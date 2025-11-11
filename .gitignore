@@ -1,0 +1,23 @@
+# Node modules
+node_modules/
+
+# Build outputs (these are committed for releases)
+# main.js, manifest.json, styles.css are tracked
+
+# Development files
+*.log
+*.map
+.DS_Store
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+*.tmp
+*.temp
+.cache/

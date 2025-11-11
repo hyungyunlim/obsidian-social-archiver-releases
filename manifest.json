@@ -1,0 +1,11 @@
+{
+  "id": "social-archiver",
+  "name": "Social Archiver",
+  "version": "1.0.3",
+  "minAppVersion": "1.5.0",
+  "description": "Archive social media posts from Facebook, LinkedIn, Instagram, TikTok, X.com, Threads, and Reddit directly into your vault",
+  "author": "Hyungyun Lim",
+  "authorUrl": "https://github.com/hyungyunlim",
+  "fundingUrl": "https://github.com/sponsors/hyungyunlim",
+  "isDesktopOnly": false
+}
