@@ -2,9 +2,9 @@
 
 Archive social media posts from 8 major platforms directly into your Obsidian vault. Built with TypeScript, Svelte, and Cloudflare infrastructure.
 
-[![GitHub release](https://img.shields.io/github/v/release/hyungyunlim/obsidian-social-archiver-releases?style=flat-square)](https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases)
-[![License](https://img.shields.io/github/license/hyungyunlim/obsidian-social-archiver-releases?style=flat-square)](LICENSE)
-[![Downloads](https://img.shields.io/github/downloads/hyungyunlim/obsidian-social-archiver-releases/total?style=flat-square)](https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases)
+[![release](https://img.shields.io/github/v/release/hyungyunlim/obsidian-social-archiver-releases)](https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases)
+[![license](https://img.shields.io/github/license/hyungyunlim/obsidian-social-archiver-releases)](LICENSE)
+[![downloads](https://img.shields.io/github/downloads/hyungyunlim/obsidian-social-archiver-releases/total)](https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases)
 
 **Currently in Beta** - Free unlimited archiving during beta period.
 
@@ -146,8 +146,6 @@ Compatible with Obsidian Bases for database-like views:
 
 **TikTok DRM:** Some videos may fail due to DRM protection. Falls back to original post URL.
 
-**Rate Limits:** BrightData API has rate limits. Managed with queue system and retry logic.
-
 **Mobile Localhost:** Mobile devices use production API only.
 
 [View all issues](https://github.com/hyungyunlim/obsidian-social-archiver-releases/issues)
@@ -199,7 +197,6 @@ Use responsibly and ethically.
 
 Built with:
 - [Obsidian](https://obsidian.md)
-- [BrightData](https://brightdata.com)
 - [Cloudflare](https://cloudflare.com)
 - [Svelte](https://svelte.dev)
 
