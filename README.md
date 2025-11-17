@@ -2,9 +2,9 @@
 
 Save what matters - Archive social media posts directly into your Obsidian vault as beautifully formatted Markdown notes.
 
-[![release](https://img.shields.io/github/v/release/hyungyunlim/obsidian-social-archiver-releases)](https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases)
+[![release](https://img.shields.io/github/v/release/hyungyunlim/obsidian-social-archiver-releases)](https://github.com/hyungyunlim/obsidian-social-archiver-releases-releases/releases)
 [![license](https://img.shields.io/github/license/hyungyunlim/obsidian-social-archiver-releases)](LICENSE)
-[![downloads](https://img.shields.io/github/downloads/hyungyunlim/obsidian-social-archiver-releases/total)](https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases)
+[![downloads](https://img.shields.io/github/downloads/hyungyunlim/obsidian-social-archiver-releases/total)](https://github.com/hyungyunlim/obsidian-social-archiver-releases-releases/releases)
 [![documentation](https://img.shields.io/badge/docs-social--archive.org-7c3aed)](https://docs.social-archive.org)
 
 > **Currently in Free Beta** - Unlimited archiving, permanent web sharing, all features completely free during beta period. [Future pricing plans →](https://docs.social-archive.org/en/guide/pricing)
@@ -86,7 +86,7 @@ Using [BRAT](https://github.com/TfTHacker/obsidian42-brat) allows you to receive
 2. **Add Social Archiver via BRAT**
    - Open **Settings** → **BRAT**
    - Click **Add Beta Plugin**
-   - Enter repository: `https://github.com/hyungyunlim/obsidian-social-archiver`
+   - Enter repository: `https://github.com/hyungyunlim/obsidian-social-archiver-releases`
    - Click **Add Plugin**
 
 3. **Enable the plugin**
@@ -99,7 +99,7 @@ BRAT will automatically check for and install updates from new releases.
 
 For one-time installation without auto-updates:
 
-1. Download latest release from [Releases](https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases)
+1. Download latest release from [Releases](https://github.com/hyungyunlim/obsidian-social-archiver-releases-releases/releases)
 2. Extract `main.js`, `manifest.json`, and `styles.css`
 3. Copy to `.obsidian/plugins/social-archiver/` in your vault
 4. Reload Obsidian (`Cmd/Ctrl + R`)
@@ -231,12 +231,12 @@ After beta completion:
 - **TikTok DRM**: Some videos may fail due to DRM protection (falls back to original post URL)
 - **Platform Changes**: Social media platforms may update their structure, temporarily affecting archiving
 
-[View All Issues →](https://github.com/hyungyunlim/obsidian-social-archiver/issues)
+[View All Issues →](https://github.com/hyungyunlim/obsidian-social-archiver-releases/issues)
 
 ## Support
 
 - 📧 **Email**: support@social-archive.org
-- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/hyungyunlim/obsidian-social-archiver/issues)
+- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/hyungyunlim/obsidian-social-archiver-releases/issues)
 - 📚 **Documentation**: [docs.social-archive.org](https://docs.social-archive.org)
 
 ## Contributing
