@@ -33,6 +33,8 @@ Social media platforms are ephemeral. Posts disappear, accounts get deleted, pla
 | **Threads** | Posts | Meta platform integration |
 | **YouTube** | Videos | Raw and formatted transcripts |
 | **Reddit** | Posts, Comments | Nested comment preservation |
+| **Pinterest** | Pins, Boards | Visual content archiving |
+| **Substack** | Articles, Newsletters | Newsletter preservation |
 
 ## Key Features
 
