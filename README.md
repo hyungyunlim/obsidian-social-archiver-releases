@@ -23,18 +23,22 @@ Social media platforms are ephemeral. Posts disappear, accounts get deleted, pla
 
 ## Supported Platforms
 
+Archive content from **12 major platforms**:
+
 | Platform | Content Types | Special Features |
 |----------|--------------|------------------|
 | **Facebook** | Posts, Photos, Videos | Full metadata extraction |
 | **LinkedIn** | Posts, Articles | Professional network archiving |
 | **Instagram** | Posts, Reels, Stories | Media optimization |
-| **TikTok** | Videos | Transcript extraction |
+| **TikTok** | Videos | Transcript extraction, DRM fallback |
 | **X (Twitter)** | Tweets, Threads, Spaces | Thread unrolling |
 | **Threads** | Posts | Meta platform integration |
 | **YouTube** | Videos | Raw and formatted transcripts |
 | **Reddit** | Posts, Comments | Nested comment preservation |
 | **Pinterest** | Pins, Boards | Visual content archiving |
 | **Substack** | Articles, Newsletters | Newsletter preservation |
+| **Mastodon** | Posts, Boosts, Quotes | Instance-aware parsing, external link cards |
+| **Bluesky** | Posts, Threads, Reposts | Quote-rich capture, embed extraction |
 
 ## Key Features
 
