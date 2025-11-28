@@ -23,22 +23,25 @@ Social media platforms are ephemeral. Posts disappear, accounts get deleted, pla
 
 ## Supported Platforms
 
-Archive content from **12 major platforms**:
+Archive content from **14 major platforms**:
 
-| Platform | Content Types | Special Features |
-|----------|--------------|------------------|
-| **Facebook** | Posts, Photos, Videos | Full metadata extraction |
-| **LinkedIn** | Posts, Articles | Professional network archiving |
-| **Instagram** | Posts, Reels, Stories | Media optimization |
-| **TikTok** | Videos | Transcript extraction, DRM fallback |
-| **X (Twitter)** | Tweets, Threads, Spaces | Thread unrolling |
-| **Threads** | Posts | Meta platform integration |
-| **YouTube** | Videos | Raw and formatted transcripts |
-| **Reddit** | Posts, Comments | Nested comment preservation |
-| **Pinterest** | Pins, Boards | Visual content archiving |
-| **Substack** | Articles, Newsletters | Newsletter preservation |
-| **Mastodon** | Posts, Boosts, Quotes | Instance-aware parsing, external link cards |
-| **Bluesky** | Posts, Threads, Reposts | Quote-rich capture, embed extraction |
+| Platform | Post Archive | Profile Crawl | Subscription | Notes |
+|----------|:------------:|:-------------:|:------------:|-------|
+| **Facebook** | Yes | Yes | Yes | Full metadata extraction |
+| **Instagram** | Yes | Yes | Yes | Media optimization |
+| **TikTok** | Yes | Yes | Yes | Transcript extraction, DRM fallback |
+| **Pinterest** | Yes | Yes | Yes | Pins and profiles |
+| **Reddit** | Yes | Yes | Yes | Subreddits only for crawl/subscription |
+| **YouTube** | Yes | Yes | Yes | RSS-based, max 15 posts, free |
+| **Bluesky** | Yes | Yes | Yes | Direct API, free |
+| **Mastodon** | Yes | Yes | Yes | Direct API, all instances, free |
+| **LinkedIn** | Yes | Yes | Yes | Professional network archiving |
+| **X (Twitter)** | Yes | No | No | Requires login for profile access |
+| **Threads** | Yes | No | No | Requires login for profile access |
+| **Substack** | Yes | No | No | Articles and newsletters |
+| **Tumblr** | Yes | No | No | Posts and reblogs |
+
+YouTube, Bluesky, and Mastodon use free APIs and don't consume archive credits for profile crawl and subscriptions.
 
 ## Key Features
 
@@ -49,6 +52,19 @@ Archive content from **12 major platforms**:
 - **Automatic Retry**: If something fails, it automatically tries again (up to 3 times)
 - **Media Modes**: Choose what to save - text only, images only, or everything including videos
 - **Link Previews**: Automatically extracts and embeds link preview cards from post content
+
+### 📂 Profile Crawl
+- **Bulk Archive**: Archive multiple posts from a profile in a single operation
+- **Date Range Filtering**: Choose posts from specific time periods (24h to all time)
+- **Post Count Control**: Select how many posts to archive (1-20)
+- **Real-Time Progress**: Live status updates during crawl
+- **Automatic Deduplication**: Previously archived posts are skipped
+
+### 🔔 Subscriptions
+- **Automatic Archiving**: Subscribe to profiles for daily automatic archiving
+- **Smart Deduplication**: Post ID and content hash tracking prevents duplicates
+- **Author Catalog**: Manage all subscriptions from a central interface
+- **Timeline Integration**: Subscribed author badges shown on posts
 
 ### 📱 Timeline View
 - **Custom View**: Browse all your saved posts in one scrollable feed
