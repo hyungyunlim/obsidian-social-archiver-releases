@@ -254,14 +254,6 @@ Here are my top 3 takeaways that completely changed how I work...
 - 🐛 **Bug Reports**: [GitHub Issues](https://github.com/hyungyunlim/obsidian-social-archiver-releases/issues)
 - 📚 **Documentation**: [docs.social-archive.org](https://docs.social-archive.org)
 
-## Contributing
-
-Contributions welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Follow conventional commits (feat, fix, docs, etc.)
-4. Submit a Pull Request
-
 ## License
 
 MIT © 2024-2025 Hyungyun Lim
