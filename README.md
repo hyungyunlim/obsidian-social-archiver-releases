@@ -240,17 +240,10 @@ Here are my top 3 takeaways that completely changed how I work...
 - ✅ Permanent web sharing (no expiration)
 - ✅ All features available
 
-**Future Plans (2026)**
-After beta completion:
-- Free Tier: 10 archives/month (always free)
-- Premium Tier: 500 archives/month (purchased via Gumroad)
-- Existing beta users will receive special benefits
-
 **[Learn More About Pricing →](https://docs.social-archive.org/en/guide/pricing)**
 
 ## Known Limitations
 
-- **TikTok DRM**: Some videos may fail due to DRM protection (falls back to original post URL)
 - **Platform Changes**: Social media platforms may update their structure, temporarily affecting archiving
 
 [View All Issues →](https://github.com/hyungyunlim/obsidian-social-archiver-releases/issues)
