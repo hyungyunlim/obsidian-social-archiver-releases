@@ -23,7 +23,7 @@ Social media platforms are ephemeral. Posts disappear, accounts get deleted, pla
 
 ## Supported Platforms
 
-Archive content from **14 major platforms**:
+Archive content from **16 major platforms**:
 
 | Platform | Post Archive | Profile Crawl | Subscription | Notes |
 |----------|:------------:|:-------------:|:------------:|-------|
@@ -38,10 +38,13 @@ Archive content from **14 major platforms**:
 | **LinkedIn** | Yes | Yes | Yes | Professional network archiving |
 | **X (Twitter)** | Yes | No | No | Requires login for profile access |
 | **Threads** | Yes | No | No | Requires login for profile access |
-| **Substack** | Yes | No | No | Articles and newsletters |
-| **Tumblr** | Yes | No | No | Posts and reblogs |
+| **Substack** | Yes | No | Yes | Newsletters via RSS, free |
+| **Medium** | Yes | No | Yes | Articles via RSS, free |
+| **Tumblr** | Yes | No | Yes | Posts via RSS, free |
+| **Velog** | Yes | No | Yes | Korean tech blog, RSS, free |
+| **Generic Blog** | Yes | No | Yes | Any site with RSS feed |
 
-YouTube, Bluesky, and Mastodon use free APIs and don't consume archive credits for profile crawl and subscriptions.
+YouTube, Bluesky, Mastodon, and all RSS-based platforms (Substack, Medium, Tumblr, Velog, blogs) use free APIs and don't consume archive credits for subscriptions.
 
 ## Key Features
 
@@ -65,6 +68,7 @@ YouTube, Bluesky, and Mastodon use free APIs and don't consume archive credits f
 - **Smart Deduplication**: Post ID and content hash tracking prevents duplicates
 - **Author Catalog**: Manage all subscriptions from a central interface
 - **Timeline Integration**: Subscribed author badges shown on posts
+- **RSS Support**: Subscribe to newsletters and blogs (Substack, Medium, Tumblr, Velog) - completely free!
 
 ### 📱 Timeline View
 - **Custom View**: Browse all your saved posts in one scrollable feed
