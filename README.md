@@ -23,7 +23,7 @@ Social media platforms are ephemeral. Posts disappear, accounts get deleted, pla
 
 ## Supported Platforms
 
-Archive content from **16 major platforms**:
+Archive content from **17 major platforms**:
 
 | Platform | Post Archive | Profile Crawl | Subscription | Notes |
 |----------|:------------:|:-------------:|:------------:|-------|
@@ -38,13 +38,16 @@ Archive content from **16 major platforms**:
 | **LinkedIn** | Yes | Yes | Yes | Professional network archiving |
 | **X (Twitter)** | Yes | No | No | Requires login for profile access |
 | **Threads** | Yes | No | No | Requires login for profile access |
+| **Podcast** | Yes | No | Yes | RSS-based, custom audio player, free |
 | **Substack** | Yes | No | Yes | Newsletters via RSS, free |
 | **Medium** | Yes | No | Yes | Articles via RSS, free |
 | **Tumblr** | Yes | No | Yes | Posts via RSS, free |
 | **Velog** | Yes | No | Yes | Korean tech blog, RSS, free |
 | **Generic Blog** | Yes | No | Yes | Any site with RSS feed |
 
-YouTube, Bluesky, Mastodon, and all RSS-based platforms (Substack, Medium, Tumblr, Velog, blogs) use free APIs and don't consume archive credits for subscriptions.
+YouTube, Bluesky, Mastodon, Podcasts, and all RSS-based platforms (Substack, Medium, Tumblr, Velog, blogs) use free APIs and don't consume archive credits for subscriptions.
+
+**Tip:** Use [Listen Notes](https://listennotes.com) to find podcast RSS feeds. Each podcast page has an "RSS" button.
 
 ## Key Features
 
@@ -68,7 +71,14 @@ YouTube, Bluesky, Mastodon, and all RSS-based platforms (Substack, Medium, Tumbl
 - **Smart Deduplication**: Post ID and content hash tracking prevents duplicates
 - **Author Catalog**: Manage all subscriptions from a central interface
 - **Timeline Integration**: Subscribed author badges shown on posts
-- **RSS Support**: Subscribe to newsletters and blogs (Substack, Medium, Tumblr, Velog) - completely free!
+- **RSS Support**: Subscribe to newsletters, blogs, and podcasts (Substack, Medium, Tumblr, Velog) - completely free!
+
+### 🎙️ Podcast Support
+- **RSS Feed Subscriptions**: Subscribe to any podcast via RSS feed URL
+- **Custom Audio Player**: Play/pause, progress bar, and time display in Timeline View
+- **Episode Metadata**: Duration, season/episode numbers, publish date, hosts & guests
+- **Cover Art**: Podcast cover art and episode thumbnails
+- **Web Sharing**: Audio player works on shared links (social-archive.org)
 
 ### 📱 Timeline View
 - **Custom View**: Browse all your saved posts in one scrollable feed
