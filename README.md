@@ -39,11 +39,11 @@ Archive content from **17 major platforms**:
 | **X (Twitter)** | Yes | No | No | Requires login for profile access |
 | **Threads** | Yes | No | No | Requires login for profile access |
 | **Podcast** | Yes | No | Yes | RSS-based, custom audio player, free |
-| **Substack** | Yes | No | Yes | Newsletters via RSS, free |
-| **Medium** | Yes | No | Yes | Articles via RSS, free |
+| **Substack** | Notes only | No | Yes | Notes support post archive; newsletters via RSS subscription only, free |
+| **Medium** | No | No | Yes | Articles via RSS subscription only, free |
 | **Tumblr** | Yes | No | Yes | Posts via RSS, free |
-| **Velog** | Yes | No | Yes | Korean tech blog, RSS, free |
-| **Generic Blog** | Yes | No | Yes | Any site with RSS feed |
+| **Velog** | No | No | Yes | Korean tech blog, RSS subscription only, free |
+| **Generic Blog** | No | No | Yes | RSS subscription only, free |
 
 YouTube, Bluesky, Mastodon, Podcasts, and all RSS-based platforms (Substack, Medium, Tumblr, Velog, blogs) use free APIs and don't consume archive credits for subscriptions.
 
