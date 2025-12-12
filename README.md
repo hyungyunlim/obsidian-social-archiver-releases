@@ -38,7 +38,7 @@ Archive content from **17 major platforms**:
 | **LinkedIn** | Yes | Yes | Yes | Professional network archiving |
 | **X (Twitter)** | Yes | No | No | Requires login for profile access |
 | **Threads** | Yes | No | No | Requires login for profile access |
-| **Podcast** | Yes | No | Yes | RSS-based, custom audio player, free |
+| **Podcast** | No | No | Yes | RSS subscription only, custom audio player, free |
 | **Substack** | Notes only | No | Yes | Notes support post archive; newsletters via RSS subscription only, free |
 | **Medium** | No | No | Yes | Articles via RSS subscription only, free |
 | **Tumblr** | Yes | No | Yes | Posts via RSS, free |
