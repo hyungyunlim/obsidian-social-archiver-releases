@@ -79,8 +79,8 @@ YouTube, Bluesky, Mastodon, Podcasts, and all RSS-based platforms (Substack, Med
 - **Episode Metadata**: Duration, season/episode numbers, publish date, hosts & guests
 - **Cover Art**: Podcast cover art and episode thumbnails
 - **Web Sharing**: Audio player works on shared links (social-archive.org)
-- **Whisper Transcription**: Generate searchable transcripts using OpenAI Whisper (local processing)
-  - Requires [Whisper](https://github.com/openai/whisper) installed locally
+- **Whisper Transcription**: Generate searchable transcripts using Whisper (local processing)
+  - Requires [Whisper installed locally](https://docs.social-archive.org/en/guide/transcription)
   - Click-to-jump: Click any transcript segment to jump to that timestamp
   - Full privacy: Audio processed entirely on your device
 
