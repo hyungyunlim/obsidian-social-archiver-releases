@@ -98,7 +98,7 @@ Share your archived posts to the web with your personal public timeline:
 
 ### 🤖 AI Comments (Desktop Only)
 Add AI-powered analysis to your archived posts using local CLI tools:
-- **Supported CLIs**: [Claude Code](https://claude.ai/download), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Codex](https://github.com/openai/codex)
+- **Supported CLIs**: [Claude Code](https://claude.com/product/claude-code), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Codex](https://github.com/openai/codex)
 - **Analysis Types**:
   - **Summary**: Concise 2-3 sentence overview
   - **Fact Check**: Verify claims with web search (sources included)
