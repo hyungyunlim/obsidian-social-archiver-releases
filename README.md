@@ -100,7 +100,7 @@ Share your archived posts to the web with your personal public timeline:
 - **Public Timeline**: Access all your shared posts at `/{username}`
 - **Real-Time Updates**: Timeline updates automatically as you share more posts
 
-### 🤖 AI Comments (Desktop Only)
+### AI Comments (Desktop Only)
 Add AI-powered analysis to your archived posts using local CLI tools:
 - **Supported CLIs**: [Claude Code](https://claude.com/product/claude-code), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Codex](https://github.com/openai/codex)
 - **Analysis Types**:
@@ -110,6 +110,7 @@ Add AI-powered analysis to your archived posts using local CLI tools:
   - **Sentiment**: Emotional tone analysis
   - **Glossary**: Explain technical/specialized terms with sources
   - **Connections**: Find related notes in your vault (Obsidian wikilinks)
+  - **Reformat**: Improve markdown formatting without changing content (apply with one click)
   - **Custom**: Your own prompt template
 - **Multi-Language**: Auto-detect content language or specify output language
 - **Web Sharing**: AI comments appear on shared posts at social-archive.org
