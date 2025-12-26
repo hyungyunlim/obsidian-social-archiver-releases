@@ -23,7 +23,7 @@ Social media platforms are ephemeral. Posts disappear, accounts get deleted, pla
 
 ## Supported Platforms
 
-Archive content from **17 major platforms**:
+Archive content from **21 major platforms**:
 
 | Platform | Post Archive | Profile Crawl | Subscription | Notes |
 |----------|:------------:|:-------------:|:------------:|-------|
@@ -38,6 +38,10 @@ Archive content from **17 major platforms**:
 | **LinkedIn** | Yes | Yes | Yes | Professional network archiving |
 | **X (Twitter)** | Yes | No | No | Requires login for profile access |
 | **Threads** | Yes | No | No | Requires login for profile access |
+| **Naver Blog** | Yes | Yes | Yes | Local crawl, video support, free |
+| **Naver Cafe** | Yes | Yes | Yes | Local crawl, cookie required, free |
+| **Brunch** | Yes | Yes | Yes | Local crawl, series support, free |
+| **Naver Webtoon** | Yes | Yes | Yes | Series subscription, immersive reader, free |
 | **Podcast** | No | No | Yes | RSS subscription only, custom audio player, free |
 | **Substack** | Notes only | No | Yes | Notes support post archive; newsletters via RSS subscription only, free |
 | **Medium** | No | No | Yes | Articles via RSS subscription only, free |
@@ -45,7 +49,7 @@ Archive content from **17 major platforms**:
 | **Velog** | No | No | Yes | Korean tech blog, RSS subscription only, free |
 | **Generic Blog** | No | No | Yes | RSS subscription only, free |
 
-YouTube, Bluesky, Mastodon, Podcasts, and all RSS-based platforms (Substack, Medium, Tumblr, Velog, blogs) use free APIs and don't consume archive credits for subscriptions.
+YouTube, Bluesky, Mastodon, Naver Blog, Naver Cafe, Brunch, Naver Webtoon, Podcasts, and all RSS-based platforms use free APIs/local crawling and don't consume archive credits.
 
 **Tip:** Use [Listen Notes](https://listennotes.com) to find podcast RSS feeds. Each podcast page has an "RSS" button.
 
