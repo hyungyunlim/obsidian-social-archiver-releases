@@ -1,9 +1,9 @@
 {
   "id": "social-archiver",
   "name": "Social Archiver",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "minAppVersion": "1.5.0",
-  "description": "Archive social media posts from Facebook, LinkedIn, Instagram, TikTok, X.com, Threads, YouTube, Reddit, Pinterest, Substack, Mastodon, and Bluesky directly into your vault.",
+  "description": "Archive social media posts from Facebook, LinkedIn, Instagram, TikTok, X.com, Threads, YouTube, Reddit, Pinterest, Substack, Mastodon, Bluesky, Naver Blog, Naver Cafe, Brunch, and Naver Webtoon directly into your vault.",
   "author": "Hyungyun Lim",
   "authorUrl": "https://github.com/hyungyunlim",
   "fundingUrl": "https://github.com/sponsors/hyungyunlim",
