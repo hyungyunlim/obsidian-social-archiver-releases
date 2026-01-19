@@ -36,7 +36,7 @@ Archive content from **21 major platforms**:
 | **Bluesky** | Yes | Yes | Yes | Direct API, free |
 | **Mastodon** | Yes | Yes | Yes | Direct API, all instances, free |
 | **LinkedIn** | Yes | Yes | Yes | Professional network archiving |
-| **X (Twitter)** | Yes | No | No | Requires login for profile access |
+| **X (Twitter)** | Yes | No | Yes | RSS-based subscription, free |
 | **Threads** | Yes | No | No | Requires login for profile access |
 | **Naver Blog** | Yes | Yes | Yes | Local crawl, video support, free |
 | **Naver Cafe** | Yes | Yes | Yes | Local crawl, cookie required, free |
@@ -49,7 +49,7 @@ Archive content from **21 major platforms**:
 | **Velog** | No | No | Yes | Korean tech blog, RSS subscription only, free |
 | **Generic Blog** | No | No | Yes | RSS subscription only, free |
 
-YouTube, Bluesky, Mastodon, Naver Blog, Naver Cafe, Brunch, Naver Webtoon, Podcasts, and all RSS-based platforms use free APIs/local crawling and don't consume archive credits.
+YouTube, X (Twitter), Bluesky, Mastodon, Naver Blog, Naver Cafe, Brunch, Naver Webtoon, Podcasts, and all RSS-based platforms use free APIs/local crawling and don't consume archive credits.
 
 **Tip:** Use [Listen Notes](https://listennotes.com) to find podcast RSS feeds. Each podcast page has an "RSS" button.
 
