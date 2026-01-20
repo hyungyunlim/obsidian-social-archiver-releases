@@ -36,7 +36,7 @@ Archive content from **21 major platforms**:
 | **Bluesky** | Yes | Yes | Yes | Direct API, free |
 | **Mastodon** | Yes | Yes | Yes | Direct API, all instances, free |
 | **LinkedIn** | Yes | Yes | Yes | Professional network archiving |
-| **X (Twitter)** | Yes | No | Yes | RSS-based subscription, free |
+| **X (Twitter)** | Yes | Yes | Yes | RSS-based via xcancel, free |
 | **Threads** | Yes | No | No | Requires login for profile access |
 | **Naver Blog** | Yes | Yes | Yes | Local crawl, video support, free |
 | **Naver Cafe** | Yes | Yes | Yes | Local crawl, cookie required, free |
