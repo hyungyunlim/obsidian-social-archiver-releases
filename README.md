@@ -2,10 +2,11 @@
 
 Save what matters - Archive social media posts directly into your Obsidian vault as beautifully formatted Markdown notes.
 
-[![release](https://img.shields.io/github/v/release/hyungyunlim/obsidian-social-archiver-releases)](https://github.com/hyungyunlim/obsidian-social-archiver-releases-releases/releases)
+[![release](https://img.shields.io/github/v/release/hyungyunlim/obsidian-social-archiver-releases)](https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases)
 [![license](https://img.shields.io/github/license/hyungyunlim/obsidian-social-archiver-releases)](LICENSE)
-[![downloads](https://img.shields.io/github/downloads/hyungyunlim/obsidian-social-archiver-releases/total)](https://github.com/hyungyunlim/obsidian-social-archiver-releases-releases/releases)
+[![downloads](https://img.shields.io/github/downloads/hyungyunlim/obsidian-social-archiver-releases/total)](https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases)
 [![documentation](https://img.shields.io/badge/docs-social--archive.org-7c3aed)](https://docs.social-archive.org)
+[![App Store](https://img.shields.io/badge/App_Store-Download-0D96F6?logo=apple&logoColor=white)](https://apps.apple.com/us/app/social-archiver/id6758323634)
 
 > **Currently in Free Beta** - Unlimited archiving, permanent web sharing, all features completely free during beta period. [Future pricing plans →](https://docs.social-archive.org/en/guide/pricing)
 
@@ -15,7 +16,7 @@ Social media platforms are ephemeral. Posts disappear, accounts get deleted, pla
 
 **Why Social Archiver?**
 - 🏠 **Data Ownership**: Archived content stays in your vault - you own it forever
-- 📱 **Cross-Platform**: Works on desktop and mobile (iOS/Android share extensions coming soon)
+- 📱 **Cross-Platform**: Works on desktop and mobile (iOS app available, Android coming soon)
 - ⚡ **Real-Time Processing**: Background job processing with live progress updates
 - 🎨 **Timeline View**: Browse and search all your archives in a beautiful feed
 - 🌐 **Web Sharing**: Share archived posts to the web with public timelines
@@ -130,6 +131,14 @@ Add AI-powered analysis to your archived posts using local CLI tools:
 
 ## Installation
 
+### iOS App (Mobile)
+
+Install the Social Archiver iOS app from the App Store:
+
+- **App Store**: [Social Archiver](https://apps.apple.com/us/app/social-archiver/id6758323634)
+- **Share Extension**: Archive directly from iOS social apps into Obsidian
+- **Same Account**: Use the same email/username as your desktop plugin
+
 ### Community Plugins (Coming Soon)
 
 > **Note**: Social Archiver is currently under review for the Obsidian Community Plugin store. Once approved, you'll be able to install it directly through the plugin browser.
@@ -161,7 +170,7 @@ BRAT will automatically check for and install updates from new releases.
 
 For one-time installation without auto-updates:
 
-1. Download latest release from [Releases](https://github.com/hyungyunlim/obsidian-social-archiver-releases-releases/releases)
+1. Download latest release from [Releases](https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases)
 2. Extract `main.js`, `manifest.json`, and `styles.css`
 3. Copy to `.obsidian/plugins/social-archiver/` in your vault
 4. Reload Obsidian (`Cmd/Ctrl + R`)
