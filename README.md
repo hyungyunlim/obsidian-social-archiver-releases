@@ -1,697 +1,335 @@
 # Social Archiver for Obsidian
 
-<div align="center">
+Save what matters - Archive social media posts directly into your Obsidian vault as beautifully formatted Markdown notes.
 
-![Social Archiver Logo](https://img.shields.io/badge/Obsidian-Social_Archiver-8B5CF6?style=for-the-badge&logo=obsidian)
+[![release](https://img.shields.io/github/v/release/hyungyunlim/obsidian-social-archiver-releases)](https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases)
+[![license](https://img.shields.io/github/license/hyungyunlim/obsidian-social-archiver-releases)](LICENSE)
+[![downloads](https://img.shields.io/github/downloads/hyungyunlim/obsidian-social-archiver-releases/total)](https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases)
+[![documentation](https://img.shields.io/badge/docs-social--archive.org-7c3aed)](https://docs.social-archive.org)
+[![App Store](https://img.shields.io/badge/App_Store-Download-0D96F6?logo=apple&logoColor=white)](https://apps.apple.com/us/app/social-archiver/id6758323634)
 
-**Save what matters.** Archive social media posts from 8 major platforms directly into your Obsidian vault.
+> **Currently in Free Beta** - Unlimited archiving, permanent web sharing, all features completely free during beta period. [Future pricing plans →](https://docs.social-archive.org/en/guide/pricing)
 
-[![GitHub release](https://img.shields.io/github/v/release/hyungyunlim/obsidian-social-archiver-releases?style=flat-square)](https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases)
-[![License](https://img.shields.io/github/license/hyungyunlim/obsidian-social-archiver-releases?style=flat-square)](LICENSE)
-[![Downloads](https://img.shields.io/github/downloads/hyungyunlim/obsidian-social-archiver-releases/total?style=flat-square)](https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases)
+## Overview
 
-🚀 **Currently in Beta** - Unlimited free archiving for early adopters!
+Social media platforms are ephemeral. Posts disappear, accounts get deleted, platforms shut down. Social Archiver gives you **permanent, searchable archives** of social media content in your personal knowledge base.
 
-[Installation](#installation) • [Features](#features) • [Usage](#usage) • [Support](#support)
+**Why Social Archiver?**
+- 🏠 **Data Ownership**: Archived content stays in your vault - you own it forever
+- 📱 **Cross-Platform**: Works on desktop and mobile (iOS app available, Android coming soon)
+- ⚡ **Real-Time Processing**: Background job processing with live progress updates
+- 🎨 **Timeline View**: Browse and search all your archives in a beautiful feed
+- 🌐 **Web Sharing**: Share archived posts to the web with public timelines
+- 🔒 **Privacy-First**: Local storage by default, optional cloud features
 
-</div>
+## Supported Platforms
 
----
+Archive content from **21 major platforms**:
 
-## 🎯 Overview
+| Platform | Post Archive | Profile Crawl | Subscription | Notes |
+|----------|:------------:|:-------------:|:------------:|-------|
+| **Facebook** | Yes | Yes | Yes | Full metadata extraction |
+| **Instagram** | Yes | Yes | Yes | Media optimization |
+| **TikTok** | Yes | Yes | Yes | Transcript extraction, DRM fallback |
+| **Pinterest** | Yes | Yes | Yes | Pins and profiles |
+| **Reddit** | Yes | Yes | Yes | Subreddits only for crawl/subscription |
+| **YouTube** | Yes | Yes | Yes | RSS-based, max 15 posts, free |
+| **Bluesky** | Yes | Yes | Yes | Direct API, free |
+| **Mastodon** | Yes | Yes | Yes | Direct API, all instances, free |
+| **LinkedIn** | Yes | Yes | Yes | Professional network archiving |
+| **X (Twitter)** | Yes | Yes | Yes | RSS-based via xcancel, free |
+| **Threads** | Yes | No | No | Requires login for profile access |
+| **Naver Blog** | Yes | Yes | Yes | Local crawl, video support, free |
+| **Naver Cafe** | Yes | Yes | Yes | Local crawl, cookie required, free |
+| **Brunch** | Yes | Yes | Yes | Local crawl, series support, free |
+| **Naver Webtoon** | Yes | Yes | Yes | Series subscription, immersive reader, free |
+| **Podcast** | No | No | Yes | RSS subscription only, custom audio player, free |
+| **Substack** | Notes only | No | Yes | Notes support post archive; newsletters via RSS subscription only, free |
+| **Medium** | No | No | Yes | Articles via RSS subscription only, free |
+| **Tumblr** | Yes | No | Yes | Posts via RSS, free |
+| **Velog** | No | No | Yes | Korean tech blog, RSS subscription only, free |
+| **Generic Blog** | No | No | Yes | RSS subscription only, free |
 
-Social Archiver is a full-featured Obsidian plugin that transforms social media posts into permanent, searchable Markdown files in your vault. Built with modern web technologies and powered by Cloudflare infrastructure, it offers seamless archiving across desktop and mobile devices.
+YouTube, X (Twitter), Bluesky, Mastodon, Naver Blog, Naver Cafe, Brunch, Naver Webtoon, Podcasts, and all RSS-based platforms use free APIs/local crawling and don't consume archive credits.
 
-### Why Social Archiver?
+**Tip:** Use [Listen Notes](https://listennotes.com) to find podcast RSS feeds. Each podcast page has an "RSS" button.
 
-- 🔒 **Data Ownership**: Your archived content stays in your vault, not on external servers
-- 📱 **Mobile-First**: Optimized for both desktop and mobile with iOS/Android share extension support
-- ⚡ **Real-Time Updates**: WebSocket-powered job processing with live progress updates
-- 🎨 **Rich Timeline View**: Browse your archived posts in a beautiful, filterable timeline
-- 🌐 **12 Platform Support**: Facebook, LinkedIn, Instagram, TikTok, X.com, Threads, YouTube, Reddit, Pinterest, Substack, Mastodon, and Bluesky
-- 🚀 **Production-Ready**: Built with TypeScript strict mode, comprehensive test coverage, and SRP architecture
+## Key Features
 
----
+### 🗂 Archiving Process
+- **Instant Note Creation**: Note appears immediately in your vault with basic info
+- **Background Download**: Full content downloads in the background - you can close Obsidian or continue working
+- **Live Progress Updates**: Real-time notifications as it downloads
+- **Automatic Retry**: If something fails, it automatically tries again (up to 3 times)
+- **Media Modes**: Choose what to save - text only, images only, or everything including videos
+- **Link Previews**: Automatically extracts and embeds link preview cards from post content
 
-## ✨ Features
+### 📂 Profile Crawl
+- **Bulk Archive**: Archive multiple posts from a profile in a single operation
+- **Date Range Filtering**: Choose posts from specific time periods (24h to all time)
+- **Post Count Control**: Select how many posts to archive (1-20)
+- **Real-Time Progress**: Live status updates during crawl
+- **Automatic Deduplication**: Previously archived posts are skipped
 
-### Core Functionality
+### 🔔 Subscriptions
+- **Automatic Archiving**: Subscribe to profiles for daily automatic archiving
+- **Smart Deduplication**: Post ID and content hash tracking prevents duplicates
+- **Author Catalog**: Manage all subscriptions from a central interface
+- **Timeline Integration**: Subscribed author badges shown on posts
+- **RSS Support**: Subscribe to newsletters, blogs, and podcasts (Substack, Medium, Tumblr, Velog) - completely free!
 
-#### 🌐 Multi-Platform Support
-Archive posts from 12 major social media platforms:
+### 🎙️ Podcast Support (Desktop Only)
+- **RSS Feed Subscriptions**: Subscribe to any podcast via RSS feed URL
+- **Custom Audio Player**: Play/pause, progress bar, and time display in Timeline View
+- **Episode Metadata**: Duration, season/episode numbers, publish date, hosts & guests
+- **Cover Art**: Podcast cover art and episode thumbnails
+- **Web Sharing**: Audio player works on shared links (social-archive.org)
+- **Whisper Transcription**: Generate searchable transcripts using Whisper (local processing)
+  - Requires [Whisper installed locally](https://docs.social-archive.org/en/guide/transcription)
+  - Click-to-jump: Click any transcript segment to jump to that timestamp
+  - Full privacy: Audio processed entirely on your device
 
-| Platform | Supported Content | Special Features |
-|----------|------------------|------------------|
-| **Facebook** | Posts, Photos, Videos | Full metadata extraction |
-| **LinkedIn** | Posts, Articles | Professional network archiving |
-| **Instagram** | Posts, Reels, Stories | Media optimization |
-| **TikTok** | Videos | Transcript extraction, DRM fallback |
-| **X.com / Twitter** | Tweets, Threads, Moments, Spaces | Thread unrolling |
-| **Threads** | Posts | Meta platform integration |
-| **YouTube** | Videos | Raw + formatted transcripts |
-| **Reddit** | Posts, Comments | Nested comment preservation |
-| **Pinterest** | Pins, Idea Pins | Category + hashtag capture |
-| **Substack** | Notes & publication posts | Publication/author context, external link metadata |
-| **Mastodon** | Posts, boosts, quotes | Instance-aware parsing, external link cards |
-| **Bluesky** | Posts, threads, reposts | Quote-rich capture, embed extraction |
+### 📱 Timeline View
+- **Custom View**: Browse all your saved posts in one scrollable feed
+- **Media Gallery**: Pinterest-style layout showing all images and videos from your archives
+- **Filters**: Filter by platform, date range, and status
+- **Full-Text Search**: Search across all archived content
+- **Post Composer**: Write and publish your own posts with images and web sharing
+- **Auto-Refresh**: Timeline updates automatically when archiving completes
 
-#### 📥 Advanced Archiving
+### 🌐 Web Sharing
+Share your archived posts to the web with your personal public timeline:
+- **Preview Mode**: Copyright-safe with text excerpts and platform links (no media)
+- **Full Mode**: Complete original content with media (use with caution)
+- **Permanent URLs**: Each shared post gets its own URL
+- **Public Timeline**: Access all your shared posts at `/{username}`
+- **Real-Time Updates**: Timeline updates automatically as you share more posts
 
-- **Preliminary Document Creation**: Instant feedback with document created immediately while fetching in background
-- **Async Job Processing**: Non-blocking architecture with retry logic (max 3 attempts)
-- **Real-Time Updates**: WebSocket notifications when archives complete
-- **Media Download Modes**:
-  - `text-only` - No media downloads
-  - `images-only` - Images only (optimized)
-  - `images-and-videos` - Full media preservation
-- **Link Preview Extraction**: Automatically extract and display up to 2 linked URLs per post
-- **Embedded Archives**: Archive referenced posts (quote posts) with nested display
-- **Smart Media Handling**: CORS proxy, image optimization, blob URL support for DRM content
+### AI Comments (Desktop Only)
+Add AI-powered analysis to your archived posts using local CLI tools:
+- **Supported CLIs**: [Claude Code](https://claude.com/product/claude-code), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Codex](https://github.com/openai/codex)
+- **Analysis Types**:
+  - **Summary**: Concise 2-3 sentence overview
+  - **Fact Check**: Verify claims with web search (sources included)
+  - **Critique**: Balanced critical analysis
+  - **Sentiment**: Emotional tone analysis
+  - **Glossary**: Explain technical/specialized terms with sources
+  - **Connections**: Find related notes in your vault (Obsidian wikilinks)
+  - **Reformat**: Improve markdown formatting without changing content (apply with one click)
+  - **Custom**: Your own prompt template
+- **Multi-Language**: Auto-detect content language or specify output language
+- **Web Sharing**: AI comments appear on shared posts at social-archive.org
+- **Privacy**: All AI processing happens locally on your device
 
-#### 📝 Markdown Generation
+**Requirements**: At least one AI CLI tool must be installed and authenticated on your computer.
 
-- **YAML Frontmatter**: Rich metadata including platform, author, timestamps, credit usage
-- **Platform-Specific Formatting**: Optimized display for each social network
-- **Media Embedding**: Local image/video references with organized folder structure
-- **YouTube Transcripts**: Both raw and formatted transcript options
-- **Quoted Post Rendering**: Nested display of embedded archives
+### ⚙️ Configuration
+- **Folder Paths**: Customize where archives and media are saved
+- **File Naming**: Templates with tokens: `{date}`, `{platform}`, `{author}`, `{slug}`
+- **YAML Frontmatter**: Rich metadata for filtering and search
+- **Statistics**: Usage tracking and performance metrics
 
-#### 🤖 AI Comments (Desktop Only)
+## Installation
 
-Generate AI-powered comments on archived posts using locally-installed CLI tools:
+### iOS App (Mobile)
 
-- **Multiple AI Providers**: Claude Code, Gemini CLI, OpenAI Codex, or Ollama
-- **Comment Types**: Summary, Key Points, Fact Check, Related Connections
-- **Parallel Generation**: Generate with multiple AIs simultaneously
-- **Custom Prompts**: Create and save your own prompt templates
-- **Privacy Option**: Use Ollama for fully local, private generation
-- **Smart Context**: Automatically includes vault context for better connections
+Install the Social Archiver iOS app from the App Store:
 
-> **Note**: This feature requires desktop Obsidian with CLI tools installed. Not available on iOS/Android. See [Network Usage Disclosure](#-network-usage-disclosure) for details.
+- **App Store**: [Social Archiver](https://apps.apple.com/us/app/social-archiver/id6758323634)
+- **Share Extension**: Archive directly from iOS social apps into Obsidian
+- **Same Account**: Use the same email/username as your desktop plugin
 
-#### 🎨 Timeline View
+### Community Plugins (Coming Soon)
 
-<details>
-<summary>Timeline View Features (click to expand)</summary>
+> **Note**: Social Archiver is currently under review for the Obsidian Community Plugin store. Once approved, you'll be able to install it directly through the plugin browser.
 
-- **Custom Obsidian View**: Dedicated sidebar or full-screen timeline
-- **Post Card UI**: Beautiful card-based layout with platform icons
-- **Advanced Filtering**:
-  - By platform (multi-select)
-  - By date range
-  - By archive status
-- **Sorting Options**:
-  - Published date
-  - Archived date
-  - Platform
-- **Search**: Full-text search across post content
-- **Inline Post Composer**: Create user posts directly in timeline
-- **Automatic Refresh**: Updates when new archives complete
+### Manual Installation
 
-</details>
+#### Option 1: BRAT Plugin (Recommended - Auto Updates)
 
-#### 🔐 Authentication & Security
+Using [BRAT](https://github.com/TfTHacker/obsidian42-brat) allows you to receive automatic updates:
 
-- **Magic Link Auth**: Passwordless email authentication
-- **JWT Tokens**: Secure token-based API access
-- **Multi-Device Support**: Same account across desktop and mobile
-- **Protocol Handler**: `obsidian://social-archive?token=...` for seamless auth flow
-- **Device ID Tracking**: Multiple installations per account
+1. **Install BRAT** (if not already installed)
+   - Open **Settings** → **Community Plugins** → **Browse**
+   - Search for "BRAT"
+   - Install and enable it
 
-#### ⚙️ Settings & Configuration
+2. **Add Social Archiver via BRAT**
+   - Open **Settings** → **BRAT**
+   - Click **Add Beta Plugin**
+   - Enter repository: `https://github.com/hyungyunlim/obsidian-social-archiver-releases`
+   - Click **Add Plugin**
 
-<details>
-<summary>Comprehensive Settings (click to expand)</summary>
+3. **Enable the plugin**
+   - Go to **Settings** → **Community Plugins**
+   - Find "Social Archiver" and enable it
 
-**General**
-- Archive folder path (default: `Social Archives/{platform}/{year}/{month}/`)
-- Media folder path (default: `attachments/social-archives/`)
-- File naming format with tokens: `{date}`, `{platform}`, `{author}`, `{slug}`, `{id}`, `{shortId}`
-- Download mode selection
+BRAT will automatically check for and install updates from new releases.
 
-**Timeline View**
-- Default view mode (sidebar/main)
-- Auto-refresh settings
-- Filter preferences
-- Post composer settings
+#### Option 2: Manual Download
 
-**Authentication**
-- Account status display
-- Device management
-- Magic link generation
+For one-time installation without auto-updates:
 
-**Usage Statistics**
-- Credits used by platform
-- Average timing metrics
-- Storage usage
+1. Download latest release from [Releases](https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases)
+2. Extract `main.js`, `manifest.json`, and `styles.css`
+3. Copy to `.obsidian/plugins/social-archiver/` in your vault
+4. Reload Obsidian (`Cmd/Ctrl + R`)
+5. Enable in **Settings** → **Community Plugins**
 
-**Danger Zone**
-- Clear cache
-- Reset settings
-- Delete account (coming soon)
+## Quick Start
 
-</details>
+### 1. Account Authentication
 
----
+First-time setup requires email verification:
 
-## 🚀 Installation
+1. Click ribbon icon (bookmark-plus) or go to **Settings** → **Social Archiver**
+2. Enter your **email** and choose a **username**
+   - Email is used for authentication only (magic link sent here)
+   - Username is your unique public identifier for web sharing
+3. Check your email for the magic link (valid for 5 minutes)
+4. Click the link → Click "Open in Obsidian" button
+5. You're ready to archive!
 
-### Option 1: Obsidian Community Plugins (Recommended)
+**Why do I need an account?**
+Social Archiver uses server infrastructure to fetch content through web scraping. Authentication helps prevent abuse from bots and automated scripts. We use passwordless magic links (no passwords to remember), and authentication state doesn't sync across devices.
 
-> **Note**: Plugin is currently in beta review. Manual installation required until approved.
+### 2. Archive Your First Post
 
-1. Open **Settings** → **Community Plugins** → **Browse**
-2. Search for "**Social Archiver**"
-3. Click **Install**, then **Enable**
-
-### Option 2: Manual Installation
-
-1. Download the latest release from [GitHub Releases](https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases)
-2. Extract `main.js`, `manifest.json`, and `styles.css` to:
-   ```
-   <your-vault>/.obsidian/plugins/social-archiver/
-   ```
-3. Reload Obsidian or enable in **Settings** → **Community Plugins**
-
----
-
-## 📖 Usage
-
-### 1️⃣ Account Setup
-
-1. **Open Archive Modal** (Command Palette → "Social Archiver: Archive social media post" or click ribbon icon)
-2. **Enter Email & Username** (first-time only)
-3. **Verify Email** - Check inbox for magic link
-4. **Click Magic Link** - Opens Obsidian with authentication token
-5. **Start Archiving!** - You're ready to save posts
-
-### 2️⃣ Archive a Post (Desktop)
-
-**Method 1: Command Palette**
-1. Copy post URL from any supported platform
-2. Press `Cmd/Ctrl + P` → "Social Archiver: Archive social media post"
+**Method 1: Archive Modal (Recommended)**
+1. Copy a social media post URL
+2. Click the ribbon icon (bookmark-plus) or use Command Palette → "Archive social media post"
 3. Paste URL and click **Archive**
-4. Document created immediately, fetches in background
+4. Note appears instantly - full content downloads in background
 
-**Method 2: Clipboard Archive**
-1. Copy post URL
-2. Press `Cmd/Ctrl + P` → "Social Archiver: Archive from clipboard URL"
-3. Confirms immediately if URL is valid
+**Method 2: Post Composer in Timeline**
+1. Open Timeline View (calendar-clock ribbon icon)
+2. Click the Post Composer at the top
+3. Write your content and paste social media URLs
+4. Click **Post** → Archive suggestion banner appears
+5. Click "Archive this post" to save the linked content
 
-**Method 3: Timeline View**
-1. Open Timeline View (Command Palette → "Open timeline view")
-2. Click **+** button
-3. Enter URL and archive
+### 3. Browse Your Archives
 
-### 3️⃣ Archive a Post (Mobile)
+- Open **Timeline View** to see all your saved posts
+- Switch to **Media Gallery** for Pinterest-style image browsing
+- Filter by platform badges or date range
+- Search by content
+- Create your own posts with the + button
 
-**iOS Share Extension**
-1. Open any social media app
-2. Find post → Tap **Share**
-3. Select **Obsidian** → **Social Archiver**
-4. Post saved automatically to vault
+## Example Output
 
-**Android Share Extension**
-1. Open any social media app
-2. Find post → Tap **Share**
-3. Select **Obsidian** → **Social Archiver**
-4. Post saved automatically to vault
+Archived posts look like this:
 
-### 4️⃣ Browse Timeline
+```markdown
+---
+platform: facebook
+author: John Doe
+authorUrl: https://www.facebook.com/johndoe
+published: "2024-11-14 10:30"
+archived: "2024-11-14 15:22"
+tags:
+  - social/facebook
+originalUrl: https://www.facebook.com/share/p/ABC123/
+likes: 127
+comments: 8
+shares: 15
+share: true
+shareUrl: https://social-archive.org/username/abc123
+---
 
-1. **Open Timeline View**:
-   - Desktop: Sidebar by default (configurable)
-   - Mobile: Full-screen mode
-2. **Filter Posts**:
-   - Click platform badges to filter
-   - Use date range picker
-   - Search by content
-3. **Create User Post**:
-   - Click **+** button
-   - Write post in Markdown editor
-   - Optionally share to public web
+Just finished reading an amazing book on productivity!
+Here are my top 3 takeaways that completely changed how I work...
 
 ---
 
-## 🏗️ Architecture
-
-### Technology Stack
-
-<details>
-<summary>View Full Stack (click to expand)</summary>
-
-#### Plugin (Obsidian)
-- **Framework**: Obsidian Plugin API
-- **UI**: Svelte 5 (Runes API)
-- **Styling**: Tailwind CSS v3 (no preflight, Obsidian CSS variables)
-- **Build**: Vite + esbuild
-- **Validation**: Zod
-- **HTTP**: Axios
-- **Editor**: TipTap (Markdown)
-- **Queue**: p-queue
-
-#### Workers API (Cloudflare)
-- **Framework**: Hono
-- **Runtime**: Cloudflare Workers
-- **Storage**: KV Store, D1 Database, Durable Objects
-- **Real-Time**: WebSocket (Durable Objects)
-- **Auth**: JWT (jose library)
-- **Scraping**: BrightData API
-- **CORS**: Multi-origin support
-
-#### Share Web (Cloudflare Pages)
-- **Framework**: SvelteKit
-- **Adapter**: @sveltejs/adapter-cloudflare
-- **Styling**: Tailwind CSS + Typography plugin
-- **Rendering**: Static Site Generation (SSG)
-
-</details>
-
-### Service Architecture (SRP Compliant)
-
-The plugin follows **Single Responsibility Principle** with 40+ specialized services:
-
-- `ArchiveOrchestrator` - Coordinates full archive workflow
-- `WorkersAPIClient` - API communication only
-- `MarkdownConverter` - Markdown generation only
-- `VaultManager` - Vault file operations only
-- `MediaHandler` - Media download/optimization only
-- `PendingJobsManager` - Job queue management only
-- `RealtimeClient` - WebSocket connection only
-- `LinkPreviewExtractor` - URL extraction only
-
-[View Full Architecture Documentation](docs/ARCHITECTURE.md)
+![image 1](attachments/social-archives/2024-11-14-facebook-1234567890/1.jpg)
 
 ---
 
-## 💰 Pricing
+**Platform:** Facebook | **Author:** [John Doe](https://www.facebook.com/johndoe)
+**Published:** 2024-11-14 10:30 | **Likes:** 127 | **Comments:** 8 | **Shares:** 15
 
-### 🎉 Beta (Current - FREE!)
-
-- ✅ **Unlimited archives** during beta period
-- ✅ All features unlocked
-- ✅ No credit limits
-- ✅ Early adopter benefits when we launch
-- ✅ Help shape the product with feedback
-
-### Post-Beta Plans
-
-#### Free Plan
-- **10 archives/month**
-- Basic markdown conversion
-- 30-day share link retention
-- Standard support
-
-#### Pro Plan - $19.99/month
-- **500 archives/month**
-- AI-powered analysis (coming soon)
-- Permanent share links
-- Priority support
-- Custom domain for shares (coming soon)
-
-**Credit Costs**
-- Basic archive: 1 credit
-- With AI analysis: 3 credits (coming soon)
-- Deep research: 5 credits (coming soon)
-
-> **Note**: The plugin is free and open-source. You only pay for API usage (archiving credits). Pro licenses are obtained externally via [Gumroad](https://gumroad.com) and activated in plugin settings.
->
-> **Obsidian Policy Compliance**: This plugin is distributed for free per Obsidian's community plugin guidelines. External licensing for API services is permitted.
-
----
-
-## 🔒 Privacy & Security
-
-### Data We Collect
-- ✅ **Email address** - For authentication only
-- ✅ **Username** - Your unique identifier
-- ✅ **Usage statistics** - Archive counts by platform (aggregated)
-- ✅ **Timing metrics** - Performance data to improve service
-
-### Data We DON'T Collect
-- ❌ Your archived content (stays only in your vault)
-- ❌ Social media passwords
-- ❌ Personal browsing history
-- ❌ Vault contents or file names
-
-### Security Measures
-- 🔐 **Magic link authentication** - No passwords to leak
-- 🔒 **IP-based rate limiting** - 20 requests/hour protection
-- 🌍 **HTTPS only** - All API calls encrypted
-- ⏱️ **Temporary tokens** - Magic links expire in 15 minutes
-- 🗑️ **Automatic cleanup** - Share links expire (30 days free, permanent pro)
-
-### Compliance
-- ✅ **GDPR Compliant** - EU data protection standards
-- ✅ **Data minimization** - Only collect what's necessary
-- ✅ **Right to deletion** - Contact us to delete account
-- ✅ **Transparent processing** - Full privacy policy available
-
-[Read Full Privacy Policy](PRIVACY.md)
-
----
-
-## 🌐 Network Usage Disclosure
-
-This plugin makes external network connections:
-
-### Core Services (Required)
-| Service | Purpose | Endpoint |
-|---------|---------|----------|
-| **Social Archiver API** | Post archiving & processing | `api.social-archive.org` |
-| **BrightData** | Social media data collection | via Social Archiver API |
-| **Cloudflare** | Infrastructure & CDN | `*.cloudflare.com` |
-
-### AI Comment Feature (Desktop Only, Optional)
-The AI comment feature uses locally-installed CLI tools that connect to external AI services:
-
-| CLI Tool | Service | Endpoint | Privacy |
-|----------|---------|----------|---------|
-| **Claude Code** | Anthropic API | `api.anthropic.com` | Content sent to Anthropic |
-| **Gemini CLI** | Google AI | `generativelanguage.googleapis.com` | Content sent to Google |
-| **OpenAI Codex** | OpenAI API | `api.openai.com` | Content sent to OpenAI |
-| **Ollama** | Local only | None (localhost) | ✅ Fully private |
-
-**Important Notes:**
-- AI comment features require locally-installed CLI tools and are **desktop-only**
-- iOS and Android do not support AI comment generation
-- Your archived content is sent to AI services when requesting AI comments
-- For maximum privacy, use **Ollama** (runs entirely locally)
-- Review each AI service's privacy policy before use
-
----
-
-## 🛠️ Development
-
-### Prerequisites
-
-- Node.js 20.x or higher
-- npm or yarn
-- Git
-- Obsidian (for testing)
-
-### Quick Start
-
-```bash
-# Clone repository
-git clone https://github.com/hyungyunlim/obsidian-social-archiver-releases.git
-cd obsidian-social-archiver
-
-# Install dependencies
-npm install
-
-# Development build (watch mode)
-npm run dev
-
-# Production build
-npm run build
-
-# Run tests
-npm test
-
-# Type checking
-npm run typecheck
-
-# Lint
-npm run lint
+**Original URL:** https://www.facebook.com/share/p/ABC123/
 ```
 
-### Local Testing
+## Documentation
 
-<details>
-<summary>Development Workflow (click to expand)</summary>
+- 📖 **Main Documentation**: https://docs.social-archive.org
+- 🇬🇧 **English Guide**: https://docs.social-archive.org/en/guide/
+- 🇰🇷 **Korean Guide**: https://docs.social-archive.org/ko/guide/
+- 🔒 **Privacy Policy**: https://docs.social-archive.org/en/privacy
+- 📜 **Terms of Service**: https://docs.social-archive.org/en/terms
 
-#### 1. Build and Deploy to Test Vault
+## Privacy & Security
 
-```bash
-# Build once and copy to test vault
-npm run build:deploy
+**What We Collect:**
+- Email address (authentication only)
+- Username (unique identifier)
+- Usage statistics (aggregated)
 
-# Or build and watch for changes
-npm run dev
-```
+**What We DON'T Collect:**
+- Archived content (stays in your vault)
+- Social media passwords
+- Browsing history
+- Vault contents
 
-#### 2. Enable in Obsidian
+**Security:**
+- Magic link authentication (no passwords stored)
+- HTTPS-only communication
+- Token expiration (secure sessions)
+- GDPR/PIPA/CCPA compliant
 
-1. Open test vault in Obsidian
-2. **Settings** → **Community Plugins**
-3. Find "**Social Archiver**" and enable
-4. Click **Reload** after code changes
+**[Read Full Privacy Policy →](https://docs.social-archive.org/en/privacy)**
 
-#### 3. Custom Test Vault
+## Current Status
 
-Default test vault location:
-```
-/Users/[username]/Library/Mobile Documents/iCloud~md~obsidian/Documents/test/.obsidian
-```
+**Free Beta (November 2025)**
+- ✅ Completely free - no payment required
+- ✅ Unlimited archiving during beta period
+- ✅ Permanent web sharing (no expiration)
+- ✅ All features available
 
-Override with environment variable:
-```bash
-export SOCIAL_ARCHIVER_TEST_VAULT="/path/to/your/vault/.obsidian"
-npm run build:deploy
-```
+**[Learn More About Pricing →](https://docs.social-archive.org/en/guide/pricing)**
 
-#### 4. Testing Backend Services
+## Known Limitations
 
-```bash
-# Workers API (local)
-cd workers
-npm run dev:local
+- **Platform Changes**: Social media platforms may update their structure, temporarily affecting archiving
 
-# Share Web (local)
-cd share-web
-npm run dev
+[View All Issues →](https://github.com/hyungyunlim/obsidian-social-archiver-releases/issues)
 
-# Run all services
-npm run dev:all
-```
+## Support
 
-#### 5. Staging Deployment
+- 📧 **Email**: support@social-archive.org
+- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/hyungyunlim/obsidian-social-archiver-releases/issues)
+- 📚 **Documentation**: [docs.social-archive.org](https://docs.social-archive.org)
 
-Test with production backend:
-```bash
-npm run deploy:staging
+## License
 
-# Restore development environment
-npm run restore:dev
-```
+MIT © 2024-2025 Hyungyun Lim
 
-</details>
+## Disclaimer
 
-### Project Structure
+⚠️ **Only archive content you have permission to save.** Respect copyright laws and platform terms of service.
 
-```
-obsidian-social-archiver/
-├── .github/
-│   └── workflows/
-│       └── release.yml          # GitHub Actions release workflow
-├── src/                          # Plugin source code
-│   ├── main.ts                  # Main plugin entry
-│   ├── components/              # Svelte 5 components (10 files)
-│   ├── services/                # Business logic (40+ services)
-│   │   ├── base/               # Base service classes
-│   │   ├── ArchiveOrchestrator.ts
-│   │   ├── WorkersAPIClient.ts
-│   │   ├── MarkdownConverter.ts
-│   │   ├── VaultManager.ts
-│   │   ├── MediaHandler.ts
-│   │   ├── PendingJobsManager.ts
-│   │   └── RealtimeClient.ts
-│   ├── views/                   # TimelineView
-│   ├── modals/                  # ArchiveModal
-│   ├── settings/                # Settings UI
-│   ├── schemas/                 # Zod validation (8 platforms)
-│   ├── types/                   # TypeScript interfaces
-│   ├── utils/                   # Helper functions
-│   ├── stores/                  # Svelte stores
-│   └── hooks/                   # Svelte 5 hooks
-├── workers/                      # Cloudflare Workers API
-│   ├── src/
-│   │   ├── index.ts            # Hono app entry
-│   │   ├── handlers/           # API route handlers
-│   │   ├── middleware/         # Auth, rate limiting
-│   │   ├── durable-objects/    # TimelineRoom WebSocket
-│   │   └── utils/              # JWT, credits, validation
-│   └── tests/                  # Worker tests
-├── share-web/                   # SvelteKit share app
-│   ├── src/
-│   │   ├── routes/
-│   │   └── lib/
-│   └── tests/
-├── __tests__/                   # Plugin tests (51 files)
-├── scripts/                     # Build scripts
-├── manifest.json                # Plugin manifest
-├── versions.json                # Version compatibility
-└── package.json
-```
+Social Archiver is a tool for **personal archiving only**. It does not:
+- Bypass platform terms of service
+- Store or redistribute archived content on our servers
+- Provide access to private posts
+- Enable mass scraping or commercial use
 
-### Testing
+Use responsibly and ethically. You are solely responsible for ensuring you have the legal right to archive content.
 
-```bash
-# Run all tests
-npm test
+## Acknowledgments
 
-# Watch mode
-npm test -- --watch
+Built with:
+- [Obsidian](https://obsidian.md) - The knowledge base platform
+- [Cloudflare](https://cloudflare.com) - Infrastructure and CDN
+- [Svelte](https://svelte.dev) - UI framework
+- [BrightData](https://brightdata.com) - Web scraping API
 
-# Coverage report
-npm run test:coverage
-
-# UI testing
-npm run test:ui
-
-# Workers tests
-cd workers && npm test
-
-# Specific test file
-npm test ArchiveOrchestrator
-```
-
-### Contributing
-
-We welcome contributions! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-**Commit Convention**: We use conventional commits (feat, fix, docs, chore, refactor, test, perf)
-
-[View Contributing Guidelines](CONTRIBUTING.md)
+Special thanks to the Obsidian community for feedback and support.
 
 ---
 
-## 📚 Documentation
-
-- [Architecture Overview](docs/ARCHITECTURE.md)
-- [Authentication Flow](docs/AUTH_FLOW.md)
-- [Cloudflare Setup](docs/CLOUDFLARE_EMAIL_SETUP.md)
-- [Testing Guide](docs/TESTING_GUIDE.md)
-- [Privacy Policy](PRIVACY.md)
-- [API Reference](docs/API_REFERENCE.md)
-
----
-
-## 🐛 Known Issues & Limitations
-
-### TikTok DRM Protection
-- **Issue**: CDN URLs may fail due to DRM
-- **Workaround**: Falls back to original post URL for video embed
-
-### BrightData Rate Limits
-- **Issue**: Scraping API has rate limits
-- **Solution**: Queue management + retry logic + circuit breaker
-
-### Mobile Localhost
-- **Issue**: Mobile can't access localhost:8787
-- **Solution**: Always uses production API on mobile
-
-[View All Issues](https://github.com/hyungyunlim/obsidian-social-archiver-releases/issues)
-
----
-
-## 🗺️ Roadmap
-
-### Version 1.1 (Next Release)
-- [ ] Vault-wide user post discovery (#146)
-- [ ] Batch archiving
-- [ ] Export to PDF/EPUB
-- [ ] Advanced search filters
-
-### Version 2.0 (Future)
-- [ ] AI-powered summaries (Pro)
-- [ ] Fact-checking integration (Pro)
-- [ ] Sentiment analysis (Pro)
-- [ ] Custom domain for share links (Pro)
-- [ ] Browser extension (Chrome, Firefox, Safari)
-
-### Long-Term Vision
-- [ ] Very Very Social (Standalone SNS Platform)
-  - Independent project with synergy
-  - "Save what matters" → "Share what you think"
-
-[View Full Roadmap](https://github.com/hyungyunlim/obsidian-social-archiver-releases/projects)
-
----
-
-## 🤝 Support
-
-### Get Help
-
-- 📖 [Documentation](https://github.com/hyungyunlim/obsidian-social-archiver-releases/wiki)
-- 🐛 [Report Issues](https://github.com/hyungyunlim/obsidian-social-archiver-releases/issues)
-- 💬 [Discord Community](https://discord.gg/obsidian-social-archiver)
-- 📧 [Email Support](mailto:support@social-archive.org)
-
-### Show Your Support
-
-If you find Social Archiver useful:
-
-- ⭐ Star this repository
-- 🐦 Share on social media
-- 💰 [Sponsor on GitHub](https://github.com/sponsors/hyungyunlim)
-- ☕ [Buy Me a Coffee](https://buymeacoffee.com/hyungyunlim)
-
----
-
-## 📊 Project Status
-
-**Development Progress**: 72% Complete (78/109 tasks done)
-
-- ✅ Core archiving functionality
-- ✅ 8 platform integrations
-- ✅ Timeline view with filtering
-- ✅ Real-time WebSocket updates
-- ✅ Magic link authentication
-- ✅ Mobile support
-- ✅ Media handling (3 modes)
-- ✅ Inline post composer
-- ✅ Embedded archives (quote posts)
-- ⏳ AI features (planned)
-- ⏳ Custom domains (planned)
-
-[View Task Progress](https://github.com/hyungyunlim/obsidian-social-archiver-releases/projects/1)
-
----
-
-## 📄 License
-
-MIT © 2024 Hyungyun Lim
-
-See [LICENSE](LICENSE) for details.
-
----
-
-## ⚠️ Disclaimer
-
-**Important**: Only archive content you have permission to save. Respect copyright and privacy laws in your jurisdiction. This tool is intended for **personal archiving only**.
-
-Social Archiver does not:
-- Bypass any platform's terms of service
-- Store or redistribute archived content
-- Provide access to private or protected posts
-- Enable mass scraping or data harvesting
-
-**Use responsibly and ethically.**
-
----
-
-## 🙏 Acknowledgments
-
-- [Obsidian](https://obsidian.md) - For the amazing knowledge management platform
-- [BrightData](https://brightdata.com) - For reliable web scraping infrastructure
-- [Cloudflare](https://cloudflare.com) - For Workers, Pages, and D1 database
-- [Svelte](https://svelte.dev) - For the reactive UI framework
-- [TaskMaster AI](https://github.com/taskmaster-ai) - For development workflow automation
-
----
-
-<div align="center">
-
-**[⬆ Back to Top](#social-archiver-for-obsidian)**
-
-Made with ❤️ by [Hyungyun Lim](https://github.com/hyungyunlim)
-
-</div>
+**Website**: https://social-archive.org  
+**Made with ❤️ by [Hyungyun Lim](https://github.com/hyungyunlim)**
