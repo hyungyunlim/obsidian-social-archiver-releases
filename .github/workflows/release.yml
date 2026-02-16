@@ -50,6 +50,21 @@ jobs:
           fi
           echo "✓ Version matches"
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+
+      - name: Minify main.js for release
+        run: |
+          echo "Source main.js: $(wc -c < main.js) bytes, $(wc -l < main.js) lines"
+          npx terser@5 main.js \
+            --compress drop_console=false,drop_debugger=true \
+            --mangle safari10 \
+            --output main.min.js
+          echo "Minified main.min.js: $(wc -c < main.min.js) bytes"
+          mv main.min.js main.js
+
       - name: Create release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
