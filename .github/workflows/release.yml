@@ -14,6 +14,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Extract version from tag
+        id: version
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -22,6 +26,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Verify release metadata
+        run: npm run verify:release -- "${{ steps.version.outputs.tag }}"
+
+      - name: Verify CSS source structure
+        run: npm run check:css-source
 
       - name: Build plugin
         run: npm run build:prod
@@ -46,7 +56,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="${GITHUB_REF#refs/tags/}"
+          tag="${{ steps.version.outputs.tag }}"
 
           gh release create "$tag" \
             --title="$tag" \
