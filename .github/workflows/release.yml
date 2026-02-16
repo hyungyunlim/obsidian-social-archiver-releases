@@ -65,6 +65,13 @@ jobs:
           echo "Minified main.min.js: $(wc -c < main.min.js) bytes"
           mv main.min.js main.js
 
+      - name: Minify styles.css for release
+        run: |
+          echo "Source styles.css: $(wc -c < styles.css) bytes, $(wc -l < styles.css) lines"
+          npx lightningcss-cli@1 --minify styles.css -o styles.min.css
+          echo "Minified styles.min.css: $(wc -c < styles.min.css) bytes"
+          mv styles.min.css styles.css
+
       - name: Create release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
