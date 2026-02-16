@@ -1,0 +1,435 @@
+/* Legacy split chunk: 30-release-webtoon.css (preserves original rule order) */
+
+.release-notes-modal {
+  max-width: 500px
+}
+
+.release-notes-modal .release-notes-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-normal)
+}
+
+.release-notes-modal .release-notes-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  flex-shrink: 0
+}
+
+.release-notes-modal .release-notes-date {
+  margin: 0 0 16px;
+  font-size: 12px
+}
+
+.release-notes-modal .release-notes-content {
+  max-height: 50vh;
+  overflow-y: auto;
+  padding-right: 8px;
+  margin-bottom: 20px
+}
+
+.release-notes-modal .release-notes-content h2 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 16px 0 8px;
+  color: var(--text-normal)
+}
+
+.release-notes-modal .release-notes-content h2:first-child {
+  margin-top: 0
+}
+
+.release-notes-modal .release-notes-content ul {
+  margin: 8px 0;
+  padding-left: 20px
+}
+
+.release-notes-modal .release-notes-content li {
+  margin: 4px 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-normal)
+}
+
+.release-notes-modal .release-notes-content p {
+  margin: 8px 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-normal)
+}
+
+.release-notes-modal .release-notes-content strong {
+  font-weight: 600;
+  color: var(--text-normal)
+}
+
+.release-notes-modal .release-notes-content ol {
+  margin: 8px 0;
+  padding-left: 20px
+}
+
+.release-notes-modal .release-notes-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid var(--background-modifier-border)
+}
+
+.release-notes-modal .release-notes-footer button {
+  min-width: 80px;
+  min-height: 36px
+}
+
+@media(max-width:480px) {
+  .release-notes-modal .release-notes-content {
+    max-height: 60vh
+  }
+
+  .release-notes-modal .release-notes-footer button {
+    min-height: 44px
+  }
+}
+
+.release-notes-modal .release-notes-content iframe {
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 16/9;
+  border-radius: 8px;
+  margin: 12px 0
+}
+
+.release-notes-modal .release-notes-content .external-embed {
+  width: 100%;
+  max-width: 100%;
+  margin: 12px 0
+}
+
+.release-notes-modal .release-notes-content .external-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+  color: var(--text-accent);
+  text-decoration: none;
+  font-size: 13px;
+  margin: 8px 0
+}
+
+.release-notes-modal .release-notes-content .external-link:hover {
+  background: var(--background-modifier-hover)
+}
+
+.episode-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--background-modifier-border);
+  transition: background .15s ease
+}
+
+.episode-status {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px
+}
+
+@media(max-width:768px) {
+  .series-header {
+    padding: 10px 12px;
+    flex-wrap: wrap;
+    gap: 8px
+  }
+
+  .series-title-section {
+    flex: 1 1 100%;
+    order: 1
+  }
+
+  .series-nav {
+    order: 2;
+    margin-left: auto
+  }
+
+  .series-content {
+    padding: 12px
+  }
+
+  .episode-list-toggle,
+  .episode-item {
+    padding: 10px 12px
+  }
+
+  .series-nav-btn {
+    width: 36px;
+    height: 36px;
+    min-height: 44px;
+    min-width: 44px
+  }
+}
+
+.webtoon-series-card {
+  border-radius: 12px
+}
+
+.webtoon-series-card .webtoon-header {
+  background: var(--background-secondary)
+}
+
+.webtoon-series-card .series-author-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap
+}
+
+.webtoon-series-card .webtoon-badge {
+  padding: 1px 4px;
+  font-size: 10px;
+  border-radius: 3px;
+  flex-shrink: 0
+}
+
+.webtoon-series-card .age-badge {
+  background: var(--background-modifier-error-hover);
+  color: var(--text-muted)
+}
+
+.webtoon-series-card .day-badge,
+.webtoon-series-card .genre-badge {
+  background: var(--background-modifier-hover);
+  color: var(--text-faint)
+}
+
+.webtoon-series-card .webtoon-content {
+  padding: 0;
+  border-bottom: none
+}
+
+.webtoon-series-card .webtoon-episode-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary)
+}
+
+.webtoon-series-card .webtoon-episode-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px
+}
+
+.webtoon-series-card .webtoon-episode-num {
+  padding: 2px 8px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0
+}
+
+.webtoon-series-card .webtoon-episode-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0
+}
+
+.webtoon-reader-wrapper {
+  background: var(--background-primary)
+}
+
+.webtoon-scroll-container {
+  scrollbar-width: thin;
+  scrollbar-color: var(--background-modifier-border) transparent
+}
+
+.webtoon-scroll-container::-webkit-scrollbar {
+  width: 6px
+}
+
+.webtoon-scroll-container::-webkit-scrollbar-track {
+  background: transparent
+}
+
+.webtoon-scroll-container::-webkit-scrollbar-thumb {
+  background: var(--background-modifier-border);
+  border-radius: 3px
+}
+
+.webtoon-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: var(--background-modifier-border-hover)
+}
+
+.webtoon-image-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  background: var(--background-primary);
+  width: 100%
+}
+
+.webtoon-image-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  background: var(--background-primary)
+}
+
+.webtoon-image-wrapper img {
+  width: 100%;
+  max-width: 800px;
+  height: auto;
+  display: block
+}
+
+.webtoon-progress-bar {
+  height: 3px;
+  background: var(--background-modifier-border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 8px 16px
+}
+
+.webtoon-progress-fill {
+  height: 100%;
+  background: var(--interactive-accent);
+  border-radius: 2px;
+  transition: width .1s ease
+}
+
+.webtoon-episode-list .episode-list-toggle {
+  border-top: 1px solid var(--background-modifier-border)
+}
+
+.webtoon-episode-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--background-modifier-border);
+  transition: background .15s ease
+}
+
+.webtoon-episode-item:hover,
+.webtoon-episode-item.current {
+  background: var(--background-modifier-hover)
+}
+
+.webtoon-episode-cover {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  background: var(--background-secondary);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center
+}
+
+.webtoon-episode-cover img {
+  width: 100%;
+  height: 100%;
+  -o-object-fit: cover;
+  object-fit: cover
+}
+
+.webtoon-episode-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px
+}
+
+.webtoon-episode-item .episode-num-badge {
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0
+}
+
+.webtoon-episode-item .webtoon-episode-item-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0
+}
+
+.webtoon-episode-item .read-badge {
+  padding: 1px 4px;
+  background: var(--background-modifier-success);
+  color: var(--text-success);
+  border-radius: 3px;
+  font-size: 10px;
+  flex-shrink: 0
+}
+
+@media(max-width:768px) {
+  .webtoon-series-card .series-author-row {
+    gap: 4px
+  }
+
+  .webtoon-series-card .webtoon-badge {
+    font-size: 9px;
+    padding: 1px 3px
+  }
+
+  .webtoon-episode-item {
+    padding: 8px 12px
+  }
+
+  .webtoon-episode-cover {
+    width: 40px;
+    height: 40px
+  }
+
+  .webtoon-progress-bar {
+    margin: 6px 12px
+  }
+}
+
+.series-fullscreen-backdrop {
+  position: fixed;
+  inset: 0;
+  background: #000000b3;
+  z-index: 9999;
+  animation: series-backdrop-fadein .2s ease
+}
+
+@keyframes series-backdrop-fadein {
+  0% {
+    opacity: 0
+  }
+
+  to {
+    opacity: 1
+  }
+}
+

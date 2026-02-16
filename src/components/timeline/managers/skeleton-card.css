@@ -1,0 +1,1972 @@
+/**
+ * Skeleton Card Styles
+ *
+ * Lightweight placeholder cards for lazy loading
+ * Uses Obsidian CSS variables for theme compatibility
+ * GPU-accelerated animations for 60fps performance
+ */
+
+/* ==================== Font Inheritance ==================== */
+/* Respect Obsidian's user font settings from Appearance preferences.
+ * - body already inherits var(--font-interface) for UI elements
+ * - Post body and reader content override with var(--font-text)
+ */
+
+/* Post body content — user's text/reading font */
+.post-body-text,
+.reader-mode-body {
+  font-family: var(--font-text) !important;
+}
+
+/* ==================== Scroll Performance Optimizations ==================== */
+
+/* Timeline feed container - optimize scroll performance */
+.timeline-feed {
+  /* Enable content-visibility for off-screen optimization */
+  /* Note: Browser will skip rendering posts far from viewport */
+}
+
+/* Timeline wrapper with CSS containment */
+.timeline-feed > .mb-2 {
+  /* CSS Containment: Isolate each post card for layout optimization */
+  contain: layout style paint;
+  /* content-visibility: auto allows browser to skip off-screen rendering */
+  content-visibility: auto;
+  /* Intrinsic size hint prevents layout shift when content-visibility kicks in */
+  contain-intrinsic-size: auto 300px;
+}
+
+/* ==================== Container ==================== */
+
+.post-card-skeleton {
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  overflow: hidden;
+  position: relative;
+  /* CSS containment for independent layout calculations */
+  contain: layout style paint;
+  /* Allow browser to skip rendering when off-screen */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 300px;
+}
+
+/* Shimmer animation overlay - uses transform (GPU-composited) instead of left (layout-triggering) */
+.post-card-skeleton::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--background-modifier-border-hover) 50%,
+    transparent 100%
+  );
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  pointer-events: none;
+  will-change: transform;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* ==================== Header ==================== */
+
+.skeleton-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.skeleton-avatar {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 50%;
+  background: var(--background-modifier-border);
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-author-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.skeleton-author-name {
+  width: 120px;
+  max-width: 60%;
+}
+
+.skeleton-platform-badge {
+  width: 60px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--background-modifier-border);
+  animation: skeleton-pulse 1.5s ease-in-out infinite 0.1s;
+}
+
+/* ==================== Content ==================== */
+
+.skeleton-content {
+  margin-bottom: 12px;
+}
+
+.skeleton-text-line {
+  height: 14px;
+  background: var(--background-modifier-border);
+  border-radius: 4px;
+  margin-bottom: 8px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-text-line:nth-child(1) {
+  width: 100%;
+}
+
+.skeleton-text-line:nth-child(2) {
+  width: 95%;
+  animation-delay: 0.1s;
+}
+
+.skeleton-text-line.short {
+  width: 65%;
+  animation-delay: 0.2s;
+}
+
+.skeleton-media {
+  width: 100%;
+  height: 200px;
+  margin-top: 12px;
+  background: var(--background-modifier-border);
+  border-radius: 6px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite 0.3s;
+}
+
+/* ==================== Footer ==================== */
+
+.skeleton-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.skeleton-interactions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.skeleton-interactions .skeleton-text-line {
+  width: 60px;
+  height: 12px;
+  margin-bottom: 0;
+}
+
+/* ==================== Animations ==================== */
+
+@keyframes skeleton-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .post-card-skeleton::before {
+    animation: none;
+    transform: none;
+  }
+
+  .skeleton-avatar,
+  .skeleton-text-line,
+  .skeleton-platform-badge,
+  .skeleton-media {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* ==================== Mobile Optimizations ==================== */
+
+@media (max-width: 768px) {
+  .post-card-skeleton {
+    padding: 12px;
+  }
+
+  .skeleton-avatar {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+  }
+
+  .skeleton-media {
+    height: 160px;
+  }
+
+  /* Improve touch responsiveness on mobile */
+  .timeline-feed > .mb-2 {
+    /* Prevent 300ms tap delay */
+    touch-action: manipulation;
+    /* Reduce intrinsic size estimate on mobile */
+    contain-intrinsic-size: auto 250px;
+  }
+}
+
+/* ==================== Hover Animation Optimization ==================== */
+
+/* Only enable will-change on hover to avoid memory overhead */
+.media-card:hover,
+.timeline-feed > .mb-2:hover {
+  will-change: transform;
+}
+
+/* GPU acceleration for elements with transforms */
+.hover\:-translate-y-1:hover {
+  will-change: transform;
+}
+
+/* ==================== Theme Support ==================== */
+
+/* Light theme adjustments (if needed) */
+body:not(.theme-dark) .post-card-skeleton {
+  /* Light theme already uses correct Obsidian variables */
+}
+
+/* Dark theme adjustments (if needed) */
+.theme-dark .post-card-skeleton {
+  /* Dark theme already uses correct Obsidian variables */
+}
+
+/* ==================== Error State ==================== */
+
+.post-card-skeleton.skeleton-error {
+  border-color: var(--background-modifier-error-hover);
+  opacity: 0.7;
+}
+
+.post-card-skeleton.skeleton-error::before {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--background-modifier-error) 50%,
+    transparent 100%
+  );
+}
+
+/* ==================== Media Gallery Loading ==================== */
+
+/* Hide file titles in media gallery cards */
+.bases-media-gallery-container .bases-entry-title,
+.bases-media-gallery-container .file-embed-title,
+.bases-media-gallery-container .markdown-embed-title,
+.bases-media-gallery-container h1,
+.bases-media-gallery-container h2,
+.bases-media-gallery-container h3,
+.media-gallery .bases-entry-title,
+.media-gallery .file-embed-title,
+.media-gallery .markdown-embed-title,
+.media-card > div:first-child:not(.platform-badge):not(.media-container):not(.media-metadata) {
+  display: none !important;
+}
+
+.media-gallery-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  gap: 16px;
+}
+
+.media-gallery-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--background-modifier-border);
+  border-top-color: var(--interactive-accent);
+  border-radius: 50%;
+  animation: media-gallery-spin 0.8s linear infinite;
+}
+
+@keyframes media-gallery-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.media-gallery-loading-text {
+  font-size: 14px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .media-gallery-spinner {
+    animation: media-gallery-pulse 1.5s ease-in-out infinite;
+    border-top-color: var(--background-modifier-border);
+  }
+
+  @keyframes media-gallery-pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+}
+
+/* ==================== Media Card Aspect Ratio Fix ==================== */
+
+/* Remove min-height constraint and use aspect ratio */
+.media-container {
+  width: 100%;
+  position: relative;
+  background: var(--background-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Remove min-height to allow natural aspect ratio */
+}
+
+/* Images and videos should maintain aspect ratio */
+.media-image,
+.media-video {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: contain; /* Changed from cover to contain to show full image */
+  max-height: 400px; /* Limit maximum height for very tall images */
+}
+
+/* Portrait media (9:16, etc) - Keep normal size */
+.media-card-portrait .media-image,
+.media-card-portrait .media-video {
+  max-height: 400px; /* Same as default */
+}
+
+/* Very wide media - Make them larger */
+.media-card-wide .media-image,
+.media-card-wide .media-video {
+  max-height: 800px; /* Larger for very wide images */
+}
+
+/* ==================== Grid Layout ==================== */
+
+.media-gallery-grid {
+  display: grid;
+  gap: 16px;
+  grid-auto-flow: dense; /* Fill gaps automatically */
+  /* grid-template-columns is set by .media-gallery-cols-X classes below */
+}
+
+/* Grid layout - maintain aspect ratio */
+.media-gallery-grid .media-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.media-gallery-grid .media-container {
+  width: 100%;
+  height: auto;
+  aspect-ratio: auto; /* Let content determine aspect ratio */
+}
+
+/* Wide media takes 2 columns in grid */
+.media-gallery-grid .media-card-wide {
+  grid-column: span 2;
+}
+
+/* Portrait media takes 1 column but taller */
+.media-gallery-grid .media-card-portrait {
+  grid-column: span 1;
+}
+
+/* For masonry layout, natural flow */
+.media-gallery-masonry {
+  column-count: 3;
+  column-gap: 16px;
+  /* Remove the grid display */
+  display: block !important;
+}
+
+.media-gallery-masonry .media-card {
+  display: inline-block;
+  width: 100%;
+  margin-bottom: 16px;
+  break-inside: avoid;
+  page-break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+}
+
+/* Ensure images load before calculating layout */
+.media-gallery-masonry .media-image,
+.media-gallery-masonry .media-video {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Column counts for different sizes */
+.media-gallery-cols-2.media-gallery-masonry {
+  column-count: 2;
+}
+
+.media-gallery-cols-3.media-gallery-masonry {
+  column-count: 3;
+}
+
+.media-gallery-cols-4.media-gallery-masonry {
+  column-count: 4;
+}
+
+.media-gallery-cols-5.media-gallery-masonry {
+  column-count: 5;
+}
+
+.media-gallery-cols-6.media-gallery-masonry {
+  column-count: 6;
+}
+
+.media-gallery-cols-7.media-gallery-masonry {
+  column-count: 7;
+}
+
+.media-gallery-cols-8.media-gallery-masonry {
+  column-count: 8;
+}
+
+.media-gallery-cols-9.media-gallery-masonry {
+  column-count: 9;
+}
+
+.media-gallery-cols-10.media-gallery-masonry {
+  column-count: 10;
+}
+
+/* Grid layout column counts */
+.media-gallery-cols-2.media-gallery-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.media-gallery-cols-3.media-gallery-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.media-gallery-cols-4.media-gallery-grid {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.media-gallery-cols-5.media-gallery-grid {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.media-gallery-cols-6.media-gallery-grid {
+  grid-template-columns: repeat(6, 1fr);
+}
+
+.media-gallery-cols-7.media-gallery-grid {
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.media-gallery-cols-8.media-gallery-grid {
+  grid-template-columns: repeat(8, 1fr);
+}
+
+.media-gallery-cols-9.media-gallery-grid {
+  grid-template-columns: repeat(9, 1fr);
+}
+
+.media-gallery-cols-10.media-gallery-grid {
+  grid-template-columns: repeat(10, 1fr);
+}
+
+/* ==================== Responsive Layout ==================== */
+
+/* Extra large screens (>1600px) - Use full column count */
+/* No changes needed, use default settings */
+
+/* Large screens (1200px - 1600px) - Reduce by 2 columns */
+@media (max-width: 1600px) {
+  .media-gallery-cols-10.media-gallery-grid { grid-template-columns: repeat(8, 1fr); }
+  .media-gallery-cols-9.media-gallery-grid { grid-template-columns: repeat(7, 1fr); }
+  .media-gallery-cols-8.media-gallery-grid { grid-template-columns: repeat(6, 1fr); }
+  .media-gallery-cols-7.media-gallery-grid { grid-template-columns: repeat(5, 1fr); }
+  .media-gallery-cols-6.media-gallery-grid { grid-template-columns: repeat(4, 1fr); }
+  .media-gallery-cols-5.media-gallery-grid { grid-template-columns: repeat(4, 1fr); }
+
+  .media-gallery-cols-10.media-gallery-masonry { column-count: 8; }
+  .media-gallery-cols-9.media-gallery-masonry { column-count: 7; }
+  .media-gallery-cols-8.media-gallery-masonry { column-count: 6; }
+  .media-gallery-cols-7.media-gallery-masonry { column-count: 5; }
+  .media-gallery-cols-6.media-gallery-masonry { column-count: 4; }
+  .media-gallery-cols-5.media-gallery-masonry { column-count: 4; }
+}
+
+/* Medium screens (768px - 1200px) - Reduce to max 4 columns */
+@media (max-width: 1200px) {
+  .media-gallery-cols-10.media-gallery-grid,
+  .media-gallery-cols-9.media-gallery-grid,
+  .media-gallery-cols-8.media-gallery-grid,
+  .media-gallery-cols-7.media-gallery-grid,
+  .media-gallery-cols-6.media-gallery-grid,
+  .media-gallery-cols-5.media-gallery-grid { grid-template-columns: repeat(4, 1fr); }
+
+  .media-gallery-cols-4.media-gallery-grid { grid-template-columns: repeat(3, 1fr); }
+
+  .media-gallery-cols-10.media-gallery-masonry,
+  .media-gallery-cols-9.media-gallery-masonry,
+  .media-gallery-cols-8.media-gallery-masonry,
+  .media-gallery-cols-7.media-gallery-masonry,
+  .media-gallery-cols-6.media-gallery-masonry,
+  .media-gallery-cols-5.media-gallery-masonry { column-count: 4; }
+
+  .media-gallery-cols-4.media-gallery-masonry { column-count: 3; }
+}
+
+/* Small screens (480px - 768px) - 2 columns */
+@media (max-width: 768px) {
+  .media-gallery-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .media-gallery-masonry { column-count: 2 !important; }
+}
+
+/* Mobile (< 480px) - 1 column */
+@media (max-width: 480px) {
+  .media-gallery-grid { grid-template-columns: repeat(1, 1fr) !important; }
+  .media-gallery-masonry { column-count: 1 !important; }
+}
+
+/* ==================== Hover-only Platform Badge & Metadata ==================== */
+
+/* Hide platform badge by default */
+.platform-badge {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+/* Show platform badge on hover */
+.media-card:hover .platform-badge {
+  opacity: 1;
+}
+
+/* Metadata overlay - hidden by default, shown on hover */
+.media-metadata {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.media-card:hover .media-metadata {
+  opacity: 1;
+}
+
+/* Metadata text styles */
+.media-author {
+  font-size: 13px;
+  font-weight: 500;
+  color: white;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.media-date {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ==================== Lightbox Navigation ==================== */
+
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  background: rgba(0, 0, 0, 0.3);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: opacity 0.3s ease, background 0.2s ease;
+  z-index: 10;
+  user-select: none;
+  opacity: 0;
+  border-radius: 50%;
+}
+
+@media (hover: hover) {
+  .lightbox-content:hover .lightbox-nav {
+    opacity: 0.6;
+  }
+
+  .lightbox-nav:hover {
+    opacity: 1 !important;
+    background: rgba(0, 0, 0, 0.5);
+  }
+}
+
+.lightbox-nav svg {
+  width: 18px;
+  height: 18px;
+}
+
+.lightbox-prev {
+  left: 20px;
+}
+
+.lightbox-next {
+  right: 20px;
+}
+
+.lightbox-counter {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  z-index: 10;
+}
+
+/* ==================== Crawl Status Banner ==================== */
+
+/* Spinning animation for loader icon */
+.crawl-status-banners .spin svg {
+  animation: crawl-banner-spin 1s linear infinite;
+}
+
+@keyframes crawl-banner-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .crawl-status-banners .spin svg {
+    animation: none;
+  }
+}
+
+/* ==================== List & Paragraph Reset (Timeline Cards) ==================== */
+
+/* Reset paragraphs after lists to prevent indentation inheritance */
+.blog-content-inline ul,
+.blog-content-inline ol {
+  margin-bottom: 1em;
+  padding-left: 1.5em;
+}
+
+.blog-content-inline ul + p,
+.blog-content-inline ol + p,
+.blog-content-inline li + p {
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+  text-indent: 0 !important;
+}
+
+/* Ensure paragraphs have no inherited list indentation */
+.blog-content-inline p {
+  margin-left: 0;
+  padding-left: 0;
+}
+
+/* ==================== Series Card Styles ==================== */
+
+/* Series card container */
+.series-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  transition: border-color 0.2s ease;
+}
+
+@media (hover: hover) {
+  .series-card:hover {
+    border-color: var(--background-modifier-border-hover);
+  }
+}
+
+/* Series header */
+.series-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.series-title-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.series-platform-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.series-platform-icon svg {
+  fill: var(--text-accent);
+  width: 100%;
+  height: 100%;
+}
+
+.series-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (hover: hover) {
+  .series-title:hover {
+    text-decoration: underline;
+  }
+}
+
+.series-author {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Series navigation */
+.series-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.series-nav-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+@media (hover: hover) {
+  .series-nav-btn:hover {
+    background: var(--background-modifier-hover);
+  }
+}
+
+.series-nav-btn.disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.series-episode-indicator {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  min-width: 40px;
+  text-align: center;
+}
+
+/* Series content area */
+.series-content {
+  padding: 16px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+/* Episode title */
+.episode-title {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-normal);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .episode-title:hover {
+    text-decoration: underline;
+  }
+}
+
+.episode-content-wrapper {
+  /* Wrapper for PostCardRenderer content */
+}
+
+.episode-excerpt {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+/* Episode list (TOC) */
+.series-episode-list-wrapper {
+  /* Container for toggle + list */
+}
+
+.episode-list-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  cursor: pointer;
+  background: var(--background-secondary);
+  transition: background 0.15s ease;
+}
+
+/* Hover/active effects removed for cleaner look */
+
+.episode-list-chevron {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.2s ease;
+}
+
+.episode-list-chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.episode-list-container {
+  max-height: min(45vh, 520px);
+  overflow-y: auto;
+}
+
+/* Episode item in list */
+.episode-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--background-modifier-border);
+  transition: background 0.15s ease;
+}
+
+/* Only apply hover on devices that support it (not touch) */
+@media (hover: hover) {
+  .episode-item:hover {
+    background: var(--background-modifier-hover);
+  }
+}
+
+/* Active state for touch feedback */
+.episode-item:active {
+  background: var(--background-modifier-hover);
+}
+
+.episode-item.current {
+  background: var(--background-modifier-hover);
+}
+
+.episode-item:last-child {
+  border-bottom: none;
+}
+
+.episode-status {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.episode-status.current {
+  color: var(--interactive-accent);
+}
+
+.episode-status.read {
+  color: var(--text-muted);
+}
+
+.episode-status.unread {
+  color: var(--text-faint);
+}
+
+.episode-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.episode-item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.episode-num {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--background-modifier-border);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.episode-item-title {
+  font-size: 13px;
+  color: var(--text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.episode-item.current .episode-item-title {
+  font-weight: 600;
+}
+
+.episode-item-excerpt {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.episode-item.read .episode-item-excerpt {
+  opacity: 0.7;
+}
+
+/* Mobile optimizations for series cards */
+@media (max-width: 768px) {
+  .series-header {
+    padding: 8px 12px;
+    gap: 8px;
+    /* Keep single line layout, never wrap */
+    flex-wrap: nowrap !important;
+  }
+
+  .series-title-section {
+    flex: 1;
+    min-width: 0; /* Allow shrinking */
+    order: 0 !important; /* Always first */
+  }
+
+  .series-controls {
+    flex-shrink: 0;
+    order: 1 !important; /* Always after title */
+  }
+
+  .series-title-wrapper {
+    gap: 0 !important;
+  }
+
+  .series-title {
+    font-size: 13px;
+  }
+
+  .series-author {
+    font-size: 11px;
+  }
+
+  .series-platform-icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .series-nav {
+    flex-shrink: 0;
+    gap: 4px;
+  }
+
+  .series-nav-btn {
+    width: 32px;
+    height: 32px;
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .series-expand-btn {
+    width: 32px;
+    height: 32px;
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .series-episode-indicator {
+    font-size: 12px;
+    min-width: 32px;
+  }
+
+  .series-content {
+    padding: 12px;
+  }
+
+  .episode-list-toggle {
+    padding: 10px 12px;
+  }
+
+  .episode-item {
+    padding: 10px 12px;
+  }
+
+  /* Fullscreen on mobile - safe area aware */
+  .series-card.series-fullscreen {
+    /* Position: full screen */
+    width: 100vw !important;
+    max-width: none !important;
+    top: 0 !important;
+    left: 0 !important;
+    transform: none !important;
+    border-radius: 0 !important;
+    /* Height with safe area calculation */
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
+    /* No padding - safe area handled by children */
+    padding: 0 !important;
+    /* Contain layout changes to prevent backdrop flicker during image loading */
+    contain: layout style;
+  }
+
+  /* Header in fullscreen - add top safe area */
+  .series-card.series-fullscreen .series-header {
+    padding-top: calc(8px + env(safe-area-inset-top, 0px));
+    border-radius: 0;
+  }
+
+  /* Episode list in fullscreen - add bottom safe area with matching background */
+  .series-card.series-fullscreen .series-episode-list-wrapper {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--background-secondary);
+  }
+
+  /* Episode toggle in fullscreen - no radius */
+  .series-card.series-fullscreen .episode-list-toggle {
+    border-radius: 0;
+  }
+}
+
+/* ==================== Code Block Copy Button (Timeline Cards) ==================== */
+
+/* Code block container - relative positioning for button */
+.timeline-feed pre[class],
+.blog-content-inline pre[class] {
+  position: relative;
+}
+
+/* Copy button - hidden by default, smaller, positioned top-right */
+/* High specificity selectors to override Tailwind/Obsidian defaults */
+.workspace .timeline-feed pre button.copy-code-button,
+.workspace .blog-content-inline pre button.copy-code-button,
+.timeline-feed pre[class] button.copy-code-button,
+.blog-content-inline pre[class] button.copy-code-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  padding: 4px 6px;
+  font-size: 10px;
+  min-height: unset;
+  height: auto;
+  line-height: 1;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  box-shadow: none;
+}
+
+/* Show copy button on hover */
+@media (hover: hover) {
+  .workspace .timeline-feed pre:hover button.copy-code-button,
+  .workspace .blog-content-inline pre:hover button.copy-code-button,
+  .timeline-feed pre[class]:hover button.copy-code-button,
+  .blog-content-inline pre[class]:hover button.copy-code-button {
+    opacity: 0.7;
+  }
+
+  /* Full opacity on button hover */
+  .workspace .timeline-feed pre button.copy-code-button:hover,
+  .workspace .blog-content-inline pre button.copy-code-button:hover,
+  .timeline-feed pre[class] button.copy-code-button:hover,
+  .blog-content-inline pre[class] button.copy-code-button:hover {
+    opacity: 1;
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+  }
+}
+
+/* ==================== Series Expand Button ==================== */
+
+.series-expand-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: background 0.15s ease, color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.series-expand-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Hover only on devices that support it */
+@media (hover: hover) {
+  .series-expand-btn:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+  }
+}
+
+/* Active state for touch feedback */
+.series-expand-btn:active {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+/* ==================== Episode List Fixes ==================== */
+
+/* Remove border from episode list wrapper when collapsed */
+.series-episode-list-wrapper {
+  border-top: none;
+}
+
+/* Episode toggle - last element, rounded corners */
+.episode-list-toggle {
+  border-radius: 0 0 12px 12px;
+}
+
+/* When list is expanded, toggle doesn't need bottom radius */
+.series-episode-list-wrapper .episode-list-container[style*="block"] + .episode-list-toggle,
+.episode-list-toggle:has(+ .episode-list-container[style*="block"]) {
+  border-radius: 0;
+}
+
+/* Webtoon episode list border fix */
+.webtoon-episode-list .episode-list-toggle {
+  border-top: 1px solid var(--background-modifier-border);
+  border-bottom: none;
+}
+
+/* Episode list container - no extra spacing */
+.episode-list-container {
+  border-radius: 0 0 12px 12px;
+}
+
+.episode-list-container[style*="none"] {
+  display: none !important;
+  height: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+}
+
+/* ==================== Immersive Mode (Webtoon Full-Screen Reading) ==================== */
+/* Triggered by tapping the content area in fullscreen mode */
+/* Like Naver Webtoon app - hides all UI, shows only images */
+
+/* Fullscreen card - flex layout for proper expansion */
+.series-card.series-fullscreen {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Base transitions for smooth show/hide */
+.series-card.series-fullscreen .series-header,
+.series-card.series-fullscreen .series-episode-list-wrapper,
+.series-card.series-fullscreen .webtoon-episode-header {
+  transition: opacity 0.2s ease;
+}
+
+/* Content takes available space */
+.series-card.series-fullscreen .series-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Fullscreen mode - webtoon scroll container fills available space */
+.series-card.series-fullscreen .webtoon-scroll-container {
+  flex: 1;
+  max-height: none !important;
+  height: auto !important;
+}
+
+/* Fullscreen mode - add bottom padding for last image visibility */
+.series-card.series-fullscreen .webtoon-image-container {
+  padding-bottom: 80px; /* Space for Next Episode button */
+}
+
+/* Immersive mode - fade out header */
+.series-card.series-immersive .series-header {
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+}
+
+/* Immersive mode - hide episode header inside content */
+.series-card.series-immersive .webtoon-episode-header {
+  opacity: 0;
+  pointer-events: none;
+  height: 0;
+  overflow: hidden;
+  padding: 0 !important;
+  border: none !important;
+}
+
+/* Immersive mode - fade out episode list */
+.series-card.series-immersive .series-episode-list-wrapper {
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+}
+
+/* Immersive mode - content fills entire card */
+.series-card.series-immersive .series-content {
+  padding: 0 !important;
+}
+
+/* Immersive mode - webtoon scroll container fills space */
+.series-card.series-immersive .webtoon-scroll-container {
+  flex: 1;
+  max-height: none !important;
+  height: auto !important;
+  border-radius: 0;
+}
+
+/* Immersive mode - hide progress bar */
+.series-card.series-immersive .webtoon-progress-bar {
+  display: none;
+}
+
+/* Backdrop transition for immersive mode */
+.series-fullscreen-backdrop {
+  transition: opacity 0.3s ease;
+  will-change: opacity;
+  contain: strict;
+}
+
+/* ==================== Fullscreen Episode List Scroll Fix ==================== */
+/* Toggle header stays fixed, only episode list scrolls */
+
+.series-card.series-fullscreen .series-episode-list-wrapper {
+  display: flex;
+  flex-direction: column;
+  max-height: min(55vh, 560px); /* Dynamic height based on viewport */
+  overflow: hidden !important; /* Override overflow-y:auto on wrapper */
+}
+
+.series-card.series-fullscreen .episode-list-toggle {
+  flex-shrink: 0; /* Toggle header doesn't shrink */
+}
+
+.series-card.series-fullscreen .episode-list-container {
+  flex: 1;
+  overflow-y: auto;
+  max-height: none; /* Remove max-height, flex controls height */
+}
+
+/* Fullscreen mode - comments wrapper dynamic height */
+.series-card.series-fullscreen .series-comments-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.series-card.series-fullscreen .comments-list-container {
+  max-height: min(35vh, 450px) !important; /* Dynamic height based on viewport */
+}
+
+/* Expand episode list further, especially when comments are also open */
+.series-card:has(.comments-list-container[style*="block"]):has(.episode-list-container[style*="block"]) .episode-list-container {
+  max-height: min(50vh, 560px);
+}
+
+.series-card:has(.comments-list-container[style*="block"]):has(.episode-list-container[style*="block"]) .comments-list-container {
+  max-height: min(30vh, 320px) !important;
+}
+
+.series-card.series-fullscreen:has(.comments-list-container[style*="block"]):has(.episode-list-container[style*="block"]) .series-episode-list-wrapper {
+  max-height: min(60vh, 620px);
+}
+
+.series-card.series-fullscreen:has(.comments-list-container[style*="block"]):has(.episode-list-container[style*="block"]) .comments-list-container {
+  max-height: min(25vh, 300px) !important;
+}
+
+@media (max-width: 768px) {
+  .episode-list-container {
+    max-height: min(60vh, 560px);
+  }
+
+  .series-card.series-fullscreen .series-episode-list-wrapper {
+    max-height: min(65vh, 640px);
+  }
+
+  .series-card:has(.comments-list-container[style*="block"]):has(.episode-list-container[style*="block"]) .episode-list-container {
+    max-height: min(65vh, 600px);
+  }
+}
+
+/* Mobile immersive mode - edge-to-edge with safe area consideration */
+@media (max-width: 768px) {
+  .series-card.series-immersive .webtoon-scroll-container {
+    /* No horizontal padding - true full screen width */
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  /* Image wrapper in immersive - full width */
+  .series-card.series-immersive .webtoon-image-wrapper {
+    width: 100vw;
+    max-width: 100vw;
+  }
+
+  .series-card.series-immersive .webtoon-image-wrapper img {
+    max-width: 100vw;
+  }
+
+  /* First image needs top safe area padding to avoid battery/notch overlap */
+  .series-card.series-immersive .webtoon-image-container > .webtoon-image-wrapper:first-child {
+    padding-top: env(safe-area-inset-top, 0px);
+    background: var(--background-primary);
+  }
+
+  /* Next Episode button needs bottom safe area padding */
+  .series-card.series-immersive .webtoon-next-episode-btn {
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+/* Tap hint indicator (shown briefly when entering fullscreen) */
+.series-card.series-fullscreen .webtoon-scroll-container::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 60px;
+  height: 60px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+/* Brief tap hint on first enter (controlled via animation) */
+.series-card.series-fullscreen:not(.series-immersive) .webtoon-scroll-container.show-tap-hint::after {
+  animation: tapHint 2s ease-out forwards;
+}
+
+@keyframes tapHint {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+  15% { opacity: 0.7; transform: translate(-50%, -50%) scale(1); }
+  85% { opacity: 0.7; }
+  100% { opacity: 0; }
+}
+
+/* ==================== Timeline View Safe Area (Mobile) ==================== */
+/* When Obsidian's mobile navigation is hidden, content needs safe-area padding */
+/* This prevents content from being obscured by iOS status bar / Dynamic Island */
+
+/* Mobile-only: Add safe-area padding to timeline view */
+/* Note: is-mobile class is added by Obsidian on mobile devices */
+body.is-mobile .social-archiver-timeline-view {
+  /* Top safe area for status bar / Dynamic Island */
+  padding-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px), var(--timeline-safe-area-top-fallback, 0px));
+  /* Bottom safe area for home indicator */
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px), var(--timeline-safe-area-bottom-fallback, 0px));
+}
+
+/* Target view-content inside timeline view for Obsidian's DOM structure */
+body.is-mobile .social-archiver-timeline-view .view-content {
+  padding-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px), var(--timeline-safe-area-top-fallback, 0px));
+}
+
+/* Fallback using media query for devices where is-mobile might not be set */
+@media (max-width: 768px) {
+  .social-archiver-timeline-view {
+    padding-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px), var(--timeline-safe-area-top-fallback, 0px));
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px), var(--timeline-safe-area-bottom-fallback, 0px));
+  }
+}
+
+/* When Obsidian is in frameless/hidden-tab mode on mobile */
+body.is-mobile.is-hidden-frameless .social-archiver-timeline-view,
+body.is-phone .social-archiver-timeline-view,
+body.is-tablet .social-archiver-timeline-view {
+  padding-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px), var(--timeline-safe-area-top-fallback, 0px));
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px), var(--timeline-safe-area-bottom-fallback, 0px));
+}
+
+/* ==================== Reader Mode ==================== */
+
+/* Backdrop - semi-transparent overlay behind reader */
+.reader-mode-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  contain: strict;
+}
+
+.reader-mode-backdrop-visible {
+  opacity: 1;
+}
+
+/* Container - fixed fullscreen over everything */
+.reader-mode-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  z-index: 1000;
+  background: var(--background-primary);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  overflow: hidden;
+  /* Safe area padding (env + Obsidian vars + visualViewport fallback) */
+  padding-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px), var(--reader-safe-area-top-fallback, 0px));
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px), var(--reader-safe-area-bottom-fallback, 0px));
+  box-sizing: border-box;
+  /* Default font size (overridden by JS via CSS variable) */
+  --reader-font-size: 19px;
+  /* Allow vertical scroll, JS handles horizontal swipe */
+  touch-action: pan-y;
+}
+
+.reader-mode-container-visible {
+  opacity: 1;
+}
+
+/* Single panel wrapper - fills the container */
+.reader-mode-panel-wrapper {
+  width: 100%;
+  height: 100%;
+  will-change: transform, opacity;
+  touch-action: pan-y;
+}
+
+/* Panel - the actual reader content area (class added by renderer) */
+.reader-mode-panel {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollable area inside panel */
+.reader-mode-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 24px;
+  touch-action: pan-y;
+}
+
+/* Centered content wrapper */
+.reader-mode-content {
+  max-width: 680px;
+  margin: 0 auto;
+  width: 100%;
+  padding-bottom: 32px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* ---------- Header (sticky, outside scroll area) ---------- */
+.reader-mode-header-wrapper {
+  flex-shrink: 0;
+  padding: 6px 24px;
+  background: var(--background-primary);
+  border: none;
+}
+
+.reader-mode-header-content {
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.reader-mode-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+
+.reader-mode-header-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 6px;
+  color: var(--text-muted);
+  transition: background 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+@media (hover: hover) {
+  .reader-mode-header-btn:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+  }
+}
+
+.reader-mode-header-btn:active {
+  background: var(--background-modifier-hover);
+  transition: none;
+}
+
+.reader-mode-header-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.reader-mode-position {
+  font-size: 14px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Right group in header: font controls, copy */
+.reader-mode-header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-self: end;
+}
+
+
+
+/* ---------- Author ---------- */
+.reader-mode-author {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.reader-mode-avatar {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.reader-mode-author-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.reader-mode-author-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reader-mode-author-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reader-mode-platform-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.reader-mode-platform-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.reader-mode-author-meta {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Tags ---------- */
+.reader-mode-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.reader-mode-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 16px;
+  background: var(--background-secondary);
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.reader-mode-tag-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--background-modifier-border);
+  flex-shrink: 0;
+}
+
+/* ---------- Title ---------- */
+.reader-mode-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-normal);
+  line-height: 1.35;
+  margin: 0 0 20px 0;
+  padding: 0;
+}
+
+/* ---------- Body ---------- */
+.reader-mode-body {
+  font-size: var(--reader-font-size, 19px);
+  line-height: 1.75;
+  color: var(--text-normal);
+  margin-bottom: 24px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.reader-mode-body p {
+  margin-bottom: 1em;
+}
+
+.reader-mode-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+.reader-mode-body a {
+  color: var(--interactive-accent);
+  text-decoration: underline;
+}
+
+.reader-mode-body blockquote {
+  border-left: 3px solid var(--interactive-accent);
+  padding-left: 14px;
+  margin-left: 0;
+  color: var(--text-muted);
+}
+
+.reader-mode-body code {
+  font-size: 0.9em;
+  background: var(--code-background);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.reader-mode-body pre {
+  background: var(--code-background);
+  padding: 14px;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+/* ---------- Media ---------- */
+.reader-mode-media {
+  margin-bottom: 24px;
+}
+
+.reader-mode-media img {
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+/* ---------- Metrics (used inside action bar) ---------- */
+.reader-mode-metric {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.reader-mode-metric-icon {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reader-mode-metric-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* ---------- Action Bar ---------- */
+.reader-mode-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-top: 14px;
+  margin-top: 20px;
+  border-top: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.reader-mode-action-bar-metrics {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.reader-mode-action-bar-spacer {
+  flex: 1;
+}
+
+.reader-mode-action-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.reader-mode-action-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 6px;
+  color: var(--text-muted);
+  transition: background 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+@media (hover: hover) {
+  .reader-mode-action-btn:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+  }
+}
+
+.reader-mode-action-btn:active {
+  background: var(--background-modifier-hover);
+  transition: none;
+}
+
+.reader-mode-action-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ---------- Source Link ---------- */
+.reader-mode-source {
+  margin-top: 16px;
+  padding-bottom: 20px;
+}
+
+.reader-mode-source a {
+  font-size: 14px;
+}
+
+/* ---------- Modal z-index override ---------- */
+/* Obsidian Modals (TagModal, confirm, etc.) must appear above reader mode (z-index 1000) */
+.modal-container:has(.social-archiver-tag-modal),
+.modal-container:has(.social-archiver-confirm-modal) {
+  z-index: 1001;
+}
+
+/* Fallback: any modal opened while reader is active should be on top.
+   Obsidian's .modal-container is normally z-index ~var(--layer-modal).
+   We raise ALL modal-containers when reader is present to avoid stacking issues. */
+body:has(.reader-mode-container-visible) .modal-container {
+  z-index: 1001;
+}
+
+/* ---------- Mobile adjustments ---------- */
+@media (max-width: 768px) {
+  .reader-mode-scroll {
+    padding: 0 16px;
+  }
+
+  .reader-mode-body {
+    /* Still uses the CSS variable on mobile — user controls the size */
+    line-height: 1.7;
+  }
+
+  .reader-mode-title {
+    font-size: 22px;
+  }
+
+  .reader-mode-avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .reader-mode-author-name {
+    font-size: 14px;
+  }
+
+  .reader-mode-author-meta {
+    font-size: 12px;
+  }
+
+  .reader-mode-header-wrapper {
+    padding: 6px 16px;
+  }
+
+  .reader-mode-header-right .reader-mode-header-btn {
+    width: 30px;
+    height: 30px;
+  }
+
+  .reader-mode-header-right .reader-mode-header-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+/* ---------- Mobile action bar — match PostCard interaction bar ---------- */
+body.is-mobile .reader-mode-action-bar {
+  gap: 12px;
+  font-size: 13px;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+}
+
+body.is-mobile .reader-mode-action-bar-metrics {
+  display: none;
+}
+
+body.is-mobile .reader-mode-action-bar-spacer {
+  display: none;
+}
+
+body.is-mobile .reader-mode-action-bar-actions {
+  gap: 1px;
+  margin-left: auto;
+}
+
+/* Match PostCard icon sizing: 16×16, no padding/bg on buttons */
+body.is-mobile .reader-mode-action-btn {
+  width: auto;
+  height: auto;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+}
+
+body.is-mobile .reader-mode-action-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ---------- Tablet (iPad) action bar — restore desktop-like layout ---------- */
+body.is-tablet .reader-mode-action-bar {
+  gap: 16px;
+  justify-content: flex-start;
+}
+
+body.is-tablet .reader-mode-action-bar-metrics {
+  display: flex;
+}
+
+body.is-tablet .reader-mode-action-bar-spacer {
+  display: block;
+  flex: 1;
+}
+
+body.is-tablet .reader-mode-action-bar-actions {
+  gap: 4px;
+  margin-left: 0;
+}
+
+body.is-tablet .reader-mode-action-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 6px;
+  background: none;
+}
+
+body.is-tablet .reader-mode-action-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+@media (hover: hover) {
+  body.is-tablet .reader-mode-action-btn:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+  }
+}

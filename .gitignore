@@ -1,23 +1,68 @@
+# Reference repositories
+/reference/
+
 # Node modules
 node_modules/
 
-# Build outputs (these are committed for releases)
-# main.js, manifest.json, styles.css are tracked
-
-# Development files
-*.log
-*.map
-.DS_Store
+# Environment variables
 .env
 .env.local
+.env.*.local
+
+# Build output
+dist/
+dist-plugin/
+build/
+*.asar
 
 # IDE
-.vscode/
 .idea/
+.vscode/
 *.swp
 *.swo
 
-# Temporary files
-*.tmp
-*.temp
-.cache/
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Obsidian plugin development
+main.js
+# styles.css is tracked as source file, only main.js is build output
+
+logs
+dev-debug.log
+# Dependency directories
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# OS specific
+
+# Cloudflare Workers
+.wrangler/
+workers/dist/
+workers/.wrangler/
+workers/.dev.vars
+
+# Task files
+# tasks.json
+# tasks/
+
+# Test scripts (may contain API keys)
+test-*.js
+
+# Admin scripts with API keys
+scripts/admin-stats.py
+
+# Backup directories
+mobile-app-svelte-backup/

@@ -1,0 +1,18 @@
+/*
+ * Source stylesheet entry for the plugin.
+ *
+ * Keep this file modular and import individual style groups here.
+ */
+
+/* Legacy stylesheet split into ordered chunks */
+@import './legacy/00-foundation.css';
+@import './legacy/10-archive.css';
+@import './legacy/20-media-gallery.css';
+@import './legacy/30-release-webtoon.css';
+@import './legacy/40-series-fullscreen.css';
+@import './legacy/50-timeline-series-mixed.css';
+@import './legacy/60-reader-mode.css';
+@import './legacy/70-video-cue.css';
+
+/* Timeline and reader-mode incremental styles */
+@import '../components/timeline/managers/skeleton-card.css';

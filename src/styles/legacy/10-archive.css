@@ -1,0 +1,253 @@
+/* Legacy split chunk: 10-archive.css (preserves original rule order) */
+
+.archive-modal-title {
+  margin-bottom: 20px;
+  font-size: 18px;
+  font-weight: 600
+}
+
+.archive-url-container {
+  margin-bottom: 16px
+}
+
+.archive-url-input {
+  width: 100%;
+  padding: 8px 12px;
+  font-family: var(--font-monospace);
+  font-size: 13px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--input-radius);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  transition: border-color .1s ease
+}
+
+.archive-url-input:focus {
+  outline: none;
+  border-color: var(--interactive-accent)
+}
+
+.archive-url-input::-moz-placeholder {
+  color: var(--text-muted);
+  font-size: 12px
+}
+
+.archive-url-input::placeholder {
+  color: var(--text-muted);
+  font-size: 12px
+}
+
+.archive-platform-badge {
+  margin-bottom: 12px;
+  padding: 4px 0;
+  font-size: 11px;
+  color: var(--text-accent);
+  font-weight: 500
+}
+
+.archive-youtube-options {
+  margin-bottom: 16px;
+  padding: 0;
+  border: none
+}
+
+.archive-youtube-options .setting-item {
+  border-top: none;
+  padding: 6px 0
+}
+
+.archive-youtube-options .setting-item:first-child {
+  padding-top: 0
+}
+
+.archive-youtube-options .setting-item:last-child {
+  padding-bottom: 0
+}
+
+.archive-youtube-options .setting-item-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-normal)
+}
+
+.archive-youtube-options .setting-item-description {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.3;
+  margin-top: 2px
+}
+
+.archive-youtube-options .setting-item-control {
+  flex-shrink: 0
+}
+
+.archive-disclaimer {
+  margin-bottom: 20px;
+  padding: 8px 0 8px 12px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  background: transparent;
+  border-left: 2px solid var(--background-modifier-border);
+  border-radius: 0
+}
+
+.modal-button-container {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--background-modifier-border)
+}
+
+.tiktok-embed-container,
+.tiktok-embed-container iframe {
+  background: var(--background-secondary) !important
+}
+
+.tiktok-embed iframe:before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--background-secondary);
+  z-index: -1
+}
+
+.archive-comment-container {
+  margin-bottom: 16px
+}
+
+.archive-comment-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-normal);
+  margin-bottom: 8px
+}
+
+.archive-comment-textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 8px 12px;
+  font-family: var(--font-text);
+  font-size: 13px;
+  line-height: 1.5;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--input-radius);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  resize: vertical;
+  transition: border-color .1s ease
+}
+
+.archive-comment-textarea:focus {
+  outline: none;
+  border-color: var(--interactive-accent)
+}
+
+.archive-comment-textarea::-moz-placeholder {
+  color: var(--text-muted);
+  font-size: 12px
+}
+
+.archive-comment-textarea::placeholder {
+  color: var(--text-muted);
+  font-size: 12px
+}
+
+.link-preview-image-container {
+  width: 120px;
+  min-width: 120px;
+  background: var(--background-secondary);
+  position: relative;
+  overflow: hidden
+}
+
+.link-preview-image {
+  width: 100%;
+  height: 100%;
+  -o-object-fit: cover;
+  object-fit: cover;
+  display: block
+}
+
+.archive-suggestion-modal {
+  padding: 20px;
+  max-width: 500px
+}
+
+.archive-suggestion-header {
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-size: 1.5em;
+  font-weight: 600;
+  color: var(--text-normal)
+}
+
+.archive-suggestion-platform-badge {
+  margin: 10px 0;
+  padding: 8px 12px;
+  background: var(--background-modifier-border);
+  border-radius: 6px;
+  font-size: .95em;
+  color: var(--text-normal)
+}
+
+.archive-suggestion-platform-badge .platform-icon {
+  font-size: 1.2em;
+  margin-right: 6px
+}
+
+.archive-suggestion-description {
+  margin: 15px 0;
+  font-size: 1em;
+  color: var(--text-normal);
+  line-height: 1.5
+}
+
+.archive-suggestion-url-preview {
+  margin: 15px 0;
+  padding: 10px;
+  background: var(--background-secondary);
+  border-radius: 4px;
+  overflow-x: auto
+}
+
+.archive-suggestion-url-preview code {
+  font-size: .9em;
+  color: var(--text-muted);
+  font-family: var(--font-monospace)
+}
+
+.archive-suggestion-credit-info {
+  margin: 10px 0;
+  padding: 8px 12px;
+  background: var(--background-modifier-message);
+  border-left: 3px solid var(--interactive-accent);
+  border-radius: 4px;
+  font-size: .9em;
+  color: var(--text-muted)
+}
+
+.archive-suggestion-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--background-modifier-border)
+}
+
+.archive-suggestion-buttons button {
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: var(--button-radius);
+  transition: all .2s ease
+}
+
+.archive-suggestion-buttons button:disabled {
+  opacity: .6;
+  cursor: not-allowed
+}
+

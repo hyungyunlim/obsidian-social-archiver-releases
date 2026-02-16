@@ -14,75 +14,41 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Verify required files exist
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build plugin
+        run: npm run build:prod
+
+      - name: Verify build outputs
         run: |
-          if [ ! -f main.js ]; then
-            echo "Error: main.js not found - please commit build artifacts"
+          if [ ! -f dist-plugin/main.js ]; then
+            echo "Error: dist-plugin/main.js not found"
             exit 1
           fi
           if [ ! -f manifest.json ]; then
             echo "Error: manifest.json not found"
             exit 1
           fi
-          if [ ! -f styles.css ]; then
-            echo "Error: styles.css not found - please commit build artifacts"
+          if [ ! -f dist-plugin/styles.css ]; then
+            echo "Error: dist-plugin/styles.css not found"
             exit 1
           fi
-          echo "✓ All required files are present"
-
-      - name: Extract version from tag
-        id: get_version
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Release version: $VERSION"
-
-      - name: Verify version matches manifest.json
-        run: |
-          MANIFEST_VERSION=$(cat manifest.json | grep '"version"' | sed 's/.*"version": "\(.*\)".*/\1/')
-          TAG_VERSION="${{ steps.get_version.outputs.version }}"
-          echo "Manifest version: $MANIFEST_VERSION"
-          echo "Tag version: $TAG_VERSION"
-          if [ "$MANIFEST_VERSION" != "$TAG_VERSION" ]; then
-            echo "Error: Version mismatch!"
-            echo "manifest.json has version $MANIFEST_VERSION but tag is $TAG_VERSION"
-            exit 1
-          fi
-          echo "✓ Version matches"
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20.x"
-
-      - name: Minify main.js for release
-        run: |
-          echo "Source main.js: $(wc -c < main.js) bytes, $(wc -l < main.js) lines"
-          npx terser@5 main.js \
-            --compress drop_console=false,drop_debugger=true \
-            --mangle safari10 \
-            --output main.min.js
-          echo "Minified main.min.js: $(wc -c < main.min.js) bytes"
-          mv main.min.js main.js
-
-      - name: Minify styles.css for release
-        run: |
-          echo "Source styles.css: $(wc -c < styles.css) bytes, $(wc -l < styles.css) lines"
-          npx lightningcss-cli@1 --minify styles.css -o styles.min.css
-          echo "Minified styles.min.css: $(wc -c < styles.min.css) bytes"
-          mv styles.min.css styles.css
+          echo "All required files are present"
 
       - name: Create release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ steps.get_version.outputs.version }}"
+          tag="${GITHUB_REF#refs/tags/}"
 
-          gh release create "$TAG" \
-            --title="$TAG" \
+          gh release create "$tag" \
+            --title="$tag" \
             --draft \
-            --generate-notes \
-            main.js manifest.json styles.css
-
-          echo "✓ Draft release created successfully"
-          echo "Visit https://github.com/${{ github.repository }}/releases to publish"
+            dist-plugin/main.js manifest.json dist-plugin/styles.css

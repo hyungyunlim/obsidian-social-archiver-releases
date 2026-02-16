@@ -1,0 +1,11 @@
+/* Legacy split chunk: 70-video-cue.css (preserves original rule order) */
+
+video::cue {
+  background-color: rgba(0, 0, 0, .55);
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 1em;
+  line-height: 1.4;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, .9);
+  white-space: pre-line
+}
