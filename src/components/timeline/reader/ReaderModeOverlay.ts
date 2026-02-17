@@ -82,7 +82,7 @@ export class ReaderModeOverlay {
     this.currentIndex = context.currentIndex;
 
     // Restore persisted font size
-    const stored = localStorage.getItem(ReaderModeOverlay.FONT_SIZE_KEY);
+    const stored = this.context.app.loadLocalStorage(ReaderModeOverlay.FONT_SIZE_KEY);
     this.fontSize = stored ? Math.max(ReaderModeOverlay.MIN_FONT, Math.min(ReaderModeOverlay.MAX_FONT, Number(stored))) : 19;
   }
 
@@ -112,7 +112,7 @@ export class ReaderModeOverlay {
     this.applyFontSize();
 
     // Single panel
-    this.panel = this.container.createDiv({ cls: 'reader-mode-panel-wrapper' });
+    this.panel = this.container.createDiv({ cls: 'reader-mode-panel-wrapper rmo-panel-animated' });
 
     // Keyboard handler (register early so ESC always works)
     this.keyHandler = (e: KeyboardEvent) => {
@@ -247,8 +247,10 @@ export class ReaderModeOverlay {
         if (bottomInset > 120) bottomInset = 0;
       }
 
-      this.container.style.setProperty('--reader-safe-area-top-fallback', `${topInset}px`);
-      this.container.style.setProperty('--reader-safe-area-bottom-fallback', `${bottomInset}px`);
+      this.container.setCssProps({
+        '--reader-safe-area-top-fallback': `${topInset}px`,
+        '--reader-safe-area-bottom-fallback': `${bottomInset}px`,
+      });
     };
 
     this.viewportSafeAreaListener = applyInsets;
@@ -297,17 +299,21 @@ export class ReaderModeOverlay {
       // Panel is already partially off-screen from the drag.
       // Continue sliding it off in the same direction.
       if (this.panel) {
-        this.panel.style.transition = 'transform 0.18s ease-out, opacity 0.12s ease-out';
-        this.panel.style.transform = `translateX(${direction === 1 ? '-100%' : '100%'})`;
-        this.panel.style.opacity = '0';
+        this.panel.setCssProps({
+          '--rmo-transition': 'transform 0.18s ease-out, opacity 0.12s ease-out',
+          '--rmo-transform': `translateX(${direction === 1 ? '-100%' : '100%'})`,
+          '--rmo-opacity': '0',
+        });
       }
       await this.wait(180);
     } else {
       // Keyboard / button: subtle slide + fade
       if (this.panel) {
-        this.panel.style.transition = 'transform 0.2s ease-in, opacity 0.2s ease-in';
-        this.panel.style.transform = `translateX(${direction === 1 ? '-60px' : '60px'})`;
-        this.panel.style.opacity = '0';
+        this.panel.setCssProps({
+          '--rmo-transition': 'transform 0.2s ease-in, opacity 0.2s ease-in',
+          '--rmo-transform': `translateX(${direction === 1 ? '-60px' : '60px'})`,
+          '--rmo-opacity': '0',
+        });
       }
       await this.wait(200);
     }
@@ -327,17 +333,21 @@ export class ReaderModeOverlay {
     // Slide in new panel from opposite direction
     if (this.panel) {
       const enterOffset = fromSwipe ? '40%' : '60px';
-      this.panel.style.transition = 'none';
-      this.panel.style.transform = `translateX(${direction === 1 ? enterOffset : `-${enterOffset}`})`;
-      this.panel.style.opacity = '0';
+      this.panel.setCssProps({
+        '--rmo-transition': 'none',
+        '--rmo-transform': `translateX(${direction === 1 ? enterOffset : `-${enterOffset}`})`,
+        '--rmo-opacity': '0',
+      });
 
       // Force reflow
       void this.panel.offsetHeight;
 
       const enterDuration = fromSwipe ? '0.22s' : '0.25s';
-      this.panel.style.transition = `transform ${enterDuration} ease-out, opacity ${enterDuration} ease-out`;
-      this.panel.style.transform = 'translateX(0)';
-      this.panel.style.opacity = '1';
+      this.panel.setCssProps({
+        '--rmo-transition': `transform ${enterDuration} ease-out, opacity ${enterDuration} ease-out`,
+        '--rmo-transform': 'translateX(0)',
+        '--rmo-opacity': '1',
+      });
     }
 
     await this.wait(fromSwipe ? 220 : 250);
@@ -347,13 +357,17 @@ export class ReaderModeOverlay {
   private bounceEdge(direction: 1 | -1): void {
     if (!this.panel) return;
 
-    this.panel.style.transition = 'transform 0.15s ease-out';
-    this.panel.style.transform = `translateX(${direction * 20}px)`;
+    this.panel.setCssProps({
+      '--rmo-transition': 'transform 0.15s ease-out',
+      '--rmo-transform': `translateX(${direction * 20}px)`,
+    });
 
     setTimeout(() => {
       if (!this.panel) return;
-      this.panel.style.transition = 'transform 0.2s ease-in';
-      this.panel.style.transform = 'translateX(0)';
+      this.panel.setCssProps({
+        '--rmo-transition': 'transform 0.2s ease-in',
+        '--rmo-transform': 'translateX(0)',
+      });
     }, 150);
   }
 
@@ -361,17 +375,21 @@ export class ReaderModeOverlay {
 
   private onSwipeProgress(progress: number): void {
     if (!this.panel || this.transitioning) return;
-    this.panel.style.transition = 'none';
-    this.panel.style.transform = `translateX(${progress * 100}vw)`;
-    // Fade slightly during drag
-    this.panel.style.opacity = String(Math.max(0.3, 1 - Math.abs(progress) * 1.5));
+    this.panel.setCssProps({
+      '--rmo-transition': 'none',
+      '--rmo-transform': `translateX(${progress * 100}vw)`,
+      // Fade slightly during drag
+      '--rmo-opacity': String(Math.max(0.3, 1 - Math.abs(progress) * 1.5)),
+    });
   }
 
   private onSwipeCancel(): void {
     if (!this.panel) return;
-    this.panel.style.transition = 'transform 0.3s ease-out, opacity 0.3s ease-out';
-    this.panel.style.transform = 'translateX(0)';
-    this.panel.style.opacity = '1';
+    this.panel.setCssProps({
+      '--rmo-transition': 'transform 0.3s ease-out, opacity 0.3s ease-out',
+      '--rmo-transform': 'translateX(0)',
+      '--rmo-opacity': '1',
+    });
   }
 
   // ---------- Archive ----------
@@ -516,7 +534,7 @@ export class ReaderModeOverlay {
       requestAnimationFrame(() => {
         const containerEl = modal.containerEl;
         if (containerEl) {
-          containerEl.style.zIndex = '1001';
+          containerEl.addClass('sa-z-1001');
         }
       });
     });
@@ -594,112 +612,128 @@ export class ReaderModeOverlay {
 
     // Backdrop
     const overlay = document.createElement('div');
-    overlay.style.cssText = `
-      position: fixed; inset: 0; z-index: 1001;
-      background: var(--background-modifier-cover);
-      display: flex; align-items: center; justify-content: center;
-    `;
+    overlay.addClass('sa-fixed');
+    overlay.addClass('sa-inset-0');
+    overlay.addClass('sa-z-1001');
+    overlay.addClass('sa-flex-center');
+    overlay.setCssProps({ '--sa-bg': 'var(--background-modifier-cover)' });
+    overlay.addClass('sa-dynamic-bg');
 
     // Modal container
     const modal = document.createElement('div');
-    modal.style.cssText = `
-      background: var(--background-primary);
-      border: 1px solid var(--background-modifier-border);
-      border-radius: 12px;
-      width: min(480px, 92vw);
-      max-height: 80vh;
-      display: flex; flex-direction: column;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-    `;
+    modal.addClass('sa-bg-primary');
+    modal.addClass('sa-border');
+    modal.addClass('sa-rounded-12');
+    modal.addClass('sa-flex-col');
+    modal.addClass('rmo-note-modal');
 
     // Header
     const header = document.createElement('div');
-    header.style.cssText = `
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 16px 10px; border-bottom: 1px solid var(--background-modifier-border);
-    `;
+    header.addClass('sa-flex-between');
+    header.addClass('sa-px-16');
+    header.addClass('sa-border-b');
+    header.addClass('rmo-note-header');
+
     const title = document.createElement('div');
-    title.style.cssText = 'font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 6px;';
+    title.addClass('sa-font-semibold');
+    title.addClass('sa-text-md');
+    title.addClass('sa-flex-row');
+    title.addClass('sa-gap-6');
     const titleIcon = document.createElement('span');
-    titleIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center;';
+    titleIcon.addClass('sa-icon-16');
     setIcon(titleIcon, 'message-square-text');
     title.appendChild(titleIcon);
     title.appendChild(document.createTextNode(post.comment ? 'Edit Note' : 'Add Note'));
     header.appendChild(title);
 
     const closeBtn = document.createElement('div');
-    closeBtn.style.cssText = `
-      cursor: pointer; width: 24px; height: 24px;
-      display: flex; align-items: center; justify-content: center;
-      border-radius: 4px; color: var(--text-muted);
-    `;
+    closeBtn.addClass('sa-clickable');
+    closeBtn.addClass('sa-icon-24');
+    closeBtn.addClass('sa-rounded-4');
+    closeBtn.addClass('sa-text-muted');
     closeBtn.setAttribute('title', 'Close (Escape)');
     setIcon(closeBtn, 'x');
-    closeBtn.addEventListener('mouseenter', () => { closeBtn.style.background = 'var(--background-modifier-hover)'; });
-    closeBtn.addEventListener('mouseleave', () => { closeBtn.style.background = ''; });
+    closeBtn.addEventListener('mouseenter', () => {
+      closeBtn.setCssProps({ '--sa-bg': 'var(--background-modifier-hover)' });
+      closeBtn.addClass('sa-dynamic-bg');
+    });
+    closeBtn.addEventListener('mouseleave', () => {
+      closeBtn.removeClass('sa-dynamic-bg');
+    });
     header.appendChild(closeBtn);
 
     // Textarea
     const body = document.createElement('div');
-    body.style.cssText = 'padding: 12px 16px; flex: 1;';
+    body.addClass('sa-p-12');
+    body.addClass('sa-flex-1');
+    body.addClass('rmo-note-body');
+
     const textarea = document.createElement('textarea');
     textarea.value = post.comment || '';
     textarea.placeholder = 'Write a personal note about this post...';
-    textarea.style.cssText = `
-      width: 100%; min-height: 120px; max-height: 300px;
-      resize: vertical; padding: 10px 12px;
-      background: var(--background-secondary);
-      border: 1px solid var(--background-modifier-border);
-      border-radius: 8px; color: var(--text-normal);
-      font-size: 14px; line-height: 1.6;
-      font-family: inherit; outline: none;
-    `;
-    textarea.addEventListener('focus', () => { textarea.style.borderColor = 'var(--interactive-accent)'; });
-    textarea.addEventListener('blur', () => { textarea.style.borderColor = 'var(--background-modifier-border)'; });
+    textarea.addClass('sa-w-full');
+    textarea.addClass('sa-bg-secondary');
+    textarea.addClass('sa-border');
+    textarea.addClass('sa-rounded-8');
+    textarea.addClass('sa-text-normal');
+    textarea.addClass('sa-text-md');
+    textarea.addClass('rmo-note-textarea');
     body.appendChild(textarea);
 
     // Footer
     const footer = document.createElement('div');
-    footer.style.cssText = `
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 10px 16px 14px;
-      border-top: 1px solid var(--background-modifier-border);
-    `;
+    footer.addClass('sa-flex-between');
+    footer.addClass('sa-px-16');
+    footer.addClass('rmo-note-footer');
+
     const hint = document.createElement('span');
-    hint.style.cssText = 'font-size: 11px; color: var(--text-muted);';
+    hint.addClass('sa-text-xs');
+    hint.addClass('sa-text-muted');
     hint.textContent = 'Cmd/Ctrl+Enter to save';
     footer.appendChild(hint);
 
     const btnGroup = document.createElement('div');
-    btnGroup.style.cssText = 'display: flex; gap: 8px;';
+    btnGroup.addClass('sa-flex');
+    btnGroup.addClass('sa-gap-8');
 
     // Delete button (only if comment exists)
     if (post.comment) {
       const deleteBtn = document.createElement('button');
       deleteBtn.textContent = 'Delete';
-      deleteBtn.style.cssText = `
-        padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer;
-        border: 1px solid var(--background-modifier-border);
-        background: var(--background-secondary); color: var(--text-error);
-      `;
+      deleteBtn.addClass('sa-px-12');
+      deleteBtn.addClass('sa-py-6');
+      deleteBtn.addClass('sa-rounded-6');
+      deleteBtn.addClass('sa-text-base');
+      deleteBtn.addClass('sa-clickable');
+      deleteBtn.addClass('sa-border');
+      deleteBtn.addClass('sa-bg-secondary');
+      deleteBtn.addClass('sa-text-error');
+      deleteBtn.addClass('rmo-note-btn');
       deleteBtn.addEventListener('click', () => void handleSave(''));
       btnGroup.appendChild(deleteBtn);
     }
 
     const cancelBtn = document.createElement('button');
     cancelBtn.textContent = 'Cancel';
-    cancelBtn.style.cssText = `
-      padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer;
-      border: 1px solid var(--background-modifier-border);
-      background: var(--background-secondary); color: var(--text-normal);
-    `;
+    cancelBtn.addClass('sa-px-12');
+    cancelBtn.addClass('sa-py-6');
+    cancelBtn.addClass('sa-rounded-6');
+    cancelBtn.addClass('sa-text-base');
+    cancelBtn.addClass('sa-clickable');
+    cancelBtn.addClass('sa-border');
+    cancelBtn.addClass('sa-bg-secondary');
+    cancelBtn.addClass('sa-text-normal');
+    cancelBtn.addClass('rmo-note-btn');
 
     const saveBtn = document.createElement('button');
     saveBtn.textContent = 'Save';
-    saveBtn.style.cssText = `
-      padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer;
-      border: none; background: var(--interactive-accent); color: var(--text-on-accent);
-    `;
+    saveBtn.addClass('sa-px-12');
+    saveBtn.addClass('sa-py-6');
+    saveBtn.addClass('sa-rounded-6');
+    saveBtn.addClass('sa-text-base');
+    saveBtn.addClass('sa-clickable');
+    saveBtn.addClass('sa-bg-accent');
+    saveBtn.addClass('rmo-note-save-btn');
 
     btnGroup.appendChild(cancelBtn);
     btnGroup.appendChild(saveBtn);
@@ -815,7 +849,7 @@ export class ReaderModeOverlay {
 
   private applyFontSize(): void {
     if (this.container) {
-      this.container.style.setProperty('--reader-font-size', `${this.fontSize}px`);
+      this.container.setCssProps({ '--reader-font-size': `${this.fontSize}px` });
     }
   }
 
@@ -824,7 +858,7 @@ export class ReaderModeOverlay {
     if (next < ReaderModeOverlay.MIN_FONT || next > ReaderModeOverlay.MAX_FONT) return;
     this.fontSize = next;
     this.applyFontSize();
-    localStorage.setItem(ReaderModeOverlay.FONT_SIZE_KEY, String(this.fontSize));
+    this.context.app.saveLocalStorage(ReaderModeOverlay.FONT_SIZE_KEY, String(this.fontSize));
     // Re-render to update the font label in header
     this.reRenderPreservingScroll().catch(console.error);
   }

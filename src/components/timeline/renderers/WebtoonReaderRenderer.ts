@@ -103,24 +103,14 @@ export class WebtoonReaderRenderer {
 
     // Scrollable content area
     const scrollContainer = wrapper.createDiv({ cls: 'webtoon-scroll-container' });
-    scrollContainer.style.cssText = `
-      max-height: ${this.options.maxHeight}px;
-      overflow-y: auto;
-      overflow-x: hidden;
-      scroll-behavior: smooth;
-      -webkit-overflow-scrolling: touch;
-    `;
+    scrollContainer.addClass('sa-overflow-y-auto', 'sa-overflow-x-hidden', 'sa-scroll-smooth');
+    scrollContainer.setCssProps({ '--sa-max-height': `${this.options.maxHeight}px` });
+    scrollContainer.addClass('sa-dynamic-max-height');
+    scrollContainer.addClass('wrr-scroll-container');
 
     // Image container
     const imageContainer = scrollContainer.createDiv({ cls: 'webtoon-image-container' });
-    imageContainer.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0;
-      background: var(--background-primary);
-      width: 100%;
-    `;
+    imageContainer.addClass('sa-flex-col', 'sa-flex-center', 'sa-bg-primary', 'sa-w-full', 'wrr-image-container-gap-0');
 
     // Setup lazy loading observer
     this.setupLazyLoading(imageContainer, post.media);
@@ -147,26 +137,13 @@ export class WebtoonReaderRenderer {
 
     // Scrollable content area
     const scrollContainer = container.createDiv({ cls: 'webtoon-scroll-container' });
-    scrollContainer.style.cssText = `
-      max-height: ${height}px;
-      overflow-y: auto;
-      overflow-x: hidden;
-      scroll-behavior: smooth;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: thin;
-      scrollbar-color: var(--background-modifier-border) transparent;
-    `;
+    scrollContainer.addClass('sa-overflow-y-auto', 'sa-overflow-x-hidden', 'sa-scroll-smooth', 'sa-scrollbar-thin', 'wrr-scroll-container', 'wrr-scrollbar-color');
+    scrollContainer.setCssProps({ '--sa-max-height': `${height}px` });
+    scrollContainer.addClass('sa-dynamic-max-height');
 
     // Image container
     const imageContainer = scrollContainer.createDiv({ cls: 'webtoon-image-container' });
-    imageContainer.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0;
-      background: var(--background-primary);
-      width: 100%;
-    `;
+    imageContainer.addClass('sa-flex-col', 'sa-flex-center', 'sa-bg-primary', 'sa-w-full', 'wrr-image-container-gap-0');
 
     // Get content images only (skip cover for local mode, but not for streaming)
     // In streaming mode, remoteImageUrls already contains only content images (no cover)
@@ -191,44 +168,24 @@ export class WebtoonReaderRenderer {
    */
   private renderHeader(container: HTMLElement, post: PostData): void {
     const header = container.createDiv({ cls: 'webtoon-episode-header' });
-    header.style.cssText = `
-      padding: 12px 16px;
-      background: var(--background-secondary);
-      border-bottom: 1px solid var(--background-modifier-border);
-    `;
+    header.addClass('sa-p-12', 'sa-px-16', 'sa-bg-secondary', 'sa-border-b');
 
     // Title
     const title = header.createDiv({ cls: 'webtoon-episode-title' });
-    title.style.cssText = `
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text-normal);
-      margin-bottom: 4px;
-      line-height: 1.3;
-    `;
+    title.addClass('sa-text-md', 'sa-font-semibold', 'sa-text-normal', 'sa-mb-4', 'sa-leading-tight');
     title.textContent = post.title || '';
 
     // Metadata row (genre, age rating, etc.)
     const metadata = post.series;
     if (metadata) {
       const metaRow = header.createDiv({ cls: 'webtoon-episode-meta' });
-      metaRow.style.cssText = `
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        font-size: 11px;
-      `;
+      metaRow.addClass('sa-flex', 'sa-flex-wrap', 'sa-gap-6', 'sa-text-xs');
 
       // Genre badges
       if (metadata.genre && metadata.genre.length > 0) {
         for (const genre of metadata.genre.slice(0, 3)) {
           const badge = metaRow.createSpan({ cls: 'webtoon-genre-badge' });
-          badge.style.cssText = `
-            padding: 2px 6px;
-            background: var(--background-modifier-hover);
-            border-radius: 4px;
-            color: var(--text-muted);
-          `;
+          badge.addClass('sa-px-6', 'sa-py-4', 'sa-bg-hover', 'sa-rounded-4', 'sa-text-muted');
           badge.textContent = genre;
         }
       }
@@ -236,24 +193,14 @@ export class WebtoonReaderRenderer {
       // Age rating
       if (metadata.ageRating) {
         const ageBadge = metaRow.createSpan({ cls: 'webtoon-age-badge' });
-        ageBadge.style.cssText = `
-          padding: 2px 6px;
-          background: var(--background-modifier-error-hover);
-          border-radius: 4px;
-          color: var(--text-muted);
-        `;
+        ageBadge.addClass('sa-px-6', 'sa-py-4', 'sa-rounded-4', 'sa-text-muted', 'wrr-age-badge');
         ageBadge.textContent = metadata.ageRating;
       }
 
       // Publish day
       if (metadata.publishDay) {
         const dayBadge = metaRow.createSpan({ cls: 'webtoon-day-badge' });
-        dayBadge.style.cssText = `
-          padding: 2px 6px;
-          background: var(--background-modifier-hover);
-          border-radius: 4px;
-          color: var(--text-muted);
-        `;
+        dayBadge.addClass('sa-px-6', 'sa-py-4', 'sa-bg-hover', 'sa-rounded-4', 'sa-text-muted');
         dayBadge.textContent = metadata.publishDay;
         if (metadata.finished) {
           dayBadge.textContent += ' (Complete)';
@@ -362,19 +309,7 @@ export class WebtoonReaderRenderer {
       const localPath = mediaItem.url;
       const imgSrc = this.getImageSource(i, localPath);
 
-      const imgWrapper = container.createDiv({ cls: 'webtoon-image-wrapper' });
-      imgWrapper.style.cssText = `
-        width: 100%;
-        display: flex;
-        justify-content: center;
-        background: var(--background-primary);
-        min-height: 100px;
-        contain: layout paint;
-        margin: 0;
-        padding: 0;
-        line-height: 0;
-        font-size: 0;
-      `;
+      const imgWrapper = container.createDiv({ cls: 'webtoon-image-wrapper wrr-image-wrapper' });
 
       const img = imgWrapper.createEl('img', {
         attr: {
@@ -386,16 +321,7 @@ export class WebtoonReaderRenderer {
         }
       });
 
-      img.style.cssText = `
-        width: 100%;
-        max-width: 800px;
-        height: auto;
-        display: block;
-        object-fit: contain;
-        margin: 0;
-        padding: 0;
-        border: none;
-      `;
+      img.addClass('wrr-image');
 
       // Load first few images immediately
       if (i < 3) {
@@ -403,8 +329,7 @@ export class WebtoonReaderRenderer {
         this.loadedImages.add(imgSrc);
       } else {
         // Placeholder while loading
-        img.style.minHeight = '200px';
-        img.style.background = 'var(--background-secondary)';
+        img.addClass('wrr-image--placeholder');
 
         // Observe for lazy loading
         this.observer?.observe(img);
@@ -412,8 +337,7 @@ export class WebtoonReaderRenderer {
 
       // Handle load event
       img.addEventListener('load', () => {
-        img.style.minHeight = '';
-        img.style.background = '';
+        img.removeClass('wrr-image--placeholder');
       });
 
       // Handle error with fallback support
@@ -432,7 +356,7 @@ export class WebtoonReaderRenderer {
         }
 
         // No fallback available or fallback also failed
-        imgWrapper.style.display = 'none';
+        imgWrapper.addClass('sa-hidden');
       });
     }
   }
@@ -445,23 +369,9 @@ export class WebtoonReaderRenderer {
     scrollContainer: HTMLElement,
     totalImages: number
   ): void {
-    const progressBar = container.createDiv({ cls: 'webtoon-progress-bar' });
-    progressBar.style.cssText = `
-      height: 3px;
-      background: var(--background-modifier-border);
-      border-radius: 2px;
-      overflow: hidden;
-      margin-top: 8px;
-    `;
+    const progressBar = container.createDiv({ cls: 'webtoon-progress-bar wrr-progress-bar' });
 
-    const progressFill = progressBar.createDiv({ cls: 'webtoon-progress-fill' });
-    progressFill.style.cssText = `
-      height: 100%;
-      width: 0%;
-      background: var(--interactive-accent);
-      border-radius: 2px;
-      transition: width 0.1s ease;
-    `;
+    const progressFill = progressBar.createDiv({ cls: 'webtoon-progress-fill wrr-progress-fill' });
 
     // Create next episode floating button inside scroll container (hidden by default)
     const nextButton = this.createNextEpisodeButton(scrollContainer);
@@ -481,15 +391,18 @@ export class WebtoonReaderRenderer {
         const scrollTop = scrollContainer.scrollTop;
         const scrollHeight = scrollContainer.scrollHeight - scrollContainer.clientHeight;
         const progress = scrollHeight > 0 ? (scrollTop / scrollHeight) * 100 : 0;
-        progressFill.style.width = `${Math.min(100, progress)}%`;
+        progressFill.setCssStyles({ width: `${Math.min(100, progress)}%` });
 
         // Show/hide next episode button at 95% scroll
         const shouldShow = progress >= 95;
         if (shouldShow !== isButtonVisible) {
           isButtonVisible = shouldShow;
-          nextButton.style.opacity = shouldShow ? '1' : '0';
-          nextButton.style.pointerEvents = shouldShow ? 'auto' : 'none';
-          nextButton.style.transform = shouldShow ? 'translateY(0)' : 'translateY(20px)';
+          nextButton.setCssProps({
+            '--sa-opacity': shouldShow ? '1' : '0',
+            '--sa-transform': shouldShow ? 'translateY(0)' : 'translateY(20px)',
+          });
+          nextButton.addClass('sa-dynamic-opacity', 'sa-dynamic-transform');
+          nextButton.setCssStyles({ pointerEvents: shouldShow ? 'auto' : 'none' });
         }
 
         // Trigger prefetch at 90% (once per episode view)
@@ -515,50 +428,63 @@ export class WebtoonReaderRenderer {
     const { hasNextEpisode, onNextEpisode, onCheckNewEpisodes } = this.options;
 
     // Make scroll container the positioning context
-    scrollContainer.style.position = 'relative';
+    scrollContainer.addClass('sa-relative');
 
-    const button = scrollContainer.createDiv({ cls: 'webtoon-next-episode-btn' });
-    button.style.cssText = `
-      position: sticky;
-      bottom: 12px;
-      float: right;
-      margin-right: 12px;
-      margin-top: -44px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 10px 16px;
-      background: var(--interactive-accent);
-      color: var(--text-on-accent);
-      border-radius: 20px;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      opacity: 0;
-      pointer-events: none;
-      transform: translateY(20px);
-      transition: opacity 0.3s ease, transform 0.3s ease, background 0.2s ease;
-      z-index: 10;
-    `;
+    const button = scrollContainer.createDiv({ cls: 'webtoon-next-episode-btn wrr-next-btn' });
+    button.setCssProps({ '--sa-transform': 'translateY(20px)' });
+    button.addClass('sa-dynamic-transform');
 
-    // Icon + Text
+    // Icon + Text (safe SVG creation, no innerHTML)
     const icon = button.createSpan();
-    icon.style.cssText = 'display: flex; align-items: center;';
-    icon.innerHTML = hasNextEpisode
-      ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>`
-      : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>`;
+    icon.addClass('sa-inline-flex');
+    if (hasNextEpisode) {
+      // "Next episode" icon (skip forward)
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('width', '14');
+      svg.setAttribute('height', '14');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke', 'currentColor');
+      svg.setAttribute('stroke-width', '2.5');
+      svg.setAttribute('stroke-linecap', 'round');
+      svg.setAttribute('stroke-linejoin', 'round');
+      const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      polygon.setAttribute('points', '5 4 15 12 5 20 5 4');
+      svg.appendChild(polygon);
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', '19');
+      line.setAttribute('y1', '5');
+      line.setAttribute('x2', '19');
+      line.setAttribute('y2', '19');
+      svg.appendChild(line);
+      icon.appendChild(svg);
+    } else {
+      // "Check for updates" icon (refresh)
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('width', '14');
+      svg.setAttribute('height', '14');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke', 'currentColor');
+      svg.setAttribute('stroke-width', '2.5');
+      svg.setAttribute('stroke-linecap', 'round');
+      svg.setAttribute('stroke-linejoin', 'round');
+      const paths = [
+        'M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8',
+        'M3 3v5h5',
+        'M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16',
+        'M16 16h5v5',
+      ];
+      for (const d of paths) {
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', d);
+        svg.appendChild(path);
+      }
+      icon.appendChild(svg);
+    }
 
     const text = button.createSpan();
     text.textContent = hasNextEpisode ? 'Next Episode' : 'Check for Updates';
-
-    // Hover effect
-    button.addEventListener('mouseenter', () => {
-      button.style.background = 'var(--interactive-accent-hover)';
-    });
-    button.addEventListener('mouseleave', () => {
-      button.style.background = 'var(--interactive-accent)';
-    });
 
     // Click handler
     button.addEventListener('click', (e) => {

@@ -178,16 +178,8 @@ export class ArchiveModal extends Modal {
 
     // Mobile modal size adjustments
     if (Platform.isMobile) {
-      // Fill most of screen while keeping Obsidian's native modal style
-      modalEl.style.setProperty('width', '92vw', 'important');
-      modalEl.style.setProperty('max-width', '92vw', 'important');
-      modalEl.style.setProperty('height', 'auto', 'important');
-      modalEl.style.setProperty('max-height', '90vh', 'important');
-      modalEl.style.setProperty('overflow-y', 'auto', 'important');
-
-      // Reduce contentEl padding on mobile to prevent input overflow
-      contentEl.style.paddingLeft = '12px';
-      contentEl.style.paddingRight = '12px';
+      modalEl.addClass('am-modal--mobile');
+      contentEl.addClass('am-content--mobile');
     }
 
     // Check authentication status
@@ -216,7 +208,7 @@ export class ArchiveModal extends Modal {
     this.urlInput.setAttribute('autocomplete', 'url');
 
     // Ensure box-sizing: border-box for proper width calculation
-    this.urlInput.style.boxSizing = 'border-box';
+    this.urlInput.addClass('sa-box-border');
 
     this.urlInput.addEventListener('input', (e) => {
       const target = e.target as HTMLInputElement;
@@ -238,7 +230,7 @@ export class ArchiveModal extends Modal {
 
     // General options (shown when URL is detected)
     this.generalOptions = contentEl.createDiv({ cls: 'archive-general-options' });
-    this.generalOptions.style.display = 'none';
+    this.generalOptions.addClass('sa-hidden');
 
     new Setting(this.generalOptions)
       .setName('Download media')
@@ -256,16 +248,14 @@ export class ArchiveModal extends Modal {
       );
 
     this.videoModeWarningEl = this.generalOptions.createDiv({ cls: 'archive-video-mode-warning' });
-    this.videoModeWarningEl.style.cssText = `
-      margin: 2px 0 10px 0;
-      padding: 8px 10px;
-      border-radius: 8px;
-      border: 1px solid var(--background-modifier-border);
-      background: var(--background-modifier-warning);
-      color: var(--text-warning);
-      font-size: 12px;
-      line-height: 1.4;
-    `;
+    this.videoModeWarningEl.addClass('sa-rounded-8');
+    this.videoModeWarningEl.addClass('sa-border');
+    this.videoModeWarningEl.addClass('sa-px-10');
+    this.videoModeWarningEl.addClass('sa-py-8');
+    this.videoModeWarningEl.addClass('sa-text-sm');
+    this.videoModeWarningEl.addClass('sa-text-warning');
+    this.videoModeWarningEl.addClass('sa-leading-normal');
+    this.videoModeWarningEl.addClass('am-video-warning');
     this.videoModeWarningEl.setText(
       '⚠️ Video download can fail on some platforms (especially feed/reels style posts). ' +
       'If it fails, the note will include a visible failure status.'
@@ -285,7 +275,7 @@ export class ArchiveModal extends Modal {
 
     // YouTube-specific options (hidden by default)
     this.youtubeOptions = contentEl.createDiv({ cls: 'archive-youtube-options' });
-    this.youtubeOptions.style.display = 'none';
+    this.youtubeOptions.addClass('sa-hidden');
 
     new Setting(this.youtubeOptions)
       .setName('Include transcript')
@@ -311,8 +301,8 @@ export class ArchiveModal extends Modal {
 
     // Comment section (shown when URL is detected)
     this.commentContainer = contentEl.createDiv({ cls: 'archive-comment-container' });
-    this.commentContainer.style.display = 'none';
-    this.commentContainer.style.marginTop = '12px';
+    this.commentContainer.addClass('sa-hidden');
+    this.commentContainer.addClass('sa-mt-12');
 
     const commentLabel = this.commentContainer.createDiv({ cls: 'archive-comment-label' });
     commentLabel.setText('💭 My Notes (optional)');
@@ -332,41 +322,36 @@ export class ArchiveModal extends Modal {
 
     // Profile preview container (shows avatar, name, bio)
     this.profilePreviewContainer = contentEl.createDiv({ cls: 'archive-profile-preview' });
-    this.profilePreviewContainer.style.display = 'none';
+    this.profilePreviewContainer.addClass('sa-hidden');
 
     // Profile crawl options container
     this.profileOptionsContainer = contentEl.createDiv({ cls: 'archive-profile-options' });
-    this.profileOptionsContainer.style.display = 'none';
+    this.profileOptionsContainer.addClass('sa-hidden');
 
     // Reddit-specific options container (after profile options, before subscribe)
     this.redditOptionsContainer = contentEl.createDiv({ cls: 'archive-reddit-options' });
-    this.redditOptionsContainer.style.display = 'none';
+    this.redditOptionsContainer.addClass('sa-hidden');
 
     // Naver cafe member options container
     this.naverCafeOptionsContainer = contentEl.createDiv({ cls: 'archive-naver-cafe-options' });
-    this.naverCafeOptionsContainer.style.display = 'none';
+    this.naverCafeOptionsContainer.addClass('sa-hidden');
 
     // Subscribe options container
     this.subscribeOptionsContainer = contentEl.createDiv({ cls: 'archive-subscribe-options' });
-    this.subscribeOptionsContainer.style.display = 'none';
+    this.subscribeOptionsContainer.addClass('sa-hidden');
 
     // Profile action buttons container (separate from post buttons)
     this.profileActionButtons = contentEl.createDiv({ cls: 'archive-profile-actions modal-button-container' });
-    this.profileActionButtons.style.display = 'none';
+    this.profileActionButtons.addClass('sa-hidden');
 
     // Disclaimer (minimal, with Lucide icon)
     this.disclaimerEl = contentEl.createDiv({ cls: 'archive-disclaimer' });
-    this.disclaimerEl.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: var(--size-4-2);
-      font-size: var(--font-smallest);
-      color: var(--text-faint);
-      margin-top: var(--size-4-3);
-    `;
+    this.disclaimerEl.addClass('sa-flex-row');
+    this.disclaimerEl.addClass('sa-text-faint');
+    this.disclaimerEl.addClass('am-disclaimer');
     const disclaimerIcon = this.disclaimerEl.createSpan();
     setIcon(disclaimerIcon, 'alert-triangle');
-    disclaimerIcon.style.cssText = '--icon-size: var(--icon-xs);';
+    disclaimerIcon.addClass('am-disclaimer-icon');
     this.disclaimerEl.createSpan({ text: 'Archive only content you have permission to save.' });
 
     // Footer buttons (for post mode)
@@ -374,8 +359,7 @@ export class ArchiveModal extends Modal {
 
     // On mobile, stack buttons vertically and make them full width
     if (Platform.isMobile) {
-      this.postFooterEl.style.flexDirection = 'column';
-      this.postFooterEl.style.gap = '12px';
+      this.postFooterEl.addClass('am-footer--mobile', 'sa-gap-12');
     }
 
     // Create Archive button first (will be on top on mobile)
@@ -388,7 +372,7 @@ export class ArchiveModal extends Modal {
 
     // Make button full width on mobile
     if (Platform.isMobile) {
-      this.archiveBtn.style.width = '100%';
+      this.archiveBtn.addClass('sa-w-full');
     }
 
     // Create Cancel button (will be below Archive on mobile)
@@ -397,7 +381,7 @@ export class ArchiveModal extends Modal {
 
     // Make button full width on mobile
     if (Platform.isMobile) {
-      cancelBtn.style.width = '100%';
+      cancelBtn.addClass('sa-w-full');
     }
 
     // Keyboard shortcuts
@@ -823,18 +807,21 @@ export class ArchiveModal extends Modal {
     // Update platform badge
     if (this.isResolving) {
       this.platformBadge.setText('Detecting link…');
-      this.platformBadge.style.color = 'var(--text-muted)';
-      this.platformBadge.style.display = 'block';
+      this.platformBadge.removeClass('sa-text-error');
+      this.platformBadge.addClass('sa-text-muted');
+      this.platformBadge.removeClass('sa-hidden');
     } else if (this.inputValidationError) {
       // Show error for unsupported URLs
       this.platformBadge.setText(`⚠ ${this.inputValidationError}`);
-      this.platformBadge.style.color = 'var(--text-error)';
-      this.platformBadge.style.display = 'block';
+      this.platformBadge.removeClass('sa-text-muted');
+      this.platformBadge.addClass('sa-text-error');
+      this.platformBadge.removeClass('sa-hidden');
     } else if (isRss && this.isDetectingFeed) {
       // Feed type detection in progress
       this.platformBadge.setText('Detecting feed type…');
-      this.platformBadge.style.color = 'var(--text-muted)';
-      this.platformBadge.style.display = 'block';
+      this.platformBadge.removeClass('sa-text-error');
+      this.platformBadge.addClass('sa-text-muted');
+      this.platformBadge.removeClass('sa-hidden');
     } else if (isRss && this.detectedPlatform) {
       // RSS feed detected - show platform from feed analysis or URL
       let platformName: string;
@@ -856,10 +843,12 @@ export class ArchiveModal extends Modal {
       } else {
         this.platformBadge.setText(`✓ ${platformName} feed detected`);
       }
-      this.platformBadge.style.color = 'var(--text-muted)';
-      this.platformBadge.style.display = 'block';
+      this.platformBadge.removeClass('sa-text-error');
+      this.platformBadge.addClass('sa-text-muted');
+      this.platformBadge.removeClass('sa-hidden');
     } else if (this.detectedPlatform) {
-      this.platformBadge.style.color = 'var(--text-muted)';
+      this.platformBadge.removeClass('sa-text-error');
+      this.platformBadge.addClass('sa-text-muted');
       if (isProfile) {
         const handle = this.urlAnalysis?.handle ?? '';
         // Reddit subreddit uses different wording
@@ -883,50 +872,50 @@ export class ArchiveModal extends Modal {
       } else {
         this.platformBadge.setText(`✓ ${this.getPlatformName(this.detectedPlatform)} detected`);
       }
-      this.platformBadge.style.display = 'block';
+      this.platformBadge.removeClass('sa-hidden');
     } else {
-      this.platformBadge.style.display = 'none';
+      this.platformBadge.addClass('sa-hidden');
     }
 
     // Branch between Post UI and Profile/RSS UI
     if ((isProfile || isRss) && this.isValidUrl && !this.isResolving) {
       // Hide post-specific options
-      this.generalOptions.style.display = 'none';
-      this.youtubeOptions.style.display = 'none';
-      this.commentContainer.style.display = 'none';
-      this.postFooterEl.style.display = 'none';
-      this.disclaimerEl.style.display = 'none';
+      this.generalOptions.addClass('sa-hidden');
+      this.youtubeOptions.addClass('sa-hidden');
+      this.commentContainer.addClass('sa-hidden');
+      this.postFooterEl.addClass('sa-hidden');
+      this.disclaimerEl.addClass('sa-hidden');
 
       // Show profile/RSS subscription options
       this.showProfileUI();
     } else {
       // Hide profile options
-      this.profilePreviewContainer.style.display = 'none';
-      this.profileOptionsContainer.style.display = 'none';
-      this.subscribeOptionsContainer.style.display = 'none';
-      this.profileActionButtons.style.display = 'none';
+      this.profilePreviewContainer.addClass('sa-hidden');
+      this.profileOptionsContainer.addClass('sa-hidden');
+      this.subscribeOptionsContainer.addClass('sa-hidden');
+      this.profileActionButtons.addClass('sa-hidden');
 
       // Show post-specific options (existing behavior)
       if (this.isValidUrl && !this.isResolving && this.detectedPlatform !== 'youtube' && this.detectedPlatform !== 'tiktok') {
-        this.generalOptions.style.display = 'block';
+        this.generalOptions.removeClass('sa-hidden');
       } else {
-        this.generalOptions.style.display = 'none';
+        this.generalOptions.addClass('sa-hidden');
       }
 
       if (this.detectedPlatform === 'youtube') {
-        this.youtubeOptions.style.display = 'block';
+        this.youtubeOptions.removeClass('sa-hidden');
       } else {
-        this.youtubeOptions.style.display = 'none';
+        this.youtubeOptions.addClass('sa-hidden');
       }
 
       if (this.isValidUrl && !this.isResolving) {
-        this.commentContainer.style.display = 'block';
-        this.postFooterEl.style.display = 'flex';
-        this.disclaimerEl.style.display = 'flex';
+        this.commentContainer.removeClass('sa-hidden');
+        this.postFooterEl.removeClass('sa-hidden');
+        this.disclaimerEl.removeClass('sa-hidden');
       } else {
-        this.commentContainer.style.display = 'none';
-        this.postFooterEl.style.display = 'none';
-        this.disclaimerEl.style.display = 'none';
+        this.commentContainer.addClass('sa-hidden');
+        this.postFooterEl.addClass('sa-hidden');
+        this.disclaimerEl.addClass('sa-hidden');
       }
 
       // Update archive button
@@ -938,7 +927,11 @@ export class ArchiveModal extends Modal {
 
   private updateVideoDownloadWarning(): void {
     if (!this.videoModeWarningEl) return;
-    this.videoModeWarningEl.style.display = this.downloadMedia === 'images-and-videos' ? 'block' : 'none';
+    if (this.downloadMedia === 'images-and-videos') {
+      this.videoModeWarningEl.removeClass('sa-hidden');
+    } else {
+      this.videoModeWarningEl.addClass('sa-hidden');
+    }
   }
 
   /**
@@ -952,7 +945,7 @@ export class ArchiveModal extends Modal {
       this.buildProfilePreview();
     } else {
       // Hide profile preview for RSS
-      this.profilePreviewContainer.style.display = 'none';
+      this.profilePreviewContainer.addClass('sa-hidden');
     }
 
     // Build crawl options
@@ -981,44 +974,24 @@ export class ArchiveModal extends Modal {
    */
   private buildProfilePreview(): void {
     this.profilePreviewContainer.empty();
-    this.profilePreviewContainer.style.display = 'block';
+    this.profilePreviewContainer.removeClass('sa-hidden');
 
     if (this.isLoadingPreview) {
       // Minimal loading state
       const loading = this.profilePreviewContainer.createDiv({ cls: 'profile-preview-loading' });
-      loading.style.cssText = `
-        display: flex;
-        align-items: center;
-        gap: var(--size-4-3);
-        padding: var(--size-4-3) 0;
-      `;
+      loading.addClass('sa-flex-row', 'am-profile-preview');
 
       const avatarSkeleton = loading.createDiv();
-      avatarSkeleton.style.cssText = `
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        background: var(--background-modifier-border);
-      `;
+      avatarSkeleton.addClass('sa-rounded-full', 'am-avatar-skeleton');
 
       const textSkeleton = loading.createDiv();
-      textSkeleton.style.cssText = `
-        width: 120px;
-        height: 14px;
-        background: var(--background-modifier-border);
-        border-radius: var(--radius-s);
-      `;
+      textSkeleton.addClass('am-text-skeleton');
       return;
     }
 
     // Minimal profile row
     const preview = this.profilePreviewContainer.createDiv({ cls: 'profile-preview' });
-    preview.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: var(--size-4-3);
-      padding: var(--size-4-3) 0;
-    `;
+    preview.addClass('sa-flex-row', 'am-profile-preview');
 
     // Avatar (40px, minimal)
     const avatarContainer = preview.createDiv({ cls: 'profile-avatar' });
@@ -1026,26 +999,19 @@ export class ArchiveModal extends Modal {
       const img = avatarContainer.createEl('img', {
         attr: { src: this.quickPreview.avatar, alt: '' }
       });
-      img.style.cssText = `
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        object-fit: cover;
-      `;
+      img.addClass('sa-rounded-full');
+      img.addClass('sa-object-cover');
+      img.addClass('am-avatar-img');
     } else {
       // Use platform icon as placeholder
       const platformIcon = this.detectedPlatform ? getPlatformSimpleIcon(this.detectedPlatform) : null;
       const placeholder = avatarContainer.createDiv();
-      placeholder.style.cssText = `
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        background: ${platformIcon ? `#${platformIcon.hex}` : 'var(--background-modifier-border)'};
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--text-faint);
-      `;
+      placeholder.addClass('sa-rounded-full');
+      placeholder.addClass('sa-flex-center');
+      placeholder.addClass('sa-text-faint');
+      placeholder.addClass('am-avatar-placeholder');
+      placeholder.setCssProps({'--sa-bg': platformIcon ? `#${platformIcon.hex}` : 'var(--background-modifier-border)'});
+      placeholder.addClass('sa-dynamic-bg');
       if (platformIcon) {
         const svg = placeholder.createSvg('svg', {
           attr: {
@@ -1072,12 +1038,10 @@ export class ArchiveModal extends Modal {
 
     const displayName = info.createDiv({ cls: 'profile-name' });
     displayName.setText(finalDisplayName);
-    displayName.style.cssText = `
-      font-size: var(--font-ui-small);
-      font-weight: var(--font-semibold);
-      color: var(--text-normal);
-      line-height: 1.3;
-    `;
+    displayName.addClass('sa-text-normal');
+    displayName.addClass('sa-font-semibold');
+    displayName.addClass('sa-leading-tight');
+    displayName.addClass('am-profile-name');
 
     // Handle display - hide if empty, show without @ for cafe names
     const handleText = this.quickPreview?.handle ?? this.urlAnalysis?.handle ?? '';
@@ -1087,10 +1051,8 @@ export class ArchiveModal extends Modal {
       const isNaverCafeMember = this.detectedPlatform === 'naver' &&
         (this.urlAnalysis?.handle ?? '').startsWith('cafe:');
       handle.setText(isNaverCafeMember ? handleText : `@${handleText}`);
-      handle.style.cssText = `
-        font-size: var(--font-ui-smaller);
-        color: var(--text-muted);
-      `;
+      handle.addClass('sa-text-muted');
+      handle.addClass('am-profile-handle');
     }
   }
 
@@ -1100,7 +1062,7 @@ export class ArchiveModal extends Modal {
    */
   private buildProfileOptions(): void {
     this.profileOptionsContainer.empty();
-    this.profileOptionsContainer.style.display = 'block';
+    this.profileOptionsContainer.removeClass('sa-hidden');
 
     // Content container
     const contentContainer = this.profileOptionsContainer;
@@ -1110,26 +1072,14 @@ export class ArchiveModal extends Modal {
 
     if (Platform.isMobile) {
       // Mobile: Compact custom layout matching Obsidian's design system
-      contentContainer.style.cssText = 'display: flex; flex-direction: column; gap: 14px; margin-top: 4px;';
-
-      // Shared input styles (compact)
-      const inputStyle = `
-        height: 28px;
-        padding: 0 8px;
-        border-radius: var(--input-radius);
-        border: 1px solid var(--background-modifier-border);
-        background: var(--background-modifier-form-field);
-        color: var(--text-normal);
-        font-size: var(--font-ui-smaller);
-        -webkit-appearance: none;
-      `;
-
-      const labelStyle = 'font-size: var(--font-ui-small); color: var(--text-normal); flex-shrink: 0;';
-      const rowStyle = 'display: flex; align-items: center; justify-content: space-between; gap: 12px;';
+      contentContainer.addClass('sa-flex-col');
+      contentContainer.addClass('sa-gap-16');
+      contentContainer.addClass('am-profile-options--mobile');
 
       // Row 1: Number of posts
       const postCountRow = contentContainer.createDiv();
-      postCountRow.style.cssText = rowStyle;
+      postCountRow.addClass('sa-flex-between');
+      postCountRow.addClass('sa-gap-12');
 
       // Determine max post count based on platform
       // YouTube: 15 (RSS limit), Local fetch platforms (Naver/Brunch): 100 (no API cost), Others: 20
@@ -1140,7 +1090,7 @@ export class ArchiveModal extends Modal {
           : CRAWL_LIMITS.MAX_POST_COUNT;
 
       const postCountLabel = postCountRow.createEl('label', { text: `Number of posts (max ${maxPostCount})` });
-      postCountLabel.style.cssText = labelStyle;
+      postCountLabel.addClass('sa-text-normal', 'sa-flex-shrink-0', 'am-form-label');
 
       // Adjust post count if exceeds platform limit
       if (this.postCount > maxPostCount) {
@@ -1153,7 +1103,7 @@ export class ArchiveModal extends Modal {
       });
       postCountInput.min = String(CRAWL_LIMITS.MIN_POST_COUNT);
       postCountInput.max = String(maxPostCount);
-      postCountInput.style.cssText = inputStyle + 'width: 80px; text-align: center;';
+      postCountInput.addClass('sa-text-normal', 'sa-rounded-4', 'sa-border', 'am-input-compact');
       postCountInput.addEventListener('input', (e) => {
         const input = e.target as HTMLInputElement;
         const num = parseInt(input.value, 10);
@@ -1178,13 +1128,14 @@ export class ArchiveModal extends Modal {
         (this.url.includes('/r/') || this.url.includes('/user/') || this.url.includes('/u/'));
       if (!isRedditProfile) {
         const timeRangeRow = contentContainer.createDiv();
-        timeRangeRow.style.cssText = rowStyle;
+        timeRangeRow.addClass('sa-flex-between');
+        timeRangeRow.addClass('sa-gap-12');
 
         const timeRangeLabel = timeRangeRow.createEl('label', { text: 'Time range' });
-        timeRangeLabel.style.cssText = labelStyle;
+        timeRangeLabel.addClass('sa-text-normal', 'sa-flex-shrink-0', 'am-form-label');
 
         const timeRangeSelect = timeRangeRow.createEl('select');
-        timeRangeSelect.style.cssText = inputStyle + 'min-width: 130px; padding-right: 24px;';
+        timeRangeSelect.addClass('sa-text-normal', 'sa-rounded-4', 'sa-border', 'am-select-compact', 'am-select-130');
         for (const [value, label] of Object.entries(TIME_RANGE_LABELS)) {
           const option = timeRangeSelect.createEl('option', { value, text: label });
           if (value === this.timeRangePreset) option.selected = true;
@@ -1196,7 +1147,7 @@ export class ArchiveModal extends Modal {
 
         // Hint row (for large crawls)
         hintEl = contentContainer.createDiv();
-        hintEl.style.cssText = 'font-size: var(--font-ui-smaller); color: var(--text-warning); display: none; margin-top: -8px;';
+        hintEl.addClass('sa-text-warning', 'sa-hidden', 'am-hint-text');
         this.updateCrawlHintMobile(hintEl);
       }
 
@@ -1225,8 +1176,7 @@ export class ArchiveModal extends Modal {
           text.inputEl.type = 'number';
           text.inputEl.min = String(CRAWL_LIMITS.MIN_POST_COUNT);
           text.inputEl.max = String(maxPostCountDesktop);
-          text.inputEl.style.width = '70px';
-          text.inputEl.style.textAlign = 'center';
+          text.inputEl.addClass('am-desktop-input-sm');
           text
             .setPlaceholder(String(CRAWL_LIMITS.DEFAULT_POST_COUNT))
             .setValue(String(this.postCount))
@@ -1282,16 +1232,16 @@ export class ArchiveModal extends Modal {
       ['last_month', 'last_3_months'].includes(this.timeRangePreset);
 
     if (isLargeCrawl) {
-      hintEl.style.display = 'flex';
-      hintEl.style.alignItems = 'center';
-      hintEl.style.gap = '4px';
+      hintEl.removeClass('sa-hidden');
+      hintEl.addClass('sa-flex', 'am-crawl-hint');
       hintEl.empty();
       const iconEl = hintEl.createSpan();
-      iconEl.style.cssText = '--icon-size: 14px; display: flex;';
+      iconEl.addClass('am-hint-icon');
       setIcon(iconEl, 'clock');
       hintEl.createSpan({ text: 'May take a few minutes' });
     } else {
-      hintEl.style.display = 'none';
+      hintEl.addClass('sa-hidden');
+      hintEl.removeClass('sa-flex');
     }
   }
 
@@ -1307,13 +1257,13 @@ export class ArchiveModal extends Modal {
     descEl.empty();
 
     if (isLargeCrawl) {
-      descEl.style.cssText = 'display: flex; align-items: center; gap: 4px; color: var(--text-warning);';
+      descEl.addClass('am-crawl-hint');
       const iconEl = descEl.createSpan();
-      iconEl.style.cssText = '--icon-size: 14px; display: flex;';
+      iconEl.addClass('am-hint-icon');
       setIcon(iconEl, 'clock');
       descEl.createSpan({ text: 'May take a few minutes' });
     } else {
-      descEl.style.cssText = '';
+      descEl.removeClass('am-crawl-hint');
     }
   }
 
@@ -1323,7 +1273,7 @@ export class ArchiveModal extends Modal {
    */
   private buildRSSOptions(): void {
     this.profileOptionsContainer.empty();
-    this.profileOptionsContainer.style.display = 'block';
+    this.profileOptionsContainer.show();
 
     const contentContainer = this.profileOptionsContainer;
 
@@ -1340,28 +1290,15 @@ export class ArchiveModal extends Modal {
 
     if (Platform.isMobile) {
       // Mobile: Compact custom layout
-      contentContainer.style.cssText = 'display: flex; flex-direction: column; gap: 14px; margin-top: 4px;';
-
-      const inputStyle = `
-        height: 28px;
-        padding: 0 8px;
-        border-radius: var(--input-radius);
-        border: 1px solid var(--background-modifier-border);
-        background: var(--background-modifier-form-field);
-        color: var(--text-normal);
-        font-size: var(--font-ui-smaller);
-        -webkit-appearance: none;
-      `;
-
-      const labelStyle = 'font-size: var(--font-ui-small); color: var(--text-normal); flex-shrink: 0;';
-      const rowStyle = 'display: flex; align-items: center; justify-content: space-between; gap: 12px;';
+      contentContainer.addClass('am-rss-mobile');
 
       // Row: Number of posts
       const postCountRow = contentContainer.createDiv();
-      postCountRow.style.cssText = rowStyle;
+      postCountRow.addClass('sa-flex-between');
+      postCountRow.addClass('sa-gap-12');
 
       const postCountLabel = postCountRow.createEl('label', { text: `Number of posts (max ${maxPostCount})` });
-      postCountLabel.style.cssText = labelStyle;
+      postCountLabel.addClass('sa-text-normal', 'sa-flex-shrink-0', 'am-form-label');
 
       const postCountInput = postCountRow.createEl('input', {
         type: 'number',
@@ -1369,7 +1306,7 @@ export class ArchiveModal extends Modal {
       });
       postCountInput.min = String(CRAWL_LIMITS.MIN_POST_COUNT);
       postCountInput.max = String(maxPostCount);
-      postCountInput.style.cssText = inputStyle + 'width: 80px; text-align: center;';
+      postCountInput.addClass('sa-text-normal', 'sa-rounded-4', 'sa-border', 'am-input-compact');
       const isLocalPlatform = isLocalFetchPlatform(this.detectedPlatform ?? '');
       postCountInput.addEventListener('input', (e) => {
         const input = e.target as HTMLInputElement;
@@ -1390,7 +1327,7 @@ export class ArchiveModal extends Modal {
 
       // Hint row
       const hintEl = contentContainer.createDiv();
-      hintEl.style.cssText = 'font-size: var(--font-ui-smaller); color: var(--text-muted); margin-top: -8px;';
+      hintEl.addClass('sa-text-muted', 'am-hint-text');
       hintEl.setText(isLocalPlatform ? 'Fetch posts directly from the blog' : 'RSS feeds typically return the latest posts');
 
     } else {
@@ -1403,8 +1340,7 @@ export class ArchiveModal extends Modal {
           text.inputEl.type = 'number';
           text.inputEl.min = String(CRAWL_LIMITS.MIN_POST_COUNT);
           text.inputEl.max = String(maxPostCount);
-          text.inputEl.style.width = '70px';
-          text.inputEl.style.textAlign = 'center';
+          text.inputEl.addClass('am-desktop-input-sm');
           text.setValue(String(this.postCount));
           text.onChange((value) => {
             const num = parseInt(value, 10);
@@ -1438,39 +1374,28 @@ export class ArchiveModal extends Modal {
       (this.url.includes('/user/') || this.url.includes('/u/'));
 
     if (!isRedditSubreddit && !isRedditUserProfile) {
-      this.redditOptionsContainer.style.display = 'none';
+      this.redditOptionsContainer.addClass('sa-hidden');
       return;
     }
 
-    this.redditOptionsContainer.style.display = 'block';
-    this.redditOptionsContainer.style.marginTop = '14px';
-
-    const inputStyle = `
-      height: 28px;
-      padding: 0 8px;
-      border-radius: var(--input-radius);
-      border: 1px solid var(--background-modifier-border);
-      background: var(--background-modifier-form-field);
-      color: var(--text-normal);
-      font-size: var(--font-ui-smaller);
-      -webkit-appearance: none;
-    `;
-    const labelStyle = 'font-size: var(--font-ui-small); color: var(--text-normal); flex-shrink: 0;';
-    const rowStyle = 'display: flex; align-items: center; justify-content: space-between; gap: 12px;';
+    this.redditOptionsContainer.removeClass('sa-hidden');
+    this.redditOptionsContainer.addClass('sa-mt-16');
 
     if (Platform.isMobile) {
       // Mobile: Compact custom layout
-      this.redditOptionsContainer.style.cssText = 'display: flex; flex-direction: column; gap: 14px;';
+      this.redditOptionsContainer.addClass('sa-flex-col');
+      this.redditOptionsContainer.addClass('sa-gap-16');
 
       // Row 1: Sort by
       const sortByRow = this.redditOptionsContainer.createDiv();
-      sortByRow.style.cssText = rowStyle;
+      sortByRow.addClass('sa-flex-between');
+      sortByRow.addClass('sa-gap-12');
 
       const sortByLabel = sortByRow.createEl('label', { text: 'Sort by' });
-      sortByLabel.style.cssText = labelStyle;
+      sortByLabel.addClass('sa-text-normal', 'sa-flex-shrink-0', 'am-form-label');
 
       const sortBySelect = sortByRow.createEl('select');
-      sortBySelect.style.cssText = inputStyle + 'min-width: 100px; padding-right: 24px;';
+      sortBySelect.addClass('sa-text-normal', 'sa-rounded-4', 'sa-border', 'am-select-compact', 'am-select-100');
       for (const opt of REDDIT_SORT_BY_OPTIONS) {
         const option = sortBySelect.createEl('option', { value: opt.value, text: opt.label });
         if (opt.value === this.redditSortBy) option.selected = true;
@@ -1481,13 +1406,14 @@ export class ArchiveModal extends Modal {
 
       // Row 2: Time range
       const timeRangeRow = this.redditOptionsContainer.createDiv();
-      timeRangeRow.style.cssText = rowStyle;
+      timeRangeRow.addClass('sa-flex-between');
+      timeRangeRow.addClass('sa-gap-12');
 
       const timeRangeLabel = timeRangeRow.createEl('label', { text: 'Time range' });
-      timeRangeLabel.style.cssText = labelStyle;
+      timeRangeLabel.addClass('sa-text-normal', 'sa-flex-shrink-0', 'am-form-label');
 
       const timeRangeSelect = timeRangeRow.createEl('select');
-      timeRangeSelect.style.cssText = inputStyle + 'min-width: 120px; padding-right: 24px;';
+      timeRangeSelect.addClass('sa-text-normal', 'sa-rounded-4', 'sa-border', 'am-select-compact', 'am-select-120');
       for (const opt of REDDIT_SORT_BY_TIME_OPTIONS) {
         const option = timeRangeSelect.createEl('option', { value: opt.value, text: opt.label });
         if (opt.value === this.redditSortByTime) option.selected = true;
@@ -1498,17 +1424,18 @@ export class ArchiveModal extends Modal {
 
       // Row 3: Keyword (optional)
       const keywordRow = this.redditOptionsContainer.createDiv();
-      keywordRow.style.cssText = rowStyle;
+      keywordRow.addClass('sa-flex-between');
+      keywordRow.addClass('sa-gap-12');
 
       const keywordLabel = keywordRow.createEl('label', { text: 'Keyword filter' });
-      keywordLabel.style.cssText = labelStyle;
+      keywordLabel.addClass('sa-text-normal', 'sa-flex-shrink-0', 'am-form-label');
 
       const keywordInput = keywordRow.createEl('input', {
         type: 'text',
         placeholder: 'Optional',
         value: this.redditKeyword,
       });
-      keywordInput.style.cssText = inputStyle + 'flex: 1; min-width: 80px;';
+      keywordInput.addClass('sa-flex-1', 'sa-text-normal', 'sa-rounded-4', 'sa-border', 'am-keyword-input');
       keywordInput.addEventListener('input', (e) => {
         this.redditKeyword = (e.target as HTMLInputElement).value;
       });
@@ -1568,12 +1495,12 @@ export class ArchiveModal extends Modal {
 
     // Show options for both Naver Blog and Cafe
     if (!isNaverBlog && !isNaverCafe) {
-      this.naverCafeOptionsContainer.style.display = 'none';
+      this.naverCafeOptionsContainer.addClass('sa-hidden');
       return;
     }
 
-    this.naverCafeOptionsContainer.style.display = 'block';
-    this.naverCafeOptionsContainer.style.marginTop = '14px';
+    this.naverCafeOptionsContainer.removeClass('sa-hidden');
+    this.naverCafeOptionsContainer.addClass('sa-mt-16');
 
     // Time range options for dropdown (only for Naver Blog - Cafe already has it in buildProfileOptions)
     const timeRangeOptions: { value: TimeRangePreset; label: string }[] = [
@@ -1585,22 +1512,20 @@ export class ArchiveModal extends Modal {
 
     if (Platform.isMobile) {
       // Mobile: Compact inline layout
-      this.naverCafeOptionsContainer.style.cssText = 'display: flex; flex-direction: column; gap: 14px; margin-top: 14px;';
-
-      const rowStyle = 'display: flex; align-items: center; justify-content: space-between; gap: 12px;';
-      const labelStyle = 'font-size: var(--font-ui-small); color: var(--text-normal); flex-shrink: 0;';
-      const inputStyle = 'font-size: var(--font-ui-small); padding: 6px 10px; border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s); background: var(--background-primary);';
+      this.naverCafeOptionsContainer.addClass('sa-flex-col');
+      this.naverCafeOptionsContainer.addClass('sa-gap-16');
+      this.naverCafeOptionsContainer.addClass('sa-mt-16');
 
       // Row 1: Time range (only for Naver Blog - Cafe already has it in buildProfileOptions)
       if (isNaverBlog) {
         const periodRow = this.naverCafeOptionsContainer.createDiv();
-        periodRow.style.cssText = rowStyle;
+        periodRow.addClass('sa-flex-between', 'sa-gap-12');
 
         const periodLabel = periodRow.createEl('label', { text: 'Time range' });
-        periodLabel.style.cssText = labelStyle;
+        periodLabel.addClass('sa-text-normal', 'sa-flex-shrink-0', 'am-form-label');
 
         const periodSelect = periodRow.createEl('select');
-        periodSelect.style.cssText = inputStyle + 'min-width: 120px;';
+        periodSelect.addClass('sa-text-normal', 'sa-rounded-4', 'sa-border', 'am-period-select');
         timeRangeOptions.forEach(opt => {
           const option = periodSelect.createEl('option', { text: opt.label, value: opt.value });
           if (opt.value === this.timeRangePreset) option.selected = true;
@@ -1612,17 +1537,18 @@ export class ArchiveModal extends Modal {
 
       // Row 2: Keyword filter
       const keywordRow = this.naverCafeOptionsContainer.createDiv();
-      keywordRow.style.cssText = rowStyle;
+      keywordRow.addClass('sa-flex-between');
+      keywordRow.addClass('sa-gap-12');
 
       const keywordLabel = keywordRow.createEl('label', { text: 'Keyword filter' });
-      keywordLabel.style.cssText = labelStyle;
+      keywordLabel.addClass('sa-text-normal', 'sa-flex-shrink-0', 'am-form-label');
 
       const keywordInput = keywordRow.createEl('input', {
         type: 'text',
         placeholder: 'Optional (e.g., 홈킷)',
         value: this.naverCafeKeyword,
       });
-      keywordInput.style.cssText = inputStyle + 'flex: 1; min-width: 80px;';
+      keywordInput.addClass('sa-flex-1', 'sa-text-normal', 'sa-rounded-4', 'sa-border', 'am-keyword-desktop');
       keywordInput.addEventListener('input', (e) => {
         this.naverCafeKeyword = (e.target as HTMLInputElement).value;
       });
@@ -1663,22 +1589,23 @@ export class ArchiveModal extends Modal {
    */
   private buildSubscribeOptions(): void {
     this.subscribeOptionsContainer.empty();
-    this.subscribeOptionsContainer.style.display = 'block';
+    this.subscribeOptionsContainer.show();
 
     // Add ARIA attributes
     this.subscribeOptionsContainer.setAttribute('role', 'group');
     this.subscribeOptionsContainer.setAttribute('aria-label', 'Subscribe options');
 
     // Add margin-top to separate from time range
-    this.subscribeOptionsContainer.style.marginTop = '14px';
+    this.subscribeOptionsContainer.addClass('sa-mt-16');
 
     if (Platform.isMobile) {
       // Mobile: Compact inline layout matching other rows
       const row = this.subscribeOptionsContainer.createDiv();
-      row.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 12px;';
+      row.addClass('sa-flex-between');
+      row.addClass('sa-gap-12');
 
       const label = row.createEl('label', { text: 'Subscribe to new posts' });
-      label.style.cssText = 'font-size: var(--font-ui-small); color: var(--text-normal); flex-shrink: 0;';
+      label.addClass('sa-text-normal', 'sa-flex-shrink-0', 'am-form-label');
 
       // Use Obsidian's checkbox-container pattern for toggle
       const toggleEl = row.createEl('div', { cls: 'checkbox-container' });
@@ -1713,29 +1640,17 @@ export class ArchiveModal extends Modal {
     // Container styling
     if (Platform.isMobile) {
       // Mobile: no border, stack vertically
-      this.profileActionButtons.style.cssText = `
-        display: flex;
-        flex-direction: column-reverse;
-        gap: var(--size-4-2);
-        margin-top: var(--size-4-4);
-      `;
+      this.profileActionButtons.addClass('sa-flex', 'am-profile-actions--mobile');
     } else {
       // Desktop: border on top
-      this.profileActionButtons.style.cssText = `
-        display: flex;
-        justify-content: flex-end;
-        gap: var(--size-4-2);
-        margin-top: var(--size-4-4);
-        padding-top: var(--size-4-3);
-        border-top: 1px solid var(--background-modifier-border);
-      `;
+      this.profileActionButtons.addClass('sa-flex', 'am-profile-actions--desktop');
     }
 
     // Cancel button first (will be on right due to flex-end, bottom on mobile due to reverse)
     const cancelBtn = this.profileActionButtons.createEl('button', { text: 'Cancel' });
     cancelBtn.addEventListener('click', () => this.close());
     if (Platform.isMobile) {
-      cancelBtn.style.width = '100%';
+      cancelBtn.addClass('sa-w-full');
     }
 
     // RSS feeds: show "Subscribe Only" (if enabled) and "Fetch Posts" buttons
@@ -1751,7 +1666,7 @@ export class ArchiveModal extends Modal {
           this.subscribeOnlyButton.disabled = true;
         }
         if (Platform.isMobile) {
-          this.subscribeOnlyButton.style.width = '100%';
+          this.subscribeOnlyButton.addClass('sa-w-full');
         }
       }
 
@@ -1766,7 +1681,7 @@ export class ArchiveModal extends Modal {
         this.crawlButton.disabled = true;
       }
       if (Platform.isMobile) {
-        this.crawlButton.style.width = '100%';
+        this.crawlButton.addClass('sa-w-full');
       }
       return;
     }
@@ -1782,7 +1697,7 @@ export class ArchiveModal extends Modal {
         this.subscribeOnlyButton.disabled = true;
       }
       if (Platform.isMobile) {
-        this.subscribeOnlyButton.style.width = '100%';
+        this.subscribeOnlyButton.addClass('sa-w-full');
       }
     }
 
@@ -1797,7 +1712,7 @@ export class ArchiveModal extends Modal {
       this.crawlButton.disabled = true;
     }
     if (Platform.isMobile) {
-      this.crawlButton.style.width = '100%';
+      this.crawlButton.addClass('sa-w-full');
     }
   }
 
@@ -1935,7 +1850,7 @@ export class ArchiveModal extends Modal {
     }
     if (this.subscribeOnlyButton) {
       this.subscribeOnlyButton.disabled = true;
-      this.subscribeOnlyButton.style.opacity = '0.5';
+      this.subscribeOnlyButton.addClass('sa-opacity-50');
     }
 
     try {
@@ -2019,7 +1934,8 @@ export class ArchiveModal extends Modal {
       }
       if (this.subscribeOnlyButton) {
         this.subscribeOnlyButton.disabled = false;
-        this.subscribeOnlyButton.style.opacity = '1';
+        this.subscribeOnlyButton.removeClass('sa-opacity-50');
+        this.subscribeOnlyButton.addClass('sa-opacity-100');
       }
     }
   }
@@ -2121,7 +2037,7 @@ export class ArchiveModal extends Modal {
     }
     if (this.subscribeOnlyButton) {
       this.subscribeOnlyButton.disabled = true;
-      this.subscribeOnlyButton.style.opacity = '0.5';
+      this.subscribeOnlyButton.addClass('sa-opacity-50');
     }
 
     try {
@@ -2147,7 +2063,8 @@ export class ArchiveModal extends Modal {
       }
       if (this.subscribeOnlyButton) {
         this.subscribeOnlyButton.disabled = false;
-        this.subscribeOnlyButton.style.opacity = '1';
+        this.subscribeOnlyButton.removeClass('sa-opacity-50');
+        this.subscribeOnlyButton.addClass('sa-opacity-100');
       }
     }
   }
@@ -2278,7 +2195,7 @@ export class ArchiveModal extends Modal {
     }
     if (this.crawlButton) {
       this.crawlButton.disabled = true;
-      this.crawlButton.style.opacity = '0.5';
+      this.crawlButton.addClass('sa-opacity-50');
     }
 
     try {
@@ -2369,7 +2286,8 @@ export class ArchiveModal extends Modal {
       }
       if (this.crawlButton) {
         this.crawlButton.disabled = false;
-        this.crawlButton.style.opacity = '1';
+        this.crawlButton.removeClass('sa-opacity-50');
+        this.crawlButton.addClass('sa-opacity-100');
       }
     }
   }
@@ -2426,7 +2344,7 @@ export class ArchiveModal extends Modal {
     const originalButtonText = this.archiveBtn.textContent ?? 'Archive';
     this.archiveBtn.textContent = 'Archiving...';
     this.archiveBtn.setAttribute('disabled', 'true');
-    this.archiveBtn.style.opacity = '0.7';
+    this.archiveBtn.addClass('sa-opacity-80');
 
     try {
       // Step 1: Close modal immediately (no preliminary doc - banner shows progress)
@@ -2488,7 +2406,8 @@ export class ArchiveModal extends Modal {
       this.isProcessing = false;
       if (this.archiveBtn?.isConnected) {
         this.archiveBtn.textContent = originalButtonText;
-        this.archiveBtn.style.opacity = '1';
+        this.archiveBtn.removeClass('sa-opacity-80');
+        this.archiveBtn.addClass('sa-opacity-100');
         this.updateArchiveButton();
       }
     }
@@ -2713,7 +2632,7 @@ export class ArchiveModal extends Modal {
     }
     if (this.subscribeOnlyButton) {
       this.subscribeOnlyButton.disabled = true;
-      this.subscribeOnlyButton.style.opacity = '0.5';
+      this.subscribeOnlyButton.addClass('sa-opacity-50');
     }
 
     try {
@@ -2864,7 +2783,8 @@ export class ArchiveModal extends Modal {
       }
       if (this.subscribeOnlyButton) {
         this.subscribeOnlyButton.disabled = false;
-        this.subscribeOnlyButton.style.opacity = '1';
+        this.subscribeOnlyButton.removeClass('sa-opacity-50');
+        this.subscribeOnlyButton.addClass('sa-opacity-100');
       }
     }
   }
@@ -2893,7 +2813,7 @@ export class ArchiveModal extends Modal {
     }
     if (this.subscribeOnlyButton) {
       this.subscribeOnlyButton.disabled = true;
-      this.subscribeOnlyButton.style.opacity = '0.5';
+      this.subscribeOnlyButton.addClass('sa-opacity-50');
     }
 
     try {
@@ -3032,7 +2952,8 @@ export class ArchiveModal extends Modal {
       }
       if (this.subscribeOnlyButton) {
         this.subscribeOnlyButton.disabled = false;
-        this.subscribeOnlyButton.style.opacity = '1';
+        this.subscribeOnlyButton.removeClass('sa-opacity-50');
+        this.subscribeOnlyButton.addClass('sa-opacity-100');
       }
     }
   }
@@ -3350,7 +3271,7 @@ export class ArchiveModal extends Modal {
     }
     if (this.crawlButton) {
       this.crawlButton.disabled = true;
-      this.crawlButton.style.opacity = '0.5';
+      this.crawlButton.addClass('sa-opacity-50');
     }
 
     try {
@@ -3416,7 +3337,8 @@ export class ArchiveModal extends Modal {
       }
       if (this.crawlButton) {
         this.crawlButton.disabled = false;
-        this.crawlButton.style.opacity = '1';
+        this.crawlButton.removeClass('sa-opacity-50');
+        this.crawlButton.addClass('sa-opacity-100');
       }
     }
   }
@@ -3453,7 +3375,7 @@ export class ArchiveModal extends Modal {
     }
     if (this.crawlButton) {
       this.crawlButton.disabled = true;
-      this.crawlButton.style.opacity = '0.5';
+      this.crawlButton.addClass('sa-opacity-50');
     }
 
     try {
@@ -3543,7 +3465,8 @@ export class ArchiveModal extends Modal {
       }
       if (this.crawlButton) {
         this.crawlButton.disabled = false;
-        this.crawlButton.style.opacity = '1';
+        this.crawlButton.removeClass('sa-opacity-50');
+        this.crawlButton.addClass('sa-opacity-100');
       }
     }
   }
@@ -3561,92 +3484,39 @@ export class ArchiveModal extends Modal {
    */
   private renderUnauthenticatedState(contentEl: HTMLElement): void {
     // Apply centered layout style
-    contentEl.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 32px 20px;
-      text-align: center;
-    `;
+    contentEl.addClass('am-unauth-content');
 
     // Title (no icon)
     const title = contentEl.createEl('h2', { text: 'Sign in to Archive' });
-    title.style.cssText = `
-      font-size: 18px;
-      font-weight: 600;
-      color: var(--text-normal);
-      margin: 0 0 20px 0;
-    `;
+    title.addClass('am-unauth-title');
 
     // Centered message
     const messageContainer = contentEl.createDiv();
-    messageContainer.style.cssText = 'margin-bottom: 28px;';
+    messageContainer.addClass('am-unauth-message-container');
 
     const mainMessage = messageContainer.createEl('p', {
       text: 'Archive your favorite social media posts'
     });
-    mainMessage.style.cssText = `
-      font-size: 14px;
-      color: var(--text-normal);
-      margin: 0 0 8px 0;
-      line-height: 1.4;
-    `;
+    mainMessage.addClass('am-unauth-main-message');
 
     const subMessage = messageContainer.createEl('p', {
       text: 'Free during beta • No password needed • Magic link authentication'
     });
-    subMessage.style.cssText = `
-      font-size: 12px;
-      color: var(--text-muted);
-      margin: 0;
-      line-height: 1.4;
-    `;
+    subMessage.addClass('am-unauth-sub-message');
 
     // Simple steps (no icons)
     const stepsContainer = contentEl.createDiv();
-    stepsContainer.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin: 0 auto 28px auto;
-      max-width: 260px;
-      width: 100%;
-    `;
+    stepsContainer.addClass('am-unauth-steps');
 
     const createStep = (number: string, text: string) => {
       const step = stepsContainer.createDiv();
-      step.style.cssText = `
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 10px 14px;
-        background: var(--background-secondary);
-        border-radius: var(--radius-s, 6px);
-        text-align: left;
-        transition: opacity 0.2s ease;
-      `;
-
-      step.addEventListener('mouseenter', () => {
-        step.style.opacity = '0.9';
-      });
-      step.addEventListener('mouseleave', () => {
-        step.style.opacity = '1';
-      });
+      step.addClass('am-unauth-step');
 
       const stepNumber = step.createEl('span', { text: number });
-      stepNumber.style.cssText = `
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--text-muted);
-        flex-shrink: 0;
-      `;
+      stepNumber.addClass('am-unauth-step-number');
 
       const stepText = step.createEl('span', { text: text });
-      stepText.style.cssText = `
-        font-size: 13px;
-        color: var(--text-normal);
-        line-height: 1.3;
-      `;
+      stepText.addClass('am-unauth-step-text');
     };
 
     createStep('1', 'Enter email & username');
@@ -3656,47 +3526,18 @@ export class ArchiveModal extends Modal {
     // Subtle disclaimer at bottom (no icon)
     const disclaimerContainer = contentEl.createDiv();
     disclaimerContainer.setText('Only archive content you have permission to save');
-    disclaimerContainer.style.cssText = `
-      font-size: 11px;
-      color: var(--text-faint);
-      padding: 8px 14px;
-      background: var(--background-secondary);
-      border-radius: var(--radius-s, 4px);
-      margin-bottom: 28px;
-      line-height: 1.3;
-      opacity: 0.7;
-    `;
+    disclaimerContainer.addClass('am-unauth-disclaimer');
 
     // Footer buttons with proper spacing from border
-    const footer = contentEl.createDiv({ cls: 'modal-button-container' });
-    footer.style.cssText = `
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-      width: 100%;
-      max-width: 320px;
-      margin: 0 auto;
-      padding-top: 16px;
-      border-top: none;
-    `;
+    const footer = contentEl.createDiv({ cls: 'modal-button-container am-unauth-footer' });
 
-    const closeBtn = footer.createEl('button', { text: 'Cancel', cls: 'mod-cancel' });
-    closeBtn.style.cssText = `
-      padding: 10px 20px;
-      font-size: 14px;
-      font-weight: 500;
-    `;
+    const closeBtn = footer.createEl('button', { text: 'Cancel', cls: 'mod-cancel am-unauth-btn' });
     closeBtn.addEventListener('click', () => this.close());
 
     const settingsBtn = footer.createEl('button', {
       text: 'Open Settings →',
-      cls: 'mod-cta'
+      cls: 'mod-cta am-unauth-btn'
     });
-    settingsBtn.style.cssText = `
-      padding: 10px 20px;
-      font-size: 14px;
-      font-weight: 500;
-    `;
     settingsBtn.addEventListener('click', () => {
       this.close();
       // Open settings and navigate to Social Archiver tab
@@ -3733,25 +3574,13 @@ export class ArchiveModal extends Modal {
     this.errorContainer.setAttribute('role', 'alert');
     this.errorContainer.setAttribute('aria-live', 'assertive');
 
-    this.errorContainer.style.cssText = `
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 8px 12px;
-      margin-bottom: 12px;
-    `;
+    this.errorContainer.addClass('am-error-container');
 
     // Display error message (with fallback for empty/undefined messages)
     const displayMessage = error.message || error.details || `Error: ${error.code}`;
     const messageText = this.errorContainer.createDiv();
     messageText.textContent = displayMessage;
-    messageText.style.cssText = `
-      margin: 0;
-      color: var(--text-error);
-      font-size: var(--font-ui-small);
-      line-height: 1.4;
-    `;
+    messageText.addClass('am-error-message');
 
     // Auto-clear error when user interacts with form (no dismiss button needed)
 
@@ -3780,8 +3609,8 @@ export class ArchiveModal extends Modal {
    */
   private showButtonLoading(button: HTMLButtonElement, loadingText: string): void {
     button.disabled = true;
-    button.style.opacity = '0.7';
-    button.style.cursor = 'wait';
+    button.addClass('sa-opacity-80');
+    button.setCssStyles({ cursor: 'wait' });
     button.setAttribute('aria-busy', 'true');
 
     // Store original text
@@ -3790,19 +3619,8 @@ export class ArchiveModal extends Modal {
 
     // Create loading spinner
     const spinner = document.createElement('span');
-    spinner.className = 'loading-spinner';
+    spinner.className = 'loading-spinner am-spinner';
     spinner.setAttribute('aria-hidden', 'true');
-    spinner.style.cssText = `
-      display: inline-block;
-      width: 12px;
-      height: 12px;
-      border: 2px solid currentColor;
-      border-right-color: transparent;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin-right: 6px;
-      vertical-align: middle;
-    `;
 
     button.textContent = '';
     button.appendChild(spinner);
@@ -3814,8 +3632,9 @@ export class ArchiveModal extends Modal {
    */
   private hideButtonLoading(button: HTMLButtonElement): void {
     button.disabled = false;
-    button.style.opacity = '1';
-    button.style.cursor = 'pointer';
+    button.removeClass('sa-opacity-80');
+    button.addClass('sa-opacity-100');
+    button.setCssStyles({ cursor: 'pointer' });
     button.removeAttribute('aria-busy');
 
     // Restore original text
@@ -3834,26 +3653,12 @@ export class ArchiveModal extends Modal {
 
   /**
    * Add CSS animation for spinner (called once on modal open)
+   * NOTE: Animations now defined in src/styles/components/modals.css
+   * This method is kept as a no-op for call-site compatibility.
    */
   private addSpinnerAnimation(): void {
-    // Check if animation already exists
-    if (document.getElementById('social-archiver-spinner-style')) {
-      return;
-    }
-
-    const style = document.createElement('style');
-    style.id = 'social-archiver-spinner-style';
-    style.textContent = `
-      @keyframes spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-      }
-      @keyframes pulse {
-        0%, 100% { opacity: 0.5; }
-        50% { opacity: 0.8; }
-      }
-    `;
-    document.head.appendChild(style);
+    // @keyframes spin and pulse are defined in modals.css
+    // No dynamic style injection needed.
   }
 
   /**
@@ -3865,16 +3670,8 @@ export class ArchiveModal extends Modal {
     isCollapsed: boolean,
     onToggle: () => void
   ): HTMLElement {
-    const header = container.createDiv({ cls: 'collapsible-header' });
-    header.style.cssText = `
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 0;
-      cursor: pointer;
-      border-bottom: 1px solid var(--background-modifier-border);
-      margin-bottom: ${isCollapsed ? '0' : '12px'};
-    `;
+    const header = container.createDiv({ cls: 'collapsible-header am-collapsible-header' });
+    header.addClass(isCollapsed ? 'am-collapsible-header--collapsed' : 'am-collapsible-header--expanded');
 
     // ARIA attributes
     header.setAttribute('role', 'button');
@@ -3883,18 +3680,11 @@ export class ArchiveModal extends Modal {
     header.setAttribute('aria-label', `${title}, ${isCollapsed ? 'collapsed' : 'expanded'}`);
 
     const titleEl = header.createEl('span', { text: title });
-    titleEl.style.cssText = `
-      font-weight: 600;
-      font-size: 14px;
-      color: var(--text-normal);
-    `;
+    titleEl.addClass('am-collapsible-title');
 
     const chevron = header.createEl('span', { text: isCollapsed ? '▶' : '▼' });
-    chevron.style.cssText = `
-      font-size: 10px;
-      color: var(--text-muted);
-      transition: transform 0.2s ease;
-    `;
+    chevron.addClass('am-collapsible-chevron');
+    if (isCollapsed) chevron.addClass('am-collapsible-chevron--collapsed');
     chevron.setAttribute('aria-hidden', 'true');
 
     // Click handler

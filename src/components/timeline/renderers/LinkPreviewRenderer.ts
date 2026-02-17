@@ -1,4 +1,4 @@
-import { setIcon, Platform } from 'obsidian';
+import { setIcon, Platform, requestUrl } from 'obsidian';
 import type { LinkPreview, LinkPreviewError } from '../../../types/post';
 import { isValidPreviewUrl } from '../../../utils/url';
 
@@ -66,7 +66,9 @@ export class LinkPreviewRenderer {
     const previewsContainer = container.createDiv({
       cls: 'link-previews-container'
     });
-    previewsContainer.style.cssText = 'display: flex; flex-direction: column; gap: 12px; margin-top: 12px;';
+    previewsContainer.addClass('sa-flex-col');
+    previewsContainer.addClass('sa-gap-12');
+    previewsContainer.addClass('sa-mt-12');
 
     // Render all previews in parallel for better performance
     const promises = urls.map(urlItem => {
@@ -86,7 +88,7 @@ export class LinkPreviewRenderer {
   ): Promise<void> {
     // Create wrapper for card + delete icon
     const wrapper = container.createDiv({ cls: 'link-preview-wrapper' });
-    wrapper.style.cssText = 'position: relative;';
+    wrapper.addClass('sa-relative');
 
     // Create placeholder card
     const card = this.createPlaceholderCardInWrapper(wrapper, url);
@@ -126,37 +128,26 @@ export class LinkPreviewRenderer {
       }
     });
 
-    card.style.cssText = `
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-      text-decoration: none;
-      color: inherit;
-      border: 1px solid var(--background-modifier-border);
-      border-radius: 8px;
-      overflow: hidden;
-      transition: all 0.2s ease;
-      background: var(--background-primary);
-      padding: 12px;
-      min-height: 60px;
-      position: relative;
-    `;
+    card.addClass('sa-flex-row');
+    card.addClass('sa-border');
+    card.addClass('sa-rounded-8');
+    card.addClass('sa-overflow-hidden');
+    card.addClass('sa-transition');
+    card.addClass('sa-bg-primary');
+    card.addClass('sa-p-12');
+    card.addClass('sa-relative');
+    card.addClass('lpr-card');
 
     // Loading spinner
     const spinner = card.createDiv({ cls: 'link-preview-loading' });
-    spinner.style.cssText = `
-      width: 20px;
-      height: 20px;
-      border: 2px solid var(--background-modifier-border);
-      border-top-color: var(--interactive-accent);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin-right: 12px;
-    `;
+    spinner.addClass('sa-icon-20');
+    spinner.addClass('sa-rounded-full');
+    spinner.addClass('lpr-spinner');
 
     // Loading text
     const loadingText = card.createSpan({ text: 'Loading preview...' });
-    loadingText.style.cssText = 'font-size: 0.875rem; color: var(--text-muted);';
+    loadingText.addClass('sa-text-sm');
+    loadingText.addClass('sa-text-muted');
 
     return card;
   }
@@ -171,23 +162,16 @@ export class LinkPreviewRenderer {
     onDelete: (url: string) => Promise<void>
   ): void {
     const deleteIcon = wrapper.createDiv({ cls: 'link-preview-delete' });
-    deleteIcon.style.cssText = `
-      position: absolute;
-      top: 6px;
-      right: 6px;
-      width: 16px;
-      height: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      opacity: 0;
-      transition: opacity 0.2s, color 0.15s;
-      background: transparent;
-      border-radius: 3px;
-      z-index: 10;
-      color: var(--text-faint);
-    `;
+    deleteIcon.addClass('sa-absolute');
+    deleteIcon.addClass('sa-icon-16');
+    deleteIcon.addClass('sa-clickable');
+    deleteIcon.addClass('sa-opacity-0');
+    deleteIcon.addClass('sa-bg-transparent');
+    deleteIcon.addClass('sa-rounded-4');
+    deleteIcon.addClass('sa-z-10');
+    deleteIcon.addClass('lpr-delete-icon');
+    deleteIcon.setCssProps({ '--sa-color': 'var(--text-faint)' });
+    deleteIcon.addClass('sa-dynamic-color');
     deleteIcon.setAttribute('aria-label', 'Remove link preview');
     deleteIcon.setAttribute('role', 'button');
     deleteIcon.setAttribute('tabindex', '0');
@@ -204,20 +188,20 @@ export class LinkPreviewRenderer {
 
     // Show on hover
     wrapper.addEventListener('mouseenter', () => {
-      deleteIcon.style.opacity = '0.6';
+      deleteIcon.setCssProps({ '--sa-opacity': '0.6' });
+      deleteIcon.addClass('sa-dynamic-opacity');
     });
     wrapper.addEventListener('mouseleave', () => {
-      deleteIcon.style.opacity = '0';
+      deleteIcon.removeClass('sa-dynamic-opacity');
     });
 
     // Subtle hover effect on icon itself
     deleteIcon.addEventListener('mouseenter', () => {
-      deleteIcon.style.opacity = '1';
-      deleteIcon.style.color = 'var(--text-muted)';
+      deleteIcon.setCssProps({ '--sa-opacity': '1', '--sa-color': 'var(--text-muted)' });
+      deleteIcon.addClass('sa-dynamic-opacity');
     });
     deleteIcon.addEventListener('mouseleave', () => {
-      deleteIcon.style.opacity = '0.6';
-      deleteIcon.style.color = 'var(--text-faint)';
+      deleteIcon.setCssProps({ '--sa-opacity': '0.6', '--sa-color': 'var(--text-faint)' });
     });
 
     // Delete action
@@ -226,8 +210,9 @@ export class LinkPreviewRenderer {
       e.stopPropagation();
 
       // Fade out animation
-      wrapper.style.opacity = '0';
-      wrapper.style.transition = 'opacity 0.2s';
+      wrapper.addClass('sa-transition-opacity');
+      wrapper.setCssProps({ '--sa-opacity': '0' });
+      wrapper.addClass('sa-dynamic-opacity');
 
       // Wait for animation
       setTimeout(async () => {
@@ -258,37 +243,26 @@ export class LinkPreviewRenderer {
       }
     });
 
-    card.style.cssText = `
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-      text-decoration: none;
-      color: inherit;
-      border: 1px solid var(--background-modifier-border);
-      border-radius: 8px;
-      overflow: hidden;
-      transition: all 0.2s ease;
-      background: var(--background-primary);
-      padding: 12px;
-      min-height: 60px;
-      position: relative;
-    `;
+    card.addClass('sa-flex-row');
+    card.addClass('sa-border');
+    card.addClass('sa-rounded-8');
+    card.addClass('sa-overflow-hidden');
+    card.addClass('sa-transition');
+    card.addClass('sa-bg-primary');
+    card.addClass('sa-p-12');
+    card.addClass('sa-relative');
+    card.addClass('lpr-card');
 
     // Loading spinner
     const spinner = card.createDiv({ cls: 'link-preview-loading' });
-    spinner.style.cssText = `
-      width: 20px;
-      height: 20px;
-      border: 2px solid var(--background-modifier-border);
-      border-top-color: var(--interactive-accent);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin-right: 12px;
-    `;
+    spinner.addClass('sa-icon-20');
+    spinner.addClass('sa-rounded-full');
+    spinner.addClass('lpr-spinner');
 
     // Loading text
     const loadingText = card.createSpan({ text: 'Loading preview...' });
-    loadingText.style.cssText = 'font-size: 0.875rem; color: var(--text-muted);';
+    loadingText.addClass('sa-text-sm');
+    loadingText.addClass('sa-text-muted');
 
     return card;
   }
@@ -305,25 +279,19 @@ export class LinkPreviewRenderer {
     card.empty();
 
     // Reset styles for error card
-    card.style.cssText = `
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-      text-decoration: none;
-      color: inherit;
-      border: 1px solid var(--background-modifier-error);
-      border-radius: 8px;
-      overflow: hidden;
-      background: var(--background-primary);
-      padding: 12px;
-      min-height: 60px;
-      position: relative;
-      cursor: default;
-    `;
+    card.addClass('sa-flex-row');
+    card.addClass('sa-rounded-8');
+    card.addClass('sa-overflow-hidden');
+    card.addClass('sa-bg-primary');
+    card.addClass('sa-p-12');
+    card.addClass('sa-relative');
+    card.addClass('lpr-error-card');
 
     // Error icon
     const iconContainer = card.createDiv();
-    iconContainer.style.cssText = 'width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-right: 12px; color: var(--text-error);';
+    iconContainer.addClass('sa-icon-32');
+    iconContainer.addClass('sa-text-error');
+    iconContainer.addClass('lpr-error-icon');
 
     // Choose icon based on error type
     let iconName: string;
@@ -350,54 +318,46 @@ export class LinkPreviewRenderer {
 
     // Content section
     const content = card.createDiv();
-    content.style.cssText = 'flex: 1; display: flex; flex-direction: column; gap: 4px;';
+    content.addClass('sa-flex-1');
+    content.addClass('sa-flex-col');
+    content.addClass('sa-gap-4');
 
     // Error title
     const title = content.createEl('div');
-    title.style.cssText = 'font-size: 0.875rem; font-weight: 600; color: var(--text-error);';
+    title.addClass('sa-text-sm');
+    title.addClass('sa-font-semibold');
+    title.addClass('sa-text-error');
     title.setText(preview.error.message);
 
     // URL
     const urlText = content.createDiv();
-    urlText.style.cssText = 'font-size: 0.75rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+    urlText.addClass('sa-text-xs');
+    urlText.addClass('sa-text-muted');
+    urlText.addClass('sa-truncate');
     urlText.setText(preview.url);
 
     // Retry button (if retryable)
     if (preview.error.retryable) {
       const retryBtn = card.createEl('button');
-      retryBtn.style.cssText = `
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        padding: 6px 12px;
-        font-size: 0.75rem;
-        color: var(--text-normal);
-        background: var(--background-modifier-hover);
-        border: 1px solid var(--background-modifier-border);
-        border-radius: 4px;
-        cursor: pointer;
-        transition: all 0.2s;
-        flex-shrink: 0;
-        margin-left: 8px;
-      `;
+      retryBtn.addClass('sa-flex-row');
+      retryBtn.addClass('sa-gap-4');
+      retryBtn.addClass('sa-px-12');
+      retryBtn.addClass('sa-py-6');
+      retryBtn.addClass('sa-text-xs');
+      retryBtn.addClass('sa-text-normal');
+      retryBtn.addClass('sa-bg-hover');
+      retryBtn.addClass('sa-border');
+      retryBtn.addClass('sa-rounded-4');
+      retryBtn.addClass('sa-clickable');
+      retryBtn.addClass('sa-transition');
+      retryBtn.addClass('sa-flex-shrink-0');
+      retryBtn.addClass('lpr-retry-btn');
 
       const retryIcon = retryBtn.createDiv();
-      retryIcon.style.cssText = 'width: 14px; height: 14px; display: flex; align-items: center; justify-content: center;';
+      retryIcon.addClass('sa-icon-14');
       setIcon(retryIcon, 'refresh-cw');
 
       retryBtn.createSpan({ text: 'Retry' });
-
-      retryBtn.addEventListener('mouseenter', () => {
-        retryBtn.style.background = 'var(--interactive-accent)';
-        retryBtn.style.color = 'var(--text-on-accent)';
-        retryBtn.style.borderColor = 'var(--interactive-accent)';
-      });
-
-      retryBtn.addEventListener('mouseleave', () => {
-        retryBtn.style.background = 'var(--background-modifier-hover)';
-        retryBtn.style.color = 'var(--text-normal)';
-        retryBtn.style.borderColor = 'var(--background-modifier-border)';
-      });
 
       retryBtn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -415,36 +375,18 @@ export class LinkPreviewRenderer {
     card.empty();
 
     // Reset styles for actual preview
-    card.style.cssText = `
-      display: flex;
-      flex-direction: row;
-      align-items: stretch;
-      text-decoration: none;
-      color: inherit;
-      border: 1px solid var(--background-modifier-border);
-      border-radius: 8px;
-      overflow: hidden;
-      transition: all 0.2s ease;
-      background: var(--background-primary);
-      position: relative;
-      cursor: pointer;
-    `;
+    card.addClass('sa-flex');
+    card.addClass('sa-border');
+    card.addClass('sa-rounded-8');
+    card.addClass('sa-overflow-hidden');
+    card.addClass('sa-transition');
+    card.addClass('sa-bg-primary');
+    card.addClass('sa-relative');
+    card.addClass('sa-clickable');
+    card.addClass('lpr-card-loaded');
 
     // Update aria-label
     card.setAttribute('aria-label', `Link preview: ${preview.title}`);
-
-    // Add hover effect
-    card.addEventListener('mouseenter', () => {
-      card.style.borderColor = 'var(--interactive-accent)';
-      card.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
-      card.style.transform = 'translateY(-1px)';
-    });
-
-    card.addEventListener('mouseleave', () => {
-      card.style.borderColor = 'var(--background-modifier-border)';
-      card.style.boxShadow = 'none';
-      card.style.transform = 'translateY(0)';
-    });
 
     // Image section (responsive - hidden on mobile, visible on desktop)
     if (preview.image && !Platform.isMobile) {
@@ -467,11 +409,18 @@ export class LinkPreviewRenderer {
 
     // Content section
     const content = card.createDiv();
-    content.style.cssText = 'flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 12px; min-height: 60px; justify-content: center;';
+    content.addClass('sa-flex-1');
+    content.addClass('sa-flex-col');
+    content.addClass('sa-gap-4');
+    content.addClass('sa-p-12');
+    content.addClass('lpr-content');
 
     // Meta (Favicon + Domain)
     const meta = content.createDiv();
-    meta.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text-muted);';
+    meta.addClass('sa-flex-row');
+    meta.addClass('sa-gap-6');
+    meta.addClass('sa-text-xs');
+    meta.addClass('sa-text-muted');
 
     // Favicon
     if (preview.favicon) {
@@ -483,30 +432,27 @@ export class LinkPreviewRenderer {
           height: '16'
         }
       });
-      favicon.style.cssText = 'width: 16px; height: 16px; object-fit: contain;';
+      favicon.addClass('sa-icon-16');
+      favicon.addClass('sa-object-contain');
       favicon.addEventListener('error', () => {
-        favicon.style.display = 'none';
+        favicon.addClass('sa-hidden');
       });
     }
 
     // Domain
     const domain = this.extractDomain(preview.url);
     const domainSpan = meta.createSpan({ text: preview.siteName || domain });
-    domainSpan.style.cssText = 'overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+    domainSpan.addClass('sa-truncate');
 
     // Title
     const title = content.createEl('h3', { text: this.truncate(preview.title, 60) });
-    title.style.cssText = `
-      margin: 0;
-      font-size: 0.8125rem;
-      font-weight: 600;
-      line-height: 1.3;
-      color: var(--text-normal);
-      overflow: hidden;
-      display: -webkit-box;
-      -webkit-line-clamp: 1;
-      -webkit-box-orient: vertical;
-    `;
+    title.addClass('sa-m-0');
+    title.addClass('sa-text-base');
+    title.addClass('sa-font-semibold');
+    title.addClass('sa-leading-tight');
+    title.addClass('sa-text-normal');
+    title.addClass('sa-overflow-hidden');
+    title.addClass('lpr-title');
 
     // Description (if available, desktop only)
     if (preview.description && !Platform.isMobile) {
@@ -514,16 +460,11 @@ export class LinkPreviewRenderer {
         text: this.truncate(preview.description, 100),
         cls: 'link-preview-description'
       });
-      description.style.cssText = `
-        margin: 0;
-        font-size: 0.6875rem;
-        line-height: 1.4;
-        color: var(--text-muted);
-        overflow: hidden;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-      `;
+      description.addClass('sa-m-0');
+      description.addClass('sa-text-xs');
+      description.addClass('sa-text-muted');
+      description.addClass('sa-overflow-hidden');
+      description.addClass('lpr-description');
     }
   }
 
@@ -552,19 +493,21 @@ export class LinkPreviewRenderer {
     this.loadingUrls.add(url);
 
     try {
-      const response = await fetch(`${this.workerUrl}/api/link-preview`, {
+      const response = await requestUrl({
+        url: `${this.workerUrl}/api/link-preview`,
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ url }),
+        throw: false
       });
 
-      const result = await response.json();
+      const result = response.json;
 
-      if (!response.ok) {
+      if (response.status !== 200) {
         // API returned error - parse error details
-        const errorPreview = this.createErrorPreview(url, response.status, result.error?.message || response.statusText);
+        const errorPreview = this.createErrorPreview(url, response.status, result.error?.message || `Error ${response.status}`);
 
         // Cache permanent errors (404, 403, 410), don't cache temporary errors (5xx, timeout)
         if (errorPreview.error && !errorPreview.error.retryable) {

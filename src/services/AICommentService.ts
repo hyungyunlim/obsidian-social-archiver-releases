@@ -9,7 +9,16 @@
  * Single Responsibility: Generate AI comments via CLI tools with process management
  */
 
-import type { ChildProcess } from 'child_process';
+// Type-only import replaced with inline interface
+interface ChildProcess {
+  stdin: NodeJS.WritableStream | null;
+  stdout: NodeJS.ReadableStream | null;
+  stderr: NodeJS.ReadableStream | null;
+  kill(signal?: NodeJS.Signals | number): boolean;
+  on(event: 'close', listener: (code: number | null) => void): this;
+  on(event: 'error', listener: (error: Error) => void): this;
+  on(event: string, listener: (...args: unknown[]) => void): this;
+}
 import type {
   AICommentResult,
   AICommentOptions,
@@ -108,6 +117,7 @@ export class AICommentService {
 
     AICommentService.shellPathPromise = new Promise((resolve) => {
       try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
         const os = require('os');
         const isWindows = os.platform() === 'win32';
 
@@ -117,7 +127,7 @@ export class AICommentService {
           const currentPath = process.env.PATH || process.env.Path || '';
           if (currentPath) {
             AICommentService.shellPath = currentPath;
-            console.log('[AICommentService] Using Windows PATH:', currentPath.slice(0, 200));
+            console.debug('[AICommentService] Using Windows PATH:', currentPath.slice(0, 200));
             resolve(currentPath);
           } else {
             resolve(null);
@@ -126,6 +136,7 @@ export class AICommentService {
         }
 
         // Unix-specific: Get PATH from login shell
+        // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: child_process required for shell PATH detection
         const { execSync } = require('child_process');
 
         // Determine the user's default shell
@@ -187,7 +198,7 @@ export class AICommentService {
 
           const shellPath = filteredPaths.join(':');
           AICommentService.shellPath = shellPath;
-          console.log('[AICommentService] Got shell PATH (filtered):', shellPath.slice(0, 200));
+          console.debug('[AICommentService] Got shell PATH (filtered):', shellPath.slice(0, 200));
           resolve(shellPath);
         } else {
           resolve(null);
@@ -543,6 +554,7 @@ Content:
 
     // Handle current note path for connections type (to exclude self-reference)
     if (options.type === 'connections' && options.currentNotePath) {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: path module required for note name extraction
       const path = require('path');
       const noteName = path.basename(options.currentNotePath, '.md');
       prompt = prompt.replace(/\{\{currentNote\}\}/g, options.currentNotePath);
@@ -569,8 +581,11 @@ Content:
       return null;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js fs/path required for temp file creation
     const os = require('os');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const fs = require('fs').promises;
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const path = require('path');
 
     const tempDir = os.tmpdir();
@@ -587,6 +602,7 @@ Content:
     if (!tempFile) return;
 
     try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: fs required for temp file cleanup
       const fs = require('fs').promises;
       await fs.unlink(tempFile);
     } catch {
@@ -615,6 +631,7 @@ Content:
       : prompt;
 
     // Check if we're on Windows - use stdin for prompts to avoid shell escaping issues
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: os required for platform detection
     const os = require('os');
     const isWindows = os.platform() === 'win32';
 
@@ -802,6 +819,7 @@ Content:
     timeout: number,
     stdinPrompt?: string
   ): Promise<string> {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: child_process required for CLI execution
     const { spawn } = require('child_process');
 
     // Report generating progress
@@ -819,6 +837,7 @@ Content:
     return new Promise((resolve, reject) => {
 
       // Build environment with shell PATH
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: os required for platform detection
       const os = require('os');
       const isWindows = os.platform() === 'win32';
       const pathSeparator = isWindows ? ';' : ':';

@@ -13,6 +13,7 @@
 
 import type { IService } from './base/IService';
 import { ErrorCategory, ErrorSeverity } from './ErrorNotificationService';
+import { Platform } from 'obsidian';
 
 /**
  * Error log entry
@@ -145,7 +146,7 @@ export class ErrorTracker implements IService {
       context: {
         ...context,
         sessionId: this.sessionId,
-        userAgent: navigator.userAgent,
+        userAgent: this.getUserAgent(),
         platform: this.getPlatform()
       },
       stackTrace: error.stack,
@@ -405,17 +406,28 @@ export class ErrorTracker implements IService {
   }
 
   /**
+   * Get user agent information
+   */
+  private getUserAgent(): string {
+    const platform = Platform.isMobile ? 'mobile' : 'desktop';
+    const os = Platform.isIosApp ? 'iOS' :
+               Platform.isAndroidApp ? 'Android' :
+               Platform.isMacOS ? 'macOS' :
+               Platform.isWin ? 'Windows' :
+               Platform.isLinux ? 'Linux' : 'unknown';
+
+    return `Obsidian/${platform}/${os}`;
+  }
+
+  /**
    * Get platform information
    */
   private getPlatform(): string {
-    if (typeof navigator !== 'undefined') {
-      const ua = navigator.userAgent.toLowerCase();
-      if (ua.includes('win')) return 'Windows';
-      if (ua.includes('mac')) return 'macOS';
-      if (ua.includes('linux')) return 'Linux';
-      if (ua.includes('android')) return 'Android';
-      if (ua.includes('iphone') || ua.includes('ipad')) return 'iOS';
-    }
+    if (Platform.isIosApp) return 'iOS';
+    if (Platform.isAndroidApp) return 'Android';
+    if (Platform.isMacOS) return 'macOS';
+    if (Platform.isWin) return 'Windows';
+    if (Platform.isLinux) return 'Linux';
     return 'Unknown';
   }
 }

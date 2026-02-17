@@ -1,0 +1,1277 @@
+/*
+ * Modal Component CSS
+ *
+ * Replaces inline styles in modal TS files to pass Obsidian automated review.
+ * Prefixes:
+ *   wam- = WebtoonArchiveModal
+ *   wrr- = WebtoonReaderRenderer
+ *   wesm- = WebtoonEpisodeSelectModal
+ *   am-  = ArchiveModal
+ *   bsm- = BrunchSubscribeModal
+ *   nsm- = NaverSubscribeModal
+ *   rsm- = RedditSubscribeModal
+ *   rnm- = ReleaseNotesModal
+ */
+
+/* ========================================
+ * WebtoonArchiveModal (wam-)
+ * ======================================== */
+
+/* URL input container close-button clearance */
+.wam-url-container {
+  margin-top: 28px;
+}
+
+/* No search results */
+.wam-no-results {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* Preview card (shared between Naver and WEBTOON) */
+.wam-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--background-secondary);
+  border-radius: var(--radius-s);
+  margin: 8px 0;
+}
+
+.wam-preview-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.wam-preview-thumb {
+  width: 60px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.wam-preview-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wam-preview-title {
+  font-weight: var(--font-semibold);
+  font-size: var(--font-ui-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wam-preview-author {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.wam-preview-stats {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.wam-preview-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.wam-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  background: var(--background-modifier-border);
+  border-radius: 8px;
+  color: var(--text-muted);
+}
+
+.wam-tag--completed {
+  font-size: 10px;
+  padding: 1px 6px;
+  background: var(--interactive-accent);
+  border-radius: 8px;
+  color: var(--text-on-accent);
+}
+
+.wam-tag--canvas {
+  font-size: 10px;
+  padding: 1px 6px;
+  background: var(--text-warning);
+  border-radius: 8px;
+  color: white;
+}
+
+/* Synopsis (below preview header) */
+.wam-synopsis {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  padding-top: 8px;
+  border-top: 1px solid var(--background-modifier-border);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Episode list wrapper */
+.wam-episode-wrapper {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  margin: var(--size-4-2) 0;
+  overflow: hidden;
+}
+
+.wam-episode-wrapper--mobile {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  margin: var(--size-4-2) 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Episode list scrollable area */
+.wam-episode-list--mobile {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 200px;
+}
+
+.wam-episode-list--desktop {
+  max-height: 45vh;
+  overflow-y: auto;
+}
+
+/* Loading state */
+.wam-loading-text {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* Loading more indicator */
+.wam-loading-more {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* Scroll sentinel */
+.wam-scroll-sentinel {
+  height: 1px;
+}
+
+/* Episode list header */
+.wam-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+/* Select all label */
+.wam-select-all-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: var(--font-ui-small);
+}
+
+/* Sort button */
+.wam-sort-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: var(--font-ui-smaller);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-s);
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+/* Sort icon */
+.wam-sort-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Pagination controls */
+.wam-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.wam-pagination--mobile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--background-modifier-border);
+  flex-shrink: 0;
+}
+
+/* Pagination button */
+.wam-page-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-s);
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.wam-page-btn--mobile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-s);
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.wam-page-btn-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Page select dropdown */
+.wam-page-select {
+  padding: 4px 8px;
+  font-size: var(--font-ui-smaller);
+  border: 1px solid var(--background-modifier-border-hover);
+  border-radius: var(--radius-s);
+  background: var(--background-primary);
+  cursor: pointer;
+  min-width: 70px;
+  text-align: center;
+  outline: none;
+}
+
+.wam-page-select:focus {
+  border-color: var(--interactive-accent);
+}
+
+.wam-page-select:not(:focus) {
+  box-shadow: none;
+}
+
+.wam-page-select--mobile {
+  padding: 3px 6px;
+  font-size: 11px;
+  border: 1px solid var(--background-modifier-border-hover);
+  border-radius: var(--radius-s);
+  background: var(--background-primary);
+  cursor: pointer;
+  min-width: 54px;
+  text-align: center;
+  outline: none;
+}
+
+.wam-page-select--mobile:focus {
+  border-color: var(--interactive-accent);
+}
+
+.wam-page-select--mobile:not(:focus) {
+  box-shadow: none;
+}
+
+/* Episode row */
+.wam-episode-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--background-modifier-border-hover);
+  cursor: pointer;
+}
+
+.wam-episode-row--disabled {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--background-modifier-border-hover);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Episode checkbox */
+.wam-episode-cb {
+  flex-shrink: 0;
+}
+
+/* Episode number */
+.wam-episode-num {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  min-width: 36px;
+  flex-shrink: 0;
+}
+
+/* Episode title container */
+.wam-episode-title-container {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Episode subtitle text */
+.wam-episode-subtitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-ui-small);
+}
+
+/* Archived badge */
+.wam-badge--archived {
+  font-size: 10px;
+  padding: 1px 5px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* Paid badge */
+.wam-badge--paid {
+  font-size: 10px;
+  padding: 1px 5px;
+  background: var(--text-error);
+  color: white;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* Episode meta (right side) */
+.wam-episode-meta {
+  font-size: 11px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.wam-episode-meta--wide {
+  font-size: 11px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+  text-align: right;
+  min-width: 70px;
+}
+
+/* Download progress */
+.wam-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--background-secondary);
+  border-radius: var(--radius-s);
+  margin: 8px 0;
+}
+
+.wam-progress-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.wam-progress-episode-info {
+  font-size: 13px;
+  color: var(--text-normal);
+}
+
+.wam-progress-episode-count {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.wam-progress-bar-bg {
+  width: 100%;
+  height: 6px;
+  background: var(--background-modifier-border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.wam-progress-bar-fill {
+  height: 100%;
+  background: var(--interactive-accent);
+  transition: width 0.2s ease;
+}
+
+.wam-progress-image-info {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* Footer */
+.wam-footer {
+  margin-top: 8px;
+}
+
+.wam-footer--mobile {
+  margin-top: 8px;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wam-footer-btn-full {
+  width: 100%;
+}
+
+/* Disclaimer */
+.wam-disclaimer {
+  font-size: 10px;
+  color: var(--text-faint);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* Subscription section */
+.wam-subscription {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--background-secondary);
+  border-radius: var(--radius-s);
+  margin: 8px 0;
+}
+
+.wam-subscription--mobile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--background-secondary);
+  border-radius: var(--radius-s);
+  margin: 4px 0;
+}
+
+.wam-subscription-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wam-subscription-bell {
+  display: inline-flex;
+  align-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+}
+
+.wam-subscription-bell--mobile {
+  display: inline-flex;
+  align-items: center;
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+}
+
+.wam-subscription-text {
+  font-size: var(--font-ui-small);
+  font-weight: 500;
+}
+
+.wam-subscription-text--mobile {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.wam-subscription-schedule {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.wam-subscription-toggle {
+  flex-shrink: 0;
+}
+
+.wam-subscription-toggle--mobile {
+  flex-shrink: 0;
+  transform: scale(0.85);
+  transform-origin: right center;
+}
+
+/* Preview banner (Naver) */
+.wam-preview-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+}
+
+.wam-preview-banner-icon {
+  font-size: 14px;
+}
+
+.wam-preview-banner-count {
+  font-weight: 500;
+}
+
+.wam-preview-banner-next {
+  color: var(--text-normal);
+}
+
+/* Schedule display toggle */
+.wam-schedule-hidden {
+  display: none;
+}
+
+.wam-schedule-visible {
+  display: block;
+}
+
+/* ========================================
+ * WebtoonReaderRenderer (wrr-)
+ * ======================================== */
+
+.wrr-image-wrapper {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--background-primary);
+  margin: 0;
+  padding: 0;
+  min-height: 100px;
+  contain: layout paint;
+  line-height: 0;
+  font-size: 0;
+}
+
+.wrr-image {
+  width: 100%;
+  display: block;
+  object-fit: contain;
+  margin: 0;
+  padding: 0;
+  max-width: 800px;
+  height: auto;
+  border: none;
+}
+
+.wrr-image--placeholder {
+  min-height: 200px;
+  background: var(--background-secondary);
+}
+
+.wrr-progress-bar {
+  overflow: hidden;
+  margin-top: 8px;
+  height: 3px;
+  background: var(--background-modifier-border);
+  border-radius: 2px;
+}
+
+.wrr-progress-fill {
+  height: 100%;
+  background: var(--interactive-accent);
+  border-radius: 2px;
+  transition: width 0.1s ease;
+}
+
+.wrr-next-btn {
+  position: sticky;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: var(--interactive-accent);
+  cursor: pointer;
+  z-index: 10;
+  pointer-events: none;
+  opacity: 0;
+  font-size: 13px;
+  font-weight: 500;
+  bottom: 12px;
+  float: right;
+  margin-right: 12px;
+  margin-top: -44px;
+  color: var(--text-on-accent);
+  border-radius: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: opacity 0.3s ease, transform 0.3s ease, background 0.2s ease;
+}
+
+.wrr-next-btn:hover {
+  background: var(--interactive-accent-hover);
+}
+
+.wrr-age-badge {
+  background: var(--background-modifier-error-hover);
+}
+
+.wrr-scroll-container {
+  -webkit-overflow-scrolling: touch;
+}
+
+.wrr-image-container-gap-0 {
+  gap: 0;
+}
+
+.wrr-scrollbar-color {
+  scrollbar-color: var(--background-modifier-border) transparent;
+}
+
+/* ========================================
+ * WebtoonEpisodeSelectModal (wesm-)
+ * ======================================== */
+
+/* Mobile modal sizing */
+.wesm-modal--mobile {
+  width: 95vw !important;
+  max-width: 95vw !important;
+  height: 85vh !important;
+  max-height: 85vh !important;
+}
+
+.wesm-modal--desktop {
+  width: 500px !important;
+  max-width: 500px !important;
+  height: 80vh !important;
+  max-height: 80vh !important;
+}
+
+.wesm-content--mobile {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.wesm-content-layout {
+  padding: 0;
+}
+
+/* Episode item cursor states */
+.wesm-episode-item--disabled {
+  cursor: not-allowed;
+}
+
+/* Paid badge */
+.wesm-paid-badge {
+  background: var(--text-error);
+  color: white;
+  padding: 1px 6px;
+  font-size: 10px;
+}
+
+/* Indicator border state */
+.wesm-indicator--empty {
+  border-width: 2px;
+}
+
+/* Indicator check background */
+.wesm-indicator--checked {
+  background: white;
+}
+
+/* Footer */
+.wesm-footer {
+  border-top: 1px solid var(--background-modifier-border);
+  border-bottom: none;
+}
+
+/* Pagination button states */
+.wesm-pagination-btn--disabled {
+  cursor: not-allowed;
+}
+
+.wesm-pagination-btn {
+  border-radius: var(--button-radius);
+}
+
+/* Select all / submit buttons */
+.wesm-select-all-btn {
+  border-radius: var(--button-radius);
+  border-color: var(--text-accent);
+}
+
+.wesm-cancel-btn {
+  border-radius: var(--button-radius);
+  border: none;
+}
+
+.wesm-submit-btn {
+  border-radius: var(--button-radius);
+  border: none;
+}
+
+/* Error margin */
+.wesm-error {
+  margin: 0 16px 8px;
+}
+
+/* ========================================
+ * ArchiveModal (am-)
+ * ======================================== */
+
+/* Spinner keyframes (replaces createElement('style')) */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.8; }
+}
+
+/* Unauthenticated state */
+.am-unauth-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 20px;
+  text-align: center;
+}
+
+.am-unauth-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-normal);
+  margin: 0 0 20px 0;
+}
+
+.am-unauth-message-container {
+  margin-bottom: 28px;
+}
+
+.am-unauth-main-message {
+  font-size: 14px;
+  color: var(--text-normal);
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+.am-unauth-sub-message {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.am-unauth-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 auto 28px auto;
+  max-width: 260px;
+  width: 100%;
+}
+
+.am-unauth-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--background-secondary);
+  border-radius: var(--radius-s, 6px);
+  text-align: left;
+  transition: opacity 0.2s ease;
+}
+
+.am-unauth-step:hover {
+  opacity: 0.9;
+}
+
+.am-unauth-step-number {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.am-unauth-step-text {
+  font-size: 13px;
+  color: var(--text-normal);
+  line-height: 1.3;
+}
+
+.am-unauth-disclaimer {
+  font-size: 11px;
+  color: var(--text-faint);
+  padding: 8px 14px;
+  background: var(--background-secondary);
+  border-radius: var(--radius-s, 4px);
+  margin-bottom: 28px;
+  line-height: 1.3;
+  opacity: 0.7;
+}
+
+.am-unauth-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+  padding-top: 16px;
+  border-top: none;
+}
+
+.am-unauth-btn {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Error container */
+.am-error-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.am-error-message {
+  font-size: 13px;
+  color: var(--text-error);
+  margin: 0;
+  flex: 1;
+}
+
+/* Loading spinner */
+.am-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--text-on-accent);
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* Collapsible section header */
+.am-collapsible-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  cursor: pointer;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.am-collapsible-header--collapsed {
+  margin-bottom: 0;
+}
+
+.am-collapsible-header--expanded {
+  margin-bottom: 12px;
+}
+
+.am-collapsible-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+.am-collapsible-chevron {
+  display: inline-flex;
+  align-items: center;
+  transition: transform 0.2s ease;
+  color: var(--text-muted);
+}
+
+.am-collapsible-chevron--collapsed {
+  transform: rotate(-90deg);
+}
+
+/* Mobile modal sizing (shared) */
+.am-modal--mobile {
+  width: 92vw !important;
+  max-width: 92vw !important;
+  height: auto !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+}
+
+.am-content--mobile {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+/* Mobile form input shared style */
+.am-mobile-input {
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--input-radius);
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-modifier-form-field);
+  color: var(--text-normal);
+  font-size: var(--font-ui-smaller);
+  -webkit-appearance: none;
+}
+
+/* Mobile form select (with extra padding-right for arrow) */
+.am-mobile-select {
+  height: 28px;
+  padding: 0 8px;
+  padding-right: 24px;
+  border-radius: var(--input-radius);
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-modifier-form-field);
+  color: var(--text-normal);
+  font-size: var(--font-ui-smaller);
+  -webkit-appearance: none;
+}
+
+/* Form label (small font) */
+.am-form-label {
+  font-size: var(--font-ui-small);
+}
+
+/* Desktop input compact width */
+.am-desktop-input-sm {
+  width: 70px;
+  text-align: center;
+}
+
+/* Video mode warning */
+.am-video-warning {
+  margin: 2px 0 10px 0;
+  background: var(--background-modifier-warning);
+}
+
+/* Disclaimer row */
+.am-disclaimer {
+  gap: var(--size-4-2);
+  font-size: var(--font-smallest);
+  margin-top: var(--size-4-3);
+}
+
+/* Disclaimer icon size */
+.am-disclaimer-icon {
+  --icon-size: var(--icon-xs);
+}
+
+/* Mobile footer stacked */
+.am-footer--mobile {
+  flex-direction: column;
+}
+
+/* Profile preview layout */
+.am-profile-preview {
+  gap: var(--size-4-3);
+  padding: var(--size-4-3) 0;
+}
+
+/* Profile avatar skeleton */
+.am-avatar-skeleton {
+  width: 40px;
+  height: 40px;
+  background: var(--background-modifier-border);
+}
+
+/* Profile text skeleton */
+.am-text-skeleton {
+  width: 120px;
+  height: 14px;
+  background: var(--background-modifier-border);
+  border-radius: var(--radius-s);
+}
+
+/* Profile avatar image */
+.am-avatar-img {
+  width: 40px;
+  height: 40px;
+}
+
+/* Profile placeholder avatar */
+.am-avatar-placeholder {
+  width: 40px;
+  height: 40px;
+}
+
+/* Profile display name */
+.am-profile-name {
+  font-size: var(--font-ui-small);
+}
+
+/* Profile handle */
+.am-profile-handle {
+  font-size: var(--font-ui-smaller);
+}
+
+/* Profile options mobile */
+.am-profile-options--mobile {
+  margin-top: 4px;
+}
+
+/* Input number compact (mobile) */
+.am-input-compact {
+  height: 28px;
+  padding: 0 8px;
+  background: var(--background-modifier-form-field);
+  font-size: var(--font-ui-smaller);
+  -webkit-appearance: none;
+  width: 80px;
+  text-align: center;
+}
+
+/* Select compact (mobile) */
+.am-select-compact {
+  height: 28px;
+  padding: 0 8px;
+  padding-right: 24px;
+  background: var(--background-modifier-form-field);
+  font-size: var(--font-ui-smaller);
+  -webkit-appearance: none;
+}
+
+/* Select with min-width */
+.am-select-130 { min-width: 130px; }
+.am-select-120 { min-width: 120px; }
+.am-select-100 { min-width: 100px; }
+
+/* Keyword input compact */
+.am-keyword-input {
+  height: 28px;
+  padding: 0 8px;
+  background: var(--background-modifier-form-field);
+  font-size: var(--font-ui-small);
+  min-width: 80px;
+}
+
+/* Hint text */
+.am-hint-text {
+  font-size: var(--font-ui-smaller);
+  margin-top: -8px;
+}
+
+/* Crawl hint icon */
+.am-hint-icon {
+  --icon-size: 14px;
+  display: flex;
+}
+
+/* Crawl hint row */
+.am-crawl-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-warning);
+}
+
+/* RSS mobile container */
+.am-rss-mobile {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+/* Naver subscribe period select */
+.am-period-select {
+  font-size: var(--font-ui-small);
+  padding: 6px 10px;
+  background: var(--background-primary);
+  min-width: 120px;
+}
+
+/* Naver subscribe keyword input */
+.am-keyword-desktop {
+  font-size: var(--font-ui-small);
+  padding: 6px 10px;
+  background: var(--background-primary);
+  min-width: 80px;
+}
+
+/* Profile action buttons mobile */
+.am-profile-actions--mobile {
+  flex-direction: column-reverse;
+  gap: var(--size-4-2);
+  margin-top: var(--size-4-4);
+}
+
+/* Profile action buttons desktop */
+.am-profile-actions--desktop {
+  justify-content: flex-end;
+  gap: var(--size-4-2);
+  margin-top: var(--size-4-4);
+  padding-top: var(--size-4-3);
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+/* ========================================
+ * BrunchSubscribeModal (bsm-)
+ * ======================================== */
+
+/* Avatar fallback letter */
+.bsm-avatar-letter {
+  color: white;
+  font-weight: bold;
+  font-size: 18px;
+}
+
+/* Error line-height */
+.bsm-error-message {
+  line-height: 1.4;
+}
+
+/* Footer */
+.bsm-footer {
+  justify-content: flex-end;
+  padding-top: 16px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+/* Button shared */
+.bsm-btn {
+  border-radius: var(--button-radius);
+  border: none;
+}
+
+/* Mobile input shared */
+.bsm-mobile-input {
+  border-radius: var(--input-radius);
+  -webkit-appearance: none;
+}
+
+/* ========================================
+ * NaverSubscribeModal (nsm-)
+ * ======================================== */
+
+/* Avatar fallback letter */
+.nsm-avatar-letter {
+  color: white;
+  font-weight: bold;
+  font-size: 18px;
+}
+
+/* Error line-height */
+.nsm-error-message {
+  line-height: 1.4;
+}
+
+/* Footer */
+.nsm-footer {
+  justify-content: flex-end;
+  padding-top: 16px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+/* Button shared */
+.nsm-btn {
+  border-radius: var(--button-radius);
+  border: none;
+}
+
+/* Mobile input shared */
+.nsm-mobile-input {
+  border-radius: var(--input-radius);
+  -webkit-appearance: none;
+}
+
+/* ========================================
+ * RedditSubscribeModal (rsm-)
+ * ======================================== */
+
+/* Avatar */
+.rsm-avatar {
+  width: 44px;
+  height: 44px;
+  background: #FF4500;
+}
+
+/* Mobile input shared */
+.rsm-mobile-input {
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--input-radius);
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-modifier-form-field);
+  color: var(--text-normal);
+  font-size: var(--font-ui-smaller);
+  -webkit-appearance: none;
+}
+
+.rsm-mobile-select {
+  height: 28px;
+  padding: 0 8px;
+  padding-right: 24px;
+  border-radius: var(--input-radius);
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-modifier-form-field);
+  color: var(--text-normal);
+  font-size: var(--font-ui-smaller);
+  -webkit-appearance: none;
+}
+
+/* Setting last item no border */
+.rsm-setting-last {
+  border-bottom: none;
+}
+
+/* ========================================
+ * ReleaseNotesModal (rnm-)
+ * ======================================== */
+
+.rnm-content--mobile {
+  padding-left: 12px;
+  padding-right: 12px;
+  padding-bottom: 16px;
+}
+
+.rnm-qr-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.rnm-qr-image {
+  width: var(--rnm-qr-size, 140px);
+  height: var(--rnm-qr-size, 140px);
+}
+
+.rnm-qr-link {
+  font-size: 13px;
+}

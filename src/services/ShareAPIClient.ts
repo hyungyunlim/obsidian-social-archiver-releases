@@ -190,7 +190,7 @@ export class ShareAPIClient implements IService {
 
         // Log request if debug mode
         if (this.config.debug) {
-          console.log('[ShareAPIClient] Request:', {
+          console.debug('[ShareAPIClient] Request:', {
             method: config.method,
             url: config.url,
             headers: config.headers,
@@ -210,7 +210,7 @@ export class ShareAPIClient implements IService {
       (response) => {
         // Log response if debug mode
         if (this.config.debug) {
-          console.log('[ShareAPIClient] Response:', {
+          console.debug('[ShareAPIClient] Response:', {
             status: response.status,
             data: response.data,
             headers: response.headers
@@ -408,7 +408,7 @@ export class ShareAPIClient implements IService {
       }
 
       if (this.config.debug) {
-        console.log('[ShareAPIClient] Media sync analysis:', {
+        console.debug('[ShareAPIClient] Media sync analysis:', {
           toUpload: mediaToUpload.length,
           toDelete: mediaToDelete.length,
           toKeep: mediaToKeep.length
@@ -574,7 +574,7 @@ export class ShareAPIClient implements IService {
             media: archive.media?.map(m => {
               const remoteUrl = pathMapping.get(m.url);
               if (this.config.debug) {
-                console.log('[ShareAPIClient] Media path mapping:', {
+                console.debug('[ShareAPIClient] Media path mapping:', {
                   localPath: m.url,
                   remoteUrl: remoteUrl || 'not found',
                   mapped: !!remoteUrl
@@ -617,7 +617,7 @@ export class ShareAPIClient implements IService {
       };
 
       if (this.config.debug) {
-        console.log('[ShareAPIClient] Update request prepared:', {
+        console.debug('[ShareAPIClient] Update request prepared:', {
           shareId,
           embeddedArchivesCount: updatedPostData.embeddedArchives?.length ?? 'undefined',
           embeddedArchivesValue: updatedPostData.embeddedArchives,

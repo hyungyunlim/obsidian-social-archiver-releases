@@ -55,57 +55,41 @@ export class TagModal extends Modal {
     // Mobile: standard form modal pattern (consistent with ArchiveModal, Subscribe modals)
     if (Platform.isMobile) {
       const { modalEl } = this;
-      modalEl.style.setProperty('width', '92vw', 'important');
-      modalEl.style.setProperty('max-width', '92vw', 'important');
-      modalEl.style.setProperty('height', 'auto', 'important');
-      modalEl.style.setProperty('max-height', '90vh', 'important');
-      modalEl.style.setProperty('overflow-y', 'auto', 'important');
-
-      contentEl.style.paddingLeft = '12px';
-      contentEl.style.paddingRight = '12px';
+      modalEl.addClass('tm-mobile');
+      contentEl.addClass('tm-mobile-content');
 
       // Shrink the built-in close button on mobile
       const closeBtn = modalEl.querySelector('.modal-close-button') as HTMLElement;
       if (closeBtn) {
-        closeBtn.style.setProperty('width', '28px', 'important');
-        closeBtn.style.setProperty('height', '28px', 'important');
-        closeBtn.style.setProperty('font-size', '14px', 'important');
-        closeBtn.style.setProperty('top', '10px', 'important');
-        closeBtn.style.setProperty('right', '10px', 'important');
+        closeBtn.addClass('tm-mobile-close');
       }
     }
 
     // Title row: "Manage Tags (count)" + "Delete All" button
     const titleRow = contentEl.createDiv();
-    titleRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between; margin: 0 0 12px;';
+    titleRow.addClass('sa-flex-between', 'sa-mb-12');
 
     const titleEl = titleRow.createDiv();
-    titleEl.style.cssText = 'display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600;';
+    titleEl.addClass('sa-flex-row', 'sa-gap-8', 'sa-text-lg', 'sa-font-semibold');
     titleEl.createSpan({ text: 'Manage Tags' });
 
     const allTags = this.getFilteredTags();
     if (allTags.length > 0) {
       const countBadge = titleEl.createSpan({ text: String(allTags.length) });
-      countBadge.style.cssText = 'font-size: 12px; font-weight: 500; color: var(--text-muted); background: var(--background-secondary); padding: 1px 8px; border-radius: 10px;';
+      countBadge.addClass('sa-text-sm', 'sa-font-medium', 'sa-text-muted', 'sa-bg-secondary', 'tm-count-badge');
 
       // Delete All button
       const deleteAllBtn = titleRow.createDiv();
-      deleteAllBtn.style.cssText = `
-        display: flex; align-items: center; gap: 4px;
-        padding: 4px 10px; border-radius: 6px;
-        font-size: 12px; font-weight: 500;
-        color: var(--text-muted); cursor: pointer;
-        transition: all 0.15s;
-      `;
+      deleteAllBtn.addClass('sa-flex-row', 'sa-gap-4', 'sa-px-10', 'sa-py-4', 'sa-rounded-6', 'sa-text-sm', 'sa-font-medium', 'sa-text-muted', 'sa-clickable', 'sa-transition');
       deleteAllBtn.createSpan({ text: 'Delete All' });
 
       deleteAllBtn.addEventListener('mouseenter', () => {
-        deleteAllBtn.style.color = 'var(--text-error)';
-        deleteAllBtn.style.background = 'var(--background-modifier-hover)';
+        deleteAllBtn.removeClass('sa-text-muted');
+        deleteAllBtn.addClass('sa-text-error', 'sa-bg-hover');
       });
       deleteAllBtn.addEventListener('mouseleave', () => {
-        deleteAllBtn.style.color = 'var(--text-muted)';
-        deleteAllBtn.style.background = 'transparent';
+        deleteAllBtn.removeClass('sa-text-error', 'sa-bg-hover');
+        deleteAllBtn.addClass('sa-text-muted');
       });
 
       deleteAllBtn.addEventListener('click', () => {
@@ -115,42 +99,25 @@ export class TagModal extends Modal {
 
     // Search / Create input
     const searchContainer = contentEl.createDiv();
-    searchContainer.style.cssText = 'position: relative; margin-bottom: 12px;';
+    searchContainer.addClass('sa-relative', 'sa-mb-12');
 
     this.searchInput = searchContainer.createEl('input', {
       type: 'text',
       placeholder: 'Search or create tag...',
     });
-    this.searchInput.style.cssText = `
-      width: 100%;
-      padding: 8px 12px;
-      border: 1px solid var(--background-modifier-border);
-      border-radius: 8px;
-      background: var(--background-primary);
-      color: var(--text-normal);
-      font-size: 14px;
-      outline: none;
-      box-sizing: border-box;
-    `;
+    this.searchInput.addClass('sa-w-full', 'sa-p-8', 'sa-border', 'sa-rounded-8', 'sa-bg-primary', 'sa-text-normal', 'sa-text-md', 'tm-search-input');
     this.searchInput.maxLength = TAG_NAME_MAX_LENGTH;
 
     // Tag list container
     this.listContainer = contentEl.createDiv();
-    this.listContainer.style.cssText = 'max-height: 300px; overflow-y: auto;';
+    this.listContainer.addClass('sa-overflow-y-auto');
+    this.listContainer.setCssProps({ '--sa-max-height': '300px' });
+    this.listContainer.addClass('sa-dynamic-max-height');
 
     // Keyboard hints footer (desktop only)
     if (Platform.isDesktop) {
       const hintsEl = contentEl.createDiv();
-      hintsEl.style.cssText = `
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 8px 4px 0;
-        margin-top: 8px;
-        border-top: 1px solid var(--background-modifier-border);
-        color: var(--text-faint);
-        font-size: 11px;
-      `;
+      hintsEl.addClass('sa-flex-row', 'sa-gap-12', 'sa-py-8', 'sa-px-4', 'sa-mt-8', 'sa-border-b', 'sa-text-faint', 'sa-text-xs');
       const hints = [
         { key: '↑↓', label: 'navigate' },
         { key: '↵', label: 'select' },
@@ -159,19 +126,10 @@ export class TagModal extends Modal {
       ];
       for (const hint of hints) {
         const hintItem = hintsEl.createSpan();
-        hintItem.style.cssText = 'display: flex; align-items: center; gap: 3px;';
+        hintItem.addClass('sa-inline-flex', 'tm-hint-gap');
         const kbd = hintItem.createEl('kbd');
         kbd.textContent = hint.key;
-        kbd.style.cssText = `
-          font-family: inherit;
-          font-size: 10px;
-          padding: 1px 4px;
-          border-radius: 3px;
-          border: 1px solid var(--background-modifier-border);
-          background: var(--background-secondary);
-          color: var(--text-muted);
-          line-height: 1.4;
-        `;
+        kbd.addClass('sa-border', 'sa-bg-secondary', 'sa-text-muted', 'tm-kbd');
         hintItem.createSpan({ text: hint.label });
       }
     }
@@ -277,13 +235,11 @@ export class TagModal extends Modal {
     rows.forEach((row, index) => {
       const el = row as HTMLElement;
       const isHighlighted = index === this.highlightedIndex;
-      el.style.background = isHighlighted
-        ? 'var(--background-modifier-hover)'
-        : '';
-      el.style.outline = isHighlighted
-        ? '2px solid var(--interactive-accent)'
-        : 'none';
-      el.style.outlineOffset = isHighlighted ? '-2px' : '0';
+      if (isHighlighted) {
+        el.addClass('sa-bg-hover', 'tm-row-highlighted');
+      } else {
+        el.removeClass('sa-bg-hover', 'tm-row-highlighted');
+      }
       if (isHighlighted) {
         el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
@@ -307,23 +263,24 @@ export class TagModal extends Modal {
     contentEl.empty();
 
     const confirmEl = contentEl.createDiv();
-    confirmEl.style.cssText = 'text-align: center; padding: 12px 0;';
+    confirmEl.addClass('sa-text-center', 'sa-py-12');
 
     const iconEl = confirmEl.createDiv();
-    iconEl.style.cssText = 'width: 32px; height: 32px; margin: 0 auto 12px; color: var(--text-error);';
+    iconEl.addClass('sa-icon-32', 'sa-text-error', 'sa-mb-12', 'tm-confirm-icon');
     setIcon(iconEl, 'alert-triangle');
 
-    confirmEl.createEl('p', { text: `Delete all ${allTags.length} tags?` }).style.cssText =
-      'font-size: 16px; font-weight: 600; margin: 0 0 4px;';
-    confirmEl.createEl('p', { text: 'This will remove all tag definitions and tags from all posts. This cannot be undone.' }).style.cssText =
-      'font-size: 13px; color: var(--text-muted); margin: 0 0 20px;';
+    const titleP = confirmEl.createEl('p', { text: `Delete all ${allTags.length} tags?` });
+    titleP.addClass('sa-text-lg', 'sa-font-semibold', 'sa-m-0', 'sa-mb-4');
+
+    const descP = confirmEl.createEl('p', { text: 'This will remove all tag definitions and tags from all posts. This cannot be undone.' });
+    descP.addClass('sa-text-base', 'sa-text-muted', 'sa-m-0', 'tm-confirm-desc');
 
     const btnRow = confirmEl.createDiv();
-    btnRow.style.cssText = 'display: flex; gap: 8px; justify-content: center;';
+    btnRow.addClass('sa-flex', 'sa-gap-8', 'tm-confirm-btns');
 
     // Cancel
     const cancelBtn = btnRow.createEl('button', { text: 'Cancel' });
-    cancelBtn.style.cssText = 'padding: 8px 20px; border-radius: 6px; font-size: 14px; cursor: pointer;';
+    cancelBtn.addClass('sa-py-8', 'sa-px-20', 'sa-rounded-6', 'sa-text-md', 'sa-clickable');
     cancelBtn.addEventListener('click', () => {
       // Re-render the modal
       this.onOpen();
@@ -331,7 +288,7 @@ export class TagModal extends Modal {
 
     // Confirm delete
     const confirmBtn = btnRow.createEl('button', { text: 'Delete All' });
-    confirmBtn.style.cssText = 'padding: 8px 20px; border-radius: 6px; font-size: 14px; cursor: pointer; background: var(--text-error); color: white; border: none; font-weight: 600;';
+    confirmBtn.addClass('sa-py-8', 'sa-px-20', 'sa-rounded-6', 'sa-text-md', 'sa-clickable', 'sa-font-semibold', 'tm-confirm-delete-btn');
     confirmBtn.addEventListener('click', () => {
       // Collect everything to delete before closing
       const definitions = [...this.tagStore.getTagDefinitions()];
@@ -420,84 +377,55 @@ export class TagModal extends Modal {
     // Empty state
     if (sorted.length === 0 && !trimmedQuery) {
       const emptyEl = container.createDiv();
-      emptyEl.style.cssText = 'padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px;';
+      emptyEl.addClass('sa-empty-state');
       emptyEl.textContent = 'No tags yet. Type a name above to create one.';
     }
   }
 
   private renderTagRow(container: HTMLElement, tag: TagDefinition, isApplied: boolean, isUndefined: boolean = false): void {
     const row = container.createDiv();
-    row.addClass('sa-tag-row');
-    row.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: background 0.15s;
-    `;
+    row.addClass('sa-tag-row', 'sa-flex-row', 'sa-gap-10', 'sa-p-8', 'sa-px-12', 'sa-rounded-6', 'sa-clickable', 'sa-transition-bg');
 
     // Color dot (or muted dot for undefined tags)
     const dot = row.createDiv();
-    dot.style.cssText = `
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: ${tag.color || 'var(--background-modifier-border)'};
-      flex-shrink: 0;
-    `;
+    dot.addClass('sa-flex-shrink-0', 'sa-rounded-full', 'tm-tag-dot');
+    dot.setCssProps({ '--tm-dot-color': tag.color || 'var(--background-modifier-border)' });
 
     // Tag name
     const nameEl = row.createSpan({ text: tag.name });
-    nameEl.style.cssText = `
-      flex: 1;
-      font-size: 14px;
-      color: ${isUndefined ? 'var(--text-muted)' : 'var(--text-normal)'};
-      font-weight: ${isApplied ? '600' : '400'};
-      ${isUndefined ? 'font-style: italic;' : ''}
-    `;
+    nameEl.addClass('sa-flex-1', 'sa-text-md');
+    if (isUndefined) {
+      nameEl.addClass('sa-text-muted', 'tm-tag-italic');
+    } else {
+      nameEl.addClass('sa-text-normal');
+    }
+    if (isApplied) {
+      nameEl.addClass('sa-font-semibold');
+    }
 
     // Checkmark for applied tags
     if (isApplied) {
       const checkEl = row.createDiv();
-      checkEl.style.cssText = `
-        width: 16px;
-        height: 16px;
-        color: var(--interactive-accent);
-        flex-shrink: 0;
-      `;
+      checkEl.addClass('sa-icon-16', 'sa-flex-shrink-0', 'tm-check-accent');
       setIcon(checkEl, 'check');
     }
 
     // Delete button (for ALL tags) — always visible for applied tags, hover-only otherwise
     const deleteBtn = row.createDiv();
-    deleteBtn.addClass('sa-tag-delete-btn');
-    deleteBtn.style.cssText = `
-      width: 20px;
-      height: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 4px;
-      color: var(--text-muted);
-      cursor: pointer;
-      transition: all 0.15s;
-      flex-shrink: 0;
-      opacity: ${isApplied || Platform.isMobile ? '1' : '0'};
-    `;
+    deleteBtn.addClass('sa-tag-delete-btn', 'sa-flex-center', 'sa-rounded-4', 'sa-text-muted', 'sa-clickable', 'sa-transition', 'sa-flex-shrink-0', 'tm-delete-btn');
+    deleteBtn.addClass(isApplied || Platform.isMobile ? 'tm-delete-btn-visible' : 'tm-delete-btn-hidden');
     deleteBtn.setAttribute('title', isUndefined ? 'Remove from all posts' : 'Delete tag and remove from all posts');
     setIcon(deleteBtn, 'trash-2');
     deleteBtn.querySelector('svg')?.setAttribute('width', '14');
     deleteBtn.querySelector('svg')?.setAttribute('height', '14');
 
     deleteBtn.addEventListener('mouseenter', () => {
-      deleteBtn.style.color = 'var(--text-error)';
-      deleteBtn.style.background = 'var(--background-modifier-hover)';
+      deleteBtn.removeClass('sa-text-muted');
+      deleteBtn.addClass('sa-text-error', 'sa-bg-hover');
     });
     deleteBtn.addEventListener('mouseleave', () => {
-      deleteBtn.style.color = 'var(--text-muted)';
-      deleteBtn.style.background = 'transparent';
+      deleteBtn.removeClass('sa-text-error', 'sa-bg-hover');
+      deleteBtn.addClass('sa-text-muted');
     });
 
     // Show/hide delete button on row hover (non-applied tags only)
@@ -510,12 +438,16 @@ export class TagModal extends Modal {
           this.highlightedIndex = -1;
           this.updateHighlight();
         }
-        row.style.background = 'var(--background-modifier-hover)';
-        deleteBtn.style.opacity = '1';
+        row.addClass('sa-bg-hover');
+        deleteBtn.removeClass('tm-delete-btn-hidden');
+        deleteBtn.addClass('tm-delete-btn-visible');
       });
       row.addEventListener('mouseleave', () => {
-        row.style.background = '';
-        if (!isApplied) deleteBtn.style.opacity = '0';
+        row.removeClass('sa-bg-hover');
+        if (!isApplied) {
+          deleteBtn.removeClass('tm-delete-btn-visible');
+          deleteBtn.addClass('tm-delete-btn-hidden');
+        }
       });
     }
 
@@ -577,39 +509,27 @@ export class TagModal extends Modal {
 
   private renderCreateRow(container: HTMLElement, name: string): void {
     const row = container.createDiv();
-    row.addClass('sa-tag-row');
-    row.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: background 0.15s;
-      border-top: 1px solid var(--background-modifier-border);
-      margin-top: 4px;
-      padding-top: 12px;
-    `;
+    row.addClass('sa-tag-row', 'sa-flex-row', 'sa-gap-10', 'sa-p-8', 'sa-px-12', 'sa-rounded-6', 'sa-clickable', 'sa-transition-bg', 'sa-border-b', 'sa-mt-4', 'tm-create-row');
 
     row.addEventListener('mouseenter', () => {
       if (this.highlightedIndex >= 0) {
         this.highlightedIndex = -1;
         this.updateHighlight();
       }
-      row.style.background = 'var(--background-modifier-hover)';
+      row.addClass('sa-bg-hover');
     });
     row.addEventListener('mouseleave', () => {
-      row.style.background = '';
+      row.removeClass('sa-bg-hover');
     });
 
     // Plus icon
     const plusEl = row.createDiv();
-    plusEl.style.cssText = 'width: 16px; height: 16px; color: var(--interactive-accent); flex-shrink: 0;';
+    plusEl.addClass('sa-icon-16', 'sa-flex-shrink-0', 'sa-text-accent');
     setIcon(plusEl, 'plus');
 
     // Text
     const textEl = row.createSpan({ text: `Create "${name}"` });
-    textEl.style.cssText = 'font-size: 14px; color: var(--interactive-accent); font-weight: 500;';
+    textEl.addClass('sa-text-md', 'sa-text-accent', 'sa-font-medium');
 
     // Create (and optionally apply) on click
     row.addEventListener('click', async () => {

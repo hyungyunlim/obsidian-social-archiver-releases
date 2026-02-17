@@ -1,4 +1,4 @@
-import { setIcon, Notice, Scope, TFile, TFolder, MarkdownRenderer, Component, Modal, Setting, Platform as ObsidianPlatform, type Vault, type App } from 'obsidian';
+import { setIcon, Notice, Scope, TFile, TFolder, MarkdownRenderer, Component, Modal, Setting, Platform as ObsidianPlatform, requestUrl, type Vault, type App } from 'obsidian';
 import type { PostData, Comment, PostMetadata, Platform } from '../../../types/post';
 import type SocialArchiverPlugin from '../../../main';
 import * as L from 'leaflet';
@@ -34,6 +34,7 @@ import type { AICommentMeta, AICommentType, AICommentProgress, AICommentResult, 
 import { insertTranscriptSection, extractTranscriptLanguages } from '../../../services/markdown/TranscriptSectionManager';
 import { languageCodeToName } from '../../../constants/languages';
 import { getPlatformCategory } from '../../../shared/platforms/types';
+import { createSVGElement } from '../../../utils/dom-helpers';
 
 /**
  * PostCardRenderer - Renders individual post cards
@@ -407,14 +408,17 @@ export class PostCardRenderer extends Component {
     if (post.comment) {
       // Comment section container (editable)
       const commentSection = wrapper.createDiv({ cls: 'mb-3' });
-      commentSection.style.cssText = 'position: relative; cursor: pointer;';
+      commentSection.addClass('sa-relative');
+      commentSection.addClass('sa-clickable');
 
       // Comment header: "Jun commented on this post · 2h ago"
       const commentHeader = commentSection.createDiv({ cls: 'mb-2' });
-      commentHeader.style.cssText = 'font-size: 13px; color: var(--text-muted);';
+      commentHeader.addClass('sa-text-base');
+      commentHeader.addClass('sa-text-muted');
 
       const userNameSpan = commentHeader.createSpan({ text: userName });
-      userNameSpan.style.cssText = 'font-weight: 600; color: var(--text-normal);';
+      userNameSpan.addClass('sa-font-semibold');
+      userNameSpan.addClass('sa-text-normal');
 
       // Use "commented on this user" for profile documents
       const commentOnText = post.type === 'profile' ? ' commented on this user' : ' commented on this post';
@@ -427,33 +431,33 @@ export class PostCardRenderer extends Component {
 
       // Comment text with inline edit icon
       const commentTextContainer = commentSection.createDiv();
-      commentTextContainer.style.cssText = 'display: inline;';
+      commentTextContainer.addClass('sa-inline-block');
 
       const commentTextDiv = commentTextContainer.createSpan();
-      commentTextDiv.style.cssText = 'font-size: 14px; line-height: 1.5; color: var(--text-normal);';
+      commentTextDiv.addClass('sa-text-md');
+      commentTextDiv.addClass('sa-leading-normal');
+      commentTextDiv.addClass('sa-text-normal');
       this.renderMarkdownLinks(commentTextDiv, post.comment, undefined, post.platform);
 
       // Edit icon (appears on hover, inline at the end of text)
       const editIcon = commentTextContainer.createSpan();
-      editIcon.style.cssText = `
-        display: inline-flex;
-        align-items: center;
-        margin-left: 6px;
-        width: 14px;
-        height: 14px;
-        opacity: 0;
-        transition: opacity 0.2s;
-        color: var(--text-muted);
-        vertical-align: middle;
-      `;
+      editIcon.addClass('sa-inline-flex');
+      editIcon.addClass('sa-ml-4');
+      editIcon.addClass('sa-icon-14');
+      editIcon.addClass('sa-opacity-0');
+      editIcon.addClass('sa-transition-opacity');
+      editIcon.addClass('sa-text-muted');
+      editIcon.addClass('pcr-edit-icon-inline');
       setIcon(editIcon, 'pencil');
 
       // Hover effects
       commentSection.addEventListener('mouseenter', () => {
-        editIcon.style.opacity = '0.6';
+        editIcon.removeClass('sa-opacity-0');
+        editIcon.addClass('sa-opacity-60');
       });
       commentSection.addEventListener('mouseleave', () => {
-        editIcon.style.opacity = '0';
+        editIcon.removeClass('sa-opacity-60');
+        editIcon.addClass('sa-opacity-0');
       });
 
       // Click to edit inline
@@ -470,13 +474,17 @@ export class PostCardRenderer extends Component {
       // Saved header: "Jun saved this post/user · 2h ago" (clickable to add note inline)
       // Only show for archived social media posts, not user posts
       const savedSection = wrapper.createDiv({ cls: 'mb-3' });
-      savedSection.style.cssText = 'position: relative; cursor: pointer;';
+      savedSection.addClass('sa-relative');
+      savedSection.addClass('sa-clickable');
 
       const savedHeader = savedSection.createDiv();
-      savedHeader.style.cssText = 'font-size: 13px; color: var(--text-muted); display: inline;';
+      savedHeader.addClass('sa-text-base');
+      savedHeader.addClass('sa-text-muted');
+      savedHeader.addClass('sa-inline-block');
 
       const userNameSpan = savedHeader.createSpan({ text: userName });
-      userNameSpan.style.cssText = 'font-weight: 600; color: var(--text-normal);';
+      userNameSpan.addClass('sa-font-semibold');
+      userNameSpan.addClass('sa-text-normal');
 
       // Use "saved this user" for profile documents, "saved this place" for Google Maps, "saved this post" for regular posts
       let savedText = ' saved this post';
@@ -494,25 +502,23 @@ export class PostCardRenderer extends Component {
 
       // Edit icon (appears on hover, inline at the end)
       const editIcon = savedSection.createSpan();
-      editIcon.style.cssText = `
-        display: inline-flex;
-        align-items: center;
-        margin-left: 6px;
-        width: 14px;
-        height: 14px;
-        opacity: 0;
-        transition: opacity 0.2s;
-        color: var(--text-muted);
-        vertical-align: middle;
-      `;
+      editIcon.addClass('sa-inline-flex');
+      editIcon.addClass('sa-ml-4');
+      editIcon.addClass('sa-icon-14');
+      editIcon.addClass('sa-opacity-0');
+      editIcon.addClass('sa-transition-opacity');
+      editIcon.addClass('sa-text-muted');
+      editIcon.addClass('pcr-edit-icon-inline');
       setIcon(editIcon, 'pencil');
 
       // Hover effects - only show icon
       savedSection.addEventListener('mouseenter', () => {
-        editIcon.style.opacity = '0.6';
+        editIcon.removeClass('sa-opacity-0');
+        editIcon.addClass('sa-opacity-60');
       });
       savedSection.addEventListener('mouseleave', () => {
-        editIcon.style.opacity = '0';
+        editIcon.removeClass('sa-opacity-60');
+        editIcon.addClass('sa-opacity-0');
       });
 
       // Click to add note inline (same as comment editing)
@@ -530,26 +536,22 @@ export class PostCardRenderer extends Component {
     // Create nested container for the actual card (always nested now)
     // For user posts (platform === 'post'), don't show left border
     const cardContainer = wrapper.createDiv();
+    cardContainer.addClass('sa-w-full');
     if (post.platform === 'post') {
-      cardContainer.style.cssText = 'padding-left: 0; margin-left: 0; width: 100%; box-sizing: border-box;';
+      cardContainer.addClass('sa-p-0');
     } else {
-      cardContainer.style.cssText = 'padding-left: 16px; border-left: 2px solid var(--background-modifier-border); margin-left: 4px; width: 100%; box-sizing: border-box;';
+      cardContainer.addClass('pcr-card-container-nested');
     }
 
     const card = cardContainer.createDiv({
       cls: 'relative rounded-lg bg-[var(--background-primary)]'
     });
-    card.style.padding = '12px'; // Consistent padding with expanded embedded cards
-    card.style.userSelect = 'text'; // Enable text selection
-    card.style.width = '100%';
-    card.style.boxSizing = 'border-box';
+    card.addClass('pcr-card');
 
     // Content area
     const contentArea = card.createDiv({ cls: 'post-content-area' });
-    contentArea.style.maxWidth = '100%';
-    contentArea.style.width = '100%';
-    contentArea.style.overflow = 'hidden';
-    contentArea.style.boxSizing = 'border-box';
+    contentArea.addClass('sa-w-full');
+    contentArea.addClass('sa-overflow-hidden');
 
     // For profile documents, render a compact profile card instead of regular content
     if (post.type === 'profile') {
@@ -686,7 +688,7 @@ export class PostCardRenderer extends Component {
     if (post.linkPreviews && post.linkPreviews.length > 0 && !hasEmbeddedArchives) {
       // Create a wrapper for link previews + archive suggestion
       const linkPreviewWrapper = contentArea.createDiv();
-      linkPreviewWrapper.style.cssText = 'margin-bottom: 0;';
+      linkPreviewWrapper.addClass('sa-mb-0');
 
       // Filter out downloaded videos from link previews
       // @ts-ignore
@@ -779,8 +781,12 @@ export class PostCardRenderer extends Component {
     if (post.quotedPost) {
       const quotedPostContainer = contentArea.createDiv();
       // For reblogs, reduce top margin since there's no content above
-      const topMargin = post.isReblog ? '4px' : '12px';
-      quotedPostContainer.style.cssText = `margin-top: ${topMargin}; margin-bottom: 12px;`;
+      quotedPostContainer.addClass('sa-mb-12');
+      if (post.isReblog) {
+        quotedPostContainer.addClass('sa-mt-4');
+      } else {
+        quotedPostContainer.addClass('sa-mt-12');
+      }
 
       this.compactPostCardRenderer.setOnExpandCallback(async (embeddedPost, expandedContainer) => {
         // For self-boost: inject parent's localAvatar into embeddedPost if same author
@@ -797,7 +803,9 @@ export class PostCardRenderer extends Component {
     if (!isEmbedded && ((post.embeddedArchives && post.embeddedArchives.length > 0) || downloadedVideos.length > 0)) {
       // Container for embedded archives
       const embeddedContainer = contentArea.createDiv();
-      embeddedContainer.style.cssText = 'margin-top: 8px; display: flex; flex-direction: column; gap: 8px;';
+      embeddedContainer.addClass('sa-mt-8');
+      embeddedContainer.addClass('sa-flex-col');
+      embeddedContainer.addClass('sa-gap-8');
 
       // Set expand callback to render full post inline
       this.compactPostCardRenderer.setOnExpandCallback(async (embeddedPost, expandedContainer) => {
@@ -870,8 +878,17 @@ export class PostCardRenderer extends Component {
     } else {
       // Even without social interactions, still render action buttons for user posts
       const actionsBar = contentArea.createDiv();
-      const borderStyle = isEmbedded ? '' : 'border-top: 1px solid var(--background-modifier-border);';
-      actionsBar.style.cssText = `display: flex; align-items: center; gap: 16px; justify-content: flex-end; padding-top: 8px; margin-top: 8px; ${borderStyle} color: var(--text-muted); flex-wrap: wrap;`;
+      actionsBar.addClass('sa-flex');
+      actionsBar.addClass('sa-flex-row');
+      actionsBar.addClass('sa-gap-16');
+      actionsBar.addClass('sa-flex-wrap');
+      actionsBar.addClass('sa-py-8');
+      actionsBar.addClass('sa-mt-8');
+      actionsBar.addClass('sa-text-muted');
+      actionsBar.addClass('pcr-actions-end');
+      if (!isEmbedded) {
+        actionsBar.addClass('pcr-actions-border-top');
+      }
 
       // Personal Like button
       this.renderPersonalLikeButton(actionsBar, post);
@@ -965,7 +982,11 @@ export class PostCardRenderer extends Component {
    */
   private renderAvatarInline(header: HTMLElement, post: PostData): void {
     const avatarContainer = header.createDiv({ cls: 'author-avatar-container' });
-    avatarContainer.style.cssText = 'flex-shrink: 0; width: 40px; height: 40px; position: relative; cursor: pointer; transition: opacity 0.2s;';
+    avatarContainer.addClass('sa-flex-shrink-0');
+    avatarContainer.addClass('sa-icon-40');
+    avatarContainer.addClass('sa-relative');
+    avatarContainer.addClass('sa-clickable');
+    avatarContainer.addClass('sa-transition-opacity');
 
     // For user posts (platform: 'post'), show user initial avatar
     if (post.platform === 'post') {
@@ -985,19 +1006,12 @@ export class PostCardRenderer extends Component {
       const userInitial = userName.charAt(0).toUpperCase();
 
       const avatar = avatarContainer.createDiv();
-      avatar.style.cssText = `
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        background: var(--interactive-accent);
-        color: var(--text-on-accent);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 16px;
-        font-weight: 600;
-        line-height: 1;
-      `;
+      avatar.addClass('sa-icon-40');
+      avatar.addClass('sa-rounded-full');
+      avatar.addClass('sa-bg-accent');
+      avatar.addClass('sa-text-lg');
+      avatar.addClass('sa-font-semibold');
+      avatar.addClass('pcr-avatar-accent');
       avatar.textContent = userInitial;
     } else {
       // For archived posts: show author avatar with platform badge
@@ -1016,58 +1030,43 @@ export class PostCardRenderer extends Component {
         // Show actual avatar image
         const avatarImg = avatarContainer.createEl('img');
         avatarImg.loading = 'lazy';
-        avatarImg.style.cssText = `
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          object-fit: cover;
-        `;
+        avatarImg.addClass('sa-icon-40');
+        avatarImg.addClass('sa-rounded-full');
+        avatarImg.addClass('sa-object-cover');
         avatarImg.src = avatarSrc;
         avatarImg.alt = post.author.name;
 
         // Fallback to initials on image error
         avatarImg.onerror = () => {
-          avatarImg.style.display = 'none';
+          avatarImg.addClass('sa-hidden');
           const fallback = avatarContainer.createDiv();
-          fallback.style.cssText = `
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: var(--background-modifier-border);
-            color: var(--text-muted);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            font-weight: 600;
-          `;
+          fallback.addClass('sa-icon-40');
+          fallback.addClass('sa-rounded-full');
+          fallback.addClass('sa-text-md');
+          fallback.addClass('sa-font-semibold');
+          fallback.addClass('pcr-avatar-fallback');
           fallback.textContent = this.getAuthorInitials(post.author.name);
         };
       } else {
         // No avatar: show initials
         const initialsAvatar = avatarContainer.createDiv();
-        initialsAvatar.style.cssText = `
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          background: var(--background-modifier-border);
-          color: var(--text-muted);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 14px;
-          font-weight: 600;
-        `;
+        initialsAvatar.addClass('sa-icon-40');
+        initialsAvatar.addClass('sa-rounded-full');
+        initialsAvatar.addClass('sa-text-md');
+        initialsAvatar.addClass('sa-font-semibold');
+        initialsAvatar.addClass('pcr-avatar-fallback');
         initialsAvatar.textContent = this.getAuthorInitials(post.author.name);
       }
     }
 
     avatarContainer.addEventListener('mouseenter', () => {
-      avatarContainer.style.opacity = '0.8';
+      avatarContainer.removeClass('sa-opacity-100');
+      avatarContainer.addClass('sa-opacity-80');
     });
 
     avatarContainer.addEventListener('mouseleave', () => {
-      avatarContainer.style.opacity = '1';
+      avatarContainer.removeClass('sa-opacity-80');
+      avatarContainer.addClass('sa-opacity-100');
     });
   }
 
@@ -1082,24 +1081,21 @@ export class PostCardRenderer extends Component {
 
     // Main container with horizontal layout
     const profileContainer = contentArea.createDiv();
-    profileContainer.style.cssText = 'display: flex; gap: 12px; align-items: flex-start;';
+    profileContainer.addClass('pcr-profile-container');
 
     // Left: Large avatar
     const avatarContainer = profileContainer.createDiv();
-    avatarContainer.style.cssText = 'flex-shrink: 0;';
+    avatarContainer.addClass('sa-flex-shrink-0');
 
     const avatarSize = ObsidianPlatform.isMobile ? 56 : 64;
     const avatar = avatarContainer.createDiv();
-    avatar.style.cssText = `
-      width: ${avatarSize}px;
-      height: ${avatarSize}px;
-      border-radius: 50%;
-      background-color: var(--background-modifier-border);
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    `;
+    avatar.addClass('sa-rounded-full');
+    avatar.addClass('sa-overflow-hidden');
+    avatar.addClass('sa-flex-center');
+    avatar.addClass('sa-dynamic-width');
+    avatar.addClass('sa-dynamic-height');
+    avatar.addClass('pcr-avatar-bg');
+    avatar.setCssProps({'--sa-width': `${avatarSize}px`, '--sa-height': `${avatarSize}px`});
 
     // Load avatar image
     const avatarUrl = post.author.localAvatar
@@ -1111,39 +1107,43 @@ export class PostCardRenderer extends Component {
       img.loading = 'lazy';
       img.src = avatarUrl;
       img.alt = displayName;
-      img.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+      img.addClass('sa-cover');
       img.onerror = () => {
         img.remove();
         avatar.setText(displayName.charAt(0).toUpperCase());
-        avatar.style.cssText += 'font-size: 24px; font-weight: 600; color: var(--text-muted);';
+        avatar.addClass('sa-text-2xl');
+        avatar.addClass('sa-font-semibold');
+        avatar.addClass('sa-text-muted');
       };
     } else {
       avatar.setText(displayName.charAt(0).toUpperCase());
-      avatar.style.cssText += 'font-size: 24px; font-weight: 600; color: var(--text-muted);';
+      avatar.addClass('sa-text-2xl');
+      avatar.addClass('sa-font-semibold');
+      avatar.addClass('sa-text-muted');
     }
 
     // Right: Profile info
     const infoContainer = profileContainer.createDiv();
-    infoContainer.style.cssText = 'flex: 1; min-width: 0;';
+    infoContainer.addClass('sa-flex-1');
+    infoContainer.addClass('sa-min-w-0');
 
     // Name and handle row
     const nameRow = infoContainer.createDiv();
-    nameRow.style.cssText = 'display: flex; align-items: center; gap: 6px; margin-bottom: 4px;';
+    nameRow.addClass('sa-flex-row');
+    nameRow.addClass('sa-gap-6');
+    nameRow.addClass('sa-mb-4');
 
     // Display name
     const nameEl = nameRow.createEl('strong', { text: displayName });
-    nameEl.style.cssText = `
-      font-size: ${ObsidianPlatform.isMobile ? '14px' : '15px'};
-      color: var(--text-normal);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    `;
+    nameEl.addClass(ObsidianPlatform.isMobile ? 'sa-text-md' : 'sa-text-lg');
+    nameEl.addClass('sa-text-normal');
+    nameEl.addClass('sa-truncate');
 
     // Verified badge
     if (profileMeta?.verified || post.author.verified) {
       const verifiedBadge = nameRow.createSpan();
-      verifiedBadge.style.cssText = 'color: var(--interactive-accent); display: flex; align-items: center;';
+      verifiedBadge.addClass('sa-text-accent');
+      verifiedBadge.addClass('sa-flex-row');
       setIcon(verifiedBadge, 'badge-check');
       verifiedBadge.setAttribute('title', 'Verified');
     }
@@ -1152,59 +1152,55 @@ export class PostCardRenderer extends Component {
     const platformIcon = getPlatformSimpleIcon(post.platform, post.author.url);
     if (platformIcon) {
       const iconWrapper = nameRow.createDiv();
-      iconWrapper.style.cssText = 'width: 14px; height: 14px; opacity: 0.5;';
-      iconWrapper.innerHTML = `
-        <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="fill: var(--text-muted); width: 100%; height: 100%;">
-          <path d="${platformIcon.path}"></path>
-        </svg>
-      `;
+      iconWrapper.addClass('sa-icon-14');
+      iconWrapper.addClass('sa-opacity-50');
+      const svg = createSVGElement(platformIcon, {
+        fill: 'var(--text-muted)',
+        width: '100%',
+        height: '100%'
+      });
+      iconWrapper.appendChild(svg);
     }
 
     // Handle
     const handleEl = infoContainer.createDiv({ text: `@${handle}` });
-    handleEl.style.cssText = `
-      font-size: ${ObsidianPlatform.isMobile ? '12px' : '13px'};
-      color: var(--text-muted);
-      margin-bottom: 8px;
-    `;
+    handleEl.addClass(ObsidianPlatform.isMobile ? 'sa-text-sm' : 'sa-text-base');
+    handleEl.addClass('sa-text-muted');
+    handleEl.addClass('sa-mb-8');
 
     // Make handle clickable to open profile
     if (profileMeta?.profileUrl || post.url) {
-      handleEl.style.cursor = 'pointer';
+      handleEl.addClass('sa-clickable');
+      handleEl.addClass('sa-transition-color');
       handleEl.addEventListener('click', () => {
         window.open(profileMeta?.profileUrl || post.url, '_blank');
       });
       handleEl.addEventListener('mouseenter', () => {
-        handleEl.style.color = 'var(--interactive-accent)';
+        handleEl.removeClass('sa-text-muted');
+        handleEl.addClass('sa-text-accent');
       });
       handleEl.addEventListener('mouseleave', () => {
-        handleEl.style.color = 'var(--text-muted)';
+        handleEl.removeClass('sa-text-accent');
+        handleEl.addClass('sa-text-muted');
       });
     }
 
     // Bio
     if (profileMeta?.bio) {
       const bioEl = infoContainer.createDiv({ text: profileMeta.bio });
-      bioEl.style.cssText = `
-        font-size: ${ObsidianPlatform.isMobile ? '12px' : '13px'};
-        color: var(--text-normal);
-        line-height: 1.4;
-        margin-bottom: 8px;
-        overflow: hidden;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-      `;
+      bioEl.addClass(ObsidianPlatform.isMobile ? 'sa-text-sm' : 'sa-text-base');
+      bioEl.addClass('sa-text-normal');
+      bioEl.addClass('sa-mb-8');
+      bioEl.addClass('sa-overflow-hidden');
+      bioEl.addClass('pcr-bio-clamp');
     }
 
     // Stats row
     const statsRow = infoContainer.createDiv();
-    statsRow.style.cssText = `
-      display: flex;
-      gap: 12px;
-      font-size: ${ObsidianPlatform.isMobile ? '11px' : '12px'};
-      color: var(--text-muted);
-    `;
+    statsRow.addClass('sa-flex');
+    statsRow.addClass('sa-gap-12');
+    statsRow.addClass(ObsidianPlatform.isMobile ? 'sa-text-xs' : 'sa-text-sm');
+    statsRow.addClass('sa-text-muted');
 
     // Helper to format numbers
     const formatNumber = (num: number | undefined): string => {
@@ -1224,39 +1220,33 @@ export class PostCardRenderer extends Component {
     for (const stat of stats) {
       const statEl = statsRow.createSpan();
       const valueSpan = statEl.createSpan({ text: formatNumber(stat.value) });
-      valueSpan.style.cssText = 'font-weight: 600; color: var(--text-normal);';
+      valueSpan.addClass('sa-font-semibold');
+      valueSpan.addClass('sa-text-normal');
       statEl.createSpan({ text: ` ${stat.label}` });
     }
 
     // Location (if available) - on separate line
     if (profileMeta?.location) {
       const locationRow = infoContainer.createDiv();
-      locationRow.style.cssText = `
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        margin-top: 6px;
-        font-size: ${ObsidianPlatform.isMobile ? '11px' : '12px'};
-        color: var(--text-muted);
-      `;
+      locationRow.addClass('sa-flex-row');
+      locationRow.addClass('sa-gap-4');
+      locationRow.addClass('sa-mt-4');
+      locationRow.addClass(ObsidianPlatform.isMobile ? 'sa-text-xs' : 'sa-text-sm');
+      locationRow.addClass('sa-text-muted');
       const locIcon = locationRow.createSpan();
-      locIcon.style.cssText = 'width: 12px; height: 12px; display: flex; align-items: center;';
+      locIcon.addClass('sa-icon-12');
       setIcon(locIcon, 'map-pin');
       locationRow.createSpan({ text: profileMeta.location });
     }
 
     // Action bar for profile cards (no social counts, no share button)
     const actionsBar = contentArea.createDiv();
-    actionsBar.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      justify-content: flex-end;
-      padding-top: 8px;
-      margin-top: 8px;
-      border-top: 1px solid var(--background-modifier-border);
-      color: var(--text-muted);
-    `;
+    actionsBar.addClass('sa-flex-between');
+    actionsBar.addClass('sa-gap-16');
+    actionsBar.addClass('sa-py-8');
+    actionsBar.addClass('sa-mt-8');
+    actionsBar.addClass('sa-text-muted');
+    actionsBar.addClass('pcr-actions-border-top');
 
     // Personal Like button (star)
     this.renderPersonalLikeButton(actionsBar, post);
@@ -1278,18 +1268,21 @@ export class PostCardRenderer extends Component {
    */
   private renderHeader(contentArea: HTMLElement, post: PostData): void {
     const header = contentArea.createDiv({ cls: 'mb-2' });
-    header.style.cssText = 'display: flex; align-items: center; gap: 10px;';
+    header.addClass('sa-flex-row');
+    header.addClass('sa-gap-10');
 
     // Left: Avatar (social media style - avatar on left)
     this.renderAvatarInline(header, post);
 
     // Middle section: Author name + timestamp
     const middleSection = header.createDiv();
-    middleSection.style.cssText = 'flex: 1; min-width: fit-content;';
+    middleSection.addClass('sa-flex-1');
+    middleSection.addClass('pcr-middle-section');
 
     // Author name row with subscription badge
     const authorNameRow = middleSection.createDiv();
-    authorNameRow.style.cssText = 'display: flex; align-items: center; gap: 6px;';
+    authorNameRow.addClass('sa-flex-row');
+    authorNameRow.addClass('sa-gap-6');
 
     // Author name - for 'post' type, use current username
     // For podcasts: use channelTitle (podcast show name), author.handle contains episode author
@@ -1307,27 +1300,14 @@ export class PostCardRenderer extends Component {
     const authorName = authorNameRow.createEl('strong', {
       text: displayName,
     });
-    authorName.style.cssText = `
-      color: var(--text-normal);
-      cursor: pointer;
-      transition: color 0.2s;
-      font-size: ${ObsidianPlatform.isMobile ? '13px' : '14px'};
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: ${ObsidianPlatform.isMobile ? '200px' : '320px'};
-    `;
+    authorName.addClass('pcr-author-name');
+    authorName.setCssProps({
+      '--pcr-author-font-size': ObsidianPlatform.isMobile ? '13px' : '14px',
+      '--pcr-author-max-width': ObsidianPlatform.isMobile ? '200px' : '320px'
+    });
 
     if (post.author.url) {
       authorName.setAttribute('title', `Visit ${displayName}'s profile`);
-
-      authorName.addEventListener('mouseenter', () => {
-        authorName.style.color = 'var(--interactive-accent)';
-      });
-
-      authorName.addEventListener('mouseleave', () => {
-        authorName.style.color = 'var(--text-normal)';
-      });
 
       authorName.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1367,7 +1347,7 @@ export class PostCardRenderer extends Component {
 
     // Relative time row (with subreddit for Reddit, title for YouTube)
     const timeRow = middleSection.createDiv();
-    timeRow.style.cssText = 'margin-top: 2px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;';
+    timeRow.addClass('pcr-time-row');
 
     const timestamp = typeof post.metadata.timestamp === 'string'
       ? new Date(post.metadata.timestamp)
@@ -1376,39 +1356,32 @@ export class PostCardRenderer extends Component {
     const timeSpan = timeRow.createSpan({
       cls: 'text-xs text-[var(--text-muted)]'
     });
-    timeSpan.style.cssText = 'white-space: nowrap;';
+    timeSpan.addClass('pcr-nowrap');
     timeSpan.setText(this.getRelativeTime(timestamp));
 
     // For Podcasts: show episode author next to timestamp (if different from channel title)
     if (post.platform === 'podcast' && post.author.handle) {
       const separator = timeRow.createSpan({ text: '·', cls: 'text-xs text-[var(--text-muted)]' });
-      separator.style.cssText = 'opacity: 0.5;';
+      separator.addClass('pcr-separator');
 
       const episodeAuthorSpan = timeRow.createSpan({
         text: `by ${post.author.handle}`,
         cls: 'text-xs text-[var(--text-muted)]'
       });
-      episodeAuthorSpan.style.cssText = 'white-space: nowrap; font-style: italic;';
+      episodeAuthorSpan.addClass('pcr-episode-author');
     }
 
     // For Reddit: show subreddit info (r/xxx) with link and subscribed badge
     if (post.platform === 'reddit' && post.content.community) {
       const separator = timeRow.createSpan({ text: '·', cls: 'text-xs text-[var(--text-muted)]' });
-      separator.style.cssText = 'opacity: 0.5;';
+      separator.addClass('pcr-separator');
 
       const subredditLink = timeRow.createEl('a', {
         text: `r/${post.content.community.name}`,
-        cls: 'text-xs'
+        cls: 'text-xs pcr-community-link'
       });
-      subredditLink.style.cssText = 'color: var(--text-muted); text-decoration: none; cursor: pointer; transition: color 0.2s;';
       subredditLink.href = post.content.community.url;
       subredditLink.setAttribute('target', '_blank');
-      subredditLink.addEventListener('mouseenter', () => {
-        subredditLink.style.color = 'var(--interactive-accent)';
-      });
-      subredditLink.addEventListener('mouseleave', () => {
-        subredditLink.style.color = 'var(--text-muted)';
-      });
       subredditLink.addEventListener('click', (e) => {
         e.stopPropagation();
       });
@@ -1417,22 +1390,15 @@ export class PostCardRenderer extends Component {
     // For Naver: show cafe info with link (truncate long names)
     if (post.platform === 'naver' && post.content.community) {
       const separator = timeRow.createSpan({ text: '·', cls: 'text-xs text-[var(--text-muted)]' });
-      separator.style.cssText = 'opacity: 0.5;';
+      separator.addClass('pcr-separator');
 
       const cafeLink = timeRow.createEl('a', {
         text: post.content.community.name,
-        cls: 'text-xs',
+        cls: 'text-xs pcr-cafe-link',
         attr: { title: post.content.community.name } // Show full name on hover
       });
-      cafeLink.style.cssText = 'color: var(--text-muted); text-decoration: none; cursor: pointer; transition: color 0.2s; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle;';
       cafeLink.href = post.content.community.url;
       cafeLink.setAttribute('target', '_blank');
-      cafeLink.addEventListener('mouseenter', () => {
-        cafeLink.style.color = 'var(--interactive-accent)';
-      });
-      cafeLink.addEventListener('mouseleave', () => {
-        cafeLink.style.color = 'var(--text-muted)';
-      });
       cafeLink.addEventListener('click', (e) => {
         e.stopPropagation();
       });
@@ -1456,28 +1422,30 @@ export class PostCardRenderer extends Component {
     // Skip if no URL and not podcast
     if (!targetUrl && !isPodcast) return;
 
-    const linkContainer = header.createDiv({ cls: 'platform-icon-badge' });
+    const linkContainer = header.createDiv({ cls: 'platform-icon-badge pcr-platform-link' });
     const hasLink = targetUrl || podcastFallbackUrl;
-    linkContainer.style.cssText = `flex-shrink: 0; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; opacity: 0.3; ${hasLink ? 'cursor: pointer;' : ''} transition: opacity 0.2s;`;
+    if (hasLink) {
+      linkContainer.addClass('pcr-platform-link-clickable');
+    }
     linkContainer.setAttribute('title', hasLink ? `Open on ${post.platform}` : post.platform);
 
     const iconWrapper = linkContainer.createDiv();
-    iconWrapper.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; color: var(--text-accent);';
+    iconWrapper.addClass('pcr-platform-icon-wrapper');
 
     const icon = getPlatformSimpleIcon(post.platform, post.author.url);
     if (icon) {
       // Use Simple Icon with Obsidian theme color
-      iconWrapper.innerHTML = `
-        <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="fill: var(--text-accent); width: 100%; height: 100%;">
-          <title>${icon.title}</title>
-          <path d="${icon.path}"/>
-        </svg>
-      `;
+      const svg = createSVGElement(icon, {
+        fill: 'var(--text-accent)',
+        width: '100%',
+        height: '100%'
+      });
+      iconWrapper.appendChild(svg);
     } else {
       // Use Lucide icon for platforms not in simple-icons (e.g., LinkedIn)
       const lucideIconName = getPlatformLucideIcon(post.platform);
       const lucideWrapper = iconWrapper.createDiv();
-      lucideWrapper.style.cssText = 'width: 100%; height: 100%;';
+      lucideWrapper.addClass('pcr-lucide-fill');
       setIcon(lucideWrapper, lucideIconName);
     }
 
@@ -1486,14 +1454,6 @@ export class PostCardRenderer extends Component {
       linkContainer.addEventListener('click', (e) => {
         e.stopPropagation();
         window.open(finalUrl, '_blank');
-      });
-
-      linkContainer.addEventListener('mouseenter', () => {
-        linkContainer.style.opacity = '0.6';
-      });
-
-      linkContainer.addEventListener('mouseleave', () => {
-        linkContainer.style.opacity = '0.3';
       });
     }
   }
@@ -1524,51 +1484,43 @@ export class PostCardRenderer extends Component {
 
     const updateBadgeStyle = (subscribed: boolean, loading: boolean) => {
       badge.empty();
-      badge.style.cssText = `
-        display: inline-flex;
-        align-items: center;
-        gap: 3px;
-        padding: 2px 6px;
-        border-radius: 10px;
-        font-size: 10px;
-        font-weight: 500;
-        cursor: ${loading ? 'wait' : 'pointer'};
-        transition: all 0.2s;
-        flex-shrink: 0;
-        opacity: ${loading ? '0.7' : '1'};
-      `;
+      badge.removeClass('pcr-badge-subscribed', 'pcr-badge-unsubscribed');
+      badge.addClass('pcr-badge');
+      badge.setCssProps({
+        '--pcr-badge-cursor': loading ? 'wait' : 'pointer',
+        '--pcr-badge-opacity': loading ? '0.7' : '1'
+      });
 
       if (subscribed) {
         // Subscribed state - green badge
-        badge.style.backgroundColor = 'rgba(var(--color-green-rgb), 0.15)';
-        badge.style.color = 'var(--color-green)';
+        badge.addClass('pcr-badge-subscribed');
         badge.setAttribute('title', 'Click to unsubscribe');
 
         // Bell icon
-        const iconContainer = badge.createDiv();
-        iconContainer.style.cssText = 'width: 10px; height: 10px; display: flex; align-items: center; justify-content: center;';
+        const iconContainer = badge.createDiv({ cls: 'pcr-badge-icon' });
         setIcon(iconContainer, 'bell');
-        iconContainer.querySelector('svg')?.setAttribute('style', 'width: 10px; height: 10px; stroke: var(--color-green);');
+        const bellSvg = iconContainer.querySelector('svg');
+        if (bellSvg) { bellSvg.addClass('pcr-badge-svg-subscribed'); }
 
         badge.createSpan({ text: 'Subscribed' });
       } else {
         // Not subscribed state - subtle badge
-        badge.style.backgroundColor = 'var(--background-modifier-hover)';
-        badge.style.color = 'var(--text-muted)';
+        badge.addClass('pcr-badge-unsubscribed');
 
         const loadingText = isUnsubscribing ? 'Unsubscribing...' : 'Subscribing...';
         badge.setAttribute('title', loading ? loadingText : 'Click to subscribe');
 
         // Bell-plus icon or loading spinner
-        const iconContainer = badge.createDiv();
-        iconContainer.style.cssText = 'width: 10px; height: 10px; display: flex; align-items: center; justify-content: center;';
+        const iconContainer = badge.createDiv({ cls: 'pcr-badge-icon' });
 
         if (loading) {
           setIcon(iconContainer, 'loader-2');
-          iconContainer.querySelector('svg')?.setAttribute('style', 'width: 10px; height: 10px; stroke: var(--text-muted); animation: spin 1s linear infinite;');
+          const loaderSvg = iconContainer.querySelector('svg');
+          if (loaderSvg) { loaderSvg.addClass('pcr-badge-svg-loading'); }
         } else {
           setIcon(iconContainer, 'bell-plus');
-          iconContainer.querySelector('svg')?.setAttribute('style', 'width: 10px; height: 10px; stroke: var(--text-muted);');
+          const bellSvg = iconContainer.querySelector('svg');
+          if (bellSvg) { bellSvg.addClass('pcr-badge-svg-unsubscribed'); }
         }
 
         badge.createSpan({ text: loading ? loadingText : 'Subscribe' });
@@ -1578,26 +1530,7 @@ export class PostCardRenderer extends Component {
     // Initial render
     updateBadgeStyle(currentSubscribed, false);
 
-    // Hover effects
-    badge.addEventListener('mouseenter', () => {
-      if (isLoading) return;
-      if (currentSubscribed) {
-        badge.style.backgroundColor = 'rgba(var(--color-green-rgb), 0.25)';
-      } else {
-        badge.style.backgroundColor = 'var(--background-modifier-border)';
-        badge.style.color = 'var(--text-normal)';
-      }
-    });
-
-    badge.addEventListener('mouseleave', () => {
-      if (isLoading) return;
-      if (currentSubscribed) {
-        badge.style.backgroundColor = 'rgba(var(--color-green-rgb), 0.15)';
-      } else {
-        badge.style.backgroundColor = 'var(--background-modifier-hover)';
-        badge.style.color = 'var(--text-muted)';
-      }
-    });
+    // Hover effects handled by CSS .pcr-badge-subscribed:hover and .pcr-badge-unsubscribed:hover
 
     // Click handler - Toggle subscribe/unsubscribe
     badge.addEventListener('click', async (e) => {
@@ -1720,23 +1653,20 @@ export class PostCardRenderer extends Component {
     // For YouTube: show video title at top of content area with title styling
     // Match embedded archive style: 📺 emoji + bold title
     if (post.platform === 'youtube' && post.title) {
-      const titleEl = contentContainer.createDiv({ cls: 'youtube-video-title' });
+      const titleEl = contentContainer.createDiv({ cls: 'youtube-video-title pcr-title-youtube' });
       titleEl.setText(`📺 ${post.title}`);
-      titleEl.style.cssText = 'font-size: 16px; font-weight: 600; color: var(--text-normal); margin-bottom: 10px; line-height: 1.4;';
     }
 
     // For RSS-based platforms: show article title at top of content area with larger, bolder styling
     if (isRssBasedPlatform(post.platform) && post.title) {
-      const titleEl = contentContainer.createDiv({ cls: 'blog-article-title' });
+      const titleEl = contentContainer.createDiv({ cls: 'blog-article-title pcr-title-blog' });
       titleEl.setText(post.title);
-      titleEl.style.cssText = 'font-size: 20px; font-weight: 700; color: var(--text-normal); margin-bottom: 14px; line-height: 1.3;';
     }
 
     // For Reddit: show post title at top of content area
     if (post.platform === 'reddit' && post.title) {
-      const titleEl = contentContainer.createDiv({ cls: 'reddit-post-title' });
+      const titleEl = contentContainer.createDiv({ cls: 'reddit-post-title pcr-title-reddit' });
       titleEl.setText(post.title);
-      titleEl.style.cssText = 'font-size: 18px; font-weight: 600; color: var(--text-normal); margin-bottom: 12px; line-height: 1.4;';
     }
 
     // For RSS-based platforms: use rawMarkdown with inline images
@@ -1777,10 +1707,8 @@ export class PostCardRenderer extends Component {
     const isLongContent = cleanContent.length > previewLength;
 
     const contentText = contentContainer.createDiv({
-      cls: 'text-sm leading-relaxed text-[var(--text-normal)] post-body-text'
+      cls: 'text-sm leading-relaxed text-[var(--text-normal)] post-body-text pcr-content-text'
     });
-    // Remove whiteSpace: 'pre-wrap' to allow native markdown rendering
-    contentText.style.wordBreak = 'break-word';
 
     if (isLongContent) {
       // Smart preview truncation - don't cut markdown in half
@@ -1804,16 +1732,8 @@ export class PostCardRenderer extends Component {
       );
 
       const seeMoreBtn = contentContainer.createEl('button', {
-        text: 'See more...'
-      });
-      seeMoreBtn.style.cssText = 'font-size: 14px; color: var(--text-muted); margin-top: 8px; display: inline-block; text-align: left; padding: 0; background: transparent; border: none; outline: none; box-shadow: none; cursor: pointer; transition: color 0.2s; font-family: inherit;';
-
-      seeMoreBtn.addEventListener('mouseenter', () => {
-        seeMoreBtn.style.color = 'var(--interactive-accent)';
-      });
-
-      seeMoreBtn.addEventListener('mouseleave', () => {
-        seeMoreBtn.style.color = 'var(--text-muted)';
+        text: 'See more...',
+        cls: 'pcr-see-more-btn'
       });
 
       let expanded = false;
@@ -1870,8 +1790,7 @@ export class PostCardRenderer extends Component {
     // Render external link preview card if exists (for quotedPost expanded view)
     // Use LinkPreviewRenderer to fetch metadata from Worker API
     if (post.metadata.externalLink) {
-      const linkPreviewContainer = contentContainer.createDiv();
-      linkPreviewContainer.style.cssText = 'margin-top: 12px;';
+      const linkPreviewContainer = contentContainer.createDiv({ cls: 'pcr-link-preview' });
       // Fire and forget - async rendering
       this.linkPreviewRenderer.renderCompact(linkPreviewContainer, post.metadata.externalLink);
     }
@@ -1930,22 +1849,10 @@ export class PostCardRenderer extends Component {
     }
 
     // Create metadata bar
-    const metadataBar = container.createDiv({ cls: 'podcast-metadata-bar' });
-    metadataBar.style.cssText = `
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px 16px;
-      font-size: 13px;
-      color: var(--text-muted);
-      margin-bottom: 12px;
-      padding: 8px 12px;
-      background: var(--background-secondary);
-      border-radius: 6px;
-    `;
+    const metadataBar = container.createDiv({ cls: 'podcast-metadata-bar pcr-podcast-metadata' });
 
     for (const item of items) {
-      const itemEl = metadataBar.createSpan({ text: item });
-      itemEl.style.cssText = 'white-space: nowrap;';
+      metadataBar.createSpan({ text: item, cls: 'pcr-podcast-metadata-item' });
     }
   }
 
@@ -1980,9 +1887,8 @@ export class PostCardRenderer extends Component {
     const isLongContent = rawMarkdown.length > previewLength;
 
     const contentText = contentContainer.createDiv({
-      cls: 'text-sm leading-relaxed text-[var(--text-normal)] blog-content-inline post-body-text'
+      cls: 'text-sm leading-relaxed text-[var(--text-normal)] blog-content-inline post-body-text pcr-content-text'
     });
-    contentText.style.wordBreak = 'break-word';
 
     // Use file path for Obsidian to resolve internal links and images
     const sourcePath = post.filePath || '';
@@ -2015,16 +1921,8 @@ export class PostCardRenderer extends Component {
       await this.resolveInlineImages(contentText, sourcePath);
 
       const seeMoreBtn = contentContainer.createEl('button', {
-        text: 'See more...'
-      });
-      seeMoreBtn.style.cssText = 'font-size: 14px; color: var(--text-muted); margin-top: 8px; display: inline-block; text-align: left; padding: 0; background: transparent; border: none; outline: none; box-shadow: none; cursor: pointer; transition: color 0.2s; font-family: inherit;';
-
-      seeMoreBtn.addEventListener('mouseenter', () => {
-        seeMoreBtn.style.color = 'var(--interactive-accent)';
-      });
-
-      seeMoreBtn.addEventListener('mouseleave', () => {
-        seeMoreBtn.style.color = 'var(--text-muted)';
+        text: 'See more...',
+        cls: 'pcr-see-more-btn'
       });
 
       let expanded = false;
@@ -2149,7 +2047,7 @@ export class PostCardRenderer extends Component {
           video.setAttribute('src', resourcePath);
           video.setAttribute('controls', 'true');
           video.setAttribute('preload', 'metadata');
-          video.style.cssText = 'max-width: 100%; max-height: 600px; width: auto; height: auto; border-radius: 8px; margin: 12px auto; display: block; object-fit: contain;';
+          video.className = 'pcr-inline-media';
           span.replaceWith(video);
         } else {
           // Create img element for images
@@ -2244,7 +2142,7 @@ export class PostCardRenderer extends Component {
       if (!hasOnlyImage) {
         // Style single images that are mixed with text
         if (img) {
-          img.style.cssText = 'max-width: 100%; max-height: 600px; width: auto; height: auto; border-radius: 8px; margin: 12px auto; display: block; object-fit: contain;';
+          img.addClass('pcr-inline-media');
         }
         i++;
         continue;
@@ -2292,7 +2190,7 @@ export class PostCardRenderer extends Component {
         i = j;
       } else {
         // Single image - style it normally
-        img.style.cssText = 'max-width: 100%; max-height: 600px; width: auto; height: auto; border-radius: 8px; margin: 12px auto; display: block; object-fit: contain;';
+        img.addClass('pcr-inline-media');
         i++;
       }
     }
@@ -2301,17 +2199,17 @@ export class PostCardRenderer extends Component {
     const remainingImages = contentEl.querySelectorAll('img:not(.gallery-image)');
     remainingImages.forEach((img) => {
       if (!img.closest('.inline-image-gallery')) {
-        (img as HTMLElement).style.cssText = 'max-width: 100%; max-height: 600px; width: auto; height: auto; border-radius: 8px; margin: 12px auto; display: block; object-fit: contain;';
+        (img as HTMLElement).addClass('pcr-inline-media');
       }
     });
 
     // Also handle internal embeds (Obsidian ![[image]] format)
     const embeds = contentEl.querySelectorAll('.internal-embed.image-embed');
     embeds.forEach((embed) => {
-      (embed as HTMLElement).style.cssText = 'max-width: 100%; margin: 12px auto; display: block; text-align: center;';
+      (embed as HTMLElement).addClass('pcr-embed-container');
       const innerImg = embed.querySelector('img');
       if (innerImg) {
-        innerImg.style.cssText = 'max-width: 100%; max-height: 600px; width: auto; height: auto; border-radius: 8px; object-fit: contain;';
+        (innerImg as HTMLElement).addClass('pcr-embed-inner-img');
       }
     });
   }
@@ -2321,59 +2219,43 @@ export class PostCardRenderer extends Component {
    */
   private createInlineImageGallery(images: HTMLImageElement[]): HTMLElement {
     const gallery = document.createElement('div');
-    gallery.className = 'inline-image-gallery';
-    gallery.style.cssText = 'margin: 12px 0; position: relative;';
+    gallery.className = 'inline-image-gallery pcr-gallery';
 
     const count = images.length;
 
     // Main display area
     const mainDisplay = document.createElement('div');
-    mainDisplay.className = 'gallery-main-display';
-    mainDisplay.style.cssText = 'position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: var(--background-secondary);';
+    mainDisplay.className = 'gallery-main-display pcr-gallery-main';
 
     // Create main image container
     const mainImageContainer = document.createElement('div');
-    mainImageContainer.style.cssText = 'width: 100%; aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center;';
+    mainImageContainer.className = 'pcr-gallery-main-container';
 
     const firstImage = images[0];
     if (!firstImage) return gallery;
     const mainImage = firstImage.cloneNode(true) as HTMLImageElement;
-    mainImage.className = 'gallery-image gallery-main-image';
-    mainImage.style.cssText = 'max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; cursor: pointer;';
+    mainImage.className = 'gallery-image gallery-main-image pcr-gallery-main-image';
     mainImageContainer.appendChild(mainImage);
     mainDisplay.appendChild(mainImageContainer);
 
     // Add counter badge if more than 1 image
     if (count > 1) {
       const counter = document.createElement('div');
-      counter.className = 'gallery-counter';
-      counter.style.cssText = 'position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.7); color: white; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 500;';
+      counter.className = 'gallery-counter pcr-gallery-counter';
       counter.textContent = `1/${count}`;
       mainDisplay.appendChild(counter);
 
-      // Navigation arrows
+      // Navigation arrows (hover handled by CSS .pcr-gallery-main:hover .pcr-gallery-nav)
       const prevBtn = document.createElement('button');
-      prevBtn.className = 'gallery-nav gallery-prev';
-      prevBtn.innerHTML = '‹';
-      prevBtn.style.cssText = 'position: absolute; left: 8px; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.5); color: white; border: none; border-radius: 50%; width: 32px; height: 32px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s;';
+      prevBtn.className = 'gallery-nav gallery-prev pcr-gallery-nav pcr-gallery-nav-prev';
+      prevBtn.textContent = '‹';
 
       const nextBtn = document.createElement('button');
-      nextBtn.className = 'gallery-nav gallery-next';
-      nextBtn.innerHTML = '›';
-      nextBtn.style.cssText = 'position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.5); color: white; border: none; border-radius: 50%; width: 32px; height: 32px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s;';
+      nextBtn.className = 'gallery-nav gallery-next pcr-gallery-nav pcr-gallery-nav-next';
+      nextBtn.textContent = '›';
 
       mainDisplay.appendChild(prevBtn);
       mainDisplay.appendChild(nextBtn);
-
-      // Show/hide navigation on hover
-      mainDisplay.addEventListener('mouseenter', () => {
-        prevBtn.style.opacity = '1';
-        nextBtn.style.opacity = '1';
-      });
-      mainDisplay.addEventListener('mouseleave', () => {
-        prevBtn.style.opacity = '0';
-        nextBtn.style.opacity = '0';
-      });
 
       // Navigation logic
       let currentIndex = 0;
@@ -2381,9 +2263,8 @@ export class PostCardRenderer extends Component {
         const currentImage = images[currentIndex];
         if (!currentImage) return;
         const newImg = currentImage.cloneNode(true) as HTMLImageElement;
-        newImg.className = 'gallery-image gallery-main-image';
-        newImg.style.cssText = 'max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; cursor: pointer;';
-        mainImageContainer.innerHTML = '';
+        newImg.className = 'gallery-image gallery-main-image pcr-gallery-main-image';
+        mainImageContainer.empty();
         mainImageContainer.appendChild(newImg);
         counter.textContent = `${currentIndex + 1}/${count}`;
 
@@ -2424,16 +2305,14 @@ export class PostCardRenderer extends Component {
     // Thumbnail strip for 3+ images
     if (count >= 3) {
       const thumbnailStrip = document.createElement('div');
-      thumbnailStrip.className = 'gallery-thumbnails';
-      thumbnailStrip.style.cssText = 'display: flex; gap: 4px; margin-top: 4px; overflow-x: auto; padding: 4px 0;';
+      thumbnailStrip.className = 'gallery-thumbnails pcr-gallery-thumbnails';
 
       images.forEach((img, index) => {
         const thumb = document.createElement('div');
-        thumb.style.cssText = 'flex-shrink: 0; width: 60px; height: 60px; border-radius: 4px; overflow: hidden; cursor: pointer; opacity: ' + (index === 0 ? '1' : '0.6') + '; transition: opacity 0.2s; border: 2px solid ' + (index === 0 ? 'var(--interactive-accent)' : 'transparent') + ';';
+        thumb.className = index === 0 ? 'pcr-gallery-thumb pcr-gallery-thumb-active' : 'pcr-gallery-thumb pcr-gallery-thumb-inactive';
 
         const thumbImg = img.cloneNode(true) as HTMLImageElement;
-        thumbImg.className = 'gallery-image';
-        thumbImg.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+        thumbImg.className = 'gallery-image pcr-gallery-thumb-img';
         thumb.appendChild(thumbImg);
 
         thumb.addEventListener('click', (e) => {
@@ -2442,9 +2321,8 @@ export class PostCardRenderer extends Component {
           const clickedImage = images[index];
           if (!clickedImage) return;
           const newImg = clickedImage.cloneNode(true) as HTMLImageElement;
-          newImg.className = 'gallery-image gallery-main-image';
-          newImg.style.cssText = 'max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; cursor: pointer;';
-          mainImageContainer.innerHTML = '';
+          newImg.className = 'gallery-image gallery-main-image pcr-gallery-main-image';
+          mainImageContainer.empty();
           mainImageContainer.appendChild(newImg);
 
           // Update counter
@@ -2453,8 +2331,9 @@ export class PostCardRenderer extends Component {
 
           // Update thumbnail styles
           thumbnailStrip.querySelectorAll('div').forEach((t, i) => {
-            (t as HTMLElement).style.opacity = i === index ? '1' : '0.6';
-            (t as HTMLElement).style.borderColor = i === index ? 'var(--interactive-accent)' : 'transparent';
+            const thumbEl = t as HTMLElement;
+            thumbEl.removeClass('pcr-gallery-thumb-active', 'pcr-gallery-thumb-inactive');
+            thumbEl.addClass(i === index ? 'pcr-gallery-thumb-active' : 'pcr-gallery-thumb-inactive');
           });
 
           // Add click handler to new main image
@@ -2478,35 +2357,34 @@ export class PostCardRenderer extends Component {
    */
   private openImageLightbox(imageSrcs: string[], startIndex: number): void {
     const overlay = document.createElement('div');
-    overlay.className = 'image-lightbox-overlay';
-    overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 10000; display: flex; align-items: center; justify-content: center;';
+    overlay.className = 'image-lightbox-overlay pcr-lightbox-overlay';
 
     let currentIndex = startIndex;
     const count = imageSrcs.length;
 
     const imgContainer = document.createElement('div');
-    imgContainer.style.cssText = 'max-width: 90vw; max-height: 90vh; position: relative;';
+    imgContainer.className = 'pcr-lightbox-container';
 
     const img = document.createElement('img');
     img.src = imageSrcs[currentIndex] ?? '';
-    img.style.cssText = 'max-width: 90vw; max-height: 90vh; object-fit: contain;';
+    img.className = 'pcr-lightbox-image';
     imgContainer.appendChild(img);
 
     // Counter
     if (count > 1) {
       const counter = document.createElement('div');
-      counter.style.cssText = 'position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%); color: white; font-size: 14px;';
+      counter.className = 'pcr-lightbox-counter';
       counter.textContent = `${currentIndex + 1} / ${count}`;
       imgContainer.appendChild(counter);
 
       // Navigation
       const prevBtn = document.createElement('button');
-      prevBtn.innerHTML = '‹';
-      prevBtn.style.cssText = 'position: fixed; left: 20px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 30px; cursor: pointer;';
+      prevBtn.textContent = '‹';
+      prevBtn.className = 'pcr-lightbox-nav pcr-lightbox-prev';
 
       const nextBtn = document.createElement('button');
-      nextBtn.innerHTML = '›';
-      nextBtn.style.cssText = 'position: fixed; right: 20px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 30px; cursor: pointer;';
+      nextBtn.textContent = '›';
+      nextBtn.className = 'pcr-lightbox-nav pcr-lightbox-next';
 
       const updateLightbox = () => {
         img.src = imageSrcs[currentIndex] ?? '';
@@ -2531,8 +2409,8 @@ export class PostCardRenderer extends Component {
 
     // Close button
     const closeBtn = document.createElement('button');
-    closeBtn.innerHTML = '×';
-    closeBtn.style.cssText = 'position: fixed; top: 20px; right: 20px; background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 50%; width: 40px; height: 40px; font-size: 24px; cursor: pointer;';
+    closeBtn.textContent = '×';
+    closeBtn.className = 'pcr-lightbox-close';
     closeBtn.addEventListener('click', () => overlay.remove());
 
     overlay.appendChild(imgContainer);
@@ -2571,41 +2449,14 @@ export class PostCardRenderer extends Component {
    * Also normalizes header sizes for better readability in post cards
    */
   private normalizeTagFontSizes(contentEl: HTMLElement): void {
-    // Normalize tags
-    const tags = contentEl.querySelectorAll('.tag, a.tag');
-    tags.forEach((tag) => {
-      (tag as HTMLElement).style.fontSize = 'inherit';
-      (tag as HTMLElement).style.lineHeight = 'inherit';
-    });
-
-    // Normalize header sizes for post card context (smaller than default)
-    const h1s = contentEl.querySelectorAll('h1');
-    h1s.forEach((h1) => {
-      (h1 as HTMLElement).style.fontSize = '1.3em';
-      (h1 as HTMLElement).style.marginTop = '16px';
-      (h1 as HTMLElement).style.marginBottom = '8px';
-    });
-
-    const h2s = contentEl.querySelectorAll('h2');
-    h2s.forEach((h2) => {
-      (h2 as HTMLElement).style.fontSize = '1.15em';
-      (h2 as HTMLElement).style.marginTop = '14px';
-      (h2 as HTMLElement).style.marginBottom = '6px';
-    });
-
-    const h3s = contentEl.querySelectorAll('h3');
-    h3s.forEach((h3) => {
-      (h3 as HTMLElement).style.fontSize = '1.05em';
-      (h3 as HTMLElement).style.marginTop = '12px';
-      (h3 as HTMLElement).style.marginBottom = '4px';
-    });
-
-    const h4s = contentEl.querySelectorAll('h4, h5, h6');
-    h4s.forEach((h) => {
-      (h as HTMLElement).style.fontSize = '1em';
-      (h as HTMLElement).style.marginTop = '10px';
-      (h as HTMLElement).style.marginBottom = '4px';
-    });
+    // The parent element already has 'post-body-text' class.
+    // CSS rules in post-card.css handle normalization:
+    //   .post-body-text .tag, .post-body-text a.tag { font-size: inherit; line-height: inherit; }
+    //   .post-body-text h1/h2/h3/h4-h6 { adjusted sizes }
+    // Ensure the class is present (it should already be set at creation time)
+    if (!contentEl.hasClass('post-body-text')) {
+      contentEl.addClass('post-body-text');
+    }
   }
 
   /**
@@ -2702,62 +2553,28 @@ export class PostCardRenderer extends Component {
     // Don't render container if no tags and we'll just show the action bar button
     if (postTags.length === 0) return;
 
-    const tagContainer = contentArea.createDiv({ cls: 'post-tag-chips' });
-    tagContainer.style.cssText = 'display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding-top: 12px;';
+    const tagContainer = contentArea.createDiv({ cls: 'post-tag-chips pcr-tag-container' });
 
     // Render existing tags (consistent with TagChipBar style)
     for (const tagName of postTags) {
       const def = definitions.find(d => d.name.toLowerCase() === tagName.toLowerCase());
       const color = def?.color || null;
 
-      const bgColor = 'var(--background-secondary)';
-      const textColor = 'var(--text-muted)';
-      const borderColor = 'transparent';
-
-      const chip = tagContainer.createDiv();
-      chip.style.cssText = `
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        padding: 3px 10px;
-        border-radius: 16px;
-        background: ${bgColor};
-        border: 1px solid ${borderColor};
-        font-size: 12px;
-        font-weight: 500;
-        color: ${textColor};
-        cursor: pointer;
-        transition: all 0.15s;
-        white-space: nowrap;
-      `;
+      const chip = tagContainer.createDiv({ cls: 'pcr-tag-chip' });
 
       // Color dot (colored for defined tags, muted gray for undefined)
-      const dot = chip.createDiv();
-      dot.style.cssText = `width: 8px; height: 8px; border-radius: 50%; background: ${color || 'var(--background-modifier-border)'}; flex-shrink: 0; align-self: center;`;
+      const dot = chip.createDiv({ cls: 'pcr-tag-dot' });
+      if (color) {
+        dot.setCssProps({ '--pcr-dot-color': color });
+      }
 
       chip.createSpan({ text: tagName });
 
-      // Remove button (x)
-      const removeBtn = chip.createDiv();
-      removeBtn.style.cssText = `
-        width: 14px; height: 14px;
-        display: inline-flex; align-items: center; justify-content: center;
-        border-radius: 50%; flex-shrink: 0;
-        color: ${textColor}; opacity: 0.5;
-        transition: all 0.15s; cursor: pointer;
-      `;
+      // Remove button (x) - hover handled by CSS .pcr-tag-remove:hover
+      const removeBtn = chip.createDiv({ cls: 'pcr-tag-remove' });
       setIcon(removeBtn, 'x');
       removeBtn.querySelector('svg')?.setAttribute('width', '10');
       removeBtn.querySelector('svg')?.setAttribute('height', '10');
-
-      removeBtn.addEventListener('mouseenter', () => {
-        removeBtn.style.opacity = '1';
-        removeBtn.style.background = 'var(--background-modifier-hover)';
-      });
-      removeBtn.addEventListener('mouseleave', () => {
-        removeBtn.style.opacity = '0.5';
-        removeBtn.style.background = 'transparent';
-      });
 
       removeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -2776,48 +2593,19 @@ export class PostCardRenderer extends Component {
         }).catch(() => {});
       });
 
-      chip.addEventListener('mouseenter', () => {
-        chip.style.background = 'var(--background-modifier-hover)';
-      });
-      chip.addEventListener('mouseleave', () => {
-        chip.style.background = bgColor;
-      });
-
-      // Click chip label to open tag modal
+      // Click chip label to open tag modal (hover handled by CSS .pcr-tag-chip:hover)
       chip.addEventListener('click', (e) => {
         e.stopPropagation();
         this.openTagModal(tagStore, filePath, tagContainer, post, rootElement);
       });
     }
 
-    // Small "+" button (matching mobile design)
-    const addBtn = tagContainer.createDiv();
-    addBtn.style.cssText = `
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      background: var(--background-secondary);
-      color: var(--text-muted);
-      cursor: pointer;
-      transition: all 0.15s;
-      flex-shrink: 0;
-    `;
+    // Small "+" button (matching mobile design) - hover handled by CSS .pcr-tag-add:hover
+    const addBtn = tagContainer.createDiv({ cls: 'pcr-tag-add' });
     addBtn.setAttribute('title', 'Add tag');
     setIcon(addBtn, 'plus');
     addBtn.querySelector('svg')?.setAttribute('width', '12');
     addBtn.querySelector('svg')?.setAttribute('height', '12');
-
-    addBtn.addEventListener('mouseenter', () => {
-      addBtn.style.background = 'var(--background-modifier-hover)';
-      addBtn.style.color = 'var(--text-normal)';
-    });
-    addBtn.addEventListener('mouseleave', () => {
-      addBtn.style.background = 'var(--background-secondary)';
-      addBtn.style.color = 'var(--text-muted)';
-    });
 
     addBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -2877,10 +2665,11 @@ export class PostCardRenderer extends Component {
    * Render interaction bar (likes, comments, shares, actions)
    */
   private renderInteractions(contentArea: HTMLElement, post: PostData, rootElement: HTMLElement, isEmbedded: boolean = false): void {
-    const interactions = contentArea.createDiv();
-    const borderStyle = isEmbedded ? '' : 'border-top: 1px solid var(--background-modifier-border);';
-    const interactionGap = ObsidianPlatform.isMobile ? '12px' : '16px';
-    interactions.style.cssText = `display: flex; align-items: center; gap: ${interactionGap}; padding-top: 8px; margin-top: 8px; ${borderStyle} color: var(--text-muted); flex-wrap: wrap;`;
+    const interactions = contentArea.createDiv({ cls: 'pcr-interactions' });
+    if (!isEmbedded) {
+      interactions.addClass('pcr-interactions-bordered');
+    }
+    interactions.setCssProps({ '--pcr-interaction-gap': ObsidianPlatform.isMobile ? '12px' : '16px' });
 
     // Check if this post has embedded archives
     const hasEmbeddedArchives = post.embeddedArchives && post.embeddedArchives.length > 0;
@@ -2889,67 +2678,42 @@ export class PostCardRenderer extends Component {
     // Reblogs show engagement on the original post, not the reblogger's card
     const metaGap = ObsidianPlatform.isMobile ? '4px' : '6px';
     if (!hasEmbeddedArchives && !post.isReblog) {
-      // Likes
+      // Likes - hover handled by CSS .pcr-action-btn:hover
       if (post.metadata.likes !== undefined) {
-        const likeBtn = interactions.createDiv();
-        likeBtn.style.cssText = `display: flex; align-items: center; gap: ${metaGap}; font-size: 13px; cursor: pointer; transition: color 0.2s;`;
-        likeBtn.addEventListener('mouseenter', () => {
-          likeBtn.style.color = 'var(--interactive-accent)';
-        });
-        likeBtn.addEventListener('mouseleave', () => {
-          likeBtn.style.color = 'var(--text-muted)';
-        });
+        const likeBtn = interactions.createDiv({ cls: 'pcr-action-btn' });
+        likeBtn.setCssProps({ '--pcr-meta-gap': metaGap });
 
-        const likeIcon = likeBtn.createDiv();
-        likeIcon.style.cssText = 'width: 16px; height: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;';
+        const likeIcon = likeBtn.createDiv({ cls: 'pcr-action-icon' });
         setIcon(likeIcon, 'heart');
 
-        const likeCount = likeBtn.createSpan({ text: this.formatNumber(post.metadata.likes) });
-        likeCount.style.cssText = 'min-width: 20px; display: flex; align-items: center;';
+        likeBtn.createSpan({ text: this.formatNumber(post.metadata.likes), cls: 'pcr-action-count' });
       }
 
-      // Comments
+      // Comments - hover handled by CSS .pcr-action-btn:hover
       if (post.metadata.comments !== undefined) {
-        const commentBtn = interactions.createDiv();
-        commentBtn.style.cssText = `display: flex; align-items: center; gap: ${metaGap}; font-size: 13px; cursor: pointer; transition: color 0.2s;`;
-        commentBtn.addEventListener('mouseenter', () => {
-          commentBtn.style.color = 'var(--interactive-accent)';
-        });
-        commentBtn.addEventListener('mouseleave', () => {
-          commentBtn.style.color = 'var(--text-muted)';
-        });
+        const commentBtn = interactions.createDiv({ cls: 'pcr-action-btn' });
+        commentBtn.setCssProps({ '--pcr-meta-gap': metaGap });
 
-        const commentIcon = commentBtn.createDiv();
-        commentIcon.style.cssText = 'width: 16px; height: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;';
+        const commentIcon = commentBtn.createDiv({ cls: 'pcr-action-icon' });
         setIcon(commentIcon, 'message-circle');
 
-        const commentCount = commentBtn.createSpan({ text: this.formatNumber(post.metadata.comments) });
-        commentCount.style.cssText = 'min-width: 20px; display: flex; align-items: center;';
+        commentBtn.createSpan({ text: this.formatNumber(post.metadata.comments), cls: 'pcr-action-count' });
       }
 
-      // Shares (hidden on mobile to save space)
+      // Shares (hidden on mobile to save space) - hover handled by CSS .pcr-action-btn:hover
       if (post.metadata.shares !== undefined && !ObsidianPlatform.isMobile) {
-        const shareBtn = interactions.createDiv();
-        shareBtn.style.cssText = `display: flex; align-items: center; gap: ${metaGap}; font-size: 13px; cursor: pointer; transition: color 0.2s;`;
-        shareBtn.addEventListener('mouseenter', () => {
-          shareBtn.style.color = 'var(--interactive-accent)';
-        });
-        shareBtn.addEventListener('mouseleave', () => {
-          shareBtn.style.color = 'var(--text-muted)';
-        });
+        const shareBtn = interactions.createDiv({ cls: 'pcr-action-btn' });
+        shareBtn.setCssProps({ '--pcr-meta-gap': metaGap });
 
-        const shareIcon = shareBtn.createDiv();
-        shareIcon.style.cssText = 'width: 16px; height: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;';
+        const shareIcon = shareBtn.createDiv({ cls: 'pcr-action-icon' });
         setIcon(shareIcon, 'repeat-2');
 
-        const shareCount = shareBtn.createSpan({ text: this.formatNumber(post.metadata.shares) });
-        shareCount.style.cssText = 'min-width: 20px; display: flex; align-items: center;';
+        shareBtn.createSpan({ text: this.formatNumber(post.metadata.shares), cls: 'pcr-action-count' });
       }
     }
 
     // Spacer (always render to push action buttons to the right)
-    const spacer = interactions.createDiv();
-    spacer.style.flex = '1';
+    const spacer = interactions.createDiv({ cls: 'pcr-spacer' });
 
     // Personal Like button (star icon, right-aligned)
     this.renderPersonalLikeButton(interactions, post);
@@ -2984,12 +2748,10 @@ export class PostCardRenderer extends Component {
    * Render personal like button
    */
   private renderPersonalLikeButton(parent: HTMLElement, post: PostData): void {
-    const personalLikeBtn = parent.createDiv();
-    personalLikeBtn.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; transition: color 0.2s;';
+    const personalLikeBtn = parent.createDiv({ cls: 'pcr-action-btn' });
     personalLikeBtn.setAttribute('title', post.like ? 'Remove from favorites' : 'Add to favorites');
 
-    const personalLikeIcon = personalLikeBtn.createDiv();
-    personalLikeIcon.style.cssText = 'width: 16px; height: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;';
+    const personalLikeIcon = personalLikeBtn.createDiv({ cls: 'pcr-action-icon' });
 
     // Set initial state
     if (post.like) {
@@ -2997,20 +2759,12 @@ export class PostCardRenderer extends Component {
       // Fill the star when liked
       const svgEl = personalLikeIcon.querySelector('svg');
       if (svgEl) {
-        svgEl.style.fill = 'currentColor';
+        svgEl.addClass('pcr-svg-filled');
       }
-      personalLikeBtn.style.color = 'var(--interactive-accent)';
+      personalLikeBtn.addClass('pcr-action-btn-active');
     } else {
       setIcon(personalLikeIcon, 'star');
-      personalLikeBtn.style.color = 'var(--text-muted)';
     }
-
-    personalLikeBtn.addEventListener('mouseenter', () => {
-      personalLikeBtn.style.color = 'var(--interactive-accent)';
-    });
-    personalLikeBtn.addEventListener('mouseleave', () => {
-      personalLikeBtn.style.color = post.like ? 'var(--interactive-accent)' : 'var(--text-muted)';
-    });
 
     // Personal Like button click handler
     personalLikeBtn.addEventListener('click', async (e) => {
@@ -3023,12 +2777,10 @@ export class PostCardRenderer extends Component {
    * Render archive button
    */
   private renderArchiveButton(parent: HTMLElement, post: PostData, rootElement: HTMLElement): void {
-    const archiveBtn = parent.createDiv();
-    archiveBtn.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; transition: color 0.2s;';
+    const archiveBtn = parent.createDiv({ cls: 'pcr-action-btn' });
     archiveBtn.setAttribute('title', post.archive ? 'Unarchive this post' : 'Archive this post');
 
-    const archiveIcon = archiveBtn.createDiv();
-    archiveIcon.style.cssText = 'width: 16px; height: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;';
+    const archiveIcon = archiveBtn.createDiv({ cls: 'pcr-action-icon' });
 
     // Set initial state
     if (post.archive) {
@@ -3036,24 +2788,12 @@ export class PostCardRenderer extends Component {
       // Fill the archive icon when archived (with internal details visible)
       const svgEl = archiveIcon.querySelector('svg');
       if (svgEl) {
-        svgEl.style.fill = 'currentColor';
-        svgEl.style.stroke = 'var(--background-primary)';
-        svgEl.style.strokeWidth = '1.5';
-        svgEl.style.strokeLinejoin = 'round';
-        svgEl.style.strokeLinecap = 'round';
+        svgEl.addClass('pcr-svg-archive-filled');
       }
-      archiveBtn.style.color = 'var(--interactive-accent)';
+      archiveBtn.addClass('pcr-action-btn-active');
     } else {
       setIcon(archiveIcon, 'archive');
-      archiveBtn.style.color = 'var(--text-muted)';
     }
-
-    archiveBtn.addEventListener('mouseenter', () => {
-      archiveBtn.style.color = 'var(--interactive-accent)';
-    });
-    archiveBtn.addEventListener('mouseleave', () => {
-      archiveBtn.style.color = post.archive ? 'var(--interactive-accent)' : 'var(--text-muted)';
-    });
 
     // Archive button click handler
     archiveBtn.addEventListener('click', async (e) => {
@@ -3107,21 +2847,11 @@ export class PostCardRenderer extends Component {
    * Render reader mode button
    */
   private renderReaderModeButton(parent: HTMLElement, post: PostData): void {
-    const readerBtn = parent.createDiv();
-    readerBtn.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; transition: color 0.2s;';
+    const readerBtn = parent.createDiv({ cls: 'pcr-action-btn' });
     readerBtn.setAttribute('title', 'Open in reader mode');
-    readerBtn.style.color = 'var(--text-muted)';
 
-    const readerIcon = readerBtn.createDiv();
-    readerIcon.style.cssText = 'width: 16px; height: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;';
+    const readerIcon = readerBtn.createDiv({ cls: 'pcr-action-icon' });
     setIcon(readerIcon, 'book-open');
-
-    readerBtn.addEventListener('mouseenter', () => {
-      readerBtn.style.color = 'var(--interactive-accent)';
-    });
-    readerBtn.addEventListener('mouseleave', () => {
-      readerBtn.style.color = 'var(--text-muted)';
-    });
 
     readerBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -3133,18 +2863,10 @@ export class PostCardRenderer extends Component {
    * Render open note button
    */
   private renderOpenNoteButton(parent: HTMLElement, post: PostData): void {
-    const openNoteBtn = parent.createDiv();
-    openNoteBtn.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; transition: color 0.2s;';
+    const openNoteBtn = parent.createDiv({ cls: 'pcr-action-btn' });
     openNoteBtn.setAttribute('title', 'Open note in Obsidian');
-    openNoteBtn.addEventListener('mouseenter', () => {
-      openNoteBtn.style.color = 'var(--interactive-accent)';
-    });
-    openNoteBtn.addEventListener('mouseleave', () => {
-      openNoteBtn.style.color = 'var(--text-muted)';
-    });
 
-    const openNoteIcon = openNoteBtn.createDiv();
-    openNoteIcon.style.cssText = 'width: 16px; height: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;';
+    const openNoteIcon = openNoteBtn.createDiv({ cls: 'pcr-action-icon' });
     setIcon(openNoteIcon, 'external-link');
 
     // Open Note button click handler
@@ -3158,18 +2880,10 @@ export class PostCardRenderer extends Component {
    * Render edit button (only for user posts)
    */
   private renderEditButton(parent: HTMLElement, post: PostData): void {
-    const editBtn = parent.createDiv();
-    editBtn.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; transition: color 0.2s;';
+    const editBtn = parent.createDiv({ cls: 'pcr-action-btn' });
     editBtn.setAttribute('title', 'Edit this post');
-    editBtn.addEventListener('mouseenter', () => {
-      editBtn.style.color = 'var(--interactive-accent)';
-    });
-    editBtn.addEventListener('mouseleave', () => {
-      editBtn.style.color = 'var(--text-muted)';
-    });
 
-    const editIcon = editBtn.createDiv();
-    editIcon.style.cssText = 'width: 16px; height: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;';
+    const editIcon = editBtn.createDiv({ cls: 'pcr-action-icon' });
     setIcon(editIcon, 'pencil');
 
     // Edit button click handler - open PostComposer in edit mode
@@ -3187,18 +2901,10 @@ export class PostCardRenderer extends Component {
    * Render delete button
    */
   private renderDeleteButton(parent: HTMLElement, post: PostData, rootElement: HTMLElement): void {
-    const deleteBtn = parent.createDiv();
-    deleteBtn.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; transition: color 0.2s;';
+    const deleteBtn = parent.createDiv({ cls: 'pcr-action-btn pcr-action-btn-error' });
     deleteBtn.setAttribute('title', 'Delete this post');
-    deleteBtn.addEventListener('mouseenter', () => {
-      deleteBtn.style.color = 'var(--text-error)';
-    });
-    deleteBtn.addEventListener('mouseleave', () => {
-      deleteBtn.style.color = 'var(--text-muted)';
-    });
 
-    const deleteIcon = deleteBtn.createDiv();
-    deleteIcon.style.cssText = 'width: 16px; height: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;';
+    const deleteIcon = deleteBtn.createDiv({ cls: 'pcr-action-icon' });
     setIcon(deleteIcon, 'trash-2');
 
     // Delete button click handler
@@ -3215,8 +2921,7 @@ export class PostCardRenderer extends Component {
     // Check if user is logged in
     const isLoggedIn = this.plugin.settings.isVerified && this.plugin.settings.authToken;
 
-    const shareBtn = parent.createDiv();
-    shareBtn.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; transition: color 0.2s;';
+    const shareBtn = parent.createDiv({ cls: 'pcr-action-btn' });
 
     // Check if already shared
     const isShared = !!(post as any).shareUrl;
@@ -3225,34 +2930,19 @@ export class PostCardRenderer extends Component {
     // Set tooltip based on login state
     if (!isLoggedIn && !isShared) {
       shareBtn.setAttribute('title', 'Log in to share posts');
-      shareBtn.style.opacity = '0.5';
-      shareBtn.style.cursor = 'not-allowed';
+      shareBtn.addClass('pcr-action-btn-disabled');
     } else {
       shareBtn.setAttribute('title', isShared ? 'Shared - Click to unshare' : 'Share this post to the web');
     }
 
-    const shareIcon = shareBtn.createDiv();
-    shareIcon.style.cssText = 'width: 16px; height: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;';
+    const shareIcon = shareBtn.createDiv({ cls: 'pcr-action-icon' });
 
     // Use different icons for shared vs unshared state
     if (isShared) {
       setIcon(shareIcon, 'link');
-      shareBtn.style.color = 'var(--interactive-accent)';
+      shareBtn.addClass('pcr-action-btn-active');
     } else {
       setIcon(shareIcon, 'share-2');
-      shareBtn.style.color = 'var(--text-muted)';
-    }
-
-    // Hover effects (only if logged in or already shared)
-    if (isLoggedIn || isShared) {
-      shareBtn.addEventListener('mouseenter', () => {
-        shareBtn.style.color = 'var(--interactive-accent)';
-      });
-      shareBtn.addEventListener('mouseleave', () => {
-        // Check current share state dynamically
-        const currentlyShared = !!(post as any).shareUrl;
-        shareBtn.style.color = currentlyShared ? 'var(--interactive-accent)' : 'var(--text-muted)';
-      });
     }
 
     // Share button click handler
@@ -3285,24 +2975,16 @@ export class PostCardRenderer extends Component {
 
     const hasTags = (post.tags?.length ?? 0) > 0;
 
-    const tagBtn = parent.createDiv();
-    tagBtn.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; transition: color 0.2s;';
+    const tagBtn = parent.createDiv({ cls: 'pcr-action-btn' });
     tagBtn.setAttribute('title', 'Manage tags');
 
-    const tagIcon = tagBtn.createDiv();
-    tagIcon.style.cssText = 'width: 16px; height: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;';
+    const tagIcon = tagBtn.createDiv({ cls: 'pcr-action-icon' });
     setIcon(tagIcon, 'tag');
 
     // Accent color when tags exist, muted when none
-    tagBtn.style.color = hasTags ? 'var(--interactive-accent)' : 'var(--text-muted)';
-
-    tagBtn.addEventListener('mouseenter', () => {
-      tagBtn.style.color = 'var(--interactive-accent)';
-    });
-    tagBtn.addEventListener('mouseleave', () => {
-      const currentHasTags = (post.tags?.length ?? 0) > 0;
-      tagBtn.style.color = currentHasTags ? 'var(--interactive-accent)' : 'var(--text-muted)';
-    });
+    if (hasTags) {
+      tagBtn.addClass('pcr-action-btn-active');
+    }
 
     tagBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -3312,7 +2994,7 @@ export class PostCardRenderer extends Component {
           post.tags = tagStore.getTagsForPost(filePath);
           // Update button color
           const nowHasTags = (post.tags?.length ?? 0) > 0;
-          tagBtn.style.color = nowHasTags ? 'var(--interactive-accent)' : 'var(--text-muted)';
+          tagBtn.toggleClass('pcr-action-btn-active', nowHasTags);
           // Refresh tag chips row (or create it if it didn't exist)
           const chipContainer = rootElement.querySelector('.post-tag-chips');
           if (chipContainer) {
@@ -3373,20 +3055,16 @@ export class PostCardRenderer extends Component {
       }
 
       const file = this.vault.getAbstractFileByPath(filePath);
-      if (!file || !('extension' in file)) {
+      if (!file || !(file instanceof TFile)) {
         new Notice('Cannot share: file not found');
         return;
       }
 
-      const tfile = file as TFile;
-
       // Show loading state
-      shareBtn.style.color = 'var(--text-muted)';
-      shareBtn.style.opacity = '0.5';
-      shareBtn.style.cursor = 'wait';
+      shareBtn.addClass('pcr-action-btn-loading');
 
       // Read original file content
-      const originalContent = await this.vault.read(tfile);
+      const originalContent = await this.vault.read(file);
 
       // Extract link previews from post content
       const extractedLinkPreviews = post.content?.text && this.plugin.linkPreviewExtractor
@@ -3439,20 +3117,22 @@ export class PostCardRenderer extends Component {
       };
 
       // Call Worker API to create share
-      const response = await fetch(`${workerUrl}/api/share`, {
+      const response = await requestUrl({
+        url: `${workerUrl}/api/share`,
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(shareRequest),
+        throw: false
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Share creation failed: ${response.statusText}`);
+      if (response.status !== 200) {
+        const errorData = response.json;
+        throw new Error(`Share creation failed: ${response.status}`);
       }
 
-      const result = await response.json();
+      const result = response.json;
       if (!result.success || !result.data) {
         throw new Error('Invalid share response');
       }
@@ -3482,15 +3162,14 @@ export class PostCardRenderer extends Component {
         this.onUIModifyCallback(filePath);
       }
 
-      await this.vault.modify(tfile, updatedContent);
+      await this.vault.modify(file, updatedContent);
 
       // Update post object
       (post as any).shareUrl = shareUrl;
 
       // Update UI to show shared state
-      shareBtn.style.opacity = '1';
-      shareBtn.style.cursor = 'pointer';
-      shareBtn.style.color = 'var(--interactive-accent)';
+      shareBtn.removeClass('pcr-action-btn-loading');
+      shareBtn.addClass('pcr-action-btn-active');
       shareBtn.setAttribute('title', 'Shared - Click to copy link');
 
       // Update icon to link icon
@@ -3516,9 +3195,7 @@ export class PostCardRenderer extends Component {
       new Notice('Failed to publish post');
 
       // Reset button state
-      shareBtn.style.opacity = '1';
-      shareBtn.style.cursor = 'pointer';
-      shareBtn.style.color = 'var(--text-muted)';
+      shareBtn.removeClass('pcr-action-btn-loading', 'pcr-action-btn-active');
     }
   }
 
@@ -3612,12 +3289,11 @@ export class PostCardRenderer extends Component {
       }
 
       const file = this.vault.getAbstractFileByPath(filePath);
-      if (!file || !('extension' in file)) {
+      if (!file || !(file instanceof TFile)) {
         new Notice('Cannot unshare: file not found');
         return;
       }
 
-      const tfile = file as TFile;
       const shareUrl = (post as any).shareUrl;
 
       if (!shareUrl) {
@@ -3634,8 +3310,7 @@ export class PostCardRenderer extends Component {
       }
 
       // Show loading state
-      shareBtn.style.opacity = '0.5';
-      shareBtn.style.cursor = 'wait';
+      shareBtn.addClass('pcr-action-btn-loading');
 
       // Delete from Worker API using ShareAPIClient
       const { ShareAPIClient } = await import('../../../services/ShareAPIClient');
@@ -3648,7 +3323,7 @@ export class PostCardRenderer extends Component {
       await shareClient.deleteShare(shareId);
 
       // Read file content
-      const content = await this.vault.read(tfile);
+      const content = await this.vault.read(file);
 
       // Remove share-related fields from YAML frontmatter
       const updatedContent = this.removeShareFromYaml(content);
@@ -3658,7 +3333,7 @@ export class PostCardRenderer extends Component {
         this.onUIModifyCallback(filePath);
       }
 
-      await this.vault.modify(tfile, updatedContent);
+      await this.vault.modify(file, updatedContent);
 
       // Update post object - remove all share-related properties
       delete (post as any).shareUrl;
@@ -3666,9 +3341,7 @@ export class PostCardRenderer extends Component {
       delete (post as any).share;
 
       // Update UI to show unshared state
-      shareBtn.style.opacity = '1';
-      shareBtn.style.cursor = 'pointer';
-      shareBtn.style.color = 'var(--text-muted)';
+      shareBtn.removeClass('pcr-action-btn-loading', 'pcr-action-btn-active');
       shareBtn.setAttribute('title', 'Share this post to the web');
 
       // Update icon to share icon
@@ -3680,8 +3353,7 @@ export class PostCardRenderer extends Component {
       new Notice('Failed to unshare post');
 
       // Reset button state
-      shareBtn.style.opacity = '1';
-      shareBtn.style.cursor = 'pointer';
+      shareBtn.removeClass('pcr-action-btn-loading');
     }
   }
 
@@ -3701,10 +3373,10 @@ export class PostCardRenderer extends Component {
       }
 
       // Check if it's a TFile
-      if ('extension' in file) {
+      if (file instanceof TFile) {
         // Open the file in a new leaf
         const leaf = this.app.workspace.getLeaf('tab');
-        await leaf.openFile(file as TFile);
+        await leaf.openFile(file);
       } else {
       }
     } catch (err) {
@@ -3724,19 +3396,13 @@ export class PostCardRenderer extends Component {
       modal.modalEl.addClass('social-archiver-confirm-modal');
 
       // Apply minimal modal styling
-      modal.modalEl.style.maxWidth = '380px';
+      modal.modalEl.addClass('pcr-confirm-modal');
 
       const contentEl = modal.contentEl;
       contentEl.empty();
 
       // Clean message container
-      const messageContainer = contentEl.createDiv();
-      messageContainer.style.cssText = `
-        font-size: 14px;
-        line-height: 1.6;
-        color: var(--text-normal);
-        margin-bottom: 24px;
-      `;
+      const messageContainer = contentEl.createDiv({ cls: 'pcr-confirm-message' });
 
       // Split message by newlines and format
       const lines = message.split('\n');
@@ -3745,56 +3411,30 @@ export class PostCardRenderer extends Component {
         const line = currentLine.trim();
         if (!line) continue;
 
-        const lineEl = messageContainer.createDiv();
-        lineEl.style.cssText = `
-          margin: 8px 0;
-          display: flex;
-          align-items: baseline;
-        `;
+        const lineEl = messageContainer.createDiv({ cls: 'pcr-confirm-line' });
 
         if (line.includes(':')) {
           // Format as label: value
         const [label = '', value = ''] = line.split(':');
 
-          const labelEl = lineEl.createEl('span', {
-            text: label.trim()
+          lineEl.createEl('span', {
+            text: label.trim(),
+            cls: 'pcr-confirm-label'
           });
-          labelEl.style.cssText = `
-            color: var(--text-muted);
-            font-size: 13px;
-            min-width: 80px;
-            margin-right: 12px;
-          `;
 
-          const valueEl = lineEl.createEl('span', {
-            text: value.trim()
+          lineEl.createEl('span', {
+            text: value.trim(),
+            cls: 'pcr-confirm-value'
           });
-          valueEl.style.cssText = `
-            color: var(--text-normal);
-            font-weight: 500;
-            font-size: 14px;
-          `;
         } else if (line.includes('media file')) {
           // Media count line - subtle highlight
-          lineEl.style.cssText = `
-            margin: 12px 0;
-            padding: 8px 12px;
-            background: var(--background-secondary);
-            border-radius: var(--radius-s);
-            color: var(--text-muted);
-            font-size: 13px;
-          `;
+          lineEl.addClass('pcr-confirm-media-line');
+          lineEl.removeClass('pcr-confirm-line');
           lineEl.setText(line);
         } else if (line.includes('cannot be undone')) {
           // Warning text - subtle but clear
-          lineEl.style.cssText = `
-            margin-top: 16px;
-            padding-top: 12px;
-            border-top: 1px solid var(--background-modifier-border);
-            color: var(--text-muted);
-            font-size: 12px;
-            font-style: italic;
-          `;
+          lineEl.addClass('pcr-confirm-warning');
+          lineEl.removeClass('pcr-confirm-line');
           lineEl.setText(line);
         } else {
           lineEl.setText(line);
@@ -3802,46 +3442,26 @@ export class PostCardRenderer extends Component {
       }
 
       // Button container
-      const buttonContainer = contentEl.createDiv({ cls: 'modal-button-container' });
-      buttonContainer.style.cssText = `
-        display: flex;
-        justify-content: flex-end;
-        gap: 8px;
-        margin-top: 24px;
-      `;
+      const buttonContainer = contentEl.createDiv({ cls: 'modal-button-container pcr-confirm-buttons' });
 
       // Cancel button (default style)
       const cancelBtn = buttonContainer.createEl('button', {
         text: 'Cancel'
       });
-      cancelBtn.style.cursor = 'pointer';
       cancelBtn.addEventListener('click', () => {
         modal.close();
         resolve(false);
       });
 
-      // Delete button (subtle warning)
+      // Delete button (subtle warning) - hover handled by CSS .pcr-confirm-delete-btn:hover
       const confirmBtn = buttonContainer.createEl('button', {
         text: 'Delete',
-        cls: 'mod-cta'
+        cls: 'mod-cta pcr-confirm-delete-btn'
       });
-      confirmBtn.style.cssText = `
-        background: var(--interactive-accent);
-        color: var(--text-on-accent);
-        cursor: pointer;
-      `;
 
       confirmBtn.addEventListener('click', () => {
         modal.close();
         resolve(true);
-      });
-
-      // Add hover effect for delete button
-      confirmBtn.addEventListener('mouseenter', () => {
-        confirmBtn.style.opacity = '0.9';
-      });
-      confirmBtn.addEventListener('mouseleave', () => {
-        confirmBtn.style.opacity = '1';
       });
 
       // Focus on cancel button by default (safer)
@@ -3908,8 +3528,6 @@ export class PostCardRenderer extends Component {
         return;
       }
 
-      const tfile = file as TFile;
-
       // Check if post is in archiving state - cancel the pending job
       if (post.archiveStatus === 'archiving') {
         try {
@@ -3947,15 +3565,17 @@ export class PostCardRenderer extends Component {
           const workerUrl = this.getWorkerUrl();
           const licenseKey = this.plugin.settings.licenseKey || 'dev-key';
 
-          const response = await fetch(`${workerUrl}/api/share/${shareId}`, {
+          const response = await requestUrl({
+            url: `${workerUrl}/api/share/${shareId}`,
             method: 'DELETE',
             headers: {
               'Content-Type': 'application/json',
               'X-License-Key': licenseKey,
             },
+            throw: false
           });
 
-          if (!response.ok) {
+          if (response.status !== 200) {
             // Continue with deletion even if unshare fails
           }
         } catch (err) {
@@ -3964,9 +3584,7 @@ export class PostCardRenderer extends Component {
       }
 
       // Animate card removal (fade out and slide up)
-      rootElement.style.transition = 'opacity 0.3s ease-out, transform 0.3s ease-out';
-      rootElement.style.opacity = '0';
-      rootElement.style.transform = 'translateY(-10px)';
+      rootElement.addClass('pcr-delete-animation');
 
       // Wait for animation to complete
       await new Promise(resolve => setTimeout(resolve, 300));
@@ -4007,7 +3625,7 @@ export class PostCardRenderer extends Component {
 
             const mediaFile = this.vault.getAbstractFileByPath(absolutePath);
 
-            if (mediaFile && 'extension' in mediaFile) {
+            if (mediaFile && mediaFile instanceof TFile) {
               // Extract parent folder path from absolute path
               const pathParts = absolutePath.split('/');
               pathParts.pop(); // Remove filename
@@ -4016,7 +3634,7 @@ export class PostCardRenderer extends Component {
                 mediaFolderPaths.add(folderPath);
               }
 
-              await this.vault.delete(mediaFile as TFile);
+              await this.vault.delete(mediaFile);
               deletedMedia.push(media.url);
             }
           } catch (err) {
@@ -4034,7 +3652,7 @@ export class PostCardRenderer extends Component {
           if (folderPath === baseMediaPath ||
               baseMediaPath.startsWith(folderPath + '/') ||
               folderPath === 'attachments') {
-            console.log(`[PostCardRenderer] Skipping protected folder: ${folderPath}`);
+            console.debug(`[PostCardRenderer] Skipping protected folder: ${folderPath}`);
             continue;
           }
 
@@ -4055,7 +3673,7 @@ export class PostCardRenderer extends Component {
       }
 
       // Delete the markdown file
-      await this.vault.delete(tfile);
+      await this.vault.delete(file);
 
       // Clean up empty parent folders (walk up from deepest to archive root)
       const baseArchivePath = this.plugin.settings.archivePath || 'Social Archives';
@@ -4103,14 +3721,12 @@ export class PostCardRenderer extends Component {
       }
 
       const file = this.vault.getAbstractFileByPath(filePath);
-      if (!file || !('extension' in file)) {
+      if (!file || !(file instanceof TFile)) {
         return;
       }
 
-      const tfile = file as TFile;
-
       // Read current file content
-      const content = await this.vault.read(tfile);
+      const content = await this.vault.read(file);
 
       // Toggle like status
       const newLikeStatus = !post.like;
@@ -4124,23 +3740,19 @@ export class PostCardRenderer extends Component {
       }
 
       // Write back to file
-      await this.vault.modify(tfile, updatedContent);
+      await this.vault.modify(file, updatedContent);
 
       // Update local state
       post.like = newLikeStatus;
 
       // Update UI
       btn.setAttribute('title', newLikeStatus ? 'Remove from favorites' : 'Add to favorites');
-      btn.style.color = newLikeStatus ? 'var(--interactive-accent)' : 'var(--text-muted)';
+      btn.toggleClass('pcr-action-btn-active', newLikeStatus);
 
       // Update star icon fill
       const svgEl = icon.querySelector('svg');
       if (svgEl) {
-        if (newLikeStatus) {
-          svgEl.style.fill = 'currentColor';
-        } else {
-          svgEl.style.fill = 'none';
-        }
+        svgEl.toggleClass('pcr-svg-filled', newLikeStatus);
       }
 
     } catch (err) {
@@ -4158,17 +3770,15 @@ export class PostCardRenderer extends Component {
       }
 
       const file = this.vault.getAbstractFileByPath(filePath);
-      if (!file || !('extension' in file)) {
+      if (!file || !(file instanceof TFile)) {
         return;
       }
-
-      const tfile = file as TFile;
 
       // Helper function to restore UI with current post.comment value
       // Uses post.comment dynamically (not captured closure variable) to reflect saved changes
       const restoreOriginalUI = () => {
         commentSection.empty();
-        commentSection.style.cssText = 'position: relative; cursor: pointer;';
+        commentSection.addClass('pcr-comment-section');
 
         const userName = this.plugin.settings.username || 'You';
         const archivedTime = this.getRelativeTime(post.archivedDate);
@@ -4178,11 +3788,9 @@ export class PostCardRenderer extends Component {
 
         if (hasCurrentComment) {
           // Restore comment UI: "Jun commented on this post · 2h ago"
-          const commentHeader = commentSection.createDiv({ cls: 'mb-2' });
-          commentHeader.style.cssText = 'font-size: 13px; color: var(--text-muted);';
+          const commentHeader = commentSection.createDiv({ cls: 'mb-2 pcr-comment-header' });
 
-          const userNameSpan = commentHeader.createSpan({ text: userName });
-          userNameSpan.style.cssText = 'font-weight: 600; color: var(--text-normal);';
+          commentHeader.createSpan({ text: userName, cls: 'pcr-comment-username' });
 
           // Use "commented on this user" for profile documents
       const commentOnText = post.type === 'profile' ? ' commented on this user' : ' commented on this post';
@@ -4193,42 +3801,19 @@ export class PostCardRenderer extends Component {
           }
 
           // Comment text with inline edit icon
-          const commentTextContainer = commentSection.createDiv();
-          commentTextContainer.style.cssText = 'display: inline;';
+          const commentTextContainer = commentSection.createDiv({ cls: 'pcr-comment-text-container' });
 
-          const commentTextDiv = commentTextContainer.createSpan();
-          commentTextDiv.style.cssText = 'font-size: 14px; line-height: 1.5; color: var(--text-normal);';
+          const commentTextDiv = commentTextContainer.createSpan({ cls: 'pcr-comment-text' });
           this.renderMarkdownLinks(commentTextDiv, currentComment, undefined, post.platform);
 
-          // Edit icon
-          const editIcon = commentTextContainer.createSpan();
-          editIcon.style.cssText = `
-            display: inline-flex;
-            align-items: center;
-            margin-left: 6px;
-            width: 14px;
-            height: 14px;
-            opacity: 0;
-            transition: opacity 0.2s;
-            color: var(--text-muted);
-            vertical-align: middle;
-          `;
+          // Edit icon (hover handled by parent .pcr-comment-section:hover via pcr-edit-icon-inline)
+          const editIcon = commentTextContainer.createSpan({ cls: 'pcr-edit-icon-inline' });
           setIcon(editIcon, 'pencil');
-
-          // Hover effects
-          commentSection.addEventListener('mouseenter', () => {
-            editIcon.style.opacity = '0.6';
-          });
-          commentSection.addEventListener('mouseleave', () => {
-            editIcon.style.opacity = '0';
-          });
         } else {
           // Restore saved UI: "Jun saved this post · 2h ago"
-          const savedHeader = commentSection.createDiv();
-          savedHeader.style.cssText = 'font-size: 13px; color: var(--text-muted); display: inline;';
+          const savedHeader = commentSection.createDiv({ cls: 'pcr-saved-header' });
 
-          const userNameSpan = savedHeader.createSpan({ text: userName });
-          userNameSpan.style.cssText = 'font-weight: 600; color: var(--text-normal);';
+          savedHeader.createSpan({ text: userName, cls: 'pcr-comment-username' });
 
           // Use "created a post" for post platform, "saved this post" for others
           const actionText = post.platform === 'post' ? ' created a post' : ' saved this post';
@@ -4238,28 +3823,9 @@ export class PostCardRenderer extends Component {
             savedHeader.createSpan({ text: ` · ${archivedTime}` });
           }
 
-          // Edit icon
-          const editIcon = commentSection.createSpan();
-          editIcon.style.cssText = `
-            display: inline-flex;
-            align-items: center;
-            margin-left: 6px;
-            width: 14px;
-            height: 14px;
-            opacity: 0;
-            transition: opacity 0.2s;
-            color: var(--text-muted);
-            vertical-align: middle;
-          `;
+          // Edit icon (hover handled by parent .pcr-comment-section:hover via pcr-edit-icon-inline)
+          const editIcon = commentSection.createSpan({ cls: 'pcr-edit-icon-inline' });
           setIcon(editIcon, 'pencil');
-
-          // Hover effects
-          commentSection.addEventListener('mouseenter', () => {
-            editIcon.style.opacity = '0.6';
-          });
-          commentSection.addEventListener('mouseleave', () => {
-            editIcon.style.opacity = '0';
-          });
         }
 
         // Click to edit
@@ -4271,27 +3837,14 @@ export class PostCardRenderer extends Component {
 
       // Clear section and create edit UI
       commentSection.empty();
-      commentSection.style.cssText = 'position: relative;';
+      commentSection.addClass('pcr-comment-section-editing');
+      commentSection.removeClass('pcr-comment-section');
 
       // Create a scope for keyboard shortcuts
       const editScope = new Scope();
 
       // Textarea
-      const textarea = commentSection.createEl('textarea');
-      textarea.style.cssText = `
-        width: 100%;
-        min-height: 60px;
-        padding: 8px;
-        font-family: var(--font-text);
-        font-size: 14px;
-        line-height: 1.5;
-        border: 1px solid var(--background-modifier-border);
-        border-radius: var(--radius-s);
-        background: var(--background-primary);
-        color: var(--text-normal);
-        resize: vertical;
-        margin-bottom: 8px;
-      `;
+      const textarea = commentSection.createEl('textarea', { cls: 'pcr-comment-textarea' });
       textarea.value = post.comment || '';
 
       // Focus and select
@@ -4301,26 +3854,23 @@ export class PostCardRenderer extends Component {
       }, 10);
 
       // Button container
-      const btnContainer = commentSection.createDiv();
-      btnContainer.style.cssText = 'display: flex; gap: 8px;';
+      const btnContainer = commentSection.createDiv({ cls: 'pcr-comment-btn-container' });
 
       // Save button
       const saveBtn = btnContainer.createEl('button', {
         text: 'Save',
-        cls: 'mod-cta'
+        cls: 'mod-cta pcr-comment-btn'
       });
-      saveBtn.style.cssText = 'font-size: 13px; padding: 4px 12px;';
 
       // Cancel button
-      const cancelBtn = btnContainer.createEl('button', { text: 'Cancel' });
-      cancelBtn.style.cssText = 'font-size: 13px; padding: 4px 12px;';
+      const cancelBtn = btnContainer.createEl('button', { text: 'Cancel', cls: 'pcr-comment-btn' });
 
       // Save handler
       const handleSave = async () => {
         const newComment = textarea.value.trim();
 
         try {
-          const content = await this.vault.read(tfile);
+          const content = await this.vault.read(file);
           const updatedContent = this.updateYamlFrontmatter(content, {
             comment: newComment || null
           });
@@ -4330,7 +3880,7 @@ export class PostCardRenderer extends Component {
             this.onUIModifyCallback(filePath);
           }
 
-          await this.vault.modify(tfile, updatedContent);
+          await this.vault.modify(file, updatedContent);
 
           post.comment = newComment || undefined;
 
@@ -4394,14 +3944,12 @@ export class PostCardRenderer extends Component {
       }
 
       const file = this.vault.getAbstractFileByPath(filePath);
-      if (!file || !('extension' in file)) {
+      if (!file || !(file instanceof TFile)) {
         return;
       }
 
-      const tfile = file as TFile;
-
       // Read current file content
-      const content = await this.vault.read(tfile);
+      const content = await this.vault.read(file);
 
       // Toggle archive status
       const newArchiveStatus = !post.archive;
@@ -4415,29 +3963,19 @@ export class PostCardRenderer extends Component {
       }
 
       // Write back to file
-      await this.vault.modify(tfile, updatedContent);
+      await this.vault.modify(file, updatedContent);
 
       // Update post object
       post.archive = newArchiveStatus;
 
       // Update UI
-      btn.style.color = newArchiveStatus ? 'var(--interactive-accent)' : 'var(--text-muted)';
+      btn.toggleClass('pcr-action-btn-active', newArchiveStatus);
       btn.setAttribute('title', newArchiveStatus ? 'Unarchive this post' : 'Archive this post');
 
       // Update archive icon fill (with internal details visible)
       const svgEl = icon.querySelector('svg');
       if (svgEl) {
-        if (newArchiveStatus) {
-          svgEl.style.fill = 'currentColor';
-          svgEl.style.stroke = 'var(--background-primary)';
-          svgEl.style.strokeWidth = '1.5';
-          svgEl.style.strokeLinejoin = 'round';
-          svgEl.style.strokeLinecap = 'round';
-        } else {
-          svgEl.style.fill = 'none';
-          svgEl.style.stroke = '';
-          svgEl.style.strokeWidth = '';
-        }
+        svgEl.toggleClass('pcr-svg-archive-filled', newArchiveStatus);
       }
 
 
@@ -4521,7 +4059,7 @@ export class PostCardRenderer extends Component {
         const key = keyMatch[1];
         currentArrayKey = null; // Reset array tracking
 
-        if (updates.hasOwnProperty(key)) {
+        if (Object.hasOwn(updates, key)) {
           const value = updates[key];
           if (value === null || value === undefined) {
             // Skip this line to remove the field
@@ -4555,7 +4093,7 @@ export class PostCardRenderer extends Component {
             currentArrayKey = key;
           }
         }
-      } else if (line.match(/^\s+-\s/) && currentArrayKey && !updates.hasOwnProperty(currentArrayKey)) {
+      } else if (line.match(/^\s+-\s/) && currentArrayKey && !Object.hasOwn(updates, currentArrayKey)) {
         // This is an array item line, keep it if we're not updating this key
         updatedLines.push(line);
       } else if (!line.match(/^\s+-\s/)) {
@@ -4759,20 +4297,13 @@ export class PostCardRenderer extends Component {
               title: `Search ${part} on ${platform}`
             }
           });
-          hashtagLink.style.cssText = 'color: var(--interactive-accent); font-weight: 500; text-decoration: none; cursor: pointer;';
-          hashtagLink.addEventListener('mouseenter', () => {
-            hashtagLink.style.textDecoration = 'underline';
-          });
-          hashtagLink.addEventListener('mouseleave', () => {
-            hashtagLink.style.textDecoration = 'none';
-          });
+          hashtagLink.addClass('pcr-hashtag-link');
           hashtagLink.addEventListener('click', (e) => {
             e.stopPropagation();
           });
         } else {
           // Just highlight without link
-          const hashtagSpan = container.createEl('span', { text: part });
-          hashtagSpan.style.cssText = 'color: var(--interactive-accent); font-weight: 500;';
+          const hashtagSpan = container.createEl('span', { text: part, cls: 'pcr-hashtag-span' });
         }
       } else {
         // Regular text
@@ -4895,18 +4426,12 @@ export class PostCardRenderer extends Component {
                 title: wikiData.notePath
               }
             });
-            wikiLink.style.cssText = 'color: var(--link-color); text-decoration: var(--link-decoration); cursor: pointer;';
+            wikiLink.addClass('pcr-wiki-link');
             wikiLink.addEventListener('click', (e) => {
               e.preventDefault();
               e.stopPropagation();
               // Open the note in Obsidian
               this.plugin.app.workspace.openLinkText(wikiData.notePath, '', false);
-            });
-            wikiLink.addEventListener('mouseenter', () => {
-              wikiLink.style.textDecoration = 'underline';
-            });
-            wikiLink.addEventListener('mouseleave', () => {
-              wikiLink.style.textDecoration = 'var(--link-decoration)';
             });
           } else {
             // Markdown link
@@ -4925,7 +4450,7 @@ export class PostCardRenderer extends Component {
                   title: 'Jump to timestamp in video'
                 }
               });
-              timestampBtn.style.cssText = 'color: var(--interactive-accent); text-decoration: underline; cursor: pointer; font-family: monospace; font-weight: 600;';
+              timestampBtn.addClass('pcr-timestamp-btn');
               timestampBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -4940,13 +4465,13 @@ export class PostCardRenderer extends Component {
               // Regular link
               const link = container.createEl('a', {
                 text: linkData.text,
+                cls: 'pcr-ext-link',
                 attr: {
                   href: linkData.url,
                   target: '_blank',
                   rel: 'noopener noreferrer'
                 }
               });
-              link.style.cssText = 'color: var(--interactive-accent); text-decoration: underline; cursor: pointer;';
               link.addEventListener('click', (e) => {
                 e.stopPropagation();
               });
@@ -4965,13 +4490,13 @@ export class PostCardRenderer extends Component {
         // Create clickable link for plain URL
         const link = container.createEl('a', {
           text: part.content,
+          cls: 'pcr-ext-link',
           attr: {
             href: part.url,
             target: '_blank',
             rel: 'noopener noreferrer'
           }
         });
-        link.style.cssText = 'color: var(--interactive-accent); text-decoration: underline; cursor: pointer;';
         link.addEventListener('click', (e) => {
           e.stopPropagation();
         });
@@ -5010,12 +4535,12 @@ export class PostCardRenderer extends Component {
       try {
         // Get the file from vault
         const imageFile = this.vault.getAbstractFileByPath(localPath);
-        if (!imageFile || !('extension' in imageFile)) {
+        if (!imageFile || !(imageFile instanceof TFile)) {
           continue;
         }
 
         // Read image as binary
-        const imageBuffer = await this.vault.readBinary(imageFile as TFile);
+        const imageBuffer = await this.vault.readBinary(imageFile);
 
         // Convert to base64
         const base64 = this.arrayBufferToBase64(imageBuffer);
@@ -5030,7 +4555,8 @@ export class PostCardRenderer extends Component {
                            ext === 'webp' ? 'image/webp' : 'image/jpeg';
 
         // Upload to Worker
-        const uploadResponse = await fetch(`${workerUrl}/api/upload-share-media`, {
+        const uploadResponse = await requestUrl({
+          url: `${workerUrl}/api/upload-share-media`,
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -5040,15 +4566,15 @@ export class PostCardRenderer extends Component {
             filename,
             contentType,
             data: base64
-          })
+          }),
+          throw: false
         });
 
-        if (!uploadResponse.ok) {
-          const errorData = await uploadResponse.json().catch(() => ({ error: 'Unknown error' }));
+        if (uploadResponse.status !== 200) {
           continue;
         }
 
-        const uploadResult = await uploadResponse.json();
+        const uploadResult = uploadResponse.json;
         const r2Url = uploadResult.data.url;
 
         // Replace local path with R2 URL in content
@@ -5287,15 +4813,7 @@ export class PostCardRenderer extends Component {
     container.empty();
 
     // Add padding and overflow handling (reduced padding for compact display)
-    const contentWrapper = container.createDiv();
-    contentWrapper.style.cssText = `
-      padding: 12px;
-      overflow-x: hidden;
-      overflow-y: auto;
-      max-width: 100%;
-      width: 100%;
-      box-sizing: border-box;
-    `;
+    const contentWrapper = container.createDiv({ cls: 'pcr-expanded-content' });
 
     // Render the full post card (without the compact version inside to avoid recursion)
     // We'll create a temporary clone without embeddedArchives and comment to prevent nesting and hide header
@@ -5324,9 +4842,7 @@ export class PostCardRenderer extends Component {
     nestedCardContainers.forEach((div) => {
       const element = div as HTMLElement;
       if (element.style.borderLeft) {
-        element.style.borderLeft = 'none';
-        element.style.paddingLeft = '0';
-        element.style.marginLeft = '0';
+        element.addClass('pcr-expanded-no-border');
       }
     });
 
@@ -5338,7 +4854,7 @@ export class PostCardRenderer extends Component {
       if (element.textContent?.includes('saved this post') ||
           element.textContent?.includes('commented on this post') ||
           element.textContent?.includes('created a post')) {
-        element.style.display = 'none';
+        element.hide();
       }
     });
 
@@ -5346,7 +4862,7 @@ export class PostCardRenderer extends Component {
     // These actions should be done from the parent post, not the embedded archive
     const actionIcons = contentWrapper.querySelectorAll('[title="Add to favorites"], [title="Share this post to the web"], [title="Archive this post"], [title="Open note in Obsidian"], [title="Delete this post"]');
     actionIcons.forEach((icon) => {
-      (icon as HTMLElement).style.display = 'none';
+      (icon as HTMLElement).hide();
     });
   }
 
@@ -5528,44 +5044,13 @@ export class PostCardRenderer extends Component {
     post: PostData,
     rootElement: HTMLElement
   ): Promise<void> {
-    const banner = contentArea.createDiv({ cls: 'archive-progress-banner' });
-    banner.style.cssText = `
-      margin: 8px 0 0 0;
-      padding: 8px 12px;
-      background: var(--background-secondary);
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    `;
+    const banner = contentArea.createDiv({ cls: 'archive-progress-banner pcr-suggestion-banner pcr-suggestion-banner-filled' });
 
     // Spinner
-    const spinner = banner.createDiv();
-    spinner.style.cssText = `
-      width: 16px;
-      height: 16px;
-      border: 2px solid var(--background-modifier-border);
-      border-top-color: var(--interactive-accent);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      flex-shrink: 0;
-    `;
-
-    // Add CSS animation if not already added
-    if (!document.head.querySelector('#archive-spinner-animation')) {
-      const style = document.createElement('style');
-      style.id = 'archive-spinner-animation';
-      style.textContent = `
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `;
-      document.head.appendChild(style);
-    }
+    const spinner = banner.createDiv({ cls: 'pcr-spinner' });
 
     // Message
-    const message = banner.createSpan({ text: 'Archiving in background...' });
-    message.style.cssText = 'font-size: 13px; color: var(--text-muted); flex: 1;';
+    const message = banner.createSpan({ cls: 'pcr-banner-message', text: 'Archiving in background...' });
   }
 
   /**
@@ -5602,27 +5087,16 @@ export class PostCardRenderer extends Component {
     }
 
     // For other statuses, show the status banner
-    const banner = contentArea.createDiv({ cls: 'archive-status-banner' });
-    banner.style.cssText = `
-      margin: 8px 0 0 0;
-      padding: 8px 0;
-      background: transparent;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    `;
+    const banner = contentArea.createDiv({ cls: 'archive-status-banner pcr-suggestion-banner' });
 
     // Status message - clear and descriptive (only 'downloaded' supported now)
     const messageText = 'Video downloaded';
 
-    const message = banner.createSpan({ text: messageText });
-    message.style.cssText = 'font-size: 13px; color: var(--text-normal); flex: 1;';
+    const message = banner.createSpan({ cls: 'pcr-banner-message', text: messageText });
 
     // Auto-hide banner after 2 seconds
     setTimeout(() => {
-      banner.style.transition = 'opacity 0.3s ease-out';
-      banner.style.opacity = '0';
+      banner.addClass('pcr-fade-out');
       setTimeout(() => banner.remove(), 300);
     }, 2000);
   }
@@ -5637,59 +5111,24 @@ export class PostCardRenderer extends Component {
     post: PostData,
     rootElement: HTMLElement
   ): Promise<void> {
-    const banner = contentArea.createDiv({ cls: 'download-suggestion-banner' });
-    banner.style.cssText = `
-      margin: 8px 0 0 0;
-      padding: 8px 0;
-      background: transparent;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    `;
+    const banner = contentArea.createDiv({ cls: 'download-suggestion-banner pcr-suggestion-banner' });
 
     // Message
-    const message = banner.createSpan({ text: 'Download this video?' });
-    message.style.cssText = 'font-size: 13px; color: var(--text-normal); flex: 1;';
+    const message = banner.createSpan({ cls: 'pcr-banner-message', text: 'Download this video?' });
 
     // Buttons
-    const buttonSection = banner.createDiv();
-    buttonSection.style.cssText = 'display: flex; align-items: center; gap: 8px; flex-shrink: 0;';
+    const buttonSection = banner.createDiv({ cls: 'pcr-banner-buttons' });
 
     // No button (X icon)
-    const noButton = buttonSection.createEl('button');
-    noButton.style.cssText = `
-      padding: 0 !important;
-      border: none !important;
-      outline: none !important;
-      box-shadow: none !important;
-      background: transparent !important;
-      color: var(--text-muted);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 24px;
-      height: 24px;
-      transition: opacity 0.2s;
-    `;
+    const noButton = buttonSection.createEl('button', { cls: 'pcr-icon-btn pcr-icon-btn-cancel' });
     noButton.setAttribute('aria-label', 'No');
     noButton.setAttribute('title', 'No');
 
-    const noIcon = noButton.createDiv();
-    noIcon.style.cssText = 'width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;';
+    const noIcon = noButton.createDiv({ cls: 'pcr-icon-btn-icon' });
     setIcon(noIcon, 'x');
-
-    noButton.addEventListener('mouseenter', () => {
-      noButton.style.background = 'var(--background-modifier-hover)';
-      noButton.style.borderRadius = '4px';
-    });
-    noButton.addEventListener('mouseleave', () => {
-      noButton.style.background = 'transparent';
-    });
     noButton.addEventListener('click', async () => {
       // Mark as download declined
-      buttonSection.style.display = 'none';
+      buttonSection.hide();
       message.textContent = 'Marking as declined...';
 
       try {
@@ -5707,36 +5146,13 @@ export class PostCardRenderer extends Component {
     });
 
     // Yes button (Download icon)
-    const yesButton = buttonSection.createEl('button');
-    yesButton.style.cssText = `
-      padding: 0 !important;
-      border: none !important;
-      outline: none !important;
-      box-shadow: none !important;
-      background: transparent !important;
-      color: var(--text-accent);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 24px;
-      height: 24px;
-      transition: opacity 0.2s;
-    `;
+    const yesButton = buttonSection.createEl('button', { cls: 'pcr-icon-btn pcr-icon-btn-accent' });
     yesButton.setAttribute('aria-label', 'Download');
     yesButton.setAttribute('title', 'Yes, download');
 
-    const yesIcon = yesButton.createDiv();
-    yesIcon.style.cssText = 'width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;';
+    const yesIcon = yesButton.createDiv({ cls: 'pcr-icon-btn-icon' });
     setIcon(yesIcon, 'download');
 
-    yesButton.addEventListener('mouseenter', () => {
-      yesButton.style.background = 'var(--background-modifier-hover)';
-      yesButton.style.borderRadius = '4px';
-    });
-    yesButton.addEventListener('mouseleave', () => {
-      yesButton.style.background = 'transparent';
-    });
     yesButton.addEventListener('click', async () => {
       // Create AbortController for cancellation
       const abortController = new AbortController();
@@ -5745,64 +5161,39 @@ export class PostCardRenderer extends Component {
       buttonSection.empty();
 
       // Cancel button (X icon)
-      const cancelButton = buttonSection.createEl('button');
-      cancelButton.style.cssText = `
-        padding: 4px !important;
-        border: none !important;
-        outline: none !important;
-        box-shadow: none !important;
-        background: transparent !important;
-        color: var(--text-muted);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 28px;
-        min-height: 28px;
-        border-radius: 4px;
-        transition: all 0.2s;
-      `;
+      const cancelButton = buttonSection.createEl('button', { cls: 'pcr-icon-btn pcr-icon-btn-cancel-lg' });
       cancelButton.setAttribute('aria-label', 'Cancel download');
       cancelButton.setAttribute('title', 'Cancel download');
 
-      const cancelIcon = cancelButton.createDiv();
-      cancelIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; justify-content: center;';
+      const cancelIcon = cancelButton.createDiv({ cls: 'pcr-icon-btn-icon-sm' });
       setIcon(cancelIcon, 'x');
 
-      cancelButton.addEventListener('mouseenter', () => {
-        cancelButton.style.background = 'var(--background-modifier-hover)';
-        cancelButton.style.color = 'var(--text-error)';
-      });
-      cancelButton.addEventListener('mouseleave', () => {
-        cancelButton.style.background = 'transparent';
-        cancelButton.style.color = 'var(--text-muted)';
-      });
       cancelButton.addEventListener('click', () => {
         abortController.abort();
         message.textContent = 'Download cancelled';
-        message.style.color = 'var(--text-muted)';
+        message.removeClass('pcr-text-normal');
+        message.addClass('pcr-text-muted');
 
         // Remove banner after 2 seconds
         setTimeout(() => {
-          banner.style.transition = 'opacity 0.3s ease-out';
-          banner.style.opacity = '0';
+          banner.addClass('pcr-fade-out');
           setTimeout(() => banner.remove(), 300);
         }, 2000);
       });
 
       message.textContent = 'Downloading with yt-dlp...';
-      message.style.color = 'var(--text-normal)';
+      message.removeClass('pcr-text-muted');
+      message.addClass('pcr-text-normal');
 
       try {
         await this.downloadWithYtDlp(url, platform, post, rootElement, message, abortController.signal);
 
         // Hide cancel button on success
-        buttonSection.style.display = 'none';
+        buttonSection.hide();
 
         // Show success message for 2 seconds, then fade out
         setTimeout(() => {
-          banner.style.transition = 'opacity 0.3s ease-out';
-          banner.style.opacity = '0';
+          banner.addClass('pcr-fade-out');
           setTimeout(() => banner.remove(), 300);
         }, 2000);
       } catch (error) {
@@ -5811,20 +5202,19 @@ export class PostCardRenderer extends Component {
         // Don't show error if it was cancelled
         if (errorMessage.includes('cancelled')) {
           message.textContent = 'Download cancelled';
-          message.style.color = 'var(--text-muted)';
+          message.addClasses(['pcr-text-muted']);
         } else {
           message.textContent = `Download failed: ${errorMessage}`;
-          message.style.color = 'var(--text-error)';
+          message.addClasses(['pcr-text-error']);
         }
 
         // Remove cancel button and show original buttons on error
         buttonSection.empty();
-        buttonSection.style.display = 'none';
+        buttonSection.hide();
 
         // Remove banner after showing message
         setTimeout(() => {
-          banner.style.transition = 'opacity 0.3s ease-out';
-          banner.style.opacity = '0';
+          banner.addClass('pcr-fade-out');
           setTimeout(() => banner.remove(), 300);
         }, 3000);
       }
@@ -5841,61 +5231,27 @@ export class PostCardRenderer extends Component {
     post: PostData,
     rootElement: HTMLElement
   ): Promise<void> {
-    const banner = contentArea.createDiv({ cls: 'audio-download-suggestion-banner' });
-    banner.style.cssText = `
-      margin: 8px 0 0 0;
-      padding: 8px 0;
-      background: transparent;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    `;
+    const banner = contentArea.createDiv({ cls: 'audio-download-suggestion-banner pcr-suggestion-banner' });
 
     // Message with file size
-    const message = banner.createSpan();
+    const message = banner.createSpan({ cls: 'pcr-banner-message' });
     const sizeText = audioSize ? ` (~${this.formatFileSize(audioSize)})` : '';
     message.textContent = `Download this episode?${sizeText}`;
-    message.style.cssText = 'font-size: 13px; color: var(--text-normal); flex: 1;';
 
     // Buttons
-    const buttonSection = banner.createDiv();
-    buttonSection.style.cssText = 'display: flex; align-items: center; gap: 8px; flex-shrink: 0;';
+    const buttonSection = banner.createDiv({ cls: 'pcr-banner-buttons' });
 
     // No button (X icon)
-    const noButton = buttonSection.createEl('button');
-    noButton.style.cssText = `
-      padding: 0 !important;
-      border: none !important;
-      outline: none !important;
-      box-shadow: none !important;
-      background: transparent !important;
-      color: var(--text-muted);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 24px;
-      height: 24px;
-      transition: opacity 0.2s;
-    `;
+    const noButton = buttonSection.createEl('button', { cls: 'pcr-icon-btn pcr-icon-btn-cancel' });
     noButton.setAttribute('aria-label', 'No');
     noButton.setAttribute('title', 'No');
 
-    const noIcon = noButton.createDiv();
-    noIcon.style.cssText = 'width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;';
+    const noIcon = noButton.createDiv({ cls: 'pcr-icon-btn-icon' });
     setIcon(noIcon, 'x');
 
-    noButton.addEventListener('mouseenter', () => {
-      noButton.style.background = 'var(--background-modifier-hover)';
-      noButton.style.borderRadius = '4px';
-    });
-    noButton.addEventListener('mouseleave', () => {
-      noButton.style.background = 'transparent';
-    });
     noButton.addEventListener('click', async () => {
       // Mark as download declined
-      buttonSection.style.display = 'none';
+      buttonSection.hide();
       message.textContent = 'Marking as declined...';
 
       try {
@@ -5907,36 +5263,13 @@ export class PostCardRenderer extends Component {
     });
 
     // Yes button (Download icon)
-    const yesButton = buttonSection.createEl('button');
-    yesButton.style.cssText = `
-      padding: 0 !important;
-      border: none !important;
-      outline: none !important;
-      box-shadow: none !important;
-      background: transparent !important;
-      color: var(--text-accent);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 24px;
-      height: 24px;
-      transition: opacity 0.2s;
-    `;
+    const yesButton = buttonSection.createEl('button', { cls: 'pcr-icon-btn pcr-icon-btn-accent' });
     yesButton.setAttribute('aria-label', 'Download');
     yesButton.setAttribute('title', 'Yes, download');
 
-    const yesIcon = yesButton.createDiv();
-    yesIcon.style.cssText = 'width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;';
+    const yesIcon = yesButton.createDiv({ cls: 'pcr-icon-btn-icon' });
     setIcon(yesIcon, 'download');
 
-    yesButton.addEventListener('mouseenter', () => {
-      yesButton.style.background = 'var(--background-modifier-hover)';
-      yesButton.style.borderRadius = '4px';
-    });
-    yesButton.addEventListener('mouseleave', () => {
-      yesButton.style.background = 'transparent';
-    });
     yesButton.addEventListener('click', async () => {
       // Create AbortController for cancellation
       const abortController = new AbortController();
@@ -5945,47 +5278,21 @@ export class PostCardRenderer extends Component {
       buttonSection.empty();
 
       // Cancel button (X icon)
-      const cancelButton = buttonSection.createEl('button');
-      cancelButton.style.cssText = `
-        padding: 4px !important;
-        border: none !important;
-        outline: none !important;
-        box-shadow: none !important;
-        background: transparent !important;
-        color: var(--text-muted);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 28px;
-        min-height: 28px;
-        border-radius: 4px;
-        transition: all 0.2s;
-      `;
+      const cancelButton = buttonSection.createEl('button', { cls: 'pcr-icon-btn pcr-icon-btn-cancel-lg' });
       cancelButton.setAttribute('aria-label', 'Cancel download');
       cancelButton.setAttribute('title', 'Cancel download');
 
-      const cancelIcon = cancelButton.createDiv();
-      cancelIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; justify-content: center;';
+      const cancelIcon = cancelButton.createDiv({ cls: 'pcr-icon-btn-icon-sm' });
       setIcon(cancelIcon, 'x');
 
-      cancelButton.addEventListener('mouseenter', () => {
-        cancelButton.style.background = 'var(--background-modifier-hover)';
-        cancelButton.style.color = 'var(--text-error)';
-      });
-      cancelButton.addEventListener('mouseleave', () => {
-        cancelButton.style.background = 'transparent';
-        cancelButton.style.color = 'var(--text-muted)';
-      });
       cancelButton.addEventListener('click', () => {
         abortController.abort();
         message.textContent = 'Download cancelled';
-        message.style.color = 'var(--text-muted)';
+        message.addClass('pcr-text-muted');
 
         // Remove banner after 2 seconds
         setTimeout(() => {
-          banner.style.transition = 'opacity 0.3s ease-out';
-          banner.style.opacity = '0';
+          banner.addClass('pcr-fade-out');
           setTimeout(() => banner.remove(), 300);
         }, 2000);
       });
@@ -5993,7 +5300,6 @@ export class PostCardRenderer extends Component {
       // Show downloading message with file size if available
       const sizeInfo = audioSize ? ` (${this.formatFileSize(audioSize)})` : '';
       message.textContent = `Downloading audio${sizeInfo}...`;
-      message.style.color = 'var(--text-normal)';
 
       // Add loading animation
       let dots = 0;
@@ -6007,12 +5313,11 @@ export class PostCardRenderer extends Component {
         clearInterval(loadingInterval);
 
         // Hide cancel button on success
-        buttonSection.style.display = 'none';
+        buttonSection.hide();
 
         // Show success message for 2 seconds, then fade out
         setTimeout(() => {
-          banner.style.transition = 'opacity 0.3s ease-out';
-          banner.style.opacity = '0';
+          banner.addClass('pcr-fade-out');
           setTimeout(() => banner.remove(), 300);
         }, 2000);
       } catch (error) {
@@ -6022,20 +5327,19 @@ export class PostCardRenderer extends Component {
         // Don't show error if it was cancelled
         if (errorMessage.includes('cancelled') || errorMessage.includes('aborted')) {
           message.textContent = 'Download cancelled';
-          message.style.color = 'var(--text-muted)';
+          message.addClass('pcr-text-muted');
         } else {
           message.textContent = `Download failed: ${errorMessage}`;
-          message.style.color = 'var(--text-error)';
+          message.addClass('pcr-text-error');
         }
 
         // Remove cancel button and show original buttons on error
         buttonSection.empty();
-        buttonSection.style.display = 'none';
+        buttonSection.hide();
 
         // Remove banner after showing message
         setTimeout(() => {
-          banner.style.transition = 'opacity 0.3s ease-out';
-          banner.style.opacity = '0';
+          banner.addClass('pcr-fade-out');
           setTimeout(() => banner.remove(), 300);
         }, 3000);
       }
@@ -6163,16 +5467,7 @@ export class PostCardRenderer extends Component {
     const installedModels = WhisperDetector.getInstalledModels();
     const duration = await this.getMediaDuration(mediaPath);
 
-    const banner = contentArea.createDiv({ cls: 'transcription-suggestion-banner' });
-    banner.style.cssText = `
-      margin: 8px 0 0 0;
-      padding: 8px 0;
-      background: transparent;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    `;
+    const banner = contentArea.createDiv({ cls: 'transcription-suggestion-banner pcr-suggestion-banner' });
 
     // Current selected model (mutable)
     let selectedModel: string = this.plugin.settings.transcription?.preferredModel || 'medium';
@@ -6185,57 +5480,35 @@ export class PostCardRenderer extends Component {
     };
 
     // Message section: message + time estimate + dropdown
-    const messageSection = banner.createDiv();
-    messageSection.style.cssText = 'display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0;';
+    const messageSection = banner.createDiv({ cls: 'pcr-banner-message-section' });
 
-    const message = messageSection.createSpan();
+    const message = messageSection.createSpan({ cls: 'pcr-banner-message-nowrap' });
     message.textContent = `Transcribe with ${variant || 'Whisper'}?`;
-    message.style.cssText = 'font-size: 13px; color: var(--text-normal); white-space: nowrap;';
 
     // Time estimate (will be updated when model changes)
-    const timeEstimate = messageSection.createSpan({ cls: 'transcription-time' });
+    const timeEstimate = messageSection.createSpan({ cls: 'transcription-time pcr-banner-time-estimate' });
     const initialTime = getTimeEstimate(selectedModel);
     timeEstimate.textContent = initialTime ? `(~${initialTime})` : '';
-    timeEstimate.style.cssText = 'font-size: 12px; color: var(--text-muted); white-space: nowrap;';
 
     // Model dropdown (only show if multiple models available) - placed after time estimate
     if (installedModels.length > 1) {
       // Wrapper for select + arrow icon
-      const selectWrapper = messageSection.createDiv();
-      selectWrapper.style.cssText = 'display: flex; align-items: center; gap: 2px; cursor: pointer; margin-left: 8px;';
+      const selectWrapper = messageSection.createDiv({ cls: 'pcr-model-select-wrapper' });
 
-      const modelSelect = selectWrapper.createEl('select');
-      modelSelect.style.padding = '0';
-      modelSelect.style.margin = '0';
-      modelSelect.style.fontSize = '13px';
-      modelSelect.style.fontFamily = 'inherit';
-      modelSelect.style.lineHeight = 'inherit';
-      modelSelect.style.border = 'none';
-      modelSelect.style.borderRadius = '0';
-      modelSelect.style.background = 'transparent';
-      modelSelect.style.color = 'var(--text-muted)';
-      modelSelect.style.cursor = 'pointer';
-      modelSelect.style.outline = 'none';
-      modelSelect.style.boxShadow = 'none';
-      modelSelect.style.appearance = 'none';
-      modelSelect.style.webkitAppearance = 'none';
-      modelSelect.style.textDecoration = 'none';
-      modelSelect.style.paddingRight = '0';
-      modelSelect.style.width = 'auto';
+      const modelSelect = selectWrapper.createEl('select', { cls: 'pcr-model-select' });
 
       // Helper to adjust select width based on selected text
       const adjustSelectWidth = () => {
         const tempSpan = document.createElement('span');
-        tempSpan.style.cssText = 'font-size: 13px; font-family: inherit; visibility: hidden; position: absolute;';
+        tempSpan.addClass('pcr-model-select-measure');
         tempSpan.textContent = modelSelect.value;
         document.body.appendChild(tempSpan);
-        modelSelect.style.width = `${tempSpan.offsetWidth + 2}px`;
+        modelSelect.setCssStyles({ width: `${tempSpan.offsetWidth + 2}px` });
         document.body.removeChild(tempSpan);
       };
 
       // Lucide chevron-down icon
-      const arrowIcon = selectWrapper.createDiv();
-      arrowIcon.style.cssText = 'width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); pointer-events: none;';
+      const arrowIcon = selectWrapper.createDiv({ cls: 'pcr-model-select-arrow' });
       setIcon(arrowIcon, 'chevron-down');
 
       // Add model options
@@ -6272,46 +5545,20 @@ export class PostCardRenderer extends Component {
     }
 
     // Right section: buttons only
-    const rightSection = banner.createDiv();
-    rightSection.style.cssText = 'display: flex; align-items: center; gap: 8px; flex-shrink: 0;';
+    const rightSection = banner.createDiv({ cls: 'pcr-banner-buttons' });
 
     // Buttons container
-    const buttonSection = rightSection.createDiv({ cls: 'transcription-buttons' });
-    buttonSection.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+    const buttonSection = rightSection.createDiv({ cls: 'transcription-buttons pcr-banner-buttons-inner' });
 
     // No button (X icon)
-    const noButton = buttonSection.createEl('button');
-    noButton.style.cssText = `
-      padding: 0 !important;
-      border: none !important;
-      outline: none !important;
-      box-shadow: none !important;
-      background: transparent !important;
-      color: var(--text-muted);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 24px;
-      height: 24px;
-      transition: opacity 0.2s;
-    `;
+    const noButton = buttonSection.createEl('button', { cls: 'pcr-icon-btn pcr-icon-btn-cancel' });
     noButton.setAttribute('aria-label', 'No');
     noButton.setAttribute('title', 'No');
 
-    const noIcon = noButton.createDiv();
-    noIcon.style.cssText = 'width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;';
+    const noIcon = noButton.createDiv({ cls: 'pcr-icon-btn-icon' });
     setIcon(noIcon, 'x');
-
-    noButton.addEventListener('mouseenter', () => {
-      noButton.style.background = 'var(--background-modifier-hover)';
-      noButton.style.borderRadius = '4px';
-    });
-    noButton.addEventListener('mouseleave', () => {
-      noButton.style.background = 'transparent';
-    });
     noButton.addEventListener('click', async () => {
-      buttonSection.style.display = 'none';
+      buttonSection.hide();
       message.textContent = mode === 'video' ? 'Saving for batch...' : 'Marking as declined...';
 
       try {
@@ -6327,74 +5574,24 @@ export class PostCardRenderer extends Component {
     });
 
     // Yes button (Microphone icon)
-    const yesButton = buttonSection.createEl('button');
-    yesButton.style.cssText = `
-      padding: 0 !important;
-      border: none !important;
-      outline: none !important;
-      box-shadow: none !important;
-      background: transparent !important;
-      color: var(--text-accent);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 24px;
-      height: 24px;
-      transition: opacity 0.2s;
-    `;
+    const yesButton = buttonSection.createEl('button', { cls: 'pcr-icon-btn pcr-icon-btn-accent' });
     yesButton.setAttribute('aria-label', 'Transcribe');
     yesButton.setAttribute('title', 'Yes, transcribe');
 
-    const yesIcon = yesButton.createDiv();
-    yesIcon.style.cssText = 'width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;';
+    const yesIcon = yesButton.createDiv({ cls: 'pcr-icon-btn-icon' });
     setIcon(yesIcon, 'mic');
-
-    yesButton.addEventListener('mouseenter', () => {
-      yesButton.style.background = 'var(--background-modifier-hover)';
-      yesButton.style.borderRadius = '4px';
-    });
-    yesButton.addEventListener('mouseleave', () => {
-      yesButton.style.background = 'transparent';
-    });
     yesButton.addEventListener('click', async () => {
       const abortController = new AbortController();
 
       // Replace buttons with cancel button
       buttonSection.empty();
 
-      const cancelButton = buttonSection.createEl('button');
-      cancelButton.style.cssText = `
-        padding: 4px !important;
-        border: none !important;
-        outline: none !important;
-        box-shadow: none !important;
-        background: transparent !important;
-        color: var(--text-muted);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 28px;
-        min-height: 28px;
-        border-radius: 4px;
-        transition: all 0.2s;
-      `;
+      const cancelButton = buttonSection.createEl('button', { cls: 'pcr-icon-btn pcr-icon-btn-cancel-lg' });
       cancelButton.setAttribute('aria-label', 'Cancel transcription');
       cancelButton.setAttribute('title', 'Cancel transcription');
 
-      const cancelIcon = cancelButton.createDiv();
-      cancelIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; justify-content: center;';
+      const cancelIcon = cancelButton.createDiv({ cls: 'pcr-icon-btn-icon-sm' });
       setIcon(cancelIcon, 'x');
-
-      cancelButton.addEventListener('mouseenter', () => {
-        cancelButton.style.background = 'var(--background-modifier-hover)';
-        cancelButton.style.color = 'var(--text-error)';
-      });
-      cancelButton.addEventListener('mouseleave', () => {
-        cancelButton.style.background = 'transparent';
-        cancelButton.style.color = 'var(--text-muted)';
-      });
       cancelButton.addEventListener('click', () => {
         abortController.abort();
         message.textContent = 'Cancelling...';
@@ -6410,7 +5607,7 @@ export class PostCardRenderer extends Component {
       // Hide model dropdown wrapper during transcription
       const modelDropdown = banner.querySelector('select');
       if (modelDropdown?.parentElement) {
-        modelDropdown.parentElement.style.display = 'none';
+        (modelDropdown.parentElement as HTMLElement).hide();
       }
 
       // Execute transcription with selected model
@@ -6491,7 +5688,7 @@ export class PostCardRenderer extends Component {
       await this.saveTranscriptToPost(post, result, mediaPath, mode);
 
       messageEl.textContent = '✓ Transcript added!';
-      messageEl.style.color = 'var(--text-success)';
+      messageEl.addClass('pcr-text-success');
 
       // Refresh the post after a short delay
       setTimeout(() => {
@@ -6519,7 +5716,7 @@ export class PostCardRenderer extends Component {
         messageEl.textContent = 'Transcription failed';
         console.error('[TranscriptionBanner] Error:', error);
       }
-      messageEl.style.color = 'var(--text-error)';
+      messageEl.addClass('pcr-text-error');
 
       if (mode === 'video') {
         await this.markVideoTranscriptionFailed(post, failureMessage);
@@ -6528,11 +5725,11 @@ export class PostCardRenderer extends Component {
       // Hide time estimate and model dropdown during error state
       const timeEstimateEl = banner.querySelector('.transcription-time') as HTMLElement;
       if (timeEstimateEl) {
-        timeEstimateEl.style.display = 'none';
+        timeEstimateEl.hide();
       }
       const selectWrapper = banner.querySelector('select')?.parentElement as HTMLElement;
       if (selectWrapper) {
-        selectWrapper.style.display = 'none';
+        selectWrapper.hide();
       }
 
       // Show retry button
@@ -6540,76 +5737,38 @@ export class PostCardRenderer extends Component {
       if (buttonSection) {
         buttonSection.empty();
 
-        const retryButton = buttonSection.createEl('button');
-        retryButton.style.cssText = `
-          padding: 4px 8px !important;
-          border: none !important;
-          outline: none !important;
-          box-shadow: none !important;
-          background: transparent !important;
-          color: var(--text-accent);
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 4px;
-          font-size: 12px;
-          border-radius: 4px;
-          transition: all 0.2s;
-        `;
+        const retryButton = buttonSection.createEl('button', { cls: 'pcr-retry-btn' });
         retryButton.setAttribute('aria-label', 'Retry');
         retryButton.textContent = 'Retry';
 
-        const retryIcon = retryButton.createDiv();
-        retryIcon.style.cssText = 'width: 14px; height: 14px; display: flex; align-items: center; justify-content: center;';
+        const retryIcon = retryButton.createDiv({ cls: 'pcr-retry-icon' });
         setIcon(retryIcon, 'refresh-cw');
         retryButton.prepend(retryIcon);
-
-        retryButton.addEventListener('mouseenter', () => {
-          retryButton.style.background = 'var(--background-modifier-hover)';
-        });
-        retryButton.addEventListener('mouseleave', () => {
-          retryButton.style.background = 'transparent';
-        });
         retryButton.addEventListener('click', () => {
           // Reset state and show model dropdown again
           messageEl.textContent = `Transcribe with ${variant || 'Whisper'}?`;
-          messageEl.style.color = 'var(--text-normal)';
+          messageEl.removeClass('pcr-text-error');
 
           // Show time estimate again
           const timeEl = banner.querySelector('.transcription-time') as HTMLElement;
           if (timeEl) {
-            timeEl.style.display = '';
+            timeEl.show();
           }
 
           // Show model dropdown if exists
           const selectWrapper = banner.querySelector('select')?.parentElement as HTMLElement;
           if (selectWrapper) {
-            selectWrapper.style.display = 'flex';
+            selectWrapper.show();
+            selectWrapper.setCssStyles({ display: 'flex' });
           }
 
           // Restore original buttons
           buttonSection.empty();
 
           // Recreate No button
-          const noBtn = buttonSection.createEl('button');
-          noBtn.style.cssText = `
-            padding: 0 !important;
-            border: none !important;
-            outline: none !important;
-            box-shadow: none !important;
-            background: transparent !important;
-            color: var(--text-muted);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 24px;
-            height: 24px;
-          `;
+          const noBtn = buttonSection.createEl('button', { cls: 'pcr-icon-btn pcr-icon-btn-cancel' });
           noBtn.setAttribute('aria-label', mode === 'video' ? 'Later' : 'No');
-          const noIcon = noBtn.createDiv();
-          noIcon.style.cssText = 'width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;';
+          const noIcon = noBtn.createDiv({ cls: 'pcr-icon-btn-icon' });
           setIcon(noIcon, 'x');
           noBtn.addEventListener('click', async () => {
             if (mode === 'video') {
@@ -6621,48 +5780,23 @@ export class PostCardRenderer extends Component {
           });
 
           // Recreate Yes button
-          const yesBtn = buttonSection.createEl('button');
-          yesBtn.style.cssText = `
-            padding: 0 !important;
-            border: none !important;
-            outline: none !important;
-            box-shadow: none !important;
-            background: transparent !important;
-            color: var(--text-accent);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 24px;
-            height: 24px;
-          `;
+          const yesBtn = buttonSection.createEl('button', { cls: 'pcr-icon-btn pcr-icon-btn-accent' });
           yesBtn.setAttribute('aria-label', 'Transcribe');
-          const yesIcon = yesBtn.createDiv();
-          yesIcon.style.cssText = 'width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;';
+          const yesIcon = yesBtn.createDiv({ cls: 'pcr-icon-btn-icon' });
           setIcon(yesIcon, 'mic');
 
           yesBtn.addEventListener('click', async () => {
             const newAbortController = new AbortController();
             buttonSection.empty();
 
-            const cancelBtn = buttonSection.createEl('button');
-            cancelBtn.style.cssText = `
-              padding: 4px !important;
-              border: none !important;
-              background: transparent !important;
-              color: var(--text-muted);
-              cursor: pointer;
-              display: flex;
-              align-items: center;
-            `;
-            const cancelIcon = cancelBtn.createDiv();
-            cancelIcon.style.cssText = 'width: 16px; height: 16px;';
+            const cancelBtn = buttonSection.createEl('button', { cls: 'pcr-icon-btn pcr-icon-btn-cancel-lg' });
+            const cancelIcon = cancelBtn.createDiv({ cls: 'pcr-icon-btn-icon-sm' });
             setIcon(cancelIcon, 'x');
             cancelBtn.addEventListener('click', () => newAbortController.abort());
 
             // Hide dropdown during transcription
             if (selectWrapper) {
-              selectWrapper.style.display = 'none';
+              selectWrapper.hide();
             }
 
             // Get selected model from dropdown
@@ -6907,7 +6041,7 @@ export class PostCardRenderer extends Component {
     }
 
     messageEl.textContent = 'Audio downloaded successfully!';
-    messageEl.style.color = 'var(--text-success)';
+    messageEl.addClass('sa-text-success');
 
     // Refresh the card
     setTimeout(async () => {
@@ -6928,58 +6062,21 @@ export class PostCardRenderer extends Component {
     isPinterestBoard: boolean = false,
     urlVariants?: string[]
   ): Promise<void> {
-    const banner = contentArea.createDiv({ cls: 'archive-suggestion-banner' });
-    banner.style.cssText = `
-      margin: 8px 0 0 0;
-      padding: 8px 0;
-      background: transparent;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    `;
+    const banner = contentArea.createDiv({ cls: 'archive-suggestion-banner pcr-suggestion-banner' });
 
     // Message
-    const message = banner.createSpan({ text: 'Archive this post?' });
-    message.style.cssText = 'font-size: 13px; color: var(--text-normal); flex: 1;';
+    const message = banner.createSpan({ cls: 'pcr-banner-message', text: 'Archive this post?' });
 
     // Buttons
-    const buttonSection = banner.createDiv();
-    buttonSection.style.cssText = 'display: flex; align-items: center; gap: 8px; flex-shrink: 0;';
+    const buttonSection = banner.createDiv({ cls: 'pcr-banner-buttons' });
 
     // No button (X icon)
-    const noButton = buttonSection.createEl('button');
-    noButton.style.cssText = `
-      padding: 0 !important;
-      border: none !important;
-      outline: none !important;
-      box-shadow: none !important;
-      background: transparent !important;
-      color: var(--text-muted);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 24px;
-      height: 24px;
-      transition: color 0.2s;
-    `;
+    const noButton = buttonSection.createEl('button', { cls: 'pcr-icon-btn pcr-icon-btn-cancel' });
     noButton.setAttribute('aria-label', 'Decline archiving');
     noButton.setAttribute('title', 'No');
 
-    const noIcon = noButton.createDiv();
-    noIcon.style.cssText = 'width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;';
+    const noIcon = noButton.createDiv({ cls: 'pcr-icon-btn-icon' });
     setIcon(noIcon, 'x');
-
-    noButton.addEventListener('mouseenter', () => {
-      noButton.style.color = 'var(--text-error)';
-      noButton.style.background = 'var(--background-modifier-hover)';
-      noButton.style.borderRadius = '4px';
-    });
-    noButton.addEventListener('mouseleave', () => {
-      noButton.style.color = 'var(--text-muted)';
-      noButton.style.background = 'transparent';
-    });
     noButton.addEventListener('click', async () => {
       banner.remove();
       // Mark URL as declined (prefix with "declined:")
@@ -6988,36 +6085,12 @@ export class PostCardRenderer extends Component {
     });
 
     // Yes button (Check icon)
-    const yesButton = buttonSection.createEl('button');
-    yesButton.style.cssText = `
-      padding: 0 !important;
-      border: none !important;
-      outline: none !important;
-      box-shadow: none !important;
-      background: transparent !important;
-      color: var(--interactive-accent);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 24px;
-      height: 24px;
-      transition: opacity 0.2s;
-    `;
+    const yesButton = buttonSection.createEl('button', { cls: 'pcr-icon-btn pcr-icon-btn-accent' });
     yesButton.setAttribute('aria-label', 'Archive this post');
     yesButton.setAttribute('title', 'Yes');
 
-    const yesIcon = yesButton.createDiv();
-    yesIcon.style.cssText = 'width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;';
+    const yesIcon = yesButton.createDiv({ cls: 'pcr-icon-btn-icon' });
     setIcon(yesIcon, 'check');
-
-    yesButton.addEventListener('mouseenter', () => {
-      yesButton.style.background = 'var(--background-modifier-hover)';
-      yesButton.style.borderRadius = '4px';
-    });
-    yesButton.addEventListener('mouseleave', () => {
-      yesButton.style.background = 'transparent';
-    });
     yesButton.addEventListener('click', async () => {
       // Check authentication first
       const hasAuthToken = this.plugin.settings.authToken && this.plugin.settings.authToken.trim() !== '';
@@ -7026,38 +6099,11 @@ export class PostCardRenderer extends Component {
       if (!hasAuthToken || !isVerified) {
         // Show authentication required banner
         banner.empty();
-        banner.style.cssText = `
-          margin: 8px 0 0 0;
-          padding: 12px 16px;
-          background: var(--background-secondary);
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-        `;
+        banner.addClasses(['pcr-suggestion-banner-filled']);
 
-        const authMessage = banner.createSpan({ text: 'Sign in required to archive posts' });
-        authMessage.style.cssText = 'font-size: 13px; color: var(--text-normal); flex: 1;';
+        const authMessage = banner.createSpan({ cls: 'pcr-banner-message', text: 'Sign in required to archive posts' });
 
-        const settingsButton = banner.createEl('button', { text: 'Open Settings' });
-        settingsButton.style.cssText = `
-          padding: 6px 12px;
-          background: var(--interactive-accent);
-          color: var(--text-on-accent);
-          border: none;
-          border-radius: 6px;
-          font-size: 12px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: opacity 0.2s;
-        `;
-        settingsButton.addEventListener('mouseenter', () => {
-          settingsButton.style.opacity = '0.9';
-        });
-        settingsButton.addEventListener('mouseleave', () => {
-          settingsButton.style.opacity = '1';
-        });
+        const settingsButton = banner.createEl('button', { cls: 'pcr-settings-btn', text: 'Open Settings' });
         settingsButton.addEventListener('click', () => {
           // @ts-ignore - Obsidian internal API
           if (this.app.setting.open) {
@@ -7072,7 +6118,7 @@ export class PostCardRenderer extends Component {
       }
 
       // Hide buttons while archiving
-      buttonSection.style.display = 'none';
+      buttonSection.hide();
 
       // Archive in background (async)
       try {
@@ -7082,10 +6128,10 @@ export class PostCardRenderer extends Component {
         // Show error message in banner
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         message.textContent = `Error: ${errorMessage}`;
-        message.style.color = 'var(--text-error)';
+        message.addClass('pcr-text-error');
 
         // Show buttons again on error
-        buttonSection.style.display = 'flex';
+        buttonSection.show();
 
         // Remove banner after showing error
         setTimeout(() => {
@@ -7237,9 +6283,7 @@ export class PostCardRenderer extends Component {
                   ? embedContainer.parentElement as HTMLElement
                   : embedContainer;
 
-                targetContainer.style.height = 'auto';
-                targetContainer.style.maxWidth = '100%';
-                targetContainer.style.paddingBottom = '0';
+                targetContainer.setCssStyles({ height: 'auto', maxWidth: '100%', paddingBottom: '0' });
                 targetContainer.empty();
                 this.renderLocalVideo(targetContainer, indexedVideoFile || resolvedVideoPath!, post);
                 replacedInline = true;
@@ -7275,7 +6319,7 @@ export class PostCardRenderer extends Component {
           }
 
           message.textContent = 'Download complete!';
-          message.style.color = 'var(--text-success)';
+          message.addClass('pcr-text-success');
 
           new Notice('Video downloaded successfully!');
         }
@@ -7286,7 +6330,7 @@ export class PostCardRenderer extends Component {
       await this.removeDownloadedUrl(post, url);
 
       message.textContent = 'Download failed. Please try again.';
-      message.style.color = 'var(--text-error)';
+      message.addClass('pcr-text-error');
       new Notice('Video download failed. Check console for details.');
       throw error;
     }
@@ -7680,18 +6724,10 @@ export class PostCardRenderer extends Component {
    * Render local video file (simple version, for embedded archives)
    */
   private renderLocalVideo(container: HTMLElement, videoSource: TFile | string, post?: PostData): void {
-    const videoContainer = container.createDiv({ cls: 'local-video-container' });
-    videoContainer.style.cssText = `
-      position: relative;
-      width: 100%;
-      max-width: 100%;
-      margin: 12px 0;
-      border-radius: 8px;
-      overflow: hidden;
-      background: var(--background-secondary);
-    `;
+    const videoContainer = container.createDiv({ cls: 'local-video-container pcr-video-container' });
 
     const video = videoContainer.createEl('video', {
+      cls: 'pcr-video-element',
       attr: {
         controls: 'true',
         preload: 'metadata',
@@ -7699,12 +6735,6 @@ export class PostCardRenderer extends Component {
         'webkit-playsinline': 'true'
       }
     });
-    video.style.cssText = `
-      width: 100%;
-      max-width: 100%;
-      display: block;
-      background: #000;
-    `;
 
     const videoPath = typeof videoSource === 'string' ? videoSource : videoSource.path;
     // Use adapter path-based resource lookup to avoid requiring TFile indexing.
@@ -7949,58 +6979,16 @@ export class PostCardRenderer extends Component {
     const wrapper = container.createDiv({ cls: 'mb-2' });
 
     const card = wrapper.createDiv({
-      cls: 'relative rounded-lg bg-[var(--background-primary)]'
+      cls: 'relative rounded-lg bg-[var(--background-primary)] pcr-archiving-card'
     });
-    card.style.padding = '16px';
-    card.style.border = '1px solid var(--background-modifier-border)';
-    card.style.width = '100%';
-    card.style.boxSizing = 'border-box';
-    card.style.position = 'relative';
 
     // Delete button (shown on hover) - top-right corner
-    const deleteBtn = card.createDiv();
-    deleteBtn.style.cssText = `
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      width: 28px;
-      height: 28px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      color: var(--text-muted);
-      border-radius: 4px;
-      transition: all 0.2s ease;
-      opacity: 0;
-      pointer-events: none;
-    `;
+    const deleteBtn = card.createDiv({ cls: 'pcr-archiving-delete-btn' });
     deleteBtn.setAttribute('title', 'Cancel and delete this placeholder');
     deleteBtn.setAttribute('aria-label', 'Delete placeholder');
 
-    const deleteIcon = deleteBtn.createDiv();
-    deleteIcon.style.cssText = 'width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;';
+    const deleteIcon = deleteBtn.createDiv({ cls: 'pcr-archiving-delete-icon' });
     setIcon(deleteIcon, 'x');
-
-    // Show/hide delete button on card hover
-    card.addEventListener('mouseenter', () => {
-      deleteBtn.style.opacity = '1';
-      deleteBtn.style.pointerEvents = 'auto';
-    });
-    card.addEventListener('mouseleave', () => {
-      deleteBtn.style.opacity = '0';
-      deleteBtn.style.pointerEvents = 'none';
-    });
-
-    // Delete button hover effect
-    deleteBtn.addEventListener('mouseenter', () => {
-      deleteBtn.style.background = 'var(--background-modifier-hover)';
-      deleteBtn.style.color = 'var(--text-error)';
-    });
-    deleteBtn.addEventListener('mouseleave', () => {
-      deleteBtn.style.background = 'transparent';
-      deleteBtn.style.color = 'var(--text-muted)';
-    });
 
     // Delete handler
     deleteBtn.addEventListener('click', async (e) => {
@@ -8009,85 +6997,35 @@ export class PostCardRenderer extends Component {
     });
 
     // Platform badge
-    const platformBadge = card.createDiv();
-    platformBadge.style.cssText = `
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      background: var(--background-secondary);
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--text-muted);
-      margin-bottom: 12px;
-    `;
+    const platformBadge = card.createDiv({ cls: 'pcr-platform-badge' });
 
     const platformIcon = getPlatformSimpleIcon(post.platform, post.author.url);
     if (platformIcon) {
-      const iconSpan = platformBadge.createSpan();
-      iconSpan.style.cssText = 'width: 14px; height: 14px; display: flex; align-items: center;';
-      iconSpan.innerHTML = `
-        <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="fill: var(--text-accent); width: 14px; height: 14px;">
-          <title>${platformIcon.title}</title>
-          <path d="${platformIcon.path}"/>
-        </svg>
-      `;
+      const iconSpan = platformBadge.createSpan({ cls: 'pcr-platform-badge-icon' });
+      const svg = createSVGElement(platformIcon, {
+        fill: 'var(--text-accent)',
+        width: '14px',
+        height: '14px'
+      });
+      iconSpan.appendChild(svg);
     }
     platformBadge.createSpan({ text: getPlatformName(post.platform) });
 
     // Loading animation
-    const loadingContainer = card.createDiv();
-    loadingContainer.style.cssText = 'display: flex; align-items: center; gap: 12px; margin: 16px 0;';
+    const loadingContainer = card.createDiv({ cls: 'pcr-archiving-loading' });
 
-    const spinner = loadingContainer.createDiv();
-    spinner.style.cssText = `
-      width: 20px;
-      height: 20px;
-      border: 2px solid var(--background-modifier-border);
-      border-top-color: var(--interactive-accent);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    `;
+    const spinner = loadingContainer.createDiv({ cls: 'pcr-spinner' });
 
-    const loadingText = loadingContainer.createDiv({ text: 'Archiving content from original source...' });
-    loadingText.style.cssText = 'color: var(--text-muted); font-size: 14px;';
+    const loadingText = loadingContainer.createDiv({ cls: 'pcr-archiving-text', text: 'Archiving content from original source...' });
 
     // Original URL
     if (post.originalUrl || post.url) {
-      const urlContainer = card.createDiv();
-      urlContainer.style.cssText = `
-        margin-top: 12px;
-        padding: 8px 12px;
-        background: var(--background-secondary);
-        border-radius: 6px;
-        font-size: 12px;
-        color: var(--text-muted);
-        font-family: var(--font-monospace);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      `;
+      const urlContainer = card.createDiv({ cls: 'pcr-archiving-url' });
       urlContainer.setText(post.originalUrl || post.url);
     }
 
     // Info message
-    const infoMsg = card.createDiv({ text: 'This document will update automatically when archiving completes.' });
-    infoMsg.style.cssText = `
-      margin-top: 12px;
-      font-size: 13px;
-      color: var(--text-muted);
-      font-style: italic;
-    `;
-
-    // Add CSS animation
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes spin {
-        to { transform: rotate(360deg); }
-      }
-    `;
-    document.head.appendChild(style);
+    const infoMsg = card.createDiv({ cls: 'pcr-archiving-info', text: 'This document will update automatically when archiving completes.' });
 
     return wrapper;
   }
@@ -8099,47 +7037,16 @@ export class PostCardRenderer extends Component {
     const wrapper = container.createDiv({ cls: 'mb-2' });
 
     const card = wrapper.createDiv({
-      cls: 'relative rounded-lg bg-[var(--background-primary)]'
+      cls: 'relative rounded-lg bg-[var(--background-primary)] pcr-failed-card'
     });
-    card.style.padding = '16px';
-    card.style.paddingTop = '32px'; // Extra padding for delete button
-    card.style.border = '1px solid rgba(255, 152, 0, 0.3)'; // Softer orange instead of red
-    card.style.width = '100%';
-    card.style.boxSizing = 'border-box';
-    card.style.position = 'relative';
 
     // Delete button in top-right corner
-    const deleteBtn = card.createDiv();
-    deleteBtn.style.cssText = `
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      width: 28px;
-      height: 28px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      color: var(--text-muted);
-      border-radius: 4px;
-      transition: all 0.2s ease;
-    `;
+    const deleteBtn = card.createDiv({ cls: 'pcr-failed-delete-btn' });
     deleteBtn.setAttribute('title', 'Delete this post');
     deleteBtn.setAttribute('aria-label', 'Delete post');
 
-    const deleteIcon = deleteBtn.createDiv();
-    deleteIcon.style.cssText = 'width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;';
+    const deleteIcon = deleteBtn.createDiv({ cls: 'pcr-archiving-delete-icon' });
     setIcon(deleteIcon, 'x');
-
-    // Hover effect
-    deleteBtn.addEventListener('mouseenter', () => {
-      deleteBtn.style.background = 'var(--background-modifier-hover)';
-      deleteBtn.style.color = 'var(--text-error)';
-    });
-    deleteBtn.addEventListener('mouseleave', () => {
-      deleteBtn.style.background = 'transparent';
-      deleteBtn.style.color = 'var(--text-muted)';
-    });
 
     // Delete handler
     deleteBtn.addEventListener('click', async (e) => {
@@ -8148,65 +7055,33 @@ export class PostCardRenderer extends Component {
     });
 
     // Error header
-    const errorHeader = card.createDiv();
-    errorHeader.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 12px;
-      color: var(--text-warning);
-      font-weight: 600;
-      font-size: 14px;
-    `;
+    const errorHeader = card.createDiv({ cls: 'pcr-error-header' });
     errorHeader.createSpan({ text: '⚠️' });
     errorHeader.createSpan({ text: 'Archive Failed' });
 
     // Error message - softer background
-    const errorMsg = card.createDiv();
-    errorMsg.style.cssText = `
-      padding: 12px;
-      background: rgba(255, 152, 0, 0.1);
-      border-radius: 6px;
-      margin-bottom: 12px;
-      font-size: 13px;
-      color: var(--text-normal);
-    `;
+    const errorMsg = card.createDiv({ cls: 'pcr-error-message' });
     const errorMsgFromFrontmatter = (post as any).errorMessage || 'Unknown error occurred';
     errorMsg.setText(errorMsgFromFrontmatter);
 
     // Original URL link
     if (post.originalUrl || post.url) {
       const urlLink = card.createEl('a', {
+        cls: 'pcr-error-url',
         text: '→ View Original Source',
         href: post.originalUrl || post.url
       });
-      urlLink.style.cssText = `
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        color: var(--text-accent);
-        text-decoration: none;
-        font-size: 13px;
-        margin-bottom: 12px;
-      `;
       urlLink.setAttribute('target', '_blank');
       urlLink.setAttribute('rel', 'noopener noreferrer');
     }
 
     // Retry suggestion
-    const retryMsg = card.createDiv();
-    retryMsg.style.cssText = `
-      font-size: 13px;
-      color: var(--text-muted);
-    `;
-    retryMsg.innerHTML = `
-      <strong>You can:</strong>
-      <ul style="margin: 8px 0 0 0; padding-left: 20px;">
-        <li>Try archiving again using the Archive Modal</li>
-        <li>Check your internet connection</li>
-        <li>Verify the URL is still accessible</li>
-      </ul>
-    `;
+    const retryMsg = card.createDiv({ cls: 'pcr-error-retry-msg' });
+    const strongEl = retryMsg.createEl('strong', { text: 'You can:' });
+    const ul = retryMsg.createEl('ul', { cls: 'pcr-error-list' });
+    ul.createEl('li', { text: 'Try archiving again using the Archive Modal' });
+    ul.createEl('li', { text: 'Check your internet connection' });
+    ul.createEl('li', { text: 'Verify the URL is still accessible' });
 
     // Render archive suggestion banner at the bottom
     const url = post.originalUrl || post.url;
@@ -8274,82 +7149,8 @@ export class PostCardRenderer extends Component {
    * Inject Leaflet CSS styles (bundled, no external request)
    */
   private injectLeafletCss(): void {
-    if (PostCardRenderer.leafletCssInjected) return;
-    PostCardRenderer.leafletCssInjected = true;
-
-    // Inject minimal Leaflet CSS for map rendering
-    const style = document.createElement('style');
-    style.textContent = `
-      .leaflet-container {
-        height: 100%;
-        width: 100%;
-        font-family: inherit;
-        position: relative;
-      }
-      .leaflet-pane { position: absolute; left: 0; top: 0; }
-      .leaflet-tile-pane { z-index: 2; }
-      .leaflet-overlay-pane { z-index: 4; }
-      .leaflet-shadow-pane { z-index: 5; }
-      .leaflet-marker-pane { z-index: 6; }
-      .leaflet-tooltip-pane { z-index: 7; }
-      .leaflet-popup-pane { z-index: 8; }
-      .leaflet-map-pane { position: absolute; left: 0; top: 0; }
-      .leaflet-tile { position: absolute; filter: inherit; }
-      .leaflet-tile-container { pointer-events: none; }
-      .leaflet-zoom-animated { transform-origin: 0 0; }
-      .leaflet-control-container { pointer-events: none; }
-      .leaflet-control-container > * { pointer-events: auto; }
-      .leaflet-top, .leaflet-bottom { position: absolute; z-index: 1000; pointer-events: none; }
-      .leaflet-top { top: 0; }
-      .leaflet-bottom { bottom: 0; }
-      .leaflet-left { left: 0; }
-      .leaflet-right { right: 0; }
-      .leaflet-control { pointer-events: auto; float: left; clear: both; }
-      .leaflet-right .leaflet-control { float: right; margin-right: 8px; }
-      .leaflet-top .leaflet-control { margin-top: 10px; }
-      .leaflet-control-zoom {
-        border: none;
-        border-radius: 3px;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-        opacity: 0;
-        transition: opacity 0.2s ease;
-      }
-      .sa-map-wrapper:hover .leaflet-control-zoom {
-        opacity: 1;
-      }
-      .leaflet-control-zoom a {
-        display: block;
-        width: 22px;
-        height: 22px;
-        line-height: 22px;
-        text-align: center;
-        text-decoration: none;
-        color: #333;
-        background: #fff;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: bold;
-      }
-      .leaflet-control-zoom a:hover { background: #f4f4f4; }
-      .leaflet-control-zoom-in { border-radius: 3px 3px 0 0; border-bottom: 1px solid #ccc; }
-      .leaflet-control-zoom-out { border-radius: 0 0 3px 3px; }
-      .sa-map-attribution {
-        position: absolute;
-        bottom: 0;
-        right: 0;
-        background: rgba(255,255,255,0.7);
-        padding: 1px 4px;
-        font-size: 9px;
-        white-space: nowrap;
-        z-index: 1000;
-        pointer-events: auto;
-      }
-      .sa-map-attribution a { color: var(--text-accent); }
-      .leaflet-marker-icon { cursor: pointer; }
-      .leaflet-grab { cursor: grab; }
-      .leaflet-dragging .leaflet-grab { cursor: grabbing; }
-    `;
-    document.head.appendChild(style);
+    // Leaflet CSS is now in post-card.css - no runtime injection needed.
+    // This method is kept for backward compatibility of call sites.
   }
 
   /**
@@ -8594,152 +7395,101 @@ export class PostCardRenderer extends Component {
   private renderGoogleMapsHeader(container: HTMLElement, post: PostData): void {
     const data = this.parseGoogleMapsBusinessData(post);
 
-    const header = container.createDiv({ cls: 'gmaps-header' });
-    header.style.cssText = 'display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px;';
+    const header = container.createDiv({ cls: 'gmaps-header pcr-gmaps-header' });
 
     // Avatar/Logo
     this.renderAvatarInline(header, post);
 
     // Info section
-    const infoSection = header.createDiv();
-    infoSection.style.cssText = 'flex: 1; min-width: 0;';
+    const infoSection = header.createDiv({ cls: 'pcr-gmaps-info' });
 
     // Name row with verified badge
-    const nameRow = infoSection.createDiv();
-    nameRow.style.cssText = 'display: flex; align-items: center; gap: 6px; flex-wrap: wrap;';
+    const nameRow = infoSection.createDiv({ cls: 'pcr-gmaps-name-row' });
 
-    const nameEl = nameRow.createEl('strong', { text: data.name });
-    nameEl.style.cssText = `
-      font-size: ${ObsidianPlatform.isMobile ? '15px' : '16px'};
-      color: var(--text-normal);
-      cursor: pointer;
-    `;
+    const nameEl = nameRow.createEl('strong', { cls: 'pcr-gmaps-name', text: data.name });
+    if (ObsidianPlatform.isMobile) {
+      nameEl.setCssStyles({ fontSize: '15px' });
+    }
     nameEl.addEventListener('click', () => window.open(post.url, '_blank'));
-    nameEl.addEventListener('mouseenter', () => nameEl.style.color = 'var(--interactive-accent)');
-    nameEl.addEventListener('mouseleave', () => nameEl.style.color = 'var(--text-normal)');
 
     // Verified badge
     if (data.isVerified) {
-      const verifiedBadge = nameRow.createSpan({ text: '✓' });
-      verifiedBadge.style.cssText = 'color: var(--interactive-accent); font-size: 14px;';
+      const verifiedBadge = nameRow.createSpan({ cls: 'pcr-gmaps-verified', text: '✓' });
       verifiedBadge.setAttribute('title', 'Claimed business');
     }
 
     // Rating row (Yelp style: stars + number + review count)
     if (data.rating) {
-      const ratingRow = infoSection.createDiv();
-      ratingRow.style.cssText = 'display: flex; align-items: center; gap: 6px; margin-top: 4px;';
+      const ratingRow = infoSection.createDiv({ cls: 'pcr-gmaps-rating-row' });
 
       // Star rating display
-      const starsContainer = ratingRow.createSpan();
-      starsContainer.style.cssText = 'display: inline-flex; align-items: center; gap: 1px;';
+      const starsContainer = ratingRow.createSpan({ cls: 'pcr-gmaps-stars' });
 
       const fullStars = Math.floor(data.rating);
       const hasHalfStar = data.rating % 1 >= 0.3 && data.rating % 1 <= 0.7;
       const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
 
-      // Render stars with color (batch via innerHTML to reduce DOM mutations)
-      const starStyle = 'color: #f59e0b; font-size: 14px;';
+      // Render stars with color
       const effectiveFullStars = fullStars + (hasHalfStar || data.rating % 1 > 0.7 ? 1 : 0);
       const effectiveEmptyStars = emptyStars - (data.rating % 1 > 0.7 ? 1 : 0);
-      const starParts: string[] = [];
       for (let i = 0; i < effectiveFullStars; i++) {
-        starParts.push(`<span style="${starStyle}">★</span>`);
+        starsContainer.createSpan({ cls: 'pcr-gmaps-star', text: '★' });
       }
       for (let i = 0; i < effectiveEmptyStars; i++) {
-        starParts.push(`<span style="${starStyle}">☆</span>`);
+        starsContainer.createSpan({ cls: 'pcr-gmaps-star', text: '☆' });
       }
-      starsContainer.innerHTML = starParts.join('');
 
       // Rating number
-      const ratingNum = ratingRow.createSpan({ text: data.rating.toFixed(1) });
-      ratingNum.style.cssText = 'font-size: 13px; font-weight: 600; color: var(--text-normal);';
+      const ratingNum = ratingRow.createSpan({ cls: 'pcr-gmaps-rating-num', text: data.rating.toFixed(1) });
 
       // Review count
       if (data.reviewsCount) {
-        const reviewCount = ratingRow.createSpan({
+        ratingRow.createSpan({
+          cls: 'pcr-gmaps-review-count',
           text: `(${data.reviewsCount.toLocaleString()} reviews)`
         });
-        reviewCount.style.cssText = 'font-size: 12px; color: var(--text-muted);';
       }
     }
 
     // Category + Price row
     if (data.categories && data.categories.length > 0) {
-      const categoryRow = infoSection.createDiv();
-      categoryRow.style.cssText = 'display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap;';
+      const categoryRow = infoSection.createDiv({ cls: 'pcr-gmaps-category-row' });
 
       // Show first 2-3 categories
       const displayCategories = data.categories.slice(0, 3);
-      const categoryText = categoryRow.createSpan({
+      categoryRow.createSpan({
+        cls: 'pcr-gmaps-category',
         text: displayCategories.join(' · ')
       });
-      categoryText.style.cssText = 'font-size: 12px; color: var(--text-muted);';
 
       if (data.priceLevel) {
-        const separator = categoryRow.createSpan({ text: '·' });
-        separator.style.cssText = 'font-size: 12px; color: var(--text-muted);';
-
-        const priceEl = categoryRow.createSpan({ text: data.priceLevel });
-        priceEl.style.cssText = 'font-size: 12px; color: var(--text-muted); font-weight: 500;';
+        categoryRow.createSpan({ cls: 'pcr-gmaps-category', text: '·' });
+        categoryRow.createSpan({ cls: 'pcr-gmaps-price', text: data.priceLevel });
       }
     }
 
     // Right side: Action buttons (Call, Directions) + Platform icon
-    const rightSection = header.createDiv();
-    rightSection.style.cssText = 'display: flex; align-items: center; gap: 6px; flex-shrink: 0;';
+    const rightSection = header.createDiv({ cls: 'pcr-gmaps-right-section' });
 
     // Call button (compact)
     if (data.phone) {
-      const callBtn = rightSection.createEl('a');
+      const callBtn = rightSection.createEl('a', { cls: 'pcr-gmaps-action-btn' });
       callBtn.href = `tel:${data.phone}`;
-      callBtn.style.cssText = `
-        display: flex; align-items: center; justify-content: center;
-        width: 28px; height: 28px; border-radius: 50%;
-        background: var(--background-secondary);
-        color: var(--text-muted);
-        transition: all 0.2s;
-      `;
       callBtn.setAttribute('title', data.phone);
-      const callIcon = callBtn.createDiv();
-      callIcon.style.cssText = 'width: 14px; height: 14px; display: flex; align-items: center; justify-content: center;';
+      const callIcon = callBtn.createDiv({ cls: 'pcr-gmaps-action-icon' });
       setIcon(callIcon, 'phone');
       callBtn.addEventListener('click', (e) => e.stopPropagation());
-      callBtn.addEventListener('mouseenter', () => {
-        callBtn.style.background = 'var(--interactive-accent)';
-        callBtn.style.color = 'var(--text-on-accent)';
-      });
-      callBtn.addEventListener('mouseleave', () => {
-        callBtn.style.background = 'var(--background-secondary)';
-        callBtn.style.color = 'var(--text-muted)';
-      });
     }
 
     // Directions button (compact)
     const directionsUrl = this.buildGoogleMapsDirectionsUrl(data.lat, data.lng, data.address, data.name);
-    const dirBtn = rightSection.createEl('a');
+    const dirBtn = rightSection.createEl('a', { cls: 'pcr-gmaps-action-btn' });
     dirBtn.href = directionsUrl;
     dirBtn.target = '_blank';
-    dirBtn.style.cssText = `
-      display: flex; align-items: center; justify-content: center;
-      width: 28px; height: 28px; border-radius: 50%;
-      background: var(--background-secondary);
-      color: var(--text-muted);
-      transition: all 0.2s;
-    `;
     dirBtn.setAttribute('title', 'Get directions');
-    const dirIcon = dirBtn.createDiv();
-    dirIcon.style.cssText = 'width: 14px; height: 14px; display: flex; align-items: center; justify-content: center;';
+    const dirIcon = dirBtn.createDiv({ cls: 'pcr-gmaps-action-icon' });
     setIcon(dirIcon, 'navigation');
     dirBtn.addEventListener('click', (e) => e.stopPropagation());
-    dirBtn.addEventListener('mouseenter', () => {
-      dirBtn.style.background = 'var(--interactive-accent)';
-      dirBtn.style.color = 'var(--text-on-accent)';
-    });
-    dirBtn.addEventListener('mouseleave', () => {
-      dirBtn.style.background = 'var(--background-secondary)';
-      dirBtn.style.color = 'var(--text-muted)';
-    });
 
     // Platform icon
     this.renderOriginalPostLink(rightSection, post);
@@ -8754,47 +7504,24 @@ export class PostCardRenderer extends Component {
 
     // Address row (clickable to open in Maps)
     if (data.address) {
-      const addressRow = container.createDiv({ cls: 'gmaps-address' });
-      addressRow.style.cssText = `
-        display: flex;
-        align-items: flex-start;
-        gap: 8px;
-        padding: 10px 12px;
-        background: var(--background-secondary);
-        border-radius: 8px;
-        margin-bottom: 10px;
-        cursor: pointer;
-        transition: background 0.2s;
-      `;
-
-      addressRow.addEventListener('mouseenter', () => {
-        addressRow.style.background = 'var(--background-modifier-hover)';
-      });
-      addressRow.addEventListener('mouseleave', () => {
-        addressRow.style.background = 'var(--background-secondary)';
-      });
+      const addressRow = container.createDiv({ cls: 'gmaps-address pcr-gmaps-address-row' });
       addressRow.addEventListener('click', () => {
         window.open(directionsUrl, '_blank');
       });
 
-      const addressIconWrapper = addressRow.createDiv();
-      addressIconWrapper.style.cssText = 'width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; color: var(--text-muted);';
+      const addressIconWrapper = addressRow.createDiv({ cls: 'pcr-gmaps-address-icon' });
       setIcon(addressIconWrapper, 'map-pin');
 
-      const addressText = addressRow.createDiv();
-      addressText.style.cssText = 'flex: 1; min-width: 0;';
+      const addressText = addressRow.createDiv({ cls: 'pcr-gmaps-address-text' });
 
       // Abbreviate address: "Street, District, City, State 12345, Country" → "Street, City, Country"
       const shortAddress = this.abbreviateAddress(data.address);
-      const addressLabel = addressText.createDiv({ text: shortAddress });
-      addressLabel.style.cssText = 'font-size: 13px; color: var(--text-normal); line-height: 1.4;';
+      const addressLabel = addressText.createDiv({ cls: 'pcr-gmaps-address-label', text: shortAddress });
       addressLabel.setAttribute('title', data.address); // Full address on hover
 
-      const directionHint = addressText.createDiv({ text: 'Tap for directions' });
-      directionHint.style.cssText = 'font-size: 11px; color: var(--text-muted); margin-top: 2px;';
+      addressText.createDiv({ cls: 'pcr-gmaps-direction-hint', text: 'Tap for directions' });
 
-      const arrowIconWrapper = addressRow.createDiv();
-      arrowIconWrapper.style.cssText = 'width: 14px; height: 14px; flex-shrink: 0; color: var(--text-muted);';
+      const arrowIconWrapper = addressRow.createDiv({ cls: 'pcr-gmaps-arrow-icon' });
       setIcon(arrowIconWrapper, 'external-link');
     }
 
@@ -8802,92 +7529,55 @@ export class PostCardRenderer extends Component {
     if (data.hours && Object.keys(data.hours).length > 0) {
       const formattedHours = this.formatBusinessHours(data.hours);
 
-      const hoursSection = container.createDiv({ cls: 'gmaps-hours' });
-      hoursSection.style.cssText = `
-        padding: 10px 12px;
-        background: var(--background-secondary);
-        border-radius: 8px;
-        margin-bottom: 12px;
-      `;
+      const hoursSection = container.createDiv({ cls: 'gmaps-hours pcr-gmaps-hours-section' });
 
       // Summary row (clickable to expand)
-      const summaryRow = hoursSection.createDiv();
-      summaryRow.style.cssText = `
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        cursor: pointer;
-      `;
+      const summaryRow = hoursSection.createDiv({ cls: 'pcr-gmaps-hours-summary' });
 
-      const clockIconWrapper = summaryRow.createDiv();
-      clockIconWrapper.style.cssText = 'width: 16px; height: 16px; flex-shrink: 0; color: var(--text-muted);';
+      const clockIconWrapper = summaryRow.createDiv({ cls: 'pcr-gmaps-address-icon' });
       setIcon(clockIconWrapper, 'clock');
 
-      const summaryText = summaryRow.createSpan({ text: formattedHours.summary });
-      summaryText.style.cssText = 'font-size: 13px; color: var(--text-normal); flex: 1;';
+      summaryRow.createSpan({ cls: 'pcr-gmaps-hours-text', text: formattedHours.summary });
 
       // Detailed hours (hidden by default)
-      const detailedHours = hoursSection.createDiv();
-      detailedHours.style.cssText = 'display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--background-modifier-border);';
+      const detailedHours = hoursSection.createDiv({ cls: 'pcr-gmaps-hours-detail' });
 
       formattedHours.detailed.forEach(({ day, hours, isToday }) => {
-        const dayRow = detailedHours.createDiv();
-        dayRow.style.cssText = `
-          display: flex;
-          justify-content: space-between;
-          padding: 4px 0;
-          font-size: 12px;
-          ${isToday ? 'font-weight: 600; color: var(--interactive-accent);' : 'color: var(--text-muted);'}
-        `;
+        const dayRow = detailedHours.createDiv({ cls: 'pcr-gmaps-day-row' });
+        if (isToday) {
+          dayRow.setCssStyles({ fontWeight: '600', color: 'var(--interactive-accent)' });
+        }
 
         dayRow.createSpan({ text: day });
         const hoursSpan = dayRow.createSpan({ text: hours });
         if (hours.toLowerCase() === 'closed') {
-          hoursSpan.style.color = 'var(--text-error)';
+          hoursSpan.addClass('pcr-gmaps-closed');
         }
       });
 
       let expanded = false;
       summaryRow.addEventListener('click', () => {
         expanded = !expanded;
-        detailedHours.style.display = expanded ? 'block' : 'none';
+        detailedHours.toggleClass('sa-hidden', !expanded);
+        if (expanded) {
+          detailedHours.setCssStyles({ display: 'block' });
+        }
       });
     }
 
     // Website button (if available)
     if (data.website) {
-      const websiteRow = container.createDiv({ cls: 'gmaps-website' });
-      websiteRow.style.cssText = `
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 10px 12px;
-        background: var(--background-secondary);
-        border-radius: 8px;
-        margin-bottom: 12px;
-        cursor: pointer;
-        transition: background 0.2s;
-      `;
-
-      websiteRow.addEventListener('mouseenter', () => {
-        websiteRow.style.background = 'var(--background-modifier-hover)';
-      });
-      websiteRow.addEventListener('mouseleave', () => {
-        websiteRow.style.background = 'var(--background-secondary)';
-      });
+      const websiteRow = container.createDiv({ cls: 'gmaps-website pcr-gmaps-website-row' });
       websiteRow.addEventListener('click', () => {
         window.open(data.website, '_blank');
       });
 
-      const websiteIconWrapper = websiteRow.createDiv();
-      websiteIconWrapper.style.cssText = 'width: 16px; height: 16px; flex-shrink: 0; color: var(--text-muted);';
+      const websiteIconWrapper = websiteRow.createDiv({ cls: 'pcr-gmaps-website-icon' });
       setIcon(websiteIconWrapper, 'globe');
 
-      const websiteText = websiteRow.createSpan({ text: data.website.replace(/^https?:\/\//, '').replace(/\/$/, '') });
-      websiteText.style.cssText = 'font-size: 13px; color: var(--text-accent); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+      websiteRow.createSpan({ cls: 'pcr-gmaps-website-text', text: data.website.replace(/^https?:\/\//, '').replace(/\/$/, '') });
 
-      const arrowIconWrapper = websiteRow.createDiv();
-      arrowIconWrapper.style.cssText = 'width: 14px; height: 14px; flex-shrink: 0; color: var(--text-muted);';
+      const arrowIconWrapper = websiteRow.createDiv({ cls: 'pcr-gmaps-arrow-icon' });
       setIcon(arrowIconWrapper, 'external-link');
     }
   }
@@ -8896,40 +7586,16 @@ export class PostCardRenderer extends Component {
    * Create an action button for Google Maps card with Lucide icon
    */
   private createGmapsActionButton(container: HTMLElement, iconName: string, label: string, url: string): HTMLElement {
-    const btn = container.createEl('a');
+    const btn = container.createEl('a', { cls: 'pcr-gmaps-action-btn' });
     btn.href = url;
     btn.target = '_blank';
-    btn.style.cssText = this.getActionButtonStyle();
 
-    const iconWrapper = btn.createDiv();
-    iconWrapper.style.cssText = 'width: 14px; height: 14px; flex-shrink: 0;';
+    const iconWrapper = btn.createDiv({ cls: 'pcr-gmaps-action-icon' });
     setIcon(iconWrapper, iconName);
 
     btn.createSpan({ text: label });
     btn.addEventListener('click', (e) => e.stopPropagation());
     return btn;
-  }
-
-  /**
-   * Get consistent action button style
-   */
-  private getActionButtonStyle(): string {
-    return `
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 14px;
-      background: var(--background-secondary);
-      border: 1px solid var(--background-modifier-border);
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--text-normal);
-      text-decoration: none;
-      cursor: pointer;
-      transition: all 0.2s;
-      white-space: nowrap;
-    `;
   }
 
   /**
@@ -8948,37 +7614,14 @@ export class PostCardRenderer extends Component {
     // Inject CSS once
     this.injectLeafletCss();
 
-    const mapWrapper = container.createDiv({ cls: 'sa-map-wrapper' });
-    mapWrapper.style.cssText = `
-      margin: 12px 0;
-      border-radius: 8px;
-      overflow: hidden;
-      background: var(--background-secondary);
-      position: relative;
-      contain: layout style;
-    `;
+    const mapWrapper = container.createDiv({ cls: 'sa-map-wrapper pcr-gmaps-map-wrapper' });
 
     // Map container
-    const mapContainer = mapWrapper.createDiv();
-    mapContainer.style.cssText = `
-      width: 100%;
-      height: 200px;
-      position: relative;
-    `;
+    const mapContainer = mapWrapper.createDiv({ cls: 'pcr-gmaps-map-container' });
 
     // Touch overlay to prevent Leaflet from capturing scroll events
     // This overlay intercepts all touch events and only allows clicks through
-    const touchOverlay = mapWrapper.createDiv();
-    touchOverlay.style.cssText = `
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      z-index: 1000;
-      cursor: pointer;
-      touch-action: pan-y;
-    `;
+    const touchOverlay = mapWrapper.createDiv({ cls: 'pcr-gmaps-map-touch-overlay' });
 
     // Click on overlay opens Google Maps
     touchOverlay.addEventListener('click', () => {
@@ -9016,17 +7659,11 @@ export class PostCardRenderer extends Component {
 
         // Custom attribution - top left corner (z-index low to stay below filter panels)
         const attr = document.createElement('div');
-        attr.style.cssText = `
-          position: absolute;
-          top: 0;
-          left: 0;
-          background: rgba(255,255,255,0.7);
-          padding: 1px 4px;
-          font-size: 9px;
-          z-index: 10;
-          pointer-events: auto;
-        `;
-        attr.innerHTML = '© <a href="https://www.openstreetmap.org/copyright" target="_blank" style="color: var(--text-accent);">OSM</a>';
+        attr.addClass('pcr-gmaps-map-attr');
+        attr.textContent = '© ';
+        const link = attr.createEl('a', { text: 'OSM' });
+        link.href = 'https://www.openstreetmap.org/copyright';
+        link.target = '_blank';
         mapWrapper.appendChild(attr);
 
 
@@ -9047,12 +7684,7 @@ export class PostCardRenderer extends Component {
       } catch (err) {
         console.error('[PostCardRenderer] Failed to initialize Leaflet map:', err);
         // Fallback: show location text only
-        mapContainer.style.cssText = `
-          padding: 20px;
-          text-align: center;
-          color: var(--text-muted);
-          font-size: 12px;
-        `;
+        mapContainer.addClass('pcr-map-fallback-text');
         mapContainer.textContent = `📍 ${post.metadata.location || `${lat}, ${lng}`}`;
       }
     };
@@ -9076,40 +7708,27 @@ export class PostCardRenderer extends Component {
     observer.observe(mapContainer);
 
     // Add location info bar
-    const linkContainer = mapWrapper.createDiv();
-    linkContainer.style.cssText = `
-      padding: 8px 12px;
-      background: var(--background-primary);
-      border-top: 1px solid var(--background-modifier-border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 12px;
-    `;
+    const linkContainer = mapWrapper.createDiv({ cls: 'pcr-map-link-container' });
 
     // Location text
     if (post.metadata.location) {
-      const locationText = linkContainer.createSpan({ text: post.metadata.location });
-      locationText.style.cssText = 'color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; margin-right: 12px;';
+      linkContainer.createSpan({ text: post.metadata.location, cls: 'pcr-map-location-text' });
     }
 
     // Links container
-    const linksDiv = linkContainer.createDiv();
-    linksDiv.style.cssText = 'display: flex; gap: 12px; flex-shrink: 0;';
+    const linksDiv = linkContainer.createDiv({ cls: 'pcr-map-links' });
 
     // Directions link
     const directionsUrl = this.buildGoogleMapsDirectionsUrl(lat, lng, post.metadata.location, post.author.name);
-    const directionsLink = linksDiv.createEl('a', { text: 'Directions' });
+    const directionsLink = linksDiv.createEl('a', { text: 'Directions', cls: 'pcr-map-link' });
     directionsLink.href = directionsUrl;
     directionsLink.target = '_blank';
-    directionsLink.style.cssText = 'color: var(--text-accent); text-decoration: none;';
     directionsLink.addEventListener('click', (e) => e.stopPropagation());
 
     // Google Maps link
-    const gmapLink = linksDiv.createEl('a', { text: 'Open in Maps' });
+    const gmapLink = linksDiv.createEl('a', { text: 'Open in Maps', cls: 'pcr-map-link' });
     gmapLink.href = post.url || `https://www.google.com/maps?q=${lat},${lng}`;
     gmapLink.target = '_blank';
-    gmapLink.style.cssText = 'color: var(--text-accent); text-decoration: none;';
     gmapLink.addEventListener('click', (e) => e.stopPropagation());
   }
 
@@ -9219,8 +7838,7 @@ export class PostCardRenderer extends Component {
       : availableClis[0]!; // Safe: we already checked availableClis.length > 0
 
     // Create container for banner with top margin for separation
-    const bannerContainer = contentArea.createDiv({ cls: 'ai-comment-banner-container' });
-    bannerContainer.style.marginTop = '16px';
+    const bannerContainer = contentArea.createDiv({ cls: 'ai-comment-banner-container pcr-banner-mt-16' });
 
     // Create banner instance
     const banner = new AICommentBanner();
@@ -9835,7 +8453,7 @@ export class PostCardRenderer extends Component {
           seeMoreBtn.remove();
         }
 
-        contentTextEl.innerHTML = '';
+        contentTextEl.empty();
         await MarkdownRenderer.renderMarkdown(newContent.trim(), contentTextEl, filePath, this);
         this.normalizeTagFontSizes(contentTextEl);
         this.addHashtagClickHandlers(contentTextEl);

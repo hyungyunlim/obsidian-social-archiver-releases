@@ -456,8 +456,7 @@ export class PendingJobsManager implements IService {
 
     // Remove from localStorage
     const key = this.getJobKey(id);
-    this.app.loadLocalStorage(key); // Ensure it's loaded first
-    localStorage.removeItem(key);
+    this.app.saveLocalStorage(key, null);
 
     // Remove from cache
     this.jobsCache.delete(id);
@@ -628,7 +627,7 @@ export class PendingJobsManager implements IService {
             rawJob = JSON.parse(jobData);
           } catch (parseError) {
             console.warn(`[PendingJobsManager] Corrupted job data for ${id}, removing:`, parseError);
-            localStorage.removeItem(this.getJobKey(id));
+            this.app.saveLocalStorage(this.getJobKey(id), null);
             continue;
           }
 
@@ -638,7 +637,7 @@ export class PendingJobsManager implements IService {
             job = this.sanitizeJob(rawJob);
           } catch (sanitizeError) {
             console.warn(`[PendingJobsManager] Failed to sanitize job ${id}, removing:`, sanitizeError);
-            localStorage.removeItem(this.getJobKey(id));
+            this.app.saveLocalStorage(this.getJobKey(id), null);
             continue;
           }
 
@@ -663,14 +662,14 @@ export class PendingJobsManager implements IService {
               this.jobsCache.set(winner.id, winner);
 
               // Remove loser from storage
-              localStorage.removeItem(this.getJobKey(loser.id));
+              this.app.saveLocalStorage(this.getJobKey(loser.id), null);
             } else {
               this.jobsCache.set(id, job);
             }
           } catch (validationError) {
             console.warn(`[PendingJobsManager] Invalid job schema ${id}, removing:`, validationError);
             // Remove invalid job from localStorage
-            localStorage.removeItem(this.getJobKey(id));
+            this.app.saveLocalStorage(this.getJobKey(id), null);
           }
         }
       } catch (error) {
@@ -939,8 +938,8 @@ export class PendingJobsManager implements IService {
   private isLocalStorageAvailable(): boolean {
     try {
       const test = '__storage_test__';
-      localStorage.setItem(test, test);
-      localStorage.removeItem(test);
+      this.app.saveLocalStorage(test, test);
+      this.app.saveLocalStorage(test, null);
       return true;
     } catch {
       return false;

@@ -97,7 +97,8 @@ export class SkeletonCardRenderer {
     });
 
     // Apply estimated height to prevent layout shift
-    skeleton.style.minHeight = `${height}px`;
+    skeleton.addClass('sa-dynamic-min-height');
+    skeleton.setCssProps({ '--sa-min-height': `${height}px` });
 
     // Render skeleton structure
     this.renderHeader(skeleton, post, showPlatformIcon);

@@ -155,7 +155,8 @@ export class MediaGalleryView extends BasesView implements HoverParent {
 
   private async extractMediaFromEntry(entry: any, app: App): Promise<MediaItem[]> {
     const media: MediaItem[] = [];
-    const file = entry.file as TFile;
+    if (!(entry.file instanceof TFile)) return [];
+    const file = entry.file;
 
     try {
       // Check if this is a media file itself (not a markdown file)
@@ -249,7 +250,10 @@ export class MediaGalleryView extends BasesView implements HoverParent {
         let resolvedFile: TFile | null = null;
         if (typeof mediaItem.url === 'string' && !mediaItem.url.startsWith('http')) {
           // Try to resolve as vault path
-          resolvedFile = app.vault.getAbstractFileByPath(mediaItem.url) as TFile;
+          const abstractFile = app.vault.getAbstractFileByPath(mediaItem.url);
+          if (abstractFile instanceof TFile) {
+            resolvedFile = abstractFile;
+          }
 
           // If not found, try relative to the source file
           if (!resolvedFile) {

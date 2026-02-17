@@ -12,16 +12,15 @@ export class YouTubeEmbedRenderer {
    */
   renderYouTube(container: HTMLElement, videoId: string, _isEmbedded: boolean = false): HTMLIFrameElement {
     // Outer wrapper to constrain size
-    const outerWrapper = container.createDiv();
-    outerWrapper.style.cssText = 'width: 100%; max-width: 100%; overflow: hidden; margin: 12px 0; box-sizing: border-box;';
+    const outerWrapper = container.createDiv({ cls: 'yte-outer-wrapper' });
 
-    const embedContainer = outerWrapper.createDiv();
-    embedContainer.style.cssText = 'position: relative; width: 100%; padding-bottom: 56.25%; border-radius: 8px; overflow: hidden; background: var(--background-secondary); box-sizing: border-box;';
+    const embedContainer = outerWrapper.createDiv({ cls: 'yte-embed-container' });
 
     // IMPORTANT: enablejsapi=1 is required for postMessage control
     // Create iframe without src - defer loading until visible via IntersectionObserver
     const embedSrc = `https://www.youtube-nocookie.com/embed/${videoId}?enablejsapi=1`;
     const iframe = embedContainer.createEl('iframe', {
+      cls: 'yte-iframe-fill',
       attr: {
         frameborder: '0',
         allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture',
@@ -29,7 +28,6 @@ export class YouTubeEmbedRenderer {
         referrerpolicy: 'strict-origin-when-cross-origin'
       }
     });
-    iframe.style.cssText = 'position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;';
 
     // Remove width/height attributes that may override CSS
     iframe.removeAttribute('width');
@@ -67,24 +65,23 @@ export class YouTubeEmbedRenderer {
 
     if (!finalVideoId) {
       // Fallback: show link
-      const linkContainer = container.createDiv();
-      linkContainer.style.cssText = 'padding: 20px; text-align: center; background: var(--background-secondary); border-radius: 8px; margin: 12px 0;';
+      const linkContainer = container.createDiv({ cls: 'yte-tiktok-fallback' });
       const link = linkContainer.createEl('a', {
+        cls: 'yte-link-accent',
         text: 'View on TikTok',
         attr: {
           href: url,
           target: '_blank'
         }
       });
-      link.style.cssText = 'color: var(--interactive-accent); text-decoration: underline;';
       return;
     }
 
-    const embedContainer = container.createDiv();
-    embedContainer.style.cssText = 'width: 100%; max-width: 340px; height: 700px; margin: 12px auto; border-radius: 8px; overflow: hidden; background: var(--background-secondary);';
+    const embedContainer = container.createDiv({ cls: 'yte-tiktok-embed' });
 
     const tiktokSrc = `https://www.tiktok.com/embed/v2/${finalVideoId}`;
     const iframe = embedContainer.createEl('iframe', {
+      cls: 'yte-iframe-full',
       attr: {
         width: '340',
         height: '700',
@@ -94,7 +91,6 @@ export class YouTubeEmbedRenderer {
         referrerpolicy: 'strict-origin-when-cross-origin'
       }
     });
-    iframe.style.cssText = 'width: 100%; height: 100%; border: none;';
 
     // Defer iframe src loading until visible in viewport
     const observer = new IntersectionObserver((entries) => {

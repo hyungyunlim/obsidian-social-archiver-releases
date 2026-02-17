@@ -14,6 +14,7 @@ import { GumroadClient } from './GumroadClient';
 import { LicenseStorage } from './LicenseStorage';
 import { Logger } from './Logger';
 import { generateDeviceId } from '../utils/encryption';
+import { Platform } from 'obsidian';
 
 /**
  * License validator configuration
@@ -336,12 +337,15 @@ export class LicenseValidator implements IService {
    * Get device name
    */
   private getDeviceName(): string {
-    // Try to get hostname or fallback to platform
-    if (typeof navigator !== 'undefined' && navigator.userAgent) {
-      return navigator.userAgent;
-    }
+    // Use Obsidian Platform API to get device info
+    const platform = Platform.isMobile ? 'mobile' : 'desktop';
+    const os = Platform.isIosApp ? 'iOS' :
+               Platform.isAndroidApp ? 'Android' :
+               Platform.isMacOS ? 'macOS' :
+               Platform.isWin ? 'Windows' :
+               Platform.isLinux ? 'Linux' : 'unknown';
 
-    return `${process.platform}-device`;
+    return `${os}-${platform}`;
   }
 
   /**

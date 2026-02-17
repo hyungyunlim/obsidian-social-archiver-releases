@@ -23,6 +23,7 @@ import {
   getPlatformLucideIcon,
 } from '../../../services/IconService';
 import { getPlatformName } from '@/shared/platforms';
+import { createCustomSVG } from '@/utils/dom-helpers';
 
 export interface ReaderContentCallbacks {
   onClose: () => void;
@@ -50,17 +51,6 @@ export interface ReaderContentCallbacks {
 }
 
 export class ReaderModeContentRenderer extends Component {
-  private static scrollbarStyleInjected = false;
-
-  /** Inject a <style> once to hide webkit scrollbars on the reader scroll area */
-  private static injectScrollbarHideStyle(): void {
-    if (this.scrollbarStyleInjected) return;
-    const style = document.createElement('style');
-    style.textContent = '.reader-mode-scroll::-webkit-scrollbar{display:none}';
-    document.head.appendChild(style);
-    this.scrollbarStyleInjected = true;
-  }
-
   private app: App;
   private plugin: SocialArchiverPlugin;
   private mediaGalleryRenderer: MediaGalleryRenderer;
@@ -93,11 +83,8 @@ export class ReaderModeContentRenderer extends Component {
     this.renderHeader(headerContent, index, total, post, callbacks);
 
     // Scrollable inner wrapper (scrollbar hidden for cleaner reading experience)
-    const scrollArea = container.createDiv({ cls: 'reader-mode-scroll' });
-    scrollArea.style.scrollbarWidth = 'none';           // Firefox
-    (scrollArea.style as any).msOverflowStyle = 'none'; // IE/Edge
-    // Webkit scrollbar hide via one-time stylesheet injection
-    ReaderModeContentRenderer.injectScrollbarHideStyle();
+    // Webkit: .reader-mode-scroll::-webkit-scrollbar{display:none} in misc-components.css
+    const scrollArea = container.createDiv({ cls: 'reader-mode-scroll rmcr-scroll-hide' });
 
     // Centered content wrapper (max-width 680px)
     const content = scrollArea.createDiv({ cls: 'reader-mode-content' });
@@ -121,7 +108,7 @@ export class ReaderModeContentRenderer extends Component {
     // 5.5 External link preview
     if (post.metadata?.externalLink) {
       const linkContainer = content.createDiv({ cls: 'reader-mode-external-link' });
-      linkContainer.style.cssText = 'margin: 16px 0;';
+      linkContainer.addClass('sa-my-16');
       this.linkPreviewRenderer.renderCompact(linkContainer, post.metadata.externalLink);
     }
 
@@ -207,7 +194,7 @@ export class ReaderModeContentRenderer extends Component {
     // Avatar (clickable if author URL exists)
     const avatarEl = authorSection.createDiv({ cls: 'reader-mode-avatar' });
     if (post.author.url) {
-      avatarEl.style.cursor = 'pointer';
+      avatarEl.addClass('sa-clickable');
       avatarEl.setAttribute('title', `Visit ${post.author.name}'s profile`);
       avatarEl.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -219,9 +206,11 @@ export class ReaderModeContentRenderer extends Component {
       const img = avatarEl.createEl('img');
       img.src = avatarSrc;
       img.alt = post.author.name;
-      img.style.cssText = 'width: 100%; height: 100%; border-radius: 50%; object-fit: cover;';
+      img.addClass('sa-wh-full');
+      img.addClass('sa-rounded-full');
+      img.addClass('sa-object-cover');
       img.onerror = () => {
-        img.style.display = 'none';
+        img.addClass('sa-hidden');
         this.renderInitialsAvatar(avatarEl, post.author.name);
       };
     } else {
@@ -237,14 +226,15 @@ export class ReaderModeContentRenderer extends Component {
     // Author name (clickable if author URL exists)
     const authorNameEl = nameRow.createSpan({ text: post.author.name, cls: 'reader-mode-author-name' });
     if (post.author.url) {
-      authorNameEl.style.cursor = 'pointer';
-      authorNameEl.style.transition = 'color 0.2s';
+      authorNameEl.addClass('sa-clickable');
+      authorNameEl.addClass('sa-transition-color');
       authorNameEl.setAttribute('title', `Visit ${post.author.name}'s profile`);
       authorNameEl.addEventListener('mouseenter', () => {
-        authorNameEl.style.color = 'var(--interactive-accent)';
+        authorNameEl.setCssProps({ '--sa-color': 'var(--interactive-accent)' });
+        authorNameEl.addClass('sa-dynamic-color');
       });
       authorNameEl.addEventListener('mouseleave', () => {
-        authorNameEl.style.color = '';
+        authorNameEl.removeClass('sa-dynamic-color');
       });
       authorNameEl.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -257,13 +247,20 @@ export class ReaderModeContentRenderer extends Component {
     const platformIcon = getPlatformSimpleIcon(post.platform);
     if (platformIcon) {
       const iconEl = nameRow.createDiv({ cls: 'reader-mode-platform-icon' });
-      iconEl.innerHTML = `<svg role="img" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="${platformIcon.path}"/></svg>`;
+      const svg = createCustomSVG('0 0 24 24', platformIcon.path);
+      svg.addClass('rmcr-platform-svg');
+      iconEl.appendChild(svg);
       if (originalUrl) {
-        iconEl.style.cursor = 'pointer';
-        iconEl.style.transition = 'opacity 0.2s';
+        iconEl.addClass('sa-clickable');
+        iconEl.addClass('sa-transition-opacity');
         iconEl.setAttribute('title', `Open on ${getPlatformName(post.platform)}`);
-        iconEl.addEventListener('mouseenter', () => { iconEl.style.opacity = '0.6'; });
-        iconEl.addEventListener('mouseleave', () => { iconEl.style.opacity = ''; });
+        iconEl.addEventListener('mouseenter', () => {
+          iconEl.setCssProps({ '--sa-opacity': '0.6' });
+          iconEl.addClass('sa-dynamic-opacity');
+        });
+        iconEl.addEventListener('mouseleave', () => {
+          iconEl.removeClass('sa-dynamic-opacity');
+        });
         iconEl.addEventListener('click', (e) => {
           e.stopPropagation();
           window.open(originalUrl, '_blank');
@@ -275,11 +272,16 @@ export class ReaderModeContentRenderer extends Component {
         const iconEl = nameRow.createDiv({ cls: 'reader-mode-platform-icon' });
         setIcon(iconEl, lucideIcon);
         if (originalUrl) {
-          iconEl.style.cursor = 'pointer';
-          iconEl.style.transition = 'opacity 0.2s';
+          iconEl.addClass('sa-clickable');
+          iconEl.addClass('sa-transition-opacity');
           iconEl.setAttribute('title', `Open on ${getPlatformName(post.platform)}`);
-          iconEl.addEventListener('mouseenter', () => { iconEl.style.opacity = '0.6'; });
-          iconEl.addEventListener('mouseleave', () => { iconEl.style.opacity = ''; });
+          iconEl.addEventListener('mouseenter', () => {
+            iconEl.setCssProps({ '--sa-opacity': '0.6' });
+            iconEl.addClass('sa-dynamic-opacity');
+          });
+          iconEl.addEventListener('mouseleave', () => {
+            iconEl.removeClass('sa-dynamic-opacity');
+          });
           iconEl.addEventListener('click', (e) => {
             e.stopPropagation();
             window.open(originalUrl, '_blank');
@@ -316,56 +318,56 @@ export class ReaderModeContentRenderer extends Component {
     const isSubscribed = callbacks.subscriptionStatus === 'subscribed';
     const badge = parent.createDiv();
 
-    badge.style.cssText = `
-      display: inline-flex;
-      align-items: center;
-      gap: 3px;
-      padding: 2px 6px;
-      border-radius: 10px;
-      font-size: 10px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s;
-      flex-shrink: 0;
-    `;
+    badge.addClass('sa-inline-flex');
+    badge.addClass('sa-gap-2');
+    badge.addClass('sa-px-6');
+    badge.addClass('sa-py-4');
+    badge.addClass('sa-rounded-12');
+    badge.addClass('sa-text-xs');
+    badge.addClass('sa-font-medium');
+    badge.addClass('sa-clickable');
+    badge.addClass('sa-transition');
+    badge.addClass('sa-flex-shrink-0');
 
     if (isSubscribed) {
-      badge.style.backgroundColor = 'rgba(var(--color-green-rgb), 0.15)';
-      badge.style.color = 'var(--color-green)';
+      badge.setCssProps({ '--sa-bg': 'rgba(var(--color-green-rgb), 0.15)', '--sa-color': 'var(--color-green)' });
+      badge.addClass('sa-dynamic-bg');
+      badge.addClass('sa-dynamic-color');
       badge.setAttribute('title', 'Subscribed — click to unsubscribe');
 
       const iconContainer = badge.createDiv();
-      iconContainer.style.cssText = 'width: 10px; height: 10px; display: flex; align-items: center; justify-content: center;';
+      iconContainer.addClass('sa-icon-10');
       setIcon(iconContainer, 'bell');
-      iconContainer.querySelector('svg')?.setAttribute('style', 'width: 10px; height: 10px; stroke: var(--color-green);');
+      iconContainer.querySelector('svg')?.addClass('rmcr-badge-icon-subscribed');
       badge.createSpan({ text: 'Subscribed' });
     } else {
-      badge.style.backgroundColor = 'var(--background-modifier-hover)';
-      badge.style.color = 'var(--text-muted)';
+      badge.addClass('sa-bg-hover');
+      badge.addClass('sa-text-muted');
       badge.setAttribute('title', 'Click to subscribe');
 
       const iconContainer = badge.createDiv();
-      iconContainer.style.cssText = 'width: 10px; height: 10px; display: flex; align-items: center; justify-content: center;';
+      iconContainer.addClass('sa-icon-10');
       setIcon(iconContainer, 'bell-plus');
-      iconContainer.querySelector('svg')?.setAttribute('style', 'width: 10px; height: 10px; stroke: var(--text-muted);');
+      iconContainer.querySelector('svg')?.addClass('rmcr-badge-icon-muted');
       badge.createSpan({ text: 'Subscribe' });
     }
 
     // Hover effects
     badge.addEventListener('mouseenter', () => {
       if (isSubscribed) {
-        badge.style.backgroundColor = 'rgba(var(--color-green-rgb), 0.25)';
+        badge.setCssProps({ '--sa-bg': 'rgba(var(--color-green-rgb), 0.25)' });
       } else {
-        badge.style.backgroundColor = 'var(--background-modifier-border)';
-        badge.style.color = 'var(--text-normal)';
+        badge.setCssProps({ '--sa-bg': 'var(--background-modifier-border)', '--sa-color': 'var(--text-normal)' });
+        badge.addClass('sa-dynamic-bg');
+        badge.addClass('sa-dynamic-color');
       }
     });
     badge.addEventListener('mouseleave', () => {
       if (isSubscribed) {
-        badge.style.backgroundColor = 'rgba(var(--color-green-rgb), 0.15)';
+        badge.setCssProps({ '--sa-bg': 'rgba(var(--color-green-rgb), 0.15)' });
       } else {
-        badge.style.backgroundColor = 'var(--background-modifier-hover)';
-        badge.style.color = 'var(--text-muted)';
+        badge.removeClass('sa-dynamic-bg');
+        badge.removeClass('sa-dynamic-color');
       }
     });
 
@@ -395,7 +397,8 @@ export class ReaderModeContentRenderer extends Component {
       const def = definitions.find(d => d.name.toLowerCase() === tag.toLowerCase());
       const dot = chip.createDiv({ cls: 'reader-mode-tag-dot' });
       if (def?.color) {
-        dot.style.background = def.color;
+        dot.setCssProps({ '--sa-bg': def.color });
+        dot.addClass('sa-dynamic-bg');
       }
 
       chip.createSpan({ text: tag });
@@ -445,35 +448,38 @@ export class ReaderModeContentRenderer extends Component {
     sourcePath: string
   ): Promise<void> {
     const wrapper = parent.createDiv({ cls: 'reader-mode-quoted-post' });
-    wrapper.style.cssText = `
-      margin: 20px 0;
-      padding: 16px;
-      border-left: 3px solid var(--interactive-accent);
-      border-radius: 4px;
-      background: var(--background-secondary);
-    `;
+    wrapper.addClass('sa-p-16');
+    wrapper.addClass('sa-rounded-4');
+    wrapper.addClass('sa-bg-secondary');
+    wrapper.addClass('reader-mode-quoted-post');
 
     // Header: platform icon + author
     const header = wrapper.createDiv();
-    header.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 10px;';
+    header.addClass('sa-flex-row');
+    header.addClass('sa-gap-8');
+    header.addClass('sa-mb-8');
 
     const platformName = getPlatformName(quoted.platform);
     const platformIcon = getPlatformSimpleIcon(quoted.platform);
     if (platformIcon) {
       const iconEl = header.createDiv();
-      iconEl.style.cssText = 'width: 16px; height: 16px; flex-shrink: 0; opacity: 0.7;';
-      iconEl.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="${platformIcon.path}"/></svg>`;
+      iconEl.addClass('sa-icon-16');
+      iconEl.addClass('sa-opacity-80');
+      const quotedSvg = createCustomSVG('0 0 24 24', platformIcon.path);
+      quotedSvg.addClass('rmcr-platform-svg-16');
+      iconEl.appendChild(quotedSvg);
     }
 
     const authorName = quoted.author?.name || 'Unknown';
     const authorEl = header.createEl('span', { text: `${platformName} — ${authorName}` });
-    authorEl.style.cssText = 'font-size: 0.85em; opacity: 0.7; font-weight: 500;';
+    authorEl.addClass('sa-text-sm');
+    authorEl.addClass('sa-opacity-80');
+    authorEl.addClass('sa-font-medium');
 
     // Body text — inherit reader font size via CSS variable (slightly smaller)
     const bodyText = quoted.content?.text || quoted.content?.markdown || '';
     if (bodyText.trim()) {
-      const bodyEl = wrapper.createDiv({ cls: 'reader-mode-body' });
-      bodyEl.style.cssText = 'font-size: calc(var(--reader-font-size, 19px) * 0.9); line-height: 1.7;';
+      const bodyEl = wrapper.createDiv({ cls: 'reader-mode-body rmcr-quoted-body' });
       const escaped = bodyText.replace(/</g, '&lt;').replace(/>/g, '&gt;');
       await MarkdownRenderer.renderMarkdown(escaped, bodyEl, sourcePath, this);
     }
@@ -481,7 +487,7 @@ export class ReaderModeContentRenderer extends Component {
     // Media
     if (quoted.media && quoted.media.length > 0) {
       const mediaContainer = wrapper.createDiv();
-      mediaContainer.style.cssText = 'margin-top: 12px;';
+      mediaContainer.addClass('sa-mt-12');
       this.mediaGalleryRenderer.render(mediaContainer, quoted.media, quoted as PostData);
     }
 
@@ -493,7 +499,10 @@ export class ReaderModeContentRenderer extends Component {
         href: url,
         cls: 'external-link',
       });
-      linkEl.style.cssText = 'display: inline-block; margin-top: 10px; font-size: 0.8em; opacity: 0.6;';
+      linkEl.addClass('sa-inline-block');
+      linkEl.addClass('sa-mt-8');
+      linkEl.addClass('sa-text-sm');
+      linkEl.addClass('sa-opacity-60');
     }
   }
 
@@ -524,7 +533,9 @@ export class ReaderModeContentRenderer extends Component {
       text: 'View original',
       href: url,
     });
-    link.style.cssText = 'color: var(--text-muted); font-size: 13px; text-decoration: underline;';
+    link.addClass('sa-text-muted');
+    link.addClass('sa-text-base');
+    link.addClass('rmcr-source-link');
     link.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -639,7 +650,7 @@ export class ReaderModeContentRenderer extends Component {
     btn.setAttribute('title', opts.title);
 
     if (opts.active) {
-      btn.style.color = 'var(--interactive-accent)';
+      btn.addClass('sa-text-accent');
     }
 
     const iconEl = btn.createDiv();
@@ -647,15 +658,10 @@ export class ReaderModeContentRenderer extends Component {
 
     // Apply fill style for active icons (star, archive)
     if (opts.filled) {
-      const svgEl = iconEl.querySelector('svg');
-      if (svgEl) {
-        svgEl.style.fill = 'currentColor';
-        if (opts.filledStroke) {
-          svgEl.style.stroke = 'var(--background-primary)';
-          svgEl.style.strokeWidth = '1.5';
-          svgEl.style.strokeLinejoin = 'round';
-          svgEl.style.strokeLinecap = 'round';
-        }
+      if (opts.filledStroke) {
+        iconEl.addClass('rmcr-icon-filled-stroke');
+      } else {
+        iconEl.addClass('rmcr-icon-filled');
       }
     }
 
@@ -697,12 +703,13 @@ export class ReaderModeContentRenderer extends Component {
   private renderInitialsAvatar(container: HTMLElement, name: string): void {
     const initials = this.getAuthorInitials(name);
     const div = container.createDiv();
-    div.style.cssText = `
-      width: 100%; height: 100%; border-radius: 50%;
-      background: var(--interactive-accent); color: var(--text-on-accent);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 13px; font-weight: 600; line-height: 1;
-    `;
+    div.addClass('sa-wh-full');
+    div.addClass('sa-rounded-full');
+    div.addClass('sa-bg-accent');
+    div.addClass('sa-flex-center');
+    div.addClass('sa-text-base');
+    div.addClass('sa-font-semibold');
+    div.addClass('rmcr-initials-text');
     div.textContent = initials;
   }
 

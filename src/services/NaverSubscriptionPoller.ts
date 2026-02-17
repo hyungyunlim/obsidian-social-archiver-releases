@@ -710,7 +710,7 @@ export class NaverSubscriptionPoller {
         return 0;
       }
 
-      console.log(`[NaverPoller] Processing ${notifications.length} pending notifications`);
+      console.debug(`[NaverPoller] Processing ${notifications.length} pending notifications`);
 
       const processedIds: string[] = [];
 

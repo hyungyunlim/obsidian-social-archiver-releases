@@ -14,5 +14,23 @@
 @import './legacy/60-reader-mode.css';
 @import './legacy/70-video-cue.css';
 
+/* Utility classes replacing inline styles */
+@import './utilities.css';
+
+/* Content renderer component styles */
+@import './components/content-renderers.css';
+
+/* Timeline renderer component styles (SeriesCard, CompactPostCard, GalleryView) */
+@import './components/timeline-renderers.css';
+
+/* Modal component styles (replacing inline styles for Obsidian review) */
+@import './components/modals.css';
+
+/* Misc component classes replacing inline styles */
+@import './components/misc-components.css';
+
+/* PostCardRenderer component styles */
+@import './components/post-card.css';
+
 /* Timeline and reader-mode incremental styles */
 @import '../components/timeline/managers/skeleton-card.css';

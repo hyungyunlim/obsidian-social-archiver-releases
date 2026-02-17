@@ -47,7 +47,7 @@ const AUTHOR_CATALOG_DEBUG = (() => {
 
 function debugLog(...args: unknown[]): void {
   if (!AUTHOR_CATALOG_DEBUG) return;
-  console.log('[AuthorCatalog]', ...args);
+  console.debug('[AuthorCatalog]', ...args);
 }
 
 function debugWarn(...args: unknown[]): void {
@@ -993,7 +993,7 @@ async function loadAuthors(forceRefresh = false): Promise<void> {
 
     // Stale check — don't overwrite newer results if a newer scan started
     if (isAuthorLoadInProgress() && myGeneration !== getAuthorLoadGeneration()) {
-      console.log(
+      console.debug(
         '[AuthorCatalog] loadAuthors STALE — discarding results (generation',
         myGeneration,
         'superseded by',

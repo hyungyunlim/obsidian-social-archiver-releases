@@ -84,23 +84,16 @@ class ConfirmModal extends Modal {
 
     // Modal size
     if (Platform.isMobile) {
-      modalEl.style.setProperty('width', '90vw', 'important');
-      modalEl.style.setProperty('max-width', '90vw', 'important');
+      modalEl.addClass('cm-mobile');
     } else {
-      modalEl.style.setProperty('width', '400px', 'important');
-      modalEl.style.setProperty('max-width', '400px', 'important');
+      modalEl.addClass('cm-desktop');
     }
 
     // Set title
     this.setTitle(title);
 
     // Message - simple paragraph
-    const messageEl = contentEl.createEl('p', { cls: 'confirm-modal-message' });
-    messageEl.style.cssText = `
-      margin: 0 0 16px 0;
-      color: var(--text-normal);
-      line-height: 1.5;
-    `;
+    const messageEl = contentEl.createEl('p', { cls: 'confirm-modal-message cm-message' });
     messageEl.setText(message);
 
     // Button row using Setting
@@ -196,26 +189,16 @@ class InputConfirmModal extends Modal {
 
     // Modal size
     if (Platform.isMobile) {
-      modalEl.style.setProperty('width', '90vw', 'important');
-      modalEl.style.setProperty('max-width', '90vw', 'important');
-      // Position at top for keyboard
-      modalEl.style.alignSelf = 'flex-start';
-      modalEl.style.marginTop = 'calc(env(safe-area-inset-top, 0px) + 16px)';
+      modalEl.addClass('cm-mobile', 'cm-mobile-position');
     } else {
-      modalEl.style.setProperty('width', '400px', 'important');
-      modalEl.style.setProperty('max-width', '400px', 'important');
+      modalEl.addClass('cm-desktop');
     }
 
     // Set title
     this.setTitle(title);
 
     // Message - simple paragraph
-    const messageEl = contentEl.createEl('p', { cls: 'confirm-modal-message' });
-    messageEl.style.cssText = `
-      margin: 0 0 16px 0;
-      color: var(--text-normal);
-      line-height: 1.5;
-    `;
+    const messageEl = contentEl.createEl('p', { cls: 'confirm-modal-message cm-message' });
     messageEl.setText(message);
 
     // Input section using Setting
@@ -230,15 +213,16 @@ class InputConfirmModal extends Modal {
       text.setPlaceholder(inputPlaceholder);
 
       // Style input
-      text.inputEl.style.cssText = `
-        width: 100%;
-        font-family: var(--font-monospace);
-      `;
+      text.inputEl.addClass('cm-input-monospace');
 
       text.inputEl.addEventListener('input', () => {
         const matches = text.inputEl.value === requiredInput;
         this.confirmBtn.disabled = !matches;
-        this.confirmBtn.style.opacity = matches ? '1' : '0.5';
+        if (matches) {
+          this.confirmBtn.removeClass('cm-btn-disabled');
+        } else {
+          this.confirmBtn.addClass('cm-btn-disabled');
+        }
       });
     });
 
@@ -268,7 +252,7 @@ class InputConfirmModal extends Modal {
       }
 
       btn.buttonEl.disabled = true;
-      btn.buttonEl.style.opacity = '0.5';
+      btn.buttonEl.addClass('cm-btn-disabled');
 
       btn.onClick(() => {
         if (this.inputEl.value === requiredInput) {

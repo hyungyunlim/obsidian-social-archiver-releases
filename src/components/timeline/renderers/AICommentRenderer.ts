@@ -89,19 +89,14 @@ export class AICommentRenderer {
 
     // Main container - simple list matching regular comments
     const commentSection = container.createDiv({ cls: 'ai-comment-viewer' });
-    commentSection.style.cssText = `
-      margin-top: 12px;
-      padding-top: 12px;
-      border-top: 1px solid var(--background-modifier-border);
-    `;
+    commentSection.addClass('sa-mt-12');
+    commentSection.addClass('sa-py-12');
+    commentSection.addClass('sa-border-t');
 
     // Comments list
     this.commentsListEl = commentSection.createDiv({ cls: 'ai-comments-list' });
-    this.commentsListEl.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    `;
+    this.commentsListEl.addClass('sa-flex-col');
+    this.commentsListEl.addClass('sa-gap-8');
 
     this.renderComments(this.commentsListEl);
   }
@@ -135,72 +130,73 @@ export class AICommentRenderer {
       attr: { 'data-comment-id': meta.id },
     });
     // Subtle styling: faint background only
-    commentDiv.style.cssText = `
-      font-size: 13px;
-      line-height: 1.5;
-      background: color-mix(in srgb, var(--background-secondary) 50%, transparent);
-      border-radius: 4px;
-      padding: 6px 8px;
-    `;
+    commentDiv.addClass('sa-text-base');
+    commentDiv.addClass('sa-leading-normal');
+    commentDiv.addClass('sa-rounded-4');
+    commentDiv.addClass('sa-py-6');
+    commentDiv.addClass('sa-px-8');
+    // Dynamic background (color-mix)
+    commentDiv.setCssProps({ '--sa-bg': 'color-mix(in srgb, var(--background-secondary) 50%, transparent)' });
+    commentDiv.addClass('sa-dynamic-bg');
 
     // Header line: **name** · type · date · buttons
     const headerLine = commentDiv.createDiv({ cls: 'ai-comment-header' });
-    headerLine.style.cssText = 'display: flex; align-items: center; gap: 6px; margin-bottom: 4px;';
+    headerLine.addClass('sa-flex-row');
+    headerLine.addClass('sa-gap-6');
+    headerLine.addClass('sa-mb-4');
 
     // Sparkles icon (Lucide)
     const aiIcon = headerLine.createSpan({ cls: 'ai-comment-icon' });
-    aiIcon.style.cssText = `
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 14px;
-      height: 14px;
-      color: var(--interactive-accent);
-      opacity: 0.8;
-    `;
+    aiIcon.addClass('sa-icon-14');
+    aiIcon.addClass('sa-opacity-80');
+    aiIcon.setCssProps({ '--sa-color': 'var(--interactive-accent)' });
+    aiIcon.addClass('sa-dynamic-color');
     setIcon(aiIcon, 'sparkles');
 
     // CLI name (bold, like username)
     const nameSpan = headerLine.createEl('strong');
-    nameSpan.style.cssText = 'font-weight: 600; color: var(--text-normal);';
+    nameSpan.addClass('sa-font-semibold');
+    nameSpan.addClass('sa-text-normal');
     nameSpan.textContent = CLI_NAMES[meta.cli] || meta.cli;
 
     // Separator after name
-    headerLine.createSpan({ text: '·' }).style.cssText = 'color: var(--text-faint);';
+    const sep1 = headerLine.createSpan({ text: '·' });
+    sep1.addClass('sa-text-faint');
 
     // Type badge
     const typeSpan = headerLine.createSpan();
-    typeSpan.style.cssText = 'font-size: 11px; color: var(--text-muted); padding: 1px 6px; background: var(--background-modifier-hover); border-radius: 4px;';
+    typeSpan.addClass('sa-text-xs');
+    typeSpan.addClass('sa-text-muted');
+    typeSpan.addClass('sa-py-1');
+    typeSpan.addClass('sa-px-6');
+    typeSpan.addClass('sa-bg-hover');
+    typeSpan.addClass('sa-rounded-4');
     typeSpan.textContent = COMMENT_TYPE_DISPLAY_NAMES[meta.type] || meta.type;
 
     // Separator
-    headerLine.createSpan({ text: '·' }).style.cssText = 'color: var(--text-faint);';
+    const sep2 = headerLine.createSpan({ text: '·' });
+    sep2.addClass('sa-text-faint');
 
     // Date
     const dateSpan = headerLine.createSpan();
-    dateSpan.style.cssText = 'font-size: 12px; color: var(--text-muted);';
+    dateSpan.addClass('sa-text-sm');
+    dateSpan.addClass('sa-text-muted');
     dateSpan.textContent = this.formatDate(meta.generatedAt);
 
     // Spacer
     const spacer = headerLine.createSpan();
-    spacer.style.flex = '1';
+    spacer.addClass('sa-flex-1');
 
     // Add more button (only on last comment, hide on mobile since CLI not available)
     let addBtn: HTMLSpanElement | null = null;
     if (isLast && !Platform.isMobile) {
       addBtn = headerLine.createSpan({ cls: 'ai-comment-add-btn' });
-      addBtn.style.cssText = `
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 20px;
-        height: 20px;
-        border-radius: 4px;
-        cursor: pointer;
-        color: var(--text-muted);
-        opacity: 0;
-        transition: all 0.2s;
-      `;
+      addBtn.addClass('sa-icon-20');
+      addBtn.addClass('sa-rounded-4');
+      addBtn.addClass('sa-clickable');
+      addBtn.addClass('sa-text-muted');
+      addBtn.addClass('sa-opacity-0');
+      addBtn.addClass('sa-transition');
       setIcon(addBtn, 'plus');
       addBtn.setAttribute('title', 'Add another AI comment');
 
@@ -211,14 +207,19 @@ export class AICommentRenderer {
 
       addBtn.addEventListener('mouseenter', () => {
         if (addBtn) {
-          addBtn.style.color = 'var(--interactive-accent)';
-          addBtn.style.background = 'var(--background-modifier-hover)';
+          addBtn.removeClass('sa-text-muted');
+          addBtn.removeClass('sa-bg-transparent');
+          addBtn.setCssProps({ '--sa-color': 'var(--interactive-accent)' });
+          addBtn.addClass('sa-dynamic-color');
+          addBtn.addClass('sa-bg-hover');
         }
       });
       addBtn.addEventListener('mouseleave', () => {
         if (addBtn) {
-          addBtn.style.color = 'var(--text-muted)';
-          addBtn.style.background = 'transparent';
+          addBtn.addClass('sa-text-muted');
+          addBtn.removeClass('sa-dynamic-color');
+          addBtn.removeClass('sa-bg-hover');
+          addBtn.addClass('sa-bg-transparent');
         }
       });
     }
@@ -227,18 +228,12 @@ export class AICommentRenderer {
     let applyBtn: HTMLSpanElement | null = null;
     if (meta.type === 'reformat' && this.onApplyReformat) {
       applyBtn = headerLine.createSpan({ cls: 'ai-comment-apply' });
-      applyBtn.style.cssText = `
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 20px;
-        height: 20px;
-        border-radius: 4px;
-        cursor: pointer;
-        color: var(--text-faint);
-        opacity: 0;
-        transition: all 0.2s;
-      `;
+      applyBtn.addClass('sa-icon-20');
+      applyBtn.addClass('sa-rounded-4');
+      applyBtn.addClass('sa-clickable');
+      applyBtn.addClass('sa-text-faint');
+      applyBtn.addClass('sa-opacity-0');
+      applyBtn.addClass('sa-transition');
       setIcon(applyBtn, 'check');
       applyBtn.setAttribute('aria-label', 'Apply to content');
 
@@ -246,55 +241,69 @@ export class AICommentRenderer {
         e.stopPropagation();
         if (this.onApplyReformat) {
           // Show loading state
-          applyBtn!.style.opacity = '0.5';
-          applyBtn!.style.pointerEvents = 'none';
+          applyBtn!.removeClass('sa-opacity-0');
+          applyBtn!.addClass('sa-opacity-50');
+          applyBtn!.addClass('sa-pointer-none');
           try {
             await this.onApplyReformat(meta.id, text);
           } finally {
             if (applyBtn) {
-              applyBtn.style.opacity = '1';
-              applyBtn.style.pointerEvents = 'auto';
+              applyBtn.removeClass('sa-opacity-50');
+              applyBtn.addClass('sa-opacity-100');
+              applyBtn.removeClass('sa-pointer-none');
             }
           }
         }
       });
 
       applyBtn.addEventListener('mouseenter', () => {
-        applyBtn!.style.color = 'var(--text-success)';
-        applyBtn!.style.background = 'var(--background-modifier-success)';
+        applyBtn!.removeClass('sa-text-faint');
+        applyBtn!.addClass('sa-text-success');
+        applyBtn!.setCssProps({ '--sa-bg': 'var(--background-modifier-success)' });
+        applyBtn!.addClass('sa-dynamic-bg');
       });
       applyBtn.addEventListener('mouseleave', () => {
-        applyBtn!.style.color = 'var(--text-faint)';
-        applyBtn!.style.background = 'transparent';
+        applyBtn!.addClass('sa-text-faint');
+        applyBtn!.removeClass('sa-text-success');
+        applyBtn!.removeClass('sa-dynamic-bg');
+        applyBtn!.addClass('sa-bg-transparent');
       });
     }
 
     // Delete button
     const deleteBtn = headerLine.createSpan({ cls: 'ai-comment-delete' });
-    deleteBtn.style.cssText = `
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 20px;
-      height: 20px;
-      border-radius: 4px;
-      cursor: pointer;
-      color: var(--text-faint);
-      opacity: 0;
-      transition: all 0.2s;
-    `;
+    deleteBtn.addClass('sa-icon-20');
+    deleteBtn.addClass('sa-rounded-4');
+    deleteBtn.addClass('sa-clickable');
+    deleteBtn.addClass('sa-text-faint');
+    deleteBtn.addClass('sa-opacity-0');
+    deleteBtn.addClass('sa-transition');
     setIcon(deleteBtn, 'trash-2');
 
     // Show buttons on hover
     commentDiv.addEventListener('mouseenter', () => {
-      if (addBtn) addBtn.style.opacity = '1';
-      if (applyBtn) applyBtn.style.opacity = '1';
-      deleteBtn.style.opacity = '1';
+      if (addBtn) {
+        addBtn.removeClass('sa-opacity-0');
+        addBtn.addClass('sa-opacity-100');
+      }
+      if (applyBtn) {
+        applyBtn.removeClass('sa-opacity-0');
+        applyBtn.addClass('sa-opacity-100');
+      }
+      deleteBtn.removeClass('sa-opacity-0');
+      deleteBtn.addClass('sa-opacity-100');
     });
     commentDiv.addEventListener('mouseleave', () => {
-      if (addBtn) addBtn.style.opacity = '0';
-      if (applyBtn) applyBtn.style.opacity = '0';
-      deleteBtn.style.opacity = '0';
+      if (addBtn) {
+        addBtn.removeClass('sa-opacity-100');
+        addBtn.addClass('sa-opacity-0');
+      }
+      if (applyBtn) {
+        applyBtn.removeClass('sa-opacity-100');
+        applyBtn.addClass('sa-opacity-0');
+      }
+      deleteBtn.removeClass('sa-opacity-100');
+      deleteBtn.addClass('sa-opacity-0');
     });
 
     deleteBtn.addEventListener('click', async (e) => {
@@ -303,117 +312,27 @@ export class AICommentRenderer {
     });
 
     deleteBtn.addEventListener('mouseenter', () => {
-      deleteBtn.style.color = 'var(--text-error)';
-      deleteBtn.style.background = 'var(--background-modifier-error)';
+      deleteBtn.removeClass('sa-text-faint');
+      deleteBtn.addClass('sa-text-error');
+      deleteBtn.setCssProps({ '--sa-bg': 'var(--background-modifier-error)' });
+      deleteBtn.addClass('sa-dynamic-bg');
     });
     deleteBtn.addEventListener('mouseleave', () => {
-      deleteBtn.style.color = 'var(--text-faint)';
-      deleteBtn.style.background = 'transparent';
+      deleteBtn.addClass('sa-text-faint');
+      deleteBtn.removeClass('sa-text-error');
+      deleteBtn.removeClass('sa-dynamic-bg');
+      deleteBtn.addClass('sa-bg-transparent');
     });
 
     // Content area (separate line, allows proper text wrapping)
     const textContainer = commentDiv.createDiv({ cls: 'ai-comment-text-container' });
 
     const textSpan = textContainer.createDiv({ cls: 'ai-comment-text' });
-    textSpan.style.cssText = 'color: var(--text-normal); line-height: 1.5;';
+    textSpan.addClass('sa-text-normal');
+    textSpan.addClass('sa-leading-normal');
 
-    // Plain text style - minimal markdown formatting
+    // Plain text style - minimal markdown formatting (styles in content-renderers.css)
     textSpan.addClass('ai-comment-plain');
-    const style = document.createElement('style');
-    style.textContent = `
-      .ai-comment-plain,
-      .ai-comment-plain * {
-        font-size: 13px !important;
-        font-weight: normal !important;
-        line-height: 1.5 !important;
-      }
-      .ai-comment-plain h1,
-      .ai-comment-plain h2,
-      .ai-comment-plain h3,
-      .ai-comment-plain h4,
-      .ai-comment-plain h5,
-      .ai-comment-plain h6 {
-        font-size: 13px !important;
-        font-weight: 600 !important;
-        margin-top: 1em !important;
-        margin-bottom: 0.3em !important;
-        padding: 0 !important;
-        display: block !important;
-      }
-      .ai-comment-plain h1 {
-        margin-top: 1.5em !important;
-      }
-      .ai-comment-plain h2 {
-        margin-top: 1.2em !important;
-      }
-      .ai-comment-plain > h1:first-child,
-      .ai-comment-plain > h2:first-child,
-      .ai-comment-plain > h3:first-child,
-      .ai-comment-plain > p:first-child + h1,
-      .ai-comment-plain > p:first-child + h2,
-      .ai-comment-plain > p:first-child + h3 {
-        margin-top: 0.5em !important;
-      }
-      .ai-comment-plain > *:first-child {
-        margin-top: 0 !important;
-      }
-      .ai-comment-plain p {
-        margin: 0.5em 0 !important;
-      }
-      .ai-comment-plain p:first-child {
-        margin-top: 0 !important;
-      }
-      .ai-comment-plain ul,
-      .ai-comment-plain ol {
-        margin: 0.3em 0 !important;
-        padding-left: 1.2em !important;
-      }
-      .ai-comment-plain li {
-        margin: 0 !important;
-        padding: 0 !important;
-      }
-      .ai-comment-plain li::marker {
-        color: var(--text-muted) !important;
-      }
-      .ai-comment-plain table {
-        font-size: 12px !important;
-        margin: 0.5em 0 !important;
-        border-collapse: collapse !important;
-      }
-      .ai-comment-plain th,
-      .ai-comment-plain td {
-        padding: 2px 6px !important;
-        border: 1px solid var(--background-modifier-border) !important;
-      }
-      .ai-comment-plain th {
-        font-weight: 600 !important;
-        background: var(--background-secondary) !important;
-      }
-      .ai-comment-plain code {
-        font-size: 12px !important;
-        background: var(--background-secondary) !important;
-        padding: 1px 4px !important;
-        border-radius: 3px !important;
-      }
-      .ai-comment-plain blockquote {
-        margin: 0.3em 0 !important;
-        padding-left: 8px !important;
-        border-left: 2px solid var(--text-faint) !important;
-        color: var(--text-muted) !important;
-      }
-      .ai-comment-plain hr {
-        margin: 0.5em 0 !important;
-        border: none !important;
-        border-top: 1px solid var(--background-modifier-border) !important;
-      }
-      .ai-comment-plain strong {
-        font-weight: 600 !important;
-      }
-      .ai-comment-plain a {
-        color: var(--text-accent) !important;
-      }
-    `;
-    textSpan.appendChild(style);
 
     // Render markdown content
     if (this.component) {
@@ -443,35 +362,34 @@ export class AICommentRenderer {
     if (isLongText) {
       // Wrap textSpan in a container for proper fade effect
       const textWrapper = textContainer.createDiv({ cls: 'ai-comment-text-wrapper' });
-      textWrapper.style.cssText = `
-        position: relative;
-        max-height: 12em;
-        overflow: hidden;
-      `;
+      textWrapper.addClass('sa-relative');
+      textWrapper.addClass('sa-overflow-hidden');
+      textWrapper.setCssProps({ '--sa-max-height': '12em' });
+      textWrapper.addClass('sa-dynamic-max-height');
       // Move textSpan into wrapper
       textWrapper.appendChild(textSpan);
 
       // Add gradient fade at bottom when collapsed
       const fadeOverlay = textWrapper.createDiv({ cls: 'ai-comment-fade' });
-      fadeOverlay.style.cssText = `
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        height: 2.5em;
-        background: linear-gradient(to bottom, transparent 0%, var(--background-primary) 80%);
-        pointer-events: none;
-      `;
+      fadeOverlay.addClass('sa-absolute');
+      fadeOverlay.addClass('sa-bottom-0');
+      fadeOverlay.addClass('sa-left-0');
+      fadeOverlay.addClass('sa-right-0');
+      fadeOverlay.addClass('sa-pointer-none');
+      fadeOverlay.setCssProps({
+        '--sa-height': '2.5em',
+        '--sa-bg': 'linear-gradient(to bottom, transparent 0%, var(--background-primary) 80%)'
+      });
+      fadeOverlay.addClass('sa-dynamic-height');
+      fadeOverlay.addClass('sa-dynamic-bg');
 
       // Add expand/collapse toggle
       const toggleBtn = textContainer.createSpan({ cls: 'ai-comment-toggle' });
-      toggleBtn.style.cssText = `
-        display: inline-block;
-        color: var(--text-accent);
-        cursor: pointer;
-        font-size: 12px;
-        margin-top: 4px;
-      `;
+      toggleBtn.addClass('sa-inline-block');
+      toggleBtn.addClass('sa-text-accent');
+      toggleBtn.addClass('sa-clickable');
+      toggleBtn.addClass('sa-text-sm');
+      toggleBtn.addClass('sa-mt-4');
       toggleBtn.textContent = 'Show more';
 
       toggleBtn.addEventListener('click', (e) => {
@@ -479,24 +397,20 @@ export class AICommentRenderer {
         isExpanded = !isExpanded;
 
         if (isExpanded) {
-          textWrapper.style.maxHeight = 'none';
-          textWrapper.style.overflow = 'visible';
-          fadeOverlay.style.display = 'none';
+          textWrapper.setCssProps({ '--sa-max-height': 'none' });
+          textWrapper.removeClass('sa-overflow-hidden');
+          fadeOverlay.addClass('sa-hidden');
           toggleBtn.textContent = 'Show less';
         } else {
-          textWrapper.style.maxHeight = '12em'; // Same as initial collapsed height
-          textWrapper.style.overflow = 'hidden';
-          fadeOverlay.style.display = 'block';
+          textWrapper.setCssProps({ '--sa-max-height': '12em' }); // Same as initial collapsed height
+          textWrapper.addClass('sa-overflow-hidden');
+          fadeOverlay.removeClass('sa-hidden');
           toggleBtn.textContent = 'Show more';
         }
       });
 
-      toggleBtn.addEventListener('mouseenter', () => {
-        toggleBtn.style.textDecoration = 'underline';
-      });
-      toggleBtn.addEventListener('mouseleave', () => {
-        toggleBtn.style.textDecoration = 'none';
-      });
+      // Hover underline handled by CSS .acr-toggle:hover
+      toggleBtn.addClass('acr-toggle');
     }
 
     return commentDiv;
@@ -512,8 +426,8 @@ export class AICommentRenderer {
     if (!confirmed) return;
 
     // Visual feedback
-    element.style.opacity = '0.5';
-    element.style.pointerEvents = 'none';
+    element.addClass('sa-opacity-50');
+    element.addClass('sa-pointer-none');
 
     try {
       // onDelete callback will handle file update and UI refresh
@@ -521,8 +435,8 @@ export class AICommentRenderer {
       // Note: refreshPostCard will re-render the entire AI comments section
     } catch (error) {
       // Restore on error
-      element.style.opacity = '1';
-      element.style.pointerEvents = 'auto';
+      element.removeClass('sa-opacity-50');
+      element.removeClass('sa-pointer-none');
       console.error('[AICommentRenderer] Delete failed:', error);
     }
   }
@@ -536,7 +450,7 @@ export class AICommentRenderer {
 
     if (remaining === 0 && this.container) {
       // Remove the entire container when no comments left
-      this.container.innerHTML = '';
+      this.container.empty();
     } else if (remaining > 0 && remainingItems && !Platform.isMobile) {
       // Add + button to the new last comment if not on mobile
       const lastItem = remainingItems[remaining - 1] as HTMLElement;
@@ -549,18 +463,12 @@ export class AICommentRenderer {
 
         const addBtn = document.createElement('span');
         addBtn.className = 'ai-comment-add-btn';
-        addBtn.style.cssText = `
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 20px;
-          height: 20px;
-          border-radius: 4px;
-          cursor: pointer;
-          color: var(--text-muted);
-          opacity: 0;
-          transition: all 0.2s;
-        `;
+        addBtn.classList.add('sa-icon-20');
+        addBtn.classList.add('sa-rounded-4');
+        addBtn.classList.add('sa-clickable');
+        addBtn.classList.add('sa-text-muted');
+        addBtn.classList.add('sa-opacity-0');
+        addBtn.classList.add('sa-transition');
         setIcon(addBtn, 'plus');
         addBtn.setAttribute('title', 'Add another AI comment');
 
@@ -570,12 +478,15 @@ export class AICommentRenderer {
         });
 
         addBtn.addEventListener('mouseenter', () => {
-          addBtn.style.color = 'var(--interactive-accent)';
-          addBtn.style.background = 'var(--background-modifier-hover)';
+          addBtn.classList.remove('sa-text-muted');
+          addBtn.classList.add('sa-text-accent');
+          addBtn.classList.add('sa-bg-hover');
         });
         addBtn.addEventListener('mouseleave', () => {
-          addBtn.style.color = 'var(--text-muted)';
-          addBtn.style.background = 'transparent';
+          addBtn.classList.remove('sa-text-accent');
+          addBtn.classList.add('sa-text-muted');
+          addBtn.classList.remove('sa-bg-hover');
+          addBtn.classList.add('sa-bg-transparent');
         });
 
         // Insert before delete button
@@ -587,10 +498,12 @@ export class AICommentRenderer {
 
         // Show buttons on hover
         lastItem.addEventListener('mouseenter', () => {
-          addBtn.style.opacity = '1';
+          addBtn.classList.remove('sa-opacity-0');
+          addBtn.classList.add('sa-opacity-100');
         });
         lastItem.addEventListener('mouseleave', () => {
-          addBtn.style.opacity = '0';
+          addBtn.classList.remove('sa-opacity-100');
+          addBtn.classList.add('sa-opacity-0');
         });
       }
     }
@@ -602,23 +515,17 @@ export class AICommentRenderer {
   private showCopyFeedback(element: HTMLElement): void {
     const feedback = document.createElement('div');
     feedback.textContent = 'Copied!';
-    feedback.style.cssText = `
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: var(--background-modifier-success);
-      color: var(--text-on-accent);
-      padding: 4px 12px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 500;
-      pointer-events: none;
-      z-index: 100;
-      animation: fadeOut 1s ease forwards;
-    `;
+    feedback.classList.add('sa-absolute');
+    feedback.classList.add('sa-py-4');
+    feedback.classList.add('sa-px-12');
+    feedback.classList.add('sa-rounded-4');
+    feedback.classList.add('sa-text-sm');
+    feedback.classList.add('sa-font-medium');
+    feedback.classList.add('sa-pointer-none');
+    feedback.classList.add('sa-z-100');
+    feedback.classList.add('acr-copy-feedback');
 
-    element.style.position = 'relative';
+    element.classList.add('sa-relative');
     element.appendChild(feedback);
 
     setTimeout(() => {
@@ -732,26 +639,14 @@ export class AICommentRenderer {
         const timestampSpan = document.createElement('span');
         timestampSpan.className = 'ai-comment-timestamp';
         timestampSpan.textContent = fullMatch;
-        timestampSpan.style.cssText = `
-          color: var(--text-accent);
-          cursor: pointer;
-          font-family: var(--font-monospace);
-          background: var(--background-modifier-hover);
-          padding: 1px 4px;
-          border-radius: 3px;
-          transition: all 0.15s ease;
-        `;
+        timestampSpan.classList.add('sa-text-accent');
+        timestampSpan.classList.add('sa-clickable');
+        timestampSpan.classList.add('sa-bg-hover');
+        timestampSpan.classList.add('sa-rounded-4');
+        timestampSpan.classList.add('acr-timestamp');
         timestampSpan.title = `Jump to ${fullMatch}`;
 
-        // Add hover effect
-        timestampSpan.addEventListener('mouseenter', () => {
-          timestampSpan.style.background = 'var(--interactive-accent)';
-          timestampSpan.style.color = 'var(--text-on-accent)';
-        });
-        timestampSpan.addEventListener('mouseleave', () => {
-          timestampSpan.style.background = 'var(--background-modifier-hover)';
-          timestampSpan.style.color = 'var(--text-accent)';
-        });
+        // Hover effect handled entirely by CSS .acr-timestamp:hover
 
         // Add click handler
         timestampSpan.addEventListener('click', (e) => {

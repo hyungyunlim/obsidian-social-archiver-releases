@@ -381,11 +381,12 @@ export class WorkersAPIClient implements IService {
 
   async isHealthy(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.config.endpoint}/health`, {
+      const response = await requestUrl({
+        url: `${this.config.endpoint}/health`,
         method: 'GET',
-        signal: AbortSignal.timeout(5000), // 5 second timeout
+        throw: false
       });
-      return response.ok;
+      return response.status === 200;
     } catch {
       return false;
     }

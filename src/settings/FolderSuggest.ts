@@ -18,12 +18,11 @@ export class FolderSuggest extends AbstractInputSuggest<TFolder> {
 
     // Get all folders from vault
     this.app.vault.getAllLoadedFiles().forEach((file) => {
-      // Check if it's a folder (has children property)
-      if ('children' in file) {
-        const folder = file as TFolder;
+      // Check if it's a folder
+      if (file instanceof TFolder) {
         // Filter folders that match the query
-        if (folder.path.toLowerCase().includes(lowerCaseQuery)) {
-          folders.push(folder);
+        if (file.path.toLowerCase().includes(lowerCaseQuery)) {
+          folders.push(file);
         }
       }
     });

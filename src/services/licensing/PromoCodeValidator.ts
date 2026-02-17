@@ -2,6 +2,7 @@
  * PromoCodeValidator - Promotional code validation and management service
  */
 
+import { requestUrl } from 'obsidian';
 import {
   PromoCodeInfo,
   PromoCodeValidationResult,
@@ -482,25 +483,21 @@ export class PromoCodeValidator implements IService {
     this.logger?.debug(`Making Gumroad API request (attempt ${attempt})`, { endpoint });
 
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
-
-      const response = await fetch(url, {
+      const response = await requestUrl({
+        url,
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
-        signal: controller.signal,
+        throw: false
       });
 
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (response.status !== 200) {
+        throw new Error(`HTTP ${response.status}`);
       }
 
-      const data = await response.json();
+      const data = response.json;
       return data as T;
     } catch (error) {
       this.logger?.warn(`Gumroad API request failed (attempt ${attempt})`, { error });

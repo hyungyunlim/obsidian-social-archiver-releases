@@ -466,7 +466,7 @@ export class BrunchSubscriptionPoller {
         return 0;
       }
 
-      console.log(`[BrunchSubscriptionPoller] Processing ${notifications.length} pending notifications`);
+      console.debug(`[BrunchSubscriptionPoller] Processing ${notifications.length} pending notifications`);
 
       const processedIds: string[] = [];
 

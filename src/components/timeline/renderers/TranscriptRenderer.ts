@@ -120,22 +120,21 @@ export class TranscriptRenderer {
     }
 
     // Main container
-    const transcriptSection = container.createDiv({ cls: 'podcast-transcript-viewer' });
-    transcriptSection.style.cssText = `
-      margin: ${this.isMobile ? '12px 0' : '16px 0'};
-      border: 1px solid var(--background-modifier-border);
-      border-radius: ${this.isMobile ? '6px' : '8px'};
-      overflow: hidden;
-    `;
+    const transcriptSection = container.createDiv({ cls: 'podcast-transcript-viewer sa-border sa-overflow-hidden tr-section' });
+    if (this.isMobile) {
+      transcriptSection.addClass('tr-section-mobile');
+    }
 
     // Header (collapsible toggle)
     const header = this.renderHeader(transcriptSection, options.language);
 
     // Content area (collapsible)
     this.contentEl = transcriptSection.createDiv({ cls: 'transcript-content' });
-    this.contentEl.style.cssText = `
-      display: ${this.isCollapsed ? 'none' : 'block'};
-    `;
+    if (this.isCollapsed) {
+      this.contentEl.addClass('sa-hidden');
+    } else {
+      this.contentEl.addClass('sa-block');
+    }
 
     // Toggle collapse on header click
     header.addEventListener('click', () => {
@@ -148,12 +147,10 @@ export class TranscriptRenderer {
     }
 
     // Segments list
-    this.segmentsListEl = this.contentEl.createDiv({ cls: 'transcript-segments' });
-    this.segmentsListEl.style.cssText = `
-      padding: 0 ${this.isMobile ? '10px 10px' : '12px 12px'};
-      max-height: ${this.isMobile ? '300px' : '400px'};
-      overflow-y: auto;
-    `;
+    this.segmentsListEl = this.contentEl.createDiv({ cls: 'transcript-segments sa-overflow-y-auto tr-segments' });
+    if (this.isMobile) {
+      this.segmentsListEl.addClass('tr-segments-mobile');
+    }
 
     this.renderSegments(this.segmentsListEl);
 
@@ -169,29 +166,25 @@ export class TranscriptRenderer {
    * Render header section
    */
   private renderHeader(parent: HTMLElement, language?: string): HTMLElement {
-    const header = parent.createDiv({ cls: 'transcript-header' });
-    header.style.cssText = `
-      padding: ${this.isMobile ? '10px 12px' : '12px 16px'};
-      background: var(--background-secondary);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: ${this.isMobile ? '6px' : '8px'};
-      user-select: none;
-    `;
+    const header = parent.createDiv({ cls: 'transcript-header sa-flex-row sa-bg-secondary sa-clickable sa-no-select tr-header' });
+    if (this.isMobile) {
+      header.addClass('tr-header-mobile');
+    }
 
     // Collapse icon
-    const collapseIcon = header.createSpan({ cls: 'collapse-icon' });
-    collapseIcon.style.cssText = `display: flex; align-items: center;${this.isMobile ? ' width: 16px; height: 16px;' : ''}`;
+    const collapseIcon = header.createSpan({ cls: 'collapse-icon sa-flex-row' });
+    if (this.isMobile) {
+      collapseIcon.addClass('sa-icon-16');
+    }
     setIcon(collapseIcon, this.isCollapsed ? 'chevron-right' : 'chevron-down');
 
     // Title
-    const titleEl = header.createSpan({ text: 'Transcript', cls: 'transcript-title' });
-    titleEl.style.cssText = `
-      font-weight: 500;
-      font-size: ${this.isMobile ? '13px' : '14px'};
-      flex: 1;
-    `;
+    const titleEl = header.createSpan({ text: 'Transcript', cls: 'transcript-title sa-flex-1 sa-font-medium' });
+    if (this.isMobile) {
+      titleEl.addClass('tr-title-mobile');
+    } else {
+      titleEl.addClass('tr-title-desktop');
+    }
 
     // Language tabs (if multilang) or badge (if single language)
     if (this.languages.length >= 2) {
@@ -199,19 +192,14 @@ export class TranscriptRenderer {
     } else if (language && language !== 'auto') {
       const langBadge = header.createSpan({
         text: language.toUpperCase(),
-        cls: 'transcript-language'
+        cls: 'transcript-language sa-bg-hover sa-rounded-4 sa-text-muted sa-font-medium tr-lang-badge'
       });
-      langBadge.style.cssText = `
-        font-size: ${this.isMobile ? '9px' : '10px'};
-        padding: 2px ${this.isMobile ? '4px' : '6px'};
-        background: var(--background-modifier-hover);
-        border-radius: 4px;
-        color: var(--text-muted);
-        font-weight: 500;
-      `;
+      if (this.isMobile) {
+        langBadge.addClass('tr-lang-badge-mobile');
+      }
     }
 
-    // CC (caption) toggle button — only shown when native captions are available
+    // CC (caption) toggle button -- only shown when native captions are available
     if (this.onCaptionToggle) {
       this.renderCaptionToggleButton(header);
     }
@@ -233,42 +221,27 @@ export class TranscriptRenderer {
    */
   private renderLanguageTabs(parent: HTMLElement): void {
     // Wrapper with fade indicators for overflow
-    const wrapper = parent.createDiv({ cls: 'transcript-language-tabs-wrapper' });
-    wrapper.style.cssText = `
-      position: relative;
-      flex-shrink: 1;
-      min-width: 0;
-      overflow: hidden;
-    `;
+    const wrapper = parent.createDiv({ cls: 'transcript-language-tabs-wrapper sa-relative sa-min-w-0 sa-overflow-hidden tr-lang-tabs-wrapper' });
 
-    const tabsContainer = wrapper.createDiv({ cls: 'transcript-language-tabs' });
-    tabsContainer.style.cssText = `
-      display: flex;
-      gap: ${this.isMobile ? '4px' : '6px'};
-      overflow-x: auto;
-      scrollbar-width: none;
-      -ms-overflow-style: none;
-    `;
+    const tabsContainer = wrapper.createDiv({ cls: 'transcript-language-tabs sa-flex tr-lang-tabs' });
+    if (this.isMobile) {
+      tabsContainer.addClass('tr-lang-tabs-mobile');
+    }
 
     // Fade indicator for right overflow
-    const fadeRight = wrapper.createDiv({ cls: 'tabs-fade-right' });
-    fadeRight.style.cssText = `
-      position: absolute;
-      right: 0;
-      top: 0;
-      bottom: 0;
-      width: 20px;
-      background: linear-gradient(to right, transparent, var(--background-secondary));
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.2s;
-    `;
+    const fadeRight = wrapper.createDiv({ cls: 'tabs-fade-right sa-absolute sa-top-0 sa-right-0 sa-bottom-0 sa-pointer-none sa-opacity-0 sa-transition-opacity tr-tabs-fade' });
 
     // Update fade visibility on scroll
     const updateFade = () => {
       const hasOverflow = tabsContainer.scrollWidth > tabsContainer.clientWidth;
       const atEnd = tabsContainer.scrollLeft + tabsContainer.clientWidth >= tabsContainer.scrollWidth - 2;
-      fadeRight.style.opacity = (hasOverflow && !atEnd) ? '1' : '0';
+      if (hasOverflow && !atEnd) {
+        fadeRight.removeClass('sa-opacity-0');
+        fadeRight.addClass('sa-opacity-100');
+      } else {
+        fadeRight.removeClass('sa-opacity-100');
+        fadeRight.addClass('sa-opacity-0');
+      }
     };
     tabsContainer.addEventListener('scroll', updateFade);
 
@@ -281,37 +254,21 @@ export class TranscriptRenderer {
 
       const tab = tabsContainer.createDiv({
         text: this.isMobile ? langCode.toUpperCase() : displayName,
-        cls: 'language-tab'
+        cls: 'language-tab sa-rounded-4 sa-clickable sa-flex-shrink-0 sa-font-medium sa-transition tr-lang-tab'
       });
-      tab.style.cssText = `
-        font-size: ${this.isMobile ? '9px' : '10px'};
-        padding: ${this.isMobile ? '2px 6px' : '3px 8px'};
-        border-radius: 4px;
-        cursor: pointer;
-        white-space: nowrap;
-        flex-shrink: 0;
-        font-weight: 500;
-        transition: all 0.2s;
-        color: ${isActive ? 'var(--text-accent)' : 'var(--text-muted)'};
-        background: ${isActive ? 'var(--background-modifier-active-hover)' : 'var(--background-modifier-hover)'};
-      `;
+      if (this.isMobile) {
+        tab.addClass('tr-lang-tab-mobile');
+      }
+      if (isActive) {
+        tab.addClass('tr-lang-tab-active');
+      } else {
+        tab.addClass('tr-lang-tab-inactive');
+      }
 
       tab.addEventListener('click', (e) => {
         e.stopPropagation();
         this.switchLanguage(langCode);
       });
-
-      // Hover effect for inactive tabs
-      if (!isActive) {
-        tab.addEventListener('mouseenter', () => {
-          tab.style.background = 'var(--background-modifier-active-hover)';
-        });
-        tab.addEventListener('mouseleave', () => {
-          if (langCode !== this.currentLanguage) {
-            tab.style.background = 'var(--background-modifier-hover)';
-          }
-        });
-      }
     }
   }
 
@@ -319,22 +276,20 @@ export class TranscriptRenderer {
    * Render auto-scroll toggle button
    */
   private renderAutoScrollToggle(parent: HTMLElement): HTMLElement {
-    const toggleBtn = parent.createDiv({ cls: 'transcript-autoscroll-toggle' });
-    toggleBtn.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: ${this.isMobile ? '0' : '4px'};
-      padding: ${this.isMobile ? '4px 6px' : '4px 8px'};
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: ${this.isMobile ? '10px' : '11px'};
-      color: ${this.autoScroll ? 'var(--text-accent)' : 'var(--text-muted)'};
-      background: ${this.autoScroll ? 'var(--background-modifier-hover)' : 'transparent'};
-      transition: all 0.2s;
-    `;
+    const toggleBtn = parent.createDiv({ cls: 'transcript-autoscroll-toggle sa-flex-row sa-rounded-4 sa-clickable sa-transition tr-toggle-btn' });
+    if (this.isMobile) {
+      toggleBtn.addClass('tr-toggle-btn-mobile');
+    }
+    if (this.autoScroll) {
+      toggleBtn.addClass('tr-toggle-active');
+    } else {
+      toggleBtn.addClass('tr-toggle-inactive');
+    }
 
-    const icon = toggleBtn.createSpan({ cls: 'autoscroll-icon' });
-    icon.style.cssText = `display: flex; align-items: center;${this.isMobile ? ' width: 14px; height: 14px;' : ''}`;
+    const icon = toggleBtn.createSpan({ cls: 'autoscroll-icon sa-flex-row' });
+    if (this.isMobile) {
+      icon.addClass('sa-icon-14');
+    }
     setIcon(icon, 'scroll');
 
     // Only show label on desktop
@@ -344,19 +299,12 @@ export class TranscriptRenderer {
 
     toggleBtn.addEventListener('click', () => {
       this.autoScroll = !this.autoScroll;
-      toggleBtn.style.color = this.autoScroll ? 'var(--text-accent)' : 'var(--text-muted)';
-      toggleBtn.style.background = this.autoScroll ? 'var(--background-modifier-hover)' : 'transparent';
-    });
-
-    // Hover effect
-    toggleBtn.addEventListener('mouseenter', () => {
-      if (!this.autoScroll) {
-        toggleBtn.style.background = 'var(--background-modifier-hover)';
-      }
-    });
-    toggleBtn.addEventListener('mouseleave', () => {
-      if (!this.autoScroll) {
-        toggleBtn.style.background = 'transparent';
+      if (this.autoScroll) {
+        toggleBtn.removeClass('tr-toggle-inactive');
+        toggleBtn.addClass('tr-toggle-active');
+      } else {
+        toggleBtn.removeClass('tr-toggle-active');
+        toggleBtn.addClass('tr-toggle-inactive');
       }
     });
 
@@ -367,23 +315,21 @@ export class TranscriptRenderer {
    * Render CC (closed caption) toggle button for native video captions
    */
   private renderCaptionToggleButton(parent: HTMLElement): void {
-    const ccBtn = parent.createDiv({ cls: 'transcript-caption-toggle' });
-    ccBtn.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: ${this.isMobile ? '0' : '4px'};
-      padding: ${this.isMobile ? '4px 6px' : '4px 8px'};
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: ${this.isMobile ? '10px' : '11px'};
-      color: ${this.captionActive ? 'var(--text-accent)' : 'var(--text-muted)'};
-      background: ${this.captionActive ? 'var(--background-modifier-hover)' : 'transparent'};
-      transition: all 0.2s;
-    `;
+    const ccBtn = parent.createDiv({ cls: 'transcript-caption-toggle sa-flex-row sa-rounded-4 sa-clickable sa-transition tr-toggle-btn' });
+    if (this.isMobile) {
+      ccBtn.addClass('tr-toggle-btn-mobile');
+    }
+    if (this.captionActive) {
+      ccBtn.addClass('tr-toggle-active');
+    } else {
+      ccBtn.addClass('tr-toggle-inactive');
+    }
     ccBtn.title = this.captionActive ? 'Hide video captions' : 'Show video captions';
 
-    const icon = ccBtn.createSpan({ cls: 'caption-toggle-icon' });
-    icon.style.cssText = `display: flex; align-items: center;${this.isMobile ? ' width: 14px; height: 14px;' : ''}`;
+    const icon = ccBtn.createSpan({ cls: 'caption-toggle-icon sa-flex-row' });
+    if (this.isMobile) {
+      icon.addClass('sa-icon-14');
+    }
     setIcon(icon, 'subtitles');
 
     if (!this.isMobile) {
@@ -394,21 +340,14 @@ export class TranscriptRenderer {
       e.stopPropagation();
       if (!this.onCaptionToggle) return;
       this.captionActive = this.onCaptionToggle();
-      ccBtn.style.color = this.captionActive ? 'var(--text-accent)' : 'var(--text-muted)';
-      ccBtn.style.background = this.captionActive ? 'var(--background-modifier-hover)' : 'transparent';
+      if (this.captionActive) {
+        ccBtn.removeClass('tr-toggle-inactive');
+        ccBtn.addClass('tr-toggle-active');
+      } else {
+        ccBtn.removeClass('tr-toggle-active');
+        ccBtn.addClass('tr-toggle-inactive');
+      }
       ccBtn.title = this.captionActive ? 'Hide video captions' : 'Show video captions';
-    });
-
-    // Hover effect
-    ccBtn.addEventListener('mouseenter', () => {
-      if (!this.captionActive) {
-        ccBtn.style.background = 'var(--background-modifier-hover)';
-      }
-    });
-    ccBtn.addEventListener('mouseleave', () => {
-      if (!this.captionActive) {
-        ccBtn.style.background = 'transparent';
-      }
     });
   }
 
@@ -418,26 +357,23 @@ export class TranscriptRenderer {
   private renderSpeakerJumpButton(parent: HTMLElement): HTMLElement {
     const hasSpeakers = this.speakerSegmentIndices.length > 0;
 
-    const jumpBtn = parent.createDiv({ cls: 'transcript-speaker-jump' });
-    jumpBtn.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: ${this.isMobile ? '0' : '4px'};
-      padding: ${this.isMobile ? '4px 6px' : '4px 8px'};
-      border-radius: 4px;
-      cursor: ${hasSpeakers ? 'pointer' : 'not-allowed'};
-      font-size: ${this.isMobile ? '10px' : '11px'};
-      color: ${hasSpeakers ? 'var(--text-muted)' : 'var(--text-faint)'};
-      background: transparent;
-      transition: all 0.2s;
-      opacity: ${hasSpeakers ? '1' : '0.5'};
-    `;
+    const jumpBtn = parent.createDiv({ cls: 'transcript-speaker-jump sa-flex-row sa-rounded-4 sa-bg-transparent sa-transition tr-toggle-btn' });
+    if (this.isMobile) {
+      jumpBtn.addClass('tr-toggle-btn-mobile');
+    }
+    if (hasSpeakers) {
+      jumpBtn.addClass('tr-speaker-enabled');
+    } else {
+      jumpBtn.addClass('tr-speaker-disabled');
+    }
     jumpBtn.title = hasSpeakers
       ? `Jump to next speaker (${this.speakerSegmentIndices.length} speakers)`
       : 'No speaker markers detected';
 
-    const icon = jumpBtn.createSpan({ cls: 'speaker-jump-icon' });
-    icon.style.cssText = `display: flex; align-items: center;${this.isMobile ? ' width: 14px; height: 14px;' : ''}`;
+    const icon = jumpBtn.createSpan({ cls: 'speaker-jump-icon sa-flex-row' });
+    if (this.isMobile) {
+      icon.addClass('sa-icon-14');
+    }
     setIcon(icon, 'user');
 
     // Only show label on desktop
@@ -451,23 +387,9 @@ export class TranscriptRenderer {
       if (hasSpeakers) {
         this.jumpToNextSpeaker();
         // Update button style to show it's active
-        jumpBtn.style.color = 'var(--text-accent)';
-        jumpBtn.style.background = 'var(--background-modifier-hover)';
+        jumpBtn.addClass('tr-toggle-active');
       }
     });
-
-    if (hasSpeakers) {
-      // Hover effect
-      jumpBtn.addEventListener('mouseenter', () => {
-        jumpBtn.style.background = 'var(--background-modifier-hover)';
-      });
-      jumpBtn.addEventListener('mouseleave', () => {
-        if (this.currentSpeakerJumpIndex < 0) {
-          jumpBtn.style.background = 'transparent';
-          jumpBtn.style.color = 'var(--text-muted)';
-        }
-      });
-    }
 
     return jumpBtn;
   }
@@ -545,53 +467,29 @@ export class TranscriptRenderer {
    * Render search bar
    */
   private renderSearchBar(parent: HTMLElement): void {
-    const searchBar = parent.createDiv({ cls: 'transcript-search' });
-    searchBar.style.cssText = `
-      padding: ${this.isMobile ? '6px 10px' : '8px 12px'};
-      border-bottom: 1px solid var(--background-modifier-border);
-    `;
+    const searchBar = parent.createDiv({ cls: 'transcript-search sa-border-b tr-search-bar' });
+    if (this.isMobile) {
+      searchBar.addClass('tr-search-bar-mobile');
+    }
 
-    const inputWrapper = searchBar.createDiv({ cls: 'transcript-search-wrapper' });
-    inputWrapper.style.cssText = `
-      position: relative;
-      display: flex;
-      align-items: center;
-    `;
+    const inputWrapper = searchBar.createDiv({ cls: 'transcript-search-wrapper sa-relative sa-flex-row' });
 
     // Search icon
-    const searchIcon = inputWrapper.createSpan({ cls: 'search-icon' });
-    searchIcon.style.cssText = `
-      position: absolute;
-      left: ${this.isMobile ? '8px' : '10px'};
-      color: var(--text-muted);
-      display: flex;
-      align-items: center;
-      ${this.isMobile ? 'width: 14px; height: 14px;' : ''}
-    `;
+    const searchIcon = inputWrapper.createSpan({ cls: 'search-icon sa-absolute sa-flex-row sa-text-muted tr-search-icon' });
+    if (this.isMobile) {
+      searchIcon.addClass('sa-icon-14');
+      searchIcon.addClass('tr-search-icon-mobile');
+    }
     setIcon(searchIcon, 'search');
 
     const input = inputWrapper.createEl('input', {
       type: 'text',
       placeholder: this.isMobile ? 'Search...' : 'Search transcript...',
-      cls: 'transcript-search-input'
+      cls: 'transcript-search-input sa-w-full sa-border sa-rounded-4 sa-bg-primary tr-search-input'
     }) as HTMLInputElement;
-    input.style.cssText = `
-      width: 100%;
-      padding: ${this.isMobile ? '5px 8px 5px 28px' : '6px 10px 6px 34px'};
-      border: 1px solid var(--background-modifier-border);
-      border-radius: 4px;
-      background: var(--background-primary);
-      font-size: ${this.isMobile ? '12px' : '13px'};
-      outline: none;
-    `;
-
-    // Focus style
-    input.addEventListener('focus', () => {
-      input.style.borderColor = 'var(--interactive-accent)';
-    });
-    input.addEventListener('blur', () => {
-      input.style.borderColor = 'var(--background-modifier-border)';
-    });
+    if (this.isMobile) {
+      input.addClass('tr-search-input-mobile');
+    }
 
     // Search functionality
     input.addEventListener('input', () => {
@@ -658,79 +556,44 @@ export class TranscriptRenderer {
     const speakerColor = isEvenSpeaker ? 'var(--text-accent)' : 'var(--text-faint)';
 
     const segmentEl = parent.createDiv({
-      cls: `transcript-segment speaker-${speakerIndex % 2}`,
+      cls: `transcript-segment speaker-${speakerIndex % 2} sa-flex-row sa-transition-bg tr-segment tr-segment-hover`,
       attr: {
         'data-segment-id': String(segment.id),
         'data-speaker': String(speakerIndex)
       }
     });
-    segmentEl.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: ${this.isMobile ? '8px' : '12px'};
-      padding: ${this.isMobile ? '8px 0' : '10px 0'};
-      border-bottom: 1px solid var(--background-modifier-border-hover);
-      transition: background 0.15s ease;
-      border-left: 2px solid ${speakerColor};
-      padding-left: ${this.isMobile ? '8px' : '10px'};
-      margin-left: -${this.isMobile ? '10px' : '12px'};
-    `;
+    segmentEl.setCssProps({ '--tr-speaker-color': speakerColor });
+    if (this.isMobile) {
+      segmentEl.addClass('tr-segment-mobile');
+    }
 
     // Timestamp (clickable)
     const timestamp = segmentEl.createSpan({
       text: `[${this.formatTimestamp(segment.start)}]`,
-      cls: 'segment-timestamp'
+      cls: 'segment-timestamp sa-text-accent sa-clickable sa-flex-shrink-0 sa-transition-opacity tr-timestamp'
     });
-    timestamp.style.cssText = `
-      color: var(--text-accent);
-      cursor: pointer;
-      font-family: var(--font-monospace);
-      font-size: ${this.isMobile ? '10px' : '12px'};
-      flex-shrink: 0;
-      min-width: ${this.isMobile ? '42px' : '55px'};
-      transition: opacity 0.15s;
-    `;
+    if (this.isMobile) {
+      timestamp.addClass('tr-timestamp-mobile');
+    }
 
     timestamp.addEventListener('click', (e) => {
       e.stopPropagation();
       this.seekToTime(segment.start);
     });
 
-    timestamp.addEventListener('mouseenter', () => {
-      timestamp.style.opacity = '0.7';
-    });
-    timestamp.addEventListener('mouseleave', () => {
-      timestamp.style.opacity = '1';
-    });
-
     // Text content (with >> marker stripped)
     const textEl = segmentEl.createSpan({
-      cls: 'segment-text'
+      cls: 'segment-text sa-flex-1 sa-text-normal tr-text'
     });
-    textEl.style.cssText = `
-      flex: 1;
-      line-height: ${this.isMobile ? '1.5' : '1.6'};
-      font-size: ${this.isMobile ? '13px' : '14px'};
-      color: var(--text-normal);
-    `;
+    if (this.isMobile) {
+      textEl.addClass('tr-text-mobile');
+    }
     textEl.textContent = displayText;
 
     // Make entire segment clickable (but timestamp is primary action)
+    segmentEl.addClass('sa-clickable');
     segmentEl.addEventListener('click', () => {
       this.seekToTime(segment.start);
-    });
-    segmentEl.style.cursor = 'pointer';
-
-    // Hover effect
-    segmentEl.addEventListener('mouseenter', () => {
-      if (this.currentSegmentIndex !== segment.id) {
-        segmentEl.style.background = 'var(--background-modifier-hover)';
-      }
-    });
-    segmentEl.addEventListener('mouseleave', () => {
-      if (this.currentSegmentIndex !== segment.id) {
-        segmentEl.style.background = '';
-      }
     });
 
     return segmentEl;
@@ -768,26 +631,16 @@ export class TranscriptRenderer {
    * Render a visual divider between speaker turns
    */
   private renderSpeakerDivider(parent: HTMLElement): void {
-    const divider = parent.createDiv({ cls: 'speaker-divider' });
-    divider.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 2px 10px;
-      color: var(--text-faint);
-      font-size: 10px;
-    `;
+    const divider = parent.createDiv({ cls: 'speaker-divider sa-flex-row sa-gap-8 sa-text-faint tr-speaker-divider' });
 
     // Left line
-    const leftLine = divider.createSpan();
-    leftLine.style.cssText = 'flex: 1; border-top: 1px dashed var(--background-modifier-border);';
+    const leftLine = divider.createSpan({ cls: 'sa-flex-1 tr-divider-line' });
 
     // Diamond marker
-    divider.createSpan({ text: '\u25C6' }); // ◆
+    divider.createSpan({ text: '\u25C6' }); // diamond
 
     // Right line
-    const rightLine = divider.createSpan();
-    rightLine.style.cssText = 'flex: 1; border-top: 1px dashed var(--background-modifier-border);';
+    const rightLine = divider.createSpan({ cls: 'sa-flex-1 tr-divider-line' });
   }
 
   /**
@@ -807,7 +660,7 @@ export class TranscriptRenderer {
     if (this.currentSegmentIndex >= 0) {
       const oldEl = this.segmentElements.get(this.currentSegmentIndex);
       if (oldEl) {
-        oldEl.style.background = '';
+        oldEl.removeClass('tr-segment-active');
         oldEl.classList.remove('segment-active');
       }
     }
@@ -816,7 +669,7 @@ export class TranscriptRenderer {
     if (segmentId !== undefined && segmentId >= 0) {
       const newEl = this.segmentElements.get(segmentId);
       if (newEl) {
-        newEl.style.background = 'var(--background-modifier-active-hover)';
+        newEl.addClass('tr-segment-active');
         newEl.classList.add('segment-active');
 
         // Auto-scroll if enabled (scroll within container only, not the whole page)
@@ -860,16 +713,19 @@ export class TranscriptRenderer {
 
       if (this.searchQuery === '') {
         // Show all, remove highlighting
-        element.style.display = 'flex';
-        textEl.innerHTML = '';
+        element.removeClass('sa-hidden');
+        element.addClass('sa-flex');
+        textEl.empty();
         textEl.textContent = displayText;
       } else if (displayText.toLowerCase().includes(this.searchQuery)) {
         // Show and highlight matches
-        element.style.display = 'flex';
+        element.removeClass('sa-hidden');
+        element.addClass('sa-flex');
         this.highlightText(textEl as HTMLElement, displayText, this.searchQuery);
       } else {
         // Hide non-matching
-        element.style.display = 'none';
+        element.removeClass('sa-flex');
+        element.addClass('sa-hidden');
       }
     }
   }
@@ -878,7 +734,7 @@ export class TranscriptRenderer {
    * Highlight search matches in text
    */
   private highlightText(element: HTMLElement, text: string, query: string): void {
-    element.innerHTML = '';
+    element.empty();
 
     const lowerText = text.toLowerCase();
     const lowerQuery = query.toLowerCase();
@@ -893,12 +749,7 @@ export class TranscriptRenderer {
 
       // Add highlighted match
       const mark = document.createElement('mark');
-      mark.style.cssText = `
-        background: var(--text-highlight-bg);
-        color: var(--text-normal);
-        padding: 0 2px;
-        border-radius: 2px;
-      `;
+      mark.classList.add('tr-highlight');
       mark.textContent = text.substring(index, index + query.length);
       element.appendChild(mark);
 
@@ -935,13 +786,19 @@ export class TranscriptRenderer {
     this.isCollapsed = !this.isCollapsed;
 
     if (this.contentEl) {
-      this.contentEl.style.display = this.isCollapsed ? 'none' : 'block';
+      if (this.isCollapsed) {
+        this.contentEl.removeClass('sa-block');
+        this.contentEl.addClass('sa-hidden');
+      } else {
+        this.contentEl.removeClass('sa-hidden');
+        this.contentEl.addClass('sa-block');
+      }
     }
 
     // Update icon
     const icon = this.container?.querySelector('.collapse-icon');
     if (icon) {
-      icon.innerHTML = '';
+      (icon as HTMLElement).empty();
       setIcon(icon as HTMLElement, this.isCollapsed ? 'chevron-right' : 'chevron-down');
     }
   }
@@ -1036,7 +893,7 @@ export class TranscriptRenderer {
 
     // Re-render segments list
     if (this.segmentsListEl) {
-      this.segmentsListEl.innerHTML = '';
+      this.segmentsListEl.empty();
       this.renderSegments(this.segmentsListEl);
     }
 
@@ -1048,10 +905,13 @@ export class TranscriptRenderer {
         if (!tab) continue;
         const isActive = this.languages[i] === languageCode;
         const tabEl = tab as HTMLElement;
-        tabEl.style.color = isActive ? 'var(--text-accent)' : 'var(--text-muted)';
-        tabEl.style.background = isActive
-          ? 'var(--background-modifier-active-hover)'
-          : 'var(--background-modifier-hover)';
+        if (isActive) {
+          tabEl.removeClass('tr-lang-tab-inactive');
+          tabEl.addClass('tr-lang-tab-active');
+        } else {
+          tabEl.removeClass('tr-lang-tab-active');
+          tabEl.addClass('tr-lang-tab-inactive');
+        }
       }
     }
 

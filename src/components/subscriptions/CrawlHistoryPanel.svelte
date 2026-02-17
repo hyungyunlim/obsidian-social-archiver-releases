@@ -101,11 +101,11 @@ async function loadHistory(): Promise<void> {
     if (fetchRunHistory) {
       const runs = await fetchRunHistory(author.subscriptionId);
       history = runs.map(mapRunToEntry);
-      console.log('[CrawlHistoryPanel] Loaded history for:', author.subscriptionId, runs.length, 'runs');
+      console.debug('[CrawlHistoryPanel] Loaded history for:', author.subscriptionId, runs.length, 'runs');
     } else {
       // No fetch function provided - show empty state
       history = [];
-      console.log('[CrawlHistoryPanel] No fetchRunHistory provided');
+      console.debug('[CrawlHistoryPanel] No fetchRunHistory provided');
     }
   } catch (err) {
     error = err instanceof Error ? err : new Error('Failed to load history');

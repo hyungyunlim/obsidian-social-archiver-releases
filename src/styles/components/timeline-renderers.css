@@ -1,0 +1,755 @@
+/*
+ * Component CSS for timeline renderers.
+ *
+ * Prefixes:
+ *   scr-  SeriesCardRenderer
+ *   cpcr- CompactPostCardRenderer
+ *   gvr-  GalleryViewRenderer
+ *
+ * Replaces element.style.* assignments flagged by the Obsidian review bot.
+ */
+
+/* ========================================
+ * SeriesCardRenderer (scr-)
+ * ======================================== */
+
+/* -- Publish day badge ---------------------------------------------------- */
+.scr-publish-day-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  line-height: 1;
+}
+
+/* -- Subscription badge (shared base) ------------------------------------- */
+.scr-sub-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.scr-sub-badge--loading {
+  cursor: wait;
+}
+
+/* Subscribed state - green tint */
+.scr-sub-badge--subscribed {
+  background: rgba(var(--color-green-rgb), 0.15);
+  color: var(--color-green);
+}
+
+.scr-sub-badge--subscribed:hover {
+  background: rgba(var(--color-green-rgb), 0.25);
+}
+
+/* Not subscribed state */
+.scr-sub-badge--not-subscribed {
+  background: var(--background-modifier-hover);
+  color: var(--text-muted);
+}
+
+.scr-sub-badge--not-subscribed:hover {
+  background: var(--background-modifier-border);
+  color: var(--text-normal);
+}
+
+/* -- Unread badge --------------------------------------------------------- */
+.scr-unread-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--text-on-accent);
+}
+
+/* -- Offline message ------------------------------------------------------ */
+.scr-offline-message {
+  min-height: 200px;
+  padding: 24px;
+}
+
+/* -- Header --------------------------------------------------------------- */
+.scr-header {
+  display: block !important;
+  padding: 10px 12px !important;
+}
+
+.scr-header-row {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  width: 100% !important;
+}
+
+.scr-platform-icon {
+  flex-shrink: 0 !important;
+}
+
+.scr-title {
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  flex-shrink: 1 !important;
+  min-width: 0 !important;
+}
+
+.scr-spacer {
+  flex: 1 1 auto !important;
+  min-width: 8px !important;
+}
+
+.scr-controls {
+  display: flex !important;
+  align-items: center !important;
+  flex-shrink: 0 !important;
+  margin-left: auto !important;
+}
+
+.scr-controls--desktop {
+  gap: 6px !important;
+}
+
+.scr-controls--mobile {
+  gap: 2px !important;
+}
+
+.scr-nav-section {
+  display: flex !important;
+  align-items: center !important;
+}
+
+.scr-nav-section--desktop {
+  gap: 4px !important;
+}
+
+.scr-nav-section--mobile {
+  gap: 0 !important;
+}
+
+/* -- Fullscreen header safe-area ------------------------------------------ */
+.scr-header--fullscreen {
+  padding-top: calc(10px + env(safe-area-inset-top, 0px));
+}
+
+.scr-header--normal {
+  padding-top: 10px;
+}
+
+/* -- Scroll container states ---------------------------------------------- */
+.scr-scroll-no-smooth {
+  scroll-behavior: auto;
+}
+
+.scr-scroll-smooth {
+  scroll-behavior: smooth;
+}
+
+.scr-scroll-clickable {
+  cursor: pointer;
+}
+
+/* -- Comments dropdown ---------------------------------------------------- */
+.scr-comments-toggle {
+  border-top: 1px solid var(--background-modifier-border);
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+}
+
+.scr-comments-toggle:hover {
+  background: var(--background-modifier-hover);
+}
+
+.scr-comments-loading-svg {
+  animation: spin 1s linear infinite;
+}
+
+.scr-comments-container {
+  padding-top: 0;
+  padding-bottom: 12px;
+  max-height: 400px;
+}
+
+/* -- Comment items -------------------------------------------------------- */
+.scr-comment-body {
+  white-space: pre-wrap;
+}
+
+.scr-comment-heart {
+  color: #e91e63;
+}
+
+/* -- Webtoon metadata badges ---------------------------------------------- */
+.scr-wt-badge {
+  padding: 1px 4px;
+  font-size: 10px;
+}
+
+.scr-wt-badge--age {
+  background: var(--background-modifier-error-hover);
+}
+
+/* -- Episode number tag (webtoon content header) -------------------------- */
+.scr-episode-num {
+  padding: 2px 8px;
+  color: var(--text-on-accent);
+}
+
+/* -- Author whitespace ---------------------------------------------------- */
+.scr-nowrap {
+  white-space: nowrap;
+}
+
+/* -- Webtoon episode item ------------------------------------------------- */
+.scr-episode-item {
+  padding: 10px 16px;
+}
+
+.scr-episode-cover {
+  width: 48px;
+  height: 48px;
+  transition: opacity 0.15s ease, filter 0.15s ease;
+}
+
+.scr-episode-cover--read {
+  filter: grayscale(50%);
+}
+
+.scr-episode-cover--unread {
+  filter: none;
+}
+
+/* -- Episode number badge ------------------------------------------------- */
+.scr-num-badge {
+  padding: 1px 6px;
+  font-size: 11px;
+}
+
+.scr-num-badge--read {
+  font-weight: 500;
+}
+
+.scr-num-badge--unread {
+  font-weight: 600;
+}
+
+/* -- Episode title read/unread -------------------------------------------- */
+.scr-ep-title--read {
+  font-weight: 400;
+}
+
+.scr-ep-title--unread {
+  font-weight: 500;
+}
+
+/* -- Episode metadata row ------------------------------------------------- */
+.scr-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1;
+}
+
+/* -- Star score container ------------------------------------------------- */
+.scr-star-score {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--text-muted);
+}
+
+.scr-star-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* -- Publish date --------------------------------------------------------- */
+.scr-publish-date {
+  color: var(--text-faint);
+}
+
+/* -- Episode action container --------------------------------------------- */
+.scr-action-container {
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: var(--text-muted);
+}
+
+.scr-action-container--visible {
+  opacity: 1;
+}
+
+/* -- Episode action button ------------------------------------------------ */
+.scr-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.2s;
+  color: var(--text-muted);
+}
+
+.scr-action-btn:hover {
+  color: var(--interactive-accent);
+}
+
+.scr-action-btn-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* -- Comment badge (episode list) ----------------------------------------- */
+.scr-comment-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-muted);
+}
+
+.scr-comment-badge-icon {
+  width: 11px;
+  height: 11px;
+  display: flex;
+  align-items: center;
+}
+
+/* -- Sort / Add / Delete header buttons ----------------------------------- */
+.scr-header-btn {
+  background: transparent;
+}
+
+.scr-header-btn:hover {
+  background: var(--background-modifier-hover);
+}
+
+/* -- Delete button hover -------------------------------------------------- */
+.scr-delete-btn:hover {
+  background: rgba(var(--color-red-rgb), 0.1);
+}
+
+/* -- Episode list visibility ---------------------------------------------- */
+.scr-episode-list--expanded {
+  display: block;
+}
+
+.scr-episode-list--collapsed {
+  display: none;
+}
+
+/* -- Mobile more button --------------------------------------------------- */
+.scr-more-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.scr-more-btn:hover {
+  background: var(--background-modifier-hover);
+}
+
+/* -- Episode action menu (mobile dropdown) -------------------------------- */
+.scr-action-menu {
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  min-width: 160px;
+}
+
+.scr-action-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-normal);
+  transition: background 0.1s ease;
+}
+
+.scr-action-menu-item:hover {
+  background: var(--background-modifier-hover);
+}
+
+.scr-action-menu-item--active {
+  color: var(--interactive-accent);
+}
+
+.scr-action-menu-icon {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* -- Episode item hover --------------------------------------------------- */
+.scr-episode-item-hover:hover {
+  background: var(--background-modifier-hover);
+}
+
+.scr-episode-item-hover:hover .scr-action-container {
+  opacity: 1;
+}
+
+/* -- Cover icon placeholder ----------------------------------------------- */
+.scr-cover-icon-placeholder {
+  width: 20px;
+  height: 20px;
+  color: var(--text-faint);
+}
+
+/* -- Cover image ---------------------------------------------------------- */
+.scr-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* -- SVG fill helpers ----------------------------------------------------- */
+.scr-svg-filled svg {
+  fill: currentColor;
+}
+
+/* -- Subscription badge icon SVG sizing ----------------------------------- */
+.scr-sub-icon-subscribed svg {
+  width: 10px;
+  height: 10px;
+  stroke: var(--color-green);
+}
+
+.scr-sub-icon-default svg {
+  width: 10px;
+  height: 10px;
+  stroke: var(--text-muted);
+}
+
+.scr-sub-icon-loading svg {
+  width: 10px;
+  height: 10px;
+  stroke: var(--text-muted);
+  animation: spin 1s linear infinite;
+}
+
+/* -- Episode list read item active color ---------------------------------- */
+.scr-read-active-color {
+  color: var(--interactive-accent);
+}
+
+/* ========================================
+ * CompactPostCardRenderer (cpcr-)
+ * ======================================== */
+
+/* -- Card wrapper --------------------------------------------------------- */
+.cpcr-wrapper {
+  margin: 8px 0;
+}
+
+/* -- Card base ------------------------------------------------------------ */
+.cpcr-card {
+  gap: 0;
+  padding: 0;
+  user-select: text;
+}
+
+/* -- Expanded content transition ------------------------------------------ */
+.cpcr-expanded {
+  transition: all 0.2s ease-out;
+}
+
+/* -- Card hover ----------------------------------------------------------- */
+.cpcr-card:hover {
+  background-color: var(--background-modifier-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* -- Thumbnail ------------------------------------------------------------ */
+.cpcr-thumbnail {
+  width: 120px;
+  border-radius: 0;
+  background-size: cover;
+  background-position: center;
+}
+
+/* -- YouTube play icon overlay -------------------------------------------- */
+.cpcr-play-icon {
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding-left: 4px;
+}
+
+/* -- Media count badge ---------------------------------------------------- */
+.cpcr-media-badge {
+  bottom: 4px;
+  right: 4px;
+  padding: 2px 6px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+}
+
+/* -- Platform icon badge -------------------------------------------------- */
+.cpcr-platform-icon {
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  transition: opacity 0.2s;
+  pointer-events: auto;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.cpcr-platform-icon--linkable {
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.cpcr-platform-icon--linkable:hover {
+  opacity: 0.85;
+}
+
+.cpcr-platform-icon--static {
+  opacity: 0.25;
+  cursor: default;
+}
+
+/* -- Content section ------------------------------------------------------ */
+.cpcr-content-section {
+  justify-content: center;
+}
+
+/* -- Author name font size ------------------------------------------------ */
+.cpcr-author-name--mobile {
+  font-size: 11px;
+}
+
+.cpcr-author-name--desktop {
+  font-size: 13px;
+}
+
+/* -- Text line clamping (multi-line ellipsis) ----------------------------- */
+.cpcr-line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  text-overflow: ellipsis;
+}
+
+.cpcr-line-clamp-4 {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  text-overflow: ellipsis;
+}
+
+.cpcr-description-preview {
+  line-height: 1.4;
+}
+
+.cpcr-content-preview {
+  line-height: 1.4;
+}
+
+/* -- Avatar fallback background ------------------------------------------- */
+.cpcr-avatar-fallback {
+  background: var(--background-modifier-border);
+}
+
+/* -- User initial avatar (post platform) ---------------------------------- */
+.cpcr-user-avatar {
+  color: var(--text-on-accent);
+}
+
+/* ========================================
+ * GalleryViewRenderer (gvr-)
+ * ======================================== */
+
+/* -- Empty state ---------------------------------------------------------- */
+.gvr-empty-state {
+  padding: 48px 16px;
+}
+
+/* -- Author section -------------------------------------------------------- */
+.gvr-author-section {
+  margin-bottom: 40px;
+}
+
+/* -- Author header -------------------------------------------------------- */
+.gvr-author-header {
+  padding: 12px 16px;
+  font-size: 15px;
+  border: none;
+}
+
+.gvr-author-header-name {
+  line-height: 1.2;
+}
+
+.gvr-author-header-count {
+  font-weight: 400;
+  margin-left: 6px;
+}
+
+/* -- Post subsection ------------------------------------------------------ */
+.gvr-post-subsection {
+  margin-bottom: 24px;
+  margin-left: 16px;
+}
+
+/* -- Post subheader ------------------------------------------------------- */
+.gvr-post-subheader {
+  padding: 6px 12px;
+  border: none;
+  transition: all 0.15s ease;
+}
+
+.gvr-post-subheader:hover {
+  background: var(--background-modifier-hover);
+}
+
+.gvr-post-name {
+  line-height: 1.2;
+}
+
+/* -- Link icon wrapper ---------------------------------------------------- */
+.gvr-link-icon {
+  opacity: 0.3;
+  line-height: 1;
+  transition: opacity 0.15s;
+}
+
+/* -- Count text ----------------------------------------------------------- */
+.gvr-count-text {
+  font-weight: 400;
+}
+
+/* -- Group section -------------------------------------------------------- */
+.gvr-group-section {
+  margin-bottom: 32px;
+}
+
+/* -- Group header --------------------------------------------------------- */
+.gvr-group-header {
+  padding: 8px 16px;
+  border: none;
+}
+
+.gvr-group-header--clickable {
+  transition: all 0.15s ease;
+}
+
+.gvr-group-header--clickable:hover {
+  background: var(--background-modifier-hover);
+}
+
+.gvr-group-header--clickable:hover .gvr-link-icon {
+  opacity: 0.6;
+}
+
+.gvr-header-text {
+  line-height: 1.2;
+}
+
+/* -- Masonry grid --------------------------------------------------------- */
+.gvr-masonry-grid {
+  column-count: var(--gvr-columns, 4);
+  column-gap: 16px;
+  column-fill: balance;
+}
+
+/* -- Media card ----------------------------------------------------------- */
+.gvr-media-card {
+  border: none;
+  transition: transform 0.2s, box-shadow 0.2s;
+  break-inside: avoid;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.gvr-media-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.gvr-media-card:hover .gvr-platform-badge {
+  opacity: 1;
+}
+
+/* -- Platform badge ------------------------------------------------------- */
+.gvr-platform-badge {
+  top: 8px;
+  left: 8px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  text-transform: capitalize;
+  backdrop-filter: blur(2px);
+}
+
+/* -- Media image / video -------------------------------------------------- */
+.gvr-media-loading {
+  height: auto;
+  min-height: 150px;
+  transition: opacity 0.2s ease-in;
+}
+
+/* -- Media error container ------------------------------------------------ */
+.gvr-media-error-container {
+  min-height: 200px;
+}
+
+/* -- Video play icon overlay ---------------------------------------------- */
+.gvr-play-icon {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 48px;
+  height: 48px;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+/* -- Metadata footer ------------------------------------------------------ */
+.gvr-metadata {
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent);
+  backdrop-filter: blur(2px);
+}
+
+/* -- Lightbox ------------------------------------------------------------- */
+.gvr-lightbox {
+  background: rgba(0, 0, 0, 0.9);
+  z-index: 9999;
+}
+
+.gvr-lightbox-content {
+  max-width: 90vw;
+  max-height: 90vh;
+}
+
+.gvr-lightbox-media {
+  max-width: 100%;
+  max-height: 90vh;
+}

@@ -1,6 +1,7 @@
 import { Modal, App, Platform, Setting } from 'obsidian';
 import type { AuthorCatalogEntry } from '@/types/author-catalog';
 import { siReddit } from '@/constants/platform-icons';
+import { createSVGElement } from '@/utils/dom-helpers';
 
 /**
  * Reddit Subscribe Options returned from modal
@@ -113,14 +114,8 @@ export class RedditSubscribeModal extends Modal {
 
     // Mobile modal size adjustments (same as ArchiveModal)
     if (Platform.isMobile) {
-      modalEl.style.setProperty('width', '92vw', 'important');
-      modalEl.style.setProperty('max-width', '92vw', 'important');
-      modalEl.style.setProperty('height', 'auto', 'important');
-      modalEl.style.setProperty('max-height', '90vh', 'important');
-      modalEl.style.setProperty('overflow-y', 'auto', 'important');
-
-      contentEl.style.paddingLeft = '12px';
-      contentEl.style.paddingRight = '12px';
+      modalEl.addClass('am-modal--mobile');
+      contentEl.addClass('sa-px-12');
     }
 
     // Title - different text for subreddits vs user profiles
@@ -136,7 +131,7 @@ export class RedditSubscribeModal extends Modal {
 
     // Error container (hidden by default)
     this.errorContainer = contentEl.createDiv({ cls: 'reddit-error-container' });
-    this.errorContainer.style.display = 'none';
+    this.errorContainer.addClass('sa-hidden');
 
     // Options
     this.renderOptions(contentEl);
@@ -160,67 +155,44 @@ export class RedditSubscribeModal extends Modal {
 
   private renderProfileCard(container: HTMLElement): void {
     const card = container.createDiv({ cls: 'reddit-profile-card' });
-    card.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px;
-      background: var(--background-secondary);
-      border-radius: 8px;
-      margin-bottom: 16px;
-    `;
+    card.addClass('sa-flex-row', 'sa-gap-12', 'sa-p-12', 'sa-bg-secondary', 'sa-rounded-8', 'sa-mb-16');
 
     // Avatar with Reddit icon
     const avatar = card.createDiv({ cls: 'reddit-avatar' });
-    avatar.style.cssText = `
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
-      background: #FF4500;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    `;
-    avatar.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="${siReddit.path}"/></svg>`;
+    avatar.addClass('sa-flex-center', 'sa-rounded-full', 'sa-flex-shrink-0', 'rsm-avatar');
+    const svg = createSVGElement(siReddit, {
+      width: '24px',
+      height: '24px',
+      fill: 'white'
+    });
+    avatar.appendChild(svg);
 
     // Info
     const info = card.createDiv({ cls: 'reddit-info' });
 
     const name = info.createDiv({ cls: 'reddit-name' });
-    name.style.cssText = 'font-weight: 600; color: var(--text-normal);';
+    name.addClass('sa-font-semibold', 'sa-text-normal');
     name.setText(this.author.authorName || 'Unknown');
 
     if (this.author.archiveCount > 0) {
       const stats = info.createDiv({ cls: 'reddit-stats' });
-      stats.style.cssText = 'font-size: var(--font-smaller); color: var(--text-muted); margin-top: 2px;';
+      stats.addClass('sa-text-xs', 'sa-text-muted', 'sa-mt-2');
       stats.setText(`${this.author.archiveCount} archived posts`);
     }
   }
 
   private showError(message: string): void {
     this.errorContainer.empty();
-    this.errorContainer.style.cssText = `
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 8px 12px;
-      margin-bottom: 12px;
-    `;
+    this.errorContainer.removeClass('sa-hidden');
+    this.errorContainer.addClass('sa-flex-between', 'sa-gap-12', 'sa-p-8', 'sa-px-12', 'sa-mb-12');
 
     const messageText = this.errorContainer.createDiv();
     messageText.textContent = message;
-    messageText.style.cssText = `
-      margin: 0;
-      color: var(--text-error);
-      font-size: var(--font-ui-small);
-      line-height: 1.4;
-    `;
+    messageText.addClass('sa-m-0', 'sa-text-error', 'sa-text-sm', 'sa-leading-normal');
   }
 
   private hideError(): void {
-    this.errorContainer.style.display = 'none';
+    this.errorContainer.addClass('sa-hidden');
     this.errorContainer.empty();
   }
 
@@ -229,30 +201,17 @@ export class RedditSubscribeModal extends Modal {
 
     if (Platform.isMobile) {
       // Mobile: Compact custom layout (same as ArchiveModal)
-      optionsContainer.style.cssText = 'display: flex; flex-direction: column; gap: 14px;';
-
-      const rowStyle = 'display: flex; align-items: center; justify-content: space-between; gap: 12px;';
-      const labelStyle = 'font-size: var(--font-ui-small); color: var(--text-normal); flex-shrink: 0;';
-      const inputStyle = `
-        height: 28px;
-        padding: 0 8px;
-        border-radius: var(--input-radius);
-        border: 1px solid var(--background-modifier-border);
-        background: var(--background-modifier-form-field);
-        color: var(--text-normal);
-        font-size: var(--font-ui-smaller);
-        -webkit-appearance: none;
-      `;
+      optionsContainer.addClass('sa-flex-col', 'sa-gap-16');
 
       // Row 1: Sort by
       const sortByRow = optionsContainer.createDiv();
-      sortByRow.style.cssText = rowStyle;
+      sortByRow.addClass('sa-flex-between', 'sa-gap-12');
 
       const sortByLabel = sortByRow.createEl('label', { text: 'Sort by' });
-      sortByLabel.style.cssText = labelStyle;
+      sortByLabel.addClass('sa-text-sm', 'sa-text-normal', 'sa-flex-shrink-0');
 
       const sortBySelect = sortByRow.createEl('select');
-      sortBySelect.style.cssText = inputStyle + 'min-width: 100px; padding-right: 24px;';
+      sortBySelect.addClass('rsm-mobile-select');
       const sortByOptions = this.isUserProfile ? SORT_BY_OPTIONS_USER : SORT_BY_OPTIONS_SUBREDDIT;
       for (const opt of sortByOptions) {
         const option = sortBySelect.createEl('option', { value: opt.value, text: opt.label });
@@ -264,13 +223,13 @@ export class RedditSubscribeModal extends Modal {
 
       // Row 2: Time range
       const timeRangeRow = optionsContainer.createDiv();
-      timeRangeRow.style.cssText = rowStyle;
+      timeRangeRow.addClass('sa-flex-between', 'sa-gap-12');
 
       const timeRangeLabel = timeRangeRow.createEl('label', { text: 'Time range' });
-      timeRangeLabel.style.cssText = labelStyle;
+      timeRangeLabel.addClass('sa-text-sm', 'sa-text-normal', 'sa-flex-shrink-0');
 
       const timeRangeSelect = timeRangeRow.createEl('select');
-      timeRangeSelect.style.cssText = inputStyle + 'min-width: 120px; padding-right: 24px;';
+      timeRangeSelect.addClass('rsm-mobile-select');
       for (const opt of TIME_RANGE_OPTIONS) {
         const option = timeRangeSelect.createEl('option', { value: opt.value, text: opt.label });
         if (opt.value === this.sortByTime) option.selected = true;
@@ -281,33 +240,35 @@ export class RedditSubscribeModal extends Modal {
 
       // Row 3: Keyword filter
       const keywordRow = optionsContainer.createDiv();
-      keywordRow.style.cssText = rowStyle;
+      keywordRow.addClass('sa-flex-between', 'sa-gap-12');
 
       const keywordLabel = keywordRow.createEl('label', { text: 'Keyword filter' });
-      keywordLabel.style.cssText = labelStyle;
+      keywordLabel.addClass('sa-text-sm', 'sa-text-normal', 'sa-flex-shrink-0');
 
       const keywordInput = keywordRow.createEl('input', {
         type: 'text',
         placeholder: 'Optional',
         value: this.keyword
       });
-      keywordInput.style.cssText = inputStyle + 'flex: 1; min-width: 80px;';
+      keywordInput.addClass('sa-flex-1', 'sa-min-w-0', 'rsm-mobile-input');
       keywordInput.addEventListener('input', (e) => {
         this.keyword = (e.target as HTMLInputElement).value;
       });
 
       // Row 4: Posts per run
       const postsRow = optionsContainer.createDiv();
-      postsRow.style.cssText = rowStyle;
+      postsRow.addClass('sa-flex-between', 'sa-gap-12');
 
       const postsLabel = postsRow.createEl('label', { text: `Posts per run (max ${MAX_POSTS_PER_RUN.MAX})` });
-      postsLabel.style.cssText = labelStyle;
+      postsLabel.addClass('sa-text-sm', 'sa-text-normal', 'sa-flex-shrink-0');
 
       const postsInput = postsRow.createEl('input', {
         type: 'number',
         value: String(this.maxPostsPerRun)
       });
-      postsInput.style.cssText = inputStyle + 'width: 70px; text-align: center;';
+      postsInput.addClass('rsm-mobile-input', 'sa-text-center');
+      postsInput.setCssProps({'--sa-width': '70px'});
+      postsInput.addClass('sa-dynamic-width');
       postsInput.min = String(MAX_POSTS_PER_RUN.MIN);
       postsInput.max = String(MAX_POSTS_PER_RUN.MAX);
       postsInput.addEventListener('input', (e) => {
@@ -371,8 +332,8 @@ export class RedditSubscribeModal extends Modal {
           text.inputEl.type = 'number';
           text.inputEl.min = String(MAX_POSTS_PER_RUN.MIN);
           text.inputEl.max = String(MAX_POSTS_PER_RUN.MAX);
-          text.inputEl.style.width = '70px';
-          text.inputEl.style.textAlign = 'center';
+          text.inputEl.setCssProps({'--sa-width': '70px'});
+          text.inputEl.addClass('sa-dynamic-width', 'sa-text-center');
           text
             .setPlaceholder(String(MAX_POSTS_PER_RUN.DEFAULT))
             .setValue(String(this.maxPostsPerRun))
@@ -392,8 +353,8 @@ export class RedditSubscribeModal extends Modal {
             });
         });
       // Remove bottom border and margin from last setting
-      postsSetting.settingEl.style.borderBottom = 'none';
-      postsSetting.settingEl.style.paddingBottom = '0';
+      postsSetting.settingEl.addClass('rsm-setting-last');
+      postsSetting.settingEl.addClass('sa-p-0');
     }
   }
 
@@ -402,8 +363,7 @@ export class RedditSubscribeModal extends Modal {
 
     // Mobile: stack buttons vertically
     if (Platform.isMobile) {
-      footer.style.flexDirection = 'column';
-      footer.style.gap = '12px';
+      footer.addClass('sa-flex-col', 'sa-gap-12');
     }
 
     // Submit button first (on top for mobile)
@@ -414,7 +374,7 @@ export class RedditSubscribeModal extends Modal {
     this.submitBtn.addEventListener('click', () => void this.handleSubmit());
 
     if (Platform.isMobile) {
-      this.submitBtn.style.width = '100%';
+      this.submitBtn.addClass('sa-w-full');
     }
 
     // Cancel button
@@ -422,7 +382,7 @@ export class RedditSubscribeModal extends Modal {
     cancelBtn.addEventListener('click', () => this.close());
 
     if (Platform.isMobile) {
-      cancelBtn.style.width = '100%';
+      cancelBtn.addClass('sa-w-full');
     }
   }
 

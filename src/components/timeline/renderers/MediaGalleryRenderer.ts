@@ -99,16 +99,19 @@ export class MediaGalleryRenderer {
 
     const playerWrapper = container.createDiv();
     playerWrapper.addClass('social-audio-player');
-    playerWrapper.style.cssText = `
-      width: 100%;
-      padding: ${isMobile ? '12px' : '14px'};
-      background: var(--background-secondary);
-      border: 1px solid var(--background-modifier-border);
-      border-radius: ${isMobile ? '10px' : '12px'};
-      display: flex;
-      flex-direction: column;
-      gap: ${isMobile ? '14px' : '16px'};
-    `;
+    playerWrapper.addClass('sa-w-full');
+    playerWrapper.addClass('sa-bg-secondary');
+    playerWrapper.addClass('sa-border');
+    playerWrapper.addClass('sa-flex-col');
+    if (isMobile) {
+      playerWrapper.addClass('sa-p-12');
+      playerWrapper.addClass('sa-gap-14');
+      playerWrapper.addClass('mgr-player-mobile');
+    } else {
+      playerWrapper.addClass('sa-p-14');
+      playerWrapper.addClass('sa-gap-16');
+      playerWrapper.addClass('sa-rounded-12');
+    }
 
     // Hidden audio element
     const audio = playerWrapper.createEl('audio', {
@@ -117,32 +120,37 @@ export class MediaGalleryRenderer {
         preload: 'metadata'
       }
     });
-    audio.style.display = 'none';
+    audio.addClass('sa-hidden');
 
     // Register for exclusive playback (pause others when this plays)
     this.registerAudioElement(audio);
 
     // Top row: Cover art + info + play button
     const topRow = playerWrapper.createDiv();
-    topRow.style.cssText = `display: flex; align-items: center; gap: ${isMobile ? '10px' : '12px'};`;
+    topRow.addClass('sa-flex-row');
+    if (isMobile) {
+      topRow.addClass('sa-gap-10');
+    } else {
+      topRow.addClass('sa-gap-12');
+    }
 
     // Cover art / podcast icon (desktop: 48px, mobile: 40px)
     const coverSize = isMobile ? 40 : 48;
     const coverArt = topRow.createDiv();
     coverArt.addClass('audio-player-cover');
-    coverArt.style.cssText = `
-      width: ${coverSize}px;
-      height: ${coverSize}px;
-      border-radius: ${isMobile ? '8px' : '10px'};
-      background: linear-gradient(135deg, var(--background-modifier-border) 0%, var(--background-primary) 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--background-modifier-border);
-    `;
+    coverArt.addClass('sa-flex-center');
+    coverArt.addClass('sa-flex-shrink-0');
+    coverArt.addClass('sa-overflow-hidden');
+    coverArt.addClass('sa-border');
+    coverArt.addClass('sa-dynamic-width');
+    coverArt.addClass('sa-dynamic-height');
+    coverArt.addClass('mgr-cover-art');
+    coverArt.setCssProps({ '--sa-width': `${coverSize}px`, '--sa-height': `${coverSize}px` });
+    if (isMobile) {
+      coverArt.addClass('mgr-cover-art-mobile');
+    } else {
+      coverArt.addClass('mgr-cover-art-desktop');
+    }
 
     // Try to use author avatar as cover
     const avatarUrl = post?.author?.avatar || post?.author?.localAvatar;
@@ -154,49 +162,60 @@ export class MediaGalleryRenderer {
           alt: 'Cover'
         }
       });
-      coverImg.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+      coverImg.addClass('sa-cover');
       coverImg.addEventListener('error', () => {
         coverImg.remove();
         // Neutral gradient for fallback (distinct from accent-colored play button)
-        coverArt.style.background = 'linear-gradient(135deg, var(--background-modifier-border-hover) 0%, var(--background-modifier-border) 100%)';
+        coverArt.removeClass('mgr-cover-art');
+        coverArt.addClass('mgr-cover-art-fallback');
         const iconWrapper = coverArt.createDiv();
-        iconWrapper.style.cssText = `width: ${iconSize}px; height: ${iconSize}px; color: var(--text-muted); display: flex; align-items: center; justify-content: center;`;
+        iconWrapper.addClass('sa-flex-center');
+        iconWrapper.addClass('sa-text-muted');
+        iconWrapper.addClass('sa-dynamic-width');
+        iconWrapper.addClass('sa-dynamic-height');
+        iconWrapper.setCssProps({ '--sa-width': `${iconSize}px`, '--sa-height': `${iconSize}px` });
         setIcon(iconWrapper, 'podcast');
       });
     } else {
       // Neutral gradient for podcast icon (distinct from accent-colored play button)
-      coverArt.style.background = 'linear-gradient(135deg, var(--background-modifier-border-hover) 0%, var(--background-modifier-border) 100%)';
+      coverArt.removeClass('mgr-cover-art');
+      coverArt.addClass('mgr-cover-art-fallback');
       const iconWrapper = coverArt.createDiv();
-      iconWrapper.style.cssText = `width: ${iconSize}px; height: ${iconSize}px; color: var(--text-muted); display: flex; align-items: center; justify-content: center;`;
+      iconWrapper.addClass('sa-flex-center');
+      iconWrapper.addClass('sa-text-muted');
+      iconWrapper.addClass('sa-dynamic-width');
+      iconWrapper.addClass('sa-dynamic-height');
+      iconWrapper.setCssProps({ '--sa-width': `${iconSize}px`, '--sa-height': `${iconSize}px` });
       setIcon(iconWrapper, 'podcast');
     }
 
     // Info section (title + author)
     const infoSection = topRow.createDiv();
-    infoSection.style.cssText = 'flex: 1; min-width: 0; overflow: hidden;';
+    infoSection.addClass('sa-flex-1');
+    infoSection.addClass('sa-overflow-hidden');
 
     const titleEl = infoSection.createDiv();
-    titleEl.style.cssText = `
-      font-size: ${isMobile ? '13px' : '14px'};
-      font-weight: 600;
-      color: var(--text-normal);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      line-height: 1.3;
-    `;
+    titleEl.addClass('sa-font-semibold');
+    titleEl.addClass('sa-text-normal');
+    titleEl.addClass('sa-truncate');
+    titleEl.addClass('sa-leading-tight');
+    if (isMobile) {
+      titleEl.addClass('sa-text-base');
+    } else {
+      titleEl.addClass('sa-text-md');
+    }
     titleEl.setText(post?.title || 'Audio');
 
     const authorEl = infoSection.createDiv();
-    authorEl.style.cssText = `
-      font-size: ${isMobile ? '11px' : '12px'};
-      color: var(--text-muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      margin-top: 2px;
-      line-height: 1.3;
-    `;
+    authorEl.addClass('sa-text-muted');
+    authorEl.addClass('sa-truncate');
+    authorEl.addClass('sa-leading-tight');
+    authorEl.addClass('sa-mt-2');
+    if (isMobile) {
+      authorEl.addClass('sa-text-xs');
+    } else {
+      authorEl.addClass('sa-text-sm');
+    }
     authorEl.setText(post?.author?.name || '');
 
     // Play/Pause button (desktop: 40px, mobile: 36px)
@@ -204,32 +223,38 @@ export class MediaGalleryRenderer {
     const playIconSize = isMobile ? 18 : 20;
     const playBtn = topRow.createDiv();
     playBtn.addClass('audio-player-btn');
-    playBtn.style.cssText = `
-      width: ${btnSize}px;
-      height: ${btnSize}px;
-      border-radius: 50%;
-      background: var(--interactive-accent);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      flex-shrink: 0;
-      transition: all 0.2s ease;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    `;
+    playBtn.addClass('sa-flex-center');
+    playBtn.addClass('sa-rounded-full');
+    playBtn.addClass('sa-bg-accent');
+    playBtn.addClass('sa-clickable');
+    playBtn.addClass('sa-flex-shrink-0');
+    playBtn.addClass('sa-transition');
+    playBtn.addClass('sa-dynamic-width');
+    playBtn.addClass('sa-dynamic-height');
+    playBtn.addClass('mgr-play-btn');
+    playBtn.setCssProps({ '--sa-width': `${btnSize}px`, '--sa-height': `${btnSize}px` });
 
     const playIcon = playBtn.createDiv();
-    playIcon.style.cssText = `width: ${playIconSize}px; height: ${playIconSize}px; color: var(--text-on-accent); display: flex; align-items: center; justify-content: center;`;
+    playIcon.addClass('sa-flex-center');
+    playIcon.addClass('sa-dynamic-width');
+    playIcon.addClass('sa-dynamic-height');
+    playIcon.addClass('mgr-play-icon');
+    playIcon.addClass('mgr-play-icon-offset');
+    playIcon.setCssProps({ '--sa-width': `${playIconSize}px`, '--sa-height': `${playIconSize}px` });
     setIcon(playIcon, 'play');
-    // Offset play icon slightly for optical centering (play triangles appear left-heavy)
-    playIcon.style.transform = 'translateX(1px)';
 
     let isPlaying = false;
 
     const updatePlayButton = () => {
       playIcon.empty();
       // Play icon needs slight offset, pause icon is centered
-      playIcon.style.transform = isPlaying ? 'translateX(0)' : 'translateX(1px)';
+      if (isPlaying) {
+        playIcon.removeClass('mgr-play-icon-offset');
+        playIcon.addClass('mgr-play-icon-center');
+      } else {
+        playIcon.removeClass('mgr-play-icon-center');
+        playIcon.addClass('mgr-play-icon-offset');
+      }
       setIcon(playIcon, isPlaying ? 'pause' : 'play');
     };
 
@@ -242,111 +267,111 @@ export class MediaGalleryRenderer {
       }
     });
 
-    playBtn.addEventListener('mouseenter', () => {
-      playBtn.style.transform = 'scale(1.08)';
-      playBtn.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
-    });
-
-    playBtn.addEventListener('mouseleave', () => {
-      playBtn.style.transform = 'scale(1)';
-      playBtn.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
-    });
-
     // Bottom row: Progress bar + time
     const bottomRow = playerWrapper.createDiv();
-    bottomRow.style.cssText = `display: flex; align-items: center; gap: ${isMobile ? '8px' : '10px'};`;
+    bottomRow.addClass('sa-flex-row');
+    if (isMobile) {
+      bottomRow.addClass('sa-gap-8');
+    } else {
+      bottomRow.addClass('sa-gap-10');
+    }
 
     // Current time
     const currentTimeEl = bottomRow.createDiv();
     currentTimeEl.addClass('audio-current-time');
-    currentTimeEl.style.cssText = `font-size: ${isMobile ? '10px' : '11px'}; color: var(--text-muted); min-width: ${isMobile ? '32px' : '38px'}; text-align: right; font-variant-numeric: tabular-nums; transition: color 0.2s ease;`;
+    currentTimeEl.addClass('sa-text-muted');
+    currentTimeEl.addClass('sa-text-right');
+    currentTimeEl.addClass('sa-transition-color');
+    currentTimeEl.addClass('sa-dynamic-width');
+    currentTimeEl.addClass('mgr-time-display');
+    if (isMobile) {
+      currentTimeEl.addClass('mgr-time-mobile');
+      currentTimeEl.setCssProps({ '--sa-width': '32px' });
+    } else {
+      currentTimeEl.addClass('sa-text-xs');
+      currentTimeEl.setCssProps({ '--sa-width': '38px' });
+    }
     currentTimeEl.setText('0:00');
 
     // Progress bar wrapper (for larger touch/click area)
     const progressWrapper = bottomRow.createDiv();
-    progressWrapper.style.cssText = `
-      flex: 1;
-      height: 20px;
-      display: flex;
-      align-items: center;
-      cursor: pointer;
-      position: relative;
-    `;
+    progressWrapper.addClass('sa-flex-1');
+    progressWrapper.addClass('sa-flex-row');
+    progressWrapper.addClass('sa-clickable');
+    progressWrapper.addClass('sa-relative');
+    progressWrapper.addClass('sa-dynamic-height');
+    progressWrapper.setCssProps({ '--sa-height': '20px' });
 
     // Progress bar container (the visible track)
     const progressContainer = progressWrapper.createDiv();
-    progressContainer.style.cssText = `
-      width: 100%;
-      height: 4px;
-      background: var(--background-modifier-border);
-      border-radius: 2px;
-      position: relative;
-      overflow: visible;
-      transition: height 0.15s ease;
-    `;
+    progressContainer.addClass('sa-w-full');
+    progressContainer.addClass('sa-relative');
+    progressContainer.addClass('sa-dynamic-height');
+    progressContainer.addClass('mgr-progress-track');
+    progressContainer.setCssProps({ '--sa-height': '4px' });
 
     // Buffered indicator (rendered first, behind progress)
     const bufferedFill = progressContainer.createDiv();
-    bufferedFill.style.cssText = `
-      position: absolute;
-      top: 0;
-      left: 0;
-      height: 100%;
-      width: 0%;
-      background: var(--background-modifier-border-hover);
-      border-radius: 2px;
-    `;
+    bufferedFill.addClass('sa-absolute');
+    bufferedFill.addClass('sa-top-0');
+    bufferedFill.addClass('sa-left-0');
+    bufferedFill.addClass('sa-h-full');
+    bufferedFill.addClass('sa-dynamic-width');
+    bufferedFill.addClass('mgr-buffered-fill');
+    bufferedFill.setCssProps({ '--sa-width': '0%' });
 
     // Progress fill (on top of buffered)
     const progressFill = progressContainer.createDiv();
-    progressFill.style.cssText = `
-      position: absolute;
-      top: 0;
-      left: 0;
-      height: 100%;
-      width: 0%;
-      background: var(--interactive-accent);
-      border-radius: 2px;
-      transition: width 0.1s linear;
-    `;
+    progressFill.addClass('sa-absolute');
+    progressFill.addClass('sa-top-0');
+    progressFill.addClass('sa-left-0');
+    progressFill.addClass('sa-h-full');
+    progressFill.addClass('sa-dynamic-width');
+    progressFill.addClass('mgr-progress-fill');
+    progressFill.setCssProps({ '--sa-width': '0%' });
 
     // Thumb indicator
     const thumbSize = isMobile ? 12 : 14;
     const thumb = progressContainer.createDiv();
-    thumb.style.cssText = `
-      position: absolute;
-      top: 50%;
-      left: 0%;
-      width: ${thumbSize}px;
-      height: ${thumbSize}px;
-      background: var(--interactive-accent);
-      border: 2px solid var(--background-primary);
-      border-radius: 50%;
-      transform: translate(-50%, -50%);
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-      opacity: 0;
-      transition: opacity 0.15s ease, transform 0.15s ease;
-      pointer-events: none;
-    `;
+    thumb.addClass('sa-absolute');
+    thumb.addClass('sa-rounded-full');
+    thumb.addClass('sa-bg-accent');
+    thumb.addClass('sa-opacity-0');
+    thumb.addClass('sa-pointer-none');
+    thumb.addClass('sa-dynamic-width');
+    thumb.addClass('sa-dynamic-height');
+    thumb.addClass('mgr-thumb');
+    thumb.setCssProps({ '--sa-width': `${thumbSize}px`, '--sa-height': `${thumbSize}px` });
 
     // Hover effects for progress bar
     let isHoveringProgress = false;
     progressWrapper.addEventListener('mouseenter', () => {
       isHoveringProgress = true;
-      progressContainer.style.height = '6px';
-      thumb.style.opacity = '1';
+      progressContainer.setCssProps({ '--sa-height': '6px' });
+      thumb.removeClass('sa-opacity-0');
+      thumb.addClass('sa-opacity-100');
     });
     progressWrapper.addEventListener('mouseleave', () => {
       isHoveringProgress = false;
-      progressContainer.style.height = '4px';
+      progressContainer.setCssProps({ '--sa-height': '4px' });
       if (!isPlaying) {
-        thumb.style.opacity = '0';
+        thumb.removeClass('sa-opacity-100');
+        thumb.addClass('sa-opacity-0');
       }
     });
 
     // Duration
     const durationEl = bottomRow.createDiv();
-    durationEl.style.cssText = `font-size: ${isMobile ? '10px' : '11px'}; color: var(--text-faint); min-width: ${isMobile ? '32px' : '38px'}; font-variant-numeric: tabular-nums;`;
+    durationEl.addClass('sa-text-faint');
+    durationEl.addClass('sa-dynamic-width');
+    durationEl.addClass('mgr-time-display');
+    if (isMobile) {
+      durationEl.addClass('mgr-time-mobile');
+      durationEl.setCssProps({ '--sa-width': '32px' });
+    } else {
+      durationEl.addClass('sa-text-xs');
+      durationEl.setCssProps({ '--sa-width': '38px' });
+    }
     durationEl.setText('--:--');
 
     // Playback speed button
@@ -355,19 +380,22 @@ export class MediaGalleryRenderer {
 
     const speedBtn = bottomRow.createDiv();
     speedBtn.addClass('audio-speed-btn');
-    speedBtn.style.cssText = `
-      font-size: ${isMobile ? '10px' : '11px'};
-      color: var(--text-muted);
-      padding: 2px 6px;
-      border-radius: 4px;
-      cursor: pointer;
-      user-select: none;
-      transition: all 0.15s ease;
-      background: transparent;
-      font-weight: 500;
-      min-width: ${isMobile ? '32px' : '36px'};
-      text-align: center;
-    `;
+    speedBtn.addClass('sa-rounded-4');
+    speedBtn.addClass('sa-clickable');
+    speedBtn.addClass('sa-no-select');
+    speedBtn.addClass('sa-transition');
+    speedBtn.addClass('sa-font-medium');
+    speedBtn.addClass('sa-text-center');
+    speedBtn.addClass('sa-dynamic-width');
+    speedBtn.addClass('mgr-speed-btn');
+    speedBtn.addClass('mgr-speed-default');
+    if (isMobile) {
+      speedBtn.addClass('mgr-time-mobile');
+      speedBtn.setCssProps({ '--sa-width': '32px' });
+    } else {
+      speedBtn.addClass('sa-text-xs');
+      speedBtn.setCssProps({ '--sa-width': '36px' });
+    }
     speedBtn.setText('1x');
 
     speedBtn.addEventListener('click', (e) => {
@@ -378,17 +406,25 @@ export class MediaGalleryRenderer {
         audio.playbackRate = newSpeed;
         speedBtn.setText(newSpeed === 1 ? '1x' : `${newSpeed}x`);
         // Highlight when not 1x
-        speedBtn.style.color = newSpeed === 1 ? 'var(--text-muted)' : 'var(--interactive-accent)';
-        speedBtn.style.background = newSpeed === 1 ? 'transparent' : 'var(--background-modifier-hover)';
+        if (newSpeed === 1) {
+          speedBtn.removeClass('mgr-speed-active');
+          speedBtn.addClass('mgr-speed-default');
+        } else {
+          speedBtn.removeClass('mgr-speed-default');
+          speedBtn.addClass('mgr-speed-active');
+        }
       }
     });
 
     speedBtn.addEventListener('mouseenter', () => {
-      speedBtn.style.background = 'var(--background-modifier-hover)';
+      speedBtn.addClass('mgr-speed-active');
     });
     speedBtn.addEventListener('mouseleave', () => {
       const currentSpeed = speedOptions[currentSpeedIndex];
-      speedBtn.style.background = currentSpeed === 1 ? 'transparent' : 'var(--background-modifier-hover)';
+      if (currentSpeed === 1) {
+        speedBtn.removeClass('mgr-speed-active');
+        speedBtn.addClass('mgr-speed-default');
+      }
     });
 
     // Progress bar click handler
@@ -403,7 +439,7 @@ export class MediaGalleryRenderer {
 
     // Update thumb position
     const updateThumbPosition = (percent: number) => {
-      thumb.style.left = `${percent}%`;
+      thumb.setCssStyles({ left: `${percent}%` });
     };
 
     // Audio event listeners
@@ -416,7 +452,7 @@ export class MediaGalleryRenderer {
     audio.addEventListener('timeupdate', () => {
       if (audio.duration && isFinite(audio.duration)) {
         const percent = (audio.currentTime / audio.duration) * 100;
-        progressFill.style.width = `${percent}%`;
+        progressFill.setCssProps({ '--sa-width': `${percent}%` });
         updateThumbPosition(percent);
         currentTimeEl.setText(this.formatTime(audio.currentTime));
       }
@@ -426,7 +462,7 @@ export class MediaGalleryRenderer {
       if (audio.buffered.length > 0 && audio.duration && isFinite(audio.duration)) {
         const bufferedEnd = audio.buffered.end(audio.buffered.length - 1);
         const percent = (bufferedEnd / audio.duration) * 100;
-        bufferedFill.style.width = `${percent}%`;
+        bufferedFill.setCssProps({ '--sa-width': `${percent}%` });
       }
     });
 
@@ -434,8 +470,10 @@ export class MediaGalleryRenderer {
       isPlaying = true;
       updatePlayButton();
       // Show thumb and highlight current time when playing
-      thumb.style.opacity = '1';
-      currentTimeEl.style.color = 'var(--interactive-accent)';
+      thumb.removeClass('sa-opacity-0');
+      thumb.addClass('sa-opacity-100');
+      currentTimeEl.removeClass('sa-text-muted');
+      currentTimeEl.addClass('sa-text-accent');
     });
 
     audio.addEventListener('pause', () => {
@@ -443,9 +481,11 @@ export class MediaGalleryRenderer {
       updatePlayButton();
       // Hide thumb unless hovering, reset current time color
       if (!isHoveringProgress) {
-        thumb.style.opacity = '0';
+        thumb.removeClass('sa-opacity-100');
+        thumb.addClass('sa-opacity-0');
       }
-      currentTimeEl.style.color = 'var(--text-muted)';
+      currentTimeEl.removeClass('sa-text-accent');
+      currentTimeEl.addClass('sa-text-muted');
     });
 
     audio.addEventListener('ended', () => {
@@ -453,21 +493,24 @@ export class MediaGalleryRenderer {
       updatePlayButton();
       audio.currentTime = 0;
       // Reset UI state
-      progressFill.style.width = '0%';
+      progressFill.setCssProps({ '--sa-width': '0%' });
       updateThumbPosition(0);
       if (!isHoveringProgress) {
-        thumb.style.opacity = '0';
+        thumb.removeClass('sa-opacity-100');
+        thumb.addClass('sa-opacity-0');
       }
-      currentTimeEl.style.color = 'var(--text-muted)';
+      currentTimeEl.removeClass('sa-text-accent');
+      currentTimeEl.addClass('sa-text-muted');
       currentTimeEl.setText('0:00');
     });
 
     audio.addEventListener('error', () => {
       titleEl.setText('Error loading audio');
-      titleEl.style.color = 'var(--text-error)';
-      playBtn.style.opacity = '0.5';
-      playBtn.style.cursor = 'not-allowed';
-      playBtn.style.pointerEvents = 'none';
+      titleEl.removeClass('sa-text-normal');
+      titleEl.addClass('sa-text-error');
+      playBtn.addClass('sa-opacity-50');
+      playBtn.addClass('mgr-disabled');
+      playBtn.addClass('sa-pointer-none');
     });
 
     return { wrapper: playerWrapper, audio };
@@ -503,7 +546,14 @@ export class MediaGalleryRenderer {
     // Check if all media is audio for reduced min-height
     const isAudioOnly = media.every(m => m.type === 'audio' || isAudioUrl(m.url));
     const mediaContainer = carouselContainer.createDiv();
-    mediaContainer.style.cssText = `position: relative; width: 100%; min-height: ${isAudioOnly ? '80px' : '200px'}; max-height: 600px; display: flex; align-items: center; justify-content: center; background: transparent; transition: height 0.3s ease;`;
+    mediaContainer.addClass('sa-relative');
+    mediaContainer.addClass('sa-w-full');
+    mediaContainer.addClass('sa-flex-center');
+    mediaContainer.addClass('sa-bg-transparent');
+    mediaContainer.addClass('mgr-media-container');
+    if (isAudioOnly) {
+      mediaContainer.addClass('mgr-media-container-audio');
+    }
 
     let currentIndex = 0;
     let maxRenderedHeight = 0;
@@ -514,7 +564,7 @@ export class MediaGalleryRenderer {
         const renderedHeight = element.clientHeight || element.offsetHeight;
         if (renderedHeight > 0) {
           maxRenderedHeight = Math.max(maxRenderedHeight, renderedHeight);
-          mediaContainer.style.height = `${maxRenderedHeight}px`;
+          mediaContainer.setCssStyles({ height: `${maxRenderedHeight}px` });
         }
       });
     };
@@ -535,7 +585,11 @@ export class MediaGalleryRenderer {
 
       if (isAudioMedia) {
         const { wrapper: audioWrapper, audio } = this.renderAudioPlayer(mediaContainer, resourcePath, post);
-        audioWrapper.style.display = i === currentIndex ? 'flex' : 'none';
+        if (i === currentIndex) {
+          audioWrapper.addClass('sa-flex');
+        } else {
+          audioWrapper.addClass('sa-hidden');
+        }
 
         if (i === 0) {
           renderedAudioElement = audio;
@@ -558,8 +612,14 @@ export class MediaGalleryRenderer {
           }
         });
 
-        video.style.cssText = 'max-width: 100%; max-height: 600px; width: auto; height: auto; object-fit: contain;';
-        video.style.display = i === currentIndex ? 'block' : 'none';
+        video.addClass('sa-max-w-full');
+        video.addClass('sa-object-contain');
+        video.addClass('mgr-media-item');
+        if (i === currentIndex) {
+          video.addClass('sa-block');
+        } else {
+          video.addClass('sa-hidden');
+        }
 
         video.addEventListener('error', () => {
           video.remove();
@@ -583,8 +643,14 @@ export class MediaGalleryRenderer {
           }
         });
 
-        img.style.cssText = 'max-width: 100%; max-height: 600px; width: auto; height: auto; object-fit: contain;';
-        img.style.display = i === currentIndex ? 'block' : 'none';
+        img.addClass('sa-max-w-full');
+        img.addClass('sa-object-contain');
+        img.addClass('mgr-media-item');
+        if (i === currentIndex) {
+          img.addClass('sa-block');
+        } else {
+          img.addClass('sa-hidden');
+        }
 
         img.addEventListener('error', () => {
           img.remove();
@@ -599,7 +665,7 @@ export class MediaGalleryRenderer {
         }
 
         if (extractedLink && media.length === 1) {
-          img.style.cursor = 'pointer';
+          img.addClass('sa-clickable');
           img.setAttribute('title', `Open link: ${extractedLink}`);
           img.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -631,9 +697,16 @@ export class MediaGalleryRenderer {
         // Audio player uses flex display, others use block
         const isAudioPlayer = element.classList.contains('social-audio-player');
         if (i === index) {
-          element.style.display = isAudioPlayer ? 'flex' : 'block';
+          element.removeClass('sa-hidden');
+          if (isAudioPlayer) {
+            element.addClass('sa-flex');
+          } else {
+            element.addClass('sa-block');
+          }
         } else {
-          element.style.display = 'none';
+          element.removeClass('sa-flex');
+          element.removeClass('sa-block');
+          element.addClass('sa-hidden');
         }
         // Pause videos and audio when hidden
         if (element instanceof HTMLVideoElement) {
@@ -666,7 +739,8 @@ export class MediaGalleryRenderer {
         // Update thumbnail active state if they exist
         const thumbnails = carouselContainer.querySelectorAll('.media-thumbnail');
         thumbnails.forEach((thumb, i) => {
-          (thumb as HTMLElement).style.borderColor = i === index ? 'var(--interactive-accent)' : 'transparent';
+          const thumbEl = thumb as HTMLElement;
+          thumbEl.toggleClass('mgr-thumbnail-active', i === index);
         });
       }
     };
@@ -675,9 +749,18 @@ export class MediaGalleryRenderer {
     if (media.length > 1) {
       // Left navigation button (subtle, hover-only)
       const leftBtn = mediaContainer.createDiv();
-      leftBtn.style.cssText = 'position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; border-radius: 50%; background: rgba(0, 0, 0, 0.5); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; opacity: 0; transition: opacity 0.2s ease, background 0.2s ease;';
+      leftBtn.addClass('sa-absolute');
+      leftBtn.addClass('sa-flex-center');
+      leftBtn.addClass('sa-rounded-full');
+      leftBtn.addClass('sa-clickable');
+      leftBtn.addClass('sa-z-10');
+      leftBtn.addClass('sa-opacity-0');
+      leftBtn.addClass('sa-transition');
+      leftBtn.addClass('mgr-nav-btn');
+      leftBtn.addClass('mgr-nav-btn-left');
       const leftIcon = leftBtn.createDiv();
-      leftIcon.style.cssText = 'width: 16px; height: 16px; color: white;';
+      leftIcon.addClass('sa-icon-16');
+      leftIcon.addClass('mgr-nav-icon');
       setIcon(leftIcon, 'chevron-left');
 
       leftBtn.addEventListener('click', (e) => {
@@ -686,19 +769,20 @@ export class MediaGalleryRenderer {
         showMedia(newIndex);
       });
 
-      leftBtn.addEventListener('mouseenter', () => {
-        leftBtn.style.background = 'rgba(0, 0, 0, 0.6)';
-      });
-
-      leftBtn.addEventListener('mouseleave', () => {
-        leftBtn.style.background = 'rgba(0, 0, 0, 0.4)';
-      });
-
       // Right navigation button (subtle, hover-only)
       const rightBtn = mediaContainer.createDiv();
-      rightBtn.style.cssText = 'position: absolute; right: 12px; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; border-radius: 50%; background: rgba(0, 0, 0, 0.5); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; opacity: 0; transition: opacity 0.2s ease, background 0.2s ease;';
+      rightBtn.addClass('sa-absolute');
+      rightBtn.addClass('sa-flex-center');
+      rightBtn.addClass('sa-rounded-full');
+      rightBtn.addClass('sa-clickable');
+      rightBtn.addClass('sa-z-10');
+      rightBtn.addClass('sa-opacity-0');
+      rightBtn.addClass('sa-transition');
+      rightBtn.addClass('mgr-nav-btn');
+      rightBtn.addClass('mgr-nav-btn-right');
       const rightIcon = rightBtn.createDiv();
-      rightIcon.style.cssText = 'width: 16px; height: 16px; color: white;';
+      rightIcon.addClass('sa-icon-16');
+      rightIcon.addClass('mgr-nav-icon');
       setIcon(rightIcon, 'chevron-right');
 
       rightBtn.addEventListener('click', (e) => {
@@ -707,23 +791,19 @@ export class MediaGalleryRenderer {
         showMedia(newIndex);
       });
 
-      rightBtn.addEventListener('mouseenter', () => {
-        rightBtn.style.background = 'rgba(0, 0, 0, 0.6)';
-      });
-
-      rightBtn.addEventListener('mouseleave', () => {
-        rightBtn.style.background = 'rgba(0, 0, 0, 0.4)';
-      });
-
       // Show buttons on media container hover
       mediaContainer.addEventListener('mouseenter', () => {
-        leftBtn.style.opacity = '1';
-        rightBtn.style.opacity = '1';
+        leftBtn.removeClass('sa-opacity-0');
+        leftBtn.addClass('sa-opacity-100');
+        rightBtn.removeClass('sa-opacity-0');
+        rightBtn.addClass('sa-opacity-100');
       });
 
       mediaContainer.addEventListener('mouseleave', () => {
-        leftBtn.style.opacity = '0';
-        rightBtn.style.opacity = '0';
+        leftBtn.removeClass('sa-opacity-100');
+        leftBtn.addClass('sa-opacity-0');
+        rightBtn.removeClass('sa-opacity-100');
+        rightBtn.addClass('sa-opacity-0');
       });
 
       // Keyboard navigation
@@ -744,7 +824,11 @@ export class MediaGalleryRenderer {
     if (media.length > 1) {
       // Thumbnails container
       const thumbnailsContainer = carouselContainer.createDiv();
-      thumbnailsContainer.style.cssText = 'display: flex; gap: 8px; padding: 12px; overflow-x: auto; background: rgba(0, 0, 0, 0.02); scrollbar-width: thin; scrollbar-color: var(--background-modifier-border) transparent;';
+      thumbnailsContainer.addClass('sa-flex');
+      thumbnailsContainer.addClass('sa-gap-8');
+      thumbnailsContainer.addClass('sa-p-12');
+      thumbnailsContainer.addClass('sa-scrollbar-thin');
+      thumbnailsContainer.addClass('mgr-thumbnails-container');
 
       // Add webkit scrollbar styles
       thumbnailsContainer.addClass('media-thumbnails-scroll');
@@ -767,7 +851,13 @@ export class MediaGalleryRenderer {
 
         const thumbnail = thumbnailsContainer.createDiv();
         thumbnail.addClass('media-thumbnail');
-        thumbnail.style.cssText = 'position: relative; width: 60px; height: 60px; flex-shrink: 0; border-radius: 4px; overflow: hidden; cursor: pointer; border: 2px solid transparent; transition: all 0.2s;';
+        thumbnail.addClass('sa-relative');
+        thumbnail.addClass('sa-flex-shrink-0');
+        thumbnail.addClass('sa-rounded-4');
+        thumbnail.addClass('sa-overflow-hidden');
+        thumbnail.addClass('sa-clickable');
+        thumbnail.addClass('sa-transition');
+        thumbnail.addClass('mgr-thumbnail');
 
         if (isVideo) {
           // Video thumbnail - show play icon overlay
@@ -777,29 +867,23 @@ export class MediaGalleryRenderer {
               preload: 'metadata'
             }
           });
-          videoThumb.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+          videoThumb.addClass('sa-cover');
 
           // Minimal play icon overlay
           const playOverlay = thumbnail.createDiv();
-          playOverlay.classList.add('video-play-overlay');
-          playOverlay.style.cssText = 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 32px; height: 32px; background: rgba(0, 0, 0, 0.5); border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; cursor: pointer;';
+          playOverlay.addClass('video-play-overlay');
+          playOverlay.addClass('sa-absolute');
+          playOverlay.addClass('sa-flex-center');
+          playOverlay.addClass('sa-rounded-full');
+          playOverlay.addClass('sa-clickable');
+          playOverlay.addClass('sa-transition');
+          playOverlay.addClass('mgr-video-overlay');
 
           // Play icon (smaller, more subtle)
           const playIcon = playOverlay.createDiv();
-          playIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; justify-content: center;';
+          playIcon.addClass('sa-icon-16');
+          playIcon.addClass('mgr-video-overlay-icon');
           setIcon(playIcon, 'play');
-          playIcon.style.color = 'rgba(255, 255, 255, 0.95)';
-
-          // Hover effect
-          thumbnail.addEventListener('mouseenter', () => {
-            playOverlay.style.background = 'rgba(0, 0, 0, 0.6)';
-            playOverlay.style.transform = 'translate(-50%, -50%) scale(1.1)';
-          });
-
-          thumbnail.addEventListener('mouseleave', () => {
-            playOverlay.style.background = 'rgba(0, 0, 0, 0.4)';
-            playOverlay.style.transform = 'translate(-50%, -50%) scale(1)';
-          });
         } else {
           // Image thumbnail
           const imgThumb = thumbnail.createEl('img', {
@@ -809,7 +893,7 @@ export class MediaGalleryRenderer {
               loading: 'lazy'
             }
           });
-          imgThumb.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+          imgThumb.addClass('sa-cover');
         }
 
         // Click to navigate
@@ -820,15 +904,19 @@ export class MediaGalleryRenderer {
 
         // Active state
         if (i === 0) {
-          thumbnail.style.borderColor = 'var(--interactive-accent)';
+          thumbnail.addClass('mgr-thumbnail-active');
         }
       }
 
       // Counter indicator (bottom-right, above thumbnails)
       const counter = carouselContainer.createDiv();
       counter.addClass('media-counter');
-      // Position above thumbnails: thumbnail height (60px) + padding (12px * 2) + gap (12px) = ~96px
-      counter.style.cssText = 'position: absolute; bottom: 96px; right: 12px; padding: 4px 8px; border-radius: 4px; background: rgba(0, 0, 0, 0.5); color: rgba(255, 255, 255, 0.85); font-size: 11px; font-weight: 500; z-index: 10;';
+      counter.addClass('sa-absolute');
+      counter.addClass('sa-z-10');
+      counter.addClass('sa-rounded-4');
+      counter.addClass('sa-text-xs');
+      counter.addClass('sa-font-medium');
+      counter.addClass('mgr-counter');
       counter.setText(`1/${media.length}`);
     }
 
@@ -853,7 +941,7 @@ export class MediaGalleryRenderer {
     if (whisperTranscript?.segments && whisperTranscript.segments.length > 0) {
       // Create transcript container below media
       const transcriptContainer = container.createDiv({ cls: 'podcast-transcript-container' });
-      transcriptContainer.style.cssText = 'margin-top: 8px;';
+      transcriptContainer.addClass('sa-mt-8');
 
       // Create new transcript renderer for this post (each post gets its own instance)
       const transcriptRenderer = new TranscriptRenderer();

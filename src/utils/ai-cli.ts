@@ -182,6 +182,7 @@ export class AICliDetector {
     this.resetCache();
 
     try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
       const os = require('os');
       const platform = os.platform();
 
@@ -254,6 +255,7 @@ export class AICliDetector {
     this.resetCache();
 
     try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
       const os = require('os');
       const platform = os.platform();
 
@@ -295,9 +297,12 @@ export class AICliDetector {
     cli: AICli,
     platform: string
   ): Promise<AICliDetectionResult> {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
     const { exec } = require('child_process');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
     const { promisify } = require('util');
     const execAsync = promisify(exec);
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
     const os = require('os');
 
     const paths = this.DETECTION_PATHS[cli][platform] || [];
@@ -455,8 +460,11 @@ export class AICliDetector {
    */
   private static async checkAuthentication(cli: AICli, _cliPath: string): Promise<boolean> {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
       const os = require('os');
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
       const fs = require('fs');
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
       const path = require('path');
       const homeDir = os.homedir();
 

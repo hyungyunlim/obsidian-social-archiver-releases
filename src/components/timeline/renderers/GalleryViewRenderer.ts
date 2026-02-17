@@ -1,4 +1,5 @@
 import { type App, type Vault, type TFile, setIcon, prepareSimpleSearch } from 'obsidian';
+import { createCustomSVG } from '../../../utils/dom-helpers';
 
 /**
  * Media item data structure for gallery view
@@ -247,40 +248,28 @@ export class GalleryViewRenderer {
 
     // If no authors have items, show empty state
     if (sortedAuthors.length === 0) {
-      const emptyDiv = container.createDiv('gallery-empty-state');
-      emptyDiv.style.cssText = 'text-align: center; padding: 48px 16px; color: var(--text-muted);';
+      const emptyDiv = container.createDiv('gallery-empty-state sa-text-center sa-text-muted');
+      emptyDiv.addClass('gvr-empty-state');
       emptyDiv.createEl('p', { text: 'No media items found' });
       return;
     }
 
     // Create wrapper for all author groups
-    const allAuthorsWrapper = container.createDiv('gallery-all-authors');
-    allAuthorsWrapper.style.cssText = 'width: 100%; position: relative;';
+    const allAuthorsWrapper = container.createDiv('gallery-all-authors sa-w-full sa-relative');
 
     // Render each author group
     for (const [authorName, authorItems] of sortedAuthors) {
       // Author section
-      const authorSection = allAuthorsWrapper.createDiv('gallery-author-section');
-      authorSection.style.cssText = 'margin-bottom: 40px;';
+      const authorSection = allAuthorsWrapper.createDiv('gallery-author-section gvr-author-section');
 
       // Author header (larger, more prominent)
-      const authorHeader = authorSection.createDiv('gallery-author-header');
-      authorHeader.style.cssText = `
-        padding: 12px 16px;
-        font-size: 15px;
-        font-weight: 600;
-        color: var(--text-normal);
-        border: none;
-        margin-bottom: 16px;
-        background: var(--background-secondary);
-        border-radius: 6px;
-      `;
+      const authorHeader = authorSection.createDiv('gallery-author-header sa-bg-secondary sa-rounded-6 sa-text-normal sa-font-semibold sa-mb-16 gvr-author-header');
 
       const authorNameSpan = authorHeader.createSpan({ text: authorName });
-      authorNameSpan.style.cssText = 'line-height: 1.2;';
+      authorNameSpan.addClass('gvr-author-header-name');
 
       const authorCountSpan = authorHeader.createSpan({ text: ` (${authorItems.length})` });
-      authorCountSpan.style.cssText = 'font-size: 12px; font-weight: 400; color: var(--text-faint); opacity: 0.7; margin-left: 6px;';
+      authorCountSpan.addClass('sa-text-sm', 'sa-text-faint', 'sa-opacity-80', 'gvr-author-header-count');
 
       // Now group this author's items by post
       const postGroups = new Map<string, { items: MediaItemData[], file?: TFile }>();
@@ -300,29 +289,12 @@ export class GalleryViewRenderer {
       // Render each post under this author
       for (const [postName, postData] of sortedPosts) {
         // Post subsection
-        const postSection = authorSection.createDiv('gallery-post-subsection');
-        postSection.style.cssText = 'margin-bottom: 24px; margin-left: 16px;';
+        const postSection = authorSection.createDiv('gallery-post-subsection sa-mb-16 gvr-post-subsection');
 
         // Post header (smaller, indented)
-        const postHeader = postSection.createDiv('gallery-post-subheader');
-        postHeader.style.cssText = `
-          padding: 6px 12px;
-          font-size: 12px;
-          font-weight: 500;
-          color: var(--text-muted);
-          border: none;
-          margin-bottom: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          background: transparent;
-          cursor: pointer;
-          transition: all 0.15s ease;
-          border-radius: 4px;
-        `;
+        const postHeader = postSection.createDiv('gallery-post-subheader sa-flex-between sa-bg-transparent sa-clickable sa-rounded-4 sa-text-sm sa-font-medium sa-text-muted sa-mb-8 gvr-post-subheader');
 
-        const postHeaderLeft = postHeader.createDiv();
-        postHeaderLeft.style.cssText = 'display: flex; align-items: center; gap: 6px;';
+        const postHeaderLeft = postHeader.createDiv('sa-flex-row sa-gap-6');
 
         // Trim long post names (show first 60 chars + ellipsis)
         const displayName = postName.length > 60 ? postName.substring(0, 60) + '...' : postName;
@@ -331,7 +303,7 @@ export class GalleryViewRenderer {
           text: displayName,
           attr: { title: postName }
         });
-        postNameSpan.style.cssText = 'line-height: 1.2; color: var(--text-normal);';
+        postNameSpan.addClass('sa-text-normal', 'gvr-post-name');
 
         // Add external link icon
         if (postData.file) {
@@ -339,16 +311,9 @@ export class GalleryViewRenderer {
             this.app.workspace.getLeaf().openFile(postData.file!);
           });
 
-          postHeader.addEventListener('mouseenter', () => {
-            postHeader.style.background = 'var(--background-modifier-hover)';
-          });
+          // Hover effect handled by CSS .gvr-post-subheader:hover
 
-          postHeader.addEventListener('mouseleave', () => {
-            postHeader.style.background = 'transparent';
-          });
-
-          const linkIconWrapper = postHeaderLeft.createSpan();
-          linkIconWrapper.style.cssText = 'display: inline-flex; align-items: center; opacity: 0.3; line-height: 1; transition: opacity 0.15s;';
+          const linkIconWrapper = postHeaderLeft.createSpan('sa-inline-flex gvr-link-icon');
           setIcon(linkIconWrapper, 'external-link');
 
           const svgEl = linkIconWrapper.querySelector('svg');
@@ -359,7 +324,7 @@ export class GalleryViewRenderer {
         }
 
         const postCountSpan = postHeader.createSpan({ text: `${postData.items.length}` });
-        postCountSpan.style.cssText = 'font-size: 11px; font-weight: 400; color: var(--text-faint); opacity: 0.7;';
+        postCountSpan.addClass('sa-text-xs', 'sa-text-faint', 'sa-opacity-80', 'gvr-count-text');
 
         // Render post's media items
         this.renderUngroupedGallery(postSection, postData.items);
@@ -391,40 +356,27 @@ export class GalleryViewRenderer {
 
     // If no groups have items after filtering, show empty state
     if (sortedGroups.length === 0) {
-      const emptyDiv = container.createDiv('gallery-empty-state');
-      emptyDiv.style.cssText = 'text-align: center; padding: 48px 16px; color: var(--text-muted);';
+      const emptyDiv = container.createDiv('gallery-empty-state sa-text-center sa-text-muted');
+      emptyDiv.addClass('gvr-empty-state');
       emptyDiv.createEl('p', { text: 'No media items found' });
       return;
     }
 
     // Create wrapper for all groups
-    const allGroupsWrapper = container.createDiv('gallery-all-groups');
-    allGroupsWrapper.style.cssText = 'width: 100%; position: relative;';
+    const allGroupsWrapper = container.createDiv('gallery-all-groups sa-w-full sa-relative');
 
     // Render each group
     for (const [groupName, groupData] of sortedGroups) {
       // Group section
-      const groupSection = allGroupsWrapper.createDiv('gallery-group-section');
-      groupSection.style.cssText = 'margin-bottom: 32px;';
+      const groupSection = allGroupsWrapper.createDiv('gallery-group-section gvr-group-section');
 
       // Group header (simple, no sticky)
-      const groupHeader = groupSection.createDiv('gallery-group-header');
-      groupHeader.style.cssText = `
-        padding: 8px 16px;
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--text-muted);
-        border: none;
-        margin-bottom: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        background: transparent;
-        ${groupBy === 'post' ? 'cursor: pointer; transition: all 0.15s ease; border-radius: 6px;' : ''}
-      `;
+      const groupHeader = groupSection.createDiv('gallery-group-header sa-flex-between sa-bg-transparent sa-text-base sa-font-medium sa-text-muted sa-mb-8 gvr-group-header');
+      if (groupBy === 'post') {
+        groupHeader.addClass('sa-clickable', 'sa-rounded-6', 'gvr-group-header--clickable');
+      }
 
-      const headerLeft = groupHeader.createDiv();
-      headerLeft.style.cssText = 'display: flex; align-items: center; gap: 6px;';
+      const headerLeft = groupHeader.createDiv('sa-flex-row sa-gap-6');
 
       // Trim long group names for posts (show first 60 chars + ellipsis)
       const displayName = groupBy === 'post' && groupName.length > 60
@@ -435,27 +387,18 @@ export class GalleryViewRenderer {
         text: displayName,
         attr: { title: groupName } // Full title on hover
       });
-      headerText.style.cssText = 'line-height: 1.2; color: var(--text-normal);';
+      headerText.addClass('sa-text-normal', 'gvr-header-text');
 
       // Make post titles clickable with Lucide icon
       if (groupBy === 'post' && groupData.file) {
-        groupHeader.addEventListener('mouseenter', () => {
-          groupHeader.style.background = 'var(--background-modifier-hover)';
-          headerText.style.color = 'var(--text-normal)';
-        });
-
-        groupHeader.addEventListener('mouseleave', () => {
-          groupHeader.style.background = 'transparent';
-          headerText.style.color = 'var(--text-normal)';
-        });
+        // Hover effect handled by CSS .gvr-group-header--clickable:hover
 
         groupHeader.addEventListener('click', () => {
           this.app.workspace.getLeaf().openFile(groupData.file!);
         });
 
         // Add Lucide external-link icon (smaller and more subtle)
-        const linkIconWrapper = headerLeft.createSpan();
-        linkIconWrapper.style.cssText = 'display: inline-flex; align-items: center; opacity: 0.3; line-height: 1; transition: opacity 0.15s;';
+        const linkIconWrapper = headerLeft.createSpan('sa-inline-flex sa-transition-opacity gvr-link-icon');
         setIcon(linkIconWrapper, 'external-link');
 
         // Resize icon to be smaller
@@ -465,18 +408,11 @@ export class GalleryViewRenderer {
           svgEl.setAttribute('height', '12');
         }
 
-        // Show icon more on hover
-        groupHeader.addEventListener('mouseenter', () => {
-          linkIconWrapper.style.opacity = '0.6';
-        });
-
-        groupHeader.addEventListener('mouseleave', () => {
-          linkIconWrapper.style.opacity = '0.3';
-        });
+        // Hover icon opacity handled by CSS .gvr-group-header--clickable:hover .gvr-link-icon
       }
 
       const headerCount = groupHeader.createSpan({ text: `${groupData.items.length}` });
-      headerCount.style.cssText = 'font-size: 11px; font-weight: 400; color: var(--text-faint); opacity: 0.7;';
+      headerCount.addClass('sa-text-xs', 'sa-text-faint', 'sa-opacity-80', 'gvr-count-text');
 
       // Group grid
       this.renderUngroupedGallery(groupSection, groupData.items);
@@ -489,32 +425,33 @@ export class GalleryViewRenderer {
   private renderUngroupedGallery(container: HTMLElement, mediaItems: MediaItemData[]): void {
     // If no items after filtering, show empty state
     if (mediaItems.length === 0) {
-      const emptyDiv = container.createDiv('gallery-empty-state');
-      emptyDiv.style.cssText = 'text-align: center; padding: 48px 16px; color: var(--text-muted);';
+      const emptyDiv = container.createDiv('gallery-empty-state sa-text-center sa-text-muted');
+      emptyDiv.addClass('gvr-empty-state');
       emptyDiv.createEl('p', { text: 'No media items found' });
       return;
     }
 
     // Create Pinterest-style masonry grid with better alignment
-    const gridEl = container.createDiv('media-gallery-masonry');
-    gridEl.style.cssText = 'column-count: 4; column-gap: 16px; padding: 16px; column-fill: balance;';
+    const gridEl = container.createDiv('media-gallery-masonry sa-p-16 gvr-masonry-grid');
 
     // Responsive column count with proper cleanup
     const updateColumns = () => {
       const width = gridEl.clientWidth;
+      let columnCount = '4';
       if (width < 600) {
-        gridEl.style.columnCount = '1';
+        columnCount = '1';
       } else if (width < 900) {
-        gridEl.style.columnCount = '2';
+        columnCount = '2';
       } else if (width < 1200) {
-        gridEl.style.columnCount = '3';
+        columnCount = '3';
       } else if (width < 1600) {
-        gridEl.style.columnCount = '4';
+        columnCount = '4';
       } else if (width < 2000) {
-        gridEl.style.columnCount = '5';
+        columnCount = '5';
       } else {
-        gridEl.style.columnCount = '6';
+        columnCount = '6';
       }
+      gridEl.setCssProps({ '--gvr-columns': columnCount });
     };
 
     // Initial update
@@ -594,7 +531,7 @@ export class GalleryViewRenderer {
     cards.forEach((card, index) => {
       const item = allMediaItems[index];
       if (!item) {
-        card.style.display = 'none';
+        card.addClass('sa-hidden');
         return;
       }
 
@@ -618,10 +555,15 @@ export class GalleryViewRenderer {
         visible = visible && searchableText.includes(searchLower);
       }
 
-      const wasVisible = card.style.display !== 'none';
+      const wasVisible = !card.hasClass('sa-hidden');
 
       // Show/hide with CSS (instant, no re-render)
-      card.style.display = visible ? 'inline-block' : 'none';
+      if (visible) {
+        card.removeClass('sa-hidden');
+        card.addClass('sa-inline-block');
+      } else {
+        card.addClass('sa-hidden');
+      }
 
       // Re-observe cards that become visible for lazy loading
       if (visible && !wasVisible && lazyLoadObserver) {
@@ -634,12 +576,10 @@ export class GalleryViewRenderer {
    * Render a single media card
    */
   private renderMediaCard(parent: HTMLElement, item: MediaItemData, allMediaItems: MediaItemData[]): HTMLElement {
-    const cardEl = parent.createDiv('media-card');
-    cardEl.style.cssText = 'position: relative; border: none; border-radius: 8px; overflow: hidden; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; background: var(--background-primary); margin-bottom: 16px; break-inside: avoid; display: inline-block; width: 100%; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);';
+    const cardEl = parent.createDiv('media-card sa-relative sa-rounded-8 sa-overflow-hidden sa-clickable sa-bg-primary sa-mb-16 sa-inline-block sa-w-full gvr-media-card');
 
     // Media container
-    const mediaContainer = cardEl.createDiv('media-container');
-    mediaContainer.style.cssText = 'position: relative; width: 100%; overflow: hidden; background: var(--background-secondary);';
+    const mediaContainer = cardEl.createDiv('media-container sa-relative sa-w-full sa-overflow-hidden sa-bg-secondary');
 
     // Get media file
     const mediaFile = this.app.vault.getAbstractFileByPath(item.mediaPath);
@@ -654,17 +594,14 @@ export class GalleryViewRenderer {
 
     // Platform badge (hover only)
     if (item.platform) {
-      const platformBadge = mediaContainer.createDiv('platform-badge');
-      // More subtle blur: blur(2px) instead of blur(4px), lighter background
-      platformBadge.style.cssText = 'position: absolute; top: 8px; left: 8px; padding: 4px 8px; border-radius: 4px; background: rgba(0, 0, 0, 0.5); color: white; font-size: 11px; font-weight: 500; opacity: 0; transition: opacity 0.2s; text-transform: capitalize; backdrop-filter: blur(2px); z-index: 1;';
+      const platformBadge = mediaContainer.createDiv('platform-badge gvr-platform-badge sa-absolute sa-rounded-4 sa-opacity-0 sa-transition-opacity sa-z-1 sa-text-xs sa-font-medium');
       platformBadge.textContent = item.platform;
     }
 
     // Metadata footer - click to open source file
     this.renderMetadata(cardEl, item);
 
-    // Hover effects
-    this.attachHoverEffects(cardEl);
+    // Hover effects handled by CSS .gvr-media-card:hover
 
     return cardEl;
   }
@@ -681,18 +618,18 @@ export class GalleryViewRenderer {
     });
 
     // More subtle placeholder with aspect ratio preservation
-    imgEl.style.cssText = 'width: 100%; height: auto; display: block; min-height: 150px; background: var(--background-secondary); transition: opacity 0.2s ease-in;';
-    imgEl.style.opacity = '0'; // Start invisible
+    imgEl.addClass('sa-w-full', 'sa-block', 'sa-bg-secondary', 'sa-opacity-0', 'gvr-media-loading');
 
     imgEl.onerror = () => {
-      imgEl.style.display = 'none';
-      container.style.minHeight = '200px';
+      imgEl.addClass('sa-hidden');
+      container.addClass('gvr-media-error-container');
       this.renderMediaNotFound(container);
     };
 
     imgEl.onload = () => {
-      imgEl.style.minHeight = 'auto';
-      imgEl.style.opacity = '1'; // Fade in when loaded
+      imgEl.setCssStyles({ 'min-height': 'auto' });
+      imgEl.removeClass('sa-opacity-0');
+      imgEl.addClass('sa-opacity-100');
     };
 
     // Click handler for lightbox
@@ -717,9 +654,18 @@ export class GalleryViewRenderer {
    */
   private renderVideo(container: HTMLElement, item: MediaItemData, allMediaItems: MediaItemData[]): void {
     // Add play icon overlay to indicate it's a video
-    const playIconOverlay = container.createDiv('video-play-icon');
-    playIconOverlay.style.cssText = 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 48px; height: 48px; background: rgba(0, 0, 0, 0.6); border-radius: 50%; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 1; opacity: 0.8;';
-    playIconOverlay.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
+    const playIconOverlay = container.createDiv('video-play-icon gvr-play-icon sa-absolute sa-flex-center sa-rounded-full sa-pointer-none sa-z-1 sa-opacity-80');
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', '24');
+    svg.setAttribute('height', '24');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'white');
+    svg.setAttribute('stroke-width', '2');
+    const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    polygon.setAttribute('points', '5 3 19 12 5 21 5 3');
+    svg.appendChild(polygon);
+    playIconOverlay.appendChild(svg);
 
     const videoEl = container.createEl('video', {
       attr: {
@@ -729,8 +675,7 @@ export class GalleryViewRenderer {
         preload: 'metadata' // Load metadata and first frame (fast thumbnail)
       }
     });
-    videoEl.style.cssText = 'width: 100%; height: auto; display: block; min-height: 150px; background: var(--background-secondary); transition: opacity 0.2s ease-in;';
-    videoEl.style.opacity = '0'; // Start invisible
+    videoEl.addClass('sa-w-full', 'sa-block', 'sa-bg-secondary', 'sa-opacity-0', 'gvr-media-loading');
     videoEl.muted = true; // Set muted as boolean
 
     // Hide controls by default
@@ -740,26 +685,29 @@ export class GalleryViewRenderer {
     container.addEventListener('mouseenter', () => {
       if (videoEl.src) { // Only play if loaded
         void videoEl.play();
-        playIconOverlay.style.opacity = '0'; // Hide play icon on hover
+        playIconOverlay.removeClass('sa-opacity-80');
+        playIconOverlay.addClass('sa-opacity-0');
       }
     });
 
     container.addEventListener('mouseleave', () => {
       videoEl.pause();
       videoEl.currentTime = 0;
-      playIconOverlay.style.opacity = '0.8'; // Show play icon again
+      playIconOverlay.removeClass('sa-opacity-0');
+      playIconOverlay.addClass('sa-opacity-80');
     });
 
     videoEl.onerror = () => {
-      videoEl.style.display = 'none';
+      videoEl.addClass('sa-hidden');
       playIconOverlay.remove();
-      container.style.minHeight = '200px';
+      container.addClass('gvr-media-error-container');
       this.renderMediaNotFound(container);
     };
 
     videoEl.onloadeddata = () => {
-      videoEl.style.minHeight = 'auto';
-      videoEl.style.opacity = '1'; // Fade in when loaded
+      videoEl.setCssStyles({ 'min-height': 'auto' });
+      videoEl.removeClass('sa-opacity-0');
+      videoEl.addClass('sa-opacity-100');
     };
 
     // Click handler for lightbox
@@ -783,22 +731,21 @@ export class GalleryViewRenderer {
    * Render media not found placeholder
    */
   private renderMediaNotFound(container: HTMLElement): void {
-    container.style.minHeight = '200px';
+    container.addClass('gvr-media-error-container');
     const errorEl = container.createDiv({
       text: '� Media not found',
       cls: 'flex items-center justify-center h-full text-[var(--text-muted)]'
     });
-    errorEl.style.cssText = 'position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center;';
+    errorEl.addClass('sa-absolute');
+    errorEl.addClass('sa-inset-0');
+    errorEl.addClass('sa-flex-center');
   }
 
   /**
    * Render metadata footer with author and title (hover-only visibility)
    */
   private renderMetadata(card: HTMLElement, item: MediaItemData): void {
-    const metadataEl = card.createDiv('media-metadata');
-    // Don't override opacity - let CSS handle hover state
-    // More subtle blur: blur(2px) instead of blur(4px)
-    metadataEl.style.cssText = 'position: absolute; bottom: 0; left: 0; right: 0; padding: 12px; background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent); backdrop-filter: blur(2px); cursor: pointer;';
+    const metadataEl = card.createDiv('media-metadata gvr-metadata sa-absolute sa-bottom-0 sa-left-0 sa-right-0 sa-p-12 sa-clickable');
 
     if (item.author) {
       const authorEl = metadataEl.createDiv('media-author');
@@ -818,25 +765,6 @@ export class GalleryViewRenderer {
   }
 
   /**
-   * Attach hover effects to card (subtle)
-   */
-  private attachHoverEffects(card: HTMLElement): void {
-    card.addEventListener('mouseenter', () => {
-      card.style.transform = 'translateY(-1px)';
-      card.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.08)';
-      const badge = card.querySelector('.platform-badge') as HTMLElement;
-      if (badge) badge.style.opacity = '1';
-    });
-
-    card.addEventListener('mouseleave', () => {
-      card.style.transform = 'translateY(0)';
-      card.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.05)';
-      const badge = card.querySelector('.platform-badge') as HTMLElement;
-      if (badge) badge.style.opacity = '0';
-    });
-  }
-
-  /**
    * Open lightbox for media preview with Lucide icons and keyboard navigation
    */
   private openLightbox(mediaItems: MediaItemData[], startIndex: number): void {
@@ -844,7 +772,7 @@ export class GalleryViewRenderer {
 
     // Create modal
     const modal = document.createElement('div');
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.9); z-index: 9999; display: flex; align-items: center; justify-content: center;';
+    modal.className = 'sa-fixed sa-inset-0 sa-flex-center gvr-lightbox';
 
     // Close on backdrop click
     modal.addEventListener('click', () => {
@@ -852,8 +780,7 @@ export class GalleryViewRenderer {
     });
 
     // Content container
-    const content = modal.createDiv('lightbox-content');
-    content.style.cssText = 'position: relative; max-width: 90vw; max-height: 90vh; display: flex; align-items: center; justify-content: center;';
+    const content = modal.createDiv('lightbox-content sa-relative sa-flex-center gvr-lightbox-content');
     content.addEventListener('click', (e) => e.stopPropagation());
 
     // Render current media
@@ -869,15 +796,13 @@ export class GalleryViewRenderer {
       const mediaSrc = this.app.vault.adapter.getResourcePath(item.mediaPath);
 
       if (item.type === 'image') {
-        const img = content.createEl('img');
+        const img = content.createEl('img', { cls: 'sa-object-contain gvr-lightbox-media' });
         img.src = mediaSrc;
-        img.style.cssText = 'max-width: 100%; max-height: 90vh; object-fit: contain;';
       } else {
-        const video = content.createEl('video');
+        const video = content.createEl('video', { cls: 'sa-object-contain gvr-lightbox-media' });
         video.src = mediaSrc;
         video.controls = true;
         video.autoplay = true;
-        video.style.cssText = 'max-width: 100%; max-height: 90vh; object-fit: contain;';
       }
 
       // Add navigation buttons (only if multiple items)

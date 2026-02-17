@@ -31,84 +31,37 @@ export class BatchTranscriptionNotice {
     const container = this.notice.noticeEl;
     container.empty();
     container.addClass('social-archiver-batch-notice');
-    Object.assign(container.style, {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '8px',
-      padding: '12px 16px',
-      maxWidth: '360px',
-      width: '360px',
-    });
+    container.addClass('sa-flex-col', 'sa-gap-8', 'sa-p-12', 'sa-px-16');
 
     // Header row: icon + title
     const headerRow = container.createDiv();
-    Object.assign(headerRow.style, {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-    });
+    headerRow.addClass('sa-flex-row', 'sa-gap-8');
 
     const iconEl = headerRow.createSpan();
-    Object.assign(iconEl.style, {
-      display: 'flex',
-      alignItems: 'center',
-      flexShrink: '0',
-      color: 'var(--text-accent)',
-    });
-    iconEl.style.setProperty('--icon-size', '16px');
+    iconEl.addClass('sa-inline-flex', 'sa-flex-shrink-0', 'sa-text-accent', 'sa-icon-16');
     setIcon(iconEl, 'mic');
 
     this.titleEl = headerRow.createSpan();
-    Object.assign(this.titleEl.style, {
-      fontWeight: 'var(--font-semibold)',
-      fontSize: 'var(--font-ui-small)',
-      color: 'var(--text-normal)',
-    });
+    this.titleEl.addClass('sa-font-semibold', 'sa-text-sm', 'sa-text-normal');
 
     // Progress bar
     this.progressBarEl = container.createDiv();
-    Object.assign(this.progressBarEl.style, {
-      height: '4px',
-      borderRadius: '2px',
-      background: 'var(--background-modifier-border)',
-      overflow: 'hidden',
-    });
+    this.progressBarEl.addClass('sa-overflow-hidden', 'btn-progress-bar');
 
     this.progressBarFill = this.progressBarEl.createDiv();
-    Object.assign(this.progressBarFill.style, {
-      height: '100%',
-      borderRadius: '2px',
-      background: 'var(--interactive-accent)',
-      transition: 'width 0.3s ease',
-      width: '0%',
-    });
+    this.progressBarFill.addClass('sa-h-full', 'btn-progress-fill', 'btn-fill-accent');
 
     // Status text (current file being processed)
     this.statusEl = container.createDiv();
-    Object.assign(this.statusEl.style, {
-      fontSize: '12px',
-      color: 'var(--text-muted)',
-      lineHeight: '1.4',
-      overflow: 'hidden',
-      textOverflow: 'ellipsis',
-      whiteSpace: 'nowrap',
-    });
+    this.statusEl.addClass('sa-text-sm', 'sa-text-muted', 'sa-leading-normal', 'sa-truncate');
 
     // Stats (done/failed/skipped counts)
     this.statsEl = container.createDiv();
-    Object.assign(this.statsEl.style, {
-      fontSize: '11px',
-      color: 'var(--text-faint)',
-    });
+    this.statsEl.addClass('sa-text-xs', 'sa-text-faint');
 
     // Buttons row
     this.buttonsEl = container.createDiv();
-    Object.assign(this.buttonsEl.style, {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      marginTop: '2px',
-    });
+    this.buttonsEl.addClass('sa-flex-row', 'sa-gap-8', 'sa-mt-2');
 
     // Subscribe to progress updates
     this.unsubscribe = this.manager.onProgress((progress) => {
@@ -140,21 +93,26 @@ export class BatchTranscriptionNotice {
     const pct = progress.totalItems > 0
       ? Math.round(((progress.completedItems + progress.failedItems + progress.skippedItems) / progress.totalItems) * 100)
       : 0;
-    this.progressBarFill.style.width = `${pct}%`;
+    this.progressBarFill.setCssProps({ '--btn-progress': `${pct}%` });
 
     // Progress bar color based on status
+    this.progressBarFill.removeClass('btn-fill-accent', 'btn-fill-green', 'btn-fill-muted', 'btn-fill-yellow');
     if (progress.status === 'completed') {
-      this.progressBarFill.style.background = 'var(--color-green)';
+      this.progressBarFill.addClass('btn-fill-green');
     } else if (progress.status === 'cancelled') {
-      this.progressBarFill.style.background = 'var(--text-muted)';
+      this.progressBarFill.addClass('btn-fill-muted');
     } else if (progress.status === 'paused') {
-      this.progressBarFill.style.background = 'var(--color-yellow)';
+      this.progressBarFill.addClass('btn-fill-yellow');
     } else {
-      this.progressBarFill.style.background = 'var(--interactive-accent)';
+      this.progressBarFill.addClass('btn-fill-accent');
     }
 
     // Hide progress bar during scanning (no meaningful progress yet)
-    this.progressBarEl.style.display = progress.status === 'scanning' ? 'none' : 'block';
+    if (progress.status === 'scanning') {
+      this.progressBarEl.addClass('sa-hidden');
+    } else {
+      this.progressBarEl.removeClass('sa-hidden');
+    }
 
     // Status
     this.statusEl.textContent = this.getStatusText(progress);
@@ -168,9 +126,9 @@ export class BatchTranscriptionNotice {
       this.statsEl.textContent = parts.length > 0
         ? `${parts.join(', ')} / ${progress.totalItems} total`
         : `0 / ${progress.totalItems} total`;
-      this.statsEl.style.display = 'block';
+      this.statsEl.removeClass('sa-hidden');
     } else {
-      this.statsEl.style.display = 'none';
+      this.statsEl.addClass('sa-hidden');
     }
 
     // Buttons
@@ -229,79 +187,28 @@ export class BatchTranscriptionNotice {
     const btn = parent.createEl('button');
 
     // Base styles
-    Object.assign(btn.style, {
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: '4px',
-      padding: '4px 12px',
-      fontSize: '12px',
-      fontFamily: 'inherit',
-      fontWeight: 'var(--font-medium)',
-      borderRadius: 'var(--radius-s)',
-      cursor: 'pointer',
-      border: '1px solid transparent',
-      lineHeight: '1.5',
-      transition: 'background 0.15s ease, color 0.15s ease',
-    });
+    btn.addClass('sa-inline-flex', 'sa-flex-row', 'sa-gap-4', 'sa-px-12', 'sa-py-4', 'sa-text-sm', 'sa-font-medium', 'sa-clickable', 'sa-leading-normal', 'btn-action-button');
 
     // Variant styles
     switch (variant) {
       case 'primary':
-        Object.assign(btn.style, {
-          background: 'var(--interactive-accent)',
-          color: 'var(--text-on-accent)',
-          border: '1px solid var(--interactive-accent)',
-        });
+        btn.addClass('sa-bg-accent', 'btn-variant-primary');
         break;
       case 'danger':
-        Object.assign(btn.style, {
-          background: 'none',
-          color: 'var(--text-muted)',
-          border: '1px solid var(--background-modifier-border)',
-        });
+        btn.addClass('sa-text-muted', 'btn-variant-danger');
         break;
       default:
-        Object.assign(btn.style, {
-          background: 'var(--background-modifier-hover)',
-          color: 'var(--text-normal)',
-          border: '1px solid var(--background-modifier-border)',
-        });
+        btn.addClass('sa-bg-hover', 'sa-text-normal', 'btn-variant-default');
         break;
     }
 
     // Icon
     const iconEl = btn.createSpan();
-    Object.assign(iconEl.style, {
-      display: 'flex',
-      alignItems: 'center',
-    });
-    iconEl.style.setProperty('--icon-size', '12px');
+    iconEl.addClass('sa-inline-flex', 'sa-icon-12');
     setIcon(iconEl, icon);
 
     // Label
     btn.createSpan({ text: label });
-
-    // Hover effects
-    const originalBg = btn.style.background;
-    const originalColor = btn.style.color;
-    btn.addEventListener('mouseenter', () => {
-      if (variant === 'danger') {
-        btn.style.color = 'var(--color-red)';
-        btn.style.borderColor = 'var(--color-red)';
-      } else if (variant === 'primary') {
-        btn.style.filter = 'brightness(1.1)';
-      } else {
-        btn.style.background = 'var(--background-modifier-border)';
-      }
-    });
-    btn.addEventListener('mouseleave', () => {
-      btn.style.background = originalBg;
-      btn.style.color = originalColor;
-      btn.style.filter = '';
-      if (variant === 'danger') {
-        btn.style.borderColor = 'var(--background-modifier-border)';
-      }
-    });
 
     btn.addEventListener('click', onClick);
 

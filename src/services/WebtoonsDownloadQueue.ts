@@ -478,7 +478,7 @@ export class WebtoonsDownloadQueue extends EventTarget {
       const file = this.app.vault.getAbstractFileByPath(filePath);
       if (!file || !(file instanceof TFile)) return;
 
-      const content = await this.app.vault.read(file as TFile);
+      const content = await this.app.vault.read(file);
 
       // Check if comments section already exists
       if (content.includes('## Best Comments')) return;
@@ -488,13 +488,13 @@ export class WebtoonsDownloadQueue extends EventTarget {
 
       // Append comments to the file
       const updatedContent = content + commentsSection;
-      await this.app.vault.modify(file as TFile, updatedContent);
+      await this.app.vault.modify(file, updatedContent);
 
       // Update frontmatter with comment count
       if (totalCount > 0) {
         const updatedWithMeta = this.updateFrontmatterCommentCount(updatedContent, totalCount);
         if (updatedWithMeta !== updatedContent) {
-          await this.app.vault.modify(file as TFile, updatedWithMeta);
+          await this.app.vault.modify(file, updatedWithMeta);
         }
       }
     } catch (error) {
@@ -693,8 +693,8 @@ export class WebtoonsDownloadQueue extends EventTarget {
 
     // Check if file exists
     const existingFile = this.app.vault.getAbstractFileByPath(filePath);
-    if (existingFile) {
-      await this.app.vault.modify(existingFile as TFile, content);
+    if (existingFile && existingFile instanceof TFile) {
+      await this.app.vault.modify(existingFile, content);
     } else {
       await this.app.vault.create(filePath, content);
     }

@@ -901,7 +901,7 @@ export interface ParseInstagramUrlResult {
  * ```typescript
  * const result = parseInstagramUrl('https://instagram.com/username');
  * if (result.valid) {
- *   console.log(result.username); // 'username'
+ *   console.debug(result.username); // 'username'
  * }
  * ```
  */
@@ -973,7 +973,7 @@ export interface ParseXUrlResult {
  * ```typescript
  * const result = parseXUrl('https://x.com/username');
  * if (result.valid) {
- *   console.log(result.username); // 'username'
+ *   console.debug(result.username); // 'username'
  * }
  * ```
  */
@@ -1186,8 +1186,8 @@ export function isYouTubeProfileUrl(url: string): boolean {
  * ```typescript
  * const result = parseYouTubeProfileUrl('https://youtube.com/@MrBeast');
  * if (result.valid) {
- *   console.log(result.handle);  // 'MrBeast'
- *   console.log(result.urlType); // 'handle'
+ *   console.debug(result.handle);  // 'MrBeast'
+ *   console.debug(result.urlType); // 'handle'
  * }
  * ```
  */

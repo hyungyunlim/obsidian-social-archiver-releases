@@ -2,6 +2,7 @@
  * GumroadClient - Gumroad API integration service
  */
 
+import { requestUrl } from 'obsidian';
 import {
   LicenseInfo,
   LicenseValidationResult,
@@ -217,23 +218,20 @@ export class GumroadClient implements IService {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
-
-      const response = await fetch(url.toString(), {
+      const response = await requestUrl({
+        url: url.toString(),
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
-        signal: controller.signal,
+        throw: false
       });
 
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (response.status !== 200) {
+        throw new Error(`HTTP ${response.status}`);
       }
 
-      const data = await response.json();
+      const data = response.json;
       return data as T;
     } catch (error) {
       this.logger?.warn(`Gumroad API request failed (attempt ${attempt})`, { error });

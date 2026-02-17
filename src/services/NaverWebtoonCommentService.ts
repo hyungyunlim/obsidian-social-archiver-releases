@@ -276,7 +276,7 @@ export class NaverWebtoonCommentService {
     switch (level) {
       case 'debug':
       case 'info':
-        console.log(prefix, message, ...args);
+        console.debug(prefix, message, ...args);
         break;
       case 'warn':
         console.warn(prefix, message, ...args);

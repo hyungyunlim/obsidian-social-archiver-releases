@@ -1,4 +1,4 @@
-import { type App, type TFile, TFolder } from 'obsidian';
+import { TFile, TFolder, type App } from 'obsidian';
 import type { TagDefinition, TagWithCount } from '@/types/tag';
 import { TAG_COLORS, TAG_NAME_MAX_LENGTH } from '@/types/tag';
 import type SocialArchiverPlugin from '@/main';
@@ -127,9 +127,9 @@ export class TagStore {
   /** Get tags for a post from its YAML frontmatter (returns all tags, including undefined ones) */
   getTagsForPost(filePath: string): string[] {
     const file = this.app.vault.getAbstractFileByPath(filePath);
-    if (!file || !(file instanceof TFolder === false && 'extension' in file)) return [];
+    if (!file || !(file instanceof TFile)) return [];
 
-    const cache = this.app.metadataCache.getFileCache(file as TFile);
+    const cache = this.app.metadataCache.getFileCache(file);
     const tags = cache?.frontmatter?.tags;
     if (!Array.isArray(tags)) return [];
 
@@ -139,9 +139,9 @@ export class TagStore {
   /** Add a tag to a post's YAML frontmatter */
   async addTagToPost(filePath: string, tagName: string): Promise<void> {
     const file = this.app.vault.getAbstractFileByPath(filePath);
-    if (!file || !('extension' in file)) return;
+    if (!file || !(file instanceof TFile)) return;
 
-    await this.app.fileManager.processFrontMatter(file as TFile, (frontmatter) => {
+    await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
       if (!Array.isArray(frontmatter.tags)) {
         frontmatter.tags = [];
       }
@@ -156,9 +156,9 @@ export class TagStore {
   /** Remove a tag from a post's YAML frontmatter */
   async removeTagFromPost(filePath: string, tagName: string): Promise<void> {
     const file = this.app.vault.getAbstractFileByPath(filePath);
-    if (!file || !('extension' in file)) return;
+    if (!file || !(file instanceof TFile)) return;
 
-    await this.app.fileManager.processFrontMatter(file as TFile, (frontmatter) => {
+    await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
       if (!Array.isArray(frontmatter.tags)) return;
       const lower = tagName.toLowerCase();
       frontmatter.tags = frontmatter.tags.filter((t: string) => t.toLowerCase() !== lower);
@@ -373,8 +373,8 @@ export class TagStore {
     for (const child of folder.children) {
       if (child instanceof TFolder) {
         files.push(...this.getMarkdownFiles(child));
-      } else if ('extension' in child && (child as TFile).extension === 'md') {
-        files.push(child as TFile);
+      } else if (child instanceof TFile && child.extension === 'md') {
+        files.push(child);
       }
     }
     return files;
@@ -385,8 +385,8 @@ export class TagStore {
     for (const child of folder.children) {
       if (child instanceof TFolder) {
         this.countTagsInFolder(child, countMap, originalNames);
-      } else if ('extension' in child && (child as TFile).extension === 'md') {
-        const cache = this.app.metadataCache.getFileCache(child as TFile);
+      } else if (child instanceof TFile && child.extension === 'md') {
+        const cache = this.app.metadataCache.getFileCache(child);
         const tags = cache?.frontmatter?.tags;
         if (Array.isArray(tags)) {
           for (const tag of tags) {

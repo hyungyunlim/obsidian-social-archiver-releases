@@ -2,9 +2,6 @@
  * CacheManager - KV Store-based caching service
  */
 
-import { createHash } from 'crypto';
-import { gzip, gunzip } from 'zlib';
-import { promisify } from 'util';
 import {
   IKVStore,
   ICacheService,
@@ -23,8 +20,73 @@ import {
 import { IService } from '../types/services';
 import { Logger } from './Logger';
 
-const gzipAsync = promisify(gzip);
-const gunzipAsync = promisify(gunzip);
+/**
+ * Simple hash function for generating cache keys
+ * Uses FNV-1a hash algorithm (web-compatible)
+ */
+function simpleHash(input: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  // Convert to unsigned 32-bit and then to hex
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+/**
+ * Compress string using LZ-based compression (web-compatible)
+ * Returns base64-encoded compressed data
+ */
+async function compressString(input: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(input);
+
+  // Use CompressionStream if available (modern browsers/Node 17+)
+  if (typeof CompressionStream !== 'undefined') {
+    const stream = new Blob([data]).stream();
+    const compressedStream = stream.pipeThrough(new CompressionStream('gzip'));
+    const compressedBlob = await new Response(compressedStream).blob();
+    const arrayBuffer = await compressedBlob.arrayBuffer();
+
+    // Convert to base64
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]!);
+    }
+    return btoa(binary);
+  }
+
+  // Fallback: no compression (just base64 encode)
+  return btoa(input);
+}
+
+/**
+ * Decompress base64-encoded compressed data
+ * Returns original string
+ */
+async function decompressString(compressed: string): Promise<string> {
+  // Convert from base64
+  const binary = atob(compressed);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
+  // Use DecompressionStream if available
+  if (typeof DecompressionStream !== 'undefined') {
+    const stream = new Blob([bytes]).stream();
+    const decompressedStream = stream.pipeThrough(new DecompressionStream('gzip'));
+    const decompressedBlob = await new Response(decompressedStream).blob();
+    const text = await decompressedBlob.text();
+    return text;
+  }
+
+  // Fallback: assume no compression (just base64 decode)
+  const decoder = new TextDecoder();
+  return decoder.decode(bytes);
+}
 
 /**
  * Default cache configuration
@@ -208,8 +270,7 @@ export class CacheManager implements IService, ICacheService {
         return;
       }
 
-      const dataBuffer = Buffer.from(dataString, 'utf-8');
-      const originalSize = dataBuffer.length;
+      const originalSize = dataString.length;
 
       // Compress if enabled and above threshold
       const shouldCompress =
@@ -222,9 +283,8 @@ export class CacheManager implements IService, ICacheService {
 
       if (shouldCompress) {
         try {
-          const compressedBuffer = await gzipAsync(dataBuffer);
-          finalData = compressedBuffer.toString('base64');
-          finalSize = compressedBuffer.length;
+          finalData = await compressString(dataString);
+          finalSize = finalData.length;
           compressed = true;
           this.logger?.debug('Data compressed', {
             key,
@@ -483,7 +543,7 @@ export class CacheManager implements IService, ICacheService {
   }
 
   private hash(input: string): string {
-    return createHash('sha256').update(input).digest('hex');
+    return simpleHash(input);
   }
 
   private async deserializeEntry<T>(serialized: string): Promise<CacheEntry<T>> {
@@ -494,9 +554,7 @@ export class CacheManager implements IService, ICacheService {
     if (entry.metadata.compressed) {
       // Decompress data
       try {
-        const compressedBuffer = Buffer.from(entry.data, 'base64');
-        const decompressedBuffer = await gunzipAsync(compressedBuffer);
-        const decompressedString = decompressedBuffer.toString('utf-8');
+        const decompressedString = await decompressString(entry.data);
         data = JSON.parse(decompressedString);
       } catch (error) {
         this.logger?.error('Decompression error', error instanceof Error ? error : undefined);

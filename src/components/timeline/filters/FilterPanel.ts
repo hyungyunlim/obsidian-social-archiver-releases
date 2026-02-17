@@ -2,6 +2,7 @@ import { setIcon } from 'obsidian';
 import type { FilterState } from './FilterSortManager';
 import type { PlatformIcon as SimpleIcon } from '../../../constants/platform-icons';
 import { TIMELINE_PLATFORM_IDS, TIMELINE_PLATFORM_LABELS } from '../../../constants/timelinePlatforms';
+import { createSVGElement } from '../../../utils/dom-helpers';
 
 type PlatformOption = {
   id: string;
@@ -47,20 +48,8 @@ export class FilterPanel {
     // Remove existing dropdowns
     parent.querySelectorAll('.sort-dropdown').forEach(el => el.remove());
 
-    this.panelEl = parent.createDiv({ cls: 'filter-panel' });
-    this.panelEl.style.cssText = `
-      position: absolute;
-      top: 48px;
-      left: 0;
-      z-index: 1000;
-      background: var(--background-primary);
-      border: 1px solid var(--background-modifier-border);
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      padding: 16px;
-      min-width: 320px;
-      max-width: 400px;
-    `;
+    this.panelEl = parent.createDiv({ cls: 'filter-panel fp-panel' });
+    this.panelEl.addClass('sa-absolute', 'sa-z-1000', 'sa-bg-primary', 'sa-border', 'sa-rounded-8', 'sa-p-16');
 
     this.renderPlatformFilters(this.panelEl, filterState, updateFilterButton);
     this.renderDivider(this.panelEl);
@@ -92,45 +81,28 @@ export class FilterPanel {
    */
   private renderPlatformFilters(panel: HTMLElement, filterState: FilterState, updateFilterButton: () => void): void {
     const platformSection = panel.createDiv();
-    platformSection.style.cssText = 'margin-bottom: 16px;';
+    platformSection.addClass('sa-mb-16');
 
     const headerRow = platformSection.createDiv();
-    headerRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; gap: 8px;';
+    headerRow.addClass('sa-flex-between', 'sa-gap-8', 'sa-mb-8');
 
     const platformLabel = headerRow.createEl('div', { text: 'Platforms' });
-    platformLabel.style.cssText = 'font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;';
+    platformLabel.addClass('sa-text-sm', 'sa-font-semibold', 'sa-text-muted', 'fp-label-uppercase');
 
     const toggleButton = headerRow.createDiv();
-    toggleButton.style.cssText = `
-      width: 32px;
-      height: 32px;
-      border-radius: 6px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      background: transparent;
-      transition: all 0.2s;
-      position: relative;
-    `;
+    toggleButton.addClass('sa-icon-32', 'sa-rounded-6', 'sa-clickable', 'sa-bg-transparent', 'sa-transition', 'sa-relative');
 
     const toggleIcon = toggleButton.createDiv();
-    toggleIcon.style.cssText = `
-      width: 18px;
-      height: 18px;
-      pointer-events: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    `;
+    toggleIcon.addClass('sa-icon-16', 'sa-pointer-none');
 
     const setIconColor = (allSelected: boolean, isHover: boolean = false) => {
+      toggleIcon.removeClass('sa-text-accent', 'sa-text-normal', 'sa-text-muted');
       if (allSelected) {
-        toggleIcon.style.color = 'var(--interactive-accent)';
+        toggleIcon.addClass('sa-text-accent');
       } else if (isHover) {
-        toggleIcon.style.color = 'var(--text-normal)';
+        toggleIcon.addClass('sa-text-normal');
       } else {
-        toggleIcon.style.color = 'var(--text-muted)';
+        toggleIcon.addClass('sa-text-muted');
       }
     };
 
@@ -151,11 +123,11 @@ export class FilterPanel {
 
     // Combined hover effect handler
     toggleButton.addEventListener('mouseenter', () => {
-      toggleButton.style.background = 'rgba(var(--mono-rgb-100), 0.05)';
+      toggleButton.addClass('fp-toggle-hover');
       updateToggleState(true);
     });
     toggleButton.addEventListener('mouseleave', () => {
-      toggleButton.style.background = 'transparent';
+      toggleButton.removeClass('fp-toggle-hover');
       updateToggleState(false);
     });
 
@@ -192,7 +164,7 @@ export class FilterPanel {
   ): void {
     section.querySelector('.platforms-grid')?.remove();
     const platformsGrid = section.createDiv({ cls: 'platforms-grid' });
-    platformsGrid.style.cssText = 'display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;';
+    platformsGrid.addClass('sa-gap-8', 'fp-platforms-grid');
 
     // Get platform counts
     const platformCounts = this.getPlatformCounts?.() || {};
@@ -245,40 +217,49 @@ export class FilterPanel {
     const isDisabled = !hasData;
 
     const checkbox = container.createDiv();
-    checkbox.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px;
-      border-radius: 6px;
-      cursor: ${isDisabled ? 'not-allowed' : 'pointer'};
-      transition: all 0.2s;
-      background: ${isSelected ? 'var(--background-modifier-hover)' : 'transparent'};
-      opacity: ${isDisabled ? '0.4' : '1'};
-    `;
+    checkbox.addClass('sa-flex-row', 'sa-gap-8', 'sa-p-8', 'sa-rounded-6', 'sa-transition');
+    if (isDisabled) {
+      checkbox.addClass('sa-opacity-60', 'fp-disabled');
+    } else {
+      checkbox.addClass('sa-clickable');
+    }
+    if (isSelected) {
+      checkbox.addClass('sa-bg-hover');
+    }
 
     // Platform icon
     const iconWrapper = checkbox.createDiv();
-    iconWrapper.style.cssText = `width: 18px; height: 18px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: ${isDisabled ? 'var(--text-faint)' : 'var(--text-accent)'};`;
+    iconWrapper.addClass('sa-icon-16');
+    if (isDisabled) {
+      iconWrapper.addClass('sa-text-faint');
+    } else {
+      iconWrapper.addClass('sa-text-accent');
+    }
 
     const icon = this.getPlatformIcon(platform.id);
     if (icon) {
-      iconWrapper.innerHTML = `
-        <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="fill: var(--text-accent); width: 100%; height: 100%;">
-          <title>${icon.title}</title>
-          <path d="${icon.path}"/>
-        </svg>
-      `;
+      const svg = createSVGElement(icon, {
+        fill: 'var(--text-accent)',
+        width: '100%',
+        height: '100%'
+      });
+      iconWrapper.appendChild(svg);
     } else {
       const lucideIconName = this.getLucideIconName(platform.id);
       setIcon(iconWrapper, lucideIconName);
     }
 
     const label = checkbox.createSpan({ text: platform.label });
-    label.style.cssText = `font-size: 13px; flex: 1; color: ${isDisabled ? 'var(--text-faint)' : 'inherit'};`;
+    label.addClass('sa-text-base', 'sa-flex-1');
+    if (isDisabled) {
+      label.addClass('sa-text-faint');
+    }
 
     const checkIcon = checkbox.createDiv();
-    checkIcon.style.cssText = `width: 16px; height: 16px; display: ${isSelected ? 'block' : 'none'};`;
+    checkIcon.addClass('sa-icon-16');
+    if (!isSelected) {
+      checkIcon.addClass('sa-hidden');
+    }
     setIcon(checkIcon, 'check');
 
     // Click handler
@@ -292,12 +273,12 @@ export class FilterPanel {
 
       if (newPlatforms.has(platform.id)) {
         newPlatforms.delete(platform.id);
-        checkbox.style.background = 'transparent';
-        checkIcon.style.display = 'none';
+        checkbox.removeClass('sa-bg-hover');
+        checkIcon.addClass('sa-hidden');
       } else {
         newPlatforms.add(platform.id);
-        checkbox.style.background = 'var(--background-modifier-hover)';
-        checkIcon.style.display = 'block';
+        checkbox.addClass('sa-bg-hover');
+        checkIcon.removeClass('sa-hidden');
       }
 
       this.onFilterChangeCallback?.({ platforms: newPlatforms });
@@ -309,13 +290,13 @@ export class FilterPanel {
     // Hover handlers
     checkbox.addEventListener('mouseenter', () => {
       if (!filterState.platforms.has(platform.id) && !isDisabled) {
-        checkbox.style.background = 'var(--background-secondary)';
+        checkbox.addClass('sa-bg-secondary');
       }
     });
 
     checkbox.addEventListener('mouseleave', () => {
       if (!filterState.platforms.has(platform.id) && !isDisabled) {
-        checkbox.style.background = 'transparent';
+        checkbox.removeClass('sa-bg-secondary');
       }
     });
   }
@@ -325,7 +306,7 @@ export class FilterPanel {
    */
   private renderDivider(panel: HTMLElement): void {
     const divider = panel.createDiv();
-    divider.style.cssText = 'height: 1px; background: var(--background-modifier-border); margin: 16px 0;';
+    divider.addClass('sa-border-b', 'fp-divider');
   }
 
   /**
@@ -333,35 +314,31 @@ export class FilterPanel {
    */
   private renderLikeFilter(panel: HTMLElement, filterState: FilterState, updateFilterButton: () => void): void {
     const likeOption = panel.createDiv();
-    likeOption.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.2s;
-      margin-bottom: 8px;
-      background: ${filterState.likedOnly ? 'var(--background-modifier-hover)' : 'transparent'};
-    `;
+    likeOption.addClass('sa-flex-row', 'sa-gap-8', 'sa-p-8', 'sa-rounded-6', 'sa-clickable', 'sa-transition', 'sa-mb-8');
+    if (filterState.likedOnly) {
+      likeOption.addClass('sa-bg-hover');
+    }
 
     const likeIcon = likeOption.createDiv();
-    likeIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; flex-shrink: 0; color: var(--text-accent);';
+    likeIcon.addClass('sa-icon-16', 'sa-text-accent');
     setIcon(likeIcon, 'star');
 
     const likeLabel = likeOption.createSpan({ text: 'Liked posts only' });
-    likeLabel.style.cssText = 'font-size: 13px; flex: 1; line-height: 16px;';
+    likeLabel.addClass('sa-text-base', 'sa-flex-1', 'sa-leading-16');
 
     const likeCheckIcon = likeOption.createDiv();
-    likeCheckIcon.style.cssText = `width: 16px; height: 16px; flex-shrink: 0; display: ${filterState.likedOnly ? 'flex' : 'none'}; align-items: center;`;
+    likeCheckIcon.addClass('sa-icon-16', 'sa-flex-center');
+    if (!filterState.likedOnly) {
+      likeCheckIcon.addClass('sa-hidden');
+    }
     setIcon(likeCheckIcon, 'check');
 
     likeOption.addEventListener('click', () => {
       // Get latest filter state
       const currentState = this.getFilterStateCallback?.() || filterState;
       const newLikedOnly = !currentState.likedOnly;
-      likeOption.style.background = newLikedOnly ? 'var(--background-modifier-hover)' : 'transparent';
-      likeCheckIcon.style.display = newLikedOnly ? 'flex' : 'none';
+      likeOption.toggleClass('sa-bg-hover', newLikedOnly);
+      likeCheckIcon.toggleClass('sa-hidden', !newLikedOnly);
 
       this.onFilterChangeCallback?.({ likedOnly: newLikedOnly });
       this.onRerenderCallback?.();
@@ -374,35 +351,31 @@ export class FilterPanel {
    */
   private renderCommentFilter(panel: HTMLElement, filterState: FilterState, updateFilterButton: () => void): void {
     const commentOption = panel.createDiv();
-    commentOption.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.2s;
-      margin-bottom: 8px;
-      background: ${filterState.commentedOnly ? 'var(--background-modifier-hover)' : 'transparent'};
-    `;
+    commentOption.addClass('sa-flex-row', 'sa-gap-8', 'sa-p-8', 'sa-rounded-6', 'sa-clickable', 'sa-transition', 'sa-mb-8');
+    if (filterState.commentedOnly) {
+      commentOption.addClass('sa-bg-hover');
+    }
 
     const commentIcon = commentOption.createDiv();
-    commentIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; flex-shrink: 0; color: var(--text-accent);';
+    commentIcon.addClass('sa-icon-16', 'sa-text-accent');
     setIcon(commentIcon, 'message-square');
 
     const commentLabel = commentOption.createSpan({ text: 'With notes only' });
-    commentLabel.style.cssText = 'font-size: 13px; flex: 1; line-height: 16px;';
+    commentLabel.addClass('sa-text-base', 'sa-flex-1', 'sa-leading-16');
 
     const commentCheckIcon = commentOption.createDiv();
-    commentCheckIcon.style.cssText = `width: 16px; height: 16px; flex-shrink: 0; display: ${filterState.commentedOnly ? 'flex' : 'none'}; align-items: center;`;
+    commentCheckIcon.addClass('sa-icon-16', 'sa-flex-center');
+    if (!filterState.commentedOnly) {
+      commentCheckIcon.addClass('sa-hidden');
+    }
     setIcon(commentCheckIcon, 'check');
 
     commentOption.addEventListener('click', () => {
       // Get latest filter state
       const currentState = this.getFilterStateCallback?.() || filterState;
       const newCommentedOnly = !currentState.commentedOnly;
-      commentOption.style.background = newCommentedOnly ? 'var(--background-modifier-hover)' : 'transparent';
-      commentCheckIcon.style.display = newCommentedOnly ? 'flex' : 'none';
+      commentOption.toggleClass('sa-bg-hover', newCommentedOnly);
+      commentCheckIcon.toggleClass('sa-hidden', !newCommentedOnly);
 
       this.onFilterChangeCallback?.({ commentedOnly: newCommentedOnly });
       this.onRerenderCallback?.();
@@ -415,35 +388,31 @@ export class FilterPanel {
    */
   private renderSharedFilter(panel: HTMLElement, filterState: FilterState, updateFilterButton: () => void): void {
     const sharedOption = panel.createDiv();
-    sharedOption.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.2s;
-      margin-bottom: 8px;
-      background: ${filterState.sharedOnly ? 'var(--background-modifier-hover)' : 'transparent'};
-    `;
+    sharedOption.addClass('sa-flex-row', 'sa-gap-8', 'sa-p-8', 'sa-rounded-6', 'sa-clickable', 'sa-transition', 'sa-mb-8');
+    if (filterState.sharedOnly) {
+      sharedOption.addClass('sa-bg-hover');
+    }
 
     const sharedIcon = sharedOption.createDiv();
-    sharedIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; flex-shrink: 0; color: var(--text-accent);';
+    sharedIcon.addClass('sa-icon-16', 'sa-text-accent');
     setIcon(sharedIcon, 'share-2');
 
     const sharedLabel = sharedOption.createSpan({ text: 'Shared posts only' });
-    sharedLabel.style.cssText = 'font-size: 13px; flex: 1; line-height: 16px;';
+    sharedLabel.addClass('sa-text-base', 'sa-flex-1', 'sa-leading-16');
 
     const sharedCheckIcon = sharedOption.createDiv();
-    sharedCheckIcon.style.cssText = `width: 16px; height: 16px; flex-shrink: 0; display: ${filterState.sharedOnly ? 'flex' : 'none'}; align-items: center;`;
+    sharedCheckIcon.addClass('sa-icon-16', 'sa-flex-center');
+    if (!filterState.sharedOnly) {
+      sharedCheckIcon.addClass('sa-hidden');
+    }
     setIcon(sharedCheckIcon, 'check');
 
     sharedOption.addEventListener('click', () => {
       // Get latest filter state
       const currentState = this.getFilterStateCallback?.() || filterState;
       const newSharedOnly = !currentState.sharedOnly;
-      sharedOption.style.background = newSharedOnly ? 'var(--background-modifier-hover)' : 'transparent';
-      sharedCheckIcon.style.display = newSharedOnly ? 'flex' : 'none';
+      sharedOption.toggleClass('sa-bg-hover', newSharedOnly);
+      sharedCheckIcon.toggleClass('sa-hidden', !newSharedOnly);
 
       this.onFilterChangeCallback?.({ sharedOnly: newSharedOnly });
       this.onRerenderCallback?.();
@@ -456,35 +425,31 @@ export class FilterPanel {
    */
   private renderSubscribedFilter(panel: HTMLElement, filterState: FilterState, updateFilterButton: () => void): void {
     const subscribedOption = panel.createDiv();
-    subscribedOption.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.2s;
-      margin-bottom: 8px;
-      background: ${filterState.subscribedOnly ? 'var(--background-modifier-hover)' : 'transparent'};
-    `;
+    subscribedOption.addClass('sa-flex-row', 'sa-gap-8', 'sa-p-8', 'sa-rounded-6', 'sa-clickable', 'sa-transition', 'sa-mb-8');
+    if (filterState.subscribedOnly) {
+      subscribedOption.addClass('sa-bg-hover');
+    }
 
     const subscribedIcon = subscribedOption.createDiv();
-    subscribedIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; flex-shrink: 0; color: var(--text-accent);';
+    subscribedIcon.addClass('sa-icon-16', 'sa-text-accent');
     setIcon(subscribedIcon, 'bell');
 
     const subscribedLabel = subscribedOption.createSpan({ text: 'Subscribed posts only' });
-    subscribedLabel.style.cssText = 'font-size: 13px; flex: 1; line-height: 16px;';
+    subscribedLabel.addClass('sa-text-base', 'sa-flex-1', 'sa-leading-16');
 
     const subscribedCheckIcon = subscribedOption.createDiv();
-    subscribedCheckIcon.style.cssText = `width: 16px; height: 16px; flex-shrink: 0; display: ${filterState.subscribedOnly ? 'flex' : 'none'}; align-items: center;`;
+    subscribedCheckIcon.addClass('sa-icon-16', 'sa-flex-center');
+    if (!filterState.subscribedOnly) {
+      subscribedCheckIcon.addClass('sa-hidden');
+    }
     setIcon(subscribedCheckIcon, 'check');
 
     subscribedOption.addEventListener('click', () => {
       // Get latest filter state
       const currentState = this.getFilterStateCallback?.() || filterState;
       const newSubscribedOnly = !currentState.subscribedOnly;
-      subscribedOption.style.background = newSubscribedOnly ? 'var(--background-modifier-hover)' : 'transparent';
-      subscribedCheckIcon.style.display = newSubscribedOnly ? 'flex' : 'none';
+      subscribedOption.toggleClass('sa-bg-hover', newSubscribedOnly);
+      subscribedCheckIcon.toggleClass('sa-hidden', !newSubscribedOnly);
 
       this.onFilterChangeCallback?.({ subscribedOnly: newSubscribedOnly });
       this.onRerenderCallback?.();
@@ -497,34 +462,31 @@ export class FilterPanel {
    */
   private renderArchiveFilter(panel: HTMLElement, filterState: FilterState, updateFilterButton: () => void): void {
     const archiveOption = panel.createDiv();
-    archiveOption.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.2s;
-      background: ${filterState.includeArchived ? 'var(--background-modifier-hover)' : 'transparent'};
-    `;
+    archiveOption.addClass('sa-flex-row', 'sa-gap-8', 'sa-p-8', 'sa-rounded-6', 'sa-clickable', 'sa-transition');
+    if (filterState.includeArchived) {
+      archiveOption.addClass('sa-bg-hover');
+    }
 
     const archiveIcon = archiveOption.createDiv();
-    archiveIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; flex-shrink: 0;';
+    archiveIcon.addClass('sa-icon-16');
     setIcon(archiveIcon, 'archive');
 
     const archiveLabel = archiveOption.createSpan({ text: 'Include archived' });
-    archiveLabel.style.cssText = 'font-size: 13px; flex: 1; line-height: 16px;';
+    archiveLabel.addClass('sa-text-base', 'sa-flex-1', 'sa-leading-16');
 
     const archiveCheckIcon = archiveOption.createDiv();
-    archiveCheckIcon.style.cssText = `width: 16px; height: 16px; flex-shrink: 0; display: ${filterState.includeArchived ? 'flex' : 'none'}; align-items: center;`;
+    archiveCheckIcon.addClass('sa-icon-16', 'sa-flex-center');
+    if (!filterState.includeArchived) {
+      archiveCheckIcon.addClass('sa-hidden');
+    }
     setIcon(archiveCheckIcon, 'check');
 
     archiveOption.addEventListener('click', () => {
       // Get latest filter state
       const currentState = this.getFilterStateCallback?.() || filterState;
       const newIncludeArchived = !currentState.includeArchived;
-      archiveOption.style.background = newIncludeArchived ? 'var(--background-modifier-hover)' : 'transparent';
-      archiveCheckIcon.style.display = newIncludeArchived ? 'flex' : 'none';
+      archiveOption.toggleClass('sa-bg-hover', newIncludeArchived);
+      archiveCheckIcon.toggleClass('sa-hidden', !newIncludeArchived);
 
       this.onFilterChangeCallback?.({ includeArchived: newIncludeArchived });
       this.onRerenderCallback?.();

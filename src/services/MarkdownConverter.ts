@@ -1878,6 +1878,15 @@ export class MarkdownConverter implements IService {
         : contentText)
       : hashtagsText || '';
 
+    // X Article: append rendered article body (content.html contains Draft.js → Markdown)
+    const isXArticle = postData.platform === 'x' && !!postData.content.html;
+    if (isXArticle) {
+      const articleBody = postData.content.html!;
+      baseText = baseText
+        ? `${baseText}\n\n---\n\n${articleBody}`
+        : articleBody;
+    }
+
     // For RSS-based platforms: replace {{IMAGE_N}} and {{VIDEO_N}} placeholders with actual embeds
     let blogMediaUsedInline = false;
     if (isRssBasedPlatform(postData.platform) && mediaResults && mediaResults.length > 0) {
@@ -1922,9 +1931,10 @@ export class MarkdownConverter implements IService {
       }
     }
 
-    // For RSS-based platforms, preserve markdown headings (they come from HTML conversion)
+    // For RSS-based platforms and X Articles, preserve markdown headings (they come from HTML/Draft.js conversion)
     // For other platforms, escape headings to prevent rendering issues
-    const sanitizedText = isRssBasedPlatform(postData.platform)
+    const preserveHeadings = isRssBasedPlatform(postData.platform) || isXArticle;
+    const sanitizedText = preserveHeadings
       ? this.escapeOrderedListPatterns(baseText)
       : this.escapeOrderedListPatterns(this.escapeLeadingMarkdownHeadings(baseText));
 

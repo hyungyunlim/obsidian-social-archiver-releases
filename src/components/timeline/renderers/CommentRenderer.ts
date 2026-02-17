@@ -110,7 +110,7 @@ export class CommentRenderer {
     this.platform = platform; // Store platform for URL generation
     this.postAuthor = postAuthor; // Store post author for highlighting
     const commentsContainer = container.createDiv();
-    commentsContainer.style.cssText = 'margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--background-modifier-border);';
+    commentsContainer.addClass('sa-mt-12', 'sa-pt-12', 'sa-border-b');
 
     const maxVisibleComments = 2;
     const hasMoreComments = comments.length > maxVisibleComments;
@@ -118,16 +118,18 @@ export class CommentRenderer {
     // "View all X comments" button (if there are more than 2 comments)
     if (hasMoreComments) {
       const viewAllBtn = commentsContainer.createDiv();
-      viewAllBtn.style.cssText = 'font-size: 13px; color: var(--text-muted); cursor: pointer; margin-bottom: 8px; transition: color 0.2s;';
+      viewAllBtn.addClass('sa-text-base', 'sa-text-muted', 'sa-clickable', 'sa-mb-8', 'sa-transition-color');
       viewAllBtn.setText(`View all ${comments.length} comments`);
 
       let showingAll = false;
 
       viewAllBtn.addEventListener('mouseenter', () => {
-        viewAllBtn.style.color = 'var(--text-normal)';
+        viewAllBtn.removeClass('sa-text-muted');
+        viewAllBtn.addClass('sa-text-normal');
       });
       viewAllBtn.addEventListener('mouseleave', () => {
-        viewAllBtn.style.color = 'var(--text-muted)';
+        viewAllBtn.removeClass('sa-text-normal');
+        viewAllBtn.addClass('sa-text-muted');
       });
 
       viewAllBtn.addEventListener('click', (e) => {
@@ -148,7 +150,7 @@ export class CommentRenderer {
 
     // Comments list
     const commentsListContainer = commentsContainer.createDiv();
-    commentsListContainer.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
+    commentsListContainer.addClass('sa-flex-col', 'sa-gap-8');
 
     // Show last 2 comments initially (like Instagram)
     const commentsToShow = hasMoreComments ? comments.slice(-maxVisibleComments) : comments;
@@ -198,18 +200,14 @@ export class CommentRenderer {
       }
 
       const link = container.createEl('a', { text: linkText });
-      link.style.cssText = 'color: var(--text-accent); text-decoration: none; cursor: pointer; word-break: break-all;';
+      link.addClass('sa-text-accent', 'sa-clickable', 'sa-word-break');
+      link.addClass('cr-link');
       link.href = linkUrl;
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
       link.title = linkUrl; // Show full URL on hover
 
-      link.addEventListener('mouseenter', () => {
-        link.style.textDecoration = 'underline';
-      });
-      link.addEventListener('mouseleave', () => {
-        link.style.textDecoration = 'none';
-      });
+      // Hover underline handled by CSS .cr-link:hover
       link.addEventListener('click', (e) => {
         e.stopPropagation();
       });
@@ -228,15 +226,16 @@ export class CommentRenderer {
    */
   private renderComment(container: HTMLElement, comment: Comment, isReply: boolean = false): void {
     const commentDiv = container.createDiv();
-    commentDiv.style.cssText = isReply
-      ? 'font-size: 13px; line-height: 1.4; margin-left: 24px;'
-      : 'font-size: 13px; line-height: 1.4;';
+    commentDiv.addClass('sa-text-base', 'sa-leading-normal');
+    if (isReply) {
+      commentDiv.addClass('cr-reply');
+    }
 
     // Comment content: **name** content (on same line)
     const contentSpan = commentDiv.createSpan();
 
     const usernameSpan = contentSpan.createEl('strong');
-    usernameSpan.style.cssText = 'font-weight: 600; color: var(--text-normal); cursor: pointer;';
+    usernameSpan.addClass('sa-font-semibold', 'sa-text-normal', 'sa-clickable');
     // Use author.name for display (e.g., "Charlie Moon" for LinkedIn)
     usernameSpan.setText(comment.author.name);
 
@@ -244,32 +243,20 @@ export class CommentRenderer {
     if (this.isPostAuthor(comment.author)) {
       const authorBadge = contentSpan.createSpan({ cls: 'comment-author-badge' });
       authorBadge.setText('Author');
-      authorBadge.style.cssText = `
-        font-size: 10px;
-        font-weight: 500;
-        color: var(--text-accent);
-        background: var(--background-modifier-hover);
-        padding: 1px 6px;
-        border-radius: 3px;
-        margin-left: 4px;
-        vertical-align: middle;
-      `;
+      authorBadge.addClass('sa-text-accent', 'sa-bg-hover', 'sa-ml-4');
+      authorBadge.addClass('cr-author-badge');
     }
 
     // Fix Reddit author URL if empty
     const authorUrl = this.fixRedditAuthorUrl(comment);
 
     if (authorUrl) {
+      usernameSpan.addClass('cr-username');
       usernameSpan.addEventListener('click', (e) => {
         e.stopPropagation();
         window.open(authorUrl, '_blank');
       });
-      usernameSpan.addEventListener('mouseenter', () => {
-        usernameSpan.style.textDecoration = 'underline';
-      });
-      usernameSpan.addEventListener('mouseleave', () => {
-        usernameSpan.style.textDecoration = 'none';
-      });
+      // Hover underline handled by CSS .cr-username:hover
     }
 
     // Add space after username
@@ -277,14 +264,14 @@ export class CommentRenderer {
 
     // Render comment content with parsed links/mentions
     const commentContentSpan = contentSpan.createSpan();
-    commentContentSpan.style.color = 'var(--text-normal)';
+    commentContentSpan.addClass('sa-text-normal');
     this.renderTextWithLinks(commentContentSpan, comment.content);
 
     // Time and likes (inline for both main comments and replies)
     // Only show time if timestamp exists and is valid
     if (comment.timestamp) {
       const timeSpan = contentSpan.createSpan();
-      timeSpan.style.cssText = 'font-size: 12px; color: var(--text-muted); margin-left: 8px;';
+      timeSpan.addClass('sa-text-sm', 'sa-text-muted', 'sa-ml-8');
       const relativeTime = this.getRelativeTime(new Date(comment.timestamp));
       if (relativeTime && relativeTime !== 'Invalid Date') {
         timeSpan.setText(relativeTime);
@@ -293,17 +280,19 @@ export class CommentRenderer {
 
     if (comment.likes && comment.likes > 0) {
       const likesSpan = contentSpan.createSpan();
-      likesSpan.style.cssText = 'font-size: 12px; color: var(--text-muted);';
+      likesSpan.addClass('sa-text-sm', 'sa-text-muted');
       // Add separator if timestamp was shown
       const separator = comment.timestamp ? ' · ' : ' ';
-      likesSpan.style.marginLeft = comment.timestamp ? '0' : '8px';
+      if (!comment.timestamp) {
+        likesSpan.addClass('sa-ml-8');
+      }
       likesSpan.setText(`${separator}${comment.likes} ${comment.likes === 1 ? 'like' : 'likes'}`);
     }
 
     // Render replies (nested) - inside commentDiv to avoid gap duplication
     if (comment.replies && comment.replies.length > 0) {
       const repliesContainer = commentDiv.createDiv();
-      repliesContainer.style.marginTop = '4px';
+      repliesContainer.addClass('sa-mt-4');
 
       for (const reply of comment.replies) {
         this.renderComment(repliesContainer, reply, true);

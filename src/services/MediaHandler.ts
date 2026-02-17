@@ -1,5 +1,5 @@
 import type { IService } from './base/IService';
-import type { Vault, TFile } from 'obsidian';
+import { TFile, type Vault } from 'obsidian';
 import type { Media, Platform } from '@/types/post';
 import { normalizePath, requestUrl } from 'obsidian';
 import type { WorkersAPIClient } from './WorkersAPIClient';
@@ -539,14 +539,14 @@ export class MediaHandler implements IService {
 
       // Check if file already exists
       const existingFile = this.vault.getAbstractFileByPath(path);
-      if (existingFile) {
+      if (existingFile && existingFile instanceof TFile) {
         // File already exists, reuse it
         return {
           originalUrl: media.url,
           localPath: path,
           type: selectedType,
           size: processedData.byteLength,
-          file: existingFile as TFile, // Type assertion since we checked it exists
+          file: existingFile,
         };
       }
 
@@ -570,14 +570,14 @@ export class MediaHandler implements IService {
       if (errorMessage.includes('File already exists') || errorMessage.includes('already exists')) {
         if (resolvedPath) {
           const existingResolvedFile = this.vault.getAbstractFileByPath(resolvedPath);
-          if (existingResolvedFile) {
+          if (existingResolvedFile && existingResolvedFile instanceof TFile) {
             const inferredType = MediaTypeDetector.detect(resolvedPath, media.mimeType);
             return {
               originalUrl: media.url,
               localPath: resolvedPath,
               type: inferredType,
               size: 0,
-              file: existingResolvedFile as TFile,
+              file: existingResolvedFile,
             };
           }
         }
@@ -588,7 +588,7 @@ export class MediaHandler implements IService {
         const path = this.pathGenerator.generatePath(platform, postId, filename);
         const existingFile = this.vault.getAbstractFileByPath(path);
 
-        if (existingFile) {
+        if (existingFile && existingFile instanceof TFile) {
           // File exists now, return it as success
           const inferredType = MediaTypeDetector.detect(media.url, media.mimeType);
           return {
@@ -596,7 +596,7 @@ export class MediaHandler implements IService {
             localPath: path,
             type: inferredType,
             size: 0, // Unknown size since we didn't download
-            file: existingFile as TFile,
+            file: existingFile,
           };
         }
       }
@@ -657,6 +657,7 @@ export class MediaHandler implements IService {
     if (url.startsWith('blob:')) {
       try {
         // Download blob URL directly in browser context (Electron/browser environment)
+        // NOTE: Using fetch() for blob: URLs - requestUrl() doesn't support blob: protocol
         const response = await fetch(url);
         if (!response.ok) {
           throw new Error(`Blob fetch failed: ${response.status} ${response.statusText}`);
@@ -997,13 +998,13 @@ export class MediaHandler implements IService {
 
     // Check if file already exists
     const existingFile = this.vault.getAbstractFileByPath(path);
-    if (existingFile) {
+    if (existingFile && existingFile instanceof TFile) {
       return {
         originalUrl: media.url,
         localPath: path,
         type: 'video',
         size: data.byteLength,
-        file: existingFile as TFile,
+        file: existingFile,
       };
     }
 

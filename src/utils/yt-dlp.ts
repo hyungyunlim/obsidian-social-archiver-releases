@@ -19,9 +19,12 @@ export class YtDlpDetector {
     }
 
     try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
       const { exec } = require('child_process');
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
       const { promisify } = require('util');
       const execAsync = promisify(exec);
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
       const os = require('os');
 
       // Build platform-specific paths
@@ -94,9 +97,12 @@ export class YtDlpDetector {
 
     try {
       // Use Electron's child_process via require
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
       const { exec } = require('child_process');
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
       const { promisify } = require('util');
       const execAsync = promisify(exec);
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
       const os = require('os');
 
       // Build platform-specific paths
@@ -221,9 +227,13 @@ export class YtDlpDetector {
     }
 
     return new Promise((resolve, reject) => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
       const { spawn } = require('child_process');
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
       const fs = require('fs');
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
       const path = require('path');
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
       const os = require('os');
 
       // Sanitize filename (remove special characters)
@@ -427,6 +437,7 @@ export class YtDlpDetector {
       process.on('error', (error: Error) => {
         // Clean up temp directory on error
         try {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
           const fs = require('fs');
           fs.rmSync(tempDir, { recursive: true, force: true });
         } catch {
@@ -446,7 +457,9 @@ export class YtDlpDetector {
       throw new Error('yt-dlp is not available');
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
     const { exec } = require('child_process');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
     const { promisify } = require('util');
     const execAsync = promisify(exec);
 

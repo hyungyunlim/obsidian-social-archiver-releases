@@ -5,7 +5,7 @@
  * with cooperative pause/cancel, persistence, and progress observer pattern.
  */
 
-import { Notice, type App, type TFile, type TFolder } from 'obsidian';
+import { Notice, TFile, TFolder, type App } from 'obsidian';
 import type { SocialArchiverSettings } from '../types/settings';
 import type {
   BatchMode,
@@ -111,10 +111,10 @@ export class BatchTranscriptionManager {
     this.setStatus('scanning');
 
     // 1. Scan
-    console.log(`[BatchTranscription] Starting batch (mode: ${mode}), scanning archive folder...`);
+    console.debug(`[BatchTranscription] Starting batch (mode: ${mode}), scanning archive folder...`);
     const scanResult = await this.scan();
     if (scanResult.length === 0) {
-      console.log('[BatchTranscription] Scan complete: no eligible items found.');
+      console.debug('[BatchTranscription] Scan complete: no eligible items found.');
       this.setStatus('completed');
       this.deletePersisted();
       return;
@@ -123,11 +123,11 @@ export class BatchTranscriptionManager {
     this.items = scanResult;
     this.persist();
 
-    console.log(`[BatchTranscription] Scan complete: ${scanResult.length} item(s) to process.`);
+    console.debug(`[BatchTranscription] Scan complete: ${scanResult.length} item(s) to process.`);
     for (const item of scanResult) {
       const name = item.filePath.split('/').pop() || item.filePath;
       const type = item.videoUrl ? `download+transcribe (${item.videoUrl})` : `transcribe (${item.videoPath})`;
-      console.log(`[BatchTranscription]   - ${name}: ${type}`);
+      console.debug(`[BatchTranscription]   - ${name}: ${type}`);
     }
 
     // 2. Check for cancel during scan
@@ -145,7 +145,7 @@ export class BatchTranscriptionManager {
 
   pause(): void {
     if (this.status !== 'running' && this.status !== 'scanning') return;
-    console.log('[BatchTranscription] Pause requested — will pause after current item completes.');
+    console.debug('[BatchTranscription] Pause requested — will pause after current item completes.');
     this.pauseRequested = true;
     this.notifyObservers();
   }
@@ -160,7 +160,7 @@ export class BatchTranscriptionManager {
     this.revalidatePendingItems();
 
     const remaining = this.items.filter(i => i.status === 'pending').length;
-    console.log(`[BatchTranscription] Resuming batch (${remaining} item(s) remaining).`);
+    console.debug(`[BatchTranscription] Resuming batch (${remaining} item(s) remaining).`);
     this.setStatus('running');
 
     await this.processLoop();
@@ -169,7 +169,7 @@ export class BatchTranscriptionManager {
   cancel(): void {
     if (this.status === 'idle' || this.status === 'completed' || this.status === 'cancelled') return;
 
-    console.log('[BatchTranscription] Cancel requested.');
+    console.debug('[BatchTranscription] Cancel requested.');
     this.cancelRequested = true;
     this.abortController?.abort();
 
@@ -207,7 +207,7 @@ export class BatchTranscriptionManager {
         return;
       }
 
-      console.log(`[BatchTranscriptionManager] Restored interrupted batch (${this.items.length} items, index ${this.currentIndex})`);
+      console.debug(`[BatchTranscriptionManager] Restored interrupted batch (${this.items.length} items, index ${this.currentIndex})`);
     } catch {
       this.deletePersisted();
     }
@@ -240,7 +240,7 @@ export class BatchTranscriptionManager {
     }
 
     if (skippedCount > 0) {
-      console.log(`[BatchTranscriptionManager] Revalidation: ${skippedCount} file(s) skipped (moved or deleted)`);
+      console.debug(`[BatchTranscriptionManager] Revalidation: ${skippedCount} file(s) skipped (moved or deleted)`);
       this.persist();
       this.notifyObservers();
     }
@@ -253,10 +253,10 @@ export class BatchTranscriptionManager {
     const archivePath = settings.archivePath || 'Social Archives';
     const archiveFolder = app.vault.getAbstractFileByPath(archivePath);
 
-    // Duck-type check: TFolder has a `children` property
-    if (!archiveFolder || !('children' in archiveFolder)) return [];
+    // Check if it's a TFolder
+    if (!archiveFolder || !(archiveFolder instanceof TFolder)) return [];
 
-    const files = this.deps.collectMarkdownFiles(archiveFolder as TFolder);
+    const files = this.deps.collectMarkdownFiles(archiveFolder);
     const items: BatchItem[] = [];
 
     for (const file of files) {
@@ -319,7 +319,7 @@ export class BatchTranscriptionManager {
     while (this.currentIndex < this.items.length) {
       // ── Cancel checkpoint ──
       if (this.cancelRequested) {
-        console.log('[BatchTranscription] Batch cancelled.');
+        console.debug('[BatchTranscription] Batch cancelled.');
         this.setStatus('cancelled');
         this.deletePersisted();
         return;
@@ -327,7 +327,7 @@ export class BatchTranscriptionManager {
 
       // ── Pause checkpoint ──
       if (this.pauseRequested) {
-        console.log(`[BatchTranscription] Batch paused at item ${this.currentIndex + 1}/${this.items.length}.`);
+        console.debug(`[BatchTranscription] Batch paused at item ${this.currentIndex + 1}/${this.items.length}.`);
         this.pausedAt = Date.now();
         this.pauseRequested = false;
         this.setStatus('paused');
@@ -350,7 +350,7 @@ export class BatchTranscriptionManager {
       try {
         // ── Download phase (if needed) ──
         if (!item.videoPath && item.videoUrl) {
-          console.log(`[BatchTranscription] ${itemNum} Downloading: ${itemName}`);
+          console.debug(`[BatchTranscription] ${itemNum} Downloading: ${itemName}`);
           item.status = 'downloading';
           this.notifyObservers();
 
@@ -364,7 +364,7 @@ export class BatchTranscriptionManager {
             this.notifyObservers();
             continue;
           }
-          console.log(`[BatchTranscription] ${itemNum} Downloaded: ${downloaded}`);
+          console.debug(`[BatchTranscription] ${itemNum} Downloaded: ${downloaded}`);
           item.videoPath = downloaded;
 
           // Embed video link in note body
@@ -381,30 +381,28 @@ export class BatchTranscriptionManager {
         }
 
         // ── Transcribe phase ──
-        console.log(`[BatchTranscription] ${itemNum} Transcribing: ${itemName}`);
+        console.debug(`[BatchTranscription] ${itemNum} Transcribing: ${itemName}`);
         item.status = 'transcribing';
         this.notifyObservers();
 
         const rawFile = this.deps.app.vault.getAbstractFileByPath(item.filePath);
-        // Duck-type check: TFile has `extension` and `basename` but no `children`
-        if (!rawFile || !('extension' in rawFile) || 'children' in rawFile) {
+        if (!rawFile || !(rawFile instanceof TFile)) {
           item.status = 'skipped';
           item.error = 'File not found';
           this.currentIndex++;
           this.notifyObservers();
           continue;
         }
-        const file = rawFile as TFile;
 
         const requestedAt = new Date().toISOString();
-        await this.deps.app.fileManager.processFrontMatter(file, (fm) => {
+        await this.deps.app.fileManager.processFrontMatter(rawFile, (fm) => {
           fm.videoTranscribed = false;
           fm.videoTranscriptionRequestedAt = requestedAt;
           delete fm.videoTranscriptionError;
         });
 
         const fullVideoPath = this.deps.toAbsoluteVaultPath(item.videoPath);
-        const cache = this.deps.app.metadataCache.getFileCache(file);
+        const cache = this.deps.app.metadataCache.getFileCache(rawFile);
         const frontmatter = (cache?.frontmatter as Record<string, unknown> | undefined) || {};
         const durationValue = frontmatter.duration;
         const mediaDuration = typeof durationValue === 'number'
@@ -425,7 +423,7 @@ export class BatchTranscriptionManager {
 
         const completedAt = new Date().toISOString();
 
-        await this.deps.app.fileManager.processFrontMatter(file, (fm) => {
+        await this.deps.app.fileManager.processFrontMatter(rawFile, (fm) => {
           fm.videoTranscribed = true;
           fm.videoTranscribedAt = completedAt;
           delete fm.videoTranscriptionError;
@@ -436,21 +434,21 @@ export class BatchTranscriptionManager {
           fm.transcriptionProcessingTime = result.processingTime;
         });
 
-        const currentContent = await this.deps.app.vault.read(file);
+        const currentContent = await this.deps.app.vault.read(rawFile);
         const updatedContent = this.deps.appendTranscriptSection(currentContent, result);
         if (updatedContent !== currentContent) {
-          await this.deps.app.vault.modify(file, updatedContent);
+          await this.deps.app.vault.modify(rawFile, updatedContent);
         }
 
         item.status = 'completed';
-        console.log(`[BatchTranscription] ${itemNum} DONE: ${itemName} (model: ${result.model}, lang: ${result.language})`);
+        console.debug(`[BatchTranscription] ${itemNum} DONE: ${itemName} (model: ${result.model}, lang: ${result.language})`);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
         // Check for cancellation
         if (errorMessage.includes('cancelled') || errorMessage.includes('abort') || this.cancelRequested) {
           if (this.cancelRequested) {
-            console.log('[BatchTranscription] Batch cancelled.');
+            console.debug('[BatchTranscription] Batch cancelled.');
             this.setStatus('cancelled');
             this.deletePersisted();
             return;
@@ -464,8 +462,8 @@ export class BatchTranscriptionManager {
         // Update frontmatter with error
         try {
           const errFile = this.deps.app.vault.getAbstractFileByPath(item.filePath);
-          if (errFile && 'extension' in errFile) {
-            await this.deps.app.fileManager.processFrontMatter(errFile as TFile, (fm) => {
+          if (errFile && errFile instanceof TFile) {
+            await this.deps.app.fileManager.processFrontMatter(errFile, (fm) => {
               fm.videoTranscribed = false;
               fm.videoTranscriptionError = errorMessage;
             });
@@ -490,7 +488,7 @@ export class BatchTranscriptionManager {
     const failed = this.items.filter(i => i.status === 'failed').length;
     const skipped = this.items.filter(i => i.status === 'skipped').length;
     const elapsed = ((Date.now() - this.startedAt) / 1000).toFixed(1);
-    console.log(`[BatchTranscription] Batch complete: ${completed} done, ${failed} failed, ${skipped} skipped (${elapsed}s total).`);
+    console.debug(`[BatchTranscription] Batch complete: ${completed} done, ${failed} failed, ${skipped} skipped (${elapsed}s total).`);
     this.setStatus('completed');
     this.deletePersisted();
     this.deps.refreshTimelineView();
@@ -504,14 +502,13 @@ export class BatchTranscriptionManager {
     try {
       // Extract platform and postId from the note's frontmatter
       const rawFile = this.deps.app.vault.getAbstractFileByPath(item.filePath);
-      if (!rawFile || !('extension' in rawFile)) return null;
-      const file = rawFile as TFile;
+      if (!rawFile || !(rawFile instanceof TFile)) return null;
 
-      const cache = this.deps.app.metadataCache.getFileCache(file);
+      const cache = this.deps.app.metadataCache.getFileCache(rawFile);
       const fm = (cache?.frontmatter as Record<string, unknown> | undefined) || {};
       const platform = (typeof fm.platform === 'string' ? fm.platform : 'unknown');
       const author = (typeof fm.author === 'string' ? fm.author : 'unknown');
-      const postId = file.basename;
+      const postId = rawFile.basename;
 
       // Try yt-dlp first for supported URLs (YouTube, TikTok, etc.)
       if (this.deps.isYtDlpUrl(item.videoUrl)) {
@@ -523,7 +520,7 @@ export class BatchTranscriptionManager {
         );
 
         if (vaultRelativePath) {
-          await this.deps.app.fileManager.processFrontMatter(file, (frontmatter) => {
+          await this.deps.app.fileManager.processFrontMatter(rawFile, (frontmatter) => {
             frontmatter.videoDownloaded = true;
             if (!Array.isArray(frontmatter.downloadedUrls)) frontmatter.downloadedUrls = [];
             if (!frontmatter.downloadedUrls.includes(item.videoUrl)) {
@@ -536,7 +533,7 @@ export class BatchTranscriptionManager {
         }
 
         // yt-dlp failed — update frontmatter and return null
-        await this.deps.app.fileManager.processFrontMatter(file, (frontmatter) => {
+        await this.deps.app.fileManager.processFrontMatter(rawFile, (frontmatter) => {
           frontmatter.videoDownloadFailed = true;
           frontmatter.videoDownloadFailedUrls = [item.videoUrl];
         });
@@ -547,7 +544,7 @@ export class BatchTranscriptionManager {
       const media: Media[] = [{ type: 'video', url: item.videoUrl }];
       const results = await this.deps.downloadMedia(media, platform, postId, author);
       if (results.length > 0 && results[0]?.localPath) {
-        await this.deps.app.fileManager.processFrontMatter(file, (frontmatter) => {
+        await this.deps.app.fileManager.processFrontMatter(rawFile, (frontmatter) => {
           frontmatter.videoDownloaded = true;
           delete frontmatter.videoDownloadFailed;
           delete frontmatter.videoDownloadFailedUrls;
@@ -555,7 +552,7 @@ export class BatchTranscriptionManager {
         return results[0].localPath;
       }
 
-      await this.deps.app.fileManager.processFrontMatter(file, (frontmatter) => {
+      await this.deps.app.fileManager.processFrontMatter(rawFile, (frontmatter) => {
         frontmatter.videoDownloadFailed = true;
         frontmatter.videoDownloadFailedUrls = [item.videoUrl];
       });
@@ -576,10 +573,9 @@ export class BatchTranscriptionManager {
   private async embedVideoInNote(filePath: string, videoVaultPath: string): Promise<void> {
     try {
       const rawFile = this.deps.app.vault.getAbstractFileByPath(filePath);
-      if (!rawFile || !('extension' in rawFile)) return;
-      const file = rawFile as TFile;
+      if (!rawFile || !(rawFile instanceof TFile)) return;
 
-      const content = await this.deps.app.vault.read(file);
+      const content = await this.deps.app.vault.read(rawFile);
       const videoLink = `![[${videoVaultPath}]]`;
 
       // Already embedded — skip
@@ -602,8 +598,8 @@ export class BatchTranscriptionManager {
       }
 
       if (updatedContent !== content) {
-        await this.deps.app.vault.modify(file, updatedContent);
-        console.log(`[BatchTranscription] Embedded video in note: ${videoLink}`);
+        await this.deps.app.vault.modify(rawFile, updatedContent);
+        console.debug(`[BatchTranscription] Embedded video in note: ${videoLink}`);
       }
     } catch (error) {
       console.warn('[BatchTranscription] Failed to embed video in note:', error);

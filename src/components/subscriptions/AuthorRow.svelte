@@ -403,7 +403,7 @@ async function handleNaverSubscribe(
     }
   };
 
-  console.log('[AuthorRow] handleNaverSubscribe options:', {
+  console.debug('[AuthorRow] handleNaverSubscribe options:', {
     modalOptions,
     builtOptions: options,
   });
@@ -441,7 +441,7 @@ async function handleBrunchSubscribe(
       const brunchService = new BrunchLocalService();
       userId = await brunchService.discoverUserId(username) || undefined;
       if (userId) {
-        console.log(`[AuthorRow] Discovered Brunch userId: ${userId} for @${username}`);
+        console.debug(`[AuthorRow] Discovered Brunch userId: ${userId} for @${username}`);
       } else {
         console.warn(`[AuthorRow] Could not discover Brunch userId for @${username}`);
       }
@@ -470,7 +470,7 @@ async function handleBrunchSubscribe(
     }
   };
 
-  console.log('[AuthorRow] handleBrunchSubscribe options:', {
+  console.debug('[AuthorRow] handleBrunchSubscribe options:', {
     modalOptions,
     builtOptions: options,
   });

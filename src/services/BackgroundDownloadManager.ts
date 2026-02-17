@@ -567,11 +567,13 @@ export class BackgroundDownloadManager extends EventTarget {
     const progress = this.getProgress();
 
     if (progress.activeSessions === 0) {
-      this.statusBarItem.style.display = 'none';
+      this.statusBarItem.addClass('bdm-status-hidden');
+      this.statusBarItem.removeClass('bdm-status-visible');
       return;
     }
 
-    this.statusBarItem.style.display = 'inline-block';
+    this.statusBarItem.removeClass('bdm-status-hidden');
+    this.statusBarItem.addClass('bdm-status-visible');
 
     const current = progress.currentSession;
     if (current) {

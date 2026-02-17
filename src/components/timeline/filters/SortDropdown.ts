@@ -29,7 +29,7 @@ export class SortDropdown {
   renderSortControls(parent: HTMLElement, sortState: SortState): HTMLElement {
     // Sort controls container (group dropdown and toggle tightly)
     const sortControls = parent.createDiv();
-    sortControls.style.cssText = 'display: flex; align-items: center; gap: 0;';
+    sortControls.addClass('sa-flex-row', 'sd-controls');
 
     this.renderSortByButton(sortControls, parent, sortState);
     this.renderOrderToggle(sortControls, sortState);
@@ -44,9 +44,10 @@ export class SortDropdown {
     const sortByBtn = container.createDiv();
     // Mobile: icon-only (adjust border radius for single button), Desktop: icon + text
     const isMobile = Platform.isMobile;
-    const padding = isMobile ? '0' : '0 12px';
-    const borderRadius = isMobile ? '8px 0 0 8px' : '8px 0 0 8px'; // Keep grouped with order toggle
-    sortByBtn.style.cssText = `display: flex; align-items: center; gap: 6px; padding: ${padding}; height: 40px; border-radius: ${borderRadius}; background: transparent; cursor: pointer; transition: all 0.2s; flex-shrink: 0; font-size: 13px; color: var(--text-muted); justify-content: center; min-width: 40px;`;
+    sortByBtn.addClass('sa-flex-row', 'sa-gap-6', 'sa-bg-transparent', 'sa-clickable', 'sa-transition', 'sa-flex-shrink-0', 'sa-text-base', 'sa-text-muted', 'sa-flex-center', 'sd-sort-btn');
+    if (!isMobile) {
+      sortByBtn.addClass('sa-px-12');
+    }
 
     const updateSortByButton = () => {
       const text = sortState.by === 'published' ? 'Published' : 'Archived';
@@ -55,23 +56,28 @@ export class SortDropdown {
     };
 
     const sortByIcon = sortByBtn.createDiv();
-    sortByIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: color 0.2s;';
+    sortByIcon.addClass('sa-icon-16', 'sa-flex-shrink-0', 'sa-transition-color');
     setIcon(sortByIcon, 'calendar');
 
     const sortByText = sortByBtn.createSpan();
     // Hide text on mobile
-    sortByText.style.cssText = `font-weight: 500; line-height: 1; ${isMobile ? 'display: none;' : ''}`;
+    sortByText.addClass('sa-font-medium', 'sd-sort-btn-text');
+    if (isMobile) {
+      sortByText.addClass('sa-hidden');
+    }
     updateSortByButton();
 
     sortByBtn.addEventListener('mouseenter', () => {
       if (!this.isOpen) {
-        sortByBtn.style.background = 'var(--background-modifier-hover)';
+        sortByBtn.removeClass('sa-bg-transparent');
+        sortByBtn.addClass('sa-bg-hover');
       }
     });
 
     sortByBtn.addEventListener('mouseleave', () => {
       if (!this.isOpen) {
-        sortByBtn.style.background = 'transparent';
+        sortByBtn.removeClass('sa-bg-hover');
+        sortByBtn.addClass('sa-bg-transparent');
       }
     });
 
@@ -89,10 +95,10 @@ export class SortDropdown {
    */
   private renderOrderToggle(container: HTMLElement, sortState: SortState): void {
     const orderBtn = container.createDiv();
-    orderBtn.style.cssText = 'display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 0 8px 8px 0; background: transparent; cursor: pointer; transition: all 0.2s; flex-shrink: 0;';
+    orderBtn.addClass('sa-flex-center', 'sa-bg-transparent', 'sa-clickable', 'sa-transition', 'sa-flex-shrink-0', 'sd-order-btn');
 
     const orderIcon = orderBtn.createDiv();
-    orderIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-muted); transition: all 0.2s;';
+    orderIcon.addClass('sa-icon-16', 'sa-flex-shrink-0', 'sa-text-muted', 'sa-transition');
 
     const updateOrderButton = () => {
       const iconName = sortState.order === 'newest' ? 'arrow-down' : 'arrow-up';
@@ -105,13 +111,17 @@ export class SortDropdown {
     updateOrderButton();
 
     orderBtn.addEventListener('mouseenter', () => {
-      orderBtn.style.background = 'var(--background-modifier-hover)';
-      orderIcon.style.color = 'var(--interactive-accent)';
+      orderBtn.removeClass('sa-bg-transparent');
+      orderBtn.addClass('sa-bg-hover');
+      orderIcon.removeClass('sa-text-muted');
+      orderIcon.addClass('sa-text-accent');
     });
 
     orderBtn.addEventListener('mouseleave', () => {
-      orderBtn.style.background = 'transparent';
-      orderIcon.style.color = 'var(--text-muted)';
+      orderBtn.removeClass('sa-bg-hover');
+      orderBtn.addClass('sa-bg-transparent');
+      orderIcon.removeClass('sa-text-accent');
+      orderIcon.addClass('sa-text-muted');
     });
 
     orderBtn.addEventListener('click', async () => {
@@ -143,18 +153,8 @@ export class SortDropdown {
     const leftOffset = btnRect.left - headerRect.left;
 
     this.dropdownEl = header.createDiv({ cls: 'sort-dropdown' });
-    this.dropdownEl.style.cssText = `
-      position: absolute;
-      top: 48px;
-      left: ${leftOffset}px;
-      z-index: 1000;
-      background: var(--background-primary);
-      border: 1px solid var(--background-modifier-border);
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      padding: 8px;
-      min-width: 140px;
-    `;
+    this.dropdownEl.addClass('sa-absolute', 'sa-z-1000', 'sa-bg-primary', 'sa-border', 'sa-rounded-8', 'sa-p-8', 'sd-dropdown');
+    this.dropdownEl.setCssProps({ '--sd-left': `${leftOffset}px` });
 
     const sortOptions: SortOption[] = [
       { by: 'published', label: 'Published', icon: 'calendar' },
@@ -182,25 +182,22 @@ export class SortDropdown {
     const item = dropdown.createDiv();
     const isActive = sortState.by === option.by;
 
-    item.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.2s;
-      background: ${isActive ? 'var(--interactive-accent)' : 'transparent'};
-      color: ${isActive ? 'var(--text-on-accent)' : 'var(--text-normal)'};
-      ${hasMarginTop ? 'margin-top: 4px;' : ''}
-    `;
+    item.addClass('sa-flex-row', 'sa-gap-8', 'sa-p-8', 'sa-rounded-6', 'sa-clickable', 'sa-transition');
+    if (isActive) {
+      item.addClass('sa-bg-accent', 'sd-option-active');
+    } else {
+      item.addClass('sa-bg-transparent', 'sa-text-normal');
+    }
+    if (hasMarginTop) {
+      item.addClass('sa-mt-4');
+    }
 
     const icon = item.createDiv();
-    icon.style.cssText = 'width: 16px; height: 16px;';
+    icon.addClass('sa-icon-16');
     setIcon(icon, option.icon);
 
     const label = item.createSpan({ text: option.label });
-    label.style.cssText = 'font-size: 13px; flex: 1;';
+    label.addClass('sa-text-base', 'sa-flex-1');
 
     item.addEventListener('click', async () => {
       sortState.by = option.by;
@@ -217,13 +214,15 @@ export class SortDropdown {
 
     item.addEventListener('mouseenter', () => {
       if (!isActive) {
-        item.style.background = 'var(--background-modifier-hover)';
+        item.removeClass('sa-bg-transparent');
+        item.addClass('sa-bg-hover');
       }
     });
 
     item.addEventListener('mouseleave', () => {
       if (!isActive) {
-        item.style.background = 'transparent';
+        item.removeClass('sa-bg-hover');
+        item.addClass('sa-bg-transparent');
       }
     });
   }

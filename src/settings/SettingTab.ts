@@ -185,37 +185,21 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Plugin Title - Largest size
     const titleEl = containerEl.createEl('h1', { text: 'Social Archiver' });
-    titleEl.style.cssText = `
-      font-size: 28px;
-      font-weight: 600;
-      margin: 0 0 8px 0;
-      color: var(--text-normal);
-    `;
+    titleEl.addClass('sa-settings-title');
 
     // Plugin Description
     const descEl = containerEl.createEl('p', {
       text: 'Archive and save social media posts to your Obsidian vault'
     });
-    descEl.style.cssText = `
-      font-size: 14px;
-      color: var(--text-muted);
-      margin: 0 0 24px 0;
-    `;
+    descEl.addClass('sa-settings-desc');
 
     // Account Section Header
     const accountHeader = containerEl.createEl('h2', { text: 'Account' });
-    accountHeader.style.cssText = `
-      font-size: 18px;
-      font-weight: 600;
-      margin: 16px 0 12px 0;
-      color: var(--text-normal);
-    `;
+    accountHeader.addClass('sa-settings-section-header-first');
 
     // Account Section (Auth Component)
     const authContainer = containerEl.createDiv({ cls: 'social-archiver-auth-section' });
-    authContainer.style.cssText = `
-      margin-bottom: 32px;
-    `;
+    authContainer.addClass('sa-settings-section');
     this.authComponent = mount(AuthSettingsTab, {
       target: authContainer,
       props: { plugin: this.plugin }
@@ -223,12 +207,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Archive Settings Section
     const archiveHeader = containerEl.createEl('h2', { text: 'Archive Settings' });
-    archiveHeader.style.cssText = `
-      font-size: 18px;
-      font-weight: 600;
-      margin: 24px 0 12px 0;
-      color: var(--text-normal);
-    `;
+    archiveHeader.addClass('sa-settings-section-header');
 
     new Setting(containerEl)
       .setName('Archive Folder')
@@ -304,12 +283,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Author Profile Management Section
     const authorProfileHeader = containerEl.createEl('h2', { text: 'Author Profile Management' });
-    authorProfileHeader.style.cssText = `
-      font-size: 18px;
-      font-weight: 600;
-      margin: 24px 0 12px 0;
-      color: var(--text-normal);
-    `;
+    authorProfileHeader.addClass('sa-settings-section-header');
 
     new Setting(containerEl)
       .setName('Download author avatars')
@@ -343,12 +317,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Sharing Settings Section
     const sharingHeader = containerEl.createEl('h2', { text: 'Sharing Settings' });
-    sharingHeader.style.cssText = `
-      font-size: 18px;
-      font-weight: 600;
-      margin: 24px 0 12px 0;
-      color: var(--text-normal);
-    `;
+    sharingHeader.addClass('sa-settings-section-header');
 
     // Share Mode setting
     new Setting(containerEl)
@@ -379,8 +348,11 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Function to toggle preview length visibility
     const updatePreviewLengthVisibility = () => {
-      previewLengthSetting.settingEl.style.display =
-        this.plugin.settings.shareMode === 'preview' ? '' : 'none';
+      if (this.plugin.settings.shareMode === 'preview') {
+        previewLengthSetting.settingEl.removeClass('sa-hidden');
+      } else {
+        previewLengthSetting.settingEl.addClass('sa-hidden');
+      }
     };
 
     // Set initial visibility
@@ -388,12 +360,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Transcription Settings Section (Desktop Only)
     const transcriptionHeader = containerEl.createEl('h2', { text: 'Transcription Settings' });
-    transcriptionHeader.style.cssText = `
-      font-size: 18px;
-      font-weight: 600;
-      margin: 24px 0 12px 0;
-      color: var(--text-normal);
-    `;
+    transcriptionHeader.addClass('sa-settings-section-header');
 
     // Mobile notice - transcription requires local Whisper CLI
     if (Platform.isMobile) {
@@ -401,11 +368,11 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         cls: 'setting-item-description'
       });
       mobileNote.textContent = 'Transcription is only available on desktop (requires local Whisper CLI)';
-      mobileNote.style.cssText = 'color: var(--text-muted); font-size: 13px; margin-bottom: 16px;';
+      mobileNote.addClass('sa-settings-info');
     } else {
     // Whisper status display
     const statusContainer = containerEl.createDiv({ cls: 'whisper-status-container' });
-    statusContainer.style.cssText = 'margin-bottom: 16px;';
+    statusContainer.addClass('sa-settings-subsection');
     this.renderWhisperStatus(statusContainer);
 
     // Enable transcription toggle
@@ -650,21 +617,14 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     syncPropertyOrder();
 
     const frontmatterHeader = containerEl.createEl('h2', { text: 'Frontmatter' });
-    frontmatterHeader.style.cssText = `
-      font-size: 18px;
-      font-weight: 600;
-      margin: 24px 0 12px 0;
-      color: var(--text-normal);
-    `;
+    frontmatterHeader.addClass('sa-settings-section-header');
 
     const frontmatterDesc = containerEl.createEl('p', {
       text: 'Choose built-in properties and add custom properties for all archived notes.'
     });
-    frontmatterDesc.style.cssText = `
-      font-size: 13px;
-      color: var(--text-muted);
-      margin: 0 0 12px 0;
-    `;
+    frontmatterDesc.addClass('sa-settings-info');
+    frontmatterDesc.setCssProps({ '--st-margin': '0 0 12px 0' });
+    frontmatterDesc.addClass('st-margin-custom');
 
     new Setting(containerEl)
       .setName('Enable frontmatter customization')
@@ -680,16 +640,13 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     const bodyContainer = containerEl.createDiv({ cls: 'social-archiver-frontmatter-body' });
 
     const defaultPropertiesHeader = bodyContainer.createEl('h3', { text: 'Property Order' });
-    defaultPropertiesHeader.style.cssText = `
-      font-size: 15px;
-      font-weight: 600;
-      margin: 12px 0 8px 0;
-      color: var(--text-normal);
-    `;
+    defaultPropertiesHeader.addClass('sa-text-md', 'sa-font-semibold', 'sa-text-normal');
+    defaultPropertiesHeader.setCssProps({ '--st-margin': '12px 0 8px 0' });
+    defaultPropertiesHeader.addClass('st-margin-custom');
     const defaultPropertiesDesc = bodyContainer.createEl('p', {
       text: 'Reorder rows. Add new rows at the bottom and move them with ↑/↓.',
     });
-    defaultPropertiesDesc.style.cssText = 'font-size: 12px; color: var(--text-muted); margin: 0 0 8px 0;';
+    defaultPropertiesDesc.addClass('sa-settings-desc-small');
 
     const categoryDefinitions: Array<{
       key: keyof FrontmatterFieldVisibility;
@@ -918,52 +875,25 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     };
 
     const orderListContainer = bodyContainer.createDiv({ cls: 'social-archiver-frontmatter-order-list' });
-    orderListContainer.style.cssText = `
-      margin: 6px 0 10px 0;
-    `;
+    orderListContainer.setCssProps({ '--st-margin': '6px 0 10px 0' });
+    orderListContainer.addClass('st-margin-custom');
 
     const styleOrderRow = (setting: Setting, variant: 'default' | 'custom' | 'add'): void => {
+      setting.settingEl.addClass('sa-bg-secondary', 'st-order-row');
+
       if (variant === 'default') {
-        setting.settingEl.style.cssText = `
-          border-top: none;
-          margin: 0 0 6px 0;
-          padding: 10px 12px;
-          background: var(--background-secondary);
-          border: none;
-          border-radius: 10px;
-        `;
+        setting.settingEl.addClass('st-order-row-default');
         return;
       }
       if (variant === 'custom') {
-        setting.settingEl.style.cssText = `
-          border-top: none;
-          margin: 0;
-          padding: 10px 12px 8px 12px;
-          background: var(--background-secondary);
-          border: none;
-          border-radius: 10px 10px 0 0;
-        `;
+        setting.settingEl.addClass('st-order-row-custom');
         return;
       }
-      setting.settingEl.style.cssText = `
-        border-top: none;
-        margin: 0 0 6px 0;
-        padding: 10px 12px;
-        background: var(--background-secondary);
-        border: none;
-        border-radius: 10px;
-      `;
+      setting.settingEl.addClass('st-order-row-add');
     };
 
     const styleCustomValueRow = (setting: Setting): void => {
-      setting.settingEl.style.cssText = `
-        border-top: none;
-        margin: 0 0 6px 0;
-        padding: 0 12px 10px 12px;
-        background: var(--background-secondary);
-        border: none;
-        border-radius: 0 0 10px 10px;
-      `;
+      setting.settingEl.addClass('sa-bg-secondary', 'st-order-row-value');
     };
 
     const moveMixedItem = (fromIndex: number, toIndex: number): void => {
@@ -1058,7 +988,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                 this.markDirty();
               });
             text.inputEl.rows = 4;
-            text.inputEl.style.width = '100%';
+            text.inputEl.addClass('sa-w-100');
           });
         styleCustomValueRow(valueSetting);
         return;
@@ -1133,43 +1063,27 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
           if (expandedAliasCategory === category.key && aliasableFields.length > 0) {
             const aliasEditor = orderListContainer.createDiv({ cls: 'social-archiver-frontmatter-alias-editor' });
-            aliasEditor.style.cssText = `
-              margin: -4px 0 8px 0;
-              padding: 8px 12px 10px 12px;
-              background: var(--background-secondary);
-              border: none;
-              border-top: 1px dashed var(--background-modifier-border);
-              border-radius: 0 0 10px 10px;
-            `;
+            aliasEditor.addClass('sa-settings-alias-editor', 'st-alias-editor-expanded');
 
             const aliasGuide = aliasEditor.createEl('p', {
               text: 'Rename default keys used by this row. Leave empty to keep the original key.',
             });
-            aliasGuide.style.cssText = 'font-size: 11px; color: var(--text-muted); margin: 0 0 6px 0;';
+            aliasGuide.addClass('sa-settings-alias-guide');
 
             for (const field of aliasableFields) {
               const row = aliasEditor.createDiv();
-              row.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-top: 6px;';
+              row.addClass('sa-settings-alias-row');
 
               const sourceEl = row.createEl('code', { text: field });
-              sourceEl.style.cssText = 'min-width: 130px; font-size: 11px; color: var(--text-normal);';
+              sourceEl.addClass('sa-settings-alias-source');
 
               const arrowEl = row.createSpan({ text: '→' });
-              arrowEl.style.cssText = 'color: var(--text-faint);';
+              arrowEl.addClass('sa-settings-alias-arrow');
 
               const inputEl = row.createEl('input', { type: 'text' });
               inputEl.value = String(frontmatterSettings.fieldAliases?.[field] || '');
               inputEl.placeholder = `alias for ${field}`;
-              inputEl.style.cssText = `
-                flex: 1;
-                min-width: 0;
-                padding: 4px 8px;
-                font-size: 12px;
-                border: 1px solid var(--background-modifier-border);
-                border-radius: var(--input-radius);
-                background: var(--background-primary);
-                color: var(--text-normal);
-              `;
+              inputEl.addClass('sa-settings-alias-input');
 
               inputEl.addEventListener('change', () => {
                 const nextAliases = {
@@ -1320,15 +1234,14 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     const coreLockedNote = bodyContainer.createEl('div', {
       text: 'Core keys cannot be removed or overridden: platform, author, authorUrl, published, archived, lastModified, tags.',
     });
-    coreLockedNote.style.cssText = 'font-size: 12px; color: var(--text-muted); margin: 4px 0 12px 0;';
+    coreLockedNote.addClass('sa-settings-desc-small');
+    coreLockedNote.setCssProps({ '--st-margin': '4px 0 12px 0' });
+    coreLockedNote.addClass('st-margin-custom');
 
     const tagSettingsHeader = bodyContainer.createEl('h3', { text: 'Archive Tags' });
-    tagSettingsHeader.style.cssText = `
-      font-size: 15px;
-      font-weight: 600;
-      margin: 14px 0 8px 0;
-      color: var(--text-normal);
-    `;
+    tagSettingsHeader.addClass('sa-text-md', 'sa-font-semibold', 'sa-text-normal');
+    tagSettingsHeader.setCssProps({ '--st-margin': '14px 0 8px 0' });
+    tagSettingsHeader.addClass('st-margin-custom');
 
     new Setting(bodyContainer)
       .setName('Main archive tag')
@@ -1375,7 +1288,11 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         }));
 
     const updateVisibility = () => {
-      bodyContainer.style.display = frontmatterSettings.enabled ? '' : 'none';
+      if (frontmatterSettings.enabled) {
+        bodyContainer.removeClass('sa-hidden');
+      } else {
+        bodyContainer.addClass('sa-hidden');
+      }
     };
     updateVisibility();
   }
@@ -1389,15 +1306,16 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         cls: 'setting-item-description'
       });
       mobileNote.textContent = 'ⓘ Transcription is only available on desktop';
-      mobileNote.style.cssText = 'color: var(--text-muted); font-size: 13px;';
+      mobileNote.addClass('sa-settings-info');
       return;
     }
 
     // Show loading state
-    container.createEl('div', {
+    const loadingEl = container.createEl('div', {
       text: 'Detecting Whisper installation...',
       cls: 'setting-item-description'
-    }).style.color = 'var(--text-muted)';
+    });
+    loadingEl.addClass('sa-text-muted');
 
     try {
       const { WhisperDetector } = await import('../utils/whisper');
@@ -1420,14 +1338,14 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         // Indicate if using custom path
         const isUsingCustomPath = customPath && detection.path.includes(customPath.replace(/\//g, '\\').split('\\').pop() || '');
         statusEl.textContent = `✓ Detected: ${detection.variant}${isUsingCustomPath ? ' (custom path)' : ''}`;
-        statusEl.style.cssText = 'color: var(--text-success); font-size: 13px;';
+        statusEl.addClass('sa-status-success');
 
         // Show path
         const pathEl = container.createEl('div', {
           cls: 'setting-item-description'
         });
         pathEl.textContent = `  Path: ${detection.path}`;
-        pathEl.style.cssText = 'color: var(--text-muted); font-size: 12px;';
+        pathEl.addClass('sa-status-path');
 
         // Show version if available
         if (detection.version && detection.version !== 'unknown') {
@@ -1435,7 +1353,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             cls: 'setting-item-description'
           });
           versionEl.textContent = `  Version: ${detection.version}`;
-          versionEl.style.cssText = 'color: var(--text-muted); font-size: 12px;';
+          versionEl.addClass('sa-status-version');
         }
 
         // Show installed models
@@ -1444,14 +1362,14 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             cls: 'setting-item-description'
           });
           modelsEl.textContent = `  Models: ${detection.installedModels.join(', ')}`;
-          modelsEl.style.cssText = 'color: var(--text-muted); font-size: 12px;';
+          modelsEl.addClass('sa-status-models');
         }
       } else {
         const statusEl = container.createEl('div', {
           cls: 'setting-item-description'
         });
         statusEl.textContent = '✗ Whisper not detected';
-        statusEl.style.cssText = 'color: var(--text-error); font-size: 13px;';
+        statusEl.addClass('sa-status-error');
 
         // Show specific hint if custom path was set but failed
         if (customPath) {
@@ -1459,19 +1377,19 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             cls: 'setting-item-description'
           });
           customPathHintEl.textContent = `⚠ Custom path could not be validated: ${customPath}`;
-          customPathHintEl.style.cssText = 'color: var(--text-warning); font-size: 12px; margin-top: 4px;';
+          customPathHintEl.addClass('sa-status-warning', 'sa-text-sm', 'sa-mt-4');
 
           const checkHintEl = container.createEl('div', {
             cls: 'setting-item-description'
           });
           checkHintEl.textContent = 'Please verify the file exists and is a valid Whisper binary.';
-          checkHintEl.style.cssText = 'color: var(--text-muted); font-size: 12px;';
+          checkHintEl.addClass('sa-status-path');
         } else {
           const hintEl = container.createEl('div', {
             cls: 'setting-item-description'
           });
           hintEl.textContent = 'Install faster-whisper: pip install faster-whisper';
-          hintEl.style.cssText = 'color: var(--text-muted); font-size: 12px; margin-top: 4px;';
+          hintEl.addClass('sa-settings-hint');
         }
       }
     } catch (error) {
@@ -1480,7 +1398,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         cls: 'setting-item-description'
       });
       errorEl.textContent = '⚠ Could not detect Whisper';
-      errorEl.style.cssText = 'color: var(--text-warning); font-size: 13px;';
+      errorEl.addClass('sa-status-warning');
     }
   }
 
@@ -1490,22 +1408,13 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   private renderNaverSettings(containerEl: HTMLElement): void {
     // Section Header
     const naverHeader = containerEl.createEl('h2', { text: '🇰🇷 Naver Settings' });
-    naverHeader.style.cssText = `
-      font-size: 18px;
-      font-weight: 600;
-      margin: 24px 0 12px 0;
-      color: var(--text-normal);
-    `;
+    naverHeader.addClass('sa-settings-section-header');
 
     // Description
     const naverDesc = containerEl.createEl('p', {
       text: 'Configure settings for archiving content from Naver Blog, Cafe, and News.'
     });
-    naverDesc.style.cssText = `
-      font-size: 13px;
-      color: var(--text-muted);
-      margin: 0 0 16px 0;
-    `;
+    naverDesc.addClass('sa-settings-info');
 
     // Cookie description
     new Setting(containerEl)
@@ -1540,7 +1449,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             this.updateNaverCookieString();
             this.markDirty();
           });
-        text.inputEl.style.cssText = 'width: 100%; font-family: var(--font-monospace); font-size: 12px;';
+        text.inputEl.addClass('sa-input-monospace');
       });
 
     // NID_SES input
@@ -1558,19 +1467,19 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             this.updateNaverCookieString();
             this.markDirty();
           });
-        text.inputEl.style.cssText = 'width: 100%; font-family: var(--font-monospace); font-size: 12px;';
+        text.inputEl.addClass('sa-input-monospace');
       });
 
     // Helper text
     const helperText = containerEl.createEl('div', {
       cls: 'setting-item-description'
     });
-    helperText.style.cssText = 'margin-top: 8px; margin-bottom: 16px; padding-left: 0;';
-    helperText.innerHTML = `
-      <small style="color: var(--text-muted);">
-        💡 <strong>Tip:</strong> Leave empty for public blogs and cafes. Only needed for private cafes that require login.
-      </small>
-    `;
+    helperText.addClass('sa-settings-helper');
+    const small = helperText.createEl('small');
+    small.addClass('sa-text-muted');
+    small.textContent = '💡 ';
+    const strong = small.createEl('strong', { text: 'Tip:' });
+    small.appendChild(document.createTextNode(' Leave empty for public blogs and cafes. Only needed for private cafes that require login.'));
   }
 
   /**
@@ -1579,26 +1488,17 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   private renderRedditSettings(containerEl: HTMLElement): void {
     // Section Header with Reddit icon
     const redditHeader = containerEl.createEl('h2', { text: 'Reddit Sync' });
-    redditHeader.style.cssText = `
-      font-size: 18px;
-      font-weight: 600;
-      margin: 24px 0 12px 0;
-      color: var(--text-normal);
-    `;
+    redditHeader.addClass('sa-settings-section-header');
 
     // Description
     const redditDesc = containerEl.createEl('p', {
       text: 'Automatically sync your Reddit saved posts to your vault. Requires connecting your Reddit account.'
     });
-    redditDesc.style.cssText = `
-      font-size: 13px;
-      color: var(--text-muted);
-      margin: 0 0 16px 0;
-    `;
+    redditDesc.addClass('sa-settings-info');
 
     // Connection status display
     const statusContainer = containerEl.createDiv({ cls: 'reddit-status-container' });
-    statusContainer.style.cssText = 'margin-bottom: 16px;';
+    statusContainer.addClass('sa-settings-subsection');
     this.renderRedditConnectionStatus(statusContainer);
 
     // Connect/Disconnect button
@@ -1682,23 +1582,14 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Info callout
     const infoDiv = containerEl.createDiv({ cls: 'setting-info' });
-    infoDiv.style.cssText = `
-      padding: 12px;
-      background: var(--background-secondary);
-      border-radius: 8px;
-      margin-top: 16px;
-      font-size: 13px;
-      color: var(--text-muted);
-    `;
-    infoDiv.innerHTML = `
-      <strong>About Reddit Sync</strong>
-      <ul style="margin: 8px 0 0 16px; padding: 0;">
-        <li>Syncs posts you've saved on Reddit</li>
-        <li>Requires Reddit OAuth authentication</li>
-        <li>Runs automatically once per day when enabled</li>
-        <li>Only new saved posts are synced (deduplication)</li>
-      </ul>
-    `;
+    infoDiv.addClass('sa-settings-info-box', 'sa-mt-16');
+    infoDiv.createEl('strong', { text: 'About Reddit Sync' });
+    const ul = infoDiv.createEl('ul');
+    ul.addClass('sa-settings-info-list');
+    ul.createEl('li', { text: 'Syncs posts you\'ve saved on Reddit' });
+    ul.createEl('li', { text: 'Requires Reddit OAuth authentication' });
+    ul.createEl('li', { text: 'Runs automatically once per day when enabled' });
+    ul.createEl('li', { text: 'Only new saved posts are synced (deduplication)' });
   }
 
   /**
@@ -1706,30 +1597,24 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    */
   private renderRedditConnectionStatus(container: HTMLElement): void {
     const statusEl = container.createDiv({ cls: 'reddit-connection-status' });
-    statusEl.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      background: var(--background-secondary);
-      border-radius: 6px;
-      font-size: 13px;
-    `;
+    statusEl.addClass('sa-settings-status-item');
 
     if (this.plugin.settings.redditConnected) {
       // Connected status
       const iconEl = statusEl.createSpan({ text: '✓' });
-      iconEl.style.cssText = 'color: var(--text-success); font-weight: 600;';
+      iconEl.addClass('sa-text-success', 'sa-font-semibold');
 
       const textEl = statusEl.createSpan();
-      textEl.innerHTML = `Connected as <strong style="color: #ff4500;">u/${this.plugin.settings.redditUsername}</strong>`;
+      textEl.textContent = 'Connected as ';
+      const strong = textEl.createEl('strong', { text: `u/${this.plugin.settings.redditUsername}` });
+      strong.addClass('st-reddit-username');
     } else {
       // Not connected status
       const iconEl = statusEl.createSpan({ text: '○' });
-      iconEl.style.cssText = 'color: var(--text-muted);';
+      iconEl.addClass('sa-text-muted');
 
       const textEl = statusEl.createSpan({ text: 'Not connected' });
-      textEl.style.cssText = 'color: var(--text-muted);';
+      textEl.addClass('sa-text-muted');
     }
   }
 
@@ -1790,31 +1675,18 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   private renderWebtoonStreamingSettings(containerEl: HTMLElement): void {
     // Section Header
     const streamingHeader = containerEl.createEl('h2', { text: 'Webtoon Streaming' });
-    streamingHeader.style.cssText = `
-      font-size: 18px;
-      font-weight: 600;
-      margin: 24px 0 12px 0;
-      color: var(--text-normal);
-    `;
+    streamingHeader.addClass('sa-settings-section-header');
 
     // Info callout explaining the feature
     const infoDiv = containerEl.createDiv({ cls: 'setting-info' });
-    infoDiv.style.cssText = `
-      padding: 12px;
-      background: var(--background-secondary);
-      border-radius: 8px;
-      margin-bottom: 16px;
-      font-size: 13px;
-      color: var(--text-muted);
-    `;
-    infoDiv.innerHTML = `
-      <strong>Streaming Mode</strong> loads webtoon episodes instantly without waiting for downloads.
-      <ul style="margin: 8px 0 0 16px; padding: 0;">
-        <li>Images are proxied through our server to bypass CORS restrictions</li>
-        <li>Background Download saves episodes for offline reading</li>
-        <li>Prefetch pre-loads the next episode for seamless transitions</li>
-      </ul>
-    `;
+    infoDiv.addClass('sa-settings-info-box');
+    const strong = infoDiv.createEl('strong', { text: 'Streaming Mode' });
+    infoDiv.appendChild(document.createTextNode(' loads webtoon episodes instantly without waiting for downloads.'));
+    const ul = infoDiv.createEl('ul');
+    ul.addClass('sa-settings-info-list');
+    ul.createEl('li', { text: 'Images are proxied through our server to bypass CORS restrictions' });
+    ul.createEl('li', { text: 'Background Download saves episodes for offline reading' });
+    ul.createEl('li', { text: 'Prefetch pre-loads the next episode for seamless transitions' });
 
     // View Mode dropdown
     new Setting(containerEl)
@@ -1860,7 +1732,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         }));
     // Ensure 44px touch target on mobile (iOS HIG compliance)
     if (Platform.isMobile) {
-      bgDownloadSetting.settingEl.style.minHeight = '44px';
+      bgDownloadSetting.settingEl.addClass('st-mobile-touch');
     }
 
     // Prefetch Next Episode toggle
@@ -1883,7 +1755,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           this.markDirty();
         }));
     if (Platform.isMobile) {
-      prefetchSetting.settingEl.style.minHeight = '44px';
+      prefetchSetting.settingEl.addClass('st-mobile-touch');
     }
 
     // Mobile Data Saver (only shown on mobile)
@@ -1906,7 +1778,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             }
             this.markDirty();
           }));
-      dataSaverSetting.settingEl.style.minHeight = '44px';
+      dataSaverSetting.settingEl.addClass('st-mobile-touch');
     }
   }
 
@@ -1916,16 +1788,11 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   private renderMobileSyncSettings(containerEl: HTMLElement): void {
     // Section Header
     const syncHeader = containerEl.createEl('h2', { text: 'Mobile Sync' });
-    syncHeader.style.cssText = `
-      font-size: 18px;
-      font-weight: 600;
-      margin: 24px 0 12px 0;
-      color: var(--text-normal);
-    `;
+    syncHeader.addClass('sa-settings-section-header');
 
     // Sync Settings Component (Svelte)
     const syncContainer = containerEl.createDiv({ cls: 'social-archiver-sync-section' });
-    syncContainer.style.cssText = 'margin-bottom: 16px;';
+    syncContainer.addClass('sa-settings-subsection');
     this.syncSettingsComponent = mount(SyncSettingsTab, {
       target: syncContainer,
       props: { plugin: this.plugin }
@@ -1938,12 +1805,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   private renderUpdateNotificationsSettings(containerEl: HTMLElement): void {
     // Section Header
     const updateHeader = containerEl.createEl('h2', { text: 'Update Notifications' });
-    updateHeader.style.cssText = `
-      font-size: 18px;
-      font-weight: 600;
-      margin: 24px 0 12px 0;
-      color: var(--text-normal);
-    `;
+    updateHeader.addClass('sa-settings-section-header');
 
     // Show release notes toggle
     new Setting(containerEl)
@@ -1964,12 +1826,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   private async renderAICommentSettings(containerEl: HTMLElement): Promise<void> {
     // Section Header
     const aiHeader = containerEl.createEl('h2', { text: 'AI Comment Settings' });
-    aiHeader.style.cssText = `
-      font-size: 18px;
-      font-weight: 600;
-      margin: 24px 0 12px 0;
-      color: var(--text-normal);
-    `;
+    aiHeader.addClass('sa-settings-section-header');
 
     // Mobile notice
     if (Platform.isMobile) {
@@ -1977,7 +1834,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         cls: 'setting-item-description'
       });
       mobileNote.textContent = 'AI Comments are only available on desktop (requires local CLI tools)';
-      mobileNote.style.cssText = 'color: var(--text-muted); font-size: 13px; margin-bottom: 16px;';
+      mobileNote.addClass('sa-settings-info');
       return;
     }
 
@@ -1996,7 +1853,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // AI Tools Detection Display
     const aiToolsContainer = containerEl.createDiv({ cls: 'ai-tools-status-container' });
-    aiToolsContainer.style.cssText = 'margin-bottom: 16px;';
+    aiToolsContainer.addClass('sa-settings-subsection');
     await this.renderAIToolsStatus(aiToolsContainer);
 
     // Default CLI selector
@@ -2063,22 +1920,18 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    * Render AI Tools detection status
    */
   private async renderAIToolsStatus(container: HTMLElement): Promise<void> {
-    container.createEl('div', {
+    const loadingEl = container.createEl('div', {
       text: 'Detecting AI tools...',
       cls: 'setting-item-description'
-    }).style.color = 'var(--text-muted)';
+    });
+    loadingEl.addClass('sa-text-muted');
 
     try {
       const detectedClis = await this.getDetectedClis();
       container.empty();
 
       const statusGrid = container.createDiv({ cls: 'ai-tools-grid' });
-      statusGrid.style.cssText = `
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 8px;
-        margin-bottom: 8px;
-      `;
+      statusGrid.addClass('sa-settings-status-grid');
 
       for (const cli of (['claude', 'gemini', 'codex'] as AICli[])) {
         const info = AI_CLI_INFO[cli];
@@ -2086,34 +1939,30 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         const isDetected = result?.available ?? false;
 
         const itemEl = statusGrid.createDiv({ cls: 'ai-tool-status-item' });
-        itemEl.style.cssText = `
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          padding: 6px 10px;
-          background: var(--background-secondary);
-          border-radius: 6px;
-          font-size: 13px;
-        `;
+        itemEl.addClass('sa-settings-status-item');
 
         const icon = itemEl.createSpan();
         icon.textContent = isDetected ? '✓' : '✗';
-        icon.style.cssText = isDetected
-          ? 'color: var(--text-success); font-weight: 600;'
-          : 'color: var(--text-muted);';
+        if (isDetected) {
+          icon.addClass('sa-text-success', 'sa-font-semibold');
+        } else {
+          icon.addClass('sa-text-muted');
+        }
 
         const nameEl = itemEl.createSpan({ text: info.displayName });
-        nameEl.style.cssText = isDetected
-          ? 'color: var(--text-normal);'
-          : 'color: var(--text-muted);';
+        if (isDetected) {
+          nameEl.addClass('sa-text-normal');
+        } else {
+          nameEl.addClass('sa-text-muted');
+        }
 
         if (isDetected && result?.version) {
           const versionEl = itemEl.createSpan({ text: `v${result.version}` });
-          versionEl.style.cssText = 'color: var(--text-faint); font-size: 11px; margin-left: auto;';
+          versionEl.addClass('sa-text-faint', 'sa-text-xs', 'sa-ml-auto');
         }
 
         if (!isDetected) {
-          itemEl.style.cursor = 'pointer';
+          itemEl.addClass('sa-clickable');
           itemEl.title = `Click to learn how to install ${info.displayName}`;
           itemEl.onclick = () => window.open(info.installUrl, '_blank');
         }
@@ -2121,12 +1970,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
       // Refresh button
       const refreshBtn = container.createEl('button', { text: 'Refresh detection' });
-      refreshBtn.style.cssText = `
-        font-size: 12px;
-        padding: 4px 10px;
-        margin-top: 4px;
-        cursor: pointer;
-      `;
+      refreshBtn.addClass('sa-refresh-btn');
       refreshBtn.onclick = async () => {
         AICliDetector.resetCache();
         await this.renderAIToolsStatus(container);
@@ -2137,7 +1981,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         cls: 'setting-item-description'
       });
       errorEl.textContent = '⚠ Could not detect AI tools';
-      errorEl.style.cssText = 'color: var(--text-warning); font-size: 13px;';
+      errorEl.addClass('sa-status-warning');
     }
   }
 
@@ -2170,7 +2014,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Collapsible header
     const headerEl = containerEl.createDiv({ cls: 'setting-item' });
-    headerEl.style.cssText = 'cursor: pointer; user-select: none;';
+    headerEl.addClass('sa-settings-collapsible-header');
 
     const headerInfo = headerEl.createDiv({ cls: 'setting-item-info' });
     const headerName = headerInfo.createDiv({ cls: 'setting-item-name', text: '▶ Platform Visibility' });
@@ -2180,13 +2024,18 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     });
 
     const contentEl = containerEl.createDiv({ cls: 'platform-visibility-content' });
-    contentEl.style.cssText = 'display: none; padding-left: 16px; margin-bottom: 16px;';
+    contentEl.addClass('sa-settings-collapsible-content');
 
     let isExpanded = false;
     headerEl.onclick = () => {
       isExpanded = !isExpanded;
       headerName.textContent = isExpanded ? '▼ Platform Visibility' : '▶ Platform Visibility';
-      contentEl.style.display = isExpanded ? 'block' : 'none';
+      if (isExpanded) {
+        contentEl.addClass('st-collapsible-visible');
+        contentEl.removeClass('sa-hidden');
+      } else {
+        contentEl.addClass('sa-hidden');
+      }
     };
 
     // Category toggles
@@ -2223,12 +2072,13 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     // Excluded platforms
     const excludedPlatforms = settings.platformVisibility.excludedPlatforms || [];
     const excludeEl = contentEl.createDiv({ cls: 'excluded-platforms' });
-    excludeEl.style.cssText = 'margin-top: 12px;';
+    excludeEl.addClass('sa-mt-12');
 
-    excludeEl.createEl('div', {
+    const excludeHeader = excludeEl.createEl('div', {
       cls: 'setting-item-name',
       text: 'Excluded Platforms'
-    }).style.marginBottom = '8px';
+    });
+    excludeHeader.addClass('sa-mb-8');
 
     const allPlatforms = [
       ...SOCIAL_MEDIA_PLATFORMS,
@@ -2237,16 +2087,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     ] as SocialPlatform[];
 
     const platformGrid = excludeEl.createDiv();
-    platformGrid.style.cssText = `
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 4px;
-    `;
+    platformGrid.addClass('sa-settings-platform-grid');
 
     for (const platform of allPlatforms) {
       const isExcluded = excludedPlatforms.includes(platform);
       const label = platformGrid.createEl('label');
-      label.style.cssText = 'display: flex; align-items: center; gap: 4px; font-size: 12px; cursor: pointer;';
+      label.addClass('sa-settings-platform-label');
 
       const checkbox = label.createEl('input', { type: 'checkbox' });
       checkbox.checked = isExcluded;
@@ -2277,7 +2123,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Collapsible header
     const headerEl = containerEl.createDiv({ cls: 'setting-item' });
-    headerEl.style.cssText = 'cursor: pointer; user-select: none;';
+    headerEl.addClass('sa-settings-collapsible-header');
 
     const headerInfo = headerEl.createDiv({ cls: 'setting-item-info' });
     const headerName = headerInfo.createDiv({ cls: 'setting-item-name', text: '▶ Vault Context (Connections)' });
@@ -2287,13 +2133,18 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     });
 
     const contentEl = containerEl.createDiv({ cls: 'vault-context-content' });
-    contentEl.style.cssText = 'display: none; padding-left: 16px; margin-bottom: 16px;';
+    contentEl.addClass('sa-settings-collapsible-content');
 
     let isExpanded = false;
     headerEl.onclick = () => {
       isExpanded = !isExpanded;
       headerName.textContent = isExpanded ? '▼ Vault Context (Connections)' : '▶ Vault Context (Connections)';
-      contentEl.style.display = isExpanded ? 'block' : 'none';
+      if (isExpanded) {
+        contentEl.addClass('st-collapsible-visible');
+        contentEl.removeClass('sa-hidden');
+      } else {
+        contentEl.addClass('sa-hidden');
+      }
     };
 
     // Enable vault context
@@ -2339,27 +2190,19 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     const inputEl = document.createElement('input');
     inputEl.type = 'text';
     inputEl.placeholder = 'Select folder...';
-    inputEl.style.cssText = 'width: 150px;';
+    inputEl.classList.add('sa-input-w-150');
 
     new FolderSuggest(this.app, inputEl);
     excludeSetting.controlEl.appendChild(inputEl);
 
     // Folder list below
     const folderListEl = contentEl.createDiv({ cls: 'exclude-folders-list' });
-    folderListEl.style.cssText = 'display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;';
+    folderListEl.classList.add('sa-settings-tag-list');
 
     const createFolderItem = (folderPath: string): HTMLElement => {
       const itemEl = document.createElement('div');
       itemEl.className = 'exclude-folder-item';
-      itemEl.style.cssText = `
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: 2px 8px;
-        background: var(--background-secondary);
-        border-radius: 12px;
-        font-size: 12px;
-      `;
+      itemEl.classList.add('sa-settings-tag-item');
 
       const pathSpan = document.createElement('span');
       pathSpan.textContent = folderPath;
@@ -2367,9 +2210,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
       const removeBtn = document.createElement('button');
       removeBtn.textContent = '×';
-      removeBtn.style.cssText = 'padding: 0 2px; font-size: 12px; cursor: pointer; background: none; border: none; color: var(--text-muted); opacity: 0.7;';
-      removeBtn.onmouseenter = () => { removeBtn.style.opacity = '1'; removeBtn.style.color = 'var(--text-error)'; };
-      removeBtn.onmouseleave = () => { removeBtn.style.opacity = '0.7'; removeBtn.style.color = 'var(--text-muted)'; };
+      removeBtn.classList.add('sa-settings-tag-remove');
       removeBtn.onclick = () => {
         this.plugin.settings.aiComment.vaultContext.excludePaths =
           this.plugin.settings.aiComment.vaultContext.excludePaths.filter(p => p !== folderPath);

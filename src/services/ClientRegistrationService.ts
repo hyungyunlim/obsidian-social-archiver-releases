@@ -58,7 +58,7 @@ export class ClientRegistrationService implements IService {
     // Auto-register if authenticated but not registered
     if (this.settings.authToken && !this.settings.syncClientId) {
       try {
-        console.log('[ClientRegistration] Auto-registering sync client...');
+        console.debug('[ClientRegistration] Auto-registering sync client...');
         await this.register();
       } catch (error) {
         // Non-fatal - continue without registration
@@ -92,7 +92,7 @@ export class ClientRegistrationService implements IService {
   async register(): Promise<ClientRegistrationResult> {
     // Check if already registered
     if (this.settings.syncClientId) {
-      console.log('[ClientRegistration] Already registered:', this.settings.syncClientId);
+      console.debug('[ClientRegistration] Already registered:', this.settings.syncClientId);
       return { success: true, clientId: this.settings.syncClientId };
     }
 
@@ -118,7 +118,7 @@ export class ClientRegistrationService implements IService {
         this.settings.syncClientId = response.clientId;
         await this.saveSettings();
 
-        console.log('[ClientRegistration] Successfully registered:', response.clientId);
+        console.debug('[ClientRegistration] Successfully registered:', response.clientId);
 
         return { success: true, clientId: response.clientId };
       }
@@ -138,13 +138,13 @@ export class ClientRegistrationService implements IService {
     const clientId = this.settings.syncClientId;
 
     if (!clientId) {
-      console.log('[ClientRegistration] No client ID to unregister');
+      console.debug('[ClientRegistration] No client ID to unregister');
       return;
     }
 
     try {
       await this.apiClient.deleteSyncClient(clientId);
-      console.log('[ClientRegistration] Successfully unregistered:', clientId);
+      console.debug('[ClientRegistration] Successfully unregistered:', clientId);
     } catch (error) {
       console.error('[ClientRegistration] Unregister failed:', error);
       // Continue even if server deletion fails

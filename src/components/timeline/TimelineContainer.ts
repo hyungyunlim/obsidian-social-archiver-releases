@@ -1,4 +1,4 @@
-import { setIcon, Notice, Platform as ObsidianPlatform, type Vault, type App, type TFile } from 'obsidian';
+import { setIcon, Notice, Platform as ObsidianPlatform, requestUrl, TFile, type Vault, type App } from 'obsidian';
 import type { PostData, Platform } from '../../types/post';
 import type SocialArchiverPlugin from '../../main';
 import type { TimelineFilterPreferences } from '../../types/settings';
@@ -38,6 +38,7 @@ import { WEBTOON_DAILY_CRON_LOCAL } from '@/shared/platforms/definitions';
 import { DEFAULT_ARCHIVE_PATH } from '@/shared/constants';
 import { PostIndexService, type PostIndexEntry } from '../../services/PostIndexService';
 import { SearchIndexService } from '../../services/SearchIndexService';
+import { createSVGElement } from '../../utils/dom-helpers';
 
 export interface TimelineContainerProps {
   vault: Vault;
@@ -390,17 +391,19 @@ export class TimelineContainer {
    */
   private async fetchSubscriptions(): Promise<SubscriptionDisplay[]> {
     try {
-      const res = await fetch(`${this.plugin.settings.workerUrl}/api/subscriptions`, {
-        headers: this.getAuthHeaders()
+      const res = await requestUrl({
+        url: `${this.plugin.settings.workerUrl}/api/subscriptions`,
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+        throw: false
       });
 
-      if (!res.ok) {
-        const text = await res.text();
-        console.warn('[TimelineContainer] Failed to load subscriptions', res.status, text);
+      if (res.status !== 200) {
+        console.warn('[TimelineContainer] Failed to load subscriptions', res.status, res.text);
         return [];
       }
 
-      const data = await res.json() as { data?: { subscriptions?: any[] } };
+      const data = res.json as { data?: { subscriptions?: any[] } };
       const subs = data?.data?.subscriptions || [];
 
        if (!subs.length) {
@@ -419,15 +422,18 @@ export class TimelineContainer {
    */
   private async fetchSubscriptionsForCache(): Promise<Array<{ id: string; platform: string; target: { handle: string; profileUrl?: string } }>> {
     try {
-      const res = await fetch(`${this.plugin.settings.workerUrl}/api/subscriptions`, {
-        headers: this.getAuthHeaders()
+      const res = await requestUrl({
+        url: `${this.plugin.settings.workerUrl}/api/subscriptions`,
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+        throw: false
       });
 
-      if (!res.ok) {
+      if (res.status !== 200) {
         return [];
       }
 
-      const data = await res.json() as { data?: { subscriptions?: any[] } };
+      const data = res.json as { data?: { subscriptions?: any[] } };
       const subs = data?.data?.subscriptions || [];
 
       // Return minimal data needed for cache
@@ -458,17 +464,19 @@ export class TimelineContainer {
    */
   private async fetchSubscriptionsRaw(): Promise<any[]> {
     try {
-      const res = await fetch(`${this.plugin.settings.workerUrl}/api/subscriptions`, {
-        headers: this.getAuthHeaders()
+      const res = await requestUrl({
+        url: `${this.plugin.settings.workerUrl}/api/subscriptions`,
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+        throw: false
       });
 
-      if (!res.ok) {
-        const text = await res.text();
-        console.warn('[TimelineContainer] Failed to load subscriptions for AuthorCatalog', res.status, text);
+      if (res.status !== 200) {
+        console.warn('[TimelineContainer] Failed to load subscriptions for AuthorCatalog', res.status, res.text);
         return [];
       }
 
-      const data = await res.json() as { data?: { subscriptions?: any[] } };
+      const data = res.json as { data?: { subscriptions?: any[] } };
       const subs = data?.data?.subscriptions || [];
 
       if (!subs.length) {
@@ -487,12 +495,14 @@ export class TimelineContainer {
    * Update subscription (pause/resume)
    */
   private async updateSubscription(subscriptionId: string, updates: Partial<SubscriptionDisplay>): Promise<void> {
-    await fetch(`${this.plugin.settings.workerUrl}/api/subscriptions/${subscriptionId}`, {
+    await requestUrl({
+      url: `${this.plugin.settings.workerUrl}/api/subscriptions/${subscriptionId}`,
       method: 'PATCH',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({
         enabled: updates.enabled
-      })
+      }),
+      throw: false
     });
   }
 
@@ -516,12 +526,14 @@ export class TimelineContainer {
       // If poller not available, fall through to Worker API (may fail)
     }
 
-    const response = await fetch(`${this.plugin.settings.workerUrl}/api/subscriptions/${subscriptionId}/run`, {
+    const response = await requestUrl({
+      url: `${this.plugin.settings.workerUrl}/api/subscriptions/${subscriptionId}/run`,
       method: 'POST',
-      headers: this.getAuthHeaders()
+      headers: this.getAuthHeaders(),
+      throw: false
     });
 
-    if (!response.ok) {
+    if (response.status !== 200) {
       return;
     }
   }
@@ -530,9 +542,11 @@ export class TimelineContainer {
    * Delete subscription
    */
   private async deleteSubscription(subscriptionId: string): Promise<void> {
-    const response = await fetch(`${this.plugin.settings.workerUrl}/api/subscriptions/${subscriptionId}`, {
+    const response = await requestUrl({
+      url: `${this.plugin.settings.workerUrl}/api/subscriptions/${subscriptionId}`,
       method: 'DELETE',
-      headers: this.getAuthHeaders()
+      headers: this.getAuthHeaders(),
+      throw: false
     });
 
     // Handle 404 as "already deleted" - don't throw error
@@ -540,8 +554,8 @@ export class TimelineContainer {
       return;
     }
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+    if (response.status !== 200) {
+      const errorData = response.json || {};
       throw new Error(errorData?.error?.message || `Failed to delete subscription: ${response.status}`);
     }
   }
@@ -647,17 +661,19 @@ export class TimelineContainer {
    */
   private async fetchRunHistory(subscriptionId: string): Promise<any[]> {
     try {
-      const response = await fetch(
-        `${this.plugin.settings.workerUrl}/api/subscriptions/${subscriptionId}/runs?limit=20`,
-        { headers: this.getAuthHeaders() }
-      );
+      const response = await requestUrl({
+        url: `${this.plugin.settings.workerUrl}/api/subscriptions/${subscriptionId}/runs?limit=20`,
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+        throw: false
+      });
 
-      if (!response.ok) {
+      if (response.status !== 200) {
         console.warn('[TimelineContainer] Failed to fetch run history:', response.status);
         return [];
       }
 
-      const data = await response.json();
+      const data = response.json;
       return data?.data?.runs || [];
     } catch (error) {
       console.error('[TimelineContainer] fetchRunHistory error', error);
@@ -794,7 +810,8 @@ export class TimelineContainer {
     // Expand search bar if not already expanded
     if (!this.searchExpanded && this.searchContainer) {
       this.searchExpanded = true;
-      this.searchContainer.style.height = '52px';
+      this.searchContainer.addClass('tc-search-expanded');
+      this.searchContainer.removeClass('tc-search-collapsed');
     }
 
     // Set search input value with # prefix
@@ -847,9 +864,7 @@ export class TimelineContainer {
     // If post is archived and includeArchived filter is false, remove the card
     if (newArchiveStatus && !filterState.includeArchived) {
       // Animate card removal (fade out and slide up)
-      cardElement.style.transition = 'opacity 0.3s ease-out, transform 0.3s ease-out';
-      cardElement.style.opacity = '0';
-      cardElement.style.transform = 'translateY(-10px)';
+      cardElement.addClass('tc-card-removing');
 
       // Remove from DOM after animation
       setTimeout(() => {
@@ -871,9 +886,7 @@ export class TimelineContainer {
 
   private async render(): Promise<void> {
     // Add Tailwind classes individually
-    this.containerEl.className = 'w-full h-full overflow-y-auto p-4';
-    // White background for clean look in main area
-    this.containerEl.style.backgroundColor = 'var(--background-primary)';
+    this.containerEl.className = 'w-full h-full overflow-y-auto p-4 tc-bg-primary';
 
     if (this.viewMode === 'gallery') {
       await this.renderGalleryView();
@@ -913,31 +926,24 @@ export class TimelineContainer {
     // Create loading bar container
     this.loadingBarEl = document.createElement('div');
     this.loadingBarEl.className = 'timeline-inline-loading';
-    this.loadingBarEl.style.cssText = `
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: var(--background-primary);
-      padding: 8px 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      border-bottom: 1px solid var(--background-modifier-border);
-      font-size: 13px;
-      color: var(--text-muted);
-    `;
+    this.loadingBarEl.addClass('sa-sticky');
+    this.loadingBarEl.addClass('sa-top-0');
+    this.loadingBarEl.addClass('sa-z-100');
+    this.loadingBarEl.addClass('sa-bg-primary');
+    this.loadingBarEl.addClass('sa-px-16');
+    this.loadingBarEl.addClass('sa-py-8');
+    this.loadingBarEl.addClass('sa-flex-row');
+    this.loadingBarEl.addClass('sa-gap-8');
+    this.loadingBarEl.addClass('sa-border-b');
+    this.loadingBarEl.addClass('sa-text-base');
+    this.loadingBarEl.addClass('sa-text-muted');
 
     // Spinner
     const spinner = document.createElement('div');
     spinner.className = 'timeline-loading-spinner-small';
-    spinner.style.cssText = `
-      width: 16px;
-      height: 16px;
-      border: 2px solid var(--background-modifier-border);
-      border-top-color: var(--interactive-accent);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    `;
+    spinner.addClass('sa-icon-16');
+    spinner.addClass('sa-rounded-full');
+    spinner.addClass('tc-spinner-small');
     this.loadingBarEl.appendChild(spinner);
 
     // Text
@@ -995,17 +1001,13 @@ export class TimelineContainer {
     const emptyDiv = this.containerEl.createDiv({
       cls: 'flex flex-col items-center justify-center text-center text-[var(--text-muted)]'
     });
-    emptyDiv.style.minHeight = 'calc(100vh - 200px)';
+    emptyDiv.addClass('tc-empty-min-height');
 
     const iconContainer = emptyDiv.createDiv({
       cls: 'mb-4 text-[var(--text-muted)]'
     });
     setIcon(iconContainer, 'inbox');
-    const svgEl = iconContainer.querySelector('svg');
-    if (svgEl) {
-      svgEl.style.width = '48px';
-      svgEl.style.height = '48px';
-    }
+    iconContainer.addClass('tc-empty-icon');
 
     emptyDiv.createEl('h3', {
       text: 'No archived posts yet',
@@ -1542,14 +1544,17 @@ export class TimelineContainer {
    */
   private renderHeader(): HTMLElement {
     const headerWrapper = this.containerEl.createDiv();
-    headerWrapper.style.cssText = 'margin-bottom: 4px;';
+    headerWrapper.addClass('sa-mb-4');
 
     const header = headerWrapper.createDiv();
-    header.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 12px; position: relative;';
+    header.addClass('sa-flex-between');
+    header.addClass('sa-gap-12');
+    header.addClass('sa-relative');
 
     // Left side: Search, Filter, and Sort buttons
     const leftButtons = header.createDiv();
-    leftButtons.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+    leftButtons.addClass('sa-flex-row');
+    leftButtons.addClass('sa-gap-8');
 
     // Search button (toggles search bar below)
     this.renderSearchButton(leftButtons);
@@ -1569,7 +1574,8 @@ export class TimelineContainer {
 
     // Right side: Archive, View Switcher, Refresh and Settings buttons
     const rightButtons = header.createDiv();
-    rightButtons.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+    rightButtons.addClass('sa-flex-row');
+    rightButtons.addClass('sa-gap-4');
 
     // Tag manage, Archive and View Switcher buttons (now also visible in Author mode)
     this.renderArchiveButton(rightButtons);
@@ -1592,38 +1598,62 @@ export class TimelineContainer {
     const searchBtn = parent.createDiv();
     // Mobile: icon-only (square button), Desktop: icon + text
     const isMobile = ObsidianPlatform.isMobile;
-    const padding = isMobile ? '0' : '0 12px';
-    const width = isMobile ? '40px' : 'auto';
-    searchBtn.style.cssText = `display: flex; align-items: center; gap: 6px; padding: ${padding}; width: ${width}; height: 40px; border-radius: 8px; background: transparent; cursor: pointer; transition: all 0.2s; flex-shrink: 0; font-size: 13px; color: var(--text-muted); justify-content: center;`;
+    searchBtn.addClass('sa-flex-row');
+    searchBtn.addClass('sa-gap-6');
+    searchBtn.addClass('sa-rounded-8');
+    searchBtn.addClass('sa-bg-transparent');
+    searchBtn.addClass('sa-clickable');
+    searchBtn.addClass('sa-transition');
+    searchBtn.addClass('sa-flex-shrink-0');
+    searchBtn.addClass('sa-text-base');
+    searchBtn.addClass('sa-text-muted');
+    searchBtn.addClass('sa-flex-center');
+    searchBtn.setCssProps({ '--sa-height': '40px' });
+    searchBtn.addClass('sa-dynamic-height');
+    if (isMobile) {
+      searchBtn.setCssProps({ '--sa-width': '40px' });
+      searchBtn.addClass('sa-dynamic-width');
+      searchBtn.addClass('sa-p-0');
+    } else {
+      searchBtn.addClass('sa-px-12', 'tc-btn-auto-width');
+    }
     searchBtn.setAttribute('title', 'Search posts');
     searchBtn.setAttribute('aria-label', 'Search posts');
 
     const searchIcon = searchBtn.createDiv();
-    searchIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: color 0.2s;';
+    searchIcon.addClass('sa-icon-16');
+    searchIcon.addClass('sa-transition-color');
     setIcon(searchIcon, 'search');
 
     const searchText = searchBtn.createSpan({ text: 'Search' });
-    // Hide text on mobile
-    searchText.style.cssText = `font-weight: 500; line-height: 1; ${isMobile ? 'display: none;' : ''}`;
+    searchText.addClass('sa-font-medium', 'tc-btn-text');
+    if (isMobile) {
+      searchText.addClass('sa-hidden');
+    }
 
     // Update button state based on search
     const updateButtonState = () => {
       const hasQuery = this.searchInput && this.searchInput.value.trim().length > 0;
       if (hasQuery || this.searchExpanded) {
-        searchBtn.style.background = 'var(--interactive-accent)';
-        searchBtn.style.color = 'var(--text-on-accent)';
-        searchIcon.style.color = 'var(--text-on-accent)';
+        searchBtn.setCssProps({ '--sa-bg': 'var(--interactive-accent)', '--sa-color': 'var(--text-on-accent)' });
+        searchBtn.addClass('sa-dynamic-bg', 'sa-dynamic-color');
+        searchIcon.setCssProps({ '--sa-color': 'var(--text-on-accent)' });
+        searchIcon.addClass('sa-dynamic-color');
       } else {
-        searchBtn.style.background = 'transparent';
-        searchBtn.style.color = 'var(--text-muted)';
-        searchIcon.style.color = 'var(--text-muted)';
+        searchBtn.removeClass('sa-dynamic-bg');
+        searchBtn.addClass('sa-bg-transparent');
+        searchBtn.setCssProps({ '--sa-color': 'var(--text-muted)' });
+        searchBtn.addClass('sa-dynamic-color');
+        searchIcon.setCssProps({ '--sa-color': 'var(--text-muted)' });
+        searchIcon.addClass('sa-dynamic-color');
       }
     };
 
     // Hover effects
     searchBtn.addEventListener('mouseenter', () => {
       if (!this.searchExpanded) {
-        searchBtn.style.background = 'var(--background-modifier-hover)';
+        searchBtn.removeClass('sa-bg-transparent');
+        searchBtn.addClass('sa-bg-hover');
       }
     });
 
@@ -1647,33 +1677,22 @@ export class TimelineContainer {
   private renderSearchBar(parent: HTMLElement): void {
     // Search bar container
     this.searchContainer = parent.createDiv();
-    this.searchContainer.style.cssText = `
-      margin-top: 12px;
-      height: 0;
-      overflow: hidden;
-      transition: height 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-    `;
+    this.searchContainer.addClass('sa-mt-12');
+    this.searchContainer.addClass('sa-overflow-hidden');
+    this.searchContainer.addClass('tc-search-container', 'tc-search-collapsed');
 
     // Wrapper to add padding for border visibility
     const searchWrapper = this.searchContainer.createDiv();
-    searchWrapper.style.cssText = `
-      padding: 2px 0;
-      height: 100%;
-      box-sizing: border-box;
-    `;
+    searchWrapper.addClass('sa-h-full', 'tc-search-wrapper');
 
     // Inner container for search input
     const searchInner = searchWrapper.createDiv();
-    searchInner.style.cssText = `
-      display: flex;
-      align-items: center;
-      padding: 10px 16px;
-      background: var(--background-modifier-form-field);
-      border: 1px solid var(--background-modifier-border);
-      border-radius: 8px;
-      height: 100%;
-      box-sizing: border-box;
-    `;
+    searchInner.addClass('sa-flex-row');
+    searchInner.addClass('sa-p-10');
+    searchInner.addClass('sa-px-16');
+    searchInner.addClass('sa-rounded-8');
+    searchInner.addClass('sa-border');
+    searchInner.addClass('sa-h-full', 'tc-search-inner');
 
     // Search input (no icon, just placeholder)
     const searchPlaceholder = this.isSubscriptionViewActive
@@ -1687,21 +1706,13 @@ export class TimelineContainer {
         'aria-label': this.isSubscriptionViewActive ? 'Search authors' : 'Search posts'
       }
     });
-    this.searchInput.style.cssText = `
-      flex: 1 1 auto;
-      width: 100%;
-      padding: 2px 8px !important;
-      margin: 0 !important;
-      border: none !important;
-      background: transparent !important;
-      color: var(--text-normal) !important;
-      font-size: 14px !important;
-      line-height: normal !important;
-      outline: none !important;
-      box-shadow: none !important;
-      -webkit-appearance: none !important;
-      appearance: none !important;
-    `;
+    this.searchInput.addClass('sa-flex-1');
+    this.searchInput.addClass('sa-w-full');
+    this.searchInput.addClass('sa-bg-transparent');
+    this.searchInput.addClass('sa-text-normal');
+    this.searchInput.addClass('sa-text-md');
+    // Override obsidian.css input defaults via CSS class
+    this.searchInput.addClass('tc-search-input');
 
     // Get current search query
     const searchQuery = this.isSubscriptionViewActive
@@ -1713,32 +1724,29 @@ export class TimelineContainer {
     // If there's a search query, open the search bar automatically
     if (searchQuery && searchQuery.trim().length > 0) {
       this.searchExpanded = true;
-      this.searchContainer!.style.height = '52px';
+      this.searchContainer!.addClass('tc-search-expanded');
+      this.searchContainer!.removeClass('tc-search-collapsed');
     }
 
     // Clear button
     const clearButton = searchInner.createDiv();
-    clearButton.style.cssText = `
-      width: 20px;
-      height: 20px;
-      margin-left: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      color: var(--text-muted);
-      opacity: 0;
-      transition: opacity 0.2s;
-      flex-shrink: 0;
-    `;
+    clearButton.addClass('sa-icon-20');
+    clearButton.addClass('sa-ml-auto');
+    clearButton.addClass('sa-clickable');
+    clearButton.addClass('sa-text-muted');
+    clearButton.addClass('sa-opacity-0');
+    clearButton.addClass('sa-transition-opacity');
+    clearButton.addClass('sa-flex-shrink-0');
     setIcon(clearButton, 'x');
 
     // Update clear button visibility
     const updateClearButton = () => {
       if (this.searchInput && this.searchInput.value.trim().length > 0) {
-        clearButton.style.opacity = '1';
+        clearButton.removeClass('sa-opacity-0');
+        clearButton.addClass('sa-opacity-100');
       } else {
-        clearButton.style.opacity = '0';
+        clearButton.removeClass('sa-opacity-100');
+        clearButton.addClass('sa-opacity-0');
       }
     };
 
@@ -1832,7 +1840,8 @@ export class TimelineContainer {
 
     if (this.searchExpanded) {
       // Expand search bar - increased height to prevent border clipping
-      this.searchContainer!.style.height = '52px';
+      this.searchContainer!.addClass('tc-search-expanded');
+      this.searchContainer!.removeClass('tc-search-collapsed');
 
       // Focus input after animation (reduced delay for faster feel)
       setTimeout(() => {
@@ -1840,7 +1849,8 @@ export class TimelineContainer {
       }, 50);
     } else {
       // Collapse search bar
-      this.searchContainer!.style.height = '0';
+      this.searchContainer!.addClass('tc-search-collapsed');
+      this.searchContainer!.removeClass('tc-search-expanded');
 
       // Clear search if empty
       if (this.searchInput && this.searchInput.value.trim().length === 0) {
@@ -1865,18 +1875,37 @@ export class TimelineContainer {
     const filterBtn = parent.createDiv();
     // Mobile: icon-only (square button), Desktop: icon + text
     const isMobile = ObsidianPlatform.isMobile;
-    const padding = isMobile ? '0' : '0 12px';
-    const width = isMobile ? '40px' : 'auto';
-    filterBtn.style.cssText = `display: flex; align-items: center; gap: 6px; padding: ${padding}; width: ${width}; height: 40px; border-radius: 8px; background: transparent; cursor: pointer; transition: all 0.2s; flex-shrink: 0; font-size: 13px; color: var(--text-muted); justify-content: center;`;
+    filterBtn.addClass('sa-flex-row');
+    filterBtn.addClass('sa-gap-6');
+    filterBtn.addClass('sa-rounded-8');
+    filterBtn.addClass('sa-bg-transparent');
+    filterBtn.addClass('sa-clickable');
+    filterBtn.addClass('sa-transition');
+    filterBtn.addClass('sa-flex-shrink-0');
+    filterBtn.addClass('sa-text-base');
+    filterBtn.addClass('sa-text-muted');
+    filterBtn.addClass('sa-flex-center');
+    filterBtn.setCssProps({ '--sa-height': '40px' });
+    filterBtn.addClass('sa-dynamic-height');
+    if (isMobile) {
+      filterBtn.setCssProps({ '--sa-width': '40px' });
+      filterBtn.addClass('sa-dynamic-width');
+      filterBtn.addClass('sa-p-0');
+    } else {
+      filterBtn.addClass('sa-px-12', 'tc-btn-auto-width');
+    }
     filterBtn.setAttribute('title', 'Filter posts');
 
     const filterIcon = filterBtn.createDiv();
-    filterIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: color 0.2s;';
+    filterIcon.addClass('sa-icon-16');
+    filterIcon.addClass('sa-transition-color');
     setIcon(filterIcon, 'filter');
 
     const filterText = filterBtn.createSpan({ text: 'Filter' });
-    // Hide text on mobile
-    filterText.style.cssText = `font-weight: 500; line-height: 1; ${isMobile ? 'display: none;' : ''}`;
+    filterText.addClass('sa-font-medium', 'tc-btn-text');
+    if (isMobile) {
+      filterText.addClass('sa-hidden');
+    }
 
     // Update filter button based on active filters
     const updateFilterButton = () => {
@@ -1885,13 +1914,17 @@ export class TimelineContainer {
       const hasActiveFilters = this.filterSortManager.hasActiveFilters();
 
       if (hasActiveFilters) {
-        filterBtn.style.background = 'var(--interactive-accent)';
-        filterBtn.style.color = 'var(--text-on-accent)';
-        filterIcon.style.color = 'var(--text-on-accent)';
+        filterBtn.setCssProps({ '--sa-bg': 'var(--interactive-accent)', '--sa-color': 'var(--text-on-accent)' });
+        filterBtn.addClass('sa-dynamic-bg', 'sa-dynamic-color');
+        filterIcon.setCssProps({ '--sa-color': 'var(--text-on-accent)' });
+        filterIcon.addClass('sa-dynamic-color');
       } else {
-        filterBtn.style.background = 'transparent';
-        filterBtn.style.color = 'var(--text-muted)';
-        filterIcon.style.color = 'var(--text-muted)';
+        filterBtn.removeClass('sa-dynamic-bg');
+        filterBtn.addClass('sa-bg-transparent');
+        filterBtn.setCssProps({ '--sa-color': 'var(--text-muted)' });
+        filterBtn.addClass('sa-dynamic-color');
+        filterIcon.setCssProps({ '--sa-color': 'var(--text-muted)' });
+        filterIcon.addClass('sa-dynamic-color');
       }
     };
 
@@ -1902,7 +1935,8 @@ export class TimelineContainer {
 
     filterBtn.addEventListener('mouseenter', () => {
       if (!this.filterPanel.isOpened) {
-        filterBtn.style.background = 'var(--background-modifier-hover)';
+        filterBtn.removeClass('sa-bg-transparent');
+        filterBtn.addClass('sa-bg-hover');
       }
     });
 
@@ -1930,7 +1964,7 @@ export class TimelineContainer {
   private renderAuthorSortControls(parent: HTMLElement): void {
     // Sort controls container (group button and toggle tightly)
     const sortControls = parent.createDiv();
-    sortControls.style.cssText = 'display: flex; align-items: center; gap: 0;';
+    sortControls.addClass('sa-flex-row', 'tc-sort-zero-gap');
 
     // Sort by button
     this.renderAuthorSortByButton(sortControls);
@@ -1945,16 +1979,33 @@ export class TimelineContainer {
   private renderAuthorSortByButton(container: HTMLElement): void {
     const sortByBtn = container.createDiv();
     const isMobile = ObsidianPlatform.isMobile;
-    const padding = isMobile ? '0' : '0 12px';
-    const borderRadius = '8px 0 0 8px';
-    sortByBtn.style.cssText = `display: flex; align-items: center; gap: 6px; padding: ${padding}; height: 40px; border-radius: ${borderRadius}; background: transparent; cursor: pointer; transition: all 0.2s; flex-shrink: 0; font-size: 13px; color: var(--text-muted); justify-content: center; min-width: 40px;`;
+    sortByBtn.addClass('sa-flex-row');
+    sortByBtn.addClass('sa-gap-6');
+    sortByBtn.addClass('sa-bg-transparent');
+    sortByBtn.addClass('sa-clickable');
+    sortByBtn.addClass('sa-transition');
+    sortByBtn.addClass('sa-flex-shrink-0');
+    sortByBtn.addClass('sa-text-base');
+    sortByBtn.addClass('sa-text-muted');
+    sortByBtn.addClass('sa-flex-center');
+    sortByBtn.setCssProps({ '--sa-height': '40px' });
+    sortByBtn.addClass('sa-dynamic-height', 'tc-sort-by-btn');
+    if (isMobile) {
+      sortByBtn.addClass('sa-p-0');
+    } else {
+      sortByBtn.addClass('sa-px-12');
+    }
 
     const sortByIcon = sortByBtn.createDiv();
-    sortByIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: color 0.2s;';
+    sortByIcon.addClass('sa-icon-16');
+    sortByIcon.addClass('sa-transition-color');
     setIcon(sortByIcon, 'calendar');
 
     const sortByText = sortByBtn.createSpan();
-    sortByText.style.cssText = `font-weight: 500; line-height: 1; ${isMobile ? 'display: none;' : ''}`;
+    sortByText.addClass('sa-font-medium', 'tc-btn-text');
+    if (isMobile) {
+      sortByText.addClass('sa-hidden');
+    }
 
     const updateButtonText = () => {
       const labels: Record<string, string> = {
@@ -1972,11 +2023,13 @@ export class TimelineContainer {
     updateButtonText();
 
     sortByBtn.addEventListener('mouseenter', () => {
-      sortByBtn.style.background = 'var(--background-modifier-hover)';
+      sortByBtn.removeClass('sa-bg-transparent');
+      sortByBtn.addClass('sa-bg-hover');
     });
 
     sortByBtn.addEventListener('mouseleave', () => {
-      sortByBtn.style.background = 'transparent';
+      sortByBtn.removeClass('sa-bg-hover');
+      sortByBtn.addClass('sa-bg-transparent');
     });
 
     sortByBtn.addEventListener('click', () => {
@@ -1989,10 +2042,18 @@ export class TimelineContainer {
    */
   private renderAuthorOrderToggle(container: HTMLElement): void {
     const orderBtn = container.createDiv();
-    orderBtn.style.cssText = 'display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 0 8px 8px 0; background: transparent; cursor: pointer; transition: all 0.2s; flex-shrink: 0;';
+    orderBtn.addClass('sa-flex-center');
+    orderBtn.addClass('sa-bg-transparent');
+    orderBtn.addClass('sa-clickable');
+    orderBtn.addClass('sa-transition');
+    orderBtn.addClass('sa-flex-shrink-0');
+    orderBtn.setCssProps({ '--sa-width': '40px', '--sa-height': '40px' });
+    orderBtn.addClass('sa-dynamic-width', 'sa-dynamic-height', 'tc-order-btn');
 
     const orderIcon = orderBtn.createDiv();
-    orderIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-muted); transition: all 0.2s;';
+    orderIcon.addClass('sa-icon-16');
+    orderIcon.addClass('sa-text-muted');
+    orderIcon.addClass('sa-transition');
 
     // Track order state separately for each sort type
     let isDescending = this.authorSortBy === 'lastRun' || this.authorSortBy === 'nameDesc' || this.authorSortBy === 'archiveCount';
@@ -2008,13 +2069,17 @@ export class TimelineContainer {
     updateOrderButton();
 
     orderBtn.addEventListener('mouseenter', () => {
-      orderBtn.style.background = 'var(--background-modifier-hover)';
-      orderIcon.style.color = 'var(--interactive-accent)';
+      orderBtn.removeClass('sa-bg-transparent');
+      orderBtn.addClass('sa-bg-hover');
+      orderIcon.removeClass('sa-text-muted');
+      orderIcon.addClass('sa-text-accent');
     });
 
     orderBtn.addEventListener('mouseleave', () => {
-      orderBtn.style.background = 'transparent';
-      orderIcon.style.color = 'var(--text-muted)';
+      orderBtn.removeClass('sa-bg-hover');
+      orderBtn.addClass('sa-bg-transparent');
+      orderIcon.removeClass('sa-text-accent');
+      orderIcon.addClass('sa-text-muted');
     });
 
     orderBtn.addEventListener('click', () => {
@@ -2059,18 +2124,13 @@ export class TimelineContainer {
     // Create dropdown
     const dropdown = document.createElement('div');
     dropdown.className = 'author-sort-dropdown';
-    dropdown.style.cssText = `
-      position: absolute;
-      top: ${anchor.getBoundingClientRect().bottom + 8}px;
-      left: ${anchor.getBoundingClientRect().left}px;
-      background: var(--background-secondary);
-      border: 1px solid var(--background-modifier-border);
-      border-radius: 8px;
-      padding: 8px;
-      z-index: 1000;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      min-width: 160px;
-    `;
+    dropdown.addClass('sa-absolute');
+    dropdown.addClass('sa-bg-secondary');
+    dropdown.addClass('sa-border');
+    dropdown.addClass('sa-rounded-8');
+    dropdown.addClass('sa-p-8');
+    dropdown.addClass('sa-z-1000');
+    dropdown.setCssStyles({ top: `${anchor.getBoundingClientRect().bottom + 8}px`, left: `${anchor.getBoundingClientRect().left}px` });
 
     const options = [
       { value: 'lastRun', label: 'Last Run' },
@@ -2080,13 +2140,11 @@ export class TimelineContainer {
 
     options.forEach(opt => {
       const option = dropdown.createDiv();
-      option.style.cssText = `
-        padding: 6px 12px;
-        cursor: pointer;
-        border-radius: 4px;
-        font-size: 13px;
-        color: var(--text-normal);
-      `;
+      option.addClass('sa-rounded-4');
+      option.addClass('sa-clickable');
+      option.addClass('sa-text-base');
+      option.addClass('sa-text-normal', 'tc-sort-option');
+
       option.textContent = opt.label;
 
       // Highlight current selection
@@ -2095,16 +2153,20 @@ export class TimelineContainer {
         (opt.value === this.authorSortBy);
 
       if (isCurrentOption) {
-        option.style.background = 'var(--background-modifier-hover)';
+        option.addClass('sa-bg-hover');
+      } else {
+        option.addClass('sa-bg-transparent');
       }
 
       option.addEventListener('mouseenter', () => {
-        option.style.background = 'var(--background-modifier-hover)';
+        option.removeClass('sa-bg-transparent');
+        option.addClass('sa-bg-hover');
       });
 
       option.addEventListener('mouseleave', () => {
         if (!isCurrentOption) {
-          option.style.background = 'transparent';
+          option.removeClass('sa-bg-hover');
+          option.addClass('sa-bg-transparent');
         }
       });
 
@@ -2159,69 +2221,58 @@ export class TimelineContainer {
 
     // Create filter panel (same as Timeline FilterPanel)
     const panel = header.createDiv({ cls: 'filter-panel' });
-    panel.style.cssText = `
-      position: absolute;
-      top: 48px;
-      left: 0;
-      z-index: 1000;
-      background: var(--background-primary);
-      border: 1px solid var(--background-modifier-border);
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      padding: 16px;
-      min-width: 320px;
-      max-width: 400px;
-    `;
+    panel.addClass('sa-absolute');
+    panel.addClass('sa-left-0');
+    panel.addClass('sa-z-1000');
+    panel.addClass('sa-bg-primary');
+    panel.addClass('sa-border');
+    panel.addClass('sa-rounded-8');
+    panel.addClass('sa-p-16', 'tc-filter-panel');
 
     // Platform section
     const platformSection = panel.createDiv();
-    platformSection.style.cssText = 'margin-bottom: 0;';
+    platformSection.addClass('sa-m-0');
 
     // Header row with label and toggle all
     const headerRow = platformSection.createDiv();
-    headerRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; gap: 8px;';
+    headerRow.addClass('sa-flex-between');
+    headerRow.addClass('sa-mb-8');
+    headerRow.addClass('sa-gap-8');
 
     const platformLabel = headerRow.createEl('div', { text: 'Platforms' });
-    platformLabel.style.cssText = 'font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;';
+    platformLabel.addClass('sa-text-xs');
+    platformLabel.addClass('sa-font-semibold');
+    platformLabel.addClass('sa-text-muted');
+    platformLabel.addClass('tc-platform-label');
 
     // Toggle all button
     const toggleButton = headerRow.createDiv();
-    toggleButton.style.cssText = `
-      width: 32px;
-      height: 32px;
-      border-radius: 6px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      background: transparent;
-      transition: all 0.2s;
-      position: relative;
-    `;
+    toggleButton.addClass('sa-icon-32');
+    toggleButton.addClass('sa-rounded-6');
+    toggleButton.addClass('sa-clickable');
+    toggleButton.addClass('sa-bg-transparent');
+    toggleButton.addClass('sa-transition');
+    toggleButton.addClass('sa-relative');
 
     const toggleIcon = toggleButton.createDiv();
-    toggleIcon.style.cssText = `
-      width: 18px;
-      height: 18px;
-      pointer-events: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    `;
+    toggleIcon.addClass('sa-icon-16');
+    toggleIcon.addClass('sa-pointer-none');
 
     const isAllSelected = this.authorPlatformFilter.length === TIMELINE_PLATFORM_IDS.length;
     setIcon(toggleIcon, isAllSelected ? 'minus-square' : 'check-square');
-    toggleIcon.style.color = isAllSelected ? 'var(--interactive-accent)' : 'var(--text-muted)';
+    toggleIcon.setCssProps({ '--sa-color': isAllSelected ? 'var(--interactive-accent)' : 'var(--text-muted)' });
+    toggleIcon.addClass('sa-dynamic-color');
     toggleButton.setAttribute('title', isAllSelected ? 'Clear all platforms' : 'Select all platforms');
 
     toggleButton.addEventListener('mouseenter', () => {
-      toggleButton.style.background = 'rgba(var(--mono-rgb-100), 0.05)';
-      toggleIcon.style.color = isAllSelected ? 'var(--interactive-accent)' : 'var(--text-normal)';
+      toggleButton.addClass('fp-toggle-hover');
+      toggleIcon.setCssProps({ '--sa-color': isAllSelected ? 'var(--interactive-accent)' : 'var(--text-normal)' });
     });
 
     toggleButton.addEventListener('mouseleave', () => {
-      toggleButton.style.background = 'transparent';
-      toggleIcon.style.color = isAllSelected ? 'var(--interactive-accent)' : 'var(--text-muted)';
+      toggleButton.removeClass('fp-toggle-hover', 'sa-bg-hover');
+      toggleButton.addClass('sa-bg-transparent');
+      toggleIcon.setCssProps({ '--sa-color': isAllSelected ? 'var(--interactive-accent)' : 'var(--text-muted)' });
     });
 
     toggleButton.addEventListener('click', () => {
@@ -2243,7 +2294,7 @@ export class TimelineContainer {
 
     // Platform options grid (same as FilterPanel)
     const platformsGrid = platformSection.createDiv({ cls: 'platforms-grid' });
-    platformsGrid.style.cssText = 'display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;';
+    platformsGrid.addClass('sa-gap-8', 'tc-platforms-grid');
 
     // Sort platforms: active (has data) first, then inactive
     const sortedPlatforms = [...TIMELINE_PLATFORM_IDS].sort((a, b) => {
@@ -2277,40 +2328,57 @@ export class TimelineContainer {
       const isDisabled = !hasAuthors;
 
       const checkbox = platformsGrid.createDiv();
-      checkbox.style.cssText = `
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px;
-        border-radius: 6px;
-        cursor: ${isDisabled ? 'not-allowed' : 'pointer'};
-        transition: all 0.2s;
-        background: ${isSelected ? 'var(--background-modifier-hover)' : 'transparent'};
-        opacity: ${isDisabled ? '0.4' : '1'};
-      `;
+      checkbox.addClass('sa-flex-row');
+      checkbox.addClass('sa-gap-8');
+      checkbox.addClass('sa-p-8');
+      checkbox.addClass('sa-rounded-6');
+      checkbox.addClass('sa-transition');
+      if (isDisabled) {
+        checkbox.addClass('tc-cursor-disabled');
+      } else {
+        checkbox.addClass('sa-clickable');
+      }
+      if (isSelected) {
+        checkbox.addClass('sa-bg-hover');
+      } else {
+        checkbox.addClass('sa-bg-transparent');
+      }
+      checkbox.setCssProps({ '--sa-opacity': isDisabled ? '0.4' : '1' });
+      checkbox.addClass('sa-dynamic-opacity');
 
       // Platform icon
       const iconWrapper = checkbox.createDiv();
-      iconWrapper.style.cssText = `width: 18px; height: 18px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: ${isDisabled ? 'var(--text-faint)' : 'var(--text-accent)'};`;
+      iconWrapper.addClass('sa-icon-16');
+      iconWrapper.setCssProps({ '--sa-color': isDisabled ? 'var(--text-faint)' : 'var(--text-accent)' });
+      iconWrapper.addClass('sa-dynamic-color');
 
       const icon = this.getPlatformSimpleIcon(platform.id);
       if (icon) {
-        iconWrapper.innerHTML = `
-          <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="fill: var(--text-accent); width: 100%; height: 100%;">
-            <title>${icon.title}</title>
-            <path d="${icon.path}"/>
-          </svg>
-        `;
-      } else {
+        const svg = createSVGElement(icon, {
+          fill: 'var(--text-accent)',
+          width: '100%',
+          height: '100%'
+        });
+        iconWrapper.appendChild(svg);
+      } else{
         const lucideIconName = this.getLucideIcon(platform.id);
         setIcon(iconWrapper, lucideIconName);
       }
 
       const label = checkbox.createSpan({ text: platform.label });
-      label.style.cssText = `font-size: 13px; flex: 1; color: ${isDisabled ? 'var(--text-faint)' : 'inherit'};`;
+      label.addClass('sa-text-base');
+      label.addClass('sa-flex-1');
+      if (isDisabled) {
+        label.addClass('sa-text-faint');
+      }
 
       const checkIcon = checkbox.createDiv();
-      checkIcon.style.cssText = `width: 16px; height: 16px; display: ${isSelected ? 'block' : 'none'};`;
+      checkIcon.addClass('sa-icon-16');
+      if (isSelected) {
+        checkIcon.removeClass('sa-hidden');
+      } else {
+        checkIcon.addClass('sa-hidden');
+      }
       setIcon(checkIcon, 'check');
 
       // Click handler
@@ -2342,44 +2410,50 @@ export class TimelineContainer {
       // Hover handlers
       checkbox.addEventListener('mouseenter', () => {
         if (!isSelected && !isDisabled) {
-          checkbox.style.background = 'var(--background-secondary)';
+          checkbox.removeClass('sa-bg-transparent');
+          checkbox.addClass('sa-bg-secondary');
         }
       });
 
       checkbox.addEventListener('mouseleave', () => {
         if (!isSelected && !isDisabled) {
-          checkbox.style.background = 'transparent';
+          checkbox.removeClass('sa-bg-secondary');
+          checkbox.addClass('sa-bg-transparent');
         }
       });
     });
 
     // Divider
     const divider = panel.createDiv();
-    divider.style.cssText = 'height: 1px; background: var(--background-modifier-border); margin: 12px 0;';
+    divider.addClass('tc-divider', 'sa-bg-border');
 
     // Include archived option (same semantics as Timeline filter)
     const includeArchived = this.filterSortManager.getFilterState().includeArchived;
     const archiveOption = panel.createDiv();
-    archiveOption.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.2s;
-      background: ${includeArchived ? 'var(--background-modifier-hover)' : 'transparent'};
-    `;
+    archiveOption.addClass('sa-flex-row');
+    archiveOption.addClass('sa-gap-8');
+    archiveOption.addClass('sa-p-8');
+    archiveOption.addClass('sa-rounded-6');
+    archiveOption.addClass('sa-clickable');
+    archiveOption.addClass('sa-transition');
+    if (includeArchived) {
+      archiveOption.addClass('sa-bg-hover');
+    } else {
+      archiveOption.addClass('sa-bg-transparent');
+    }
 
     const archiveIcon = archiveOption.createDiv();
-    archiveIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; flex-shrink: 0;';
+    archiveIcon.addClass('sa-icon-16');
     setIcon(archiveIcon, 'archive');
 
     const archiveLabel = archiveOption.createSpan({ text: 'Include archived' });
-    archiveLabel.style.cssText = 'font-size: 13px; flex: 1; line-height: 16px;';
+    archiveLabel.addClass('tc-archive-label');
 
     const archiveCheckIcon = archiveOption.createDiv();
-    archiveCheckIcon.style.cssText = `width: 16px; height: 16px; flex-shrink: 0; display: ${includeArchived ? 'flex' : 'none'}; align-items: center;`;
+    archiveCheckIcon.addClass('tc-archive-check');
+    if (!includeArchived) {
+      archiveCheckIcon.addClass('sa-hidden');
+    }
     setIcon(archiveCheckIcon, 'check');
 
     archiveOption.addEventListener('click', () => {
@@ -2418,21 +2492,27 @@ export class TimelineContainer {
    */
   private renderTagManageButton(parent: HTMLElement): void {
     const tagBtn = parent.createDiv();
-    tagBtn.style.cssText = 'display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 8px; background: transparent; cursor: pointer; transition: all 0.2s; flex-shrink: 0;';
+    tagBtn.addClass('sa-action-btn');
     tagBtn.setAttribute('title', 'Manage tags');
 
     const tagIcon = tagBtn.createDiv();
-    tagIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-muted); transition: color 0.2s;';
+    tagIcon.addClass('sa-icon-16');
+    tagIcon.addClass('sa-text-muted');
+    tagIcon.addClass('sa-transition-color');
     setIcon(tagIcon, 'tags');
 
     tagBtn.addEventListener('mouseenter', () => {
-      tagBtn.style.background = 'var(--background-modifier-hover)';
-      tagIcon.style.color = 'var(--interactive-accent)';
+      tagBtn.removeClass('sa-bg-transparent');
+      tagBtn.addClass('sa-bg-hover');
+      tagIcon.removeClass('sa-text-muted');
+      tagIcon.addClass('sa-text-accent');
     });
 
     tagBtn.addEventListener('mouseleave', () => {
-      tagBtn.style.background = 'transparent';
-      tagIcon.style.color = 'var(--text-muted)';
+      tagBtn.removeClass('sa-bg-hover');
+      tagBtn.addClass('sa-bg-transparent');
+      tagIcon.removeClass('sa-text-accent');
+      tagIcon.addClass('sa-text-muted');
     });
 
     tagBtn.addEventListener('click', () => {
@@ -2452,21 +2532,27 @@ export class TimelineContainer {
    */
   private renderArchiveButton(parent: HTMLElement): void {
     const archiveBtn = parent.createDiv();
-    archiveBtn.style.cssText = 'display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 8px; background: transparent; cursor: pointer; transition: all 0.2s; flex-shrink: 0;';
+    archiveBtn.addClass('sa-action-btn');
     archiveBtn.setAttribute('title', 'Archive social media post');
 
     const archiveIcon = archiveBtn.createDiv();
-    archiveIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-muted); transition: color 0.2s;';
+    archiveIcon.addClass('sa-icon-16');
+    archiveIcon.addClass('sa-text-muted');
+    archiveIcon.addClass('sa-transition-color');
     setIcon(archiveIcon, 'bookmark-plus');
 
     archiveBtn.addEventListener('mouseenter', () => {
-      archiveBtn.style.background = 'var(--background-modifier-hover)';
-      archiveIcon.style.color = 'var(--interactive-accent)';
+      archiveBtn.removeClass('sa-bg-transparent');
+      archiveBtn.addClass('sa-bg-hover');
+      archiveIcon.removeClass('sa-text-muted');
+      archiveIcon.addClass('sa-text-accent');
     });
 
     archiveBtn.addEventListener('mouseleave', () => {
-      archiveBtn.style.background = 'transparent';
-      archiveIcon.style.color = 'var(--text-muted)';
+      archiveBtn.removeClass('sa-bg-hover');
+      archiveBtn.addClass('sa-bg-transparent');
+      archiveIcon.removeClass('sa-text-accent');
+      archiveIcon.addClass('sa-text-muted');
     });
 
     archiveBtn.addEventListener('click', () => {
@@ -2480,9 +2566,12 @@ export class TimelineContainer {
    */
   private renderViewSwitcherButton(parent: HTMLElement): void {
     const viewSwitcherBtn = parent.createDiv();
-    viewSwitcherBtn.style.cssText = 'display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 8px; background: transparent; cursor: pointer; transition: all 0.2s; flex-shrink: 0;';
+    viewSwitcherBtn.addClass('sa-action-btn');
+
     const viewIcon = viewSwitcherBtn.createDiv();
-    viewIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-muted); transition: color 0.2s;';
+    viewIcon.addClass('sa-icon-16');
+    viewIcon.addClass('sa-text-muted');
+    viewIcon.addClass('sa-transition-color');
 
     const updateViewButton = () => {
       const isGallery = this.viewMode === 'gallery';
@@ -2492,13 +2581,17 @@ export class TimelineContainer {
     updateViewButton();
 
     viewSwitcherBtn.addEventListener('mouseenter', () => {
-      viewSwitcherBtn.style.background = 'var(--background-modifier-hover)';
-      viewIcon.style.color = 'var(--interactive-accent)';
+      viewSwitcherBtn.removeClass('sa-bg-transparent');
+      viewSwitcherBtn.addClass('sa-bg-hover');
+      viewIcon.removeClass('sa-text-muted');
+      viewIcon.addClass('sa-text-accent');
     });
 
     viewSwitcherBtn.addEventListener('mouseleave', () => {
-      viewSwitcherBtn.style.background = 'transparent';
-      viewIcon.style.color = 'var(--text-muted)';
+      viewSwitcherBtn.removeClass('sa-bg-hover');
+      viewSwitcherBtn.addClass('sa-bg-transparent');
+      viewIcon.removeClass('sa-text-accent');
+      viewIcon.addClass('sa-text-muted');
     });
 
     viewSwitcherBtn.addEventListener('click', async () => {
@@ -2528,21 +2621,27 @@ export class TimelineContainer {
    */
   private renderSubscriptionButton(parent: HTMLElement): void {
     const subscriptionBtn = parent.createDiv();
-    subscriptionBtn.style.cssText = 'display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 8px; background: transparent; cursor: pointer; transition: all 0.2s; flex-shrink: 0;';
+    subscriptionBtn.addClass('sa-action-btn');
 
     const subscriptionIcon = subscriptionBtn.createDiv();
-    subscriptionIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-muted); transition: color 0.2s;';
+    subscriptionIcon.addClass('sa-icon-16');
+    subscriptionIcon.addClass('sa-text-muted');
+    subscriptionIcon.addClass('sa-transition-color');
     setIcon(subscriptionIcon, 'users');
 
     // Update button state based on active view
     const updateButtonState = () => {
       if (this.isSubscriptionViewActive) {
-        subscriptionBtn.style.background = 'var(--interactive-accent)';
-        subscriptionIcon.style.color = 'var(--text-on-accent)';
+        subscriptionBtn.removeClass('sa-bg-transparent');
+        subscriptionBtn.addClass('sa-bg-accent');
+        subscriptionIcon.removeClass('sa-text-muted');
+        subscriptionIcon.addClass('tc-sub-icon-active');
         subscriptionBtn.setAttribute('title', 'Back to timeline');
       } else {
-        subscriptionBtn.style.background = 'transparent';
-        subscriptionIcon.style.color = 'var(--text-muted)';
+        subscriptionBtn.removeClass('sa-bg-accent');
+        subscriptionBtn.addClass('sa-bg-transparent');
+        subscriptionIcon.removeClass('tc-sub-icon-active');
+        subscriptionIcon.addClass('sa-text-muted');
         subscriptionBtn.setAttribute('title', 'Manage subscriptions');
       }
     };
@@ -2551,8 +2650,10 @@ export class TimelineContainer {
 
     subscriptionBtn.addEventListener('mouseenter', () => {
       if (!this.isSubscriptionViewActive) {
-        subscriptionBtn.style.background = 'var(--background-modifier-hover)';
-        subscriptionIcon.style.color = 'var(--interactive-accent)';
+        subscriptionBtn.removeClass('sa-bg-transparent');
+        subscriptionBtn.addClass('sa-bg-hover');
+        subscriptionIcon.removeClass('sa-text-muted');
+        subscriptionIcon.addClass('sa-text-accent');
       }
     });
 
@@ -2586,21 +2687,27 @@ export class TimelineContainer {
    */
   private renderSettingsButton(parent: HTMLElement): void {
     const settingsBtn = parent.createDiv();
-    settingsBtn.style.cssText = 'display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 8px; background: transparent; cursor: pointer; transition: all 0.2s; flex-shrink: 0;';
+    settingsBtn.addClass('sa-action-btn');
     settingsBtn.setAttribute('title', 'Open plugin settings');
 
     const settingsIcon = settingsBtn.createDiv();
-    settingsIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-muted); transition: color 0.2s;';
+    settingsIcon.addClass('sa-icon-16');
+    settingsIcon.addClass('sa-text-muted');
+    settingsIcon.addClass('sa-transition-color');
     setIcon(settingsIcon, 'settings');
 
     settingsBtn.addEventListener('mouseenter', () => {
-      settingsBtn.style.background = 'var(--background-modifier-hover)';
-      settingsIcon.style.color = 'var(--interactive-accent)';
+      settingsBtn.removeClass('sa-bg-transparent');
+      settingsBtn.addClass('sa-bg-hover');
+      settingsIcon.removeClass('sa-text-muted');
+      settingsIcon.addClass('sa-text-accent');
     });
 
     settingsBtn.addEventListener('mouseleave', () => {
-      settingsBtn.style.background = 'transparent';
-      settingsIcon.style.color = 'var(--text-muted)';
+      settingsBtn.removeClass('sa-bg-hover');
+      settingsBtn.addClass('sa-bg-transparent');
+      settingsIcon.removeClass('sa-text-accent');
+      settingsIcon.addClass('sa-text-muted');
     });
 
     settingsBtn.addEventListener('click', () => {
@@ -3178,19 +3285,20 @@ export class TimelineContainer {
     }
 
     try {
-      const res = await fetch(`${this.plugin.settings.workerUrl}/api/subscriptions`, {
+      const res = await requestUrl({
+        url: `${this.plugin.settings.workerUrl}/api/subscriptions`,
         method: 'POST',
         headers: this.getAuthHeaders(),
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(requestBody),
+        throw: false
       });
 
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Subscription create failed: ${res.status} ${text || ''}`.trim());
+      if (res.status !== 200) {
+        throw new Error(`Subscription create failed: ${res.status} ${res.text || ''}`.trim());
       }
 
       // Parse response to get new subscription ID
-      const response = await res.json();
+      const response = res.json;
       const subscription = response.data || response;
 
       // Update author object with new subscription ID
@@ -3218,7 +3326,7 @@ export class TimelineContainer {
         // Run in background to not block the UI
         setTimeout(async () => {
           try {
-            console.log('[TimelineContainer] Running initial poll for new Naver subscription:', subscription.id);
+            console.debug('[TimelineContainer] Running initial poll for new Naver subscription:', subscription.id);
             await this.plugin.naverPoller?.runSingleSubscription(subscription.id);
           } catch (error) {
             console.warn('[TimelineContainer] Initial poll failed (will retry on next cycle):', error);
@@ -3242,14 +3350,15 @@ export class TimelineContainer {
    */
   private async unsubscribeFromAuthor(subscriptionId: string, authorName: string, authorUrl?: string, platform?: Platform): Promise<void> {
     try {
-      const res = await fetch(`${this.plugin.settings.workerUrl}/api/subscriptions/${subscriptionId}`, {
+      const res = await requestUrl({
+        url: `${this.plugin.settings.workerUrl}/api/subscriptions/${subscriptionId}`,
         method: 'DELETE',
-        headers: this.getAuthHeaders()
+        headers: this.getAuthHeaders(),
+        throw: false
       });
 
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Unsubscribe failed: ${res.status} ${text || ''}`.trim());
+      if (res.status !== 200) {
+        throw new Error(`Unsubscribe failed: ${res.status} ${res.text || ''}`.trim());
       }
 
       // Update AuthorCatalogStore if authorUrl and platform are provided
@@ -3493,7 +3602,7 @@ export class TimelineContainer {
                     (requestBody.options as any).maxPostsPerRun = naverBlogOpts.maxPostsPerRun || 5;
                     (requestBody.options as any).backfillDays = naverBlogOpts.backfillDays || 3;
                   }
-                  console.log('[TimelineContainer] Naver Blog subscription options:', {
+                  console.debug('[TimelineContainer] Naver Blog subscription options:', {
                     naverBlogOpts,
                     finalOptions: requestBody.options
                   });
@@ -3501,7 +3610,7 @@ export class TimelineContainer {
               }
 
               // Debug logging before API call
-              console.log('[TimelineContainer] Final requestBody before API call:', {
+              console.debug('[TimelineContainer] Final requestBody before API call:', {
                 platform: author.platform,
                 authorUrl: author.authorUrl,
                 options: requestBody.options,
@@ -3513,19 +3622,20 @@ export class TimelineContainer {
                 }
               });
 
-              const res = await fetch(`${this.plugin.settings.workerUrl}/api/subscriptions`, {
+              const res = await requestUrl({
+                url: `${this.plugin.settings.workerUrl}/api/subscriptions`,
                 method: 'POST',
                 headers: this.getAuthHeaders(),
-                body: JSON.stringify(requestBody)
+                body: JSON.stringify(requestBody),
+                throw: false
               });
 
-              if (!res.ok) {
-                const text = await res.text();
-                throw new Error(`Subscription create failed: ${res.status} ${text || ''}`.trim());
+              if (res.status !== 200) {
+                throw new Error(`Subscription create failed: ${res.status} ${res.text || ''}`.trim());
               }
 
               // Parse response to get new subscription ID
-              const response = await res.json();
+              const response = res.json;
 
               // Extract the actual subscription from the response
               // API returns {success: true, data: {...}} structure
@@ -3547,7 +3657,7 @@ export class TimelineContainer {
                 // Run in background to not block the UI
                 setTimeout(async () => {
                   try {
-                    console.log('[TimelineContainer] Running initial poll for new Naver subscription:', subscription.id);
+                    console.debug('[TimelineContainer] Running initial poll for new Naver subscription:', subscription.id);
                     await this.plugin.naverPoller?.runSingleSubscription(subscription.id);
                   } catch (error) {
                     console.warn('[TimelineContainer] Initial poll failed (will retry on next cycle):', error);
@@ -3597,21 +3707,22 @@ export class TimelineContainer {
               };
             }
 
-            console.log('[TimelineContainer] onUpdateSubscription:', {
+            console.debug('[TimelineContainer] onUpdateSubscription:', {
               authorPlatform: author.platform,
               passedOptions: options,
               updateBody,
             });
 
-            const res = await fetch(`${this.plugin.settings.workerUrl}/api/subscriptions/${author.subscriptionId}`, {
+            const res = await requestUrl({
+              url: `${this.plugin.settings.workerUrl}/api/subscriptions/${author.subscriptionId}`,
               method: 'PATCH',
               headers: this.getAuthHeaders(),
-              body: JSON.stringify(updateBody)
+              body: JSON.stringify(updateBody),
+              throw: false
             });
 
-            if (!res.ok) {
-              const text = await res.text();
-              throw new Error(`Subscription update failed: ${res.status} ${text || ''}`.trim());
+            if (res.status !== 200) {
+              throw new Error(`Subscription update failed: ${res.status} ${res.text || ''}`.trim());
             }
 
             // Update local author data
@@ -3666,16 +3777,7 @@ export class TimelineContainer {
                 cls: 'crawl-history-modal-container'
               });
 
-              // Make sure container is on top
-              modalContainer.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                z-index: 99999;
-                pointer-events: all;
-              `;
+              // Styles handled by .crawl-history-modal-container CSS class
 
               // Store panel reference for cleanup
               let historyPanel: any = null;
@@ -3738,15 +3840,18 @@ export class TimelineContainer {
                     limit: '10'
                   });
 
-                  const res = await fetch(`${this.plugin.settings.workerUrl}/api/subscriptions/${subscriptionId}/runs?${params}`, {
-                    headers: this.getAuthHeaders()
+                  const res = await requestUrl({
+                    url: `${this.plugin.settings.workerUrl}/api/subscriptions/${subscriptionId}/runs?${params}`,
+                    method: 'GET',
+                    headers: this.getAuthHeaders(),
+                    throw: false
                   });
 
-                  if (!res.ok) {
+                  if (res.status !== 200) {
                     throw new Error(`Failed to fetch history: ${res.status}`);
                   }
 
-                  const response = await res.json();
+                  const response = res.json;
                   return response.data?.runs || [];
                 }
               });
@@ -4758,7 +4863,7 @@ export class TimelineContainer {
               // Wait for MetadataCache to update after file modification
               await new Promise<void>((resolve) => {
                 const handler = (modifiedFile: unknown) => {
-                  if ((modifiedFile as TFile).path === file.path) {
+                  if (modifiedFile instanceof TFile && modifiedFile.path === file.path) {
                     this.app.metadataCache.off('changed', handler);
                     resolve();
                   }
@@ -5008,9 +5113,8 @@ export class TimelineContainer {
       case 'create':
       case 'modify': {
         const file = this.vault.getAbstractFileByPath(filePath);
-        if (!file || !('stat' in file)) return;
-        const tFile = file as TFile;
-        const entry = await this.postDataParser.buildIndexEntry(tFile);
+        if (!file || !(file instanceof TFile)) return;
+        const entry = await this.postDataParser.buildIndexEntry(file);
         if (entry) {
           this.postIndexService.setEntry(entry);
           this.searchIndexService.addEntry(entry);
@@ -5045,8 +5149,8 @@ export class TimelineContainer {
           this.searchIndexService.removeEntry(oldPath);
           // Re-parse for search index with new path
           const file = this.vault.getAbstractFileByPath(filePath);
-          if (file && 'stat' in file) {
-            const entry = await this.postDataParser.buildIndexEntry(file as TFile);
+          if (file && file instanceof TFile) {
+            const entry = await this.postDataParser.buildIndexEntry(file);
             if (entry) {
               this.searchIndexService.addEntry(entry);
             }
@@ -5420,26 +5524,11 @@ export class TimelineContainer {
    */
   private renderGalleryGroupControls(): void {
     const groupControlsContainer = this.containerEl.createDiv('gallery-group-controls');
-    groupControlsContainer.style.cssText = 'display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: 16px; padding-right: 16px; position: relative;';
+    // Styles handled by .gallery-group-controls CSS class
 
     // Dropdown button (minimal, no border, subtle)
     const dropdownBtn = groupControlsContainer.createEl('button');
-    dropdownBtn.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 8px;
-      font-size: 12px;
-      border-radius: 4px;
-      border: none !important;
-      outline: none !important;
-      box-shadow: none !important;
-      background: transparent;
-      color: var(--text-muted);
-      cursor: pointer;
-      transition: all 0.15s ease;
-      font-weight: 400;
-    `;
+    // Styles handled by .gallery-group-controls > button CSS rule
 
     // Remove any default button styles
     dropdownBtn.classList.remove('clickable-icon', 'mod-clickable');
@@ -5454,31 +5543,32 @@ export class TimelineContainer {
     };
 
     const updateButtonText = () => {
-      dropdownBtn.innerHTML = `
-        <span style="opacity: 0.7;">Group by:</span>
-        <span style="color: var(--text-normal);">${getGroupLabel(this.galleryGroupBy)}</span>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.6;"><polyline points="6 9 12 15 18 9"></polyline></svg>
-      `;
+      dropdownBtn.empty();
+      const span1 = dropdownBtn.createSpan({ text: 'Group by:' });
+      span1.addClass('tc-group-label-dim');
+      const span2 = dropdownBtn.createSpan({ text: getGroupLabel(this.galleryGroupBy) });
+      span2.addClass('tc-group-value');
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('width', '12');
+      svg.setAttribute('height', '12');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke', 'currentColor');
+      svg.setAttribute('stroke-width', '2');
+      svg.setAttribute('stroke-linecap', 'round');
+      svg.setAttribute('stroke-linejoin', 'round');
+      svg.classList.add('tc-group-chevron');
+      const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      polyline.setAttribute('points', '6 9 12 15 18 9');
+      svg.appendChild(polyline);
+      dropdownBtn.appendChild(svg);
     };
 
     updateButtonText();
 
     // Dropdown menu (minimal, no border, subtle shadow)
     const dropdownMenu = groupControlsContainer.createDiv('gallery-group-dropdown-menu');
-    dropdownMenu.style.cssText = `
-      position: absolute;
-      top: calc(100% + 4px);
-      right: 0;
-      min-width: 120px;
-      background: var(--background-primary);
-      border: none;
-      outline: none;
-      border-radius: 6px;
-      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-      padding: 4px;
-      display: none;
-      z-index: 1000;
-    `;
+    // Styles handled by .gallery-group-dropdown-menu CSS class
 
     const options: Array<{ label: string; type: 'none' | 'author' | 'post' | 'author-post' }> = [
       { label: 'None', type: 'none' },
@@ -5498,55 +5588,49 @@ export class TimelineContainer {
 
         // Create option container with checkmark
         const optionContent = document.createElement('div');
-        optionContent.style.cssText = 'display: flex; align-items: center; justify-content: space-between; width: 100%;';
+        optionContent.className = 'tc-option-content';
 
         const labelSpan = document.createElement('span');
         labelSpan.textContent = option.label;
-        labelSpan.style.cssText = `font-size: 12px; color: ${isActive ? 'var(--text-normal)' : 'var(--text-muted)'};`;
+        labelSpan.className = isActive ? 'tc-option-label-active' : 'tc-option-label';
         optionContent.appendChild(labelSpan);
 
         if (isActive) {
           const checkmark = document.createElement('span');
-          checkmark.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--interactive-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+          const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          svg.setAttribute('width', '14');
+          svg.setAttribute('height', '14');
+          svg.setAttribute('viewBox', '0 0 24 24');
+          svg.setAttribute('fill', 'none');
+          svg.setAttribute('stroke', 'var(--interactive-accent)');
+          svg.setAttribute('stroke-width', '2');
+          svg.setAttribute('stroke-linecap', 'round');
+          svg.setAttribute('stroke-linejoin', 'round');
+          const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+          polyline.setAttribute('points', '20 6 9 17 4 12');
+          svg.appendChild(polyline);
+          checkmark.appendChild(svg);
           optionContent.appendChild(checkmark);
         }
 
         optionEl.appendChild(optionContent);
 
-        optionEl.style.cssText = `
-          width: 100%;
-          text-align: left;
-          padding: 6px 10px;
-          border-radius: 4px;
-          border: none !important;
-          outline: none !important;
-          box-shadow: none !important;
-          background: ${isActive ? 'var(--background-modifier-hover)' : 'transparent'};
-          cursor: pointer;
-          transition: background 0.1s ease;
-        `;
+        // Styles handled by .gallery-group-dropdown-menu > button CSS rule
+        if (isActive) {
+          optionEl.addClass('tc-option-active');
+        }
 
         // Remove any default button styles
         optionEl.classList.remove('clickable-icon', 'mod-clickable');
 
-        optionEl.addEventListener('mouseenter', () => {
-          if (!isActive) {
-            optionEl.style.background = 'var(--background-modifier-hover)';
-          }
-        });
-
-        optionEl.addEventListener('mouseleave', () => {
-          if (!isActive) {
-            optionEl.style.background = 'transparent';
-          }
-        });
+        // Hover handled by CSS :hover rule on .gallery-group-dropdown-menu > button
 
         optionEl.addEventListener('click', async () => {
           this.galleryGroupBy = option.type;
           updateButtonText();
-          dropdownMenu.style.display = 'none';
+          dropdownMenu.removeClass('tc-dropdown-open');
           isOpen = false;
-          dropdownBtn.style.background = 'transparent';
+          dropdownBtn.removeClass('tc-btn-open');
           await this.renderGalleryContent();
         });
       });
@@ -5564,11 +5648,11 @@ export class TimelineContainer {
       if (isOpen) {
         // Recreate menu options to ensure proper selection state
         recreateMenuOptions();
-        dropdownMenu.style.display = 'block';
-        dropdownBtn.style.background = 'var(--background-modifier-hover)';
+        dropdownMenu.addClass('tc-dropdown-open');
+        dropdownBtn.addClass('tc-btn-open');
       } else {
-        dropdownMenu.style.display = 'none';
-        dropdownBtn.style.background = 'transparent';
+        dropdownMenu.removeClass('tc-dropdown-open');
+        dropdownBtn.removeClass('tc-btn-open');
       }
     });
 
@@ -5576,8 +5660,8 @@ export class TimelineContainer {
     const closeDropdown = () => {
       if (isOpen) {
         isOpen = false;
-        dropdownMenu.style.display = 'none';
-        dropdownBtn.style.background = 'transparent';
+        dropdownMenu.removeClass('tc-dropdown-open');
+        dropdownBtn.removeClass('tc-btn-open');
       }
     };
 
@@ -5589,18 +5673,7 @@ export class TimelineContainer {
       document.removeEventListener('click', closeDropdown, true);
     });
 
-    // Hover effect
-    dropdownBtn.addEventListener('mouseenter', () => {
-      if (!isOpen) {
-        dropdownBtn.style.background = 'var(--background-modifier-hover)';
-      }
-    });
-
-    dropdownBtn.addEventListener('mouseleave', () => {
-      if (!isOpen) {
-        dropdownBtn.style.background = 'transparent';
-      }
-    });
+    // Hover handled by CSS :hover rule on .gallery-group-controls > button
   }
 
   /**
@@ -5630,7 +5703,7 @@ export class TimelineContainer {
 
     // Create new gallery container
     const galleryContainer = this.containerEl.createDiv('media-gallery-container');
-    galleryContainer.style.cssText = 'width: 100%; overflow-y: auto; opacity: 0; transition: opacity 0.2s ease-in;';
+    galleryContainer.addClass('tc-gallery-fadein');
 
     // If existing gallery exists, insert new one and fade transition
     if (existingGallery) {
@@ -5641,7 +5714,7 @@ export class TimelineContainer {
     const loadingEl = galleryContainer.createDiv({
       cls: 'media-gallery-loading'
     });
-    loadingEl.style.cssText = 'display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 200px; gap: 12px;';
+    // Loading styles handled by .media-gallery-loading CSS class
 
     const spinner = loadingEl.createDiv('media-gallery-spinner');
     const loadingText = loadingEl.createDiv({
@@ -5660,7 +5733,8 @@ export class TimelineContainer {
       const filteredFiles = this.filteredPosts
         ?.map(post => {
           if (post.filePath) {
-            return this.vault.getAbstractFileByPath(post.filePath) as TFile;
+            const file = this.vault.getAbstractFileByPath(post.filePath);
+            return file instanceof TFile ? file : null;
           }
           return null;
         })
@@ -5683,7 +5757,7 @@ export class TimelineContainer {
 
         // Fade in new gallery
         requestAnimationFrame(() => {
-          galleryContainer.style.opacity = '1';
+          galleryContainer.addClass('tc-gallery-visible');
           // Remove old gallery after fade
           if (existingGallery) {
             setTimeout(() => existingGallery.remove(), 200);
@@ -5697,12 +5771,11 @@ export class TimelineContainer {
 
       // Fade in new gallery, fade out old
       requestAnimationFrame(() => {
-        galleryContainer.style.opacity = '1';
+        galleryContainer.addClass('tc-gallery-visible');
 
         // Remove old gallery after fade completes
         if (existingGallery) {
-          (existingGallery as HTMLElement).style.transition = 'opacity 0.2s ease-out';
-          (existingGallery as HTMLElement).style.opacity = '0';
+          (existingGallery as HTMLElement).addClass('tc-gallery-fadeout');
           setTimeout(() => existingGallery.remove(), 200);
         }
       });
@@ -5716,7 +5789,7 @@ export class TimelineContainer {
 
       // Fade in error state
       requestAnimationFrame(() => {
-        galleryContainer.style.opacity = '1';
+        galleryContainer.addClass('tc-gallery-visible');
         if (existingGallery) {
           setTimeout(() => existingGallery.remove(), 200);
         }

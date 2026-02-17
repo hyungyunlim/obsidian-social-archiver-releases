@@ -341,7 +341,7 @@ export class WebtoonsLocalService {
    */
   async fetchRssFeed(urlInfo: WebtoonsUrlInfo): Promise<WebtoonsRssFeed> {
     const rssUrl = this.buildRssUrl(urlInfo);
-    console.log('[WebtoonsLocal] Fetching RSS feed:', rssUrl);
+    console.debug('[WebtoonsLocal] Fetching RSS feed:', rssUrl);
 
     const response = await requestUrl({
       url: rssUrl,
@@ -426,7 +426,7 @@ export class WebtoonsLocalService {
    */
   async fetchSeriesInfo(urlInfo: WebtoonsUrlInfo): Promise<WebtoonsSeriesInfo> {
     const seriesUrl = this.buildSeriesUrl(urlInfo);
-    console.log('[WebtoonsLocal] Fetching series info:', seriesUrl);
+    console.debug('[WebtoonsLocal] Fetching series info:', seriesUrl);
 
     const response = await requestUrl({
       url: seriesUrl,
@@ -698,7 +698,7 @@ export class WebtoonsLocalService {
     const baseUrl = this.buildSeriesUrl(urlInfo);
     const pageUrl = page > 1 ? `${baseUrl}&page=${page}` : baseUrl;
 
-    console.log('[WebtoonsLocal] Fetching episode list page:', pageUrl);
+    console.debug('[WebtoonsLocal] Fetching episode list page:', pageUrl);
 
     const response = await requestUrl({
       url: pageUrl,
@@ -826,7 +826,7 @@ export class WebtoonsLocalService {
    * @param urlInfo - URL info object
    */
   async fetchAllEpisodes(urlInfo: WebtoonsUrlInfo): Promise<WebtoonsEpisode[]> {
-    console.log('[WebtoonsLocal] Fetching all episodes for:', urlInfo.titleNo);
+    console.debug('[WebtoonsLocal] Fetching all episodes for:', urlInfo.titleNo);
 
     const allEpisodes: WebtoonsEpisode[] = [];
     const seenEpisodes = new Set<number>();
@@ -869,7 +869,7 @@ export class WebtoonsLocalService {
     // Sort by episode number (newest first)
     allEpisodes.sort((a, b) => b.episodeNo - a.episodeNo);
 
-    console.log('[WebtoonsLocal] Fetched total episodes:', allEpisodes.length);
+    console.debug('[WebtoonsLocal] Fetched total episodes:', allEpisodes.length);
     return allEpisodes;
   }
 
@@ -887,7 +887,7 @@ export class WebtoonsLocalService {
     episodeNo: number
   ): Promise<WebtoonsEpisodeDetail> {
     const viewerUrl = this.buildEpisodeUrl(urlInfo, episodeNo);
-    console.log('[WebtoonsLocal] Fetching episode detail:', viewerUrl);
+    console.debug('[WebtoonsLocal] Fetching episode detail:', viewerUrl);
 
     const response = await requestUrl({
       url: viewerUrl,
@@ -1017,7 +1017,7 @@ export class WebtoonsLocalService {
       }
     }
 
-    console.log(`[WebtoonsLocal] Parsed episode ${episodeNo}: ${imageUrls.length} images found`);
+    console.debug(`[WebtoonsLocal] Parsed episode ${episodeNo}: ${imageUrls.length} images found`);
 
     return {
       titleNo: urlInfo.titleNo,
@@ -1069,7 +1069,7 @@ export class WebtoonsLocalService {
     // Request more posts to fill up to limit after combining with tops
     const apiUrl = `${API_BASE}/p/api/community/v1/page/${pageId}/posts/search?categoryId=&pinRepresentation=distinct&displayBlindCommentAsService=false&prevSize=0&nextSize=${limit}`;
 
-    console.log('[WebtoonsLocal] Fetching best comments:', apiUrl);
+    console.debug('[WebtoonsLocal] Fetching best comments:', apiUrl);
 
     try {
       const response = await requestUrl({
@@ -1123,7 +1123,7 @@ export class WebtoonsLocalService {
         ...uniquePosts.slice(0, remaining)
       ];
 
-      console.log(`[WebtoonsLocal] Fetched ${bestComments.length} comments (${topsComments.length} tops + ${Math.min(remaining, uniquePosts.length)} posts), total: ${totalCount}`);
+      console.debug(`[WebtoonsLocal] Fetched ${bestComments.length} comments (${topsComments.length} tops + ${Math.min(remaining, uniquePosts.length)} posts), total: ${totalCount}`);
       return { comments: bestComments, totalCount };
     } catch (error) {
       console.warn('[WebtoonsLocal] Error fetching comments:', error);

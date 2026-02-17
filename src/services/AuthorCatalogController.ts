@@ -317,7 +317,7 @@ export class AuthorCatalogController {
 
     // Concurrent guard — prevents duplicate vault scans across instances
     if (isAuthorLoadInProgress()) {
-      console.log('[AuthorCatalogController] loadAuthors SKIPPED (concurrent load in progress)');
+      console.debug('[AuthorCatalogController] loadAuthors SKIPPED (concurrent load in progress)');
       const cachedState = get(store.state);
       if (cachedState.hasVaultSnapshot) {
         return cachedState.authors;
@@ -363,7 +363,7 @@ export class AuthorCatalogController {
 
       // Stale check
       if (isAuthorLoadInProgress() && myGeneration !== getAuthorLoadGeneration()) {
-        console.log(
+        console.debug(
           '[AuthorCatalogController] loadAuthors STALE — discarding results (generation',
           myGeneration,
           'superseded by',

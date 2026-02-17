@@ -83,36 +83,25 @@ export class WebtoonEpisodeSelectModal extends Modal {
 
     // Modal size
     if (Platform.isMobile) {
-      modalEl.style.setProperty('width', '95vw', 'important');
-      modalEl.style.setProperty('max-width', '95vw', 'important');
-      modalEl.style.setProperty('height', '85vh', 'important');
-      modalEl.style.setProperty('max-height', '85vh', 'important');
-      contentEl.style.paddingLeft = '8px';
-      contentEl.style.paddingRight = '8px';
+      modalEl.addClass('wesm-modal--mobile');
+      contentEl.addClass('wesm-content--mobile');
     } else {
-      modalEl.style.setProperty('width', '500px', 'important');
-      modalEl.style.setProperty('max-width', '500px', 'important');
-      modalEl.style.setProperty('height', '80vh', 'important');
-      modalEl.style.setProperty('max-height', '80vh', 'important');
+      modalEl.addClass('wesm-modal--desktop');
     }
 
     // Main layout
-    contentEl.style.cssText = 'display: flex; flex-direction: column; height: 100%; padding: 0;';
+    contentEl.addClass('sa-flex-col', 'sa-h-full', 'wesm-content-layout');
 
     // Header
     this.renderHeader(contentEl);
 
     // Error container (hidden by default)
     this.errorContainer = contentEl.createDiv({ cls: 'webtoon-error-container' });
-    this.errorContainer.style.display = 'none';
+    this.errorContainer.addClass('sa-hidden');
 
     // Episode list (scrollable)
     this.episodeListContainer = contentEl.createDiv({ cls: 'webtoon-episode-list' });
-    this.episodeListContainer.style.cssText = `
-      flex: 1;
-      overflow-y: auto;
-      padding: 8px 16px;
-    `;
+    this.episodeListContainer.addClass('sa-flex-1', 'sa-overflow-y-auto', 'sa-py-8', 'sa-px-16');
     this.renderEpisodeList();
 
     // Footer
@@ -134,46 +123,38 @@ export class WebtoonEpisodeSelectModal extends Modal {
 
   private renderHeader(container: HTMLElement): void {
     const header = container.createDiv({ cls: 'webtoon-header' });
-    header.style.cssText = `
-      padding: 16px;
-      border-bottom: 1px solid var(--background-modifier-border);
-      flex-shrink: 0;
-    `;
+    header.addClass('sa-p-16', 'sa-border-b', 'sa-flex-shrink-0');
 
     // Title
     const titleRow = header.createDiv();
-    titleRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;';
+    titleRow.addClass('sa-flex-between', 'sa-mb-8');
 
     const title = titleRow.createEl('h2');
-    title.style.cssText = 'margin: 0; font-size: var(--font-ui-medium);';
+    title.addClass('sa-m-0', 'sa-text-md');
     title.setText(this.multiSelect ? 'Select Episodes' : 'Select Episode');
 
     // Series info
     const seriesRow = header.createDiv();
-    seriesRow.style.cssText = 'display: flex; align-items: center; gap: 10px;';
+    seriesRow.addClass('sa-flex-row', 'sa-gap-10');
 
     // Mini thumbnail
     if (this.seriesInfo.thumbnailUrl) {
       const thumb = seriesRow.createDiv();
-      thumb.style.cssText = `
-        width: 36px;
-        height: 36px;
-        border-radius: 6px;
-        overflow: hidden;
-        flex-shrink: 0;
-      `;
+      thumb.addClass('sa-rounded-6', 'sa-overflow-hidden', 'sa-flex-shrink-0');
+      thumb.setCssProps({'--sa-width': '36px', '--sa-height': '36px'});
+      thumb.addClass('sa-dynamic-width', 'sa-dynamic-height');
       const img = thumb.createEl('img');
       img.src = this.seriesInfo.thumbnailUrl;
-      img.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+      img.addClass('sa-cover');
     }
 
     const seriesInfo = seriesRow.createDiv();
     const seriesTitle = seriesInfo.createDiv();
-    seriesTitle.style.cssText = 'font-weight: 500; color: var(--text-normal); font-size: var(--font-ui-small);';
+    seriesTitle.addClass('sa-font-medium', 'sa-text-normal', 'sa-text-sm');
     seriesTitle.setText(this.seriesInfo.titleName);
 
     const seriesMeta = seriesInfo.createDiv();
-    seriesMeta.style.cssText = 'font-size: var(--font-ui-smaller); color: var(--text-muted);';
+    seriesMeta.addClass('sa-text-xs', 'sa-text-muted');
     const metaParts: string[] = [];
     if (this.seriesInfo.publishDay) metaParts.push(this.seriesInfo.publishDay);
     metaParts.push(`${this.seriesInfo.totalEpisodes} episodes`);
@@ -182,14 +163,7 @@ export class WebtoonEpisodeSelectModal extends Modal {
     // Selection count (if multi-select)
     if (this.multiSelect) {
       const selectionInfo = header.createDiv({ cls: 'webtoon-selection-info' });
-      selectionInfo.style.cssText = `
-        margin-top: 8px;
-        padding: 6px 10px;
-        background: var(--background-secondary);
-        border-radius: 6px;
-        font-size: var(--font-ui-smaller);
-        color: var(--text-muted);
-      `;
+      selectionInfo.addClass('sa-mt-8', 'sa-py-6', 'sa-px-10', 'sa-bg-secondary', 'sa-rounded-6', 'sa-text-xs', 'sa-text-muted');
       this.updateSelectionInfo(selectionInfo);
     }
   }
@@ -220,97 +194,93 @@ export class WebtoonEpisodeSelectModal extends Modal {
       const isPaid = episode.charge;
       const isSelected = this.selectedEpisodes.has(episode.no);
 
-      item.style.cssText = `
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 10px 12px;
-        border-radius: 8px;
-        margin-bottom: 6px;
-        cursor: ${isPaid ? 'not-allowed' : 'pointer'};
-        background: ${isSelected ? 'var(--interactive-accent)' : 'var(--background-secondary)'};
-        opacity: ${isPaid ? '0.5' : '1'};
-        transition: background 0.15s ease;
-      `;
+      item.addClass('sa-flex-row', 'sa-gap-12', 'sa-p-10', 'sa-rounded-8', 'sa-mb-8', 'sa-transition-bg');
+      if (!isPaid) {
+        item.addClass('sa-clickable');
+      } else {
+        item.addClass('wesm-episode-item--disabled');
+      }
+      if (isSelected) {
+        item.addClass('sa-bg-accent');
+      } else {
+        item.addClass('sa-bg-secondary');
+      }
+      if (isPaid) {
+        item.addClass('sa-opacity-50');
+      }
 
       if (!isPaid) {
         item.addEventListener('click', () => this.toggleEpisode(episode.no, item));
         item.addEventListener('mouseenter', () => {
           if (!this.selectedEpisodes.has(episode.no)) {
-            item.style.background = 'var(--background-modifier-hover)';
+            item.removeClass('sa-bg-secondary');
+            item.addClass('sa-bg-hover');
           }
         });
         item.addEventListener('mouseleave', () => {
-          item.style.background = this.selectedEpisodes.has(episode.no)
-            ? 'var(--interactive-accent)'
-            : 'var(--background-secondary)';
+          if (this.selectedEpisodes.has(episode.no)) {
+            item.removeClass('sa-bg-hover');
+            item.addClass('sa-bg-accent');
+          } else {
+            item.removeClass('sa-bg-hover');
+            item.addClass('sa-bg-secondary');
+          }
         });
       }
 
       // Thumbnail
       const thumb = item.createDiv({ cls: 'episode-thumb' });
-      thumb.style.cssText = `
-        width: 48px;
-        height: 48px;
-        border-radius: 6px;
-        overflow: hidden;
-        flex-shrink: 0;
-        background: var(--background-modifier-border);
-      `;
+      thumb.addClass('sa-rounded-6', 'sa-overflow-hidden', 'sa-flex-shrink-0');
+      thumb.setCssProps({'--sa-width': '48px', '--sa-height': '48px', '--sa-bg': 'var(--background-modifier-border)'});
+      thumb.addClass('sa-dynamic-width', 'sa-dynamic-height', 'sa-dynamic-bg');
 
       if (episode.thumbnailUrl) {
         const img = thumb.createEl('img');
         img.src = episode.thumbnailUrl;
-        img.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+        img.addClass('sa-cover');
       }
 
       // Episode info
       const info = item.createDiv({ cls: 'episode-info' });
-      info.style.cssText = 'flex: 1; min-width: 0;';
+      info.addClass('sa-flex-1', 'sa-min-w-0');
 
       const titleRow = info.createDiv();
-      titleRow.style.cssText = `
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        color: ${isSelected ? 'var(--text-on-accent)' : 'var(--text-normal)'};
-      `;
+      titleRow.addClass('sa-flex-row', 'sa-gap-6');
+      if (isSelected) {
+        titleRow.setCssProps({'--sa-color': 'var(--text-on-accent)'});
+        titleRow.addClass('sa-dynamic-color');
+      } else {
+        titleRow.addClass('sa-text-normal');
+      }
 
       const episodeNum = titleRow.createSpan();
-      episodeNum.style.cssText = 'font-weight: 600; font-size: var(--font-ui-small);';
+      episodeNum.addClass('sa-font-semibold', 'sa-text-sm');
       episodeNum.setText(`Ep. ${episode.no}`);
 
       const subtitle = titleRow.createSpan();
-      subtitle.style.cssText = `
-        font-size: var(--font-ui-smaller);
-        color: ${isSelected ? 'var(--text-on-accent)' : 'var(--text-muted)'};
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      `;
+      subtitle.addClass('sa-text-xs', 'sa-truncate');
+      if (isSelected) {
+        subtitle.setCssProps({'--sa-color': 'var(--text-on-accent)'});
+        subtitle.addClass('sa-dynamic-color');
+      } else {
+        subtitle.addClass('sa-text-muted');
+      }
       subtitle.setText(episode.subtitle.replace(/^\d+화\s*/, ''));
 
       // Meta row (date, rating)
       const metaRow = info.createDiv();
-      metaRow.style.cssText = `
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 2px;
-        font-size: var(--font-ui-smaller);
-        color: ${isSelected ? 'var(--text-on-accent)' : 'var(--text-muted)'};
-      `;
+      metaRow.addClass('sa-flex-row', 'sa-gap-8', 'sa-mt-2', 'sa-text-xs');
+      if (isSelected) {
+        metaRow.setCssProps({'--sa-color': 'var(--text-on-accent)'});
+        metaRow.addClass('sa-dynamic-color');
+      } else {
+        metaRow.addClass('sa-text-muted');
+      }
 
       // Date or paid status
       if (isPaid) {
         const paidBadge = metaRow.createSpan();
-        paidBadge.style.cssText = `
-          padding: 1px 6px;
-          background: var(--text-error);
-          color: white;
-          border-radius: 3px;
-          font-size: 10px;
-        `;
+        paidBadge.addClass('wesm-paid-badge', 'sa-rounded-4');
         paidBadge.setText(episode.serviceDateDescription.includes('무료')
           ? episode.serviceDateDescription
           : 'Paid');
@@ -321,53 +291,57 @@ export class WebtoonEpisodeSelectModal extends Modal {
       // Star rating
       if (episode.starScore !== undefined && episode.starScore > 0) {
         const rating = metaRow.createSpan();
-        rating.innerHTML = `⭐ ${episode.starScore.toFixed(1)}`;
+        rating.textContent = `\u2B50 ${episode.starScore.toFixed(1)}`;
       }
 
       // Selection checkbox/indicator
       const indicator = item.createDiv({ cls: 'episode-indicator' });
-      indicator.style.cssText = `
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-      `;
+      indicator.addClass('sa-rounded-full', 'sa-flex-center', 'sa-flex-shrink-0');
+      indicator.setCssProps({'--sa-width': '24px', '--sa-height': '24px'});
+      indicator.addClass('sa-dynamic-width', 'sa-dynamic-height');
 
       if (isPaid) {
-        indicator.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="color: var(--text-muted);">
-          <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
-        </svg>`;
+        const lockSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        lockSvg.setAttribute('width', '16');
+        lockSvg.setAttribute('height', '16');
+        lockSvg.setAttribute('viewBox', '0 0 24 24');
+        lockSvg.setAttribute('fill', 'currentColor');
+        lockSvg.addClass('sa-text-muted');
+        const lockPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        lockPath.setAttribute('d', 'M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z');
+        lockSvg.appendChild(lockPath);
+        indicator.appendChild(lockSvg);
       } else if (isSelected) {
-        indicator.style.background = 'white';
-        indicator.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--interactive-accent)" stroke-width="3">
-          <polyline points="20 6 9 17 4 12"></polyline>
-        </svg>`;
+        indicator.addClass('wesm-indicator--checked');
+        const checkSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        checkSvg.setAttribute('width', '14');
+        checkSvg.setAttribute('height', '14');
+        checkSvg.setAttribute('viewBox', '0 0 24 24');
+        checkSvg.setAttribute('fill', 'none');
+        checkSvg.setAttribute('stroke', 'var(--interactive-accent)');
+        checkSvg.setAttribute('stroke-width', '3');
+        const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        polyline.setAttribute('points', '20 6 9 17 4 12');
+        checkSvg.appendChild(polyline);
+        indicator.appendChild(checkSvg);
       } else {
-        indicator.style.cssText += `
-          border: 2px solid var(--background-modifier-border);
-          background: var(--background-primary);
-        `;
+        indicator.addClass('sa-border', 'sa-bg-primary', 'wesm-indicator--empty');
       }
     });
 
     // Pagination controls
     if (totalPages > 1) {
       const pagination = this.episodeListContainer.createDiv({ cls: 'webtoon-pagination' });
-      pagination.style.cssText = `
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 8px;
-        padding: 12px 0;
-        margin-top: 8px;
-      `;
+      pagination.addClass('sa-flex-center', 'sa-gap-8', 'sa-py-12', 'sa-mt-8');
 
       // Previous button
       const prevBtn = pagination.createEl('button');
-      prevBtn.style.cssText = this.getPaginationButtonStyle(this.currentPage === 1);
+      prevBtn.addClass('sa-py-6', 'sa-px-12', 'sa-border', 'sa-text-xs', 'wesm-pagination-btn');
+      if (this.currentPage === 1) {
+        prevBtn.addClass('sa-bg-secondary', 'sa-text-muted', 'wesm-pagination-btn--disabled');
+      } else {
+        prevBtn.addClass('sa-bg-primary', 'sa-text-normal', 'sa-clickable');
+      }
       prevBtn.setText('← Prev');
       prevBtn.disabled = this.currentPage === 1;
       prevBtn.addEventListener('click', () => {
@@ -379,12 +353,17 @@ export class WebtoonEpisodeSelectModal extends Modal {
 
       // Page info
       const pageInfo = pagination.createSpan();
-      pageInfo.style.cssText = 'font-size: var(--font-ui-smaller); color: var(--text-muted); padding: 0 8px;';
+      pageInfo.addClass('sa-text-xs', 'sa-text-muted', 'sa-px-8');
       pageInfo.setText(`${this.currentPage} / ${totalPages}`);
 
       // Next button
       const nextBtn = pagination.createEl('button');
-      nextBtn.style.cssText = this.getPaginationButtonStyle(this.currentPage === totalPages);
+      nextBtn.addClass('sa-py-6', 'sa-px-12', 'sa-border', 'sa-text-xs', 'wesm-pagination-btn');
+      if (this.currentPage === totalPages) {
+        nextBtn.addClass('sa-bg-secondary', 'sa-text-muted', 'wesm-pagination-btn--disabled');
+      } else {
+        nextBtn.addClass('sa-bg-primary', 'sa-text-normal', 'sa-clickable');
+      }
       nextBtn.setText('Next →');
       nextBtn.disabled = this.currentPage === totalPages;
       nextBtn.addEventListener('click', () => {
@@ -396,26 +375,16 @@ export class WebtoonEpisodeSelectModal extends Modal {
     }
   }
 
-  private getPaginationButtonStyle(disabled: boolean): string {
-    return `
-      padding: 6px 12px;
-      border-radius: var(--button-radius);
-      border: 1px solid var(--background-modifier-border);
-      background: ${disabled ? 'var(--background-secondary)' : 'var(--background-primary)'};
-      color: ${disabled ? 'var(--text-muted)' : 'var(--text-normal)'};
-      font-size: var(--font-ui-smaller);
-      cursor: ${disabled ? 'not-allowed' : 'pointer'};
-    `;
-  }
-
   private toggleEpisode(episodeNo: number, itemEl: HTMLElement): void {
     if (this.multiSelect) {
       if (this.selectedEpisodes.has(episodeNo)) {
         this.selectedEpisodes.delete(episodeNo);
-        itemEl.style.background = 'var(--background-secondary)';
+        itemEl.removeClass('sa-bg-accent');
+        itemEl.addClass('sa-bg-secondary');
       } else {
         this.selectedEpisodes.add(episodeNo);
-        itemEl.style.background = 'var(--interactive-accent)';
+        itemEl.removeClass('sa-bg-secondary');
+        itemEl.addClass('sa-bg-accent');
       }
     } else {
       // Single select: clear previous and select new
@@ -431,47 +400,36 @@ export class WebtoonEpisodeSelectModal extends Modal {
   private updateSubmitButton(): void {
     if (this.submitBtn) {
       this.submitBtn.disabled = this.selectedEpisodes.size === 0;
-      this.submitBtn.style.opacity = this.selectedEpisodes.size === 0 ? '0.5' : '1';
+      if (this.selectedEpisodes.size === 0) {
+        this.submitBtn.addClass('sa-opacity-50');
+        this.submitBtn.removeClass('sa-opacity-100');
+      } else {
+        this.submitBtn.removeClass('sa-opacity-50');
+        this.submitBtn.addClass('sa-opacity-100');
+      }
     }
   }
 
   private showError(message: string): void {
     this.errorContainer.empty();
-    this.errorContainer.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 8px 16px;
-      margin: 0 16px 8px;
-      background: var(--background-modifier-error);
-      border-radius: 6px;
-    `;
+    this.errorContainer.removeClass('sa-hidden');
+    this.errorContainer.addClass('sa-flex-row', 'sa-gap-12', 'sa-py-8', 'sa-px-16', 'sa-mb-8', 'sa-rounded-6', 'wesm-error');
+    this.errorContainer.setCssProps({'--sa-bg': 'var(--background-modifier-error)'});
+    this.errorContainer.addClass('sa-dynamic-bg');
 
     const messageText = this.errorContainer.createDiv();
     messageText.textContent = message;
-    messageText.style.cssText = `
-      margin: 0;
-      color: var(--text-error);
-      font-size: var(--font-ui-small);
-    `;
+    messageText.addClass('sa-m-0', 'sa-text-error', 'sa-text-sm');
   }
 
   private hideError(): void {
-    this.errorContainer.style.display = 'none';
+    this.errorContainer.addClass('sa-hidden');
     this.errorContainer.empty();
   }
 
   private renderFooter(container: HTMLElement): void {
     const footer = container.createDiv({ cls: 'webtoon-footer' });
-    footer.style.cssText = `
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 16px;
-      border-top: 1px solid var(--background-modifier-border);
-      flex-shrink: 0;
-    `;
+    footer.addClass('sa-flex-between', 'sa-gap-8', 'sa-p-12', 'sa-flex-shrink-0', 'wesm-footer');
 
     // Left side: Select all (if multi-select)
     const leftSide = footer.createDiv();
@@ -479,15 +437,7 @@ export class WebtoonEpisodeSelectModal extends Modal {
       const freeEpisodes = this.episodes.filter(ep => !ep.charge);
       if (freeEpisodes.length > 0) {
         const selectAllBtn = leftSide.createEl('button');
-        selectAllBtn.style.cssText = `
-          padding: 6px 12px;
-          border-radius: var(--button-radius);
-          background: transparent;
-          color: var(--text-accent);
-          border: 1px solid var(--text-accent);
-          cursor: pointer;
-          font-size: var(--font-ui-smaller);
-        `;
+        selectAllBtn.addClass('sa-py-6', 'sa-px-12', 'sa-bg-transparent', 'sa-text-accent', 'sa-border', 'sa-clickable', 'sa-text-xs', 'wesm-select-all-btn');
         selectAllBtn.setText(this.selectedEpisodes.size === freeEpisodes.length ? 'Deselect All' : 'Select All Free');
         selectAllBtn.addEventListener('click', () => {
           if (this.selectedEpisodes.size === freeEpisodes.length) {
@@ -505,35 +455,21 @@ export class WebtoonEpisodeSelectModal extends Modal {
 
     // Right side: Cancel and Submit buttons
     const rightSide = footer.createDiv();
-    rightSide.style.cssText = 'display: flex; gap: 8px;';
+    rightSide.addClass('sa-flex', 'sa-gap-8');
 
     // Cancel button
     const cancelBtn = rightSide.createEl('button');
     cancelBtn.setText('Cancel');
-    cancelBtn.style.cssText = `
-      padding: 8px 16px;
-      border-radius: var(--button-radius);
-      background: var(--background-modifier-hover);
-      color: var(--text-normal);
-      border: none;
-      cursor: pointer;
-    `;
+    cancelBtn.addClass('sa-py-8', 'sa-px-16', 'sa-bg-hover', 'sa-text-normal', 'sa-clickable', 'wesm-cancel-btn');
     cancelBtn.addEventListener('click', () => this.close());
 
     // Submit button
     this.submitBtn = rightSide.createEl('button');
     this.submitBtn.setText(this.multiSelect ? 'Archive Selected' : 'Archive');
     this.submitBtn.disabled = true;
-    this.submitBtn.style.cssText = `
-      padding: 8px 16px;
-      border-radius: var(--button-radius);
-      background: #00DC64;
-      color: white;
-      border: none;
-      cursor: pointer;
-      font-weight: 500;
-      opacity: 0.5;
-    `;
+    this.submitBtn.addClass('sa-py-8', 'sa-px-16', 'sa-clickable', 'sa-font-medium', 'sa-opacity-50', 'wesm-submit-btn');
+    this.submitBtn.setCssProps({'--sa-bg': '#00DC64', '--sa-color': 'white'});
+    this.submitBtn.addClass('sa-dynamic-bg', 'sa-dynamic-color');
     this.submitBtn.addEventListener('click', () => void this.handleSubmit());
   }
 
@@ -547,7 +483,7 @@ export class WebtoonEpisodeSelectModal extends Modal {
 
     try {
       const selectedArray = Array.from(this.selectedEpisodes).sort((a, b) => a - b);
-      console.log('[WebtoonEpisodeSelectModal] Submitting selection:', selectedArray);
+      console.debug('[WebtoonEpisodeSelectModal] Submitting selection:', selectedArray);
 
       await this.onSubmit({
         selectedEpisodes: selectedArray,

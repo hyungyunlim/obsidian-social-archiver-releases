@@ -511,12 +511,12 @@ export default class SocialArchiverPlugin extends Plugin {
               includeFormattedTranscript: metadata.archiveOptions?.includeFormattedTranscript,
             }
           };
-          console.log(`[Social Archiver] Processing job ${jobId} from WebSocket metadata (cross-device)`);
+          console.debug(`[Social Archiver] Processing job ${jobId} from WebSocket metadata (cross-device)`);
         }
 
         if (!job) {
           // No local job and no valid metadata - will be recovered on next app start via server sync
-          console.log(`[Social Archiver] Job ${jobId} not found locally, will sync on restart`);
+          console.debug(`[Social Archiver] Job ${jobId} not found locally, will sync on restart`);
           return;
         }
 
@@ -887,7 +887,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
         // Verify this event is for us
         if (clientId !== this.settings.syncClientId) {
-          console.log('[Social Archiver] Ignoring sync event for different client:', clientId);
+          console.debug('[Social Archiver] Ignoring sync event for different client:', clientId);
           return;
         }
 
@@ -973,7 +973,7 @@ export default class SocialArchiverPlugin extends Plugin {
       // 2. Dedup guard: skip if we recently archived this URL locally
       const syncUrl = archive.originalUrl;
       if (this.hasRecentlyArchivedUrl(syncUrl)) {
-        console.log('[Social Archiver] Skipping duplicate sync for recently archived URL:', syncUrl);
+        console.debug('[Social Archiver] Skipping duplicate sync for recently archived URL:', syncUrl);
         if (!this.apiClient) {
           throw new Error('API client not initialized');
         }
@@ -1055,7 +1055,7 @@ export default class SocialArchiverPlugin extends Plugin {
         return;
       }
 
-      console.log(`[Social Archiver] Catch-up: ${pendingItems.length} pending sync item(s) found`);
+      console.debug(`[Social Archiver] Catch-up: ${pendingItems.length} pending sync item(s) found`);
       new Notice(`📱 Syncing ${pendingItems.length} missed archive(s) from mobile...`, 4000);
 
       let successCount = 0;
@@ -1067,7 +1067,7 @@ export default class SocialArchiverPlugin extends Plugin {
       }
 
       if (successCount > 0) {
-        console.log(`[Social Archiver] Catch-up complete: ${successCount}/${pendingItems.length} synced`);
+        console.debug(`[Social Archiver] Catch-up complete: ${successCount}/${pendingItems.length} synced`);
       }
     } catch (error) {
       console.error('[Social Archiver] Failed to process pending sync queue:', error);
@@ -1598,7 +1598,7 @@ export default class SocialArchiverPlugin extends Plugin {
         if (this.settings.naverCookie) {
           // Stop existing poller if any (prevent duplicates)
           if (this.naverPoller) {
-            console.log('[Social Archiver] Stopping existing NaverPoller before restart');
+            console.debug('[Social Archiver] Stopping existing NaverPoller before restart');
             this.naverPoller.stop();
           }
           this.naverPoller = new NaverSubscriptionPoller(this);
@@ -1610,7 +1610,7 @@ export default class SocialArchiverPlugin extends Plugin {
         {
           // Stop existing poller if any (prevent duplicates)
           if (this.brunchPoller) {
-            console.log('[Social Archiver] Stopping existing BrunchPoller before restart');
+            console.debug('[Social Archiver] Stopping existing BrunchPoller before restart');
             this.brunchPoller.stop();
           }
           this.brunchPoller = new BrunchSubscriptionPoller(this);
@@ -1622,7 +1622,7 @@ export default class SocialArchiverPlugin extends Plugin {
         {
           // Stop existing service if any (prevent duplicates)
           if (this.webtoonSyncService) {
-            console.log('[Social Archiver] Stopping existing WebtoonSyncService before restart');
+            console.debug('[Social Archiver] Stopping existing WebtoonSyncService before restart');
             this.webtoonSyncService.stop();
           }
           this.webtoonSyncService = new WebtoonSyncService(this);
@@ -1782,9 +1782,9 @@ export default class SocialArchiverPlugin extends Plugin {
 
     // Check if file exists
     const existingFile = this.app.vault.getAbstractFileByPath(filePath);
-    if (existingFile) {
+    if (existingFile && existingFile instanceof TFile) {
       // Update existing file
-      await this.app.vault.modify(existingFile as TFile, content);
+      await this.app.vault.modify(existingFile, content);
     } else {
       // Create new file
       await this.app.vault.create(filePath, content);
@@ -1910,7 +1910,7 @@ export default class SocialArchiverPlugin extends Plugin {
           const downloadedImages: Array<{ originalUrl: string; localPath: string }> = [];
           const totalImages = mediaToDownload.length;
 
-          console.log(`[Social Archiver] Downloading ${totalImages} webtoon images locally (subscription)`);
+          console.debug(`[Social Archiver] Downloading ${totalImages} webtoon images locally (subscription)`);
 
           for (let i = 0; i < totalImages; i++) {
             const media = mediaToDownload[i];
@@ -1942,7 +1942,7 @@ export default class SocialArchiverPlugin extends Plugin {
             }
           }
 
-          console.log(`[Social Archiver] Downloaded ${downloadedImages.length}/${totalImages} webtoon images`);
+          console.debug(`[Social Archiver] Downloaded ${downloadedImages.length}/${totalImages} webtoon images`);
 
           // Create a map of successful downloads by original URL
           const resultsByUrl = new Map(
@@ -2241,7 +2241,7 @@ export default class SocialArchiverPlugin extends Plugin {
       if (downloadMode !== 'text-only') {
         const videos = service.extractVideoMetadata(content);
         if (videos.length > 0) {
-          console.log(`[Social Archiver] Found ${videos.length} video(s) to download`);
+          console.debug(`[Social Archiver] Found ${videos.length} video(s) to download`);
           let videoCount = 0;
 
           for (const video of videos) {
@@ -2268,7 +2268,7 @@ export default class SocialArchiverPlugin extends Plugin {
                   content = content.replace(placeholder, `![[${videoPath}]]`);
 
                   videoCount++;
-                  console.log(`[Social Archiver] Downloaded video: ${videoQuality.name}`);
+                  console.debug(`[Social Archiver] Downloaded video: ${videoQuality.name}`);
                 }
               } else {
                 // If video fetch failed, replace placeholder with fallback text
@@ -2283,7 +2283,7 @@ export default class SocialArchiverPlugin extends Plugin {
           }
 
           if (videoCount > 0) {
-            console.log(`[Social Archiver] Downloaded ${videoCount} video(s)`);
+            console.debug(`[Social Archiver] Downloaded ${videoCount} video(s)`);
           }
         }
       }
@@ -2308,7 +2308,7 @@ export default class SocialArchiverPlugin extends Plugin {
             postData.author.name,
             this.settings.overwriteAuthorAvatar
           );
-          console.log(`[Social Archiver] Downloaded author avatar: ${localAvatarPath}`);
+          console.debug(`[Social Archiver] Downloaded author avatar: ${localAvatarPath}`);
         } catch (error) {
           console.warn('[Social Archiver] Failed to download author avatar:', error);
           // Continue without avatar
@@ -2455,14 +2455,14 @@ export default class SocialArchiverPlugin extends Plugin {
       if (existingFile && existingFile instanceof TFile) {
         // File already exists (re-archiving same post), update it instead
         await this.app.vault.modify(existingFile, fullDocument);
-        console.log(`[Social Archiver] Updated existing Naver cafe archive: ${newFilePath}`);
+        console.debug(`[Social Archiver] Updated existing Naver cafe archive: ${newFilePath}`);
       } else {
         // Create new file
         await this.app.vault.create(newFilePath, fullDocument);
       }
 
       const processingTime = Date.now() - startTime;
-      console.log(`[Social Archiver] Naver cafe archived locally in ${processingTime}ms`);
+      console.debug(`[Social Archiver] Naver cafe archived locally in ${processingTime}ms`);
 
       // Refresh timeline view
       this.refreshTimelineView();
@@ -2578,7 +2578,7 @@ export default class SocialArchiverPlugin extends Plugin {
       if (downloadMode !== 'text-only') {
         const videos = service.extractVideoMetadata(content);
         if (videos.length > 0) {
-          console.log(`[Social Archiver] Found ${videos.length} blog video(s) to download`);
+          console.debug(`[Social Archiver] Found ${videos.length} blog video(s) to download`);
           let videoCount = 0;
 
           for (const video of videos) {
@@ -2609,7 +2609,7 @@ export default class SocialArchiverPlugin extends Plugin {
                   }
 
                   videoCount++;
-                  console.log(`[Social Archiver] Downloaded blog video: ${videoQuality.name}`);
+                  console.debug(`[Social Archiver] Downloaded blog video: ${videoQuality.name}`);
                 }
               } else {
                 // If video fetch failed, replace placeholder with fallback text
@@ -2628,7 +2628,7 @@ export default class SocialArchiverPlugin extends Plugin {
           }
 
           if (videoCount > 0) {
-            console.log(`[Social Archiver] Downloaded ${videoCount} blog video(s)`);
+            console.debug(`[Social Archiver] Downloaded ${videoCount} blog video(s)`);
           }
         }
       }
@@ -2738,13 +2738,13 @@ export default class SocialArchiverPlugin extends Plugin {
       const existingFile = this.app.vault.getAbstractFileByPath(newFilePath);
       if (existingFile && existingFile instanceof TFile) {
         await this.app.vault.modify(existingFile, fullDocument);
-        console.log(`[Social Archiver] Updated existing Naver blog archive: ${newFilePath}`);
+        console.debug(`[Social Archiver] Updated existing Naver blog archive: ${newFilePath}`);
       } else {
         await this.app.vault.create(newFilePath, fullDocument);
       }
 
       const processingTime = Date.now() - startTime;
-      console.log(`[Social Archiver] Naver blog archived locally in ${processingTime}ms`);
+      console.debug(`[Social Archiver] Naver blog archived locally in ${processingTime}ms`);
 
       // Refresh timeline view
       this.refreshTimelineView();
@@ -2858,7 +2858,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
       // Process KakaoTV video placeholders if enabled
       if (downloadMode !== 'text-only' && postData.videos && postData.videos.length > 0) {
-        console.log(`[Social Archiver] Found ${postData.videos.length} Brunch video(s) to process`);
+        console.debug(`[Social Archiver] Found ${postData.videos.length} Brunch video(s) to process`);
         let videoCount = 0;
 
         for (const video of postData.videos) {
@@ -2888,7 +2888,7 @@ export default class SocialArchiverPlugin extends Plugin {
                 content = content.replace(placeholder, `![[${videoPath}]]`);
 
                 videoCount++;
-                console.log(`[Social Archiver] Downloaded Brunch video: ${video.videoId}`);
+                console.debug(`[Social Archiver] Downloaded Brunch video: ${video.videoId}`);
               }
             } else {
               // If video fetch failed, keep the placeholder or replace with fallback
@@ -2906,7 +2906,7 @@ export default class SocialArchiverPlugin extends Plugin {
         }
 
         if (videoCount > 0) {
-          console.log(`[Social Archiver] Downloaded ${videoCount} Brunch video(s)`);
+          console.debug(`[Social Archiver] Downloaded ${videoCount} Brunch video(s)`);
         }
       }
 
@@ -2921,10 +2921,10 @@ export default class SocialArchiverPlugin extends Plugin {
       const linkPreviews = extractedLinks.map(link => link.url);
 
       // Fetch and append comments if userId is available and commentCount > 0
-      console.log(`[Social Archiver] Comment fetch check - userId: ${postData.author.userId}, commentCount: ${postData.commentCount}`);
+      console.debug(`[Social Archiver] Comment fetch check - userId: ${postData.author.userId}, commentCount: ${postData.commentCount}`);
       if (postData.author.userId && postData.commentCount && postData.commentCount > 0) {
         try {
-          console.log(`[Social Archiver] Fetching ${postData.commentCount} Brunch comments for userId=${postData.author.userId}, postId=${postData.id}...`);
+          console.debug(`[Social Archiver] Fetching ${postData.commentCount} Brunch comments for userId=${postData.author.userId}, postId=${postData.id}...`);
           const comments = await service.fetchComments(postData.author.userId, postData.id);
           if (comments.length > 0) {
             // Extract all internal IDs from comments (both content mentions and author URLs)
@@ -2950,14 +2950,14 @@ export default class SocialArchiverPlugin extends Plugin {
             // Resolve internal IDs to real author usernames
             let authorMap = new Map<string, string>();
             if (allInternalIds.length > 0) {
-              console.log(`[Social Archiver] Resolving ${allInternalIds.length} internal author IDs...`);
+              console.debug(`[Social Archiver] Resolving ${allInternalIds.length} internal author IDs...`);
               authorMap = await service.resolveInternalIds(allInternalIds);
-              console.log(`[Social Archiver] Resolved ${authorMap.size} author IDs`);
+              console.debug(`[Social Archiver] Resolved ${authorMap.size} author IDs`);
             }
 
             const commentsMarkdown = this.formatBrunchCommentsToMarkdown(comments, authorMap);
             content += commentsMarkdown;
-            console.log(`[Social Archiver] Appended ${comments.length} comments to content`);
+            console.debug(`[Social Archiver] Appended ${comments.length} comments to content`);
           }
         } catch (error) {
           console.warn('[Social Archiver] Failed to fetch Brunch comments:', error);
@@ -2975,7 +2975,7 @@ export default class SocialArchiverPlugin extends Plugin {
             postData.author.name,
             this.settings.overwriteAuthorAvatar
           );
-          console.log(`[Social Archiver] Downloaded author avatar: ${localAvatarPath}`);
+          console.debug(`[Social Archiver] Downloaded author avatar: ${localAvatarPath}`);
         } catch (error) {
           console.warn('[Social Archiver] Failed to download author avatar:', error);
         }
@@ -3081,13 +3081,13 @@ export default class SocialArchiverPlugin extends Plugin {
       const existingFile = this.app.vault.getAbstractFileByPath(newFilePath);
       if (existingFile && existingFile instanceof TFile) {
         await this.app.vault.modify(existingFile, fullDocument);
-        console.log(`[Social Archiver] Updated existing Brunch archive: ${newFilePath}`);
+        console.debug(`[Social Archiver] Updated existing Brunch archive: ${newFilePath}`);
       } else {
         await this.app.vault.create(newFilePath, fullDocument);
       }
 
       const processingTime = Date.now() - startTime;
-      console.log(`[Social Archiver] Brunch post archived locally in ${processingTime}ms`);
+      console.debug(`[Social Archiver] Brunch post archived locally in ${processingTime}ms`);
 
       // Refresh timeline view
       this.refreshTimelineView();
@@ -3142,7 +3142,7 @@ export default class SocialArchiverPlugin extends Plugin {
       const service = new NaverWebtoonLocalService();
       const postData = await service.fetchEpisode(url);
 
-      console.log(`[Social Archiver] Fetched webtoon episode: ${postData.title} (${postData.media.length} images)`);
+      console.debug(`[Social Archiver] Fetched webtoon episode: ${postData.title} (${postData.media.length} images)`);
 
       // Format timestamps
       const timestamp = postData.timestamp;
@@ -3323,7 +3323,7 @@ ${contentParts.join('')}
       }
 
       const processingTime = Date.now() - startTime;
-      console.log(`[Social Archiver] Naver Webtoon archived locally in ${processingTime}ms`);
+      console.debug(`[Social Archiver] Naver Webtoon archived locally in ${processingTime}ms`);
 
       // Refresh timeline view
       this.refreshTimelineView();
@@ -4002,14 +4002,7 @@ ${contentParts.join('')}
           });
 
           // Show link preview
-          const previewContainer = contentEl.createDiv({ cls: 'batch-archive-preview' });
-          previewContainer.style.maxHeight = '200px';
-          previewContainer.style.overflow = 'auto';
-          previewContainer.style.marginBottom = '1em';
-          previewContainer.style.padding = '0.5em';
-          previewContainer.style.backgroundColor = 'var(--background-secondary)';
-          previewContainer.style.borderRadius = '4px';
-          previewContainer.style.fontSize = '0.85em';
+          const previewContainer = contentEl.createDiv({ cls: 'batch-archive-preview sa-preview-container' });
 
           const list = previewContainer.createEl('ol');
           for (const link of this.modalLinks.slice(0, 10)) {
@@ -4761,7 +4754,7 @@ ${contentParts.join('')}
               });
               this.archiveJobTracker.completeJob(job.id);
 
-              console.log(`[Social Archiver] Naver cafe archived locally: ${job.url}`);
+              console.debug(`[Social Archiver] Naver cafe archived locally: ${job.url}`);
               continue; // Skip Worker submission
             } catch (error) {
               console.error(`[Social Archiver] Naver cafe local fetch failed: ${job.url}`, error);
@@ -4793,7 +4786,7 @@ ${contentParts.join('')}
               });
               this.archiveJobTracker.completeJob(job.id);
 
-              console.log(`[Social Archiver] Naver blog archived locally: ${job.url}`);
+              console.debug(`[Social Archiver] Naver blog archived locally: ${job.url}`);
               continue; // Skip Worker submission
             } catch (error) {
               console.error(`[Social Archiver] Naver blog local fetch failed: ${job.url}`, error);
@@ -4825,7 +4818,7 @@ ${contentParts.join('')}
               });
               this.archiveJobTracker.completeJob(job.id);
 
-              console.log(`[Social Archiver] Brunch post archived locally: ${job.url}`);
+              console.debug(`[Social Archiver] Brunch post archived locally: ${job.url}`);
               continue; // Skip Worker submission
             } catch (error) {
               console.error(`[Social Archiver] Brunch local fetch failed: ${job.url}`, error);
@@ -4858,7 +4851,7 @@ ${contentParts.join('')}
               });
               this.archiveJobTracker.completeJob(job.id);
 
-              console.log(`[Social Archiver] Naver Webtoon archived locally: ${job.url}`);
+              console.debug(`[Social Archiver] Naver Webtoon archived locally: ${job.url}`);
               continue; // Skip Worker submission
             } catch (error) {
               console.error(`[Social Archiver] Naver Webtoon local fetch failed: ${job.url}`, error);
@@ -4869,7 +4862,7 @@ ${contentParts.join('')}
 
           // Submit archive request
           this.archiveJobTracker.markProcessing(job.id);
-          console.log(`[Social Archiver] 🔄 Submitting archive request for: ${job.url} (platform: ${job.platform})`);
+          console.debug(`[Social Archiver] 🔄 Submitting archive request for: ${job.url} (platform: ${job.platform})`);
           const response = await this.apiClient.submitArchive({
             url: job.url,
             options: {
@@ -4892,19 +4885,19 @@ ${contentParts.join('')}
           this.markRecentlyArchivedUrl(job.url);
 
           // DEBUG: Log full response for troubleshooting
-          console.log(`[Social Archiver] 📥 Archive response:`, JSON.stringify(response, null, 2));
+          console.debug(`[Social Archiver] 📥 Archive response:`, JSON.stringify(response, null, 2));
 
           // Handle synchronous completion (Fediverse, Podcast, Naver, Naver Webtoon, cached YouTube)
           // These platforms return completed status immediately without polling
           if (response.status === 'completed' && response.result?.postData) {
-            console.log(`[Social Archiver] ✅ Synchronous completion detected for ${job.platform}`);
+            console.debug(`[Social Archiver] ✅ Synchronous completion detected for ${job.platform}`);
 
             // Use the same cross-path lock key as polling/WebSocket.
             // Without this, fast synchronous responses can race with ws:job_completed
             // and process the same job twice.
             const processingKey = response.jobId || job.metadata?.workerJobId || job.id;
             if (this.processingJobs.has(processingKey)) {
-              console.log(`[Social Archiver] ⏭️ Skipping synchronous completion for already-processing job: ${processingKey}`);
+              console.debug(`[Social Archiver] ⏭️ Skipping synchronous completion for already-processing job: ${processingKey}`);
               continue;
             }
             this.processingJobs.add(processingKey);
@@ -4927,10 +4920,10 @@ ${contentParts.join('')}
                 result: response.result,
               };
 
-              console.log(`[Social Archiver] 🔄 Processing completed job... (media count: ${response.result?.postData?.media?.length || 0})`);
+              console.debug(`[Social Archiver] 🔄 Processing completed job... (media count: ${response.result?.postData?.media?.length || 0})`);
               await this.processCompletedJob(job, jobStatusData);
               this.archiveJobTracker.completeJob(job.id);
-              console.log(`[Social Archiver] 🎉 Job ${job.id} completed synchronously`);
+              console.debug(`[Social Archiver] 🎉 Job ${job.id} completed synchronously`);
             } catch (processError) {
               console.error(`[Social Archiver] ❌ processCompletedJob failed:`, processError);
               console.error(`[Social Archiver] ❌ Error details:`, {
@@ -4948,7 +4941,7 @@ ${contentParts.join('')}
 
           // Handle series selection required (Naver Webtoon series URL)
           if (response.type === 'series_selection_required' || response.status === 'series_selection_required') {
-            console.log(`[Social Archiver] 📚 Series selection required for Naver Webtoon`);
+            console.debug(`[Social Archiver] 📚 Series selection required for Naver Webtoon`);
 
             // Mark job as failed with special message - user needs to use episode URL
             await this.pendingJobsManager.updateJob(job.id, {
@@ -4968,7 +4961,7 @@ ${contentParts.join('')}
           }
 
           // Update job with worker job ID and mark as processing (for async platforms)
-          console.log(`[Social Archiver] ⏳ Async processing - marking as processing, jobId: ${response.jobId}`);
+          console.debug(`[Social Archiver] ⏳ Async processing - marking as processing, jobId: ${response.jobId}`);
           await this.pendingJobsManager.updateJob(job.id, {
             status: 'processing',
             metadata: {
@@ -4997,7 +4990,7 @@ ${contentParts.join('')}
                 archiveOptions,
               });
 
-              console.log(`[Social Archiver] Registered pending job on server: ${response.jobId}`);
+              console.debug(`[Social Archiver] Registered pending job on server: ${response.jobId}`);
             } catch (serverError) {
               // Non-critical: log warning but continue
               // Job can still complete via local PendingJobsManager and WebSocket
@@ -5284,7 +5277,7 @@ ${contentParts.join('')}
         return;
       }
 
-      console.log(`[Social Archiver] Found ${response.jobs.length} completed jobs from server to process`);
+      console.debug(`[Social Archiver] Found ${response.jobs.length} completed jobs from server to process`);
 
       for (const serverJob of response.jobs) {
         try {
@@ -5304,7 +5297,7 @@ ${contentParts.join('')}
             // Process using existing logic (single-write: creates final file directly)
             await this.processCompletedJobFromServer(serverJob);
 
-            console.log(`[Social Archiver] Processed synced job from server: ${serverJob.jobId}`);
+            console.debug(`[Social Archiver] Processed synced job from server: ${serverJob.jobId}`);
           } finally {
             this.processingJobs.delete(serverJob.jobId);
           }
@@ -5401,7 +5394,7 @@ ${contentParts.join('')}
         // ========== STEP 2: Parse Current Post ==========
         const { PostDataParser } = await import('./components/timeline/parsers/PostDataParser');
         const parser = new PostDataParser(this.app.vault, this.app);
-        const currentPost = await parser.parseFile(parentFile as TFile);
+        const currentPost = await parser.parseFile(parentFile);
 
         if (!currentPost) {
           throw new Error('Failed to parse parent post');
@@ -5690,6 +5683,7 @@ ${contentParts.join('')}
 
               // Check if it's a blob URL (TikTok videos)
               if (mediaUrl.startsWith('blob:')) {
+                // NOTE: Using fetch() for blob: URLs - requestUrl() doesn't support blob: protocol
                 const response = await fetch(mediaUrl);
                 if (!response.ok) {
                   throw new Error(`Blob fetch failed: ${response.status} ${response.statusText}`);
@@ -5744,7 +5738,7 @@ ${contentParts.join('')}
               } else if (postData.platform === 'googlemaps' || mediaUrl.includes('maps.google') || mediaUrl.includes('staticmap')) {
                 // Google Maps: Skip static map images (require API key, can't proxy)
                 // The map is rendered dynamically in the timeline using Leaflet/OSM
-                console.log(`[Social Archiver] Skipping Google Maps static image: ${mediaUrl.substring(0, 100)}...`);
+                console.debug(`[Social Archiver] Skipping Google Maps static image: ${mediaUrl.substring(0, 100)}...`);
                 continue;
               } else {
                 // Download via Workers proxy to bypass CORS
@@ -5929,7 +5923,7 @@ ${contentParts.join('')}
       // Check if job still exists (might have been processed by WebSocket)
       const currentJob = await this.pendingJobsManager.getJob(pendingJob.id);
       if (!currentJob) {
-        console.log(`[Social Archiver] Job ${pendingJob.id} already processed, skipping failure handling`);
+        console.debug(`[Social Archiver] Job ${pendingJob.id} already processed, skipping failure handling`);
         return;
       }
 
@@ -6537,7 +6531,7 @@ ${contentParts.join('')}
         clientName,
         settings: {
           vaultName,
-          platform: navigator.platform,
+          platform: ObsidianPlatform.isMobile ? 'mobile' : 'desktop',
           deviceId: this.settings.deviceId,
         },
       });
@@ -6545,7 +6539,7 @@ ${contentParts.join('')}
       if (response.clientId) {
         this.settings.syncClientId = response.clientId;
         await this.saveSettings();
-        console.log('[Social Archiver] Registered sync client:', response.clientId);
+        console.debug('[Social Archiver] Registered sync client:', response.clientId);
         return { success: true, clientId: response.clientId };
       }
 
@@ -6577,7 +6571,7 @@ ${contentParts.join('')}
       await this.apiClient.deleteSyncClient(clientId);
       this.settings.syncClientId = '';
       await this.saveSettings();
-      console.log('[Social Archiver] Unregistered sync client:', clientId);
+      console.debug('[Social Archiver] Unregistered sync client:', clientId);
       return { success: true };
     } catch (error) {
       console.error('[Social Archiver] Sync client unregistration failed:', error);

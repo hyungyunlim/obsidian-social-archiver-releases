@@ -99,14 +99,8 @@ export class NaverSubscribeModal extends Modal {
 
     // Mobile modal size adjustments
     if (Platform.isMobile) {
-      modalEl.style.setProperty('width', '92vw', 'important');
-      modalEl.style.setProperty('max-width', '92vw', 'important');
-      modalEl.style.setProperty('height', 'auto', 'important');
-      modalEl.style.setProperty('max-height', '90vh', 'important');
-      modalEl.style.setProperty('overflow-y', 'auto', 'important');
-
-      contentEl.style.paddingLeft = '12px';
-      contentEl.style.paddingRight = '12px';
+      modalEl.addClass('am-modal--mobile');
+      contentEl.addClass('am-content--mobile');
     }
 
     // Title based on subscription type
@@ -119,7 +113,7 @@ export class NaverSubscribeModal extends Modal {
 
     // Error container (hidden by default)
     this.errorContainer = contentEl.createDiv({ cls: 'naver-error-container' });
-    this.errorContainer.style.display = 'none';
+    this.errorContainer.addClass('sa-hidden');
 
     // Options
     this.renderOptions(contentEl);
@@ -143,84 +137,59 @@ export class NaverSubscribeModal extends Modal {
 
   private renderProfileCard(container: HTMLElement): void {
     const card = container.createDiv({ cls: 'naver-profile-card' });
-    card.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px;
-      background: var(--background-secondary);
-      border-radius: 8px;
-      margin-bottom: 16px;
-    `;
+    card.addClass('sa-flex-row', 'sa-gap-12', 'sa-p-12', 'sa-bg-secondary', 'sa-rounded-8', 'sa-mb-16');
 
     // Avatar - use author avatar or Naver green
     const avatar = card.createDiv({ cls: 'naver-avatar' });
-    avatar.style.cssText = `
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
-      background: #03C75A;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      overflow: hidden;
-    `;
+    avatar.addClass('sa-rounded-full', 'sa-flex-center', 'sa-flex-shrink-0', 'sa-overflow-hidden');
+    avatar.setCssProps({'--sa-width': '44px', '--sa-height': '44px', '--sa-bg': '#03C75A'});
+    avatar.addClass('sa-dynamic-width', 'sa-dynamic-height', 'sa-dynamic-bg');
 
     if (this.author.avatar) {
       const img = avatar.createEl('img');
       img.src = this.author.avatar;
-      img.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+      img.addClass('sa-cover');
       img.onerror = () => {
         img.remove();
-        avatar.innerHTML = '<span style="color: white; font-weight: bold; font-size: 18px;">N</span>';
+        const span = avatar.createSpan({ text: 'N' });
+        span.addClass('nsm-avatar-letter');
       };
     } else {
-      avatar.innerHTML = '<span style="color: white; font-weight: bold; font-size: 18px;">N</span>';
+      const span = avatar.createSpan({ text: 'N' });
+      span.addClass('nsm-avatar-letter');
     }
 
     // Info
     const info = card.createDiv({ cls: 'naver-info' });
 
     const name = info.createDiv({ cls: 'naver-name' });
-    name.style.cssText = 'font-weight: 600; color: var(--text-normal);';
+    name.addClass('sa-font-semibold', 'sa-text-normal');
     const defaultName = this.subscriptionType === 'blog' ? 'Blog Author' : 'Cafe Member';
     name.setText(this.author.authorName || defaultName);
 
     const platform = info.createDiv({ cls: 'naver-platform' });
-    platform.style.cssText = 'font-size: var(--font-smaller); color: var(--text-muted); margin-top: 2px;';
+    platform.addClass('sa-text-sm', 'sa-text-muted', 'sa-mt-2');
     platform.setText(this.subscriptionType === 'blog' ? 'Naver Blog' : 'Naver Cafe');
 
     if (this.author.archiveCount > 0) {
       const stats = info.createDiv({ cls: 'naver-stats' });
-      stats.style.cssText = 'font-size: var(--font-smaller); color: var(--text-muted); margin-top: 2px;';
+      stats.addClass('sa-text-sm', 'sa-text-muted', 'sa-mt-2');
       stats.setText(`${this.author.archiveCount} archived posts`);
     }
   }
 
   private showError(message: string): void {
     this.errorContainer.empty();
-    this.errorContainer.style.cssText = `
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 8px 12px;
-      margin-bottom: 12px;
-    `;
+    this.errorContainer.removeClass('sa-hidden');
+    this.errorContainer.addClass('sa-flex-between', 'sa-gap-12', 'sa-py-8', 'sa-px-12', 'sa-mb-12');
 
     const messageText = this.errorContainer.createDiv();
     messageText.textContent = message;
-    messageText.style.cssText = `
-      margin: 0;
-      color: var(--text-error);
-      font-size: var(--font-ui-small);
-      line-height: 1.4;
-    `;
+    messageText.addClass('sa-m-0', 'sa-text-error', 'sa-text-sm', 'nsm-error-message');
   }
 
   private hideError(): void {
-    this.errorContainer.style.display = 'none';
+    this.errorContainer.addClass('sa-hidden');
     this.errorContainer.empty();
   }
 
@@ -229,29 +198,18 @@ export class NaverSubscribeModal extends Modal {
 
     if (Platform.isMobile) {
       // Mobile: Compact custom layout
-      optionsContainer.style.cssText = 'display: flex; flex-direction: column; gap: 14px;';
-
-      const rowStyle = 'display: flex; align-items: center; justify-content: space-between; gap: 12px;';
-      const labelStyle = 'font-size: var(--font-ui-small); color: var(--text-normal); flex-shrink: 0;';
-      const inputStyle = `
-        height: 28px;
-        padding: 0 8px;
-        border-radius: var(--input-radius);
-        border: 1px solid var(--background-modifier-border);
-        background: var(--background-modifier-form-field);
-        color: var(--text-normal);
-        font-size: var(--font-ui-smaller);
-        -webkit-appearance: none;
-      `;
+      optionsContainer.addClass('sa-flex-col', 'sa-gap-16');
 
       // Row 1: Max posts per run
       const maxPostsRow = optionsContainer.createDiv();
-      maxPostsRow.style.cssText = rowStyle;
+      maxPostsRow.addClass('sa-flex-between', 'sa-gap-12');
       const maxPostsLabel = maxPostsRow.createEl('label');
-      maxPostsLabel.style.cssText = labelStyle;
+      maxPostsLabel.addClass('sa-text-sm', 'sa-text-normal', 'sa-flex-shrink-0');
       maxPostsLabel.setText('Posts per run');
       const maxPostsInput = maxPostsRow.createEl('input', { type: 'number' });
-      maxPostsInput.style.cssText = inputStyle + 'width: 70px; text-align: center;';
+      maxPostsInput.addClass('sa-px-8', 'sa-text-xs', 'sa-text-center', 'sa-border', 'nsm-mobile-input');
+      maxPostsInput.setCssProps({'--sa-height': '28px', '--sa-width': '70px', '--sa-bg': 'var(--background-modifier-form-field)'});
+      maxPostsInput.addClass('sa-dynamic-height', 'sa-dynamic-width', 'sa-dynamic-bg', 'sa-text-normal');
       maxPostsInput.min = String(MAX_POSTS_PER_RUN.MIN);
       maxPostsInput.max = String(MAX_POSTS_PER_RUN.MAX);
       maxPostsInput.value = String(this.maxPostsPerRun);
@@ -263,12 +221,14 @@ export class NaverSubscribeModal extends Modal {
 
       // Row 2: Backfill days
       const backfillRow = optionsContainer.createDiv();
-      backfillRow.style.cssText = rowStyle;
+      backfillRow.addClass('sa-flex-between', 'sa-gap-12');
       const backfillLabel = backfillRow.createEl('label');
-      backfillLabel.style.cssText = labelStyle;
+      backfillLabel.addClass('sa-text-sm', 'sa-text-normal', 'sa-flex-shrink-0');
       backfillLabel.setText('Initial sync period');
       const backfillSelect = backfillRow.createEl('select');
-      backfillSelect.style.cssText = inputStyle + 'width: 110px;';
+      backfillSelect.addClass('sa-px-8', 'sa-text-xs', 'sa-border', 'nsm-mobile-input');
+      backfillSelect.setCssProps({'--sa-height': '28px', '--sa-width': '110px', '--sa-bg': 'var(--background-modifier-form-field)'});
+      backfillSelect.addClass('sa-dynamic-height', 'sa-dynamic-width', 'sa-dynamic-bg', 'sa-text-normal');
       BACKFILL_DAYS_OPTIONS.forEach(opt => {
         const option = backfillSelect.createEl('option', { value: String(opt.value), text: opt.label });
         if (opt.value === this.backfillDays) option.selected = true;
@@ -279,12 +239,14 @@ export class NaverSubscribeModal extends Modal {
 
       // Row 3: Keyword filter
       const keywordRow = optionsContainer.createDiv();
-      keywordRow.style.cssText = rowStyle;
+      keywordRow.addClass('sa-flex-between', 'sa-gap-12');
       const keywordLabel = keywordRow.createEl('label');
-      keywordLabel.style.cssText = labelStyle;
+      keywordLabel.addClass('sa-text-sm', 'sa-text-normal', 'sa-flex-shrink-0');
       keywordLabel.setText('Keyword filter');
       const keywordInput = keywordRow.createEl('input', { type: 'text' });
-      keywordInput.style.cssText = inputStyle + 'flex: 1; min-width: 100px;';
+      keywordInput.addClass('sa-flex-1', 'sa-px-8', 'sa-text-xs', 'sa-border', 'nsm-mobile-input');
+      keywordInput.setCssProps({'--sa-height': '28px', '--sa-bg': 'var(--background-modifier-form-field)'});
+      keywordInput.addClass('sa-dynamic-height', 'sa-dynamic-bg', 'sa-text-normal');
       keywordInput.placeholder = 'Optional';
       keywordInput.value = this.keyword;
       keywordInput.addEventListener('input', () => {
@@ -293,33 +255,23 @@ export class NaverSubscribeModal extends Modal {
 
       // Hint text
       const hint = optionsContainer.createDiv();
-      hint.style.cssText = 'font-size: var(--font-ui-smaller); color: var(--text-muted); margin-top: 4px;';
+      hint.addClass('sa-text-xs', 'sa-text-muted', 'sa-mt-4');
       hint.setText('Only posts with this keyword in title will be archived.');
 
     } else {
       // Desktop: Similar layout but with more spacing
-      optionsContainer.style.cssText = 'display: flex; flex-direction: column; gap: 16px;';
-
-      const rowStyle = 'display: flex; align-items: center; justify-content: space-between; gap: 16px;';
-      const labelStyle = 'font-size: var(--font-ui-small); color: var(--text-normal);';
-      const inputStyle = `
-        height: 32px;
-        padding: 0 10px;
-        border-radius: var(--input-radius);
-        border: 1px solid var(--background-modifier-border);
-        background: var(--background-modifier-form-field);
-        color: var(--text-normal);
-        font-size: var(--font-ui-small);
-      `;
+      optionsContainer.addClass('sa-flex-col', 'sa-gap-16');
 
       // Row 1: Max posts per run
       const maxPostsRow = optionsContainer.createDiv();
-      maxPostsRow.style.cssText = rowStyle;
+      maxPostsRow.addClass('sa-flex-between', 'sa-gap-16');
       const maxPostsLabel = maxPostsRow.createEl('label');
-      maxPostsLabel.style.cssText = labelStyle;
+      maxPostsLabel.addClass('sa-text-sm', 'sa-text-normal');
       maxPostsLabel.setText('Posts per run (max 50)');
       const maxPostsInput = maxPostsRow.createEl('input', { type: 'number' });
-      maxPostsInput.style.cssText = inputStyle + 'width: 80px; text-align: center;';
+      maxPostsInput.addClass('sa-px-10', 'sa-text-sm', 'sa-text-center', 'sa-border', 'nsm-mobile-input');
+      maxPostsInput.setCssProps({'--sa-height': '32px', '--sa-width': '80px', '--sa-bg': 'var(--background-modifier-form-field)'});
+      maxPostsInput.addClass('sa-dynamic-height', 'sa-dynamic-width', 'sa-dynamic-bg', 'sa-text-normal');
       maxPostsInput.min = String(MAX_POSTS_PER_RUN.MIN);
       maxPostsInput.max = String(MAX_POSTS_PER_RUN.MAX);
       maxPostsInput.value = String(this.maxPostsPerRun);
@@ -331,12 +283,14 @@ export class NaverSubscribeModal extends Modal {
 
       // Row 2: Backfill days
       const backfillRow = optionsContainer.createDiv();
-      backfillRow.style.cssText = rowStyle;
+      backfillRow.addClass('sa-flex-between', 'sa-gap-16');
       const backfillLabel = backfillRow.createEl('label');
-      backfillLabel.style.cssText = labelStyle;
+      backfillLabel.addClass('sa-text-sm', 'sa-text-normal');
       backfillLabel.setText('Initial sync period');
       const backfillSelect = backfillRow.createEl('select');
-      backfillSelect.style.cssText = inputStyle + 'width: 120px;';
+      backfillSelect.addClass('sa-px-10', 'sa-text-sm', 'sa-border', 'nsm-mobile-input');
+      backfillSelect.setCssProps({'--sa-height': '32px', '--sa-width': '120px', '--sa-bg': 'var(--background-modifier-form-field)'});
+      backfillSelect.addClass('sa-dynamic-height', 'sa-dynamic-width', 'sa-dynamic-bg', 'sa-text-normal');
       BACKFILL_DAYS_OPTIONS.forEach(opt => {
         const option = backfillSelect.createEl('option', { value: String(opt.value), text: opt.label });
         if (opt.value === this.backfillDays) option.selected = true;
@@ -347,16 +301,18 @@ export class NaverSubscribeModal extends Modal {
 
       // Row 3: Keyword filter
       const keywordRow = optionsContainer.createDiv();
-      keywordRow.style.cssText = rowStyle;
+      keywordRow.addClass('sa-flex-between', 'sa-gap-16');
       const keywordLabelContainer = keywordRow.createDiv();
       const keywordLabel = keywordLabelContainer.createEl('label');
-      keywordLabel.style.cssText = labelStyle;
+      keywordLabel.addClass('sa-text-sm', 'sa-text-normal');
       keywordLabel.setText('Keyword filter (optional)');
       const keywordHint = keywordLabelContainer.createDiv();
-      keywordHint.style.cssText = 'font-size: var(--font-ui-smaller); color: var(--text-muted); margin-top: 2px;';
+      keywordHint.addClass('sa-text-xs', 'sa-text-muted', 'sa-mt-2');
       keywordHint.setText('Only archive posts with this keyword in title');
       const keywordInput = keywordRow.createEl('input', { type: 'text' });
-      keywordInput.style.cssText = inputStyle + 'width: 150px;';
+      keywordInput.addClass('sa-px-10', 'sa-text-sm', 'sa-border', 'nsm-mobile-input');
+      keywordInput.setCssProps({'--sa-height': '32px', '--sa-width': '150px', '--sa-bg': 'var(--background-modifier-form-field)'});
+      keywordInput.addClass('sa-dynamic-height', 'sa-dynamic-width', 'sa-dynamic-bg', 'sa-text-normal');
       keywordInput.placeholder = 'e.g., review';
       keywordInput.value = this.keyword;
       keywordInput.addEventListener('input', () => {
@@ -367,40 +323,20 @@ export class NaverSubscribeModal extends Modal {
 
   private renderFooter(container: HTMLElement): void {
     const footer = container.createDiv({ cls: 'naver-footer' });
-    footer.style.cssText = `
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-      margin-top: 20px;
-      padding-top: 16px;
-      border-top: 1px solid var(--background-modifier-border);
-    `;
+    footer.addClass('sa-flex', 'sa-gap-8', 'sa-mt-20', 'nsm-footer');
 
     // Cancel button
     const cancelBtn = footer.createEl('button');
     cancelBtn.setText('Cancel');
-    cancelBtn.style.cssText = `
-      padding: 8px 16px;
-      border-radius: var(--button-radius);
-      background: var(--background-modifier-hover);
-      color: var(--text-normal);
-      border: none;
-      cursor: pointer;
-    `;
+    cancelBtn.addClass('sa-py-8', 'sa-px-16', 'sa-bg-hover', 'sa-text-normal', 'sa-clickable', 'nsm-btn');
     cancelBtn.addEventListener('click', () => this.close());
 
     // Submit button
     this.submitBtn = footer.createEl('button');
     this.submitBtn.setText(this.isEditMode ? 'Save' : 'Subscribe');
-    this.submitBtn.style.cssText = `
-      padding: 8px 16px;
-      border-radius: var(--button-radius);
-      background: var(--interactive-accent);
-      color: var(--text-on-accent);
-      border: none;
-      cursor: pointer;
-      font-weight: 500;
-    `;
+    this.submitBtn.addClass('sa-py-8', 'sa-px-16', 'sa-clickable', 'sa-font-medium', 'nsm-btn');
+    this.submitBtn.setCssProps({'--sa-bg': 'var(--interactive-accent)', '--sa-color': 'var(--text-on-accent)'});
+    this.submitBtn.addClass('sa-dynamic-bg', 'sa-dynamic-color');
     this.submitBtn.addEventListener('click', () => void this.handleSubmit());
   }
 
@@ -413,7 +349,7 @@ export class NaverSubscribeModal extends Modal {
     this.hideError();
 
     try {
-      console.log('[NaverSubscribeModal] Submitting options:', {
+      console.debug('[NaverSubscribeModal] Submitting options:', {
         maxPostsPerRun: this.maxPostsPerRun,
         backfillDays: this.backfillDays,
         keyword: this.keyword,

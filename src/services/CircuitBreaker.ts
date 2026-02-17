@@ -3,7 +3,6 @@
  * Prevents cascading failures by failing fast when a service is down
  */
 
-import { EventEmitter } from 'events';
 import type {
 	CircuitBreakerState,
 	CircuitBreakerConfig,
@@ -28,16 +27,17 @@ const DEFAULT_CONFIG: Omit<CircuitBreakerConfig, 'name'> = {
 /**
  * Circuit Breaker
  * Implements the circuit breaker pattern with three states: CLOSED, OPEN, HALF_OPEN
+ * Uses simple event system compatible with Obsidian plugins
  */
-export class CircuitBreaker extends EventEmitter {
+export class CircuitBreaker {
 	private readonly config: CircuitBreakerConfig;
 	private state: CircuitBreakerState;
 	private metrics: CircuitBreakerMetrics;
 	private nextAttemptAt?: Date;
 	private resetTimeout?: NodeJS.Timeout;
+	private readonly listeners: Map<CircuitBreakerEvent, Set<CircuitBreakerEventListener>> = new Map();
 
 	constructor(config: Partial<CircuitBreakerConfig> & { name: string }) {
-		super();
 		this.config = { ...DEFAULT_CONFIG, ...config };
 		this.state = State.CLOSED;
 		this.metrics = this.initializeMetrics();
@@ -282,6 +282,22 @@ export class CircuitBreaker extends EventEmitter {
 	}
 
 	/**
+	 * Emit event to registered listeners
+	 */
+	private emit(event: CircuitBreakerEvent, data: CircuitBreakerEventData): void {
+		const eventListeners = this.listeners.get(event);
+		if (eventListeners) {
+			eventListeners.forEach(listener => {
+				try {
+					listener(data);
+				} catch (err) {
+					console.error(`[CircuitBreaker] Listener error for event ${event}:`, err);
+				}
+			});
+		}
+	}
+
+	/**
 	 * Get current state
 	 */
 	public getState(): CircuitBreakerState {
@@ -356,21 +372,33 @@ export class CircuitBreaker extends EventEmitter {
 	 * Add event listener
 	 */
 	public on(event: CircuitBreakerEvent, listener: CircuitBreakerEventListener): this {
-		return super.on(event, listener);
+		if (!this.listeners.has(event)) {
+			this.listeners.set(event, new Set());
+		}
+		this.listeners.get(event)!.add(listener);
+		return this;
 	}
 
 	/**
 	 * Remove event listener
 	 */
 	public off(event: CircuitBreakerEvent, listener: CircuitBreakerEventListener): this {
-		return super.off(event, listener);
+		const eventListeners = this.listeners.get(event);
+		if (eventListeners) {
+			eventListeners.delete(listener);
+		}
+		return this;
 	}
 
 	/**
 	 * Add one-time event listener
 	 */
 	public once(event: CircuitBreakerEvent, listener: CircuitBreakerEventListener): this {
-		return super.once(event, listener);
+		const onceListener: CircuitBreakerEventListener = (data) => {
+			listener(data);
+			this.off(event, onceListener);
+		};
+		return this.on(event, onceListener);
 	}
 
 	/**
@@ -381,6 +409,6 @@ export class CircuitBreaker extends EventEmitter {
 			clearTimeout(this.resetTimeout);
 			this.resetTimeout = undefined;
 		}
-		this.removeAllListeners();
+		this.listeners.clear();
 	}
 }

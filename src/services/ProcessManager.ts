@@ -5,7 +5,11 @@
  * cleanup on plugin unload or view close.
  */
 
-import type { ChildProcess } from 'child_process';
+// Type-only import replaced with inline interface
+interface ChildProcess {
+  kill(signal?: NodeJS.Signals | number): boolean;
+  on(event: 'close' | 'error', listener: (...args: unknown[]) => void): this;
+}
 
 export interface ManagedProcess {
   id: string;

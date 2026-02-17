@@ -44,15 +44,8 @@ export class ReleaseNotesModal extends Modal {
 
     // Mobile modal size adjustments (same as ArchiveModal)
     if (Platform.isMobile) {
-      modalEl.style.setProperty('width', '92vw', 'important');
-      modalEl.style.setProperty('max-width', '92vw', 'important');
-      modalEl.style.setProperty('height', 'auto', 'important');
-      modalEl.style.setProperty('max-height', '80vh', 'important');
-      modalEl.style.setProperty('overflow-y', 'auto', 'important');
-
-      contentEl.style.paddingLeft = '12px';
-      contentEl.style.paddingRight = '12px';
-      contentEl.style.paddingBottom = '16px';
+      modalEl.addClass('am-modal--mobile');
+      contentEl.addClass('rnm-content--mobile');
     }
 
     // Title with ARIA id
@@ -95,26 +88,21 @@ export class ReleaseNotesModal extends Modal {
     if (this.releaseNote.qrCode) {
       const { svgBase64, url, label } = this.releaseNote.qrCode;
       const qrContainer = document.createElement('div');
-      qrContainer.className = 'release-notes-qr';
-      qrContainer.style.display = 'flex';
-      qrContainer.style.flexDirection = 'column';
-      qrContainer.style.alignItems = 'center';
-      qrContainer.style.gap = '8px';
-      qrContainer.style.margin = '16px 0';
+      qrContainer.className = 'release-notes-qr rnm-qr-container';
 
       const qrImg = qrContainer.createEl('img', {
         attr: { src: `data:image/svg+xml;base64,${svgBase64}`, alt: 'QR Code' },
       });
       const size = Platform.isMobile ? '110px' : '140px';
-      qrImg.style.width = size;
-      qrImg.style.height = size;
+      qrImg.setCssProps({'--rnm-qr-size': size});
+      qrImg.addClass('rnm-qr-image');
 
       const qrLink = qrContainer.createEl('a', {
         text: label,
         cls: 'external-link',
         attr: { href: url, target: '_blank' },
       });
-      qrLink.style.fontSize = '13px';
+      qrLink.addClass('rnm-qr-link');
 
       // Insert before the second h2 (after iOS section, before Performance section)
       const headings = contentContainer.querySelectorAll('h2');

@@ -234,8 +234,8 @@ export class IntersectionObserverManager {
     // Create placeholder
     const placeholder = document.createElement('div');
     placeholder.className = 'post-card-recycled-placeholder';
-    placeholder.style.height = `${height}px`;
-    placeholder.style.minHeight = `${height}px`;
+    placeholder.addClass('sa-dynamic-height', 'sa-dynamic-min-height');
+    placeholder.setCssProps({ '--sa-height': `${height}px`, '--sa-min-height': `${height}px` });
     // Copy identifying attributes for incremental DOM updates
     const postId = realCard.getAttribute('data-post-id');
     if (postId) placeholder.setAttribute('data-post-id', postId);

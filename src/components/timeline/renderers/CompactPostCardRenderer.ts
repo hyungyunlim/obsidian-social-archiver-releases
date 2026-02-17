@@ -5,6 +5,7 @@ import {
 } from '../../../services/IconService';
 import { setIcon, Platform as ObsidianPlatform, MarkdownRenderer, Component } from 'obsidian';
 import type { LinkPreviewRenderer } from './LinkPreviewRenderer';
+import { createSVGElement } from '../../../utils/dom-helpers';
 
 /**
  * CompactPostCardRenderer - Renders simplified post cards for additional embedded archives
@@ -66,7 +67,7 @@ export class CompactPostCardRenderer extends Component {
   public render(container: HTMLElement, post: PostData): HTMLElement {
     // Wrapper for card + expanded content
     const wrapper = container.createDiv({ cls: 'compact-post-wrapper' });
-    wrapper.style.cssText = 'margin: 8px 0; max-width: 100%; overflow: hidden;';
+    wrapper.addClass('sa-max-w-full', 'sa-overflow-hidden', 'cpcr-wrapper');
 
     // Check container width to determine initial state
     // Expand if: Desktop platform AND container width > 768px (not in narrow sidebars)
@@ -77,57 +78,27 @@ export class CompactPostCardRenderer extends Component {
     let isExpanded = (ObsidianPlatform.isDesktop && isWideEnough) || isVideoEmbed;
 
     const card = wrapper.createDiv({ cls: 'compact-post-card' });
-    card.style.cssText = `
-      position: relative;
-      display: flex;
-      gap: 0;
-      padding: 0;
-      border-radius: 8px;
-      background: var(--background-primary);
-      border: 1px solid var(--background-modifier-border);
-      cursor: pointer;
-      transition: all 0.2s;
-      overflow: hidden;
-      user-select: text;
-    `;
+    card.addClass('sa-relative', 'sa-flex', 'sa-rounded-8', 'sa-bg-primary', 'sa-border', 'sa-clickable', 'sa-transition', 'sa-overflow-hidden', 'cpcr-card');
 
     // Expanded content container (initially hidden)
     const expandedContent = wrapper.createDiv({ cls: 'compact-post-expanded' });
-    expandedContent.style.cssText = `
-      display: none;
-      position: relative;
-      border-radius: 8px;
-      background: var(--background-primary);
-      border: 1px solid var(--background-modifier-border);
-      overflow: hidden;
-      transition: all 0.2s ease-out;
-      max-width: 100%;
-    `;
+    expandedContent.addClass('sa-hidden', 'sa-relative', 'sa-rounded-8', 'sa-bg-primary', 'sa-border', 'sa-overflow-hidden', 'sa-max-w-full', 'cpcr-expanded');
 
     // Initial display state
-    card.style.display = isExpanded ? 'none' : 'flex';
-    expandedContent.style.display = isExpanded ? 'block' : 'none';
+    if (isExpanded) {
+      card.addClass('sa-hidden');
+      expandedContent.removeClass('sa-hidden');
+      expandedContent.addClass('sa-block');
+    } else {
+      expandedContent.addClass('sa-hidden');
+    }
 
     // If starting in expanded state, immediately render full content
     if (isExpanded && this.onExpandCallback && expandedContent.children.length === 0) {
       this.onExpandCallback(post, expandedContent);
     }
 
-    // Hover effect
-    card.addEventListener('mouseenter', () => {
-      if (!isExpanded) {
-        card.style.backgroundColor = 'var(--background-modifier-hover)';
-        card.style.transform = 'translateY(-1px)';
-        card.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
-      }
-    });
-    card.addEventListener('mouseleave', () => {
-      if (!isExpanded) {
-        card.style.backgroundColor = 'var(--background-primary)';
-        card.style.transform = 'translateY(0)';
-        card.style.boxShadow = 'none';
-      }
-    });
+    // Hover effect handled by CSS .cpcr-card:hover
 
     // Toggle function
     const toggleExpanded = async (e: MouseEvent) => {
@@ -159,8 +130,9 @@ export class CompactPostCardRenderer extends Component {
 
       if (isExpanded) {
         // Expand - hide summary card, show full content
-        card.style.display = 'none';
-        expandedContent.style.display = 'block';
+        card.addClass('sa-hidden');
+        expandedContent.removeClass('sa-hidden');
+        expandedContent.addClass('sa-block');
 
         // Render full post content if callback is set and content is empty
         if (this.onExpandCallback && expandedContent.children.length === 0) {
@@ -168,8 +140,9 @@ export class CompactPostCardRenderer extends Component {
         }
       } else {
         // Collapse - show summary card, hide full content
-        card.style.display = 'flex';
-        expandedContent.style.display = 'none';
+        card.removeClass('sa-hidden');
+        expandedContent.addClass('sa-hidden');
+        expandedContent.removeClass('sa-block');
       }
     };
 
@@ -190,18 +163,7 @@ export class CompactPostCardRenderer extends Component {
 
     if (showThumbnail) {
       const thumbnail = card.createDiv();
-      thumbnail.style.cssText = `
-        width: 120px;
-        flex-shrink: 0;
-        border-radius: 0;
-        background-size: cover;
-        background-position: center;
-        background-color: var(--background-secondary);
-        position: relative;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      `;
+      thumbnail.addClass('sa-flex-shrink-0', 'sa-relative', 'sa-flex-center', 'sa-bg-secondary', 'cpcr-thumbnail');
 
       // For YouTube: use thumbnail URL, for others: use first media
       let imagePath = post.platform === 'youtube' ? post.thumbnail : post.media[0]?.url;
@@ -220,66 +182,27 @@ export class CompactPostCardRenderer extends Component {
           }
         }
 
-        thumbnail.style.backgroundImage = `url("${imagePath}")`;
+        thumbnail.setCssStyles({ 'background-image': `url("${imagePath}")` });
       }
 
       // For YouTube: show play icon overlay
       if (post.platform === 'youtube') {
         const playIcon = thumbnail.createDiv({ text: '▶' });
-        playIcon.style.cssText = `
-          position: absolute;
-          width: 40px;
-          height: 40px;
-          background: rgba(0, 0, 0, 0.7);
-          color: white;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 16px;
-          padding-left: 4px;
-        `;
+        playIcon.addClass('sa-absolute', 'sa-icon-40', 'sa-rounded-full', 'sa-text-md', 'cpcr-play-icon');
       }
 
       // Media count badge (if multiple) - for non-YouTube only
       if (post.platform !== 'youtube' && post.media.length > 1) {
         const badge = thumbnail.createDiv({ text: `+${post.media.length - 1}` });
-        badge.style.cssText = `
-          position: absolute;
-          bottom: 4px;
-          right: 4px;
-          padding: 2px 6px;
-          background: rgba(0, 0, 0, 0.7);
-          color: white;
-          border-radius: 4px;
-          font-size: 10px;
-          font-weight: 600;
-        `;
+        badge.addClass('sa-absolute', 'sa-rounded-4', 'sa-text-xs', 'sa-font-semibold', 'cpcr-media-badge');
       }
     }
 
     // External platform link/icon
     const externalUrl = this.getOriginalUrl(post);
     const platformIcon = card.createDiv({ cls: 'platform-icon-badge' });
-    platformIcon.style.cssText = `
-      position: absolute;
-      top: 6px;
-      right: 6px;
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      background: var(--background-primary);
-      border: 1px solid var(--background-modifier-border);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      opacity: ${externalUrl ? '0.55' : '0.25'};
-      transition: opacity 0.2s;
-      pointer-events: auto;
-      cursor: ${externalUrl ? 'pointer' : 'default'};
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-      z-index: 2;
-    `;
+    platformIcon.addClass('sa-absolute', 'sa-rounded-full', 'sa-bg-primary', 'sa-border', 'sa-flex-center', 'sa-z-10', 'cpcr-platform-icon');
+    platformIcon.addClass(externalUrl ? 'cpcr-platform-icon--linkable' : 'cpcr-platform-icon--static');
     platformIcon.setAttribute('title', externalUrl ? `Open on ${post.platform}` : post.platform);
     platformIcon.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -288,41 +211,36 @@ export class CompactPostCardRenderer extends Component {
       }
     });
     const iconWrapper = platformIcon.createDiv();
-    iconWrapper.style.cssText = 'width: 14px; height: 14px; display: flex; align-items: center; justify-content: center;';
+    iconWrapper.addClass('sa-icon-14');
     const simpleIcon = getPlatformSimpleIcon(post.platform);
     if (simpleIcon) {
-      iconWrapper.innerHTML = `
-        <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="fill: var(--text-accent); width: 100%; height: 100%;">
-          <title>${simpleIcon.title}</title>
-          <path d="${simpleIcon.path}"/>
-        </svg>
-      `;
+      const svg = createSVGElement(simpleIcon, {
+        fill: 'var(--text-accent)',
+        width: '100%',
+        height: '100%'
+      });
+      iconWrapper.appendChild(svg);
     } else {
       setIcon(iconWrapper, 'external-link');
     }
-    platformIcon.addEventListener('mouseenter', () => {
-      if (externalUrl) platformIcon.style.opacity = '0.85';
-    });
-    platformIcon.addEventListener('mouseleave', () => {
-      platformIcon.style.opacity = externalUrl ? '0.55' : '0.25';
-    });
+    // Hover effects handled by CSS .cpcr-platform-icon--linkable:hover
 
     // Right section: Author + Content
     const leftSection = card.createDiv();
-    leftSection.style.cssText = 'flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px; justify-content: center;';
+    leftSection.addClass('sa-flex-1', 'sa-min-w-0', 'sa-flex-col', 'sa-gap-8', 'sa-p-12', 'cpcr-content-section');
 
     // Author name row
     const headerRow = leftSection.createDiv();
-    headerRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+    headerRow.addClass('sa-flex-row', 'sa-gap-8');
 
     // Author avatar (with platform badge)
     this.renderAuthorAvatar(headerRow, post);
 
     // Author name (platform name removed - shown in top-right icon instead)
     const authorName = headerRow.createSpan({ text: post.author.name });
+    authorName.addClass('sa-font-semibold', 'sa-text-normal', 'sa-truncate');
     // Mobile: use smaller font size (11px) for author name
-    const fontSize = ObsidianPlatform.isMobile ? '11px' : '13px';
-    authorName.style.cssText = `font-weight: 600; font-size: ${fontSize}; color: var(--text-normal); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`;
+    authorName.addClass(ObsidianPlatform.isMobile ? 'cpcr-author-name--mobile' : 'cpcr-author-name--desktop');
 
     // Content preview
     // For YouTube: show title in bold + description preview
@@ -330,47 +248,19 @@ export class CompactPostCardRenderer extends Component {
     if (post.platform === 'youtube' && post.title) {
       // YouTube title (bold)
       const titlePreview = leftSection.createDiv();
-      titlePreview.style.cssText = `
-        font-size: 14px;
-        line-height: 1.3;
-        font-weight: 600;
-        color: var(--text-normal);
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      `;
+      titlePreview.addClass('sa-text-md', 'sa-font-semibold', 'sa-text-normal', 'sa-leading-tight', 'sa-overflow-hidden', 'cpcr-line-clamp-2');
       titlePreview.textContent = post.title;
 
       // YouTube description (if exists)
       if (post.content.text) {
         const descriptionPreview = leftSection.createDiv();
-        descriptionPreview.style.cssText = `
-          font-size: 12px;
-          line-height: 1.4;
-          color: var(--text-muted);
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        `;
+        descriptionPreview.addClass('sa-text-sm', 'sa-text-muted', 'sa-overflow-hidden', 'cpcr-line-clamp-2', 'cpcr-description-preview');
         descriptionPreview.textContent = this.extractPlainTextFromMarkdown(post.content.text);
       }
     } else {
       // Non-YouTube: show content text (4 lines)
       const contentPreview = leftSection.createDiv();
-      contentPreview.style.cssText = `
-        font-size: 13px;
-        line-height: 1.4;
-        color: var(--text-muted);
-        display: -webkit-box;
-        -webkit-line-clamp: 4;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      `;
+      contentPreview.addClass('sa-text-base', 'sa-text-muted', 'sa-overflow-hidden', 'cpcr-line-clamp-4', 'cpcr-content-preview');
       contentPreview.textContent = this.extractPlainTextFromMarkdown(post.content.text);
     }
 
@@ -390,16 +280,16 @@ export class CompactPostCardRenderer extends Component {
 
     if (hasMetadata) {
       const metadataRow = leftSection.createDiv();
-      metadataRow.style.cssText = 'display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--text-muted);';
+      metadataRow.addClass('sa-flex-row', 'sa-gap-12', 'sa-text-sm', 'sa-text-muted');
 
       // For YouTube: show views and duration
       if (post.platform === 'youtube') {
         if (post.metadata.views !== undefined && post.metadata.views > 0) {
           const viewsContainer = metadataRow.createSpan();
-          viewsContainer.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+          viewsContainer.addClass('sa-flex-row', 'sa-gap-4');
 
           const iconContainer = viewsContainer.createDiv();
-          iconContainer.style.cssText = 'width: 12px; height: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;';
+          iconContainer.addClass('sa-icon-12');
           setIcon(iconContainer, 'eye');
 
           viewsContainer.createSpan({ text: this.formatNumber(post.metadata.views) });
@@ -407,10 +297,10 @@ export class CompactPostCardRenderer extends Component {
 
         if (post.metadata.duration !== undefined) {
           const durationContainer = metadataRow.createSpan();
-          durationContainer.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+          durationContainer.addClass('sa-flex-row', 'sa-gap-4');
 
           const iconContainer = durationContainer.createDiv();
-          iconContainer.style.cssText = 'width: 12px; height: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;';
+          iconContainer.addClass('sa-icon-12');
           setIcon(iconContainer, 'clock');
 
           durationContainer.createSpan({ text: this.formatDuration(post.metadata.duration) });
@@ -422,7 +312,7 @@ export class CompactPostCardRenderer extends Component {
         // Episode/Season info
         if (post.metadata.episode !== undefined) {
           const episodeContainer = metadataRow.createSpan();
-          episodeContainer.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+          episodeContainer.addClass('sa-flex-row', 'sa-gap-4');
 
           if (post.metadata.season !== undefined) {
             episodeContainer.createSpan({ text: `S${post.metadata.season}E${post.metadata.episode}` });
@@ -434,10 +324,10 @@ export class CompactPostCardRenderer extends Component {
         // Duration
         if (post.metadata.duration !== undefined) {
           const durationContainer = metadataRow.createSpan();
-          durationContainer.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+          durationContainer.addClass('sa-flex-row', 'sa-gap-4');
 
           const iconContainer = durationContainer.createDiv();
-          iconContainer.style.cssText = 'width: 12px; height: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;';
+          iconContainer.addClass('sa-icon-12');
           setIcon(iconContainer, 'clock');
 
           durationContainer.createSpan({ text: this.formatDuration(post.metadata.duration) });
@@ -447,10 +337,10 @@ export class CompactPostCardRenderer extends Component {
       // Standard metadata (likes, comments, shares)
       if (post.metadata.likes !== undefined && post.metadata.likes > 0) {
         const likesContainer = metadataRow.createSpan();
-        likesContainer.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+        likesContainer.addClass('sa-flex-row', 'sa-gap-4');
 
         const iconContainer = likesContainer.createDiv();
-        iconContainer.style.cssText = 'width: 12px; height: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;';
+        iconContainer.addClass('sa-icon-12');
         setIcon(iconContainer, 'heart');
 
         likesContainer.createSpan({ text: this.formatNumber(post.metadata.likes) });
@@ -458,10 +348,10 @@ export class CompactPostCardRenderer extends Component {
 
       if (post.metadata.comments !== undefined && post.metadata.comments > 0) {
         const commentsContainer = metadataRow.createSpan();
-        commentsContainer.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+        commentsContainer.addClass('sa-flex-row', 'sa-gap-4');
 
         const iconContainer = commentsContainer.createDiv();
-        iconContainer.style.cssText = 'width: 12px; height: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;';
+        iconContainer.addClass('sa-icon-12');
         setIcon(iconContainer, 'message-circle');
 
         commentsContainer.createSpan({ text: this.formatNumber(post.metadata.comments) });
@@ -469,10 +359,10 @@ export class CompactPostCardRenderer extends Component {
 
       if (post.metadata.shares !== undefined && post.metadata.shares > 0) {
         const sharesContainer = metadataRow.createSpan();
-        sharesContainer.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+        sharesContainer.addClass('sa-flex-row', 'sa-gap-4');
 
         const iconContainer = sharesContainer.createDiv();
-        iconContainer.style.cssText = 'width: 12px; height: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;';
+        iconContainer.addClass('sa-icon-12');
         setIcon(iconContainer, 'repeat-2');
 
         sharesContainer.createSpan({ text: this.formatNumber(post.metadata.shares) });
@@ -492,18 +382,7 @@ export class CompactPostCardRenderer extends Component {
     if (platform === 'post') {
       const userInitial = 'U';
       const avatar = container.createDiv();
-      avatar.style.cssText = `
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        background: var(--interactive-accent);
-        color: var(--text-on-accent);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 12px;
-        font-weight: 600;
-      `;
+      avatar.addClass('sa-icon-20', 'sa-rounded-full', 'sa-bg-accent', 'sa-text-sm', 'sa-font-semibold', 'cpcr-user-avatar');
       avatar.textContent = userInitial;
       return;
     }
@@ -511,12 +390,12 @@ export class CompactPostCardRenderer extends Component {
     // For social media posts, use Simple Icons SVG
     const icon = getPlatformSimpleIcon(platform);
     if (icon) {
-      container.innerHTML = `
-        <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="fill: var(--text-accent); width: 100%; height: 100%;">
-          <title>${icon.title}</title>
-          <path d="${icon.path}"/>
-        </svg>
-      `;
+      const svg = createSVGElement(icon, {
+        fill: 'var(--text-accent)',
+        width: '100%',
+        height: '100%'
+      });
+      container.appendChild(svg);
     }
   }
 
@@ -626,7 +505,7 @@ export class CompactPostCardRenderer extends Component {
     if (!metadata.externalLink || !this.linkPreviewRenderer) return;
 
     const linkPreviewContainer = container.createDiv();
-    linkPreviewContainer.style.cssText = 'margin-top: 8px;';
+    linkPreviewContainer.addClass('sa-mt-8');
 
     // Prevent card toggle when clicking link preview
     linkPreviewContainer.addEventListener('click', (e) => {
@@ -716,38 +595,23 @@ export class CompactPostCardRenderer extends Component {
    */
   private renderAuthorAvatar(container: HTMLElement, post: PostData): void {
     const avatarContainer = container.createDiv();
-    avatarContainer.style.cssText = 'flex-shrink: 0; width: 32px; height: 32px; position: relative;';
+    avatarContainer.addClass('sa-flex-shrink-0', 'sa-icon-32', 'sa-relative');
 
     const avatarSrc = this.getAvatarSrc(post);
 
     if (avatarSrc) {
       // Show actual avatar image
       const avatarImg = container.createEl('img') as HTMLImageElement;
-      avatarImg.style.cssText = `
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        object-fit: cover;
-      `;
+      avatarImg.addClass('sa-icon-32', 'sa-rounded-full', 'sa-object-cover');
       avatarImg.src = avatarSrc;
       avatarImg.alt = post.author.name;
 
       // Fallback to initials on image error
       avatarImg.onerror = () => {
-        avatarImg.style.display = 'none';
+        avatarImg.addClass('sa-hidden');
         const fallback = avatarContainer.createDiv();
-        fallback.style.cssText = `
-          width: 32px;
-          height: 32px;
-          border-radius: 50%;
-          background: var(--background-modifier-border);
-          color: var(--text-muted);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 12px;
-          font-weight: 600;
-        `;
+        fallback.addClass('sa-icon-32', 'sa-rounded-full', 'sa-flex-center', 'sa-text-sm', 'sa-font-semibold', 'sa-text-muted');
+        fallback.addClass('cpcr-avatar-fallback');
         fallback.textContent = this.getAuthorInitials(post.author.name);
       };
 
@@ -756,18 +620,8 @@ export class CompactPostCardRenderer extends Component {
     } else {
       // No avatar: show initials
       const initialsAvatar = avatarContainer.createDiv();
-      initialsAvatar.style.cssText = `
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        background: var(--background-modifier-border);
-        color: var(--text-muted);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 12px;
-        font-weight: 600;
-      `;
+      initialsAvatar.addClass('sa-icon-32', 'sa-rounded-full', 'sa-flex-center', 'sa-text-sm', 'sa-font-semibold', 'sa-text-muted');
+      initialsAvatar.addClass('cpcr-avatar-fallback');
       initialsAvatar.textContent = this.getAuthorInitials(post.author.name);
     }
 

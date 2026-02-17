@@ -235,6 +235,8 @@ export class URLExpander implements IService {
     }
 
     // Fall back to native fetch (may fail with CORS)
+    // NOTE: Using fetch() here instead of requestUrl() because we need redirect: 'manual'
+    // to detect and handle redirects manually. requestUrl() auto-follows redirects.
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
@@ -287,6 +289,8 @@ export class URLExpander implements IService {
       return requestUrlResult;
     }
 
+    // NOTE: Using fetch() here instead of requestUrl() because we need redirect: 'manual'
+    // to detect and handle redirects manually. requestUrl() auto-follows redirects.
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
@@ -329,6 +333,7 @@ export class URLExpander implements IService {
         return requestUrlResult;
       }
 
+      // NOTE: Using fetch() as fallback when requestUrl fails (rare edge case)
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 

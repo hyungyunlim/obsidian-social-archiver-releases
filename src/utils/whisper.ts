@@ -151,7 +151,7 @@ export class WhisperDetector {
       if (forceEnable) {
         const forceResult = await this.forceEnableCustomPath(customPath, preferredVariant);
         if (forceResult) {
-          console.log(`[WhisperDetector] Force enabled custom path: ${customPath}`);
+          console.debug(`[WhisperDetector] Force enabled custom path: ${customPath}`);
           // Update cache with force-enabled result
           this.whisperAvailable = true;
           this.whisperVariant = forceResult.variant;
@@ -216,6 +216,7 @@ export class WhisperDetector {
     this.resetCache();
 
     try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
       const os = require('os');
       const platform = os.platform();
 
@@ -291,11 +292,16 @@ export class WhisperDetector {
   private static async validateCustomPath(
     customPath: string
   ): Promise<{ path: string; version: string; variant: WhisperVariant } | null> {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
     const { exec } = require('child_process');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
     const { promisify } = require('util');
     const execAsync = promisify(exec);
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
     const fs = require('fs');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
     const path = require('path');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
     const os = require('os');
 
     // Normalize path for Windows (handle both forward and backward slashes)
@@ -342,7 +348,7 @@ export class WhisperDetector {
         if (output) {
           const version = this.parseVersion(variant, output);
           if (version) {
-            console.log(`[WhisperDetector] Custom path validated as ${variant}: ${normalizedPath}`);
+            console.debug(`[WhisperDetector] Custom path validated as ${variant}: ${normalizedPath}`);
             return { path: normalizedPath, version, variant };
           }
         }
@@ -355,7 +361,7 @@ export class WhisperDetector {
         if (output) {
           const version = this.parseVersion(variant, output);
           if (version) {
-            console.log(`[WhisperDetector] Custom path validated as ${variant} (from error output): ${normalizedPath}`);
+            console.debug(`[WhisperDetector] Custom path validated as ${variant} (from error output): ${normalizedPath}`);
             return { path: normalizedPath, version, variant };
           }
         }
@@ -382,8 +388,11 @@ export class WhisperDetector {
     customPath: string,
     preferredVariant?: 'auto' | WhisperVariant
   ): Promise<{ path: string; version: string; variant: WhisperVariant } | null> {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
     const fs = require('fs');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
     const path = require('path');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
     const os = require('os');
 
     // Normalize path for Windows (handle both forward and backward slashes)
@@ -422,7 +431,7 @@ export class WhisperDetector {
       variant = 'openai-whisper';
     }
 
-    console.log(`[WhisperDetector] Force enabled ${variant} at: ${normalizedPath}`);
+    console.debug(`[WhisperDetector] Force enabled ${variant} at: ${normalizedPath}`);
     return {
       path: normalizedPath,
       version: 'force-enabled', // Indicate this was force-enabled without validation
@@ -437,9 +446,12 @@ export class WhisperDetector {
     variant: WhisperVariant,
     platform: string
   ): Promise<{ path: string; version: string } | null> {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
     const { exec } = require('child_process');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
     const { promisify } = require('util');
     const execAsync = promisify(exec);
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
     const os = require('os');
 
     const paths = this.DETECTION_PATHS[variant][platform] || [];
@@ -582,8 +594,11 @@ export class WhisperDetector {
     variant: WhisperVariant,
     _whisperPath: string
   ): Promise<WhisperModel[]> {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
     const os = require('os');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
     const path = require('path');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
     const fs = require('fs');
 
     const models: WhisperModel[] = [];
@@ -794,6 +809,7 @@ export class WhisperDetector {
     };
 
     // Check if running on Apple Silicon (for Metal GPU acceleration)
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
     const os = require('os');
     const isAppleSilicon = os.platform() === 'darwin' && os.arch() === 'arm64';
 

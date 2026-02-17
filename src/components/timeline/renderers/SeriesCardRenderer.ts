@@ -29,6 +29,7 @@ import { getBackgroundDownloadManager } from '../../../services/BackgroundDownlo
 import { WebtoonsDownloadQueue, type WebtoonsEpisodeJob } from '../../../services/WebtoonsDownloadQueue';
 import { VIEW_TYPE_TIMELINE } from '../../../views/TimelineView';
 import { showConfirmModal } from '../../../utils/confirm-modal';
+import { createSVGElement, createCustomSVG } from '../../../utils/dom-helpers';
 
 /**
  * Callbacks for series card interactions
@@ -255,30 +256,24 @@ export class SeriesCardRenderer extends Component {
     }
 
     const banner = container.createDiv({ cls: 'webtoon-preview-info-banner' });
-    banner.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      background: linear-gradient(to right, var(--background-secondary), var(--background-primary));
-      border-bottom: 1px solid var(--background-modifier-border);
-      font-size: 11px;
-      color: var(--text-muted);
-    `;
+    banner.addClass('sa-flex-row', 'sa-gap-6', 'sa-px-12', 'sa-py-6', 'sa-border-b', 'sa-text-xs', 'sa-text-muted');
+    banner.setCssProps({ '--sa-bg': 'linear-gradient(to right, var(--background-secondary), var(--background-primary))' });
+    banner.addClass('sa-dynamic-bg');
 
     // Calendar icon
     const icon = banner.createSpan();
-    icon.style.cssText = 'display: flex; align-items: center;';
+    icon.addClass('sa-flex-row');
     setIcon(icon, 'calendar-clock');
 
     // Preview count
     const countSpan = banner.createSpan();
-    countSpan.style.cssText = 'font-weight: 500;';
+    countSpan.addClass('sa-font-medium');
     countSpan.setText(`${previewInfo.count} previews`);
 
     // Next free episode (if available)
     if (previewInfo.nextFree) {
-      banner.createSpan({ text: '·' }).style.cssText = 'color: var(--text-faint);';
+      const separator = banner.createSpan({ text: '·' });
+      separator.addClass('sa-text-faint');
 
       const nextSpan = banner.createSpan();
       nextSpan.setText(`Ep. ${previewInfo.nextFree.no} ${previewInfo.nextFree.schedule}`);
@@ -320,18 +315,9 @@ export class SeriesCardRenderer extends Component {
     const dayAbbr = this.getPublishDayAbbr(publishDay);
 
     const badge = container.createDiv();
-    badge.style.cssText = `
-      display: inline-flex;
-      align-items: center;
-      padding: 2px 6px;
-      border-radius: 10px;
-      font-size: 10px;
-      font-weight: 500;
-      line-height: 1;
-      flex-shrink: 0;
-      background-color: rgba(var(--interactive-accent-rgb), 0.15);
-      color: var(--interactive-accent);
-    `;
+    badge.addClass('sa-inline-flex', 'sa-px-6', 'sa-rounded-12', 'sa-font-medium', 'sa-flex-shrink-0', 'sa-text-accent');
+    badge.setCssProps({ '--sa-bg': 'rgba(var(--interactive-accent-rgb), 0.15)' });
+    badge.addClass('sa-dynamic-bg', 'scr-publish-day-badge');
     badge.textContent = dayAbbr;
     badge.setAttribute('title', `Publishes on ${publishDay}`);
   }
@@ -352,52 +338,40 @@ export class SeriesCardRenderer extends Component {
 
     const updateBadgeStyle = (subscribed: boolean, loading: boolean) => {
       badge.empty();
-      badge.style.cssText = `
-        display: inline-flex;
-        align-items: center;
-        gap: 3px;
-        padding: 2px 6px;
-        border-radius: 10px;
-        font-size: 10px;
-        font-weight: 500;
-        line-height: 1;
-        cursor: ${loading ? 'wait' : 'pointer'};
-        transition: all 0.2s;
-        flex-shrink: 0;
-        opacity: ${loading ? '0.7' : '1'};
-      `;
+      badge.className = '';
+      badge.addClass('sa-inline-flex', 'sa-gap-4', 'sa-rounded-12', 'sa-font-medium', 'sa-flex-shrink-0', 'sa-transition', 'scr-sub-badge');
+      badge.toggleClass('scr-sub-badge--loading', loading);
+      badge.classList.toggle('sa-opacity-80', loading);
 
       if (subscribed) {
         // Subscribed state - green badge
-        badge.style.backgroundColor = 'rgba(var(--color-green-rgb), 0.15)';
-        badge.style.color = 'var(--color-green)';
+        badge.addClass('sa-dynamic-bg', 'sa-text-success', 'scr-sub-badge--subscribed');
         badge.setAttribute('title', 'Click to unsubscribe');
 
         // Bell icon
         const iconContainer = badge.createDiv();
-        iconContainer.style.cssText = 'width: 10px; height: 10px; display: flex; align-items: center; justify-content: center;';
+        iconContainer.addClass('sa-icon-10');
         setIcon(iconContainer, 'bell');
-        iconContainer.querySelector('svg')?.setAttribute('style', 'width: 10px; height: 10px; stroke: var(--color-green);');
+        iconContainer.addClass('scr-sub-icon-subscribed');
 
         badge.createSpan({ text: 'Subscribed' });
       } else {
         // Not subscribed state - subtle badge
-        badge.style.backgroundColor = 'var(--background-modifier-hover)';
-        badge.style.color = 'var(--text-muted)';
+        badge.addClass('sa-bg-hover', 'sa-text-muted', 'scr-sub-badge--not-subscribed');
 
         const loadingText = isUnsubscribing ? 'Unsubscribing...' : 'Subscribing...';
         badge.setAttribute('title', loading ? loadingText : 'Click to subscribe');
 
         // Bell-plus icon or loading spinner
         const iconContainer = badge.createDiv();
-        iconContainer.style.cssText = 'width: 10px; height: 10px; display: flex; align-items: center; justify-content: center;';
+        iconContainer.addClass('sa-icon-10');
 
         if (loading) {
           setIcon(iconContainer, 'loader-2');
-          iconContainer.querySelector('svg')?.setAttribute('style', 'width: 10px; height: 10px; stroke: var(--text-muted); animation: spin 1s linear infinite;');
+          iconContainer.addClass('scr-sub-icon-loading');
         } else {
           setIcon(iconContainer, 'bell-plus');
-          iconContainer.querySelector('svg')?.setAttribute('style', 'width: 10px; height: 10px; stroke: var(--text-muted);');
+          iconContainer.addClass('scr-sub-icon-default');
         }
 
         badge.createSpan({ text: loading ? loadingText : 'Subscribe' });
@@ -408,25 +382,7 @@ export class SeriesCardRenderer extends Component {
     updateBadgeStyle(currentSubscribed, false);
 
     // Hover effects
-    badge.addEventListener('mouseenter', () => {
-      if (isLoading) return;
-      if (currentSubscribed) {
-        badge.style.backgroundColor = 'rgba(var(--color-green-rgb), 0.25)';
-      } else {
-        badge.style.backgroundColor = 'var(--background-modifier-border)';
-        badge.style.color = 'var(--text-normal)';
-      }
-    });
-
-    badge.addEventListener('mouseleave', () => {
-      if (isLoading) return;
-      if (currentSubscribed) {
-        badge.style.backgroundColor = 'rgba(var(--color-green-rgb), 0.15)';
-      } else {
-        badge.style.backgroundColor = 'var(--background-modifier-hover)';
-        badge.style.color = 'var(--text-muted)';
-      }
-    });
+    // Hover effects handled by CSS .scr-sub-badge--subscribed:hover / .scr-sub-badge--not-subscribed:hover
 
     // Click handler - Toggle subscribe/unsubscribe
     badge.addEventListener('click', async (e) => {
@@ -507,21 +463,7 @@ export class SeriesCardRenderer extends Component {
     if (unreadCount === 0) return;
 
     const badge = container.createDiv({ cls: 'series-unread-badge' });
-    badge.style.cssText = `
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 16px;
-      height: 16px;
-      padding: 0 4px;
-      border-radius: 8px;
-      font-size: 10px;
-      font-weight: 600;
-      line-height: 1;
-      flex-shrink: 0;
-      background: var(--interactive-accent);
-      color: var(--text-on-accent);
-    `;
+    badge.addClass('sa-inline-flex', 'sa-rounded-8', 'sa-font-bold', 'sa-flex-shrink-0', 'sa-bg-accent', 'scr-unread-badge');
     badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
     badge.setAttribute('title', `${unreadCount} unread episode${unreadCount > 1 ? 's' : ''}`);
   }
@@ -657,7 +599,7 @@ export class SeriesCardRenderer extends Component {
    * Check if device is online
    */
   private isOnline(): boolean {
-    return navigator.onLine;
+    return typeof navigator !== 'undefined' && navigator.onLine;
   }
 
   /**
@@ -1022,28 +964,60 @@ export class SeriesCardRenderer extends Component {
     container.empty();
 
     const messageDiv = container.createDiv({ cls: 'webtoon-offline-message' });
-    messageDiv.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 200px;
-      gap: 12px;
-      padding: 24px;
-      background: var(--background-secondary);
-      border-radius: 8px;
-      color: var(--text-muted);
-      text-align: center;
-    `;
+    messageDiv.addClass('sa-flex-col', 'sa-flex-center', 'sa-gap-12', 'sa-p-20', 'sa-bg-secondary', 'sa-rounded-8', 'sa-text-muted', 'sa-text-center', 'scr-offline-message');
 
     const icon = messageDiv.createDiv();
-    icon.innerHTML = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"></path><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"></path><path d="M10.71 5.05A16 16 0 0 1 22.58 9"></path><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>`;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', '32');
+    svg.setAttribute('height', '32');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+
+    const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line1.setAttribute('x1', '1');
+    line1.setAttribute('y1', '1');
+    line1.setAttribute('x2', '23');
+    line1.setAttribute('y2', '23');
+    svg.appendChild(line1);
+
+    const path1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path1.setAttribute('d', 'M16.72 11.06A10.94 10.94 0 0 1 19 12.55');
+    svg.appendChild(path1);
+
+    const path2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path2.setAttribute('d', 'M5 12.55a10.94 10.94 0 0 1 5.17-2.39');
+    svg.appendChild(path2);
+
+    const path3 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path3.setAttribute('d', 'M10.71 5.05A16 16 0 0 1 22.58 9');
+    svg.appendChild(path3);
+
+    const path4 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path4.setAttribute('d', 'M1.42 9a15.91 15.91 0 0 1 4.7-2.88');
+    svg.appendChild(path4);
+
+    const path5 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path5.setAttribute('d', 'M8.53 16.11a6 6 0 0 1 6.95 0');
+    svg.appendChild(path5);
+
+    const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line2.setAttribute('x1', '12');
+    line2.setAttribute('y1', '20');
+    line2.setAttribute('x2', '12.01');
+    line2.setAttribute('y2', '20');
+    svg.appendChild(line2);
+
+    icon.appendChild(svg);
 
     const text = messageDiv.createDiv();
     text.textContent = message;
 
     const hint = messageDiv.createDiv();
-    hint.style.cssText = 'font-size: 12px; opacity: 0.7;';
+    hint.addClass('sa-text-sm', 'sa-opacity-80');
     hint.textContent = 'Connect to the internet to continue';
   }
 
@@ -1640,31 +1614,25 @@ export class SeriesCardRenderer extends Component {
     const header = container.createDiv({
       cls: isWebtoon ? 'series-header webtoon-header' : 'series-header'
     });
-    header.style.setProperty('display', 'block', 'important');
-    header.style.setProperty('padding', '10px 12px', 'important');
+    header.addClass('scr-header');
 
     // Row 1: [icon] [title] [badge] ----spacer---- [controls]
     const row1 = document.createElement('div');
     row1.className = 'series-header-row1';
-    row1.style.setProperty('display', 'flex', 'important');
-    row1.style.setProperty('flex-direction', 'row', 'important');
-    row1.style.setProperty('align-items', 'center', 'important');
-    row1.style.setProperty('justify-content', 'flex-start', 'important');
-    row1.style.setProperty('gap', '8px', 'important');
-    row1.style.setProperty('width', '100%', 'important');
+    row1.addClass('scr-header-row');
     header.appendChild(row1);
 
     // Platform icon (left)
     const platformIcon = document.createElement('div');
     platformIcon.className = 'series-platform-icon';
-    platformIcon.style.setProperty('flex-shrink', '0', 'important');
+    platformIcon.addClass('scr-platform-icon');
     const icon = getPlatformSimpleIcon(series.platform as any);
     if (icon) {
-      platformIcon.innerHTML = `
-        <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 16px; height: 16px;">
-          <path d="${icon.path}"/>
-        </svg>
-      `;
+      const svg = createSVGElement(icon, {
+        width: '16px',
+        height: '16px'
+      });
+      platformIcon.appendChild(svg);
     }
     row1.appendChild(platformIcon);
 
@@ -1672,15 +1640,9 @@ export class SeriesCardRenderer extends Component {
     const titleEl = document.createElement('span');
     titleEl.className = 'series-title';
     titleEl.textContent = series.seriesTitle;
-    titleEl.style.setProperty('font-weight', '600', 'important');
-    titleEl.style.setProperty('font-size', '14px', 'important');
-    titleEl.style.setProperty('white-space', 'nowrap', 'important');
-    titleEl.style.setProperty('overflow', 'hidden', 'important');
-    titleEl.style.setProperty('text-overflow', 'ellipsis', 'important');
-    titleEl.style.setProperty('flex-shrink', '1', 'important');
-    titleEl.style.setProperty('min-width', '0', 'important');
+    titleEl.addClass('scr-title');
     if (series.seriesUrl) {
-      titleEl.style.cursor = 'pointer';
+      titleEl.addClass('sa-clickable');
       titleEl.addEventListener('click', () => {
         window.open(series.seriesUrl, '_blank');
       });
@@ -1699,28 +1661,21 @@ export class SeriesCardRenderer extends Component {
 
     // Spacer to push controls to the right
     const spacer = document.createElement('div');
-    spacer.style.setProperty('flex', '1 1 auto', 'important');
-    spacer.style.setProperty('min-width', '8px', 'important');
+    spacer.addClass('scr-spacer');
     row1.appendChild(spacer);
 
     // Controls section (right side, fixed at the end)
     const isMobile = window.innerWidth <= 768 || 'ontouchstart' in window;
     const controlsSection = document.createElement('div');
     controlsSection.className = 'series-controls';
-    controlsSection.style.setProperty('display', 'flex', 'important');
-    controlsSection.style.setProperty('align-items', 'center', 'important');
-    controlsSection.style.setProperty('gap', isMobile ? '2px' : '6px', 'important');
-    controlsSection.style.setProperty('flex-shrink', '0', 'important');
-    controlsSection.style.setProperty('margin-left', 'auto', 'important');
+    controlsSection.addClass('scr-controls', isMobile ? 'scr-controls--mobile' : 'scr-controls--desktop');
     row1.appendChild(controlsSection);
 
     // Navigation controls (only if multiple episodes)
     if (hasMultipleEpisodes) {
       const navSection = controlsSection.createDiv({ cls: 'series-nav' });
       // Reduce gap between prev/next on mobile
-      navSection.style.setProperty('display', 'flex', 'important');
-      navSection.style.setProperty('align-items', 'center', 'important');
-      navSection.style.setProperty('gap', isMobile ? '0px' : '4px', 'important');
+      navSection.addClass('scr-nav-section', isMobile ? 'scr-nav-section--mobile' : 'scr-nav-section--desktop');
 
       // Previous button
       const prevBtn = navSection.createDiv({
@@ -1735,9 +1690,7 @@ export class SeriesCardRenderer extends Component {
       // Episode indicator (position-based: "1/2" not "441/2") - hidden on mobile
       const indicator = navSection.createDiv({ cls: 'series-episode-indicator' });
       indicator.textContent = `${currentIndex + 1}/${series.episodes.length}`;
-      if (isMobile) {
-        indicator.style.display = 'none';
-      }
+      indicator.classList.toggle('sa-hidden', isMobile);
       this.episodeIndicators.set(series.seriesId, indicator);
 
       // Next button
@@ -1833,7 +1786,7 @@ export class SeriesCardRenderer extends Component {
     // Apply safe-area padding to header for notch/dynamic island
     const header = card.querySelector('.series-header') as HTMLElement;
     if (header) {
-      header.style.paddingTop = 'calc(10px + env(safe-area-inset-top, 0px))';
+      header.addClass('scr-header--fullscreen');
     }
 
     // Restore scroll position after layout settles
@@ -1849,13 +1802,13 @@ export class SeriesCardRenderer extends Component {
     // Update expand icon to minimize
     const expandBtn = card.querySelector('.series-expand-btn');
     if (expandBtn) {
-      expandBtn.innerHTML = '';
+      (expandBtn as HTMLElement).empty();
       setIcon(expandBtn as HTMLElement, 'minimize-2');
     }
 
     // Disable CSS smooth scroll for keyboard navigation (use JS animation instead)
     if (scrollContainer) {
-      scrollContainer.style.scrollBehavior = 'auto';
+      scrollContainer.addClass('scr-scroll-no-smooth');
     }
 
     // Add fullscreen keyboard handler (ESC, PageUp/Down, Home/End)
@@ -1932,7 +1885,7 @@ export class SeriesCardRenderer extends Component {
     if (this.isWebtoon(series) && scrollContainer) {
       scrollContainer.addEventListener('click', this.handleImmersiveTap.bind(this, card));
       // Add cursor hint
-      scrollContainer.style.cursor = 'pointer';
+      scrollContainer.addClass('scr-scroll-clickable');
 
       // Show brief tap hint animation (first time only)
       scrollContainer.classList.add('show-tap-hint');
@@ -1969,7 +1922,7 @@ export class SeriesCardRenderer extends Component {
     // Hide backdrop in immersive mode for true full-screen feel
     const backdrop = document.querySelector('.series-fullscreen-backdrop') as HTMLElement;
     if (backdrop) {
-      backdrop.style.opacity = '0';
+      backdrop.addClass('sa-opacity-0');
     }
   }
 
@@ -1983,7 +1936,7 @@ export class SeriesCardRenderer extends Component {
     // Restore backdrop
     const backdrop = document.querySelector('.series-fullscreen-backdrop') as HTMLElement;
     if (backdrop) {
-      backdrop.style.opacity = '';
+      backdrop.removeClass('sa-opacity-0');
     }
   }
 
@@ -2035,18 +1988,20 @@ export class SeriesCardRenderer extends Component {
 
     // Restore CSS smooth scroll behavior
     if (scrollContainer) {
-      scrollContainer.style.scrollBehavior = 'smooth';
+      scrollContainer.removeClass('scr-scroll-no-smooth');
+      scrollContainer.addClass('scr-scroll-smooth');
     }
 
     // Reset header padding (remove safe-area adjustment)
     const header = card.querySelector('.series-header') as HTMLElement;
     if (header) {
-      header.style.paddingTop = '10px';
+      header.removeClass('scr-header--fullscreen');
+      header.addClass('scr-header--normal');
     }
 
     // Reset cursor on scroll container (immersive mode cleanup)
     if (scrollContainer) {
-      scrollContainer.style.cursor = '';
+      scrollContainer.removeClass('scr-scroll-clickable');
     }
 
     // Detect mobile (touch device or narrow viewport)
@@ -2101,7 +2056,7 @@ export class SeriesCardRenderer extends Component {
       // Update icon back to maximize
       const expandBtn = card.querySelector('.series-expand-btn');
       if (expandBtn) {
-        expandBtn.innerHTML = '';
+        (expandBtn as HTMLElement).empty();
         setIcon(expandBtn as HTMLElement, 'maximize-2');
       }
 
@@ -2110,12 +2065,13 @@ export class SeriesCardRenderer extends Component {
       const commentsRefs = this.commentsContainers.get(series.seriesId);
       if (commentsRefs) {
         const isExpanded = this.commentsExpanded.get(series.seriesId) ?? false;
-        commentsRefs.container.style.display = isExpanded ? 'block' : 'none';
+        commentsRefs.container.classList.toggle('sa-hidden', !isExpanded);
 
         // Also sync chevron rotation
         const chevron = card.querySelector('.comments-list-chevron') as HTMLElement;
         if (chevron) {
-          chevron.style.transform = isExpanded ? 'rotate(90deg)' : '';
+          chevron.setCssProps({ '--sa-transform': isExpanded ? 'rotate(90deg)' : 'none' });
+          chevron.addClass('sa-dynamic-transform');
         }
       }
 
@@ -2203,26 +2159,14 @@ export class SeriesCardRenderer extends Component {
     // Age rating (compact)
     if (metadata.ageRating) {
       const ageBadge = container.createSpan({ cls: 'webtoon-badge age-badge' });
-      ageBadge.style.cssText = `
-        padding: 1px 4px;
-        font-size: 10px;
-        background: var(--background-modifier-error-hover);
-        border-radius: 3px;
-        color: var(--text-muted);
-      `;
+      ageBadge.addClass('sa-rounded-4', 'sa-text-muted', 'scr-wt-badge', 'scr-wt-badge--age');
       ageBadge.textContent = metadata.ageRating;
     }
 
     // Publish day
     if (metadata.publishDay) {
       const dayBadge = container.createSpan({ cls: 'webtoon-badge day-badge' });
-      dayBadge.style.cssText = `
-        padding: 1px 4px;
-        font-size: 10px;
-        background: var(--background-modifier-hover);
-        border-radius: 3px;
-        color: var(--text-muted);
-      `;
+      dayBadge.addClass('sa-rounded-4', 'sa-text-muted', 'sa-bg-hover', 'scr-wt-badge');
       dayBadge.textContent = metadata.publishDay;
       if (metadata.finished) {
         dayBadge.textContent += ' ✓';
@@ -2233,13 +2177,7 @@ export class SeriesCardRenderer extends Component {
     if (metadata.genre && metadata.genre.length > 0) {
       for (const genre of metadata.genre.slice(0, 2)) {
         const genreBadge = container.createSpan({ cls: 'webtoon-badge genre-badge' });
-        genreBadge.style.cssText = `
-          padding: 1px 4px;
-          font-size: 10px;
-          background: var(--background-modifier-hover);
-          border-radius: 3px;
-          color: var(--text-faint);
-        `;
+        genreBadge.addClass('sa-rounded-4', 'sa-text-faint', 'sa-bg-hover', 'scr-wt-badge');
         genreBadge.textContent = genre;
       }
     }
@@ -2312,39 +2250,18 @@ export class SeriesCardRenderer extends Component {
 
     // Episode title header (minimal)
     const episodeHeader = container.createDiv({ cls: 'webtoon-episode-header' });
-    episodeHeader.style.cssText = `
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--background-modifier-border);
-      background: var(--background-secondary);
-    `;
+    episodeHeader.addClass('sa-px-16', 'sa-py-12', 'sa-border-b', 'sa-bg-secondary');
 
     // Episode number + title
     const titleRow = episodeHeader.createDiv({ cls: 'webtoon-episode-title-row' });
-    titleRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+    titleRow.addClass('sa-flex-row', 'sa-gap-8');
 
     const episodeNum = titleRow.createSpan({ cls: 'webtoon-episode-num' });
-    episodeNum.style.cssText = `
-      padding: 2px 8px;
-      background: var(--interactive-accent);
-      color: var(--text-on-accent);
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 600;
-    `;
+    episodeNum.addClass('sa-px-8', 'sa-bg-accent', 'sa-rounded-4', 'sa-text-sm', 'sa-font-bold', 'scr-episode-num');
     episodeNum.textContent = `Ep. ${episode.episode}`;
 
     const episodeTitle = titleRow.createSpan({ cls: 'webtoon-episode-title' });
-    episodeTitle.style.cssText = `
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--text-normal);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      flex: 1;
-      min-width: 0;
-      cursor: pointer;
-    `;
+    episodeTitle.addClass('sa-text-md', 'sa-font-medium', 'sa-text-normal', 'sa-truncate', 'sa-flex-1', 'sa-min-w-0', 'sa-clickable');
     // Extract just the episode title (remove series name prefix and episode number prefix)
     let titleText = episode.title.includes(' - ')
       ? episode.title.split(' - ').slice(-1)[0]
@@ -2382,12 +2299,7 @@ export class SeriesCardRenderer extends Component {
 
     // Author name (right side of episode title)
     const authorEl = titleRow.createSpan({ cls: 'series-author' });
-    authorEl.style.cssText = `
-      color: var(--text-muted);
-      font-size: 12px;
-      flex-shrink: 0;
-      white-space: nowrap;
-    `;
+    authorEl.addClass('sa-text-muted', 'sa-text-sm', 'sa-flex-shrink-0', 'scr-nowrap');
     authorEl.textContent = `by ${series.author}`;
 
     // Check if there's a next episode
@@ -2493,7 +2405,7 @@ export class SeriesCardRenderer extends Component {
     if (isMobile) {
       const scrollContainer = container.querySelector('.webtoon-scroll-container') as HTMLElement | null;
       if (scrollContainer) {
-        scrollContainer.style.cursor = 'pointer';
+        scrollContainer.addClass('scr-scroll-clickable');
         scrollContainer.addEventListener('click', (e) => {
           // Only handle when NOT in fullscreen (timeline view)
           // When in fullscreen, the enterFullscreen handler takes over
@@ -2527,29 +2439,20 @@ export class SeriesCardRenderer extends Component {
 
     // Toggle header (similar to episode list pattern)
     const toggleHeader = wrapper.createDiv({ cls: 'comments-list-toggle' });
-    toggleHeader.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      cursor: pointer;
-      border-top: 1px solid var(--background-modifier-border);
-    `;
+    toggleHeader.addClass('sa-flex-row', 'sa-gap-8', 'sa-px-12', 'sa-py-8', 'sa-clickable', 'sa-border', 'scr-comments-toggle');
 
     // Chevron icon
     const chevron = toggleHeader.createDiv({ cls: `comments-list-chevron ${isExpanded ? 'expanded' : ''}` });
     setIcon(chevron, 'chevron-right');
-    chevron.style.cssText = `
-      width: 16px;
-      height: 16px;
-      transition: transform 0.2s ease;
-      color: var(--text-muted);
-      ${isExpanded ? 'transform: rotate(90deg);' : ''}
-    `;
+    chevron.addClass('sa-icon-16', 'sa-text-muted', 'sa-transition-transform');
+    if (isExpanded) {
+      chevron.setCssProps({ '--sa-transform': 'rotate(90deg)' });
+      chevron.addClass('sa-dynamic-transform');
+    }
 
     // Label (will be updated with count)
     const label = toggleHeader.createEl('span', { cls: 'comments-list-label' });
-    label.style.cssText = 'font-size: 13px; font-weight: 500; color: var(--text-muted); flex: 1;';
+    label.addClass('sa-text-base', 'sa-font-medium', 'sa-text-muted', 'sa-flex-1');
     label.textContent = 'Best Comments';
 
     // Load comment count asynchronously and update label
@@ -2557,26 +2460,17 @@ export class SeriesCardRenderer extends Component {
 
     // Loading indicator (will be shown/hidden)
     const loadingIndicator = toggleHeader.createDiv({ cls: 'comments-loading' });
-    loadingIndicator.style.cssText = `
-      display: none;
-      width: 14px;
-      height: 14px;
-      color: var(--text-muted);
-    `;
+    loadingIndicator.addClass('sa-hidden', 'sa-icon-14', 'sa-text-muted');
     setIcon(loadingIndicator, 'loader-2');
     const loadingSvg = loadingIndicator.querySelector('svg');
     if (loadingSvg) {
-      loadingSvg.style.cssText = 'animation: spin 1s linear infinite;';
+      loadingSvg.classList.add('scr-comments-loading-svg');
     }
 
     // Comments container (collapsed by default, scrollable)
     const commentsContainer = wrapper.createDiv({ cls: 'comments-list-container' });
-    commentsContainer.style.cssText = `
-      display: ${isExpanded ? 'block' : 'none'};
-      padding: 0 12px 12px;
-      max-height: 400px;
-      overflow-y: auto;
-    `;
+    commentsContainer.classList.toggle('sa-hidden', !isExpanded);
+    commentsContainer.addClass('sa-px-12', 'sa-overflow-y-auto', 'scr-comments-container');
 
     // Store container reference for episode sync
     this.commentsContainers.set(seriesId, { container: commentsContainer, loadingIndicator, label });
@@ -2594,13 +2488,15 @@ export class SeriesCardRenderer extends Component {
 
       // Update chevron rotation
       if (newExpanded) {
-        chevron.style.transform = 'rotate(90deg)';
+        chevron.setCssProps({ '--sa-transform': 'rotate(90deg)' });
+        chevron.addClass('sa-dynamic-transform');
       } else {
-        chevron.style.transform = '';
+        chevron.removeClass('sa-dynamic-transform');
+        chevron.setCssProps({ '--sa-transform': '' });
       }
 
       // Toggle container visibility
-      commentsContainer.style.display = newExpanded ? 'block' : 'none';
+      commentsContainer.classList.toggle('sa-hidden', !newExpanded);
 
       // Load comments on first expand (from local PostData, not API)
       // Use current episode from viewState, not the captured closure value
@@ -2610,13 +2506,7 @@ export class SeriesCardRenderer extends Component {
       }
     });
 
-    // Hover effect
-    toggleHeader.addEventListener('mouseenter', () => {
-      toggleHeader.style.background = 'var(--background-modifier-hover)';
-    });
-    toggleHeader.addEventListener('mouseleave', () => {
-      toggleHeader.style.background = '';
-    });
+    // Hover effect handled by CSS .scr-comments-toggle:hover
 
     return wrapper;
   }
@@ -2639,7 +2529,7 @@ export class SeriesCardRenderer extends Component {
     }
 
     this.commentsLoading.set(seriesId, true);
-    loadingIndicator.style.display = 'flex';
+    loadingIndicator.removeClass('sa-hidden');
 
     try {
       // Find the current episode file
@@ -2675,7 +2565,7 @@ export class SeriesCardRenderer extends Component {
       this.showNoCommentsMessage(container);
     } finally {
       this.commentsLoading.set(seriesId, false);
-      loadingIndicator.style.display = 'none';
+      loadingIndicator.addClass('sa-hidden');
     }
   }
 
@@ -2725,12 +2615,7 @@ export class SeriesCardRenderer extends Component {
     container.empty();
 
     const errorEl = container.createDiv({ cls: 'comments-empty' });
-    errorEl.style.cssText = `
-      padding: 12px;
-      text-align: center;
-      color: var(--text-muted);
-      font-size: 12px;
-    `;
+    errorEl.addClass('sa-p-12', 'sa-text-center', 'sa-text-muted', 'sa-text-sm');
     errorEl.textContent = 'No saved comments';
   }
 
@@ -2822,12 +2707,7 @@ export class SeriesCardRenderer extends Component {
 
     if (comments.length === 0) {
       const emptyEl = container.createDiv({ cls: 'comments-empty' });
-      emptyEl.style.cssText = `
-        padding: 12px;
-        text-align: center;
-        color: var(--text-muted);
-        font-size: 12px;
-      `;
+      emptyEl.addClass('sa-p-12', 'sa-text-center', 'sa-text-muted', 'sa-text-sm');
       emptyEl.textContent = 'No best comments';
       return;
     }
@@ -2843,72 +2723,39 @@ export class SeriesCardRenderer extends Component {
    */
   private renderCommentItem(container: HTMLElement, comment: WebtoonComment): void {
     const item = container.createDiv({ cls: 'comment-item' });
-    item.style.cssText = `
-      padding: 8px 0;
-      border-bottom: 1px solid var(--background-modifier-border);
-    `;
+    item.addClass('sa-py-8', 'sa-border-b');
 
     // Header row: Author name
     const headerEl = item.createDiv({ cls: 'comment-header' });
-    headerEl.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-bottom: 4px;
-    `;
+    headerEl.addClass('sa-flex-row', 'sa-gap-6', 'sa-mb-4');
 
     const authorEl = headerEl.createSpan({ cls: 'comment-author' });
-    authorEl.style.cssText = `
-      font-weight: 600;
-      font-size: 12px;
-      color: var(--text-normal);
-    `;
+    authorEl.addClass('sa-font-bold', 'sa-text-sm', 'sa-text-normal');
     authorEl.textContent = comment.author.name;
 
     // Comment body (full content with line breaks preserved)
     const bodyEl = item.createDiv({ cls: 'comment-body' });
-    bodyEl.style.cssText = `
-      font-size: 12px;
-      color: var(--text-muted);
-      white-space: pre-wrap;
-      word-break: break-word;
-      line-height: 1.5;
-    `;
+    bodyEl.addClass('sa-text-sm', 'sa-text-muted', 'sa-word-break', 'sa-leading-normal', 'scr-comment-body');
     bodyEl.textContent = comment.body;
 
     // Footer row: Likes at the end
     const footerEl = item.createDiv({ cls: 'comment-footer' });
-    footerEl.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 6px;
-      font-size: 11px;
-      color: var(--text-faint);
-    `;
+    footerEl.addClass('sa-flex-row', 'sa-gap-8', 'sa-mt-4', 'sa-text-xs', 'sa-text-faint');
 
     // Likes
     const likesEl = footerEl.createSpan({ cls: 'comment-likes' });
-    likesEl.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 3px;
-    `;
+    likesEl.addClass('sa-flex-row', 'sa-gap-4');
     const heartIcon = likesEl.createSpan();
-    heartIcon.style.cssText = 'width: 11px; height: 11px; color: #e91e63; display: flex; align-items: center;';
+    heartIcon.addClass('sa-icon-12', 'scr-comment-heart');
     setIcon(heartIcon, 'heart');
     likesEl.createSpan().textContent = this.formatCount(comment.likes);
 
     // Reply count (if exists)
     if (comment.replyCount && comment.replyCount > 0) {
       const repliesEl = footerEl.createSpan({ cls: 'comment-replies' });
-      repliesEl.style.cssText = `
-        display: flex;
-        align-items: center;
-        gap: 3px;
-      `;
+      repliesEl.addClass('sa-flex-row', 'sa-gap-4');
       const replyIcon = repliesEl.createSpan();
-      replyIcon.style.cssText = 'width: 11px; height: 11px; display: flex; align-items: center;';
+      replyIcon.addClass('sa-icon-12');
       setIcon(replyIcon, 'message-circle');
       repliesEl.createSpan().textContent = this.formatCount(comment.replyCount);
     }
@@ -2971,21 +2818,7 @@ export class SeriesCardRenderer extends Component {
         const subscriptionBadge = row1.querySelector('[title*="subscribe"], [title*="Subscribe"]');
         badge = document.createElement('div');
         badge.className = 'series-unread-badge';
-        badge.style.cssText = `
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          min-width: 16px;
-          height: 16px;
-          padding: 0 4px;
-          border-radius: 8px;
-          font-size: 10px;
-          font-weight: 600;
-          line-height: 1;
-          flex-shrink: 0;
-          background: var(--interactive-accent);
-          color: var(--text-on-accent);
-        `;
+        badge.addClass('sa-inline-flex', 'sa-rounded-8', 'sa-font-bold', 'sa-flex-shrink-0', 'sa-bg-accent', 'scr-unread-badge');
         badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
         badge.setAttribute('title', `${unreadCount} unread episode${unreadCount > 1 ? 's' : ''}`);
 
@@ -3022,8 +2855,9 @@ export class SeriesCardRenderer extends Component {
     // Update cover (opacity + grayscale filter)
     const coverContainer = item.querySelector('.webtoon-episode-cover') as HTMLElement;
     if (coverContainer) {
-      coverContainer.style.opacity = isRead ? '0.5' : '1';
-      coverContainer.style.filter = isRead ? 'grayscale(50%)' : 'none';
+      coverContainer.classList.toggle('sa-opacity-50', isRead);
+      coverContainer.toggleClass('scr-episode-cover--read', isRead);
+      coverContainer.toggleClass('scr-episode-cover--unread', !isRead);
     }
 
     // Update read indicator icon (add/remove)
@@ -3035,12 +2869,7 @@ export class SeriesCardRenderer extends Component {
         // Add read indicator
         readIndicator = document.createElement('span');
         readIndicator.className = 'read-indicator';
-        readIndicator.style.cssText = `
-          display: flex;
-          align-items: center;
-          color: var(--text-faint);
-          flex-shrink: 0;
-        `;
+        readIndicator.addClass('sa-flex-row', 'sa-text-faint', 'sa-flex-shrink-0');
         setIcon(readIndicator, 'eye');
         const svgEl = readIndicator.querySelector('svg');
         if (svgEl) {
@@ -3058,16 +2887,22 @@ export class SeriesCardRenderer extends Component {
     // Update episode number badge styling
     const numBadge = item.querySelector('.episode-num-badge') as HTMLElement;
     if (numBadge && !isCurrent) {
-      numBadge.style.background = isRead ? 'var(--background-secondary)' : 'var(--background-modifier-hover)';
-      numBadge.style.color = isRead ? 'var(--text-faint)' : 'var(--text-muted)';
-      numBadge.style.fontWeight = isRead ? '500' : '600';
+      numBadge.setCssProps({
+        '--sa-bg': isRead ? 'var(--background-secondary)' : 'var(--background-modifier-hover)',
+        '--sa-color': isRead ? 'var(--text-faint)' : 'var(--text-muted)'
+      });
+      numBadge.addClass('sa-dynamic-bg', 'sa-dynamic-color');
+      numBadge.toggleClass('scr-num-badge--read', isRead);
+      numBadge.toggleClass('scr-num-badge--unread', !isRead);
     }
 
     // Update title (color + font weight)
     const titleEl = item.querySelector('.webtoon-episode-item-title') as HTMLElement;
     if (titleEl) {
-      titleEl.style.color = isRead ? 'var(--text-faint)' : 'var(--text-normal)';
-      titleEl.style.fontWeight = isRead ? '400' : '500';
+      titleEl.setCssProps({ '--sa-color': isRead ? 'var(--text-faint)' : 'var(--text-normal)' });
+      titleEl.addClass('sa-dynamic-color');
+      titleEl.toggleClass('scr-ep-title--read', isRead);
+      titleEl.toggleClass('scr-ep-title--unread', !isRead);
     }
 
     // Update action button (eye/eye-off icon) if exists
@@ -3082,7 +2917,8 @@ export class SeriesCardRenderer extends Component {
           iconContainer.empty();
           setIcon(iconContainer as HTMLElement, isRead ? 'eye' : 'eye-off');
         }
-        (btn as HTMLElement).style.color = isRead ? 'var(--interactive-accent)' : 'var(--text-muted)';
+        (btn as HTMLElement).setCssProps({ '--sa-color': isRead ? 'var(--interactive-accent)' : 'var(--text-muted)' });
+        (btn as HTMLElement).addClass('sa-dynamic-color');
         btn.setAttribute('title', isRead ? 'Mark as unread' : 'Mark as read');
       });
     }
@@ -3197,12 +3033,7 @@ export class SeriesCardRenderer extends Component {
 
             commentBadge = document.createElement('span');
             commentBadge.className = 'episode-comment-badge';
-            commentBadge.style.cssText = `
-              display: inline-flex;
-              align-items: center;
-              gap: 3px;
-              color: var(--text-muted);
-            `;
+            commentBadge.addClass('scr-comment-badge');
 
             if (starScore && starScore.nextSibling) {
               metaRow.insertBefore(commentBadge, starScore.nextSibling);
@@ -3215,9 +3046,9 @@ export class SeriesCardRenderer extends Component {
         }
 
         if (commentBadge) {
-          commentBadge.innerHTML = '';
+          commentBadge.empty();
           const icon = commentBadge.createSpan();
-          icon.style.cssText = 'width: 11px; height: 11px; display: flex; align-items: center;';
+          icon.addClass('scr-comment-badge-icon');
           setIcon(icon, 'message-circle');
           commentBadge.createSpan().textContent = this.formatCount(commentCount);
         }
@@ -3311,7 +3142,7 @@ export class SeriesCardRenderer extends Component {
 
     // Toggle header (styles from skeleton-card.css)
     const toggleHeader = listWrapper.createDiv({ cls: 'episode-list-toggle' });
-    toggleHeader.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 8px 12px;';
+    toggleHeader.addClass('sa-flex-row', 'sa-gap-8', 'sa-px-12', 'sa-py-8');
 
     // Chevron icon
     const chevron = toggleHeader.createDiv({
@@ -3321,35 +3152,18 @@ export class SeriesCardRenderer extends Component {
 
     // Label
     const label = toggleHeader.createEl('span', { cls: 'episode-list-label' });
-    label.style.cssText = 'font-size: 13px; font-weight: 500; color: var(--text-muted); flex: 1;';
+    label.addClass('sa-text-base', 'sa-font-medium', 'sa-text-muted', 'sa-flex-1');
     label.textContent = `Episodes (${series.episodes.length})`;
 
     // Sort order toggle button (webtoons only)
     if (isWebtoon && series.episodes.length > 1) {
       const sortOrder = this.plugin.settings.webtoonEpisodeSortOrder ?? 'asc';
       const sortBtn = toggleHeader.createDiv({ cls: 'episode-sort-btn' });
-      sortBtn.style.cssText = `
-        width: 24px;
-        height: 24px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 4px;
-        cursor: pointer;
-        color: var(--text-muted);
-        transition: all 0.15s ease;
-      `;
+      sortBtn.addClass('sa-icon-24', 'sa-rounded-4', 'sa-clickable', 'sa-text-muted', 'sa-transition', 'scr-header-btn');
       setIcon(sortBtn, sortOrder === 'asc' ? 'arrow-up-narrow-wide' : 'arrow-down-wide-narrow');
       sortBtn.setAttribute('title', sortOrder === 'asc' ? 'Oldest first (click for newest first)' : 'Newest first (click for oldest first)');
 
-      sortBtn.addEventListener('mouseenter', () => {
-        sortBtn.style.background = 'var(--background-modifier-hover)';
-        sortBtn.style.color = 'var(--text-normal)';
-      });
-      sortBtn.addEventListener('mouseleave', () => {
-        sortBtn.style.background = 'transparent';
-        sortBtn.style.color = 'var(--text-muted)';
-      });
+      // Hover effect handled by CSS .scr-header-btn:hover
 
       sortBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -3358,7 +3172,7 @@ export class SeriesCardRenderer extends Component {
         const newOrder = currentOrder === 'asc' ? 'desc' : 'asc';
 
         // Update icon and title immediately
-        sortBtn.innerHTML = '';
+        sortBtn.empty();
         setIcon(sortBtn, newOrder === 'asc' ? 'arrow-up-narrow-wide' : 'arrow-down-wide-narrow');
         sortBtn.setAttribute('title', newOrder === 'asc' ? 'Oldest first (click for newest first)' : 'Newest first (click for oldest first)');
 
@@ -3376,28 +3190,11 @@ export class SeriesCardRenderer extends Component {
     // Add episode button (webtoons only)
     if (isWebtoon) {
       const addBtn = toggleHeader.createDiv({ cls: 'episode-add-btn' });
-      addBtn.style.cssText = `
-        width: 24px;
-        height: 24px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 4px;
-        cursor: pointer;
-        color: var(--text-muted);
-        transition: all 0.15s ease;
-      `;
+      addBtn.addClass('sa-icon-24', 'sa-rounded-4', 'sa-clickable', 'sa-text-muted', 'sa-transition', 'scr-header-btn');
       setIcon(addBtn, 'plus');
       addBtn.setAttribute('title', 'Download more episodes');
 
-      addBtn.addEventListener('mouseenter', () => {
-        addBtn.style.background = 'var(--background-modifier-hover)';
-        addBtn.style.color = 'var(--text-normal)';
-      });
-      addBtn.addEventListener('mouseleave', () => {
-        addBtn.style.background = 'transparent';
-        addBtn.style.color = 'var(--text-muted)';
-      });
+      // Hover effect handled by CSS .scr-header-btn:hover
 
       addBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -3413,28 +3210,11 @@ export class SeriesCardRenderer extends Component {
 
       // Delete all button
       const deleteBtn = toggleHeader.createDiv({ cls: 'episode-delete-btn' });
-      deleteBtn.style.cssText = `
-        width: 24px;
-        height: 24px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 4px;
-        cursor: pointer;
-        color: var(--text-muted);
-        transition: all 0.15s ease;
-      `;
+      deleteBtn.addClass('sa-icon-24', 'sa-rounded-4', 'sa-clickable', 'sa-text-muted', 'sa-transition', 'scr-header-btn', 'scr-delete-btn');
       setIcon(deleteBtn, 'trash-2');
       deleteBtn.setAttribute('title', 'Delete all episodes');
 
-      deleteBtn.addEventListener('mouseenter', () => {
-        deleteBtn.style.background = 'rgba(var(--color-red-rgb), 0.1)';
-        deleteBtn.style.color = 'var(--color-red)';
-      });
-      deleteBtn.addEventListener('mouseleave', () => {
-        deleteBtn.style.background = 'transparent';
-        deleteBtn.style.color = 'var(--text-muted)';
-      });
+      // Hover effect handled by CSS .scr-delete-btn:hover
 
       deleteBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -3461,7 +3241,7 @@ export class SeriesCardRenderer extends Component {
 
     // Episode list container (styles from skeleton-card.css)
     const listContainer = listWrapper.createDiv({ cls: 'episode-list-container' });
-    listContainer.style.display = state.expandedTOC ? 'block' : 'none';
+    listContainer.addClass(state.expandedTOC ? 'scr-episode-list--expanded' : 'scr-episode-list--collapsed');
 
     // Preview banner placeholder (for all webtoons - shows preview episode info)
     let previewBannerContainer: HTMLElement | null = null;
@@ -3501,7 +3281,7 @@ export class SeriesCardRenderer extends Component {
     toggleHeader.addEventListener('click', () => {
       state.expandedTOC = !state.expandedTOC;
       chevron.classList.toggle('expanded', state.expandedTOC);
-      listContainer.style.display = state.expandedTOC ? 'block' : 'none';
+      listContainer.classList.toggle('sa-hidden', !state.expandedTOC);
 
       // Load comment counts when expanding webtoon episode list
       if (state.expandedTOC && isWebtoon) {
@@ -3604,54 +3384,31 @@ export class SeriesCardRenderer extends Component {
 
     const item = container.createDiv({ cls: itemClasses.join(' ') });
     item.dataset.episode = String(episode.episode);
-    item.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 16px;
-      cursor: pointer;
-      border-bottom: 1px solid var(--background-modifier-border);
-      transition: background 0.15s ease;
-    `;
+    item.addClass('sa-flex-row', 'sa-gap-12', 'sa-px-16', 'sa-clickable', 'sa-border-b', 'sa-transition-bg', 'scr-episode-item');
 
     // Cover thumbnail placeholder (will be loaded async)
     // Read episodes have grayscale + reduced opacity for clear visual distinction
     const coverContainer = item.createDiv({ cls: 'webtoon-episode-cover' });
-    coverContainer.style.cssText = `
-      width: 48px;
-      height: 48px;
-      flex-shrink: 0;
-      border-radius: 6px;
-      background: var(--background-secondary);
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      opacity: ${episode.isRead ? '0.5' : '1'};
-      filter: ${episode.isRead ? 'grayscale(50%)' : 'none'};
-      transition: opacity 0.15s ease, filter 0.15s ease;
-    `;
+    coverContainer.addClass('sa-flex-shrink-0', 'sa-rounded-6', 'sa-bg-secondary', 'sa-overflow-hidden', 'sa-flex-center', 'scr-episode-cover');
+    coverContainer.classList.toggle('sa-opacity-50', episode.isRead);
+    coverContainer.toggleClass('scr-episode-cover--read', episode.isRead);
+    coverContainer.toggleClass('scr-episode-cover--unread', !episode.isRead);
 
     // Load cover image from PostData (with streaming fallback using PostData.thumbnail)
     this.loadEpisodeCover(coverContainer, episode);
 
     // Episode info section
     const infoSection = item.createDiv({ cls: 'webtoon-episode-info' });
-    infoSection.style.cssText = 'flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;';
+    infoSection.addClass('sa-flex-1', 'sa-min-w-0', 'sa-flex-col', 'sa-gap-2');
 
     // Episode number badge + title row
     const titleRow = infoSection.createDiv({ cls: 'webtoon-episode-title-row' });
-    titleRow.style.cssText = 'display: flex; align-items: center; gap: 6px;';
+    titleRow.addClass('sa-flex-row', 'sa-gap-6');
 
     // Read indicator icon (shows before episode number for read items)
     if (episode.isRead) {
       const readIndicator = titleRow.createSpan({ cls: 'read-indicator' });
-      readIndicator.style.cssText = `
-        display: flex;
-        align-items: center;
-        color: var(--text-faint);
-        flex-shrink: 0;
-      `;
+      readIndicator.addClass('sa-flex-row', 'sa-text-faint', 'sa-flex-shrink-0');
       setIcon(readIndicator, 'eye');
       const svgEl = readIndicator.querySelector('svg');
       if (svgEl) {
@@ -3672,31 +3429,20 @@ export class SeriesCardRenderer extends Component {
       : episode.isRead
         ? 'var(--text-faint)'
         : 'var(--text-muted)';
-    numBadge.style.cssText = `
-      padding: 1px 6px;
-      background: ${numBadgeBg};
-      color: ${numBadgeColor};
-      border-radius: 3px;
-      font-size: 11px;
-      font-weight: ${episode.isRead && !isCurrent ? '500' : '600'};
-      flex-shrink: 0;
-      transition: background 0.15s ease, color 0.15s ease;
-    `;
+    numBadge.addClass('sa-rounded-4', 'sa-flex-shrink-0', 'sa-transition', 'scr-num-badge');
+    numBadge.setCssProps({ '--sa-bg': numBadgeBg, '--sa-color': numBadgeColor });
+    numBadge.addClass('sa-dynamic-bg', 'sa-dynamic-color');
+    numBadge.toggleClass('scr-num-badge--read', episode.isRead && !isCurrent);
+    numBadge.toggleClass('scr-num-badge--unread', !(episode.isRead && !isCurrent));
     numBadge.textContent = `Ep. ${episode.episode}`;
 
     // Title - more muted when read (--text-faint instead of --text-muted)
     const titleEl = titleRow.createSpan({ cls: 'webtoon-episode-item-title' });
-    titleEl.style.cssText = `
-      font-size: 13px;
-      font-weight: ${episode.isRead ? '400' : '500'};
-      color: ${episode.isRead ? 'var(--text-faint)' : 'var(--text-normal)'};
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      flex: 1;
-      min-width: 0;
-      transition: color 0.15s ease, font-weight 0.15s ease;
-    `;
+    titleEl.addClass('sa-text-base', 'sa-truncate', 'sa-flex-1', 'sa-min-w-0', 'sa-transition');
+    titleEl.toggleClass('scr-ep-title--read', episode.isRead);
+    titleEl.toggleClass('scr-ep-title--unread', !episode.isRead);
+    titleEl.setCssProps({ '--sa-color': episode.isRead ? 'var(--text-faint)' : 'var(--text-normal)' });
+    titleEl.addClass('sa-dynamic-color');
     // Extract just the episode title (remove series name prefix and episode number prefix)
     let episodeTitleText = episode.title.includes(' - ')
       ? episode.title.split(' - ').slice(-1)[0]
@@ -3710,18 +3456,13 @@ export class SeriesCardRenderer extends Component {
     // Status indicators (liked/read) - right side
     if (episode.isLiked) {
       const likedBadge = titleRow.createSpan({ cls: 'liked-badge' });
-      likedBadge.style.cssText = `
-        color: var(--interactive-accent);
-        flex-shrink: 0;
-        display: flex;
-        align-items: center;
-      `;
+      likedBadge.addClass('sa-text-accent', 'sa-flex-shrink-0', 'sa-flex-row');
       setIcon(likedBadge, 'star');
       const svgEl = likedBadge.querySelector('svg');
       if (svgEl) {
         svgEl.setAttribute('width', '12');
         svgEl.setAttribute('height', '12');
-        svgEl.style.fill = 'currentColor';
+        likedBadge.addClass('scr-svg-filled');
       }
     }
 
@@ -3732,31 +3473,22 @@ export class SeriesCardRenderer extends Component {
     const hasMetadata = episode.starScore !== undefined || episode.published;
     if (hasMetadata) {
       const metaRow = infoSection.createDiv({ cls: 'webtoon-episode-meta-row' });
-      metaRow.style.cssText = `
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 6px;
-        font-size: 11px;
-        line-height: 1;
-      `;
+      metaRow.addClass('scr-meta-row');
 
       // Star score (별점)
       if (episode.starScore !== undefined) {
         const starContainer = metaRow.createSpan({ cls: 'episode-star-score' });
-        starContainer.style.cssText = `
-          display: inline-flex;
-          align-items: center;
-          gap: 2px;
-          color: var(--text-muted);
-        `;
+        starContainer.addClass('scr-star-score');
 
         // Star icon (inline SVG)
         const starIcon = starContainer.createSpan();
-        starIcon.style.cssText = 'display: inline-flex; align-items: center;';
-        starIcon.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="#ffc107">
-          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-        </svg>`;
+        starIcon.addClass('scr-star-icon');
+        const svg = createCustomSVG(
+          '0 0 24 24',
+          'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z',
+          { width: '11px', height: '11px', fill: '#ffc107' }
+        );
+        starIcon.appendChild(svg);
 
         const scoreText = starContainer.createSpan();
         scoreText.textContent = episode.starScore.toFixed(2);
@@ -3765,7 +3497,7 @@ export class SeriesCardRenderer extends Component {
       // Published date (간략 형식)
       if (episode.published) {
         const dateContainer = metaRow.createSpan({ cls: 'episode-publish-date' });
-        dateContainer.style.cssText = 'color: var(--text-faint);';
+        dateContainer.addClass('scr-publish-date');
         // Parse date and format as YY.MM.DD
         const dateStr = this.formatShortDate(episode.published);
         dateContainer.textContent = dateStr;
@@ -3774,31 +3506,27 @@ export class SeriesCardRenderer extends Component {
 
     // Action button container (right side, visible on hover/mobile)
     const actionContainer = item.createDiv({ cls: 'webtoon-episode-actions' });
-    actionContainer.style.cssText = `
-      flex-shrink: 0;
-      opacity: 0;
-      transition: opacity 0.15s ease;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      color: var(--text-muted);
-    `;
+    actionContainer.addClass('scr-action-container');
 
     // Detect mobile
     const isMobile = window.innerWidth <= 768 || 'ontouchstart' in window;
     if (isMobile) {
       // On mobile: always show actions
-      actionContainer.style.opacity = '1';
+      actionContainer.addClass('scr-action-container--visible');
     }
 
     // Helper to create action icon button (following PostCardRenderer pattern)
     const createActionBtn = (icon: string, tooltip: string, onClick: (e: MouseEvent) => void, initialColor?: string) => {
       const btn = actionContainer.createDiv();
-      btn.style.cssText = `display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; transition: color 0.2s; color: ${initialColor || 'var(--text-muted)'};`;
+      btn.addClass('scr-action-btn');
+      if (initialColor) {
+        btn.setCssProps({ '--sa-color': initialColor });
+        btn.addClass('sa-dynamic-color');
+      }
       btn.setAttribute('title', tooltip);
 
       const iconContainer = btn.createDiv();
-      iconContainer.style.cssText = 'width: 16px; height: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;';
+      iconContainer.addClass('scr-action-btn-icon');
       setIcon(iconContainer, icon);
 
       btn.addEventListener('click', (e) => {
@@ -3806,12 +3534,7 @@ export class SeriesCardRenderer extends Component {
         onClick(e);
       });
 
-      btn.addEventListener('mouseenter', () => {
-        btn.style.color = 'var(--interactive-accent)';
-      });
-      btn.addEventListener('mouseleave', () => {
-        btn.style.color = initialColor || 'var(--text-muted)';
-      });
+      // Hover effect handled by CSS .scr-action-btn:hover
 
       return { btn, iconContainer };
     };
@@ -3819,16 +3542,7 @@ export class SeriesCardRenderer extends Component {
     if (isMobile) {
       // Mobile: Show ... button with dropdown menu
       const moreBtn = actionContainer.createDiv();
-      moreBtn.style.cssText = `
-        width: 28px;
-        height: 28px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 4px;
-        cursor: pointer;
-        color: var(--text-muted);
-      `;
+      moreBtn.addClass('scr-more-btn');
       setIcon(moreBtn, 'more-horizontal');
 
       let menuOpen = false;
@@ -3853,12 +3567,7 @@ export class SeriesCardRenderer extends Component {
         });
 
         const btnRect = moreBtn.getBoundingClientRect();
-        menuEl.style.position = 'fixed';
-        // Must be higher than fullscreen card (z-index: 10000) for visibility in mobile fullscreen
-        menuEl.style.zIndex = '999999';
-
-        // Temporarily add to body to measure menu height
-        menuEl.style.visibility = 'hidden';
+        menuEl.setCssStyles({ position: 'fixed', 'z-index': '999999', visibility: 'hidden' });
         document.body.appendChild(menuEl);
         const menuHeight = menuEl.offsetHeight;
         const menuWidth = menuEl.offsetWidth;
@@ -3869,28 +3578,28 @@ export class SeriesCardRenderer extends Component {
 
         if (spaceBelow >= menuHeight) {
           // Enough space below - show menu below button
-          menuEl.style.top = `${btnRect.bottom + 4}px`;
+          menuEl.setCssStyles({ top: `${btnRect.bottom + 4}px` });
         } else if (spaceAbove >= menuHeight) {
           // Not enough space below, but enough above - show menu above button
-          menuEl.style.top = `${btnRect.top - menuHeight - 4}px`;
+          menuEl.setCssStyles({ top: `${btnRect.top - menuHeight - 4}px` });
         } else {
           // Not enough space either way - position at best available spot
           // Prefer showing as much as possible from the top
           const topPos = Math.max(8, Math.min(btnRect.bottom + 4, window.innerHeight - menuHeight - 8));
-          menuEl.style.top = `${topPos}px`;
+          menuEl.setCssStyles({ top: `${topPos}px` });
         }
 
         // Check horizontal positioning - ensure menu doesn't extend beyond right edge
         const rightPos = window.innerWidth - btnRect.right;
         if (rightPos + menuWidth > window.innerWidth - 8) {
           // Menu would extend beyond left edge, adjust
-          menuEl.style.right = `${Math.max(8, window.innerWidth - menuWidth - 8)}px`;
+          menuEl.setCssStyles({ right: `${Math.max(8, window.innerWidth - menuWidth - 8)}px` });
         } else {
-          menuEl.style.right = `${rightPos}px`;
+          menuEl.setCssStyles({ right: `${rightPos}px` });
         }
 
         // Make visible after positioning
-        menuEl.style.visibility = 'visible';
+        menuEl.setCssStyles({ visibility: 'visible' });
         menuOpen = true;
 
         const closeHandler = (evt: MouseEvent) => {
@@ -3913,12 +3622,7 @@ export class SeriesCardRenderer extends Component {
         });
       });
 
-      moreBtn.addEventListener('mouseenter', () => {
-        moreBtn.style.background = 'var(--background-modifier-hover)';
-      });
-      moreBtn.addEventListener('mouseleave', () => {
-        moreBtn.style.background = '';
-      });
+      // Hover effect handled by CSS .scr-more-btn:hover
     } else {
       // Desktop: Show inline action buttons
 
@@ -3935,20 +3639,15 @@ export class SeriesCardRenderer extends Component {
               fm.like = newLikeStatus;
             });
             favoriteBtn.setAttribute('title', newLikeStatus ? 'Remove from favorites' : 'Add to favorites');
-            favoriteBtn.style.color = newLikeStatus ? 'var(--interactive-accent)' : 'var(--text-muted)';
-            const svgEl = favoriteIcon.querySelector('svg');
-            if (svgEl) {
-              svgEl.style.fill = newLikeStatus ? 'currentColor' : 'none';
-            }
+            favoriteBtn.setCssProps({ '--sa-color': newLikeStatus ? 'var(--interactive-accent)' : 'var(--text-muted)' });
+            favoriteBtn.addClass('sa-dynamic-color');
+            favoriteBtn.toggleClass('scr-svg-filled', newLikeStatus);
           }
         },
         favoriteColor
       );
       if (episode.isLiked) {
-        const svgEl = favoriteIcon.querySelector('svg');
-        if (svgEl) {
-          svgEl.style.fill = 'currentColor';
-        }
+        favoriteBtn.addClass('scr-svg-filled');
       }
 
       // Read marking button - uses markEpisodeAsRead for unified handling
@@ -3963,7 +3662,8 @@ export class SeriesCardRenderer extends Component {
           this.markEpisodeAsRead(series, episode, newReadStatus);
           // Update button UI immediately (icon swap)
           readBtn.setAttribute('title', newReadStatus ? 'Mark as unread' : 'Mark as read');
-          readBtn.style.color = newReadStatus ? 'var(--interactive-accent)' : 'var(--text-muted)';
+          readBtn.setCssProps({ '--sa-color': newReadStatus ? 'var(--interactive-accent)' : 'var(--text-muted)' });
+          readBtn.addClass('sa-dynamic-color');
           readIconContainer.empty();
           setIcon(readIconContainer, newReadStatus ? 'eye' : 'eye-off');
         },
@@ -3996,18 +3696,10 @@ export class SeriesCardRenderer extends Component {
     });
 
     // Hover effect - show action buttons on desktop
-    item.addEventListener('mouseenter', () => {
-      item.style.background = 'var(--background-modifier-hover)';
-      if (!isMobile) {
-        actionContainer.style.opacity = '1';
-      }
-    });
-    item.addEventListener('mouseleave', () => {
-      item.style.background = '';
-      if (!isMobile) {
-        actionContainer.style.opacity = '0';
-      }
-    });
+    // Hover effect handled by CSS .scr-episode-item-hover:hover
+    if (!isMobile) {
+      item.addClass('scr-episode-item-hover');
+    }
 
     return item;
   }
@@ -4041,37 +3733,21 @@ export class SeriesCardRenderer extends Component {
   ): HTMLElement {
     const menu = document.createElement('div');
     menu.className = 'episode-action-menu';
-    menu.style.cssText = `
-      background: var(--background-primary);
-      border: 1px solid var(--background-modifier-border);
-      border-radius: 6px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      overflow: hidden;
-      min-width: 160px;
-    `;
+    menu.addClass('scr-action-menu');
 
     const createMenuItem = (icon: string, label: string, onClick: () => void, isActive?: boolean) => {
       const item = document.createElement('div');
       item.className = 'episode-action-item';
-      item.style.cssText = `
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 10px 14px;
-        cursor: pointer;
-        font-size: 13px;
-        color: ${isActive ? 'var(--interactive-accent)' : 'var(--text-normal)'};
-        transition: background 0.1s ease;
-      `;
+      item.addClass('scr-action-menu-item');
+      if (isActive) {
+        item.addClass('scr-action-menu-item--active');
+      }
 
       const iconEl = document.createElement('span');
-      iconEl.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center; justify-content: center;';
+      iconEl.addClass('scr-action-menu-icon');
       setIcon(iconEl, icon);
       if (isActive) {
-        const svgEl = iconEl.querySelector('svg');
-        if (svgEl) {
-          svgEl.style.fill = 'currentColor';
-        }
+        iconEl.addClass('scr-svg-filled');
       }
 
       const labelEl = document.createElement('span');
@@ -4080,12 +3756,7 @@ export class SeriesCardRenderer extends Component {
       item.appendChild(iconEl);
       item.appendChild(labelEl);
 
-      item.addEventListener('mouseenter', () => {
-        item.style.background = 'var(--background-modifier-hover)';
-      });
-      item.addEventListener('mouseleave', () => {
-        item.style.background = '';
-      });
+      // Hover effect handled by CSS .scr-action-menu-item:hover
 
       item.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -4121,7 +3792,7 @@ export class SeriesCardRenderer extends Component {
     }, false); // Don't use isActive to avoid filled icon
     // Apply accent color for read state (without fill)
     if (episode.isRead) {
-      readItem.style.color = 'var(--interactive-accent)';
+      readItem.addClass('scr-read-active-color');
     }
     menu.appendChild(readItem);
 
@@ -4166,7 +3837,7 @@ export class SeriesCardRenderer extends Component {
     if (!postData || postData.media.length === 0) {
       // Show placeholder icon
       const iconWrapper = container.createDiv();
-      iconWrapper.style.cssText = 'width: 20px; height: 20px; color: var(--text-faint);';
+      iconWrapper.addClass('scr-cover-icon-placeholder');
       setIcon(iconWrapper, 'image');
       return;
     }
@@ -4176,7 +3847,7 @@ export class SeriesCardRenderer extends Component {
     if (!coverMedia) return;
 
     const coverImg = container.createEl('img');
-    coverImg.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+    coverImg.addClass('scr-cover-img');
     coverImg.src = this.getResourcePath(coverMedia.url);
     coverImg.alt = episode.title;
 
@@ -4196,14 +3867,14 @@ export class SeriesCardRenderer extends Component {
         coverImg.addEventListener('error', () => {
           coverImg.remove();
           const iconWrapper = container.createDiv();
-          iconWrapper.style.cssText = 'width: 20px; height: 20px; color: var(--text-faint);';
+          iconWrapper.addClass('scr-cover-icon-placeholder');
           setIcon(iconWrapper, 'image');
         }, { once: true });
       } else {
         // No streaming fallback available - show placeholder
         coverImg.remove();
         const iconWrapper = container.createDiv();
-        iconWrapper.style.cssText = 'width: 20px; height: 20px; color: var(--text-faint);';
+        iconWrapper.addClass('scr-cover-icon-placeholder');
         setIcon(iconWrapper, 'image');
       }
     }, { once: true });
@@ -4393,7 +4064,7 @@ export class SeriesCardRenderer extends Component {
       // Update status icon
       const statusIcon = item.querySelector('.episode-status');
       if (statusIcon) {
-        statusIcon.innerHTML = '';
+        (statusIcon as HTMLElement).empty();
         statusIcon.classList.remove('current', 'read', 'unread');
 
         if (isCurrent) {

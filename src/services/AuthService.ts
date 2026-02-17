@@ -1,4 +1,4 @@
-import { Platform } from 'obsidian';
+import { Platform, requestUrl } from 'obsidian';
 import type { SocialArchiverSettings } from '../types/settings';
 
 /**
@@ -45,7 +45,8 @@ export class AuthService {
    */
   async validateToken(token: string): Promise<ValidateTokenResponse> {
     try {
-      const response = await fetch(`${this.workerUrl}/api/auth/validate-token`, {
+      const response = await requestUrl({
+        url: `${this.workerUrl}/api/auth/validate-token`,
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -53,12 +54,13 @@ export class AuthService {
           'X-Client-Version': this.pluginVersion,
           'X-Platform': this.getPlatformIdentifier()
         },
-        body: JSON.stringify({ token })
+        body: JSON.stringify({ token }),
+        throw: false
       });
 
-      const data = await response.json();
+      const data = response.json;
 
-      if (!response.ok) {
+      if (response.status !== 200) {
         return {
           success: false,
           error: data.error || {
@@ -89,7 +91,8 @@ export class AuthService {
     error?: { code: string; message: string };
   }> {
     try {
-      const response = await fetch(`${this.workerUrl}/api/user/credits`, {
+      const response = await requestUrl({
+        url: `${this.workerUrl}/api/user/credits`,
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -97,12 +100,13 @@ export class AuthService {
           'X-Client': 'obsidian-plugin',
           'X-Client-Version': this.pluginVersion,
           'X-Platform': this.getPlatformIdentifier()
-        }
+        },
+        throw: false
       });
 
-      const data = await response.json();
+      const data = response.json;
 
-      if (!response.ok) {
+      if (response.status !== 200) {
         return {
           success: false,
           error: data.error || {

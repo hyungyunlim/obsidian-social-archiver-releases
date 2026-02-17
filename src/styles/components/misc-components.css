@@ -1,0 +1,1183 @@
+/*
+ * Misc component CSS classes
+ *
+ * Replaces inline styles flagged by the Obsidian automated review.
+ * Prefix key: tc- (TimelineContainer), apb- (ArchiveProgressBanner),
+ * csb- (CrawlStatusBanner), rmcr- (ReaderModeContent),
+ * fp- (FilterPanel), sd- (SortDropdown), tm- (TagModal),
+ * st- (SettingTab), btn- (BatchTranscription),
+ * bdm- (BackgroundDownload), mgv- (MediaGalleryView)
+ */
+
+/* ========================================
+ * ArchiveProgressBanner (apb-)
+ * ======================================== */
+
+/* Container: hidden column layout until jobs exist */
+.archive-progress-banners {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
+.archive-progress-banners.apb-visible {
+  display: flex;
+}
+
+/* Banner row */
+.archive-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  font-size: var(--font-ui-small);
+}
+
+/* Banner icon base */
+.archive-banner .banner-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  --icon-size: 16px;
+}
+
+/* Status-specific icon colors */
+.archive-banner .banner-icon.apb-icon-queued { color: var(--text-muted); }
+.archive-banner .banner-icon.apb-icon-active { color: var(--text-muted); }
+.archive-banner .banner-icon.apb-icon-completed { color: var(--color-green); }
+.archive-banner .banner-icon.apb-icon-failed { color: var(--color-red); }
+
+/* Banner text */
+.archive-banner .banner-text {
+  flex: 1;
+  color: var(--text-normal);
+}
+
+/* Banner actions container */
+.archive-banner .banner-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+/* Action button (retry, dismiss) */
+.apb-action-btn {
+  padding: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-radius: var(--radius-s);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.apb-action-btn:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+/* Spin animation (moved from createElement('style')) */
+@keyframes archive-banner-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.archive-banner .banner-icon.spin svg {
+  animation: archive-banner-spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .archive-banner .banner-icon.spin svg {
+    animation: none;
+  }
+}
+
+/* ========================================
+ * CrawlStatusBanner (csb-)
+ * ======================================== */
+
+/* Container: hidden column layout until jobs exist */
+.crawl-status-banners {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
+.crawl-status-banners.csb-visible {
+  display: flex;
+}
+
+/* Banner row */
+.crawl-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  font-size: var(--font-ui-small);
+}
+
+/* Banner icon base */
+.crawl-banner .banner-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  --icon-size: 16px;
+}
+
+/* Status-specific icon colors */
+.crawl-banner .banner-icon.csb-icon-crawling { color: var(--text-muted); }
+.crawl-banner .banner-icon.csb-icon-completed { color: var(--color-green); }
+.crawl-banner .banner-icon.csb-icon-failed { color: var(--color-red); }
+
+/* Banner text */
+.crawl-banner .banner-text {
+  flex: 1;
+  color: var(--text-normal);
+}
+
+/* Dismiss button */
+.csb-dismiss-btn {
+  padding: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-radius: var(--radius-s);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.csb-dismiss-btn:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+/* Spin animation for crawl banner (reuses archive keyframes) */
+.crawl-banner .banner-icon.spin svg {
+  animation: archive-banner-spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crawl-banner .banner-icon.spin svg {
+    animation: none;
+  }
+}
+
+/* ========================================
+ * ReaderModeContentRenderer (rmcr-)
+ * ======================================== */
+
+/* Scrollbar hide (moved from createElement('style')) */
+.reader-mode-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.rmcr-scroll-hide {
+  scrollbar-width: none;
+}
+
+/* Quoted post wrapper */
+.reader-mode-quoted-post {
+  margin: 20px 0;
+  border-left: 3px solid var(--interactive-accent);
+}
+
+/* Quoted post body */
+.rmcr-quoted-body {
+  font-size: calc(var(--reader-font-size, 19px) * 0.9);
+  line-height: 1.7;
+}
+
+/* Source link underline */
+.rmcr-source-link {
+  text-decoration: underline;
+}
+
+/* Initials avatar text */
+.rmcr-initials-text {
+  color: var(--text-on-accent);
+  line-height: 1;
+}
+
+/* SVG filled icon for active action buttons (star, archive) */
+.rmcr-icon-filled svg {
+  fill: currentColor;
+}
+
+.rmcr-icon-filled-stroke svg {
+  fill: currentColor;
+  stroke: var(--background-primary);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* Subscription badge icon (subscribed state) */
+.rmcr-badge-icon-subscribed {
+  width: 10px;
+  height: 10px;
+  stroke: var(--color-green);
+}
+
+/* Subscription badge icon (muted/unsubscribed state) */
+.rmcr-badge-icon-muted {
+  width: 10px;
+  height: 10px;
+  stroke: var(--text-muted);
+}
+
+/* Platform icon SVG in reader */
+.rmcr-platform-svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+.rmcr-platform-svg-16 {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+/* ========================================
+ * FilterPanel (fp-)
+ * ======================================== */
+
+/* Panel positioning overrides */
+.filter-panel.fp-panel {
+  top: 48px;
+  left: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 320px;
+  max-width: 400px;
+}
+
+/* Platform label uppercase */
+.fp-label-uppercase {
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Toggle hover effect */
+.fp-toggle-hover {
+  background: rgba(var(--mono-rgb-100), 0.05);
+}
+
+/* Platforms grid */
+.fp-platforms-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* Cursor not-allowed for disabled checkboxes */
+.fp-disabled {
+  cursor: not-allowed;
+}
+
+/* Divider */
+.fp-divider {
+  height: 1px;
+  margin: 16px 0;
+}
+
+/* ========================================
+ * SortDropdown (sd-)
+ * ======================================== */
+
+/* Sort controls - zero gap */
+.sd-controls {
+  gap: 0;
+}
+
+/* Sort by button */
+.sd-sort-btn {
+  height: 40px;
+  border-radius: 8px 0 0 8px;
+  min-width: 40px;
+}
+
+.sd-sort-btn-text {
+  line-height: 1;
+}
+
+/* Order toggle button */
+.sd-order-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 0 8px 8px 0;
+}
+
+/* Dropdown positioning */
+.sort-dropdown.sd-dropdown {
+  top: 48px;
+  left: var(--sd-left, 0);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 140px;
+}
+
+/* Active sort option */
+.sd-option-active {
+  color: var(--text-on-accent);
+}
+
+/* ========================================
+ * TagModal (tm-)
+ * ======================================== */
+
+/* Mobile modal overrides (tm-mobile applied to modalEl) */
+.modal.tm-mobile {
+  width: 92vw !important;
+  max-width: 92vw !important;
+  height: auto !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+}
+
+.tm-mobile-content {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+/* Mobile close button shrink */
+.tm-mobile-close {
+  width: 28px !important;
+  height: 28px !important;
+  font-size: 14px !important;
+  top: 10px !important;
+  right: 10px !important;
+}
+
+/* Count badge */
+.tm-count-badge {
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+
+/* Search input overrides */
+.tm-search-input {
+  outline: none;
+  box-sizing: border-box;
+}
+
+/* Hint items */
+.tm-hint-gap {
+  gap: 3px;
+}
+
+/* Keyboard hint badge */
+.tm-kbd {
+  font-family: inherit;
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  line-height: 1.4;
+}
+
+/* Highlighted row */
+.tm-row-highlighted {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: -2px;
+}
+
+/* Confirmation icon centering */
+.tm-confirm-icon {
+  margin: 0 auto 12px;
+}
+
+/* Confirm description bottom margin */
+.tm-confirm-desc {
+  margin-bottom: 20px;
+}
+
+/* Confirm button row center */
+.tm-confirm-btns {
+  justify-content: center;
+}
+
+/* Delete confirm button */
+.tm-confirm-delete-btn {
+  background: var(--text-error);
+  color: white;
+  border: none;
+}
+
+/* Tag color dot */
+.tm-tag-dot {
+  width: 12px;
+  height: 12px;
+  background: var(--tm-dot-color, var(--background-modifier-border));
+}
+
+/* Italic tag name (undefined/auto tags) */
+.tm-tag-italic {
+  font-style: italic;
+}
+
+/* Check icon for applied tags */
+.tm-check-accent {
+  color: var(--interactive-accent);
+}
+
+/* Delete button sizing */
+.tm-delete-btn {
+  width: 20px;
+  height: 20px;
+}
+
+.tm-delete-btn-visible {
+  opacity: 1;
+}
+
+.tm-delete-btn-hidden {
+  opacity: 0;
+}
+
+/* Create row top padding */
+.tm-create-row {
+  padding-top: 12px;
+}
+
+/* ========================================
+ * SettingTab (st-)
+ * ======================================== */
+
+/* Margin overrides via CSS custom properties */
+.st-margin-custom {
+  margin: var(--st-margin);
+}
+
+/* Order row variants */
+.st-order-row {
+  border-top: none;
+  border: none;
+}
+
+.st-order-row-default {
+  margin: 0 0 6px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+
+.st-order-row-custom {
+  margin: 0;
+  padding: 10px 12px 8px 12px;
+  border-radius: 10px 10px 0 0;
+}
+
+.st-order-row-add {
+  margin: 0 0 6px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+
+.st-order-row-value {
+  border-top: none;
+  margin: 0 0 6px 0;
+  padding: 0 12px 10px 12px;
+  border: none;
+  border-radius: 0 0 10px 10px;
+}
+
+/* Alias editor overrides */
+.st-alias-editor-expanded {
+  margin: -4px 0 8px 0;
+  border-top: 1px dashed var(--background-modifier-border);
+  border-radius: 0 0 10px 10px;
+}
+
+/* Mobile touch target */
+.st-mobile-touch {
+  min-height: 44px;
+}
+
+/* Collapsible content visible */
+.st-collapsible-visible {
+  display: block;
+}
+
+/* Reddit username color */
+.st-reddit-username {
+  color: #ff4500;
+}
+
+/* ========================================
+ * BatchTranscriptionNotice (btn-)
+ * ======================================== */
+
+/* Container sizing */
+.social-archiver-batch-notice {
+  max-width: 360px;
+  width: 360px;
+}
+
+/* Progress bar track */
+.btn-progress-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--background-modifier-border);
+}
+
+/* Progress bar fill */
+.btn-progress-fill {
+  border-radius: 2px;
+  transition: width 0.3s ease;
+  width: var(--btn-progress, 0%);
+}
+
+/* Progress fill color variants */
+.btn-progress-fill.btn-fill-accent { background: var(--interactive-accent); }
+.btn-progress-fill.btn-fill-green { background: var(--color-green); }
+.btn-progress-fill.btn-fill-muted { background: var(--text-muted); }
+.btn-progress-fill.btn-fill-yellow { background: var(--color-yellow); }
+
+/* Button base */
+.btn-action-button {
+  font-family: inherit;
+  border-radius: var(--radius-s);
+  border: 1px solid transparent;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+/* Button variants */
+.btn-variant-primary {
+  color: var(--text-on-accent);
+  border: 1px solid var(--interactive-accent);
+}
+
+.btn-variant-danger {
+  background: none;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.btn-variant-default {
+  border: 1px solid var(--background-modifier-border);
+}
+
+/* Button hover states */
+.btn-variant-danger:hover {
+  color: var(--color-red);
+  border-color: var(--color-red);
+}
+
+.btn-variant-primary:hover {
+  filter: brightness(1.1);
+}
+
+.btn-variant-default:hover {
+  background: var(--background-modifier-border);
+}
+
+/* ========================================
+ * BackgroundDownloadManager (bdm-)
+ * ======================================== */
+
+.bdm-status-hidden {
+  display: none;
+}
+
+.bdm-status-visible {
+  display: inline-block;
+}
+
+/* ========================================
+ * MediaGalleryView2 (mgv-)
+ * ======================================== */
+
+/* Container scroll */
+.social-archiver-media-gallery-view {
+  overflow-y: auto;
+  height: 100%;
+}
+
+/* Grid layout */
+.mgv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  padding: 16px;
+}
+
+/* Card */
+.mgv-card {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.mgv-card:hover {
+  transform: scale(1.05);
+}
+
+/* Media element */
+.mgv-media {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  background: var(--background-secondary);
+}
+
+/* Error state */
+.mgv-error {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* ========================================
+ * TimelineContainer (tc-)
+ * ======================================== */
+
+/* Background */
+.tc-bg-primary {
+  background-color: var(--background-primary);
+}
+
+/* Empty state min-height */
+.tc-empty-min-height {
+  min-height: calc(100vh - 200px);
+}
+
+/* Empty state icon sizing */
+.tc-empty-icon svg {
+  width: 48px;
+  height: 48px;
+}
+
+/* Loading spinner (small, inline) */
+.tc-spinner-small {
+  border: 2px solid var(--background-modifier-border);
+  border-top-color: var(--interactive-accent);
+  animation: spin 1s linear infinite;
+}
+
+/* Search container animation */
+.tc-search-container {
+  transition: height 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tc-search-container.tc-search-expanded {
+  height: 52px;
+}
+
+.tc-search-container.tc-search-collapsed {
+  height: 0;
+}
+
+/* Search wrapper padding */
+.tc-search-wrapper {
+  padding: 2px 0;
+  box-sizing: border-box;
+}
+
+/* Search inner background */
+.tc-search-inner {
+  background: var(--background-modifier-form-field);
+  box-sizing: border-box;
+}
+
+/* Search input reset (override obsidian defaults) */
+.tc-search-input {
+  padding: 2px 8px !important;
+  margin: 0 !important;
+  border: none !important;
+  line-height: normal !important;
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
+
+/* Header button line-height */
+.tc-btn-text {
+  line-height: 1;
+}
+
+/* Desktop auto-width button */
+.tc-btn-auto-width {
+  width: auto;
+}
+
+/* Sort controls zero-gap */
+.tc-sort-zero-gap {
+  gap: 0;
+}
+
+/* Sort by button border radius */
+.tc-sort-by-btn {
+  border-radius: 8px 0 0 8px;
+  min-width: 40px;
+}
+
+/* Order toggle button border radius */
+.tc-order-btn {
+  border-radius: 0 8px 8px 0;
+}
+
+/* Author sort dropdown */
+.author-sort-dropdown {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  min-width: 160px;
+}
+
+/* Author sort option padding */
+.tc-sort-option {
+  padding: 6px 12px;
+}
+
+/* Filter panel (author platform filter) */
+.tc-filter-panel {
+  top: 48px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 320px;
+  max-width: 400px;
+}
+
+/* Platform label uppercase */
+.tc-platform-label {
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Cursor not-allowed for disabled platforms */
+.tc-cursor-disabled {
+  cursor: not-allowed;
+}
+
+/* Platforms grid */
+.tc-platforms-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* Divider for filter panel */
+.tc-divider {
+  height: 1px;
+  background: var(--background-modifier-border);
+  margin: 12px 0;
+}
+
+/* Archive label in filter panel */
+.tc-archive-label {
+  font-size: 13px;
+  flex: 1;
+  line-height: 16px;
+}
+
+/* Archive check icon in filter panel */
+.tc-archive-check {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+/* Subscription icon active */
+.tc-sub-icon-active {
+  color: var(--text-on-accent);
+}
+
+/* Card removal animation */
+.tc-card-removing {
+  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+/* Crawl history modal container */
+.crawl-history-modal-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 99999;
+  pointer-events: all;
+}
+
+/* ========================================
+ * Gallery group controls (tc-)
+ * ======================================== */
+
+/* Gallery group controls container */
+.gallery-group-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-right: 16px;
+  position: relative;
+}
+
+/* Gallery dropdown button */
+.gallery-group-controls > button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-weight: 400;
+}
+
+.gallery-group-controls > button:hover {
+  background: var(--background-modifier-hover);
+}
+
+.gallery-group-controls > button.tc-btn-open {
+  background: var(--background-modifier-hover);
+}
+
+/* Gallery group-by: label opacity */
+.tc-group-label-dim {
+  opacity: 0.7;
+}
+
+/* Gallery group-by: value text */
+.tc-group-value {
+  color: var(--text-normal);
+}
+
+/* Gallery group-by: chevron opacity */
+.tc-group-chevron {
+  opacity: 0.6;
+}
+
+/* Gallery dropdown menu */
+.gallery-group-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 120px;
+  background: var(--background-primary);
+  border: none;
+  outline: none;
+  border-radius: 6px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  padding: 4px;
+  display: none;
+  z-index: 1000;
+}
+
+.gallery-group-dropdown-menu.tc-dropdown-open {
+  display: block;
+}
+
+/* Gallery dropdown option */
+.gallery-group-dropdown-menu > button {
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.gallery-group-dropdown-menu > button:hover {
+  background: var(--background-modifier-hover);
+}
+
+.gallery-group-dropdown-menu > button.tc-option-active {
+  background: var(--background-modifier-hover);
+}
+
+/* Gallery dropdown option content */
+.tc-option-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+/* Gallery dropdown option label */
+.tc-option-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.tc-option-label-active {
+  font-size: 12px;
+  color: var(--text-normal);
+}
+
+/* Gallery container (fade-in) */
+.media-gallery-container {
+  width: 100%;
+  overflow-y: auto;
+}
+
+.tc-gallery-fadein {
+  opacity: 0;
+  transition: opacity 0.2s ease-in;
+}
+
+.tc-gallery-fadein.tc-gallery-visible {
+  opacity: 1;
+}
+
+.tc-gallery-fadeout {
+  transition: opacity 0.2s ease-out;
+  opacity: 0;
+}
+
+
+/* ========================================
+ * ReaderModeOverlay (rmo-)
+ * ======================================== */
+
+/* Panel animation via CSS custom properties */
+.rmo-panel-animated {
+  transform: var(--rmo-transform, none);
+  opacity: var(--rmo-opacity, 1);
+  transition: var(--rmo-transition, none);
+}
+
+/* Note edit modal */
+.rmo-note-modal {
+  width: min(480px, 92vw);
+  max-height: 80vh;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* Note edit header */
+.rmo-note-header {
+  padding-top: 14px;
+  padding-bottom: 10px;
+}
+
+/* Note edit body */
+.rmo-note-body {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+/* Note edit textarea */
+.rmo-note-textarea {
+  min-height: 120px;
+  max-height: 300px;
+  resize: vertical;
+  padding: 10px 12px;
+  line-height: 1.6;
+  font-family: inherit;
+  outline: none;
+}
+
+.rmo-note-textarea:focus {
+  border-color: var(--interactive-accent);
+}
+
+/* Note edit footer */
+.rmo-note-footer {
+  padding-top: 10px;
+  padding-bottom: 14px;
+  border-top: 1px solid var(--background-modifier-border);
+  border-bottom: none;
+}
+
+/* Note modal button */
+.rmo-note-btn {
+  padding: 6px 14px;
+}
+
+/* Save button accent */
+.rmo-note-save-btn {
+  padding: 6px 14px;
+  border: none;
+  color: var(--text-on-accent);
+}
+
+
+/* ========================================
+ * TagChipBar (tcb-)
+ * ======================================== */
+
+/* Container */
+.tcb-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 0 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tcb-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* Chip base */
+.tcb-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 16px;
+  background: var(--tcb-bg, var(--background-secondary));
+  border: 1px solid var(--tcb-border, transparent);
+  color: var(--tcb-color, var(--text-muted));
+  font-size: 12px;
+  font-weight: var(--tcb-font-weight, 500);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.tcb-chip:hover {
+  background: var(--tcb-hover-bg, var(--background-modifier-hover));
+}
+
+/* Color dot */
+.tcb-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tcb-dot-bg);
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* Count badge */
+.tcb-count {
+  font-size: 10px;
+  opacity: 0.7;
+  margin-left: 2px;
+}
+
+
+/* ========================================
+ * Confirm Modal (cm-)
+ * ======================================== */
+
+/* Mobile sizing */
+.cm-mobile {
+  width: 90vw !important;
+  max-width: 90vw !important;
+}
+
+/* Desktop sizing */
+.cm-desktop {
+  width: 400px !important;
+  max-width: 400px !important;
+}
+
+/* Mobile keyboard position */
+.cm-mobile-position {
+  align-self: flex-start;
+  margin-top: calc(env(safe-area-inset-top, 0px) + 16px);
+}
+
+/* Message */
+.cm-message {
+  margin: 0 0 16px 0;
+  color: var(--text-normal);
+  line-height: 1.5;
+}
+
+/* Monospace input */
+.cm-input-monospace {
+  width: 100%;
+  font-family: var(--font-monospace);
+}
+
+/* Button disabled state */
+.cm-btn-disabled {
+  opacity: 0.5;
+}
+
+/* ========================================
+ * MediaGalleryView2 (mgv2-)
+ * ======================================== */
+
+.mgv2-scroll-container {
+  overflow-y: auto;
+  height: 100%;
+}
+
+.mgv2-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  padding: 16px;
+}
+
+.mgv2-card {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.mgv2-card:hover {
+  transform: scale(1.05);
+}
+
+.mgv2-media-fill {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  background: var(--background-secondary);
+}
+
+.mgv2-error-placeholder {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* ========================================
+ * WebtoonArchiveModal preview banner (wam-)
+ * ======================================== */
+
+.wam-preview-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+}
+
+.wam-preview-icon {
+  font-size: 14px;
+}
+
+.wam-preview-count {
+  font-weight: 500;
+}
+
+.wam-preview-next {
+  color: var(--text-normal);
+}

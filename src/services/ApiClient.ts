@@ -1,3 +1,4 @@
+import { requestUrl } from 'obsidian';
 import type { IService } from './base/IService';
 import type {
   ApiResponse,
@@ -237,10 +238,10 @@ export class ApiClient implements IService {
       this.abortController = new AbortController();
 
       const url = `${this.config.baseUrl}${endpoint}`;
-      const headers = {
+      const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         ...this.config.headers,
-        ...options.headers,
+        ...(options.headers as Record<string, string>),
       };
 
       const timeoutId = setTimeout(() => {
@@ -248,18 +249,20 @@ export class ApiClient implements IService {
       }, this.config.timeout);
 
       try {
-        const response = await fetch(url, {
-          ...options,
+        const response = await requestUrl({
+          url,
+          method: options.method || 'GET',
           headers,
-          signal: this.abortController.signal,
+          body: options.body as string,
+          throw: false
         });
 
         clearTimeout(timeoutId);
 
         // Parse response
-        const data = await response.json();
+        const data = response.json;
 
-        if (!response.ok) {
+        if (response.status !== 200) {
           return {
             success: false,
             error: this.parseErrorResponse(data, response.status),

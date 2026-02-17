@@ -58,7 +58,6 @@ export class CrawlStatusBanner {
 
   constructor(parentEl: HTMLElement) {
     this.containerEl = parentEl.createDiv({ cls: 'crawl-status-banners' });
-    this.applyContainerStyles();
   }
 
   /**
@@ -95,7 +94,7 @@ export class CrawlStatusBanner {
     this.jobs = [...newJobs];
 
     // Toggle visibility
-    this.containerEl.style.display = this.jobs.length > 0 ? 'flex' : 'none';
+    this.containerEl.toggleClass('csb-visible', this.jobs.length > 0);
   }
 
   /**
@@ -111,19 +110,15 @@ export class CrawlStatusBanner {
       }
     });
 
-    this.applyBannerStyles(bannerEl, job.status);
-
     // Icon container
     const iconEl = bannerEl.createSpan({ cls: 'banner-icon' });
-    this.applyIconStyles(iconEl, job.status);
+    this.applyIconStatusClass(iconEl, job.status);
     this.setStatusIcon(iconEl, job.status);
     this.iconElements.set(job.jobId, iconEl);
 
     // Text container
     const textEl = bannerEl.createSpan({ cls: 'banner-text' });
     textEl.setText(this.getStatusText(job));
-    textEl.style.flex = '1';
-    textEl.style.color = 'var(--text-normal)';
 
     // Dismiss button (only for completed or failed jobs)
     if (job.status === 'failed' || job.status === 'completed') {
@@ -147,12 +142,11 @@ export class CrawlStatusBanner {
     if (statusChanged && oldJob) {
       bannerEl.removeClass(`banner-${oldJob.status}`);
       bannerEl.addClass(`banner-${job.status}`);
-      this.applyBannerStyles(bannerEl, job.status);
 
       // Update icon
       const iconEl = this.iconElements.get(job.jobId);
       if (iconEl) {
-        this.applyIconStyles(iconEl, job.status);
+        this.applyIconStatusClass(iconEl, job.status);
         this.setStatusIcon(iconEl, job.status);
       }
 
@@ -175,10 +169,9 @@ export class CrawlStatusBanner {
    */
   private addDismissButton(bannerEl: HTMLElement, jobId: string): void {
     const dismissBtn = bannerEl.createEl('button', {
-      cls: 'banner-dismiss clickable-icon',
+      cls: 'banner-dismiss clickable-icon csb-dismiss-btn',
       attr: { 'aria-label': 'Dismiss' }
     });
-    this.applyDismissButtonStyles(dismissBtn);
     setIcon(dismissBtn, 'x');
 
     const handleClick = (e: MouseEvent) => {
@@ -220,6 +213,21 @@ export class CrawlStatusBanner {
   }
 
   /**
+   * Apply the correct status color class to the icon element
+   */
+  private applyIconStatusClass(iconEl: HTMLElement, status: ActiveCrawlJob['status']): void {
+    iconEl.removeClass('csb-icon-crawling', 'csb-icon-completed', 'csb-icon-failed');
+
+    if (status === 'crawling') {
+      iconEl.addClass('csb-icon-crawling');
+    } else if (status === 'completed') {
+      iconEl.addClass('csb-icon-completed');
+    } else if (status === 'failed') {
+      iconEl.addClass('csb-icon-failed');
+    }
+  }
+
+  /**
    * Generate status text for a job
    */
   private getStatusText(job: ActiveCrawlJob): string {
@@ -235,85 +243,6 @@ export class CrawlStatusBanner {
     } else {
       return `Failed: ${handle} - ${job.error || 'Unknown error'}`;
     }
-  }
-
-  // =========================================================================
-  // Inline Styles (using Obsidian CSS variables)
-  // =========================================================================
-
-  private applyContainerStyles(): void {
-    Object.assign(this.containerEl.style, {
-      display: 'none', // Hidden until jobs exist
-      flexDirection: 'column',
-      gap: '8px',
-      marginTop: '0',
-      marginBottom: '12px'
-    });
-  }
-
-  private applyBannerStyles(el: HTMLElement, status: ActiveCrawlJob['status']): void {
-    Object.assign(el.style, {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      padding: '10px 14px',
-      background: 'var(--background-secondary)',
-      border: '1px solid var(--background-modifier-border)',
-      borderRadius: 'var(--radius-s)',
-      fontSize: 'var(--font-ui-small)'
-    });
-  }
-
-  private applyIconStyles(el: HTMLElement, status: ActiveCrawlJob['status']): void {
-    Object.assign(el.style, {
-      flexShrink: '0',
-      display: 'flex',
-      alignItems: 'center'
-    });
-
-    // Set icon size via CSS variable
-    el.style.setProperty('--icon-size', '16px');
-
-    // Status-specific colors
-    if (status === 'crawling') {
-      el.style.color = 'var(--text-muted)';
-    } else if (status === 'completed') {
-      el.style.color = 'var(--color-green)';
-    } else if (status === 'failed') {
-      el.style.color = 'var(--color-red)';
-    }
-  }
-
-  private applyDismissButtonStyles(el: HTMLElement): void {
-    Object.assign(el.style, {
-      padding: '4px',
-      background: 'none',
-      border: 'none',
-      cursor: 'pointer',
-      color: 'var(--text-muted)',
-      borderRadius: 'var(--radius-s)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center'
-    });
-
-    // Hover effects
-    const handleMouseEnter = () => {
-      el.style.color = 'var(--text-normal)';
-      el.style.background = 'var(--background-modifier-hover)';
-    };
-    const handleMouseLeave = () => {
-      el.style.color = 'var(--text-muted)';
-      el.style.background = 'none';
-    };
-
-    el.addEventListener('mouseenter', handleMouseEnter);
-    el.addEventListener('mouseleave', handleMouseLeave);
-
-    this.cleanupFunctions.push(() => {
-      el.removeEventListener('mouseenter', handleMouseEnter);
-      el.removeEventListener('mouseleave', handleMouseLeave);
-    });
   }
 
   // =========================================================================

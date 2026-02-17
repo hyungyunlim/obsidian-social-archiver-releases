@@ -228,7 +228,7 @@ export class NaverWebtoonLocalService {
   async searchWebtoons(keyword: string): Promise<WebtoonSearchResult[]> {
     const searchUrl = `${API_BASE}/api/search/all?keyword=${encodeURIComponent(keyword)}`;
 
-    console.log('[NaverWebtoonLocal] Searching webtoons:', searchUrl);
+    console.debug('[NaverWebtoonLocal] Searching webtoons:', searchUrl);
 
     try {
       const response = await requestUrl({
@@ -371,7 +371,7 @@ export class NaverWebtoonLocalService {
   async fetchWebtoonInfo(titleId: string): Promise<WebtoonAPIInfo> {
     const apiUrl = `${API_BASE}/api/article/list/info?titleId=${titleId}`;
 
-    console.log('[NaverWebtoonLocal] Fetching webtoon info:', apiUrl);
+    console.debug('[NaverWebtoonLocal] Fetching webtoon info:', apiUrl);
 
     const response = await requestUrl({
       url: apiUrl,
@@ -401,7 +401,7 @@ export class NaverWebtoonLocalService {
     const sortParam = sortAsc ? '&sort=ASC' : '';
     const apiUrl = `${API_BASE}/api/article/list?titleId=${titleId}&page=${page}${sortParam}`;
 
-    console.log('[NaverWebtoonLocal] Fetching episode list:', apiUrl);
+    console.debug('[NaverWebtoonLocal] Fetching episode list:', apiUrl);
 
     const response = await requestUrl({
       url: apiUrl,
@@ -430,7 +430,7 @@ export class NaverWebtoonLocalService {
   async fetchEpisodeDetail(titleId: string, episodeNo: number): Promise<EpisodeDetail> {
     const detailUrl = `${MOBILE_API_BASE}/webtoon/detail?titleId=${titleId}&no=${episodeNo}`;
 
-    console.log('[NaverWebtoonLocal] Fetching episode detail:', detailUrl);
+    console.debug('[NaverWebtoonLocal] Fetching episode detail:', detailUrl);
 
     const headers = this.getHeaders();
     // Use mobile User-Agent for episode detail
@@ -549,7 +549,7 @@ export class NaverWebtoonLocalService {
     // Extract author comment
     const authorComment = this.extractAuthorComment(html);
 
-    console.log(`[NaverWebtoonLocal] Parsed episode: ${imageUrls.length} images found`);
+    console.debug(`[NaverWebtoonLocal] Parsed episode: ${imageUrls.length} images found`);
 
     return {
       titleId: parseInt(titleId, 10),
@@ -638,7 +638,7 @@ export class NaverWebtoonLocalService {
    * Returns ArrayBuffer for saving to vault
    */
   async downloadImage(imageUrl: string): Promise<ArrayBuffer> {
-    console.log('[NaverWebtoonLocal] Downloading image:', imageUrl.substring(0, 80) + '...');
+    console.debug('[NaverWebtoonLocal] Downloading image:', imageUrl.substring(0, 80) + '...');
 
     const response = await requestUrl({
       url: imageUrl,

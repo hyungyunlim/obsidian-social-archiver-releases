@@ -227,38 +227,25 @@ export class WebtoonArchiveModal extends Modal {
 
     if (Platform.isMobile) {
       // Fullscreen on mobile (respecting safe areas)
-      modalEl.style.setProperty('width', '100vw', 'important');
-      modalEl.style.setProperty('max-width', '100vw', 'important');
-      modalEl.style.setProperty('height', '100vh', 'important');
-      modalEl.style.setProperty('max-height', '100vh', 'important');
-      modalEl.style.setProperty('margin', '0', 'important');
-      modalEl.style.setProperty('border-radius', '0', 'important');
-      modalEl.style.setProperty('top', '0', 'important');
-      modalEl.style.setProperty('left', '0', 'important');
-      modalEl.style.setProperty('transform', 'none', 'important');
-      modalEl.style.setProperty('padding-top', 'env(safe-area-inset-top, 0px)', 'important');
+      // Dynamic values must use CSS custom properties
+      modalEl.setCssProps({'--sa-modal-padding-top': 'env(safe-area-inset-top, 0px)'});
+      modalEl.addClass('sa-mobile-fullscreen');
 
       // Position close button below safe area
       const closeBtn = modalEl.querySelector('.modal-close-button') as HTMLElement;
       if (closeBtn) {
-        closeBtn.style.setProperty('top', 'calc(env(safe-area-inset-top, 0px) + 8px)', 'important');
+        closeBtn.setCssProps({'--sa-close-btn-top': 'calc(env(safe-area-inset-top, 0px) + 8px)'});
+        closeBtn.addClass('sa-mobile-close-btn');
       }
 
-      contentEl.style.cssText = `
-        padding: 16px;
-        padding-bottom: 12px;
-        padding-left: max(16px, env(safe-area-inset-left));
-        padding-right: max(16px, env(safe-area-inset-right));
-        height: 100%;
-        overflow-y: auto;
-        box-sizing: border-box;
-      `;
+      contentEl.setCssProps({
+        '--sa-padding-left': 'max(16px, env(safe-area-inset-left))',
+        '--sa-padding-right': 'max(16px, env(safe-area-inset-right))',
+      });
+      contentEl.addClass('sa-mobile-content');
     } else {
       // Desktop: taller modal
-      modalEl.style.setProperty('max-height', '85vh', 'important');
-      modalEl.style.setProperty('height', 'auto');
-      modalEl.style.setProperty('width', '520px', 'important');
-      modalEl.style.setProperty('max-width', '90vw', 'important');
+      modalEl.addClass('sa-desktop-modal');
     }
 
     this.contentContainer = contentEl;
@@ -426,11 +413,11 @@ export class WebtoonArchiveModal extends Modal {
 
   private renderUrlInput(container: HTMLElement): void {
     const inputContainer = container.createDiv({ cls: 'archive-url-container' });
-    inputContainer.style.marginTop = '28px'; // Space for close button
+    inputContainer.addClass('wam-url-container');
 
     // URL input row with optional language selector
     const inputRow = inputContainer.createDiv();
-    inputRow.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+    inputRow.addClass('sa-flex-row', 'sa-gap-8');
 
     const input = inputRow.createEl('input', {
       type: 'text',
@@ -439,7 +426,7 @@ export class WebtoonArchiveModal extends Modal {
       value: this.url,
     });
 
-    input.style.cssText = 'flex: 1; box-sizing: border-box;';
+    input.addClass('sa-flex-1');
 
     let debounceTimer: number;
     input.addEventListener('input', (e) => {
@@ -480,23 +467,15 @@ export class WebtoonArchiveModal extends Modal {
    */
   private renderLanguageSelector(container: HTMLElement): void {
     const langContainer = container.createDiv({ cls: 'webtoon-language-selector' });
-    langContainer.style.cssText = 'display: flex; align-items: center; gap: 4px; flex-shrink: 0;';
+    langContainer.addClass('sa-flex-row', 'sa-gap-4', 'sa-flex-shrink-0');
 
     // Globe icon
     const globeIcon = langContainer.createSpan();
-    globeIcon.style.cssText = 'display: inline-flex; align-items: center; width: 16px; height: 16px; color: var(--text-muted);';
+    globeIcon.addClass('sa-icon-16', 'sa-text-muted');
     setIcon(globeIcon, 'globe');
 
     const select = langContainer.createEl('select');
-    select.style.cssText = `
-      padding: 4px 8px;
-      font-size: var(--font-ui-smaller);
-      border: 1px solid var(--background-modifier-border);
-      border-radius: var(--radius-s);
-      background: var(--background-primary);
-      cursor: pointer;
-      min-width: 80px;
-    `;
+    select.addClass('sa-webtoon-lang-select');
 
     const languages = this.webtoonsService.getSupportedLanguages();
     for (const lang of languages) {
@@ -557,85 +536,74 @@ export class WebtoonArchiveModal extends Modal {
 
   private renderStatusBadge(container: HTMLElement): void {
     const badge = container.createDiv({ cls: 'archive-platform-badge' });
-    badge.style.cssText = 'display: flex; align-items: center; gap: 4px; margin-top: 4px; font-size: var(--font-ui-smaller);';
+    badge.addClass('sa-flex-row', 'sa-gap-4', 'sa-mt-4', 'sa-text-xs');
 
     switch (this.state) {
       case 'loading':
         badge.setText('Loading...');
-        badge.style.color = 'var(--text-muted)';
+        badge.addClass('sa-text-muted');
         break;
       case 'searching':
         badge.setText('Searching...');
-        badge.style.color = 'var(--text-muted)';
+        badge.addClass('sa-text-muted');
         break;
       case 'search-results': {
         const searchIcon = badge.createSpan();
-        searchIcon.style.cssText = 'display: inline-flex; align-items: center; width: 14px; height: 14px;';
+        searchIcon.addClass('sa-icon-14');
         setIcon(searchIcon, 'search');
         badge.createSpan({ text: `${this.searchResults.length} results for "${this.searchQuery}"` });
-        badge.style.color = 'var(--text-accent)';
+        badge.addClass('sa-text-accent');
         break;
       }
       case 'ready':
       case 'downloading':
       case 'completed': {
         const icon = badge.createSpan();
-        icon.style.cssText = 'display: inline-flex; align-items: center; width: 14px; height: 14px;';
+        icon.addClass('sa-icon-14');
         setIcon(icon, 'check');
         // Show platform name based on detected platform
         const platformName = this.platform === 'webtoons'
           ? `WEBTOON (${this.selectedLanguage.toUpperCase()})`
           : 'Naver Webtoon';
         badge.createSpan({ text: platformName });
-        badge.style.color = 'var(--text-accent)';
+        badge.addClass('sa-text-accent');
         break;
       }
       case 'error': {
         const errIcon = badge.createSpan();
-        errIcon.style.cssText = 'display: inline-flex; align-items: center; width: 14px; height: 14px;';
+        errIcon.addClass('sa-icon-14');
         setIcon(errIcon, 'alert-triangle');
         badge.createSpan({ text: this.errorMessage });
-        badge.style.color = 'var(--text-error)';
+        badge.addClass('sa-text-error');
         break;
       }
       default:
-        badge.style.display = 'none';
+        badge.addClass('sa-hidden');
     }
   }
 
   private renderSearchResults(container: HTMLElement): void {
     const wrapper = container.createDiv({ cls: 'webtoon-search-results' });
-    wrapper.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin: 12px 0;
-    `;
+    wrapper.addClass('sa-flex-col', 'sa-gap-8', 'sa-search-results-wrapper');
 
     this.searchResults.forEach((webtoon, index) => {
       const item = wrapper.createDiv({ cls: 'webtoon-search-item' });
       item.dataset.searchIndex = String(index);
       const isSelected = index === this.selectedSearchIndex;
-      item.style.cssText = `
-        display: flex;
-        align-items: flex-start;
-        gap: 12px;
-        padding: 10px 12px;
-        background: ${isSelected ? 'var(--background-modifier-hover)' : 'var(--background-secondary)'};
-        border-radius: var(--radius-s);
-        cursor: pointer;
-        transition: background 0.15s ease;
-        ${isSelected ? 'outline: 2px solid var(--interactive-accent); outline-offset: -2px;' : ''}
-      `;
+
+      item.addClass('sa-search-item');
+      if (isSelected) {
+        item.addClass('sa-search-item-selected');
+      }
 
       item.addEventListener('mouseenter', () => {
         if (this.selectedSearchIndex !== index) {
-          item.style.background = 'var(--background-modifier-hover)';
+          item.addClass('sa-bg-hover');
         }
       });
       item.addEventListener('mouseleave', () => {
         if (this.selectedSearchIndex !== index) {
-          item.style.background = 'var(--background-secondary)';
+          item.removeClass('sa-bg-hover');
         }
       });
 
@@ -649,54 +617,28 @@ export class WebtoonArchiveModal extends Modal {
         const thumb = item.createEl('img');
         thumb.src = webtoon.thumbnailUrl;
         thumb.alt = webtoon.titleName;
-        thumb.style.cssText = `
-          width: 50px;
-          height: 66px;
-          object-fit: cover;
-          border-radius: 4px;
-          flex-shrink: 0;
-        `;
+        thumb.addClass('sa-search-item-thumb');
       }
 
       // Info
       const info = item.createDiv();
-      info.style.cssText = 'flex: 1; min-width: 0;';
+      info.addClass('sa-flex-1', 'sa-min-w-0');
 
       // Title
       const title = info.createDiv();
-      title.style.cssText = `
-        font-weight: var(--font-semibold);
-        font-size: var(--font-ui-medium);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      `;
+      title.addClass('sa-font-semibold', 'sa-text-md', 'sa-truncate');
       title.setText(webtoon.titleName);
 
       // Author & episode count
       const meta = info.createDiv();
-      meta.style.cssText = `
-        font-size: var(--font-ui-smaller);
-        color: var(--text-muted);
-        margin-top: 2px;
-      `;
+      meta.addClass('sa-text-xs', 'sa-text-muted', 'sa-mt-2');
       const finishedText = webtoon.finished ? ' · Complete' : ' · Ongoing';
       meta.setText(`${webtoon.displayAuthor} · ${webtoon.articleTotalCount} episodes${finishedText}`);
 
       // Synopsis (truncated)
       if (webtoon.synopsis) {
         const synopsis = info.createDiv();
-        synopsis.style.cssText = `
-          font-size: var(--font-ui-smaller);
-          color: var(--text-muted);
-          margin-top: 4px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          line-height: 1.4;
-        `;
+        synopsis.addClass('sa-search-item-synopsis');
         synopsis.setText(webtoon.synopsis.replace(/\n/g, ' '));
       }
     });
@@ -704,16 +646,12 @@ export class WebtoonArchiveModal extends Modal {
 
   private renderNoSearchResults(container: HTMLElement): void {
     const wrapper = container.createDiv({ cls: 'webtoon-no-results' });
-    wrapper.style.cssText = `
-      padding: 24px;
-      text-align: center;
-      color: var(--text-muted);
-    `;
+    wrapper.addClass('wam-no-results');
 
     const icon = wrapper.createDiv();
-    icon.style.cssText = 'display: flex; justify-content: center; margin-bottom: 8px;';
+    icon.addClass('sa-flex-center', 'sa-mb-8');
     const iconSpan = icon.createSpan();
-    iconSpan.style.cssText = 'width: 32px; height: 32px;';
+    iconSpan.addClass('sa-icon-32');
     setIcon(iconSpan, 'search-x');
 
     wrapper.createDiv({ text: 'No webtoons found' });
@@ -733,13 +671,7 @@ export class WebtoonArchiveModal extends Modal {
       const el = item as HTMLElement;
       const isSelected = index === this.selectedSearchIndex;
 
-      el.style.background = isSelected
-        ? 'var(--background-modifier-hover)'
-        : 'var(--background-secondary)';
-      el.style.outline = isSelected
-        ? '2px solid var(--interactive-accent)'
-        : 'none';
-      el.style.outlineOffset = isSelected ? '-2px' : '0';
+      el.toggleClass('sa-search-item-selected', isSelected);
 
       // Scroll into view if selected
       if (isSelected) {
@@ -759,13 +691,7 @@ export class WebtoonArchiveModal extends Modal {
       const isHighlighted = index === this.selectedEpisodeIndex;
 
       // Apply highlight styling
-      el.style.outline = isHighlighted
-        ? '2px solid var(--interactive-accent)'
-        : 'none';
-      el.style.outlineOffset = isHighlighted ? '-2px' : '0';
-      el.style.background = isHighlighted
-        ? 'var(--background-modifier-hover)'
-        : 'transparent';
+      el.toggleClass('sa-episode-highlighted', isHighlighted);
 
       // Scroll into view if highlighted
       if (isHighlighted) {
@@ -791,94 +717,57 @@ export class WebtoonArchiveModal extends Modal {
 
     // Outer wrapper with column layout
     const preview = container.createDiv({ cls: 'webtoon-preview' });
-    preview.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      padding: 10px 12px;
-      background: var(--background-secondary);
-      border-radius: var(--radius-s);
-      margin: 8px 0;
-    `;
+    preview.addClass('wam-preview');
 
     // Header row: Thumbnail + Info
     const headerRow = preview.createDiv();
-    headerRow.style.cssText = 'display: flex; align-items: flex-start; gap: 12px;';
+    headerRow.addClass('wam-preview-header');
 
     // Thumbnail (larger, proper aspect ratio for webtoon covers)
     if (this.webtoonInfo.thumbnailUrl) {
       const thumb = headerRow.createEl('img');
       thumb.src = this.webtoonInfo.thumbnailUrl;
       thumb.alt = this.webtoonInfo.titleName;
-      thumb.style.cssText = `
-        width: 60px;
-        height: 80px;
-        object-fit: cover;
-        border-radius: 4px;
-        flex-shrink: 0;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-      `;
+      thumb.addClass('wam-preview-thumb');
     }
 
     // Info column
     const info = headerRow.createDiv();
-    info.style.cssText = 'flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;';
+    info.addClass('wam-preview-info');
 
     // Title
     const title = info.createDiv({ text: this.webtoonInfo.titleName });
-    title.style.cssText = `
-      font-weight: var(--font-semibold);
-      font-size: var(--font-ui-medium);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    `;
+    title.addClass('wam-preview-title');
 
     // Author
     const authors = this.webtoonInfo.communityArtists?.map(a => a.name).join(', ');
     if (authors) {
       const authorEl = info.createDiv({ text: authors });
-      authorEl.style.cssText = 'font-size: 12px; color: var(--text-muted);';
+      authorEl.addClass('wam-preview-author');
     }
 
     // Stats row
     const totalEpisodes = this.pageInfo?.totalRows ?? 0;
     const selectedCount = this.selectedEpisodeNos.size;
     this.statsEl = info.createDiv();
-    this.statsEl.style.cssText = 'font-size: 11px; color: var(--text-muted);';
+    this.statsEl.addClass('wam-preview-stats');
     this.statsEl.setText(`${totalEpisodes} episodes · ${selectedCount} selected`);
 
     // Genre tags (inline with info)
     if (this.webtoonInfo.curationTagList?.length) {
       const tagsEl = info.createDiv();
-      tagsEl.style.cssText = 'display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px;';
+      tagsEl.addClass('wam-preview-tags');
 
       for (const tag of this.webtoonInfo.curationTagList.slice(0, 4)) {
         const tagEl = tagsEl.createSpan({ text: `#${tag.tagName}` });
-        tagEl.style.cssText = `
-          font-size: 10px;
-          padding: 1px 6px;
-          background: var(--background-modifier-border);
-          border-radius: 8px;
-          color: var(--text-muted);
-        `;
+        tagEl.addClass('wam-tag');
       }
     }
 
     // Synopsis (separate row below header)
     if (this.webtoonInfo.synopsis) {
       const synopsisEl = preview.createDiv();
-      synopsisEl.style.cssText = `
-        font-size: 11px;
-        color: var(--text-muted);
-        line-height: 1.5;
-        padding-top: 8px;
-        border-top: 1px solid var(--background-modifier-border);
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-      `;
+      synopsisEl.addClass('wam-synopsis');
       synopsisEl.setText(this.webtoonInfo.synopsis);
     }
   }
@@ -891,148 +780,77 @@ export class WebtoonArchiveModal extends Modal {
 
     // Outer wrapper with column layout
     const preview = container.createDiv({ cls: 'webtoon-preview' });
-    preview.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      padding: 10px 12px;
-      background: var(--background-secondary);
-      border-radius: var(--radius-s);
-      margin: 8px 0;
-    `;
+    preview.addClass('wam-preview');
 
     // Header row: Thumbnail + Info
     const headerRow = preview.createDiv();
-    headerRow.style.cssText = 'display: flex; align-items: flex-start; gap: 12px;';
+    headerRow.addClass('wam-preview-header');
 
     // Thumbnail
     if (this.webtoonsSeriesInfo.thumbnailUrl) {
       const thumb = headerRow.createEl('img');
       thumb.src = this.webtoonsSeriesInfo.thumbnailUrl;
       thumb.alt = this.webtoonsSeriesInfo.title;
-      thumb.style.cssText = `
-        width: 60px;
-        height: 80px;
-        object-fit: cover;
-        border-radius: 4px;
-        flex-shrink: 0;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-      `;
+      thumb.addClass('wam-preview-thumb');
     }
 
     // Info column
     const info = headerRow.createDiv();
-    info.style.cssText = 'flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;';
+    info.addClass('wam-preview-info');
 
     // Title
     const title = info.createDiv({ text: this.webtoonsSeriesInfo.title });
-    title.style.cssText = `
-      font-weight: var(--font-semibold);
-      font-size: var(--font-ui-medium);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    `;
+    title.addClass('wam-preview-title');
 
     // Author
     if (this.webtoonsSeriesInfo.authorNames) {
       const authorEl = info.createDiv({ text: this.webtoonsSeriesInfo.authorNames });
-      authorEl.style.cssText = 'font-size: 12px; color: var(--text-muted);';
+      authorEl.addClass('wam-preview-author');
     }
 
     // Stats row
     const totalEpisodes = this.webtoonsEpisodes.length;
     const selectedCount = this.selectedEpisodeNos.size;
     this.statsEl = info.createDiv();
-    this.statsEl.style.cssText = 'font-size: 11px; color: var(--text-muted);';
+    this.statsEl.addClass('wam-preview-stats');
     this.statsEl.setText(`${totalEpisodes} episodes · ${selectedCount} selected`);
 
     // Status tags (completed, genre, update day)
     const tagsEl = info.createDiv();
-    tagsEl.style.cssText = 'display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px;';
+    tagsEl.addClass('wam-preview-tags');
 
     // Genre tag
     if (this.webtoonsSeriesInfo.genre) {
       const genreTag = tagsEl.createSpan({ text: `#${this.webtoonsSeriesInfo.genre}` });
-      genreTag.style.cssText = `
-        font-size: 10px;
-        padding: 1px 6px;
-        background: var(--background-modifier-border);
-        border-radius: 8px;
-        color: var(--text-muted);
-      `;
+      genreTag.addClass('wam-tag');
     }
 
     // Update day or completed tag
     if (this.webtoonsSeriesInfo.isCompleted) {
       const completedTag = tagsEl.createSpan({ text: 'Completed' });
-      completedTag.style.cssText = `
-        font-size: 10px;
-        padding: 1px 6px;
-        background: var(--interactive-accent);
-        border-radius: 8px;
-        color: var(--text-on-accent);
-      `;
+      completedTag.addClass('wam-tag--completed');
     } else if (this.webtoonsSeriesInfo.updateDay) {
       const updateTag = tagsEl.createSpan({ text: this.webtoonsSeriesInfo.updateDay });
-      updateTag.style.cssText = `
-        font-size: 10px;
-        padding: 1px 6px;
-        background: var(--background-modifier-border);
-        border-radius: 8px;
-        color: var(--text-muted);
-      `;
+      updateTag.addClass('wam-tag');
     }
 
     // Canvas tag if applicable
     if (this.webtoonsSeriesInfo.isCanvas) {
       const canvasTag = tagsEl.createSpan({ text: 'Canvas' });
-      canvasTag.style.cssText = `
-        font-size: 10px;
-        padding: 1px 6px;
-        background: var(--text-warning);
-        border-radius: 8px;
-        color: white;
-      `;
+      canvasTag.addClass('wam-tag--canvas');
     }
 
     // Synopsis (separate row below header)
     if (this.webtoonsSeriesInfo.description) {
       const synopsisEl = preview.createDiv();
-      synopsisEl.style.cssText = `
-        font-size: 11px;
-        color: var(--text-muted);
-        line-height: 1.5;
-        padding-top: 8px;
-        border-top: 1px solid var(--background-modifier-border);
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-      `;
+      synopsisEl.addClass('wam-synopsis');
       synopsisEl.setText(this.webtoonsSeriesInfo.description);
     }
   }
 
   private renderEpisodeList(container: HTMLElement): void {
     const wrapper = container.createDiv({ cls: 'webtoon-episode-wrapper' });
-    wrapper.style.cssText = Platform.isMobile
-      ? `
-        border: 1px solid var(--background-modifier-border);
-        border-radius: var(--radius-m);
-        margin: var(--size-4-2) 0;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-        flex: 1;
-        min-height: 0;
-      `
-      : `
-        border: 1px solid var(--background-modifier-border);
-        border-radius: var(--radius-m);
-        margin: var(--size-4-2) 0;
-        overflow: hidden;
-      `;
+    wrapper.addClass(Platform.isMobile ? 'wam-episode-wrapper--mobile' : 'wam-episode-wrapper');
 
     // Header: Select all + Sort toggle
     this.renderListHeader(wrapper);
@@ -1044,9 +862,7 @@ export class WebtoonArchiveModal extends Modal {
 
     // Episode list (flexible height)
     const list = wrapper.createDiv({ cls: 'webtoon-episode-list' });
-    list.style.cssText = Platform.isMobile
-      ? 'flex: 1; overflow-y: auto; min-height: 200px;'
-      : 'max-height: 45vh; overflow-y: auto;';
+    list.addClass(Platform.isMobile ? 'wam-episode-list--mobile' : 'wam-episode-list--desktop');
 
     // Handle both platforms
     if (this.platform === 'webtoons') {
@@ -1054,7 +870,7 @@ export class WebtoonArchiveModal extends Modal {
       if (this.isLoadingWebtoonsPage && this.webtoonsEpisodes.length === 0) {
         // Initial loading state
         const loading = list.createDiv();
-        loading.style.cssText = 'padding: 20px; text-align: center; color: var(--text-muted);';
+        loading.addClass('wam-loading-text');
         loading.setText('Loading episodes...');
       } else {
         for (const item of this.webtoonsEpisodes) {
@@ -1064,14 +880,14 @@ export class WebtoonArchiveModal extends Modal {
         // Mobile: infinite scroll loading indicator
         if (Platform.isMobile && this.isLoadingMore) {
           const loadingMore = list.createDiv({ cls: 'webtoon-loading-more' });
-          loadingMore.style.cssText = 'padding: 16px; text-align: center; color: var(--text-muted);';
+          loadingMore.addClass('wam-loading-more');
           loadingMore.setText('Loading more...');
         }
 
         // Mobile: infinite scroll trigger
         if (Platform.isMobile && this.webtoonsHasMorePages && !this.isLoadingMore) {
           const sentinel = list.createDiv({ cls: 'webtoon-scroll-sentinel' });
-          sentinel.style.cssText = 'height: 1px;';
+          sentinel.addClass('wam-scroll-sentinel');
 
           const observer = new IntersectionObserver(
             (entries) => {
@@ -1091,7 +907,7 @@ export class WebtoonArchiveModal extends Modal {
       if (this.isLoadingPage && this.episodes.length === 0) {
         // Initial loading state (no episodes yet)
         const loading = list.createDiv();
-        loading.style.cssText = 'padding: 20px; text-align: center; color: var(--text-muted);';
+        loading.addClass('wam-loading-text');
         loading.setText('Loading episodes...');
       } else {
         for (const item of this.episodes) {
@@ -1101,14 +917,14 @@ export class WebtoonArchiveModal extends Modal {
         // Mobile: infinite scroll loading indicator
         if (Platform.isMobile && this.isLoadingMore) {
           const loadingMore = list.createDiv({ cls: 'webtoon-loading-more' });
-          loadingMore.style.cssText = 'padding: 16px; text-align: center; color: var(--text-muted);';
+          loadingMore.addClass('wam-loading-more');
           loadingMore.setText('Loading more...');
         }
 
         // Mobile: infinite scroll trigger
         if (Platform.isMobile && this.hasMorePages && !this.isLoadingMore) {
           const sentinel = list.createDiv({ cls: 'webtoon-scroll-sentinel' });
-          sentinel.style.cssText = 'height: 1px;';
+          sentinel.addClass('wam-scroll-sentinel');
 
           // Use IntersectionObserver for efficient scroll detection
           const observer = new IntersectionObserver(
@@ -1146,15 +962,7 @@ export class WebtoonArchiveModal extends Modal {
     const isSelected = this.selectedEpisodeNos.has(episode.episodeNo);
 
     const row = container.createDiv({ cls: 'webtoon-episode-row' });
-    row.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 12px;
-      border-bottom: 1px solid var(--background-modifier-border-hover);
-      cursor: ${isDisabled ? 'not-allowed' : 'pointer'};
-      opacity: ${isDisabled ? '0.5' : '1'};
-    `;
+    row.addClass(isDisabled ? 'wam-episode-row--disabled' : 'wam-episode-row');
 
     if (!isDisabled) {
       row.addEventListener('click', (e) => {
@@ -1167,7 +975,7 @@ export class WebtoonArchiveModal extends Modal {
 
     // Checkbox
     const cb = row.createEl('input', { type: 'checkbox' });
-    cb.style.cssText = 'flex-shrink: 0;';
+    cb.addClass('wam-episode-cb');
     cb.checked = isArchived ? true : isSelected;
     cb.disabled = isDisabled;
     if (!isDisabled) {
@@ -1179,30 +987,23 @@ export class WebtoonArchiveModal extends Modal {
 
     // Episode number
     const numEl = row.createSpan({ text: `#${episode.episodeNo}` });
-    numEl.style.cssText = 'color: var(--text-muted); font-size: var(--font-ui-smaller); min-width: 36px; flex-shrink: 0;';
+    numEl.addClass('wam-episode-num');
 
     // Title (flexible, truncate)
     const titleContainer = row.createDiv();
-    titleContainer.style.cssText = 'flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px;';
+    titleContainer.addClass('wam-episode-title-container');
 
     const subtitle = titleContainer.createSpan({ text: episode.title });
-    subtitle.style.cssText = 'overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-ui-small);';
+    subtitle.addClass('wam-episode-subtitle');
 
     if (isArchived) {
       const badge = titleContainer.createSpan({ text: 'Archived' });
-      badge.style.cssText = `
-        font-size: 10px;
-        padding: 1px 5px;
-        background: var(--interactive-accent);
-        color: var(--text-on-accent);
-        border-radius: 3px;
-        flex-shrink: 0;
-      `;
+      badge.addClass('wam-badge--archived');
     }
 
     // Meta on right (date)
     const meta = row.createDiv();
-    meta.style.cssText = 'font-size: 11px; color: var(--text-faint); flex-shrink: 0; text-align: right; min-width: 70px;';
+    meta.addClass('wam-episode-meta--wide');
     meta.setText(episode.pubDate.toLocaleDateString());
   }
 
@@ -1234,17 +1035,11 @@ export class WebtoonArchiveModal extends Modal {
 
   private renderListHeader(wrapper: HTMLElement): void {
     const header = wrapper.createDiv({ cls: 'webtoon-episode-header' });
-    header.style.cssText = `
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--background-modifier-border);
-    `;
+    header.addClass('wam-list-header');
 
     // Left: Select all - handle both platforms
     const selectAllLabel = header.createEl('label');
-    selectAllLabel.style.cssText = 'display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: var(--font-ui-small);';
+    selectAllLabel.addClass('wam-select-all-label');
 
     this.selectAllCb = selectAllLabel.createEl('input', { type: 'checkbox' });
 
@@ -1317,22 +1112,10 @@ export class WebtoonArchiveModal extends Modal {
 
     // Right: Sort toggle
     const sortBtn = header.createEl('button');
-    sortBtn.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      padding: 4px 8px;
-      font-size: var(--font-ui-smaller);
-      background: transparent;
-      border: none;
-      border-radius: var(--radius-s);
-      cursor: pointer;
-      color: var(--text-muted);
-    `;
-    sortBtn.addClass('clickable-icon');
+    sortBtn.addClass('wam-sort-btn', 'clickable-icon');
 
     const sortIcon = sortBtn.createSpan();
-    sortIcon.style.cssText = 'display: inline-flex; align-items: center;';
+    sortIcon.addClass('wam-sort-icon');
     setIcon(sortIcon, this.sortOrder === 'newest' ? 'arrow-down' : 'arrow-up');
     sortBtn.createSpan({ text: this.sortOrder === 'newest' ? 'Newest' : 'Oldest' });
 
@@ -1363,24 +1146,7 @@ export class WebtoonArchiveModal extends Modal {
     const isMobile = Platform.isMobile;
 
     const controls = wrapper.createDiv({ cls: 'webtoon-pagination' });
-    controls.style.cssText = isMobile
-      ? `
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 2px;
-        padding: 6px 8px;
-        border-top: 1px solid var(--background-modifier-border);
-        flex-shrink: 0;
-      `
-      : `
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 4px;
-        padding: 8px 12px;
-        border-top: 1px solid var(--background-modifier-border);
-      `;
+    controls.addClass(isMobile ? 'wam-pagination--mobile' : 'wam-pagination');
 
     const { totalPages } = this.pageInfo;
     const currentPage = this.currentPage;
@@ -1403,39 +1169,8 @@ export class WebtoonArchiveModal extends Modal {
 
     // Page dropdown with subtle border
     const pageSelect = controls.createEl('select');
-    pageSelect.style.cssText = isMobile
-      ? `
-        padding: 3px 6px;
-        font-size: 11px;
-        border: 1px solid var(--background-modifier-border-hover);
-        border-radius: var(--radius-s);
-        background: var(--background-primary);
-        cursor: pointer;
-        min-width: 54px;
-        text-align: center;
-        outline: none;
-      `
-      : `
-        padding: 4px 8px;
-        font-size: var(--font-ui-smaller);
-        border: 1px solid var(--background-modifier-border-hover);
-        border-radius: var(--radius-s);
-        background: var(--background-primary);
-        cursor: pointer;
-        min-width: 70px;
-        text-align: center;
-        outline: none;
-      `;
+    pageSelect.addClass(isMobile ? 'wam-page-select--mobile' : 'wam-page-select');
     pageSelect.disabled = this.isLoadingPage;
-
-    // Remove focus ring on blur
-    pageSelect.addEventListener('blur', () => {
-      pageSelect.style.boxShadow = 'none';
-      pageSelect.style.borderColor = 'var(--background-modifier-border-hover)';
-    });
-    pageSelect.addEventListener('focus', () => {
-      pageSelect.style.borderColor = 'var(--interactive-accent)';
-    });
 
     for (let i = 1; i <= totalPages; i++) {
       const option = pageSelect.createEl('option', {
@@ -1474,14 +1209,7 @@ export class WebtoonArchiveModal extends Modal {
     if (this.webtoonsTotalPages <= 1) return;
 
     const controls = wrapper.createDiv({ cls: 'webtoon-pagination' });
-    controls.style.cssText = `
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 4px;
-      padding: 8px 12px;
-      border-top: 1px solid var(--background-modifier-border);
-    `;
+    controls.addClass('wam-pagination');
 
     const totalPages = this.webtoonsTotalPages;
     const currentPage = this.webtoonsCurrentPage;
@@ -1504,26 +1232,8 @@ export class WebtoonArchiveModal extends Modal {
 
     // Page dropdown
     const pageSelect = controls.createEl('select');
-    pageSelect.style.cssText = `
-      padding: 4px 8px;
-      font-size: var(--font-ui-smaller);
-      border: 1px solid var(--background-modifier-border-hover);
-      border-radius: var(--radius-s);
-      background: var(--background-primary);
-      cursor: pointer;
-      min-width: 70px;
-      text-align: center;
-      outline: none;
-    `;
+    pageSelect.addClass('wam-page-select');
     pageSelect.disabled = this.isLoadingWebtoonsPage;
-
-    pageSelect.addEventListener('blur', () => {
-      pageSelect.style.boxShadow = 'none';
-      pageSelect.style.borderColor = 'var(--background-modifier-border-hover)';
-    });
-    pageSelect.addEventListener('focus', () => {
-      pageSelect.style.borderColor = 'var(--interactive-accent)';
-    });
 
     for (let i = 1; i <= totalPages; i++) {
       const option = pageSelect.createEl('option', {
@@ -1558,37 +1268,10 @@ export class WebtoonArchiveModal extends Modal {
   private createPaginationButton(container: HTMLElement, iconName: string, title: string): HTMLButtonElement {
     const isMobile = Platform.isMobile;
     const btn = container.createEl('button', { attr: { title } });
-    btn.style.cssText = isMobile
-      ? `
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 24px;
-        height: 24px;
-        padding: 0;
-        background: transparent;
-        border: none;
-        border-radius: var(--radius-s);
-        cursor: pointer;
-        color: var(--text-muted);
-      `
-      : `
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 28px;
-        height: 28px;
-        padding: 0;
-        background: transparent;
-        border: none;
-        border-radius: var(--radius-s);
-        cursor: pointer;
-        color: var(--text-muted);
-      `;
-    btn.addClass('clickable-icon');
+    btn.addClass(isMobile ? 'wam-page-btn--mobile' : 'wam-page-btn', 'clickable-icon');
 
     const icon = btn.createSpan();
-    icon.style.cssText = 'display: inline-flex; align-items: center;';
+    icon.addClass('wam-page-btn-icon');
     setIcon(icon, iconName);
 
     return btn;
@@ -1602,15 +1285,7 @@ export class WebtoonArchiveModal extends Modal {
     const isSelected = this.selectedEpisodeNos.has(episode.no);
 
     const row = container.createDiv({ cls: 'webtoon-episode-row' });
-    row.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 12px;
-      border-bottom: 1px solid var(--background-modifier-border-hover);
-      cursor: ${isDisabled ? 'not-allowed' : 'pointer'};
-      opacity: ${isDisabled ? '0.5' : '1'};
-    `;
+    row.addClass(isDisabled ? 'wam-episode-row--disabled' : 'wam-episode-row');
 
     if (!isDisabled) {
       row.addEventListener('click', (e) => {
@@ -1625,7 +1300,7 @@ export class WebtoonArchiveModal extends Modal {
 
     // Checkbox
     const cb = row.createEl('input', { type: 'checkbox' });
-    cb.style.cssText = 'flex-shrink: 0;';
+    cb.addClass('wam-episode-cb');
     cb.checked = isArchived ? true : isSelected; // Archived shows as checked+disabled
     cb.disabled = isDisabled;
     if (!isDisabled) {
@@ -1637,40 +1312,26 @@ export class WebtoonArchiveModal extends Modal {
 
     // Episode number
     const numEl = row.createSpan({ text: `#${episode.no}` });
-    numEl.style.cssText = 'color: var(--text-muted); font-size: var(--font-ui-smaller); min-width: 36px; flex-shrink: 0;';
+    numEl.addClass('wam-episode-num');
 
     // Title (flexible, truncate)
     const titleContainer = row.createDiv();
-    titleContainer.style.cssText = 'flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px;';
+    titleContainer.addClass('wam-episode-title-container');
 
     const subtitle = titleContainer.createSpan({ text: episode.subtitle });
-    subtitle.style.cssText = 'overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-ui-small);';
+    subtitle.addClass('wam-episode-subtitle');
 
     if (isArchived) {
       const badge = titleContainer.createSpan({ text: 'Archived' });
-      badge.style.cssText = `
-        font-size: 10px;
-        padding: 1px 5px;
-        background: var(--interactive-accent);
-        color: var(--text-on-accent);
-        border-radius: 3px;
-        flex-shrink: 0;
-      `;
+      badge.addClass('wam-badge--archived');
     } else if (isPaid) {
       const badge = titleContainer.createSpan({ text: 'Paid' });
-      badge.style.cssText = `
-        font-size: 10px;
-        padding: 1px 5px;
-        background: var(--text-error);
-        color: white;
-        border-radius: 3px;
-        flex-shrink: 0;
-      `;
+      badge.addClass('wam-badge--paid');
     }
 
     // Meta on right (rating + date)
     const meta = row.createDiv();
-    meta.style.cssText = 'font-size: 11px; color: var(--text-faint); flex-shrink: 0; text-align: right;';
+    meta.addClass('wam-episode-meta');
 
     const parts: string[] = [];
     if (episode.starScore) parts.push(`★${episode.starScore.toFixed(1)}`);
@@ -1699,22 +1360,14 @@ export class WebtoonArchiveModal extends Modal {
       : 0;
 
     const progress = container.createDiv({ cls: 'webtoon-progress' });
-    progress.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      padding: 12px;
-      background: var(--background-secondary);
-      border-radius: var(--radius-s);
-      margin: 8px 0;
-    `;
+    progress.addClass('wam-progress');
 
     // Top row: Episode info
     const topRow = progress.createDiv();
-    topRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center;';
+    topRow.addClass('wam-progress-row');
 
     const episodeInfo = topRow.createDiv();
-    episodeInfo.style.cssText = 'font-size: 13px; color: var(--text-normal);';
+    episodeInfo.addClass('wam-progress-episode-info');
 
     if (currentEpisode) {
       // Show episode number and truncated subtitle
@@ -1732,40 +1385,31 @@ export class WebtoonArchiveModal extends Modal {
 
     // Episode count on right
     const episodeCount = topRow.createDiv();
-    episodeCount.style.cssText = 'font-size: 12px; color: var(--text-muted);';
+    episodeCount.addClass('wam-progress-episode-count');
     episodeCount.setText(`Episode ${completedEpisodes + (currentEpisode ? 1 : 0)}/${totalEpisodes}`);
 
     // Middle: Progress bar
     const barBg = progress.createDiv();
-    barBg.style.cssText = `
-      width: 100%;
-      height: 6px;
-      background: var(--background-modifier-border);
-      border-radius: 3px;
-      overflow: hidden;
-    `;
+    barBg.addClass('wam-progress-bar-bg');
 
     const barFill = barBg.createDiv();
-    barFill.style.cssText = `
-      width: ${percent}%;
-      height: 100%;
-      background: var(--interactive-accent);
-      transition: width 0.2s ease;
-    `;
+    barFill.addClass('wam-progress-bar-fill');
+    barFill.setCssProps({'--sa-width': `${percent}%`});
+    barFill.addClass('sa-dynamic-width');
 
     // Bottom row: Image progress (only show when downloading)
     if (currentEpisode && totalImages > 0) {
       const bottomRow = progress.createDiv();
-      bottomRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center;';
+      bottomRow.addClass('wam-progress-row');
 
       const imageInfo = bottomRow.createDiv();
-      imageInfo.style.cssText = 'font-size: 11px; color: var(--text-faint);';
+      imageInfo.addClass('wam-progress-image-info');
       imageInfo.setText(`Downloading image ${currentImageIndex + 1} of ${totalImages}`);
 
       // Image progress percentage
       const imagePercent = totalImages > 0 ? Math.round(((currentImageIndex + 1) / totalImages) * 100) : 0;
       const imagePercentEl = bottomRow.createDiv();
-      imagePercentEl.style.cssText = 'font-size: 11px; color: var(--text-faint);';
+      imagePercentEl.addClass('wam-progress-image-info');
       imagePercentEl.setText(`${imagePercent}%`);
     }
   }
@@ -1773,12 +1417,7 @@ export class WebtoonArchiveModal extends Modal {
   private renderFooter(container: HTMLElement): void {
     // Buttons
     const footer = container.createDiv({ cls: 'modal-button-container' });
-    footer.style.cssText = 'margin-top: 8px;';
-
-    if (Platform.isMobile) {
-      footer.style.flexDirection = 'column';
-      footer.style.gap = '8px';
-    }
+    footer.addClass(Platform.isMobile ? 'wam-footer--mobile' : 'wam-footer');
 
     // Download button
     if (this.state === 'ready' || this.state === 'completed') {
@@ -1790,7 +1429,7 @@ export class WebtoonArchiveModal extends Modal {
       });
       this.downloadBtn.disabled = selectedCount === 0;
 
-      if (Platform.isMobile) this.downloadBtn.style.width = '100%';
+      if (Platform.isMobile) this.downloadBtn.addClass('wam-footer-btn-full');
 
       this.downloadBtn.addEventListener('click', () => void this.startDownload());
     }
@@ -1800,7 +1439,7 @@ export class WebtoonArchiveModal extends Modal {
       text: this.state === 'downloading' ? 'Cancel' : 'Close',
     });
 
-    if (Platform.isMobile) cancelBtn.style.width = '100%';
+    if (Platform.isMobile) cancelBtn.addClass('wam-footer-btn-full');
 
     cancelBtn.addEventListener('click', () => {
       if (this.state === 'downloading') {
@@ -1812,7 +1451,7 @@ export class WebtoonArchiveModal extends Modal {
 
     // Compact disclaimer
     const disclaimer = container.createDiv();
-    disclaimer.style.cssText = 'font-size: 10px; color: var(--text-faint); text-align: center; margin-top: 8px;';
+    disclaimer.addClass('wam-disclaimer');
     disclaimer.setText('Archive only content you have permission to save.');
   }
 
@@ -2482,58 +2121,32 @@ export class WebtoonArchiveModal extends Modal {
     const isMobile = Platform.isMobile;
 
     const section = container.createDiv({ cls: 'webtoon-subscription-section' });
-    section.style.cssText = isMobile
-      ? `
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 6px 10px;
-        background: var(--background-secondary);
-        border-radius: var(--radius-s);
-        margin: 4px 0;
-      `
-      : `
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 10px 12px;
-        background: var(--background-secondary);
-        border-radius: var(--radius-s);
-        margin: 8px 0;
-      `;
+    section.addClass(isMobile ? 'wam-subscription--mobile' : 'wam-subscription');
 
     // Left: Bell icon + text
     const labelRow = section.createDiv();
-    labelRow.style.cssText = 'display: flex; align-items: center; gap: 6px;';
+    labelRow.addClass('wam-subscription-label');
 
     const bellIcon = labelRow.createSpan();
-    bellIcon.style.cssText = isMobile
-      ? 'display: inline-flex; align-items: center; width: 14px; height: 14px; color: var(--text-muted);'
-      : 'display: inline-flex; align-items: center; width: 16px; height: 16px; color: var(--text-muted);';
+    bellIcon.addClass(isMobile ? 'wam-subscription-bell--mobile' : 'wam-subscription-bell');
     setIcon(bellIcon, 'bell');
 
     const textContainer = labelRow.createDiv();
     const mainText = textContainer.createDiv({ text: isMobile ? 'Auto-archive' : 'Auto-archive new episodes' });
-    mainText.style.cssText = isMobile
-      ? 'font-size: 12px; font-weight: 500;'
-      : 'font-size: var(--font-ui-small); font-weight: 500;';
+    mainText.addClass(isMobile ? 'wam-subscription-text--mobile' : 'wam-subscription-text');
 
     // Schedule info (shown when subscribed) - hidden on mobile to save space
     const scheduleInfo = textContainer.createDiv({ cls: 'subscription-schedule-info' });
     if (isMobile) {
-      scheduleInfo.style.display = 'none';
+      scheduleInfo.addClass('sa-hidden');
     } else {
-      scheduleInfo.style.cssText = 'font-size: var(--font-ui-smaller); color: var(--text-muted); margin-top: 2px;';
+      scheduleInfo.addClass('wam-subscription-schedule');
       this.updateScheduleInfo(scheduleInfo);
     }
 
     // Right: Toggle (smaller on mobile)
     const toggleContainer = section.createDiv();
-    toggleContainer.style.cssText = 'flex-shrink: 0;';
-    if (isMobile) {
-      toggleContainer.style.transform = 'scale(0.85)';
-      toggleContainer.style.transformOrigin = 'right center';
-    }
+    toggleContainer.addClass(isMobile ? 'wam-subscription-toggle--mobile' : 'wam-subscription-toggle');
 
     const toggle = new ToggleComponent(toggleContainer);
     toggle.setValue(this.isSubscribed);
@@ -2549,20 +2162,24 @@ export class WebtoonArchiveModal extends Modal {
    */
   private updateScheduleInfo(scheduleEl: HTMLElement): void {
     if (!this.isSubscribed) {
-      scheduleEl.style.display = 'none';
+      scheduleEl.removeClass('wam-schedule-visible');
+      scheduleEl.addClass('wam-schedule-hidden');
       return;
     }
 
     if (this.platform === 'webtoons' && this.webtoonsSeriesInfo?.updateDay) {
       // WEBTOON (Global) - show update day
       scheduleEl.setText(`Checks every ${this.webtoonsSeriesInfo.updateDay}`);
-      scheduleEl.style.display = 'block';
+      scheduleEl.removeClass('wam-schedule-hidden');
+      scheduleEl.addClass('wam-schedule-visible');
     } else if (this.platform === 'naver-webtoon' && this.webtoonInfo?.publishDescription) {
       const checkDay = this.getCheckDayName(this.webtoonInfo.publishDescription);
       scheduleEl.setText(`Checks every ${checkDay} at 11 PM KST`);
-      scheduleEl.style.display = 'block';
+      scheduleEl.removeClass('wam-schedule-hidden');
+      scheduleEl.addClass('wam-schedule-visible');
     } else {
-      scheduleEl.style.display = 'none';
+      scheduleEl.removeClass('wam-schedule-visible');
+      scheduleEl.addClass('wam-schedule-hidden');
     }
   }
 
@@ -3100,26 +2717,14 @@ export class WebtoonArchiveModal extends Modal {
   private renderPreviewBanner(container: HTMLElement): void {
     if (this.previewEpisodes.length === 0) return;
 
-    const banner = container.createDiv({ cls: 'webtoon-preview-banner' });
-    banner.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      background: var(--background-secondary);
-      border-bottom: 1px solid var(--background-modifier-border);
-      font-size: var(--font-ui-small);
-      color: var(--text-muted);
-    `;
+    const banner = container.createDiv({ cls: 'webtoon-preview-banner wam-preview-banner' });
 
     // Calendar icon
-    const icon = banner.createSpan();
-    icon.style.cssText = 'font-size: 14px;';
+    const icon = banner.createSpan({ cls: 'wam-preview-icon' });
     icon.setText('📅');
 
     // Preview count
-    const countSpan = banner.createSpan();
-    countSpan.style.cssText = 'font-weight: 500;';
+    const countSpan = banner.createSpan({ cls: 'wam-preview-count' });
     countSpan.setText(`${this.previewEpisodes.length} previews`);
 
     // Separator
@@ -3128,8 +2733,7 @@ export class WebtoonArchiveModal extends Modal {
     // Next free episode
     const nextFree = this.previewEpisodes[this.previewEpisodes.length - 1]; // Last one is closest to free
     if (nextFree) {
-      const nextSpan = banner.createSpan();
-      nextSpan.style.cssText = 'color: var(--text-normal);';
+      const nextSpan = banner.createSpan({ cls: 'wam-preview-next' });
       nextSpan.setText(`Next free: Ep. ${nextFree.no} (${nextFree.freeSchedule})`);
     }
   }

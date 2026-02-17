@@ -262,10 +262,7 @@ export class TimelineView extends ItemView {
             if (!('stat' in file)) return;
             if (!(file instanceof TFile)) return; // Additional type guard
 
-            // At this point, file is guaranteed to be TFile
-            const tFile = file as TFile;
-
-            const content = await this.app.vault.read(tFile);
+            const content = await this.app.vault.read(file);
             const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
             if (frontmatterMatch) {
               const frontmatter = frontmatterMatch[1];
@@ -279,7 +276,7 @@ export class TimelineView extends ItemView {
                   // Parse the updated post
                   const { PostDataParser } = await import('../components/timeline/parsers/PostDataParser');
                   const parser = new PostDataParser(this.app.vault, this.app);
-                  const postData = await parser.parseFile(tFile);
+                  const postData = await parser.parseFile(file);
 
                   if (postData) {
                     // IMPORTANT: Ensure embeddedArchives is explicitly set
@@ -514,11 +511,12 @@ export class TimelineView extends ItemView {
         if (bottomInset > 120) bottomInset = 0;
       }
 
-      container.style.setProperty('--timeline-safe-area-top-fallback', `${topInset}px`);
-      container.style.setProperty('--timeline-safe-area-bottom-fallback', `${bottomInset}px`);
-      container.style.setProperty('--timeline-safe-area-top-extra', `${androidExtraTopGap}px`);
-      container.style.paddingTop = 'calc(max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px), var(--timeline-safe-area-top-fallback, 0px)) + var(--timeline-safe-area-top-extra, 0px))';
-      container.style.paddingBottom = 'max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px), var(--timeline-safe-area-bottom-fallback, 0px))';
+      container.setCssProps({
+        '--timeline-safe-area-top-fallback': `${topInset}px`,
+        '--timeline-safe-area-bottom-fallback': `${bottomInset}px`,
+        '--timeline-safe-area-top-extra': `${androidExtraTopGap}px`,
+      });
+      container.addClass('sa-timeline-safe-area');
     };
 
     this.timelineSafeAreaListener = applyInsets;

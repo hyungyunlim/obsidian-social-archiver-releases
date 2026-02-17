@@ -10,6 +10,8 @@
  * Single Responsibility: Poll validation status until completion/failure
  */
 
+import { requestUrl } from 'obsidian';
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -243,17 +245,18 @@ export class ProfileValidationPoller {
 
     for (let attempt = 0; attempt < this.maxRetries; attempt++) {
       try {
-        const response = await fetch(url, {
+        const response = await requestUrl({
+          url,
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${this.authToken}`,
             'Content-Type': 'application/json',
           },
-          signal: this.abortController?.signal,
+          throw: false
         });
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
+        if (response.status !== 200) {
+          const errorData = response.json || {};
           return {
             success: false,
             error: {
@@ -263,7 +266,7 @@ export class ProfileValidationPoller {
           };
         }
 
-        return await response.json();
+        return response.json;
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
 

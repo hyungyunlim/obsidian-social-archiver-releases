@@ -8,7 +8,7 @@
  * - Cancellation support via AbortController
  */
 
-import type { App, TFile } from 'obsidian';
+import { TFile, type App } from 'obsidian';
 import {
   NaverWebtoonLocalService,
   type WebtoonAPIInfo,
@@ -325,7 +325,7 @@ export class WebtoonDownloadQueue extends EventTarget {
         throw error;
       }
 
-      console.log(`[WebtoonDownloadQueue] Adult content detected, falling back to Worker API for episode ${episodeNo}`);
+      console.debug(`[WebtoonDownloadQueue] Adult content detected, falling back to Worker API for episode ${episodeNo}`);
 
       // Fallback to Worker API for adult content
       const episodeUrl = `https://comic.naver.com/webtoon/detail?titleId=${titleId}&no=${episodeNo}`;
@@ -809,8 +809,8 @@ export class WebtoonDownloadQueue extends EventTarget {
 
     // Check if file exists
     const existingFile = this.app.vault.getAbstractFileByPath(filePath);
-    if (existingFile) {
-      await this.app.vault.modify(existingFile as TFile, content);
+    if (existingFile && existingFile instanceof TFile) {
+      await this.app.vault.modify(existingFile, content);
     } else {
       await this.app.vault.create(filePath, content);
     }
@@ -1013,9 +1013,9 @@ export class WebtoonDownloadQueue extends EventTarget {
       if (!file || !(file instanceof this.app.vault.adapter.constructor)) {
         // File might be TFile
         const tFile = this.app.vault.getAbstractFileByPath(filePath);
-        if (!tFile) return;
+        if (!tFile || !(tFile instanceof TFile)) return;
 
-        const content = await this.app.vault.read(tFile as TFile);
+        const content = await this.app.vault.read(tFile);
 
         // Generate comments section
         const commentsSection = this.generateCommentsMarkdown(comments, commentCount);
@@ -1036,7 +1036,7 @@ export class WebtoonDownloadQueue extends EventTarget {
           updatedContent = content + '\n' + commentsSection;
         }
 
-        await this.app.vault.modify(tFile as TFile, updatedContent);
+        await this.app.vault.modify(tFile, updatedContent);
       }
     } catch (error) {
       console.warn(`[WebtoonDownloadQueue] Failed to update comments:`, error);

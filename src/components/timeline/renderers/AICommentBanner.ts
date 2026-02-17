@@ -111,15 +111,8 @@ export class AICommentBanner {
     }
 
     const banner = container.createDiv({ cls: 'ai-comment-banner' });
-    banner.style.cssText = `
-      margin: 8px 0 0 0;
-      padding: 8px 0;
-      background: transparent;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    `;
+    banner.addClass('sa-flex-between', 'sa-gap-12', 'sa-bg-transparent', 'sa-py-8');
+    banner.addClass('acb-banner');
 
     this.contentEl = banner;
     this.renderCurrentState();
@@ -127,7 +120,7 @@ export class AICommentBanner {
 
   private renderCurrentState(): void {
     if (!this.contentEl || !this.options) return;
-    this.contentEl.innerHTML = '';
+    this.contentEl.empty();
 
     switch (this.state) {
       case 'default':
@@ -156,16 +149,12 @@ export class AICommentBanner {
     if (!this.options) return;
 
     // Change parent to column layout for potential second row
-    parent.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      padding: 8px 12px;
-    `;
+    parent.removeClass('sa-flex-between', 'sa-flex-row');
+    parent.addClass('sa-flex-col', 'sa-gap-8', 'sa-p-8', 'sa-px-12');
 
     // Main row container
     const mainRow = parent.createDiv();
-    mainRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 12px;';
+    mainRow.addClass('sa-flex-between', 'sa-gap-12');
 
     // Check if multi-AI mode is enabled
     const isMultiAi = this.options.multiAiEnabled &&
@@ -174,15 +163,17 @@ export class AICommentBanner {
 
     // Left section: "Add AI [Type ▼]?" + CLI info
     const messageSection = mainRow.createDiv();
-    messageSection.style.cssText = 'display: flex; align-items: center; gap: 0; flex: 1; min-width: 0;';
+    messageSection.addClass('sa-flex-row', 'sa-flex-1', 'sa-min-w-0');
 
     // "Add " prefix
     const prefix = messageSection.createSpan({ text: 'Add' });
-    prefix.style.cssText = 'font-size: 13px; color: var(--text-normal); white-space: nowrap; margin-right: 4px;';
+    prefix.addClass('sa-text-base', 'sa-text-normal');
+    prefix.addClass('acb-label-prefix');
 
     // Type dropdown wrapper (inline with text)
     const typeWrapper = messageSection.createDiv();
-    typeWrapper.style.cssText = 'display: flex; align-items: center; gap: 1px; cursor: pointer; margin-right: 4px;';
+    typeWrapper.addClass('sa-flex-row', 'sa-clickable');
+    typeWrapper.addClass('acb-type-wrapper');
 
     const typeSelect = this.createMinimalSelect(typeWrapper);
 
@@ -198,20 +189,21 @@ export class AICommentBanner {
 
     // Chevron icon for type
     const typeChevron = typeWrapper.createDiv();
-    typeChevron.style.cssText = 'width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); pointer-events: none;';
+    typeChevron.addClass('sa-icon-14', 'sa-text-muted', 'sa-pointer-none');
     setIcon(typeChevron, 'chevron-down');
 
     // "using" label
     const usingLabel = messageSection.createSpan({ text: 'using' });
-    usingLabel.style.cssText = 'font-size: 13px; color: var(--text-normal); white-space: nowrap; margin: 0 4px;';
+    usingLabel.addClass('sa-text-base', 'sa-text-normal');
+    usingLabel.addClass('acb-label-using');
 
     // Adjust width helper
     const adjustWidth = (select: HTMLSelectElement) => {
       const tempSpan = document.createElement('span');
-      tempSpan.style.cssText = 'font-size: 13px; font-family: inherit; visibility: hidden; position: absolute;';
+      tempSpan.classList.add('acb-measure-span');
       tempSpan.textContent = select.options[select.selectedIndex]?.text || '';
       document.body.appendChild(tempSpan);
-      select.style.width = `${tempSpan.offsetWidth + 2}px`;
+      select.setCssStyles({ width: `${tempSpan.offsetWidth + 2}px` });
       document.body.removeChild(tempSpan);
     };
 
@@ -225,9 +217,13 @@ export class AICommentBanner {
       adjustWidth(typeSelect);
       // Update custom prompt row visibility
       if (customPromptRow) {
-        customPromptRow.style.display = typeSelect.value === 'custom' ? 'flex' : 'none';
-        if (typeSelect.value === 'custom' && this.customPromptInput) {
-          this.customPromptInput.focus();
+        if (typeSelect.value === 'custom') {
+          customPromptRow.removeClass('sa-hidden');
+          if (this.customPromptInput) {
+            this.customPromptInput.focus();
+          }
+        } else {
+          customPromptRow.addClass('sa-hidden');
         }
       }
     });
@@ -239,12 +235,13 @@ export class AICommentBanner {
         .join(', ');
 
       const aiList = messageSection.createSpan({ text: aiNames });
-      aiList.style.cssText = 'font-size: 13px; color: var(--text-muted);';
+      aiList.addClass('sa-text-base', 'sa-text-muted');
     }
     // Single AI mode: show dropdown if multiple CLIs available
     else if (this.options.availableClis.length > 1) {
       const cliWrapper = messageSection.createDiv();
-      cliWrapper.style.cssText = 'display: flex; align-items: center; gap: 1px; cursor: pointer;';
+      cliWrapper.addClass('sa-flex-row', 'sa-clickable');
+      cliWrapper.addClass('acb-select-wrapper');
 
       const cliSelect = this.createMinimalSelect(cliWrapper);
 
@@ -259,7 +256,7 @@ export class AICommentBanner {
       }
 
       const cliChevron = cliWrapper.createDiv();
-      cliChevron.style.cssText = 'width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); pointer-events: none;';
+      cliChevron.addClass('sa-icon-14', 'sa-text-muted', 'sa-pointer-none');
       setIcon(cliChevron, 'chevron-down');
 
       adjustWidth(cliSelect);
@@ -274,17 +271,19 @@ export class AICommentBanner {
       const singleCli = this.options.availableClis[0];
       if (singleCli) {
         const cliName = messageSection.createSpan({ text: AI_CLI_INFO[singleCli].displayName });
-        cliName.style.cssText = 'font-size: 13px; color: var(--text-muted);';
+        cliName.addClass('sa-text-base', 'sa-text-muted');
       }
     }
 
     // "in" label for language
     const inLabel = messageSection.createSpan({ text: 'in' });
-    inLabel.style.cssText = 'font-size: 13px; color: var(--text-normal); white-space: nowrap; margin: 0 4px;';
+    inLabel.addClass('sa-text-base', 'sa-text-normal');
+    inLabel.addClass('acb-label-using');
 
     // Language dropdown
     const langWrapper = messageSection.createDiv();
-    langWrapper.style.cssText = 'display: flex; align-items: center; gap: 1px; cursor: pointer;';
+    langWrapper.addClass('sa-flex-row', 'sa-clickable');
+    langWrapper.addClass('acb-select-wrapper');
 
     const langSelect = this.createMinimalSelect(langWrapper);
 
@@ -301,7 +300,7 @@ export class AICommentBanner {
     }
 
     const langChevron = langWrapper.createDiv();
-    langChevron.style.cssText = 'width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); pointer-events: none;';
+    langChevron.addClass('sa-icon-14', 'sa-text-muted', 'sa-pointer-none');
     setIcon(langChevron, 'chevron-down');
 
     adjustWidth(langSelect);
@@ -313,11 +312,12 @@ export class AICommentBanner {
 
     // "?" suffix at the end
     const suffix = messageSection.createSpan({ text: '?' });
-    suffix.style.cssText = 'font-size: 13px; color: var(--text-normal); white-space: nowrap; margin-left: 2px;';
+    suffix.addClass('sa-text-base', 'sa-text-normal');
+    suffix.addClass('acb-label-suffix');
 
     // Right section: buttons
     const buttonSection = mainRow.createDiv();
-    buttonSection.style.cssText = 'display: flex; align-items: center; gap: 4px; flex-shrink: 0;';
+    buttonSection.addClass('sa-flex-row', 'sa-gap-4', 'sa-flex-shrink-0');
 
     // No button (X)
     const noButton = this.createIconButton(buttonSection, 'x', 'No');
@@ -327,51 +327,42 @@ export class AICommentBanner {
       this.contentEl?.remove();
     });
     noButton.addEventListener('mouseenter', () => {
-      noButton.style.color = 'var(--text-error)';
-      noButton.style.background = 'var(--background-modifier-hover)';
-      noButton.style.borderRadius = '4px';
+      noButton.removeClass('sa-text-muted', 'sa-bg-transparent');
+      noButton.addClass('sa-text-error', 'sa-bg-hover', 'sa-rounded-4');
     });
     noButton.addEventListener('mouseleave', () => {
-      noButton.style.color = 'var(--text-muted)';
-      noButton.style.background = 'transparent';
+      noButton.removeClass('sa-text-error', 'sa-bg-hover', 'sa-rounded-4');
+      noButton.addClass('sa-text-muted', 'sa-bg-transparent');
     });
 
     // Yes button (Check)
     const yesButton = this.createIconButton(buttonSection, 'check', 'Yes');
-    yesButton.style.color = 'var(--interactive-accent)';
+    yesButton.addClass('sa-text-accent');
     yesButton.addEventListener('click', () => {
       this.handleGenerate();
     });
     yesButton.addEventListener('mouseenter', () => {
-      yesButton.style.background = 'var(--background-modifier-hover)';
-      yesButton.style.borderRadius = '4px';
+      yesButton.removeClass('sa-bg-transparent');
+      yesButton.addClass('sa-bg-hover', 'sa-rounded-4');
     });
     yesButton.addEventListener('mouseleave', () => {
-      yesButton.style.background = 'transparent';
+      yesButton.removeClass('sa-bg-hover', 'sa-rounded-4');
+      yesButton.addClass('sa-bg-transparent');
     });
 
     // Custom prompt input row (hidden by default, shown when 'custom' type is selected)
     customPromptRow = parent.createDiv();
-    customPromptRow.style.cssText = `
-      display: ${this.selectedType === 'custom' ? 'flex' : 'none'};
-      align-items: center;
-      gap: 8px;
-    `;
+    customPromptRow.addClass('sa-flex-row', 'sa-gap-8');
+    if (this.selectedType !== 'custom') {
+      customPromptRow.addClass('sa-hidden');
+    }
 
     const promptInput = customPromptRow.createEl('input', {
       type: 'text',
       placeholder: 'Enter your custom prompt...',
     });
-    promptInput.style.cssText = `
-      flex: 1;
-      padding: 6px 10px;
-      font-size: 13px;
-      border: 1px solid var(--background-modifier-border);
-      border-radius: 4px;
-      background: var(--background-primary);
-      color: var(--text-normal);
-      outline: none;
-    `;
+    promptInput.addClass('sa-flex-1', 'sa-p-6', 'sa-px-10', 'sa-text-base', 'sa-border', 'sa-rounded-4', 'sa-bg-primary', 'sa-text-normal');
+    promptInput.addClass('acb-prompt-input');
     promptInput.value = this.customPrompt;
     this.customPromptInput = promptInput;
 
@@ -388,13 +379,7 @@ export class AICommentBanner {
       }
     });
 
-    // Focus styling
-    promptInput.addEventListener('focus', () => {
-      promptInput.style.borderColor = 'var(--interactive-accent)';
-    });
-    promptInput.addEventListener('blur', () => {
-      promptInput.style.borderColor = 'var(--background-modifier-border)';
-    });
+    // Focus styling handled by CSS .acb-prompt-input:focus
   }
 
   /**
@@ -404,14 +389,8 @@ export class AICommentBanner {
     if (!this.options || !this.selectedType) return;
 
     // Reset parent to row layout (default state uses column for custom prompt row)
-    parent.style.cssText = `
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 8px 12px;
-    `;
+    parent.removeClass('sa-flex-col');
+    parent.addClass('sa-flex-between', 'sa-gap-12', 'sa-p-8', 'sa-px-12');
 
     // Start timer if not already started
     if (this.generatingStartTime === 0) {
@@ -420,7 +399,7 @@ export class AICommentBanner {
 
     // Message with elapsed time and status
     const message = parent.createSpan({ cls: 'ai-generating-message' });
-    message.style.cssText = 'font-size: 13px; color: var(--text-normal); flex: 1;';
+    message.addClass('sa-text-base', 'sa-text-normal', 'sa-flex-1');
 
     // Store current status for display - use type-specific message
     const typeMessages: Record<AICommentType, string> = {
@@ -473,13 +452,12 @@ export class AICommentBanner {
     const cancelBtn = this.createIconButton(parent, 'x', 'Cancel');
     cancelBtn.addEventListener('click', () => this.handleCancel());
     cancelBtn.addEventListener('mouseenter', () => {
-      cancelBtn.style.color = 'var(--text-error)';
-      cancelBtn.style.background = 'var(--background-modifier-hover)';
-      cancelBtn.style.borderRadius = '4px';
+      cancelBtn.removeClass('sa-text-muted', 'sa-bg-transparent');
+      cancelBtn.addClass('sa-text-error', 'sa-bg-hover', 'sa-rounded-4');
     });
     cancelBtn.addEventListener('mouseleave', () => {
-      cancelBtn.style.color = 'var(--text-muted)';
-      cancelBtn.style.background = 'transparent';
+      cancelBtn.removeClass('sa-text-error', 'sa-bg-hover', 'sa-rounded-4');
+      cancelBtn.addClass('sa-text-muted', 'sa-bg-transparent');
     });
   }
 
@@ -503,20 +481,15 @@ export class AICommentBanner {
    */
   private renderCompleteState(parent: HTMLElement): void {
     // Reset parent to row layout
-    parent.style.cssText = `
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-      gap: 12px;
-      padding: 8px 12px;
-    `;
+    parent.removeClass('sa-flex-col');
+    parent.addClass('sa-flex-row', 'sa-gap-12', 'sa-p-8', 'sa-px-12');
 
     // Success message only - auto-dismisses after 2 seconds
     const successMsg = parent.createSpan();
-    successMsg.style.cssText = 'font-size: 13px; color: var(--text-success); flex: 1; display: flex; align-items: center; gap: 6px;';
+    successMsg.addClass('sa-text-base', 'sa-text-success', 'sa-flex-1', 'sa-flex-row', 'sa-gap-6');
 
     const checkIcon = successMsg.createDiv();
-    checkIcon.style.cssText = 'width: 16px; height: 16px; display: flex; align-items: center;';
+    checkIcon.addClass('sa-icon-16');
     setIcon(checkIcon, 'check');
 
     successMsg.createSpan({ text: 'AI comment added' });
@@ -536,13 +509,8 @@ export class AICommentBanner {
     if (!this.options || !this.selectedCli) return;
 
     // Reset parent to row layout
-    parent.style.cssText = `
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-      gap: 12px;
-      padding: 8px 12px;
-    `;
+    parent.removeClass('sa-flex-col');
+    parent.addClass('sa-flex-row', 'sa-gap-12', 'sa-p-8', 'sa-px-12');
 
     // Back button
     const backBtn = this.createIconButton(parent, 'arrow-left', 'Back');
@@ -551,29 +519,26 @@ export class AICommentBanner {
       this.renderCurrentState();
     });
     backBtn.addEventListener('mouseenter', () => {
-      backBtn.style.background = 'var(--background-modifier-hover)';
-      backBtn.style.borderRadius = '4px';
+      backBtn.removeClass('sa-bg-transparent');
+      backBtn.addClass('sa-bg-hover', 'sa-rounded-4');
     });
     backBtn.addEventListener('mouseleave', () => {
-      backBtn.style.background = 'transparent';
+      backBtn.removeClass('sa-bg-hover', 'sa-rounded-4');
+      backBtn.addClass('sa-bg-transparent');
     });
 
     // Warning message
     const message = parent.createSpan();
-    message.style.cssText = 'font-size: 13px; color: var(--text-warning); flex: 1;';
+    message.addClass('sa-text-base', 'sa-text-warning', 'sa-flex-1');
     message.textContent = `${AI_CLI_INFO[this.selectedCli].displayName} requires authentication`;
 
     // Setup link
     const setupLink = parent.createEl('a', { text: 'Setup' });
     setupLink.href = AI_CLI_INFO[this.selectedCli].installUrl;
     setupLink.target = '_blank';
-    setupLink.style.cssText = 'font-size: 12px; color: var(--text-accent); text-decoration: none;';
-    setupLink.addEventListener('mouseenter', () => {
-      setupLink.style.textDecoration = 'underline';
-    });
-    setupLink.addEventListener('mouseleave', () => {
-      setupLink.style.textDecoration = 'none';
-    });
+    setupLink.addClass('sa-text-sm', 'sa-text-accent');
+    setupLink.addClass('acb-setup-link');
+    // Hover underline handled by CSS .acb-setup-link:hover
   }
 
   // ============================================================================
@@ -582,50 +547,20 @@ export class AICommentBanner {
 
   private createMinimalSelect(parent: HTMLElement): HTMLSelectElement {
     const select = parent.createEl('select');
-    select.style.cssText = `
-      padding: 0;
-      margin: 0;
-      font-size: 13px;
-      font-family: inherit;
-      line-height: inherit;
-      border: none;
-      border-radius: 0;
-      background: transparent;
-      color: var(--text-muted);
-      cursor: pointer;
-      outline: none;
-      box-shadow: none;
-      appearance: none;
-      -webkit-appearance: none;
-      text-decoration: none;
-      padding-right: 0;
-      width: auto;
-    `;
+    select.addClass('sa-p-0', 'sa-m-0', 'sa-text-base', 'sa-bg-transparent', 'sa-text-muted', 'sa-clickable');
+    select.addClass('acb-minimal-select');
     return select;
   }
 
   private createIconButton(parent: HTMLElement, icon: string, title: string): HTMLElement {
     const button = parent.createEl('button');
-    button.style.cssText = `
-      padding: 0 !important;
-      border: none !important;
-      outline: none !important;
-      box-shadow: none !important;
-      background: transparent !important;
-      color: var(--text-muted);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 24px;
-      height: 24px;
-      transition: all 0.2s;
-    `;
+    button.addClass('sa-p-0', 'sa-flex-center', 'sa-bg-transparent', 'sa-text-muted', 'sa-clickable', 'sa-transition');
+    button.addClass('acb-icon-btn');
     button.setAttribute('aria-label', title);
     button.setAttribute('title', title);
 
     const iconEl = button.createDiv();
-    iconEl.style.cssText = 'width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;';
+    iconEl.addClass('sa-icon-20');
     setIcon(iconEl, icon);
 
     return button;

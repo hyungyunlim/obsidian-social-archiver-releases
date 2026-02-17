@@ -48,7 +48,7 @@ export class MediaGalleryView2 extends ItemView {
     container.addClass('social-archiver-media-gallery-view');
 
     // Enable scrolling
-    container.style.cssText = 'overflow-y: auto; height: 100%;';
+    container.addClass('mgv2-scroll-container');
 
     // Create content container
     this.contentContainer = container.createDiv('media-gallery-content');
@@ -129,68 +129,58 @@ export class MediaGalleryView2 extends ItemView {
       }
 
       // Create grid
-      const gridEl = this.contentContainer.createDiv('media-gallery-grid');
-      gridEl.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; padding: 16px;';
+      const gridEl = this.contentContainer.createDiv({ cls: 'media-gallery-grid mgv2-grid' });
 
       for (const item of mediaItems) {
-        const cardEl = gridEl.createDiv('media-card');
-        cardEl.style.cssText = 'border: 1px solid var(--background-modifier-border); border-radius: 8px; overflow: hidden; cursor: pointer; transition: transform 0.2s;';
+        const cardEl = gridEl.createDiv({ cls: 'media-card mgv2-card' });
 
         // Get absolute path for media file
         const mediaFile = this.app.vault.getAbstractFileByPath(item.media);
 
         if (item.type === 'image' && mediaFile) {
           const imgEl = cardEl.createEl('img', {
+            cls: 'mgv2-media-fill',
             attr: {
               src: this.app.vault.adapter.getResourcePath(item.media),
               alt: 'Media from ' + item.file.basename
             }
           });
-          imgEl.style.cssText = 'width: 100%; height: 200px; object-fit: cover; background: var(--background-secondary);';
 
           // Error handling
           imgEl.onerror = () => {
-            imgEl.style.display = 'none';
+            imgEl.addClass('sa-hidden');
             cardEl.createDiv({
               text: '⚠️ Image not found',
-              cls: 'media-error'
-            }).style.cssText = 'padding: 20px; text-align: center; color: var(--text-muted);';
+              cls: 'media-error mgv2-error-placeholder'
+            });
           };
         } else if (item.type === 'video' && mediaFile) {
           const videoEl = cardEl.createEl('video', {
+            cls: 'mgv2-media-fill',
             attr: {
               src: this.app.vault.adapter.getResourcePath(item.media),
               controls: 'true'
             }
           });
-          videoEl.style.cssText = 'width: 100%; height: 200px; object-fit: cover; background: var(--background-secondary);';
 
           videoEl.onerror = () => {
-            videoEl.style.display = 'none';
+            videoEl.addClass('sa-hidden');
             cardEl.createDiv({
               text: '⚠️ Video not found',
-              cls: 'media-error'
-            }).style.cssText = 'padding: 20px; text-align: center; color: var(--text-muted);';
+              cls: 'media-error mgv2-error-placeholder'
+            });
           };
         } else {
           // File doesn't exist
           cardEl.createDiv({
             text: '⚠️ Media file not found',
-            cls: 'media-error'
-          }).style.cssText = 'padding: 20px; text-align: center; color: var(--text-muted);';
+            cls: 'media-error mgv2-error-placeholder'
+          });
         }
 
         // Click to open source file
         cardEl.addEventListener('click', () => {
           this.app.workspace.getLeaf().openFile(item.file);
-        });
-
-        cardEl.addEventListener('mouseenter', () => {
-          cardEl.style.transform = 'scale(1.05)';
-        });
-
-        cardEl.addEventListener('mouseleave', () => {
-          cardEl.style.transform = 'scale(1)';
         });
       }
 
