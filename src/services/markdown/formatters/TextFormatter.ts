@@ -39,7 +39,7 @@ export class TextFormatter {
   linkifyYouTubeTimestamps(text: string, videoId: string): string {
     // Match timestamps at the beginning of lines: HH:MM:SS or MM:SS
     // Pattern: line start, optional whitespace, timestamp, optional separator (space, dash, etc), description text
-    const result = text.replace(/^(\s*)(\d{1,2}:\d{2}(?::\d{2})?)[\s\-]*(.*)$/gm, (_match, whitespace, timestamp, description) => {
+    const result = text.replace(/^(\s*)(\d{1,2}:\d{2}(?::\d{2})?)[\s-]*(.*)$/gm, (_match, whitespace, timestamp, description) => {
       // Skip if no description (just timestamp alone)
       if (!description.trim()) {
         return _match;

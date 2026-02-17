@@ -1245,16 +1245,16 @@ export class NaverSubscriptionPoller {
       }
 
       const now = Date.now();
-      let loadedCount = 0;
-      let expiredCount = 0;
+      let _loadedCount = 0;
+      let _expiredCount = 0;
 
       // Load entries, filtering out expired ones
       for (const [key, entry] of Object.entries(cacheData.entries)) {
         if (now - entry.cachedAt < RSS_CACHE_TTL_MS) {
           this.rssCache.set(key, entry);
-          loadedCount++;
+          _loadedCount++;
         } else {
-          expiredCount++;
+          _expiredCount++;
         }
       }
 

@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const MastodonURLSchema = z.string().url().refine((value) => {
   try {
     const parsed = new URL(value);
-    return /\/\@[^/]+\/\d+/.test(parsed.pathname);
+    return /\/@[^/]+\/\d+/.test(parsed.pathname);
   } catch {
     return false;
   }

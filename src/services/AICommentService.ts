@@ -29,6 +29,7 @@ import type {
   AIOutputLanguage,
 } from '../types/ai-comment';
 import type { AICli } from '../utils/ai-cli';
+import nodeRequire from '../utils/nodeRequire';
 import {
   AICommentError,
   DEFAULT_PROMPTS,
@@ -117,8 +118,7 @@ export class AICommentService {
 
     AICommentService.shellPathPromise = new Promise((resolve) => {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-        const os = require('os');
+        const os = nodeRequire('os') as typeof import('os');
         const isWindows = os.platform() === 'win32';
 
         // On Windows, use the current PATH directly
@@ -136,8 +136,7 @@ export class AICommentService {
         }
 
         // Unix-specific: Get PATH from login shell
-        // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: child_process required for shell PATH detection
-        const { execSync } = require('child_process');
+        const { execSync } = nodeRequire('child_process') as typeof import('child_process');
 
         // Determine the user's default shell
         const shell = process.env.SHELL || '/bin/zsh';
@@ -554,8 +553,7 @@ Content:
 
     // Handle current note path for connections type (to exclude self-reference)
     if (options.type === 'connections' && options.currentNotePath) {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: path module required for note name extraction
-      const path = require('path');
+      const path = nodeRequire('path') as typeof import('path');
       const noteName = path.basename(options.currentNotePath, '.md');
       prompt = prompt.replace(/\{\{currentNote\}\}/g, options.currentNotePath);
       prompt = prompt.replace(/\{\{currentNoteName\}\}/g, noteName);
@@ -581,12 +579,9 @@ Content:
       return null;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js fs/path required for temp file creation
-    const os = require('os');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const fs = require('fs').promises;
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const path = require('path');
+    const os = nodeRequire('os') as typeof import('os');
+    const fs = (nodeRequire('fs') as typeof import('fs')).promises;
+    const path = nodeRequire('path') as typeof import('path');
 
     const tempDir = os.tmpdir();
     const tempFile = path.join(tempDir, `${TEMP_FILE_PREFIX}${Date.now()}.txt`);
@@ -602,8 +597,7 @@ Content:
     if (!tempFile) return;
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: fs required for temp file cleanup
-      const fs = require('fs').promises;
+      const fs = (nodeRequire('fs') as typeof import('fs')).promises;
       await fs.unlink(tempFile);
     } catch {
       // Ignore cleanup errors
@@ -631,8 +625,7 @@ Content:
       : prompt;
 
     // Check if we're on Windows - use stdin for prompts to avoid shell escaping issues
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: os required for platform detection
-    const os = require('os');
+    const os = nodeRequire('os') as typeof import('os');
     const isWindows = os.platform() === 'win32';
 
     switch (cli) {
@@ -819,8 +812,7 @@ Content:
     timeout: number,
     stdinPrompt?: string
   ): Promise<string> {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: child_process required for CLI execution
-    const { spawn } = require('child_process');
+    const { spawn } = nodeRequire('child_process') as typeof import('child_process');
 
     // Report generating progress
     options.onProgress?.({
@@ -837,8 +829,7 @@ Content:
     return new Promise((resolve, reject) => {
 
       // Build environment with shell PATH
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: os required for platform detection
-      const os = require('os');
+      const os = nodeRequire('os') as typeof import('os');
       const isWindows = os.platform() === 'win32';
       const pathSeparator = isWindows ? ';' : ':';
       const env = { ...process.env };

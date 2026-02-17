@@ -14,7 +14,7 @@ import {
 vi.mock('obsidian', () => ({
   Notice: vi.fn().mockImplementation((message: string, duration?: number) => {
     return {
-      noticeEl: {
+      messageEl: {
         removeClass: vi.fn(),
         addClass: vi.fn(),
         createEl: vi.fn(() => ({
@@ -226,7 +226,7 @@ describe('ErrorNotificationService', () => {
       service.showError(error, { severity: ErrorSeverity.WARNING });
 
       const notice = vi.mocked(Notice).mock.results[0].value;
-      expect(notice.noticeEl.addClass).toHaveBeenCalledWith('notice-warning');
+      expect(notice.messageEl.addClass).toHaveBeenCalledWith('notice-warning');
     });
 
     it('should use custom duration', () => {
@@ -263,7 +263,7 @@ describe('ErrorNotificationService', () => {
       });
 
       const notice = vi.mocked(Notice).mock.results[0].value;
-      expect(notice.noticeEl.createEl).toHaveBeenCalledWith(
+      expect(notice.messageEl.createEl).toHaveBeenCalledWith(
         'button',
         expect.objectContaining({ text: 'Retry' })
       );

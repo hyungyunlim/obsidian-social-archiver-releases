@@ -634,13 +634,13 @@ export class TranscriptRenderer {
     const divider = parent.createDiv({ cls: 'speaker-divider sa-flex-row sa-gap-8 sa-text-faint tr-speaker-divider' });
 
     // Left line
-    const leftLine = divider.createSpan({ cls: 'sa-flex-1 tr-divider-line' });
+    divider.createSpan({ cls: 'sa-flex-1 tr-divider-line' });
 
     // Diamond marker
     divider.createSpan({ text: '\u25C6' }); // diamond
 
     // Right line
-    const rightLine = divider.createSpan({ cls: 'sa-flex-1 tr-divider-line' });
+    divider.createSpan({ cls: 'sa-flex-1 tr-divider-line' });
   }
 
   /**

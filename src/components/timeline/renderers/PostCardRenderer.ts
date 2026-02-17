@@ -22,7 +22,7 @@ import { normalizeAuthorUrl } from '../../../services/AuthorDeduplicator';
 import { isValidPreviewUrl, encodePathForMarkdownLink } from '../../../utils/url';
 import { get } from 'svelte/store';
 import type { AuthorCatalogEntry } from '../../../types/author-catalog';
-import { RSS_BASED_PLATFORMS, isRssBasedPlatform } from '../../../constants/rssPlatforms';
+import { isRssBasedPlatform } from '../../../constants/rssPlatforms';
 import { getPlatformName } from '@/shared/platforms';
 import { isSupportedPlatformUrl, validateAndDetectPlatform, isPinterestBoardUrl } from '../../../schemas/platforms';
 import { resolvePinterestUrl } from '../../../utils/pinterest';
@@ -1724,7 +1724,8 @@ export class PostCardRenderer extends Component {
       }
 
       // Use Obsidian's native markdown renderer
-      await MarkdownRenderer.renderMarkdown(
+      await MarkdownRenderer.render(
+        this.app,
         preview + '...',
         contentText,
         '', // sourcePath (empty for non-file content)
@@ -1742,7 +1743,7 @@ export class PostCardRenderer extends Component {
         expanded = !expanded;
         if (expanded) {
           contentText.empty();
-          await MarkdownRenderer.renderMarkdown(cleanContent, contentText, '', this);
+          await MarkdownRenderer.render(this.app, cleanContent, contentText, '', this);
           seeMoreBtn.setText('See less');
           // Re-add timestamp handlers after re-rendering
           if (post.platform === 'youtube' && post.videoId) {
@@ -1754,7 +1755,7 @@ export class PostCardRenderer extends Component {
           this.normalizeTagFontSizes(contentText);
         } else {
           contentText.empty();
-          await MarkdownRenderer.renderMarkdown(preview + '...', contentText, '', this);
+          await MarkdownRenderer.render(this.app, preview + '...', contentText, '', this);
           seeMoreBtn.setText('See more...');
           // Re-add timestamp handlers after re-rendering
           if (post.platform === 'youtube' && post.videoId) {
@@ -1768,7 +1769,8 @@ export class PostCardRenderer extends Component {
       });
     } else {
       // Use Obsidian's native markdown renderer for short content
-      await MarkdownRenderer.renderMarkdown(
+      await MarkdownRenderer.render(
+        this.app,
         cleanContent,
         contentText,
         '', // sourcePath (empty for non-file content)
@@ -1910,7 +1912,8 @@ export class PostCardRenderer extends Component {
       }
 
       // Use Obsidian's native markdown renderer with sourcePath for image resolution
-      await MarkdownRenderer.renderMarkdown(
+      await MarkdownRenderer.render(
+        this.app,
         preview + '\n\n...',
         contentText,
         sourcePath,
@@ -1931,10 +1934,10 @@ export class PostCardRenderer extends Component {
         expanded = !expanded;
         contentText.empty();
         if (expanded) {
-          await MarkdownRenderer.renderMarkdown(rawMarkdown, contentText, sourcePath, this);
+          await MarkdownRenderer.render(this.app, rawMarkdown, contentText, sourcePath, this);
           seeMoreBtn.setText('See less');
         } else {
-          await MarkdownRenderer.renderMarkdown(preview + '\n\n...', contentText, sourcePath, this);
+          await MarkdownRenderer.render(this.app, preview + '\n\n...', contentText, sourcePath, this);
           seeMoreBtn.setText('See more...');
         }
         // Resolve image paths after rendering
@@ -1948,7 +1951,7 @@ export class PostCardRenderer extends Component {
       });
     } else {
       // Short blog content - render full markdown
-      await MarkdownRenderer.renderMarkdown(rawMarkdown, contentText, sourcePath, this);
+      await MarkdownRenderer.render(this.app, rawMarkdown, contentText, sourcePath, this);
       // Resolve image paths after rendering
       await this.resolveInlineImages(contentText, sourcePath);
     }
@@ -2713,7 +2716,7 @@ export class PostCardRenderer extends Component {
     }
 
     // Spacer (always render to push action buttons to the right)
-    const spacer = interactions.createDiv({ cls: 'pcr-spacer' });
+    interactions.createDiv({ cls: 'pcr-spacer' });
 
     // Personal Like button (star icon, right-aligned)
     this.renderPersonalLikeButton(interactions, post);
@@ -2925,7 +2928,6 @@ export class PostCardRenderer extends Component {
 
     // Check if already shared
     const isShared = !!(post as any).shareUrl;
-    const shareUrl = (post as any).shareUrl;
 
     // Set tooltip based on login state
     if (!isLoggedIn && !isShared) {
@@ -3026,9 +3028,7 @@ export class PostCardRenderer extends Component {
    */
   private async createShare(post: PostData, shareBtn: HTMLElement, shareIcon: HTMLElement): Promise<void> {
     try {
-      const originalUrl = post.url;
       let targetUrl = post.url;
-      let resolvedPinterestBoard = false;
       const platform = post.platform;
 
       if (platform === 'pinterest') {
@@ -3037,7 +3037,6 @@ export class PostCardRenderer extends Component {
           if (resolution.resolvedUrl) {
             targetUrl = resolution.resolvedUrl;
           }
-          resolvedPinterestBoard = resolution.isBoard || resolvedPinterestBoard;
         } catch {
           // Keep original URL on failure
         }
@@ -3128,7 +3127,6 @@ export class PostCardRenderer extends Component {
       });
 
       if (response.status !== 200) {
-        const errorData = response.json;
         throw new Error(`Share creation failed: ${response.status}`);
       }
 
@@ -3634,7 +3632,7 @@ export class PostCardRenderer extends Component {
                 mediaFolderPaths.add(folderPath);
               }
 
-              await this.vault.delete(mediaFile);
+              await this.app.fileManager.trashFile(mediaFile);
               deletedMedia.push(media.url);
             }
           } catch (err) {
@@ -3673,7 +3671,7 @@ export class PostCardRenderer extends Component {
       }
 
       // Delete the markdown file
-      await this.vault.delete(file);
+      await this.app.fileManager.trashFile(file);
 
       // Clean up empty parent folders (walk up from deepest to archive root)
       const baseArchivePath = this.plugin.settings.archivePath || 'Social Archives';
@@ -4303,7 +4301,7 @@ export class PostCardRenderer extends Component {
           });
         } else {
           // Just highlight without link
-          const hashtagSpan = container.createEl('span', { text: part, cls: 'pcr-hashtag-span' });
+          container.createEl('span', { text: part, cls: 'pcr-hashtag-span' });
         }
       } else {
         // Regular text
@@ -5047,10 +5045,10 @@ export class PostCardRenderer extends Component {
     const banner = contentArea.createDiv({ cls: 'archive-progress-banner pcr-suggestion-banner pcr-suggestion-banner-filled' });
 
     // Spinner
-    const spinner = banner.createDiv({ cls: 'pcr-spinner' });
+    banner.createDiv({ cls: 'pcr-spinner' });
 
     // Message
-    const message = banner.createSpan({ cls: 'pcr-banner-message', text: 'Archiving in background...' });
+    banner.createSpan({ cls: 'pcr-banner-message', text: 'Archiving in background...' });
   }
 
   /**
@@ -5989,6 +5987,7 @@ export class PostCardRenderer extends Component {
     // Create MediaHandler instance
     const mediaHandler = new MediaHandler({
       vault: this.vault,
+      app: this.app,
       basePath: mediaPath,
       optimizeImages: false, // No optimization for audio
     });
@@ -6101,7 +6100,7 @@ export class PostCardRenderer extends Component {
         banner.empty();
         banner.addClasses(['pcr-suggestion-banner-filled']);
 
-        const authMessage = banner.createSpan({ cls: 'pcr-banner-message', text: 'Sign in required to archive posts' });
+        banner.createSpan({ cls: 'pcr-banner-message', text: 'Sign in required to archive posts' });
 
         const settingsButton = banner.createEl('button', { cls: 'pcr-settings-btn', text: 'Open Settings' });
         settingsButton.addEventListener('click', () => {
@@ -6166,7 +6165,7 @@ export class PostCardRenderer extends Component {
     const outputPath = `${vaultBasePath}/${platformFolder}`;
 
     // Generate filename with platform prefix (e.g., tiktok_authorname_timestamp)
-    const authorName = post.author.name.replace(/[^a-z0-9\-_]/gi, '_');
+    const authorName = post.author.name.replace(/[^a-z0-9_-]/gi, '_');
     const filename = `${platform}_${authorName}_${Date.now()}`;
 
     message.textContent = 'Preparing download...';
@@ -6295,7 +6294,8 @@ export class PostCardRenderer extends Component {
             try {
               const refreshedFile = this.vault.getFileByPath(post.filePath);
               if (refreshedFile) {
-                const parser = new PostDataParser(this.vault, this.app);
+                const { PostDataParser: Parser } = await import('../parsers/PostDataParser');
+                const parser = new Parser(this.vault, this.app);
                 const refreshedPost = await parser.parseFile(refreshedFile);
                 if (refreshedPost) {
                   rootElement.empty();
@@ -6551,125 +6551,121 @@ export class PostCardRenderer extends Component {
       return;
     }
 
-    try {
-      const originalUrl = urlVariants?.[0] ?? url;
-      let targetUrl = url;
-      let resolvedPinterestBoard = isPinterestBoard;
+    const originalUrl = urlVariants?.[0] ?? url;
+    let targetUrl = url;
+    let resolvedPinterestBoard = isPinterestBoard;
 
-      if (_platform === 'pinterest') {
-        try {
-          const resolution = await resolvePinterestUrl(url);
-          if (resolution.resolvedUrl) {
-            targetUrl = resolution.resolvedUrl;
-          }
-          resolvedPinterestBoard = resolution.isBoard || resolvedPinterestBoard;
-        } catch {
-          // Keep original URL on failure
+    if (_platform === 'pinterest') {
+      try {
+        const resolution = await resolvePinterestUrl(url);
+        if (resolution.resolvedUrl) {
+          targetUrl = resolution.resolvedUrl;
         }
+        resolvedPinterestBoard = resolution.isBoard || resolvedPinterestBoard;
+      } catch {
+        // Keep original URL on failure
       }
-
-      // ========== NEW: Create Pending Job (NON-BLOCKING) ==========
-      if (message) {
-        message.textContent = 'Archiving in background...';
-      }
-
-      const jobId = `embed-${Date.now()}`;
-      const pendingJob = {
-        id: jobId,
-        url: targetUrl,
-        platform: _platform,
-        status: 'pending' as const,
-        timestamp: Date.now(),
-        retryCount: 0,
-        metadata: {
-          embeddedArchive: true,
-          parentFilePath: post.filePath,
-          isPinterestBoard: resolvedPinterestBoard ? true : undefined,
-          originalUrl: originalUrl !== targetUrl ? originalUrl : undefined,
-        }
-      };
-
-      await this.plugin.pendingJobsManager.addJob(pendingJob);
-
-      // Mark URL as "archiving" to show progress banner after refresh
-      const parentFile = this.vault.getFileByPath(post.filePath);
-      if (parentFile) {
-        try {
-          const content = await this.vault.read(parentFile);
-          const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
-
-          if (frontmatterMatch && frontmatterMatch[1]) {
-            // Parse existing processedUrls
-            const processedUrlsMatch = frontmatterMatch[1].match(/processedUrls:\s*\[(.*?)\]/);
-            let processedUrls: string[] = [];
-
-            if (processedUrlsMatch && processedUrlsMatch[1]) {
-              processedUrls = processedUrlsMatch[1]
-                .split(',')
-                .map(u => u.trim().replace(/^["']|["']$/g, ''))
-                .filter(u => u);
-            }
-
-            const variants = Array.from(new Set([...(urlVariants ?? []), targetUrl, originalUrl].filter(Boolean))) as string[];
-
-            // Add "archiving:" prefix to show progress banner
-            let updated = false;
-            variants.forEach(u => {
-              const archivingUrl = `archiving:${u}`;
-              if (!processedUrls.some(v => v === u || v === archivingUrl || v === `declined:${u}`)) {
-                processedUrls.push(archivingUrl);
-                updated = true;
-              }
-            });
-
-            if (updated) {
-              // Update frontmatter
-              const newProcessedUrlsLine = `processedUrls: [${processedUrls.map(u => `"${u}"`).join(', ')}]`;
-
-              let newContent: string;
-              if (processedUrlsMatch) {
-                // Replace existing processedUrls line
-                newContent = content.replace(
-                  /processedUrls:\s*\[.*?\]/,
-                  newProcessedUrlsLine
-                );
-              } else {
-                // Add processedUrls to frontmatter
-                newContent = content.replace(
-                  /^(---\n[\s\S]*?)(---)/,
-                  `$1${newProcessedUrlsLine}\n$2`
-                );
-              }
-
-              // Register UI modify to prevent double refresh
-              if (this.onUIModifyCallback && post.filePath) {
-                this.onUIModifyCallback(post.filePath);
-              }
-
-              await this.vault.modify(parentFile, newContent);
-            }
-          }
-        } catch (error) {
-          console.error('[PostCardRenderer] Failed to update processedUrls:', error);
-          // Continue anyway - processCompletedJob will update it later
-        }
-      }
-
-      // Update banner message (will stay until archiving completes)
-      if (message) {
-        message.textContent = 'Archiving in background... You can continue browsing.';
-        // Banner will be removed automatically when timeline refreshes after completion
-      }
-
-      // Trigger immediate background check
-      this.plugin.checkPendingJobs?.().catch(() => {
-        // Silently fail - periodic checker will retry
-      });
-
-      // Early return - processing continues in processCompletedJob()
-    } catch (error) {
-      throw error;
     }
+
+    // ========== NEW: Create Pending Job (NON-BLOCKING) ==========
+    if (message) {
+      message.textContent = 'Archiving in background...';
+    }
+
+    const jobId = `embed-${Date.now()}`;
+    const pendingJob = {
+      id: jobId,
+      url: targetUrl,
+      platform: _platform,
+      status: 'pending' as const,
+      timestamp: Date.now(),
+      retryCount: 0,
+      metadata: {
+        embeddedArchive: true,
+        parentFilePath: post.filePath,
+        isPinterestBoard: resolvedPinterestBoard ? true : undefined,
+        originalUrl: originalUrl !== targetUrl ? originalUrl : undefined,
+      }
+    };
+
+    await this.plugin.pendingJobsManager.addJob(pendingJob);
+
+    // Mark URL as "archiving" to show progress banner after refresh
+    const parentFile = this.vault.getFileByPath(post.filePath);
+    if (parentFile) {
+      try {
+        const content = await this.vault.read(parentFile);
+        const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+
+        if (frontmatterMatch && frontmatterMatch[1]) {
+          // Parse existing processedUrls
+          const processedUrlsMatch = frontmatterMatch[1].match(/processedUrls:\s*\[(.*?)\]/);
+          let processedUrls: string[] = [];
+
+          if (processedUrlsMatch && processedUrlsMatch[1]) {
+            processedUrls = processedUrlsMatch[1]
+              .split(',')
+              .map(u => u.trim().replace(/^["']|["']$/g, ''))
+              .filter(u => u);
+          }
+
+          const variants = Array.from(new Set([...(urlVariants ?? []), targetUrl, originalUrl].filter(Boolean))) as string[];
+
+          // Add "archiving:" prefix to show progress banner
+          let updated = false;
+          variants.forEach(u => {
+            const archivingUrl = `archiving:${u}`;
+            if (!processedUrls.some(v => v === u || v === archivingUrl || v === `declined:${u}`)) {
+              processedUrls.push(archivingUrl);
+              updated = true;
+            }
+          });
+
+          if (updated) {
+            // Update frontmatter
+            const newProcessedUrlsLine = `processedUrls: [${processedUrls.map(u => `"${u}"`).join(', ')}]`;
+
+            let newContent: string;
+            if (processedUrlsMatch) {
+              // Replace existing processedUrls line
+              newContent = content.replace(
+                /processedUrls:\s*\[.*?\]/,
+                newProcessedUrlsLine
+              );
+            } else {
+              // Add processedUrls to frontmatter
+              newContent = content.replace(
+                /^(---\n[\s\S]*?)(---)/,
+                `$1${newProcessedUrlsLine}\n$2`
+              );
+            }
+
+            // Register UI modify to prevent double refresh
+            if (this.onUIModifyCallback && post.filePath) {
+              this.onUIModifyCallback(post.filePath);
+            }
+
+            await this.vault.modify(parentFile, newContent);
+          }
+        }
+      } catch (error) {
+        console.error('[PostCardRenderer] Failed to update processedUrls:', error);
+        // Continue anyway - processCompletedJob will update it later
+      }
+    }
+
+    // Update banner message (will stay until archiving completes)
+    if (message) {
+      message.textContent = 'Archiving in background... You can continue browsing.';
+      // Banner will be removed automatically when timeline refreshes after completion
+    }
+
+    // Trigger immediate background check
+    this.plugin.checkPendingJobs?.().catch(() => {
+      // Silently fail - periodic checker will retry
+    });
+
+    // Processing continues in processCompletedJob()
   }
 
   /**
@@ -7025,7 +7021,7 @@ export class PostCardRenderer extends Component {
     }
 
     // Info message
-    const infoMsg = card.createDiv({ cls: 'pcr-archiving-info', text: 'This document will update automatically when archiving completes.' });
+    card.createDiv({ cls: 'pcr-archiving-info', text: 'This document will update automatically when archiving completes.' });
 
     return wrapper;
   }
@@ -7077,7 +7073,7 @@ export class PostCardRenderer extends Component {
 
     // Retry suggestion
     const retryMsg = card.createDiv({ cls: 'pcr-error-retry-msg' });
-    const strongEl = retryMsg.createEl('strong', { text: 'You can:' });
+    retryMsg.createEl('strong', { text: 'You can:' });
     const ul = retryMsg.createEl('ul', { cls: 'pcr-error-list' });
     ul.createEl('li', { text: 'Try archiving again using the Archive Modal' });
     ul.createEl('li', { text: 'Check your internet connection' });
@@ -7440,7 +7436,7 @@ export class PostCardRenderer extends Component {
       }
 
       // Rating number
-      const ratingNum = ratingRow.createSpan({ cls: 'pcr-gmaps-rating-num', text: data.rating.toFixed(1) });
+      ratingRow.createSpan({ cls: 'pcr-gmaps-rating-num', text: data.rating.toFixed(1) });
 
       // Review count
       if (data.reviewsCount) {
@@ -7909,6 +7905,7 @@ export class PostCardRenderer extends Component {
       this.aiCommentRenderers.set(post.id, renderer);
 
       const options: AICommentRendererOptions = {
+        app: this.app,
         comments,
         commentTexts,
         component: this,
@@ -8454,7 +8451,7 @@ export class PostCardRenderer extends Component {
         }
 
         contentTextEl.empty();
-        await MarkdownRenderer.renderMarkdown(newContent.trim(), contentTextEl, filePath, this);
+        await MarkdownRenderer.render(this.app, newContent.trim(), contentTextEl, filePath, this);
         this.normalizeTagFontSizes(contentTextEl);
         this.addHashtagClickHandlers(contentTextEl);
       }

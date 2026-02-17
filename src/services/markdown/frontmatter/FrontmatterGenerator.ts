@@ -34,8 +34,8 @@ function normalizeAuthorUrl(url: string | undefined, platform: Platform): string
     const isMedium = hostname === 'medium.com' || hostname === 'www.medium.com' || hostname.endsWith('.medium.com');
     if (isMedium) {
       // Remove query params
-      let cleanUrl = `${parsedUrl.protocol}//${parsedUrl.hostname}${parsedUrl.pathname}`;
-      cleanUrl = cleanUrl.replace(/\/+$/, ''); // Remove trailing slashes
+      let _cleanUrl = `${parsedUrl.protocol}//${parsedUrl.hostname}${parsedUrl.pathname}`;
+      _cleanUrl = _cleanUrl.replace(/\/+$/, ''); // Remove trailing slashes
 
       if (hostname === 'medium.com' || hostname === 'www.medium.com') {
         // Extract @username from path
@@ -586,7 +586,7 @@ ${content}`;
       return frontmatter;
     }
 
-    const result: YamlFrontmatter = {};
+    const result = {} as YamlFrontmatter;
 
     for (const key of orderedKeys) {
       const aliasedKey = aliases[key] || key;

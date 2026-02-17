@@ -149,7 +149,7 @@ export class ProfileValidationPoller {
     return new Promise((resolve, reject) => {
       this.abortController = new AbortController();
       const startTime = Date.now();
-      let lastStatus: ValidationJobStatus = 'pending';
+      let _lastStatus: ValidationJobStatus = 'pending';
 
       // Set up timeout (tracked for cleanup)
       this.timeoutId = setTimeout(() => {
@@ -178,7 +178,7 @@ export class ProfileValidationPoller {
           }
 
           const { status, result, error } = response.data;
-          lastStatus = status;
+          _lastStatus = status;
 
           // Report progress
           this.onProgress?.(status, elapsed);

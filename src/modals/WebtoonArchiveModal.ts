@@ -2090,9 +2090,7 @@ export class WebtoonArchiveModal extends Modal {
       const existing = subscriptions.find(
         (s: Subscription) =>
           s.platform === 'naver-webtoon' &&
-          // Use == for loose comparison to handle string/number mismatch
-          // eslint-disable-next-line eqeqeq
-          s.naverWebtoonOptions?.titleId == this.titleId &&
+          String(s.naverWebtoonOptions?.titleId) === String(this.titleId) &&
           s.enabled
       );
 

@@ -292,7 +292,7 @@ export class ErrorNotificationService implements IService {
 
     // Add action button if provided
     if (options.action) {
-      const buttonEl = notice.noticeEl.createEl('button', {
+      const buttonEl = notice.messageEl.createEl('button', {
         text: options.action.label,
         cls: 'error-action-button'
       });
@@ -431,7 +431,7 @@ export class ErrorNotificationService implements IService {
    * Style notice based on severity
    */
   private styleNotice(notice: Notice, severity: ErrorSeverity): void {
-    const noticeEl = notice.noticeEl;
+    const noticeEl = notice.messageEl;
 
     // Remove default styling
     noticeEl.removeClass('notice');

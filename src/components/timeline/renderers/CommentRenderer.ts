@@ -171,7 +171,7 @@ export class CommentRenderer {
     // Combined regex to match:
     // 1. Markdown links: [text](url)
     // 2. Plain URLs: https://... or http://...
-    const combinedRegex = /\[([^\]]+)\]\(([^)]+)\)|(https?:\/\/[^\s<>\[\]()]+)/g;
+    const combinedRegex = /\[([^\]]+)\]\(([^)]+)\)|(https?:\/\/[^\s<>[\]()]+)/g;
 
     let lastIndex = 0;
     let match;

@@ -385,7 +385,7 @@ export class SeriesCardRenderer extends Component {
     // Hover effects handled by CSS .scr-sub-badge--subscribed:hover / .scr-sub-badge--not-subscribed:hover
 
     // Click handler - Toggle subscribe/unsubscribe
-    badge.addEventListener('click', async (e) => {
+    badge.addEventListener('click', (e) => { void (async () => {
       e.stopPropagation();
       if (isLoading) return;
 
@@ -451,7 +451,7 @@ export class SeriesCardRenderer extends Component {
           }
         }
       }
-    });
+    })(); });
   }
 
   /**
@@ -482,8 +482,8 @@ export class SeriesCardRenderer extends Component {
       return false;
     }
 
-    // Delete the note file first (use delete instead of trash to avoid native confirmation)
-    await this.app.vault.delete(file);
+    // Delete the note file (respects user's trash preference)
+    await this.app.fileManager.trashFile(file);
 
     // Clear cached PostData for the deleted episode to prevent stale image loading
     this.postDataCache.delete(episode.filePath);
@@ -524,7 +524,7 @@ export class SeriesCardRenderer extends Component {
           const filesToDelete = [...mediaFolder.children];
           for (const child of filesToDelete) {
             if (child instanceof TFile) {
-              await this.app.vault.delete(child);
+              await this.app.fileManager.trashFile(child);
             }
           }
           // Then delete the empty folder
@@ -703,13 +703,13 @@ export class SeriesCardRenderer extends Component {
    * Render streaming episode content directly in the container
    * Uses Workers proxy for CORS bypass
    */
-  private async renderStreamingEpisode(
+  private renderStreamingEpisode(
     series: SeriesGroup,
     detail: EpisodeDetail,
     container: HTMLElement
-  ): Promise<void> {
+  ): void {
     // Preserve fullscreen state - check before destroying reader
-    const wasFullscreen = this.fullscreenSeriesId === series.seriesId;
+    const _wasFullscreen = this.fullscreenSeriesId === series.seriesId;
 
     // Update viewState and episode indicator for streaming episode
     series.currentEpisode = detail.no;
@@ -782,14 +782,14 @@ export class SeriesCardRenderer extends Component {
       streamingMode: true,
       remoteImageUrls: detail.imageUrls,
       workersEndpoint: this.plugin.settings.workerUrl,
-      onNextEpisode: async () => {
+      onNextEpisode: () => { void (async () => {
         const nextEpisodeNo = detail.no + 1;
 
         // First check if next episode is downloaded locally
         const localCheck = this.checkLocalEpisodeExists(series.seriesId, nextEpisodeNo, series.platform);
         if (localCheck.exists) {
           // Use local files instead of streaming
-          await this.renderLocalEpisode(series, nextEpisodeNo, localCheck.imagePaths, container);
+          this.renderLocalEpisode(series, nextEpisodeNo, localCheck.imagePaths, container);
           return;
         }
 
@@ -818,14 +818,14 @@ export class SeriesCardRenderer extends Component {
           // No more episodes, open modal to check for updates
           this.handleAddEpisodeClick(series, nextEpisodeNo);
         }
-      },
-      onCheckNewEpisodes: async () => {
+      })(); },
+      onCheckNewEpisodes: () => {
         const nextEpisodeNo = detail.no + 1;
 
         // First check locally
         const localCheck = this.checkLocalEpisodeExists(series.seriesId, nextEpisodeNo, series.platform);
         if (localCheck.exists) {
-          await this.renderLocalEpisode(series, nextEpisodeNo, localCheck.imagePaths, container);
+          this.renderLocalEpisode(series, nextEpisodeNo, localCheck.imagePaths, container);
           return;
         }
 
@@ -859,12 +859,12 @@ export class SeriesCardRenderer extends Component {
   /**
    * Render locally downloaded episode
    */
-  private async renderLocalEpisode(
+  private renderLocalEpisode(
     series: SeriesGroup,
     episodeNo: number,
     imagePaths: string[],
     container: HTMLElement
-  ): Promise<void> {
+  ): void {
     // Cleanup previous reader if exists
     const existingReader = this.webtoonReaders.get(series.seriesId);
     if (existingReader) {
@@ -895,13 +895,13 @@ export class SeriesCardRenderer extends Component {
       getResourcePath: (path: string) => this.getResourcePath(path),
       hasNextEpisode,
       streamingMode: false,
-      onNextEpisode: async () => {
+      onNextEpisode: () => { void (async () => {
         const nextEpisodeNo = episodeNo + 1;
 
         // Check if next episode exists locally
         const localCheck = this.checkLocalEpisodeExists(series.seriesId, nextEpisodeNo, series.platform);
         if (localCheck.exists) {
-          await this.renderLocalEpisode(series, nextEpisodeNo, localCheck.imagePaths, container);
+          this.renderLocalEpisode(series, nextEpisodeNo, localCheck.imagePaths, container);
           return;
         }
 
@@ -929,7 +929,7 @@ export class SeriesCardRenderer extends Component {
         } else {
           this.handleAddEpisodeClick(series, nextEpisodeNo);
         }
-      },
+      })(); },
       onCheckNewEpisodes: () => {
         if (!this.isOnline()) {
           this.showOfflineMessage(container, 'Cannot check for updates offline');
@@ -1050,7 +1050,7 @@ export class SeriesCardRenderer extends Component {
         const webtoonInfo = await this.getWebtoonInfoForSeries(series);
         if (!webtoonInfo) {
           // Fallback to direct streaming without markdown
-          await this.renderStreamingEpisode(series, detail, container);
+          this.renderStreamingEpisode(series, detail, container);
           return;
         }
 
@@ -1157,7 +1157,7 @@ export class SeriesCardRenderer extends Component {
         }
 
         // Fallback to direct streaming
-        await this.renderStreamingEpisode(series, detail, container);
+        this.renderStreamingEpisode(series, detail, container);
         return;
       }
 
@@ -1241,12 +1241,12 @@ export class SeriesCardRenderer extends Component {
       }
 
       // Now render streaming episode (markdown exists, images still downloading)
-      await this.renderStreamingEpisode(series, detail, container);
+      this.renderStreamingEpisode(series, detail, container);
 
     } catch (error) {
       console.error('[SeriesCardRenderer] createMarkdownThenStream failed:', error);
       // Fallback to direct streaming
-      await this.renderStreamingEpisode(series, detail, container);
+      this.renderStreamingEpisode(series, detail, container);
     }
   }
 
@@ -1280,7 +1280,7 @@ export class SeriesCardRenderer extends Component {
       }
 
       // Add to silent download queue
-      await downloadManager.addSilentDownload(webtoonInfo, detail);
+      downloadManager.addSilentDownload(webtoonInfo, detail);
     } catch (error) {
       // Silent failure - background download is optional
     }
@@ -2134,7 +2134,7 @@ export class SeriesCardRenderer extends Component {
     // We'll populate this asynchronously if not cached
     if (!metadata) {
       // Try to get from frontmatter directly
-      this.callbacks.getPostData(firstEpisode.filePath).then((data) => {
+      void this.callbacks.getPostData(firstEpisode.filePath).then((data) => {
         if (data?.series) {
           this.postDataCache.set(firstEpisode.filePath, data);
           // Re-render badges if container still exists
@@ -2334,12 +2334,12 @@ export class SeriesCardRenderer extends Component {
       streamingMode: isStreaming,
       remoteImageUrls: streamingImageUrls,
       workersEndpoint: this.plugin.settings.workerUrl || 'https://social-archiver-api.social-archive.org',
-      onNextEpisode: async () => {
+      onNextEpisode: () => { void (async () => {
         // First check if next episode exists locally
         const nextEpisode = series.episodes[currentIndex + 1];
         if (nextEpisode) {
           // Local episode exists - use normal switch
-          this.switchToEpisode(series, nextEpisode.episode);
+          await this.switchToEpisode(series, nextEpisode.episode);
           return;
         }
 
@@ -2364,8 +2364,8 @@ export class SeriesCardRenderer extends Component {
         // Fallback: open download modal (download-first mode or streaming failed)
         const nextEpisodeNo = episode.episode + 1;
         this.handleAddEpisodeClick(series, nextEpisodeNo);
-      },
-      onCheckNewEpisodes: async () => {
+      })(); },
+      onCheckNewEpisodes: () => { void (async () => {
         // In stream-first mode, try streaming first
         if (isStreamFirst) {
           const nextEpisodeNo = episode.episode + 1;
@@ -2386,7 +2386,7 @@ export class SeriesCardRenderer extends Component {
         // No new episode or download-first mode - open modal
         const nextEpisodeNo = episode.episode + 1;
         this.handleAddEpisodeClick(series, nextEpisodeNo);
-      },
+      })(); },
       onScrollComplete: () => {
         // Auto-mark as read when scroll reaches 95%+
         if (!episode.isRead) {
@@ -2456,7 +2456,7 @@ export class SeriesCardRenderer extends Component {
     label.textContent = 'Best Comments';
 
     // Load comment count asynchronously and update label
-    this.updateCommentsLabelCount(series, currentEpisodeNo, label);
+    void this.updateCommentsLabelCount(series, currentEpisodeNo, label);
 
     // Loading indicator (will be shown/hidden)
     const loadingIndicator = toggleHeader.createDiv({ cls: 'comments-loading' });
@@ -2482,7 +2482,7 @@ export class SeriesCardRenderer extends Component {
     }
 
     // Toggle handler with lazy loading
-    toggleHeader.addEventListener('click', async () => {
+    toggleHeader.addEventListener('click', () => { void (async () => {
       const newExpanded = !this.commentsExpanded.get(seriesId);
       this.commentsExpanded.set(seriesId, newExpanded);
 
@@ -2504,7 +2504,7 @@ export class SeriesCardRenderer extends Component {
         const currentEpisode = this.getViewState(series).currentEpisode;
         await this.loadCommentsFromPostData(series, currentEpisode, commentsContainer, loadingIndicator);
       }
-    });
+    })(); });
 
     // Hover effect handled by CSS .scr-comments-toggle:hover
 
@@ -2546,7 +2546,7 @@ export class SeriesCardRenderer extends Component {
 
       // If not found, search by frontmatter (for streaming episodes not yet in array)
       if (!file) {
-        file = await this.findEpisodeFileByFrontmatter(seriesId, episodeNo, series.platform);
+        file = this.findEpisodeFileByFrontmatter(seriesId, episodeNo, series.platform);
       }
 
       if (!file) {
@@ -2573,11 +2573,11 @@ export class SeriesCardRenderer extends Component {
    * Find episode file by frontmatter when not in series.episodes array
    * Used for streaming episodes that are downloaded but not yet indexed
    */
-  private async findEpisodeFileByFrontmatter(
+  private findEpisodeFileByFrontmatter(
     seriesId: string,
     episodeNo: number,
     platform: string
-  ): Promise<TFile | null> {
+  ): TFile | null {
     // Markdown files are in "Social Archives/{platform}/" not in media folder
     const platformDisplayName = platform === 'webtoons' ? 'WEBTOON' : 'naver-webtoon';
     const parentPath = `Social Archives/${platformDisplayName}`;
@@ -2934,7 +2934,7 @@ export class SeriesCardRenderer extends Component {
     }
 
     // Debounce save for 500ms to batch multiple updates
-    this.readUpdateDebounceTimer = setTimeout(async () => {
+    this.readUpdateDebounceTimer = setTimeout(() => { void (async () => {
       // Save all pending updates
       for (const [pendingPath, pendingIsRead] of this.pendingReadUpdates) {
         const file = this.app.vault.getAbstractFileByPath(pendingPath);
@@ -2950,7 +2950,7 @@ export class SeriesCardRenderer extends Component {
       }
       this.pendingReadUpdates.clear();
       this.readUpdateDebounceTimer = null;
-    }, 500);
+    })(); }, 500);
   }
 
   /**
@@ -3216,7 +3216,7 @@ export class SeriesCardRenderer extends Component {
 
       // Hover effect handled by CSS .scr-delete-btn:hover
 
-      deleteBtn.addEventListener('click', async (e) => {
+      deleteBtn.addEventListener('click', (e) => { void (async () => {
         e.stopPropagation();
 
         // Exit fullscreen mode first if active
@@ -3236,7 +3236,7 @@ export class SeriesCardRenderer extends Component {
         if (confirmed) {
           await this.deleteSeriesFiles(series);
         }
-      });
+      })(); });
     }
 
     // Episode list container (styles from skeleton-card.css)
@@ -3245,7 +3245,7 @@ export class SeriesCardRenderer extends Component {
 
     // Preview banner placeholder (for all webtoons - shows preview episode info)
     let previewBannerContainer: HTMLElement | null = null;
-    const { isSubscribed } = isWebtoon ? this.getSubscriptionInfo(series.seriesId) : { isSubscribed: false };
+    const { isSubscribed: _isSubscribed } = isWebtoon ? this.getSubscriptionInfo(series.seriesId) : { isSubscribed: false };
     if (isWebtoon) {
       previewBannerContainer = listContainer.createDiv({ cls: 'preview-banner-container' });
 
@@ -3285,7 +3285,7 @@ export class SeriesCardRenderer extends Component {
 
       // Load comment counts when expanding webtoon episode list
       if (state.expandedTOC && isWebtoon) {
-        this.loadEpisodeCommentCounts(series);
+        void this.loadEpisodeCommentCounts(series);
 
         // Load preview info for all webtoons when expanding (Naver Webtoon only)
         if (previewBannerContainer && !this.previewInfoCache.has(series.seriesId)) {
@@ -3301,7 +3301,7 @@ export class SeriesCardRenderer extends Component {
 
     // If initially expanded, load comment counts for webtoons
     if (state.expandedTOC && isWebtoon) {
-      this.loadEpisodeCommentCounts(series);
+      void this.loadEpisodeCommentCounts(series);
     }
 
     return listWrapper;
@@ -3360,7 +3360,7 @@ export class SeriesCardRenderer extends Component {
 
     // Click to switch episode
     item.addEventListener('click', () => {
-      this.switchToEpisode(series, episode.episode);
+      void this.switchToEpisode(series, episode.episode);
     });
 
     return item;
@@ -3395,7 +3395,7 @@ export class SeriesCardRenderer extends Component {
     coverContainer.toggleClass('scr-episode-cover--unread', !episode.isRead);
 
     // Load cover image from PostData (with streaming fallback using PostData.thumbnail)
-    this.loadEpisodeCover(coverContainer, episode);
+    void this.loadEpisodeCover(coverContainer, episode);
 
     // Episode info section
     const infoSection = item.createDiv({ cls: 'webtoon-episode-info' });
@@ -3567,7 +3567,7 @@ export class SeriesCardRenderer extends Component {
         });
 
         const btnRect = moreBtn.getBoundingClientRect();
-        menuEl.setCssStyles({ position: 'fixed', 'z-index': '999999', visibility: 'hidden' });
+        menuEl.setCssStyles({ position: 'fixed', zIndex: '999999', visibility: 'hidden' });
         document.body.appendChild(menuEl);
         const menuHeight = menuEl.offsetHeight;
         const menuWidth = menuEl.offsetWidth;
@@ -3628,10 +3628,10 @@ export class SeriesCardRenderer extends Component {
 
       // Add to favorites (star icon)
       const favoriteColor = episode.isLiked ? 'var(--interactive-accent)' : 'var(--text-muted)';
-      const { btn: favoriteBtn, iconContainer: favoriteIcon } = createActionBtn(
+      const { btn: favoriteBtn, iconContainer: _favoriteIcon } = createActionBtn(
         'star',
         episode.isLiked ? 'Remove from favorites' : 'Add to favorites',
-        async () => {
+        () => { void (async () => {
           const file = this.app.vault.getAbstractFileByPath(episode.filePath);
           if (file instanceof TFile) {
             const newLikeStatus = !episode.isLiked;
@@ -3643,7 +3643,7 @@ export class SeriesCardRenderer extends Component {
             favoriteBtn.addClass('sa-dynamic-color');
             favoriteBtn.toggleClass('scr-svg-filled', newLikeStatus);
           }
-        },
+        })(); },
         favoriteColor
       );
       if (episode.isLiked) {
@@ -3676,7 +3676,7 @@ export class SeriesCardRenderer extends Component {
       });
 
       // Delete button
-      createActionBtn('trash-2', 'Delete this post', async () => {
+      createActionBtn('trash-2', 'Delete this post', () => { void (async () => {
         const confirmed = await showConfirmModal(this.app, {
           title: 'Delete Episode',
           message: `Are you sure you want to delete "${episode.title}"? This will remove the markdown file and downloaded images. This action cannot be undone.`,
@@ -3687,12 +3687,12 @@ export class SeriesCardRenderer extends Component {
         if (confirmed) {
           await this.deleteEpisodeWithMedia(series, episode);
         }
-      });
+      })(); });
     }
 
     // Click handler for episode (switch to this episode)
     item.addEventListener('click', () => {
-      this.switchToEpisode(series, episode.episode);
+      void this.switchToEpisode(series, episode.episode);
     });
 
     // Hover effect - show action buttons on desktop
@@ -3769,7 +3769,7 @@ export class SeriesCardRenderer extends Component {
 
     // Add to favorites
     const likeLabel = episode.isLiked ? 'Remove from favorites' : 'Add to favorites';
-    menu.appendChild(createMenuItem('star', likeLabel, async () => {
+    menu.appendChild(createMenuItem('star', likeLabel, () => { void (async () => {
       const file = this.app.vault.getAbstractFileByPath(episode.filePath);
       if (file instanceof TFile) {
         await this.app.fileManager.processFrontMatter(file, (fm) => {
@@ -3779,7 +3779,7 @@ export class SeriesCardRenderer extends Component {
           this.callbacks.onRefreshNeeded();
         }
       }
-    }, episode.isLiked));
+    })(); }, episode.isLiked));
 
     // Read marking - uses markEpisodeAsRead for unified handling
     // Uses eye/eye-off icons for clearer visual indication
@@ -3802,7 +3802,7 @@ export class SeriesCardRenderer extends Component {
     }));
 
     // Delete
-    menu.appendChild(createMenuItem('trash-2', 'Delete', async () => {
+    menu.appendChild(createMenuItem('trash-2', 'Delete', () => { void (async () => {
       const confirmed = await showConfirmModal(this.app, {
         title: 'Delete Episode',
         message: `Are you sure you want to delete "${episode.title}"? This will remove the markdown file and downloaded images. This action cannot be undone.`,
@@ -3813,7 +3813,7 @@ export class SeriesCardRenderer extends Component {
       if (confirmed) {
         await this.deleteEpisodeWithMedia(series, episode);
       }
-    }));
+    })(); }));
 
     return menu;
   }
@@ -3895,7 +3895,7 @@ export class SeriesCardRenderer extends Component {
 
     const newEpisode = this.getEpisodeAtIndex(series, newIndex);
     if (newEpisode) {
-      this.switchToEpisode(series, newEpisode.episode);
+      void this.switchToEpisode(series, newEpisode.episode);
     }
   }
 
@@ -4131,7 +4131,7 @@ export class SeriesCardRenderer extends Component {
       // Clear cached counts to force reload
       this.episodeCommentCounts.delete(series.seriesId);
       this.episodeCommentCountsLoading.delete(series.seriesId);
-      this.loadEpisodeCommentCounts(series);
+      void this.loadEpisodeCommentCounts(series);
     }
   }
 
@@ -4423,7 +4423,7 @@ export class SeriesCardRenderer extends Component {
               // Media URL is relative path in vault
               const mediaFile = vault.getAbstractFileByPath(media.url);
               if (mediaFile instanceof TFile) {
-                await vault.delete(mediaFile);
+                await this.app.fileManager.trashFile(mediaFile);
                 deletedMedia++;
                 // Track parent folder for cleanup
                 const parentPath = media.url.substring(0, media.url.lastIndexOf('/'));
@@ -4437,7 +4437,7 @@ export class SeriesCardRenderer extends Component {
           if (parentPath) foldersToCheck.add(parentPath);
 
           // Delete markdown file
-          await vault.delete(file);
+          await this.app.fileManager.trashFile(file);
           deletedMarkdown++;
         }
       }

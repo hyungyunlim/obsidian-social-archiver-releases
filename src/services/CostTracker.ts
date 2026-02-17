@@ -64,7 +64,7 @@ export class CostTracker implements IService {
   /**
    * Initialize the cost tracker
    */
-  async initialize(): Promise<void> {
+  initialize(): void {
     if (this.initialized) {
       this.logger?.warn('CostTracker already initialized');
       return;
@@ -76,7 +76,7 @@ export class CostTracker implements IService {
 
     // Load persisted transactions if enabled
     if (this.config.persistTransactions) {
-      await this.loadTransactions();
+      this.loadTransactions();
     }
 
     this.initialized = true;
@@ -86,7 +86,7 @@ export class CostTracker implements IService {
   /**
    * Shutdown the cost tracker
    */
-  async shutdown(): Promise<void> {
+  shutdown(): void {
     if (!this.initialized) {
       return;
     }
@@ -95,7 +95,7 @@ export class CostTracker implements IService {
 
     // Persist transactions if enabled
     if (this.config.persistTransactions) {
-      await this.persistTransactions();
+      this.persistTransactions();
     }
 
     this.initialized = false;
@@ -571,12 +571,12 @@ export class CostTracker implements IService {
     return `${year}-${month}-${day}`;
   }
 
-  private async loadTransactions(): Promise<void> {
+  private loadTransactions(): void {
     // TODO: Implement persistence loading from localStorage or IndexedDB
     this.logger?.debug('Loading persisted transactions');
   }
 
-  private async persistTransactions(): Promise<void> {
+  private persistTransactions(): void {
     // TODO: Implement persistence to localStorage or IndexedDB
     this.logger?.debug('Persisting transactions');
   }

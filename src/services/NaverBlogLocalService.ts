@@ -272,8 +272,6 @@ export class NaverBlogLocalService {
     ];
 
     let html: string | null = null;
-    let fetchedUrl = '';
-
     for (const fetchUrl of urlFormats) {
       try {
         const response = await requestUrl({
@@ -286,7 +284,6 @@ export class NaverBlogLocalService {
           // Check if we got actual content (not just a frameset)
           if (response.text.includes('se-main-container') || response.text.includes('se-component')) {
             html = response.text;
-            fetchedUrl = fetchUrl;
             break;
           } else {
           }

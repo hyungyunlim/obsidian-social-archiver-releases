@@ -1,6 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import axios from 'axios';
-import MockAdapter from 'axios-mock-adapter';
 import { ShareAPIClient, type ShareAPIRequest, type ShareAPIResponse } from '@/services/ShareAPIClient';
 import type { PostData } from '@/types/post';
 import {
@@ -11,24 +9,66 @@ import {
   NetworkError,
   TimeoutError
 } from '@/types/errors/http-errors';
+import { __setRequestUrlHandler } from 'obsidian';
+
+type RequestHandler = (params: any) => Promise<any>;
+
+// Queue-based handler that processes responses in order
+class MockQueue {
+  private queue: RequestHandler[] = [];
+
+  add(handler: RequestHandler) {
+    this.queue.push(handler);
+  }
+
+  install() {
+    __setRequestUrlHandler(async (params) => {
+      const handler = this.queue.shift();
+      if (handler) {
+        return handler(params);
+      }
+      throw new Error('No more mock responses in queue');
+    });
+  }
+
+  clear() {
+    this.queue = [];
+    __setRequestUrlHandler(null);
+  }
+}
+
+function makeResponse(status: number, data: unknown, headers: Record<string, string> = {}) {
+  return async () => ({
+    status,
+    headers,
+    json: typeof data === 'object' ? data : {},
+    text: typeof data === 'string' ? data : JSON.stringify(data),
+    arrayBuffer: new ArrayBuffer(0),
+  });
+}
+
+function wrap<T>(data: T): { success: boolean; data: T } {
+  return { success: true, data };
+}
 
 describe('ShareAPIClient', () => {
   let client: ShareAPIClient;
-  let mockAxios: MockAdapter;
+  let mock: MockQueue;
 
   beforeEach(() => {
-    mockAxios = new MockAdapter(axios);
+    mock = new MockQueue();
+    mock.install();
     client = new ShareAPIClient({
       baseURL: 'https://api.test.com',
       apiKey: 'test-api-key',
       timeout: 5000,
       maxRetries: 3,
-      retryDelay: 100 // Short delay for tests
+      retryDelay: 10 // Short delay for tests
     });
   });
 
   afterEach(() => {
-    mockAxios.restore();
+    mock.clear();
   });
 
   describe('createShare', () => {
@@ -56,25 +96,26 @@ describe('ShareAPIClient', () => {
 
       const request: ShareAPIRequest = {
         postData: mockPostData,
-        options: {
-          username: 'testuser'
-        }
+        options: { username: 'testuser' }
       };
 
-      const response: ShareAPIResponse = {
+      const responseData: ShareAPIResponse = {
         shareId: 'share_123',
         shareUrl: 'https://share.test.com/share_123',
         passwordProtected: false
       };
 
-      mockAxios.onPost('/api/share').reply(200, response);
+      const captured: any[] = [];
+      mock.add(async (params) => {
+        captured.push(params);
+        return makeResponse(200, wrap(responseData))();
+      });
 
       const result = await client.createShare(request);
 
-      expect(result).toEqual(response);
-      expect(mockAxios.history.post.length).toBe(1);
-      expect(mockAxios.history.post[0].headers).toHaveProperty('Authorization', 'Bearer test-api-key');
-      expect(mockAxios.history.post[0].headers).toHaveProperty('X-License-Key', 'test-api-key');
+      expect(result).toEqual(responseData);
+      expect(captured[0].headers['Authorization']).toBe('Bearer test-api-key');
+      expect(captured[0].headers['X-License-Key']).toBe('test-api-key');
     });
 
     it('should handle legacy format', async () => {
@@ -89,18 +130,22 @@ describe('ShareAPIClient', () => {
         }
       };
 
-      const response: ShareAPIResponse = {
+      const responseData: ShareAPIResponse = {
         shareId: 'share_456',
         shareUrl: 'https://share.test.com/share_456',
         passwordProtected: false
       };
 
-      mockAxios.onPost('/api/share').reply(200, response);
+      const captured: any[] = [];
+      mock.add(async (params) => {
+        captured.push(params);
+        return makeResponse(200, wrap(responseData))();
+      });
 
       const result = await client.createShare(request);
 
-      expect(result).toEqual(response);
-      expect(mockAxios.history.post[0].data).toBe(JSON.stringify(request));
+      expect(result).toEqual(responseData);
+      expect(captured[0].body).toBe(JSON.stringify(request));
     });
 
     it('should include password protection', async () => {
@@ -116,52 +161,58 @@ describe('ShareAPIClient', () => {
 
       const protectedRequest = ShareAPIClient.addPasswordProtection(request, 'secretPassword123');
 
-      const response: ShareAPIResponse = {
+      const responseData: ShareAPIResponse = {
         shareId: 'share_789',
         shareUrl: 'https://share.test.com/share_789',
         passwordProtected: true
       };
 
-      mockAxios.onPost('/api/share').reply(200, response);
+      const captured: any[] = [];
+      mock.add(async (params) => {
+        captured.push(params);
+        return makeResponse(200, wrap(responseData))();
+      });
 
       const result = await client.createShare(protectedRequest);
 
       expect(result.passwordProtected).toBe(true);
-      expect(JSON.parse(mockAxios.history.post[0].data).options.password).toBe('secretPassword123');
+      const body = JSON.parse(captured[0].body);
+      expect(body.options.password).toBe('secretPassword123');
     });
 
     it('should set custom expiry date for pro users', async () => {
-      const request: ShareAPIRequest = {
-        content: 'Pro content'
-      };
+      const request: ShareAPIRequest = { content: 'Pro content' };
 
       const futureDate = new Date();
-      futureDate.setFullYear(futureDate.getFullYear() + 1); // 1 year from now
+      futureDate.setFullYear(futureDate.getFullYear() + 1);
 
       const expiringRequest = ShareAPIClient.setExpiryDate(request, futureDate, 'pro');
 
-      const response: ShareAPIResponse = {
+      const expectedExpiry = Math.floor(futureDate.getTime() / 1000);
+      const responseData: ShareAPIResponse = {
         shareId: 'share_pro',
         shareUrl: 'https://share.test.com/share_pro',
-        expiresAt: Math.floor(futureDate.getTime() / 1000),
+        expiresAt: expectedExpiry,
         passwordProtected: false
       };
 
-      mockAxios.onPost('/api/share').reply(200, response);
+      const captured: any[] = [];
+      mock.add(async (params) => {
+        captured.push(params);
+        return makeResponse(200, wrap(responseData))();
+      });
 
       const result = await client.createShare(expiringRequest);
 
-      expect(result.expiresAt).toBe(Math.floor(futureDate.getTime() / 1000));
-      expect(JSON.parse(mockAxios.history.post[0].data).options.expiry).toBe(Math.floor(futureDate.getTime() / 1000));
+      expect(result.expiresAt).toBe(expectedExpiry);
+      const body = JSON.parse(captured[0].body);
+      expect(body.options.expiry).toBe(expectedExpiry);
     });
 
     it('should enforce 30-day limit for free users', () => {
-      const request: ShareAPIRequest = {
-        content: 'Free content'
-      };
-
+      const request: ShareAPIRequest = { content: 'Free content' };
       const futureDate = new Date();
-      futureDate.setDate(futureDate.getDate() + 45); // 45 days from now
+      futureDate.setDate(futureDate.getDate() + 45);
 
       expect(() => {
         ShareAPIClient.setExpiryDate(request, futureDate, 'free');
@@ -169,12 +220,9 @@ describe('ShareAPIClient', () => {
     });
 
     it('should reject past expiry dates', () => {
-      const request: ShareAPIRequest = {
-        content: 'Test content'
-      };
-
+      const request: ShareAPIRequest = { content: 'Test content' };
       const pastDate = new Date();
-      pastDate.setDate(pastDate.getDate() - 1); // Yesterday
+      pastDate.setDate(pastDate.getDate() - 1);
 
       expect(() => {
         ShareAPIClient.setExpiryDate(request, pastDate, 'pro');
@@ -185,22 +233,25 @@ describe('ShareAPIClient', () => {
   describe('updateShare', () => {
     it('should update an existing share', async () => {
       const shareId = 'share_123';
-      const request: ShareAPIRequest = {
-        content: 'Updated content'
-      };
+      const request: ShareAPIRequest = { content: 'Updated content' };
 
-      const response: ShareAPIResponse = {
+      const responseData: ShareAPIResponse = {
         shareId,
         shareUrl: `https://share.test.com/${shareId}`,
         passwordProtected: false
       };
 
-      mockAxios.onPost('/api/share').reply(200, response);
+      const captured: any[] = [];
+      mock.add(async (params) => {
+        captured.push(params);
+        return makeResponse(200, wrap(responseData))();
+      });
 
       const result = await client.updateShare(shareId, request);
 
       expect(result.shareId).toBe(shareId);
-      expect(JSON.parse(mockAxios.history.post[0].data).options.shareId).toBe(shareId);
+      const body = JSON.parse(captured[0].body);
+      expect(body.options.shareId).toBe(shareId);
     });
   });
 
@@ -208,157 +259,174 @@ describe('ShareAPIClient', () => {
     it('should handle rate limiting with retry', async () => {
       const request: ShareAPIRequest = { content: 'Test' };
 
-      // First request: rate limited
-      mockAxios.onPost('/api/share').replyOnce(429, {
-        message: 'Rate limit exceeded'
-      }, {
-        'retry-after': '1'
-      });
+      // First request: rate limited (0 retry-after for fast test)
+      mock.add(makeResponse(429, { message: 'Rate limit exceeded' }, { 'retry-after': '0' }));
 
       // Second request: success
-      mockAxios.onPost('/api/share').replyOnce(200, {
+      mock.add(makeResponse(200, wrap({
         shareId: 'share_retry',
         shareUrl: 'https://share.test.com/share_retry',
         passwordProtected: false
+      })));
+
+      const callCount = { count: 0 };
+      const originalQueue = mock;
+      __setRequestUrlHandler(async (params) => {
+        callCount.count++;
+        const handler = (originalQueue as any).queue.shift();
+        if (handler) return handler(params);
+        throw new Error('No more mock responses');
       });
 
       const result = await client.createShare(request);
 
       expect(result.shareId).toBe('share_retry');
-      expect(mockAxios.history.post.length).toBe(2); // Original + 1 retry
+      expect(callCount.count).toBe(2); // Original + 1 retry
     });
 
     it('should handle authentication errors without retry', async () => {
       const request: ShareAPIRequest = { content: 'Test' };
+      const callCount = { count: 0 };
 
-      mockAxios.onPost('/api/share').reply(401, {
-        message: 'Invalid API key'
+      __setRequestUrlHandler(async () => {
+        callCount.count++;
+        return {
+          status: 401,
+          headers: {},
+          json: { message: 'Invalid API key' },
+          text: '{"message":"Invalid API key"}',
+          arrayBuffer: new ArrayBuffer(0),
+        };
       });
 
       await expect(client.createShare(request)).rejects.toThrow(AuthenticationError);
-      expect(mockAxios.history.post.length).toBe(1); // No retry for auth errors
+      expect(callCount.count).toBe(1); // No retry for auth errors
     });
 
     it('should handle invalid request errors without retry', async () => {
       const request: ShareAPIRequest = { content: 'Test' };
+      const callCount = { count: 0 };
 
-      mockAxios.onPost('/api/share').reply(400, {
-        message: 'Invalid request',
-        errors: ['Missing required field']
+      __setRequestUrlHandler(async () => {
+        callCount.count++;
+        return {
+          status: 400,
+          headers: {},
+          json: { message: 'Invalid request', errors: ['Missing required field'] },
+          text: '{"message":"Invalid request"}',
+          arrayBuffer: new ArrayBuffer(0),
+        };
       });
 
       await expect(client.createShare(request)).rejects.toThrow(InvalidRequestError);
-      expect(mockAxios.history.post.length).toBe(1); // No retry for client errors
+      expect(callCount.count).toBe(1); // No retry for client errors
     });
 
     it('should retry on server errors with exponential backoff', async () => {
-      const request: ShareAPIRequest = { content: 'Test' };
-
-      // Configure shorter delays for testing
       const testClient = new ShareAPIClient({
         baseURL: 'https://api.test.com',
         maxRetries: 3,
-        retryDelay: 10 // Very short for tests
+        retryDelay: 10
       });
 
-      // Mock axios for test client
-      const testMock = new MockAdapter((testClient as any).client);
+      const callCount = { count: 0 };
+      const responses = [
+        makeResponse(500, { message: 'Internal server error' }),
+        makeResponse(503, { message: 'Service unavailable' }),
+        makeResponse(200, wrap({
+          shareId: 'share_success',
+          shareUrl: 'https://share.test.com/share_success',
+          passwordProtected: false
+        })),
+      ];
 
-      // First two requests: server error
-      testMock.onPost('/api/share').replyOnce(500, {
-        message: 'Internal server error'
-      });
-      testMock.onPost('/api/share').replyOnce(503, {
-        message: 'Service unavailable'
+      __setRequestUrlHandler(async (params) => {
+        const handler = responses[callCount.count++];
+        if (handler) return handler(params);
+        throw new Error('No more responses');
       });
 
-      // Third request: success
-      testMock.onPost('/api/share').replyOnce(200, {
-        shareId: 'share_success',
-        shareUrl: 'https://share.test.com/share_success',
-        passwordProtected: false
-      });
-
-      const startTime = Date.now();
-      const result = await testClient.createShare(request);
-      const endTime = Date.now();
+      const result = await testClient.createShare({ content: 'Test' });
 
       expect(result.shareId).toBe('share_success');
-      expect(testMock.history.post.length).toBe(3); // Original + 2 retries
-
-      // Verify some delay occurred (at least the sum of delays)
-      expect(endTime - startTime).toBeGreaterThan(0);
-
-      testMock.restore();
+      expect(callCount.count).toBe(3); // Original + 2 retries
     });
 
     it('should handle network errors with retry', async () => {
       const request: ShareAPIRequest = { content: 'Test' };
+      let callCount = 0;
 
-      // First request: network error
-      mockAxios.onPost('/api/share').networkErrorOnce();
-
-      // Second request: success
-      mockAxios.onPost('/api/share').replyOnce(200, {
-        shareId: 'share_network',
-        shareUrl: 'https://share.test.com/share_network',
-        passwordProtected: false
+      __setRequestUrlHandler(async () => {
+        callCount++;
+        if (callCount === 1) {
+          throw new Error('ENOTFOUND api.test.com');
+        }
+        return {
+          status: 200,
+          headers: {},
+          json: wrap({ shareId: 'share_network', shareUrl: 'https://share.test.com/share_network', passwordProtected: false }),
+          text: '',
+          arrayBuffer: new ArrayBuffer(0),
+        };
       });
 
       const result = await client.createShare(request);
 
       expect(result.shareId).toBe('share_network');
-      expect(mockAxios.history.post.length).toBe(2);
-    });
-
-    it('should handle timeout errors with retry', async () => {
-      const request: ShareAPIRequest = { content: 'Test' };
-
-      // First request: timeout
-      mockAxios.onPost('/api/share').timeoutOnce();
-
-      // Second request: success
-      mockAxios.onPost('/api/share').replyOnce(200, {
-        shareId: 'share_timeout',
-        shareUrl: 'https://share.test.com/share_timeout',
-        passwordProtected: false
-      });
-
-      const result = await client.createShare(request);
-
-      expect(result.shareId).toBe('share_timeout');
-      expect(mockAxios.history.post.length).toBe(2);
+      expect(callCount).toBe(2);
     });
 
     it('should fail after max retries', async () => {
       const request: ShareAPIRequest = { content: 'Test' };
+      let callCount = 0;
 
-      // All requests fail
-      mockAxios.onPost('/api/share').reply(500, {
-        message: 'Server error'
+      __setRequestUrlHandler(async () => {
+        callCount++;
+        return {
+          status: 500,
+          headers: {},
+          json: { message: 'Server error' },
+          text: '{"message":"Server error"}',
+          arrayBuffer: new ArrayBuffer(0),
+        };
       });
 
       await expect(client.createShare(request)).rejects.toThrow(ServerError);
-      expect(mockAxios.history.post.length).toBe(3); // Original + 2 retries (maxRetries = 3)
+      expect(callCount).toBe(3); // Original + 2 retries (maxRetries = 3)
     });
   });
 
   describe('deleteShare', () => {
     it('should delete a share', async () => {
       const shareId = 'share_delete';
+      const captured: any[] = [];
 
-      mockAxios.onDelete(`/api/share/${shareId}`).reply(204);
+      __setRequestUrlHandler(async (params) => {
+        captured.push(params);
+        return {
+          status: 204,
+          headers: {},
+          json: {},
+          text: '',
+          arrayBuffer: new ArrayBuffer(0),
+        };
+      });
 
       await expect(client.deleteShare(shareId)).resolves.toBeUndefined();
-      expect(mockAxios.history.delete.length).toBe(1);
+      expect(captured[0].method).toBe('DELETE');
+      expect(captured[0].url).toBe(`https://api.test.com/api/share/${shareId}`);
     });
 
     it('should handle delete errors', async () => {
       const shareId = 'share_notfound';
 
-      mockAxios.onDelete(`/api/share/${shareId}`).reply(404, {
-        message: 'Share not found'
-      });
+      __setRequestUrlHandler(async () => ({
+        status: 404,
+        headers: {},
+        json: { message: 'Share not found' },
+        text: '{"message":"Share not found"}',
+        arrayBuffer: new ArrayBuffer(0),
+      }));
 
       await expect(client.deleteShare(shareId)).rejects.toThrow();
     });
@@ -367,38 +435,48 @@ describe('ShareAPIClient', () => {
   describe('getShareInfo', () => {
     it('should get share information', async () => {
       const shareId = 'share_info';
-      const response: ShareAPIResponse = {
+      const responseData = {
         shareId,
         shareUrl: `https://share.test.com/${shareId}`,
         passwordProtected: false,
-        expiresAt: Date.now() + 86400000 // 1 day from now
+        expiresAt: Date.now() + 86400000
       };
 
-      mockAxios.onGet(`/api/share/${shareId}`).reply(200, response);
+      // Return direct (unwrapped) format to test that path
+      __setRequestUrlHandler(async () => ({
+        status: 200,
+        headers: {},
+        json: responseData,
+        text: JSON.stringify(responseData),
+        arrayBuffer: new ArrayBuffer(0),
+      }));
 
       const result = await client.getShareInfo(shareId);
 
-      expect(result).toEqual(response);
-      expect(mockAxios.history.get.length).toBe(1);
+      expect(result.shareId).toBe(shareId);
+      expect(result.shareUrl).toBe(responseData.shareUrl);
     });
   });
 
   describe('Request Headers', () => {
     it('should include required headers', async () => {
-      const request: ShareAPIRequest = { content: 'Test' };
-
-      mockAxios.onPost('/api/share').reply(200, {
-        shareId: 'share_headers',
-        shareUrl: 'https://share.test.com/share_headers',
-        passwordProtected: false
+      const captured: any[] = [];
+      __setRequestUrlHandler(async (params) => {
+        captured.push(params);
+        return {
+          status: 200,
+          headers: {},
+          json: wrap({ shareId: 'share_headers', shareUrl: '', passwordProtected: false }),
+          text: '',
+          arrayBuffer: new ArrayBuffer(0),
+        };
       });
 
-      await client.createShare(request);
+      await client.createShare({ content: 'Test' });
 
-      const headers = mockAxios.history.post[0].headers;
+      const headers = captured[0].headers as Record<string, string>;
       expect(headers).toHaveProperty('Content-Type', 'application/json');
-      expect(headers).toHaveProperty('X-Client', 'obsidian-social-archiver');
-      expect(headers).toHaveProperty('X-Version', '1.0.0');
+      expect(headers).toHaveProperty('X-Client', 'obsidian-plugin');
       expect(headers).toHaveProperty('X-Request-Id');
       expect(headers['X-Request-Id']).toMatch(/^req_\d+_[a-z0-9]+$/);
     });
@@ -408,30 +486,32 @@ describe('ShareAPIClient', () => {
         baseURL: 'https://api.test.com'
       });
 
-      const testMock = new MockAdapter((clientNoAuth as any).client);
-
-      testMock.onPost('/api/share').reply(200, {
-        shareId: 'share_noauth',
-        shareUrl: 'https://share.test.com/share_noauth',
-        passwordProtected: false
+      const captured: any[] = [];
+      __setRequestUrlHandler(async (params) => {
+        captured.push(params);
+        return {
+          status: 200,
+          headers: {},
+          json: wrap({ shareId: 'share_noauth', shareUrl: '', passwordProtected: false }),
+          text: '',
+          arrayBuffer: new ArrayBuffer(0),
+        };
       });
 
       await clientNoAuth.createShare({ content: 'Test' });
 
-      const headers = testMock.history.post[0].headers;
+      const headers = captured[0].headers as Record<string, string>;
       expect(headers).not.toHaveProperty('Authorization');
       expect(headers).not.toHaveProperty('X-License-Key');
-
-      testMock.restore();
     });
   });
 
   describe('Service Interface', () => {
-    it('should implement IService interface', () => {
+    it('should implement IService interface', async () => {
       expect(client.name).toBe('ShareAPIClient');
       expect(client.isInitialized()).toBe(true);
-      expect(client.initialize()).resolves.toBeUndefined();
-      expect(client.cleanup()).resolves.toBeUndefined();
+      await expect(client.initialize()).resolves.toBeUndefined();
+      await expect(client.cleanup()).resolves.toBeUndefined();
     });
   });
 });

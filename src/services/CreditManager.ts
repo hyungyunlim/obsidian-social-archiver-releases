@@ -114,8 +114,8 @@ export class CreditManager implements IService {
     });
 
     // Initialize dependencies
-    await this.api.initialize();
-    await this.tracker.initialize();
+    this.api.initialize();
+    this.tracker.initialize();
 
     // Set initialized before loading license
     this.initialized = true;
@@ -127,7 +127,7 @@ export class CreditManager implements IService {
       // Check if credits need to be reset
       if (this.shouldResetCredits()) {
         this.logger?.info('Credits need reset on initialization');
-        await this.resetMonthlyCredits();
+        this.resetMonthlyCredits();
       }
     }
 
@@ -140,7 +140,7 @@ export class CreditManager implements IService {
   /**
    * Shutdown the credit manager
    */
-  async shutdown(): Promise<void> {
+  shutdown(): void {
     if (!this.initialized) {
       return;
     }
@@ -154,8 +154,8 @@ export class CreditManager implements IService {
     }
 
     // Shutdown dependencies
-    await this.tracker.shutdown();
-    await this.api.shutdown();
+    this.tracker.shutdown();
+    this.api.shutdown();
 
     // Clear event listeners
     this.eventListeners.clear();
@@ -562,7 +562,7 @@ export class CreditManager implements IService {
   /**
    * Reset monthly credits with rollover logic (subscription only)
    */
-  async resetMonthlyCredits(): Promise<void> {
+  resetMonthlyCredits(): void {
     this.ensureInitialized();
 
     if (!this.license) {
@@ -765,7 +765,7 @@ export class CreditManager implements IService {
     await this.promoStorage.storeAppliedCode(appliedCode);
 
     // Apply benefits based on promo type
-    await this.applyPromoBenefits(appliedCode);
+    this.applyPromoBenefits(appliedCode);
 
     this.logger?.info('Promotional code applied successfully', {
       code,
@@ -815,7 +815,7 @@ export class CreditManager implements IService {
   /**
    * Apply benefits from promotional code
    */
-  private async applyPromoBenefits(appliedCode: AppliedPromoCode): Promise<void> {
+  private applyPromoBenefits(appliedCode: AppliedPromoCode): void {
     const { benefit } = appliedCode;
 
     switch (benefit.type) {
@@ -902,7 +902,7 @@ export class CreditManager implements IService {
   }
 
   private generateId(): string {
-    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
   }
 
   private checkThresholds(): void {

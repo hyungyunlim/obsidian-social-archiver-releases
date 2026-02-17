@@ -101,10 +101,6 @@ export class BrunchError extends Error {
 }
 
 export class BrunchLocalService {
-  constructor() {
-    // No auth required for Brunch public content
-  }
-
   /**
    * Check if a URL is a Brunch URL
    */

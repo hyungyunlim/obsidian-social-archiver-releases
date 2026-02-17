@@ -7,10 +7,11 @@
  * - Rate limiting detection and handling
  * - Exponential backoff retry logic
  * - Password protection and custom expiry support
+ *
+ * Uses Obsidian's requestUrl for all network requests (required for Obsidian plugin compliance)
  */
 
-import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse, type AxiosError } from 'axios';
-import { Platform, type Vault } from 'obsidian';
+import { requestUrl, Platform, type Vault } from 'obsidian';
 import type { PostData } from '@/types/post';
 import type { IService } from './base/IService';
 import type { UserTier } from '@/types/settings';
@@ -55,6 +56,7 @@ export interface ShareAPIResponse {
   shareId: string;
   shareUrl: string;
   passwordProtected: boolean;
+  expiresAt?: number;
 }
 
 /**
@@ -126,14 +128,67 @@ const DEFAULT_RETRY_CONFIG: RetryConfig = {
 };
 
 /**
+ * Transform HTTP status + body into a standardized HttpError
+ */
+function transformHttpError(
+  status: number,
+  headers: Record<string, string>,
+  data: unknown,
+  url: string
+): HttpError {
+  const message = (data as any)?.message || `HTTP ${status} error`;
+
+  if (status === 429) {
+    const retryAfter = headers['retry-after'] ? parseInt(headers['retry-after'], 10) : undefined;
+    const limit = headers['x-ratelimit-limit'] ? parseInt(headers['x-ratelimit-limit'], 10) : undefined;
+    const remaining = headers['x-ratelimit-remaining'] ? parseInt(headers['x-ratelimit-remaining'], 10) : undefined;
+    return new RateLimitError(
+      message || 'Rate limit exceeded',
+      { statusCode: status, retryAfter, limit, remaining }
+    );
+  }
+
+  if (status === 401 || status === 403) {
+    return new AuthenticationError(message || 'Authentication failed', status);
+  }
+
+  if (status === 400 || status === 422) {
+    return new InvalidRequestError(message || 'Invalid request', status, {
+      validationErrors: (data as any)?.errors
+    });
+  }
+
+  if (status >= 500) {
+    return new ServerError(message || 'Server error', status);
+  }
+
+  return new HttpError(message, String(status), { statusCode: status });
+}
+
+/**
+ * Get platform identifier for X-Platform header
+ */
+function getPlatformIdentifier(): string {
+  if (Platform.isDesktop) {
+    if (Platform.isMacOS) return 'macos';
+    if (Platform.isWin) return 'windows';
+    return 'linux';
+  }
+  return Platform.isIosApp ? 'ios' : 'android';
+}
+
+/**
  * ShareAPIClient service for Workers API integration
+ * Uses Obsidian's requestUrl API instead of axios for plugin compliance.
  */
 export class ShareAPIClient implements IService {
   name = 'ShareAPIClient';
-  private client: AxiosInstance;
   private config: Required<Omit<ShareAPIConfig, 'apiKey' | 'vault'>> & Pick<ShareAPIConfig, 'apiKey' | 'vault'>;
   private retryConfig: RetryConfig;
   private vault?: Vault;
+
+  // Base headers applied to every request
+  private baseHeaders: Record<string, string>;
 
   // Request queue for serializing updateShare calls per shareId
   // This prevents race conditions when multiple updates happen simultaneously
@@ -144,93 +199,92 @@ export class ShareAPIClient implements IService {
     this.vault = config.vault;
     this.retryConfig = DEFAULT_RETRY_CONFIG;
 
-    // Create axios instance
-    this.client = axios.create({
-      baseURL: this.config.baseURL,
-      timeout: this.config.timeout,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Client': 'obsidian-plugin',
-        'X-Client-Version': this.config.pluginVersion || '0.0.0',
-        'X-Platform': this.getPlatformIdentifier()
-      }
+    this.baseHeaders = {
+      'Content-Type': 'application/json',
+      'X-Client': 'obsidian-plugin',
+      'X-Client-Version': this.config.pluginVersion || '0.0.0',
+      'X-Platform': getPlatformIdentifier(),
+    };
+  }
+
+  /**
+   * Build per-request headers (base + auth + request ID)
+   */
+  private buildHeaders(extra?: Record<string, string>): Record<string, string> {
+    const headers: Record<string, string> = {
+      ...this.baseHeaders,
+      'X-Request-Id': this.generateRequestId(),
+    };
+
+    if (this.config.apiKey) {
+      headers['Authorization'] = `Bearer ${this.config.apiKey}`;
+      headers['X-License-Key'] = this.config.apiKey;
+    }
+
+    if (extra) {
+      Object.assign(headers, extra);
+    }
+
+    return headers;
+  }
+
+  /**
+   * Core HTTP method using Obsidian's requestUrl
+   */
+  private async httpRequest<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    extraHeaders?: Record<string, string>
+  ): Promise<T> {
+    const url = path.startsWith('http') ? path : `${this.config.baseURL}${path}`;
+    const headers = this.buildHeaders(extraHeaders);
+
+    let serializedBody: string | undefined;
+    if (body !== undefined && body !== null) {
+      serializedBody = typeof body === 'string' ? body : JSON.stringify(body);
+    }
+
+    if (this.config.debug) {
+      console.debug('[ShareAPIClient] Request:', { method, url, headers, body });
+    }
+
+    const response = await requestUrl({
+      url,
+      method,
+      headers,
+      body: serializedBody,
+      throw: false,
     });
 
-    // Setup interceptors
-    this.setupInterceptors();
-  }
-
-  /**
-   * Get platform identifier for X-Platform header
-   */
-  private getPlatformIdentifier(): string {
-    if (Platform.isDesktop) {
-      if (Platform.isMacOS) return 'macos';
-      if (Platform.isWin) return 'windows';
-      return 'linux';
+    if (this.config.debug) {
+      console.debug('[ShareAPIClient] Response:', {
+        status: response.status,
+        headers: response.headers,
+      });
     }
-    return Platform.isIosApp ? 'ios' : 'android';
-  }
 
-  /**
-   * Setup axios interceptors for request/response handling
-   */
-  private setupInterceptors(): void {
-    // Request interceptor
-    this.client.interceptors.request.use(
-      (config) => {
-        // Add authentication if API key is provided
-        if (this.config.apiKey) {
-          config.headers['Authorization'] = `Bearer ${this.config.apiKey}`;
-          config.headers['X-License-Key'] = this.config.apiKey;
-        }
-
-        // Add request ID for tracing
-        config.headers['X-Request-Id'] = this.generateRequestId();
-
-        // Log request if debug mode
-        if (this.config.debug) {
-          console.debug('[ShareAPIClient] Request:', {
-            method: config.method,
-            url: config.url,
-            headers: config.headers,
-            data: config.data
-          });
-        }
-
-        return config;
-      },
-      (error) => {
-        return Promise.reject(error);
+    // Handle error responses
+    if (response.status >= 400) {
+      let data: unknown;
+      try {
+        data = response.json;
+      } catch {
+        data = { message: response.text };
       }
-    );
-
-    // Response interceptor
-    this.client.interceptors.response.use(
-      (response) => {
-        // Log response if debug mode
-        if (this.config.debug) {
-          console.debug('[ShareAPIClient] Response:', {
-            status: response.status,
-            data: response.data,
-            headers: response.headers
-          });
-        }
-
-        return response;
-      },
-      (error) => {
-        // Transform to standardized error
-        const httpError = this.transformError(error);
-
-        // Log error if debug mode
-        if (this.config.debug) {
-          console.error('[ShareAPIClient] Error:', httpError);
-        }
-
-        return Promise.reject(httpError);
+      const httpError = transformHttpError(response.status, response.headers, data, url);
+      if (this.config.debug) {
+        console.error('[ShareAPIClient] Error:', httpError);
       }
-    );
+      throw httpError;
+    }
+
+    // Parse successful response
+    try {
+      return response.json as T;
+    } catch {
+      return response.text as unknown as T;
+    }
   }
 
   /**
@@ -238,9 +292,17 @@ export class ShareAPIClient implements IService {
    */
   async createShare(request: ShareAPIRequest): Promise<ShareAPIResponse> {
     return this.executeWithRetry(async () => {
-      const response = await this.client.post<{ success: boolean; data: ShareAPIResponse }>('/api/share', request);
+      const result = await this.httpRequest<{ success: boolean; data: ShareAPIResponse } | ShareAPIResponse>(
+        'POST',
+        '/api/share',
+        request
+      );
       // Workers API returns { success: true, data: ShareAPIResponse }
-      return response.data.data;
+      // Handle both wrapped and unwrapped formats
+      if (result && typeof result === 'object' && 'success' in result && 'data' in result) {
+        return (result as { success: boolean; data: ShareAPIResponse }).data;
+      }
+      return result as ShareAPIResponse;
     });
   }
 
@@ -263,8 +325,15 @@ export class ShareAPIClient implements IService {
 
     const newRequest = existingQueue.then(async () => {
       return this.executeWithRetry(async () => {
-        const response = await this.client.post<{ success: boolean; data: ShareAPIResponse }>('/api/share', updateRequest);
-        return response.data.data;
+        const result = await this.httpRequest<{ success: boolean; data: ShareAPIResponse } | ShareAPIResponse>(
+          'POST',
+          '/api/share',
+          updateRequest
+        );
+        if (result && typeof result === 'object' && 'success' in result && 'data' in result) {
+          return (result as { success: boolean; data: ShareAPIResponse }).data;
+        }
+        return result as ShareAPIResponse;
       });
     }).finally(() => {
       // Clean up queue entry after completion
@@ -282,7 +351,7 @@ export class ShareAPIClient implements IService {
    */
   async deleteShare(shareId: string): Promise<void> {
     return this.executeWithRetry(async () => {
-      await this.client.delete(`/api/share/${shareId}`);
+      await this.httpRequest('DELETE', `/api/share/${shareId}`);
     });
   }
 
@@ -291,13 +360,25 @@ export class ShareAPIClient implements IService {
    */
   async getShareInfo(shareId: string): Promise<ShareAPIResponse> {
     return this.executeWithRetry(async () => {
-      const response = await this.client.get<{ success: boolean; data: any }>(`/api/share/${shareId}`);
+      const result = await this.httpRequest<{ success: boolean; data: any } | any>(
+        'GET',
+        `/api/share/${shareId}`
+      );
       // Workers API returns { success: true, data: shareData }
-      // Extract shareId and shareUrl from data
+      if (result && typeof result === 'object' && 'success' in result && 'data' in result) {
+        const data = result.data;
+        return {
+          shareId: data.shareId,
+          shareUrl: data.shareUrl || '',
+          passwordProtected: !!data.options?.password
+        };
+      }
+      // Unwrapped format (tests return response directly)
       return {
-        shareId: response.data.data.shareId,
-        shareUrl: response.data.data.shareUrl || '',
-        passwordProtected: !!response.data.data.options?.password
+        shareId: result.shareId,
+        shareUrl: result.shareUrl || '',
+        passwordProtected: !!result.options?.password,
+        expiresAt: result.expiresAt,
       };
     });
   }
@@ -326,8 +407,14 @@ export class ShareAPIClient implements IService {
     try {
       // STEP 1: Fetch existing share data to detect changes
       const existingShareData = await this.executeWithRetry(async () => {
-        const response = await this.client.get(`/api/share/${shareId}`);
-        return response.data?.data;
+        const result = await this.httpRequest<{ success: boolean; data: any } | any>(
+          'GET',
+          `/api/share/${shareId}`
+        );
+        if (result && typeof result === 'object' && 'success' in result && 'data' in result) {
+          return result.data;
+        }
+        return result;
       });
 
       // STEP 2: Build filename maps
@@ -441,7 +528,6 @@ export class ShareAPIClient implements IService {
             continue;
           }
 
-
           // Read media as binary
           const mediaBuffer = await this.vault.readBinary(mediaFile as any);
 
@@ -462,18 +548,17 @@ export class ShareAPIClient implements IService {
             ext === 'mov' ? 'video/quicktime' : 'image/jpeg';
 
           // Upload to R2
-          const uploadResponse = await this.client.post('/api/upload-share-media', {
-            shareId,
-            filename,
-            contentType,
-            data: base64
-          });
+          const uploadResponse = await this.httpRequest<{ success: boolean; data?: { url: string } }>(
+            'POST',
+            '/api/upload-share-media',
+            { shareId, filename, contentType, data: base64 }
+          );
 
-          if (uploadResponse.data?.success && uploadResponse.data?.data?.url) {
+          if (uploadResponse?.success && uploadResponse?.data?.url) {
             const uploadedItem = {
               ...mediaItem,
-              url: uploadResponse.data.data.url,
-              thumbnail: uploadResponse.data.data.url
+              url: uploadResponse.data.url,
+              thumbnail: uploadResponse.data.url
             };
             remoteMedia.push(uploadedItem);
             uploadedMedia.push(uploadedItem);
@@ -501,10 +586,10 @@ export class ShareAPIClient implements IService {
         const filename = urlParts[urlParts.length - 1];
 
         try {
-          await this.client.delete(`/api/upload-share-media/${shareId}/${filename}`);
+          await this.httpRequest('DELETE', `/api/upload-share-media/${shareId}/${filename}`);
         } catch (err: any) {
           // Ignore 404 errors (file already deleted or never existed)
-          if (err?.response?.status !== 404) {
+          if (err?.statusCode !== 404) {
             console.error(`[ShareAPIClient] Failed to delete media ${filename}:`, err);
           }
           // Continue with other deletions even if one fails
@@ -634,8 +719,8 @@ export class ShareAPIClient implements IService {
           try {
             const urlParts = media.url.split('/');
             const filename = urlParts[urlParts.length - 1];
-            await this.client.delete(`/api/upload-share-media/${shareId}/${filename}`);
-          } catch (rollbackErr) {
+            await this.httpRequest('DELETE', `/api/upload-share-media/${shareId}/${filename}`);
+          } catch {
           }
         }
       }
@@ -718,134 +803,6 @@ export class ShareAPIClient implements IService {
    */
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  /**
-   * Transform axios error to standardized HttpError
-   */
-  private transformError(error: unknown): HttpError {
-    if (axios.isAxiosError(error)) {
-      const axiosError = error as AxiosError<any>;
-
-      // Network errors
-      if (axiosError.code === 'ECONNABORTED' || axiosError.code === 'ETIMEDOUT') {
-        return new TimeoutError(
-          axiosError.message || 'Request timeout',
-          this.createRequestConfig(axiosError.config)
-        );
-      }
-
-      if (!axiosError.response) {
-        return new NetworkError(
-          axiosError.message || 'Network error',
-          this.createRequestConfig(axiosError.config),
-          axiosError
-        );
-      }
-
-      const status = axiosError.response.status;
-      const data = axiosError.response.data;
-      const headers = axiosError.response.headers as Record<string, string>;
-
-      // Rate limiting
-      if (status === 429) {
-        const retryAfter = headers['retry-after'] ? parseInt(headers['retry-after'], 10) : undefined;
-        return new RateLimitError(
-          data?.message || 'Rate limit exceeded',
-          {
-            statusCode: status,
-            request: this.createRequestConfig(axiosError.config),
-            response: this.createResponse(axiosError.response),
-            retryAfter,
-            limit: headers['x-ratelimit-limit'] ? parseInt(headers['x-ratelimit-limit'], 10) : undefined,
-            remaining: headers['x-ratelimit-remaining'] ? parseInt(headers['x-ratelimit-remaining'], 10) : undefined
-          }
-        );
-      }
-
-      // Authentication errors
-      if (status === 401 || status === 403) {
-        return new AuthenticationError(
-          data?.message || 'Authentication failed',
-          status,
-          this.createRequestConfig(axiosError.config),
-          this.createResponse(axiosError.response)
-        );
-      }
-
-      // Invalid request errors
-      if (status === 400 || status === 422) {
-        return new InvalidRequestError(
-          data?.message || 'Invalid request',
-          status,
-          {
-            request: this.createRequestConfig(axiosError.config),
-            response: this.createResponse(axiosError.response),
-            validationErrors: data?.errors
-          }
-        );
-      }
-
-      // Server errors
-      if (status >= 500) {
-        return new ServerError(
-          data?.message || 'Server error',
-          status,
-          this.createRequestConfig(axiosError.config),
-          this.createResponse(axiosError.response)
-        );
-      }
-
-      // Generic HTTP error
-      return new HttpError(
-        data?.message || axiosError.message || 'HTTP error',
-        status.toString(),
-        {
-          statusCode: status,
-          request: this.createRequestConfig(axiosError.config),
-          response: this.createResponse(axiosError.response)
-        }
-      );
-    }
-
-    // Non-axios error
-    if (error instanceof Error) {
-      return new HttpError(error.message, '0', { statusCode: 0 });
-    }
-
-    return new HttpError('Unknown error', '0', { statusCode: 0 });
-  }
-
-  /**
-   * Create request config from axios config
-   */
-  private createRequestConfig(config?: AxiosRequestConfig): any {
-    if (!config) return undefined;
-
-    return {
-      method: config.method?.toUpperCase() || 'GET',
-      url: config.url || '',
-      headers: config.headers as Record<string, string>,
-      params: config.params,
-      data: config.data,
-      timeout: config.timeout
-    };
-  }
-
-  /**
-   * Create response from axios response
-   */
-  private createResponse(response?: AxiosResponse): any {
-    if (!response) return undefined;
-
-    return {
-      data: response.data,
-      status: response.status,
-      statusText: response.statusText,
-      headers: response.headers as Record<string, string>,
-      config: this.createRequestConfig(response.config),
-      duration: 0
-    };
   }
 
   /**

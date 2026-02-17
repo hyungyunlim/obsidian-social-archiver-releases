@@ -6,13 +6,12 @@
  */
 
 import type { App, TFile } from 'obsidian';
-import type { AICommentSettings, VaultContextSettings } from '../../types/ai-comment';
+import type { AICommentSettings } from '../../types/ai-comment';
 import { DEFAULT_PROMPTS } from '../../types/ai-comment';
 import {
   VaultContextCollector,
   getRelevantVaultContext,
   type VaultContext,
-  type VaultContextItem,
 } from '../VaultContextCollector';
 
 // ============================================================================
@@ -283,7 +282,7 @@ function parseTagsSection(sectionText: string): string[] {
   const tags: string[] = [];
 
   // Match #tag patterns
-  const tagPattern = /#([\w\-/]+)/g;
+  const tagPattern = /#([\w/-]+)/g;
   let match: RegExpExecArray | null;
 
   while ((match = tagPattern.exec(sectionText)) !== null) {

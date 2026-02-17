@@ -67,7 +67,7 @@ interface ParsedHeader {
  * Format: ### {emoji} {CLI} · {Type} · {Date}
  * This distinguishes AI comment headers from regular markdown headers inside comment content
  */
-const AI_COMMENT_HEADER_PATTERN = /^### (?:🤖|✨|💡|🦙)\s*\w+\s*·\s*.+\s*·\s*.+$/gm;
+const _AI_COMMENT_HEADER_PATTERN = /^### (?:🤖|✨|💡|🦙)\s*\w+\s*·\s*.+\s*·\s*.+$/gm;
 
 /**
  * Parse existing AI comments from markdown content

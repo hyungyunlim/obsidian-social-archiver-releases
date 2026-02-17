@@ -537,7 +537,7 @@ export class PostDataParser {
       }
       // Also stop if this section is just an image followed by metadata
       // e.g., "![image](path)\n\n---\n\n**Platform:**"
-      if (/^\!\[.*?\]\(.*?\)\s*$/.test(trimmedSection)) {
+      if (/^!\[.*?\]\(.*?\)\s*$/.test(trimmedSection)) {
         break;
       }
       contentSections.push(section);
@@ -713,7 +713,7 @@ export class PostDataParser {
       // Parse main comment header: **[@username](url)** [· timestamp] [· likes]
       // Timestamp is optional since Instagram comments don't have timestamp from API
       // Support various Unicode separator dots: · (U+00B7), • (U+2022), ∙ (U+2219), and regular hyphen
-      const headerMatch = lines[0].match(/\*\*\[?@?([^\]]*)\]?\(?([^)]*)\)?\*\*(?:(?: [·•∙\-] ([^·•∙\-\n]+))?)(?: [·•∙\-] (\d+) likes)?/);
+      const headerMatch = lines[0].match(/\*\*\[?@?([^\]]*)\]?\(?([^)]*)\)?\*\*(?:(?: [-·•∙] ([^-·•∙\n]+))?)(?: [-·•∙] (\d+) likes)?/);
       if (!headerMatch) continue;
 
       const [, username, url, timestamp, likesStr] = headerMatch;
@@ -736,7 +736,7 @@ export class PostDataParser {
         if (currentLine && currentLine.trim().startsWith('↳')) {
           // Reply header: ↳ **[@username](url)** [· timestamp] [· likes]
           // Support various Unicode separator dots: · (U+00B7), • (U+2022), ∙ (U+2219), and regular hyphen
-          const replyHeaderMatch = currentLine.match(/↳ \*\*\[?@?([^\]]*)\]?\(?([^)]*)\)?\*\*(?:(?: [·•∙\-] ([^·•∙\-\n]+))?)(?: [·•∙\-] (\d+) likes)?/);
+          const replyHeaderMatch = currentLine.match(/↳ \*\*\[?@?([^\]]*)\]?\(?([^)]*)\)?\*\*(?:(?: [-·•∙] ([^-·•∙\n]+))?)(?: [-·•∙] (\d+) likes)?/);
           if (replyHeaderMatch) {
             const [, replyUsername, replyUrl, replyTimestamp, replyLikesStr] = replyHeaderMatch;
             i++;

@@ -1,12 +1,15 @@
 import { setIcon, MarkdownRenderer, Platform } from 'obsidian';
-import type { Component } from 'obsidian';
+import type { App, Component } from 'obsidian';
 import type { AICommentMeta, AICli } from '../../../types/ai-comment';
 import { COMMENT_TYPE_DISPLAY_NAMES } from '../../../types/ai-comment';
+import { showConfirmModal } from '../../../utils/confirm-modal';
 
 /**
  * Options for AICommentRenderer
  */
 export interface AICommentRendererOptions {
+  /** Obsidian App instance for confirmation modals */
+  app: App;
   /** AI comment metadata array */
   comments: AICommentMeta[];
   /** Map of comment ID to comment text content */
@@ -58,6 +61,7 @@ const CLI_NAMES: Record<AICli, string> = {
  * - Copy on double-click
  */
 export class AICommentRenderer {
+  private app: App | null = null;
   private container: HTMLElement | null = null;
   private commentsListEl: HTMLElement | null = null;
   private comments: AICommentMeta[] = [];
@@ -73,6 +77,7 @@ export class AICommentRenderer {
    * Render AI comments component (Instagram style, same as regular comments)
    */
   render(container: HTMLElement, options: AICommentRendererOptions): void {
+    this.app = options.app;
     this.container = container;
     this.comments = options.comments;
     this.commentTexts = options.commentTexts;
@@ -421,8 +426,14 @@ export class AICommentRenderer {
    * Note: UI refresh is handled by PostCardRenderer.refreshPostCard after onDelete
    */
   private async handleDelete(id: string, element: HTMLElement): Promise<void> {
-    // Simple confirmation
-    const confirmed = window.confirm('Delete this AI comment?');
+    // Use Obsidian modal for confirmation
+    if (!this.app) return;
+    const confirmed = await showConfirmModal(this.app, {
+      title: 'Delete AI comment',
+      message: 'Are you sure you want to delete this AI comment?',
+      confirmText: 'Delete',
+      confirmClass: 'danger',
+    });
     if (!confirmed) return;
 
     // Visual feedback

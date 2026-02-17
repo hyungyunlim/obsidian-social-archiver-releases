@@ -7,6 +7,8 @@
  * - openai-whisper (Original Python implementation)
  */
 
+import nodeRequire from './nodeRequire';
+
 export type WhisperVariant = 'faster-whisper' | 'whisper.cpp' | 'openai-whisper';
 export type WhisperModel = 'tiny' | 'base' | 'small' | 'medium' | 'large' | 'large-v2' | 'large-v3';
 
@@ -216,8 +218,7 @@ export class WhisperDetector {
     this.resetCache();
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-      const os = require('os');
+      const os = nodeRequire('os') as typeof import('os');
       const platform = os.platform();
 
       // Check if running on Apple Silicon Mac
@@ -292,17 +293,12 @@ export class WhisperDetector {
   private static async validateCustomPath(
     customPath: string
   ): Promise<{ path: string; version: string; variant: WhisperVariant } | null> {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-    const { exec } = require('child_process');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-    const { promisify } = require('util');
+    const { exec } = nodeRequire('child_process') as typeof import('child_process');
+    const { promisify } = nodeRequire('util') as typeof import('util');
     const execAsync = promisify(exec);
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-    const fs = require('fs');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-    const path = require('path');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-    const os = require('os');
+    const fs = nodeRequire('fs') as typeof import('fs');
+    const path = nodeRequire('path') as typeof import('path');
+    const os = nodeRequire('os') as typeof import('os');
 
     // Normalize path for Windows (handle both forward and backward slashes)
     let normalizedPath = customPath.trim();
@@ -388,12 +384,9 @@ export class WhisperDetector {
     customPath: string,
     preferredVariant?: 'auto' | WhisperVariant
   ): Promise<{ path: string; version: string; variant: WhisperVariant } | null> {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-    const fs = require('fs');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-    const path = require('path');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-    const os = require('os');
+    const fs = nodeRequire('fs') as typeof import('fs');
+    const path = nodeRequire('path') as typeof import('path');
+    const os = nodeRequire('os') as typeof import('os');
 
     // Normalize path for Windows (handle both forward and backward slashes)
     let normalizedPath = customPath.trim();
@@ -446,13 +439,10 @@ export class WhisperDetector {
     variant: WhisperVariant,
     platform: string
   ): Promise<{ path: string; version: string } | null> {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-    const { exec } = require('child_process');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-    const { promisify } = require('util');
+    const { exec } = nodeRequire('child_process') as typeof import('child_process');
+    const { promisify } = nodeRequire('util') as typeof import('util');
     const execAsync = promisify(exec);
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-    const os = require('os');
+    const os = nodeRequire('os') as typeof import('os');
 
     const paths = this.DETECTION_PATHS[variant][platform] || [];
     const expandedPaths = paths.map(p => this.expandPath(p, os));
@@ -594,12 +584,9 @@ export class WhisperDetector {
     variant: WhisperVariant,
     _whisperPath: string
   ): Promise<WhisperModel[]> {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-    const os = require('os');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-    const path = require('path');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-    const fs = require('fs');
+    const os = nodeRequire('os') as typeof import('os');
+    const path = nodeRequire('path') as typeof import('path');
+    const fs = nodeRequire('fs') as typeof import('fs');
 
     const models: WhisperModel[] = [];
     const modelNames: WhisperModel[] = ['tiny', 'base', 'small', 'medium', 'large', 'large-v2', 'large-v3'];
@@ -809,8 +796,7 @@ export class WhisperDetector {
     };
 
     // Check if running on Apple Silicon (for Metal GPU acceleration)
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-    const os = require('os');
+    const os = nodeRequire('os') as typeof import('os');
     const isAppleSilicon = os.platform() === 'darwin' && os.arch() === 'arm64';
 
     // Select multipliers based on variant (default to faster-whisper)

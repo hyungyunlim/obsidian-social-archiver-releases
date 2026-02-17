@@ -8,6 +8,7 @@
  */
 
 import { WhisperDetector, type WhisperVariant, type WhisperModel } from '../utils/whisper';
+import nodeRequire from '../utils/nodeRequire';
 import type {
   TranscriptionResult,
   TranscriptionOptions,
@@ -120,10 +121,8 @@ export class TranscriptionService {
    * Validate media file exists and has supported format
    */
   private async validateAudioFile(audioPath: string): Promise<void> {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js fs/path required for file validation
-    const fs = require('fs');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const path = require('path');
+    const fs = nodeRequire('fs') as typeof import('fs');
+    const path = nodeRequire('path') as typeof import('path');
 
     // Check file exists
     if (!fs.existsSync(audioPath)) {
@@ -148,8 +147,7 @@ export class TranscriptionService {
    */
   private checkSystemResources(model: WhisperModel): void {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: os required for memory check
-      const os = require('os');
+      const os = nodeRequire('os') as typeof import('os');
       const freeMemory = os.freemem();
       const requiredMemory = MODEL_MEMORY_REQUIREMENTS[model];
 
@@ -197,10 +195,8 @@ export class TranscriptionService {
    */
   private async getAudioDuration(audioPath: string): Promise<number> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: child_process required for ffprobe execution
-      const { exec } = require('child_process');
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: util required for promisify
-      const { promisify } = require('util');
+      const { exec } = nodeRequire('child_process') as typeof import('child_process');
+      const { promisify } = nodeRequire('util') as typeof import('util');
       const execAsync = promisify(exec);
 
       // Try ffprobe first
@@ -228,8 +224,7 @@ export class TranscriptionService {
     mediaPath: string,
     signal?: AbortSignal
   ): Promise<{ path: string; cleanup: () => Promise<void> }> {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: path required for file extension check
-    const path = require('path');
+    const path = nodeRequire('path') as typeof import('path');
     const ext = path.extname(mediaPath).toLowerCase();
 
     if (!VIDEO_MEDIA_FORMATS.includes(ext)) {
@@ -243,8 +238,7 @@ export class TranscriptionService {
     return {
       path: wavPath,
       cleanup: async () => {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: fs required for temp file cleanup
-        const fs = require('fs');
+        const fs = nodeRequire('fs') as typeof import('fs');
         try {
           if (fs.existsSync(wavPath)) {
             fs.unlinkSync(wavPath);
@@ -260,14 +254,10 @@ export class TranscriptionService {
    * Extract mono 16kHz WAV from video using ffmpeg.
    */
   private async extractAudioFromVideo(videoPath: string, signal?: AbortSignal): Promise<string> {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for ffmpeg execution
-    const fs = require('fs');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const os = require('os');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const path = require('path');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { spawn } = require('child_process');
+    const fs = nodeRequire('fs') as typeof import('fs');
+    const os = nodeRequire('os') as typeof import('os');
+    const path = nodeRequire('path') as typeof import('path');
+    const { spawn } = nodeRequire('child_process') as typeof import('child_process');
 
     const ffmpegPath = await this.resolveFfmpegPath();
     if (!ffmpegPath) {
@@ -363,8 +353,7 @@ export class TranscriptionService {
    * Resolve an executable ffmpeg path from PATH and common install locations.
    */
   private async resolveFfmpegPath(): Promise<string | null> {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: os required for platform detection
-    const os = require('os');
+    const os = nodeRequire('os') as typeof import('os');
     const isWindows = os.platform() === 'win32';
     const username = os.userInfo().username;
 
@@ -397,8 +386,7 @@ export class TranscriptionService {
    * Check if a binary can be executed.
    */
   private async canExecuteBinary(binaryPath: string, args: string[] = []): Promise<boolean> {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: child_process required for binary check
-    const { spawn } = require('child_process');
+    const { spawn } = nodeRequire('child_process') as typeof import('child_process');
 
     return await new Promise<boolean>((resolve) => {
       let settled = false;
@@ -427,10 +415,8 @@ export class TranscriptionService {
     audioPath: string,
     options: TranscriptionOptions
   ): { command: string; args: string[]; outputFile: string | null } {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for temp file path generation
-    const os = require('os');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const path = require('path');
+    const os = nodeRequire('os') as typeof import('os');
+    const path = nodeRequire('path') as typeof import('path');
 
     // Create temp output file for JSON output
     const tempDir = os.tmpdir();
@@ -514,12 +500,9 @@ export class TranscriptionService {
    * Get whisper.cpp model file path
    */
   private getWhisperCppModelPath(model: WhisperModel): string {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for model path resolution
-    const os = require('os');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const path = require('path');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const fs = require('fs');
+    const os = nodeRequire('os') as typeof import('os');
+    const path = nodeRequire('path') as typeof import('path');
+    const fs = nodeRequire('fs') as typeof import('fs');
 
     // Common model paths for whisper.cpp
     const modelDirs = [
@@ -555,10 +538,8 @@ export class TranscriptionService {
     timeout: number = 5 * 60 * 1000 // Default 5 minutes
   ): Promise<TranscriptionResult> {
     return new Promise((resolve, reject) => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: child_process required for Whisper CLI execution
-      const { spawn } = require('child_process');
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: fs required for output file reading
-      const fs = require('fs');
+      const { spawn } = nodeRequire('child_process') as typeof import('child_process');
+      const fs = nodeRequire('fs') as typeof import('fs');
       const startTime = Date.now();
 
       // Report initial progress
@@ -570,8 +551,7 @@ export class TranscriptionService {
       });
 
       // Ensure PATH includes common binary locations (ffmpeg, etc.)
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: os required for platform detection
-      const os = require('os');
+      const os = nodeRequire('os') as typeof import('os');
       const isWindows = os.platform() === 'win32';
       const pathSeparator = isWindows ? ';' : ':';
       const env = { ...process.env };

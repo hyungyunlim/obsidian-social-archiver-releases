@@ -1,4 +1,5 @@
 import { App, PluginSettingTab, Setting, Platform } from 'obsidian';
+import nodeRequire from '../utils/nodeRequire';
 import type SocialArchiverPlugin from '../main';
 import { FolderSuggest } from './FolderSuggest';
 import type {
@@ -24,7 +25,7 @@ import DangerZone from './DangerZone.svelte';
 import SyncSettingsTab from './SyncSettingsTab.svelte';
 import type { AICli, AICliDetectionResult } from '../utils/ai-cli';
 import { AICliDetector, AI_CLI_INFO } from '../utils/ai-cli';
-import { COMMENT_TYPE_DISPLAY_NAMES, COMMENT_TYPE_DESCRIPTIONS, OUTPUT_LANGUAGE_NAMES } from '../types/ai-comment';
+import { COMMENT_TYPE_DISPLAY_NAMES, OUTPUT_LANGUAGE_NAMES } from '../types/ai-comment';
 import type { AICommentType, AIOutputLanguage } from '../types/ai-comment';
 import {
   SOCIAL_MEDIA_PLATFORMS,
@@ -388,7 +389,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Whisper variant dropdown
     // Check if Apple Silicon for recommended variant
-    const os = require('os');
+    const os = nodeRequire('os') as typeof import('os');
     const isAppleSilicon = Platform.isDesktop && os.platform() === 'darwin' && os.arch() === 'arm64';
 
     new Setting(containerEl)
@@ -449,7 +450,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         }));
 
     // Custom Whisper path
-    const customPathSetting = new Setting(containerEl)
+    new Setting(containerEl)
       .setName('Custom Whisper path')
       .setDesc('Override automatic detection with a custom binary path (optional)')
       .addText(text => text
@@ -745,7 +746,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     ];
 
     const defaultKeySet = new Set(DEFAULT_FRONTMATTER_PROPERTY_ORDER);
-    const coreLockedKeySet = new Set(FRONTMATTER_CORE_LOCKED_FIELDS);
+    const coreLockedKeySet = new Set<string>(FRONTMATTER_CORE_LOCKED_FIELDS);
     const categoryByField = new Map<string, keyof FrontmatterFieldVisibility>();
     const categoryByKey = new Map<keyof FrontmatterFieldVisibility, typeof categoryDefinitions[number]>();
     for (const category of categoryDefinitions) {
@@ -900,7 +901,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       if (toIndex < 0 || toIndex >= mixedOrderItems.length || fromIndex === toIndex) {
         return;
       }
-      [mixedOrderItems[fromIndex], mixedOrderItems[toIndex]] = [mixedOrderItems[toIndex], mixedOrderItems[fromIndex]];
+      [mixedOrderItems[fromIndex], mixedOrderItems[toIndex]] = [mixedOrderItems[toIndex]!, mixedOrderItems[fromIndex]!];
       rebuildPropertyOrderFromMixedOrder();
       renderMixedPropertyRows();
     };
@@ -1478,7 +1479,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     const small = helperText.createEl('small');
     small.addClass('sa-text-muted');
     small.textContent = '💡 ';
-    const strong = small.createEl('strong', { text: 'Tip:' });
+    small.createEl('strong', { text: 'Tip:' });
     small.appendChild(document.createTextNode(' Leave empty for public blogs and cafes. Only needed for private cafes that require login.'));
   }
 
@@ -1680,7 +1681,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     // Info callout explaining the feature
     const infoDiv = containerEl.createDiv({ cls: 'setting-info' });
     infoDiv.addClass('sa-settings-info-box');
-    const strong = infoDiv.createEl('strong', { text: 'Streaming Mode' });
+    infoDiv.createEl('strong', { text: 'Streaming Mode' });
     infoDiv.appendChild(document.createTextNode(' loads webtoon episodes instantly without waiting for downloads.'));
     const ul = infoDiv.createEl('ul');
     ul.addClass('sa-settings-info-list');

@@ -134,7 +134,7 @@ function handleDelete(imageId: string): void {
 
   // Show undo notice
   const notice = new Notice('Image removed. Click to undo.', 5000);
-  notice.noticeEl.addEventListener('click', () => {
+  notice.messageEl.addEventListener('click', () => {
     handleUndoDelete();
     notice.hide();
   });

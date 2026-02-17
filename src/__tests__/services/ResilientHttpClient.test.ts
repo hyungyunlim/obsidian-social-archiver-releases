@@ -1,33 +1,33 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ResilientHttpClient } from '@/services/ResilientHttpClient';
 import { CircuitBreakerState, CircuitBreakerOpenError } from '@/types/circuit-breaker';
-import axios from 'axios';
+import { __setRequestUrlHandler } from 'obsidian';
 
-// Mock axios
-vi.mock('axios');
+function makeSuccessResponse(data: unknown = { success: true }) {
+	return {
+		status: 200,
+		headers: {},
+		json: data,
+		text: JSON.stringify(data),
+		arrayBuffer: new ArrayBuffer(0),
+	};
+}
+
+function makeErrorResponse(status: number, message = 'Error') {
+	return {
+		status,
+		headers: {},
+		json: { message },
+		text: JSON.stringify({ message }),
+		arrayBuffer: new ArrayBuffer(0),
+	};
+}
 
 describe('ResilientHttpClient', () => {
 	let client: ResilientHttpClient;
-	let mockAxiosInstance: any;
 
 	beforeEach(() => {
-		mockAxiosInstance = {
-			request: vi.fn(),
-			interceptors: {
-				request: {
-					use: vi.fn(() => 0),
-					eject: vi.fn(),
-				},
-				response: {
-					use: vi.fn(() => 0),
-					eject: vi.fn(),
-				},
-			},
-		};
-
-		vi.mocked(axios.create).mockReturnValue(mockAxiosInstance as any);
-		vi.mocked(axios.isAxiosError).mockReturnValue(false);
-
+		__setRequestUrlHandler(null);
 		client = new ResilientHttpClient({
 			baseURL: 'https://api.brightdata.com',
 			timeout: 30000,
@@ -38,6 +38,10 @@ describe('ResilientHttpClient', () => {
 				timeout: 100, // Fast timeout for tests
 			},
 		});
+	});
+
+	afterEach(() => {
+		__setRequestUrlHandler(null);
 	});
 
 	describe('Initialization', () => {
@@ -56,12 +60,7 @@ describe('ResilientHttpClient', () => {
 
 	describe('Request Execution with Circuit Breaker', () => {
 		it('should execute successful requests', async () => {
-			mockAxiosInstance.request.mockResolvedValue({
-				data: { success: true },
-				status: 200,
-				statusText: 'OK',
-				headers: {},
-			});
+			__setRequestUrlHandler(async () => makeSuccessResponse({ success: true }));
 
 			const response = await client.get('/test');
 
@@ -70,12 +69,7 @@ describe('ResilientHttpClient', () => {
 		});
 
 		it('should track successful requests in metrics', async () => {
-			mockAxiosInstance.request.mockResolvedValue({
-				data: { success: true },
-				status: 200,
-				statusText: 'OK',
-				headers: {},
-			});
+			__setRequestUrlHandler(async () => makeSuccessResponse({ success: true }));
 
 			await client.get('/test');
 			await client.get('/test');
@@ -86,22 +80,9 @@ describe('ResilientHttpClient', () => {
 		});
 
 		it('should open circuit after failure threshold', async () => {
-			vi.mocked(axios.isAxiosError).mockReturnValue(true);
+			__setRequestUrlHandler(async () => makeErrorResponse(500, 'Server error'));
 
-			const error = {
-				isAxiosError: true,
-				response: {
-					status: 500,
-					statusText: 'Internal Server Error',
-					data: { error: 'Server error' },
-					headers: {},
-				},
-				config: { url: '/test', method: 'GET' },
-			};
-
-			mockAxiosInstance.request.mockRejectedValue(error);
-
-			// Execute 3 failing requests (threshold)
+			// Execute 3 failing requests (threshold = 3)
 			for (let i = 0; i < 3; i++) {
 				try {
 					await client.get('/test');
@@ -114,20 +95,7 @@ describe('ResilientHttpClient', () => {
 		});
 
 		it('should reject requests when circuit is open', async () => {
-			vi.mocked(axios.isAxiosError).mockReturnValue(true);
-
-			const error = {
-				isAxiosError: true,
-				response: {
-					status: 500,
-					statusText: 'Internal Server Error',
-					data: { error: 'Server error' },
-					headers: {},
-				},
-				config: { url: '/test', method: 'GET' },
-			};
-
-			mockAxiosInstance.request.mockRejectedValue(error);
+			__setRequestUrlHandler(async () => makeErrorResponse(500, 'Server error'));
 
 			// Open circuit
 			for (let i = 0; i < 3; i++) {
@@ -143,20 +111,11 @@ describe('ResilientHttpClient', () => {
 		});
 
 		it('should not invoke HTTP client when circuit is open', async () => {
-			vi.mocked(axios.isAxiosError).mockReturnValue(true);
-
-			const error = {
-				isAxiosError: true,
-				response: {
-					status: 500,
-					statusText: 'Internal Server Error',
-					data: { error: 'Server error' },
-					headers: {},
-				},
-				config: { url: '/test', method: 'GET' },
-			};
-
-			mockAxiosInstance.request.mockRejectedValue(error);
+			let callCount = 0;
+			__setRequestUrlHandler(async () => {
+				callCount++;
+				return makeErrorResponse(500, 'Server error');
+			});
 
 			// Open circuit
 			for (let i = 0; i < 3; i++) {
@@ -167,7 +126,7 @@ describe('ResilientHttpClient', () => {
 				}
 			}
 
-			const callCountBeforeReject = mockAxiosInstance.request.mock.calls.length;
+			const countBeforeReject = callCount;
 
 			// Try request with open circuit
 			try {
@@ -176,27 +135,14 @@ describe('ResilientHttpClient', () => {
 				// Expected
 			}
 
-			// Should not have called axios
-			expect(mockAxiosInstance.request.mock.calls.length).toBe(callCountBeforeReject);
+			// Should not have called requestUrl again
+			expect(callCount).toBe(countBeforeReject);
 		});
 	});
 
 	describe('Circuit Recovery', () => {
 		it('should transition to half-open after timeout', async () => {
-			vi.mocked(axios.isAxiosError).mockReturnValue(true);
-
-			const error = {
-				isAxiosError: true,
-				response: {
-					status: 500,
-					statusText: 'Internal Server Error',
-					data: { error: 'Server error' },
-					headers: {},
-				},
-				config: { url: '/test', method: 'GET' },
-			};
-
-			mockAxiosInstance.request.mockRejectedValue(error);
+			__setRequestUrlHandler(async () => makeErrorResponse(500, 'Server error'));
 
 			// Open circuit
 			for (let i = 0; i < 3; i++) {
@@ -209,16 +155,11 @@ describe('ResilientHttpClient', () => {
 
 			expect(client.isCircuitOpen()).toBe(true);
 
-			// Wait for timeout
+			// Wait for timeout (100ms in config)
 			await new Promise(resolve => setTimeout(resolve, 150));
 
 			// Mock successful response for recovery
-			mockAxiosInstance.request.mockResolvedValue({
-				data: { success: true },
-				status: 200,
-				statusText: 'OK',
-				headers: {},
-			});
+			__setRequestUrlHandler(async () => makeSuccessResponse({ success: true }));
 
 			// This should trigger half-open transition
 			await client.get('/test');
@@ -228,20 +169,7 @@ describe('ResilientHttpClient', () => {
 		});
 
 		it('should close circuit after success threshold in half-open', async () => {
-			vi.mocked(axios.isAxiosError).mockReturnValue(true);
-
-			const error = {
-				isAxiosError: true,
-				response: {
-					status: 500,
-					statusText: 'Internal Server Error',
-					data: { error: 'Server error' },
-					headers: {},
-				},
-				config: { url: '/test', method: 'GET' },
-			};
-
-			mockAxiosInstance.request.mockRejectedValue(error);
+			__setRequestUrlHandler(async () => makeErrorResponse(500, 'Server error'));
 
 			// Open circuit
 			for (let i = 0; i < 3; i++) {
@@ -255,15 +183,9 @@ describe('ResilientHttpClient', () => {
 			// Wait for half-open
 			await new Promise(resolve => setTimeout(resolve, 150));
 
-			// Mock successful responses
-			mockAxiosInstance.request.mockResolvedValue({
-				data: { success: true },
-				status: 200,
-				statusText: 'OK',
-				headers: {},
-			});
+			// Mock successful responses (need successThreshold = 2 successes)
+			__setRequestUrlHandler(async () => makeSuccessResponse({ success: true }));
 
-			// Execute success threshold requests (2 in config)
 			await client.get('/test'); // half-open
 			await client.get('/test'); // close
 
@@ -274,80 +196,68 @@ describe('ResilientHttpClient', () => {
 
 	describe('HTTP Methods with Circuit Breaker', () => {
 		beforeEach(() => {
-			mockAxiosInstance.request.mockResolvedValue({
-				data: { success: true },
-				status: 200,
-				statusText: 'OK',
-				headers: {},
-			});
+			__setRequestUrlHandler(async () => makeSuccessResponse({ success: true }));
 		});
 
 		it('should execute GET request', async () => {
+			const captured: any[] = [];
+			__setRequestUrlHandler(async (params) => {
+				captured.push(params);
+				return makeSuccessResponse({ success: true });
+			});
+
 			const response = await client.get('/test');
 
 			expect(response.data).toEqual({ success: true });
-			expect(mockAxiosInstance.request).toHaveBeenCalledWith(
-				expect.objectContaining({
-					method: 'GET',
-					url: '/test',
-				})
-			);
+			expect(captured[0].method).toBe('GET');
+			expect(captured[0].url).toBe('https://api.brightdata.com/test');
 		});
 
 		it('should execute POST request', async () => {
 			const data = { key: 'value' };
+			const captured: any[] = [];
+			__setRequestUrlHandler(async (params) => {
+				captured.push(params);
+				return makeSuccessResponse({ success: true });
+			});
+
 			await client.post('/test', data);
 
-			expect(mockAxiosInstance.request).toHaveBeenCalledWith(
-				expect.objectContaining({
-					method: 'POST',
-					url: '/test',
-					data,
-				})
-			);
+			expect(captured[0].method).toBe('POST');
+			expect(captured[0].body).toBe(JSON.stringify(data));
 		});
 
 		it('should execute PUT request', async () => {
 			const data = { key: 'updated' };
+			const captured: any[] = [];
+			__setRequestUrlHandler(async (params) => {
+				captured.push(params);
+				return makeSuccessResponse({ success: true });
+			});
+
 			await client.put('/test', data);
 
-			expect(mockAxiosInstance.request).toHaveBeenCalledWith(
-				expect.objectContaining({
-					method: 'PUT',
-					url: '/test',
-					data,
-				})
-			);
+			expect(captured[0].method).toBe('PUT');
+			expect(captured[0].body).toBe(JSON.stringify(data));
 		});
 
 		it('should execute DELETE request', async () => {
+			const captured: any[] = [];
+			__setRequestUrlHandler(async (params) => {
+				captured.push(params);
+				return makeSuccessResponse({ success: true });
+			});
+
 			await client.delete('/test');
 
-			expect(mockAxiosInstance.request).toHaveBeenCalledWith(
-				expect.objectContaining({
-					method: 'DELETE',
-					url: '/test',
-				})
-			);
+			expect(captured[0].method).toBe('DELETE');
+			expect(captured[0].url).toBe('https://api.brightdata.com/test');
 		});
 	});
 
 	describe('Circuit Management', () => {
 		it('should manually reset circuit', async () => {
-			vi.mocked(axios.isAxiosError).mockReturnValue(true);
-
-			const error = {
-				isAxiosError: true,
-				response: {
-					status: 500,
-					statusText: 'Internal Server Error',
-					data: { error: 'Server error' },
-					headers: {},
-				},
-				config: { url: '/test', method: 'GET' },
-			};
-
-			mockAxiosInstance.request.mockRejectedValue(error);
+			__setRequestUrlHandler(async () => makeErrorResponse(500, 'Server error'));
 
 			// Open circuit
 			for (let i = 0; i < 3; i++) {
@@ -370,12 +280,7 @@ describe('ResilientHttpClient', () => {
 		});
 
 		it('should provide circuit breaker metrics', async () => {
-			mockAxiosInstance.request.mockResolvedValue({
-				data: { success: true },
-				status: 200,
-				statusText: 'OK',
-				headers: {},
-			});
+			__setRequestUrlHandler(async () => makeSuccessResponse({ success: true }));
 
 			await client.get('/test');
 			await client.get('/test');

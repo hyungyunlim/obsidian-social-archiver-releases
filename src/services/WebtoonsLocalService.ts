@@ -610,7 +610,7 @@ export class WebtoonsLocalService {
 
     // Primary pattern: list link + title text inside search result card
     const cardRegex = new RegExp(
-      `<a\\s+href="https?:\/\/www\\.webtoons\\.com\/${targetLanguage}\/([^/]+)\/([^/]+)\/list\\?title_no=(\\d+)"[^>]*>[\\s\\S]*?<p[^>]*class="[^\"]*subj[^\"]*"[^>]*>([^<]+)<\\/p>`,
+      `<a\\s+href="https?://www\\.webtoons\\.com/${targetLanguage}/([^/]+)/([^/]+)/list\\?title_no=(\\d+)"[^>]*>[\\s\\S]*?<p[^>]*class="[^"]*subj[^"]*"[^>]*>([^<]+)<\\/p>`,
       'gi',
     );
 
@@ -625,7 +625,7 @@ export class WebtoonsLocalService {
     // Fallback: any list links in the search page
     if (candidates.length === 0) {
       const linkRegex = new RegExp(
-        `https?:\/\/www\\.webtoons\\.com\/${targetLanguage}\/([^/]+)\/([^/]+)\/list\\?title_no=(\\d+)`,
+        `https?://www\\.webtoons\\.com/${targetLanguage}/([^/]+)/([^/]+)/list\\?title_no=(\\d+)`,
         'gi',
       );
 
@@ -754,14 +754,14 @@ export class WebtoonsLocalService {
     //   Date
     //   like count
     // </a>
-    const episodeRegex = /<a[^>]*href="([^"]*viewer\?title_no=\d+&episode_no=(\d+))"[^>]*>[\s\S]*?<img[^>]*src="([^"]+)"[^>]*>[\s\S]*?<\/a>/gi;
+    const _episodeRegex = /<a[^>]*href="([^"]*viewer\?title_no=\d+&episode_no=(\d+))"[^>]*>[\s\S]*?<img[^>]*src="([^"]+)"[^>]*>[\s\S]*?<\/a>/gi;
 
     // Alternative pattern for more structured extraction
-    const listItemRegex = /<li[^>]*class="[^"]*_episodeItem[^"]*"[^>]*>[\s\S]*?<a[^>]*href="([^"]*episode_no=(\d+))"[\s\S]*?<img[^>]*src="([^"]+)"[\s\S]*?<span[^>]*class="[^"]*subj[^"]*"[^>]*>([^<]+)<[\s\S]*?<span[^>]*class="[^"]*date[^"]*"[^>]*>([^<]+)<[\s\S]*?<\/li>/gi;
+    const _listItemRegex = /<li[^>]*class="[^"]*_episodeItem[^"]*"[^>]*>[\s\S]*?<a[^>]*href="([^"]*episode_no=(\d+))"[\s\S]*?<img[^>]*src="([^"]+)"[\s\S]*?<span[^>]*class="[^"]*subj[^"]*"[^>]*>([^<]+)<[\s\S]*?<span[^>]*class="[^"]*date[^"]*"[^>]*>([^<]+)<[\s\S]*?<\/li>/gi;
 
     // Try to find episodes using common patterns
     // Episode links typically have: /viewer?title_no=XXX&episode_no=YY
-    const linkRegex = /href="([^"]*\/viewer\?title_no=(\d+)&episode_no=(\d+))"[^>]*>[\s\S]*?<img[^>]*src="([^"]+)"[^>]*alt="([^"]*)"[\s\S]*?(?:<span[^>]*>([^<]*)<\/span>[\s\S]*?)?(?:like[^<]*<[^>]*>[\s]*(\d[\d,]*)|<[^>]*>(\d[\d,]*)\s*<\/span>)/gi;
+    const _linkRegex = /href="([^"]*\/viewer\?title_no=(\d+)&episode_no=(\d+))"[^>]*>[\s\S]*?<img[^>]*src="([^"]+)"[^>]*alt="([^"]*)"[\s\S]*?(?:<span[^>]*>([^<]*)<\/span>[\s\S]*?)?(?:like[^<]*<[^>]*>[\s]*(\d[\d,]*)|<[^>]*>(\d[\d,]*)\s*<\/span>)/gi;
 
     let match;
     const seenEpisodes = new Set<number>();

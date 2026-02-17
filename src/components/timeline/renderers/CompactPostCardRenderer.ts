@@ -182,7 +182,7 @@ export class CompactPostCardRenderer extends Component {
           }
         }
 
-        thumbnail.setCssStyles({ 'background-image': `url("${imagePath}")` });
+        thumbnail.setCssStyles({ backgroundImage: `url("${imagePath}")` });
       }
 
       // For YouTube: show play icon overlay

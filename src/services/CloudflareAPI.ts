@@ -55,7 +55,7 @@ export class CloudflareAPI implements IService {
   /**
    * Initialize the API client
    */
-  async initialize(): Promise<void> {
+  initialize(): void {
     if (this.initialized) {
       this.logger?.warn('CloudflareAPI already initialized');
       return;
@@ -84,7 +84,7 @@ export class CloudflareAPI implements IService {
   /**
    * Shutdown the API client
    */
-  async shutdown(): Promise<void> {
+  shutdown(): void {
     if (!this.initialized) {
       return;
     }

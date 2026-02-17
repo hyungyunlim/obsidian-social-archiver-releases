@@ -86,7 +86,7 @@ export class RequestQueueManager<T = unknown> implements IService {
 	/**
 	 * IService implementation
 	 */
-	async initialize(): Promise<void> {
+	initialize(): void {
 		this.logger.info('RequestQueueManager initialized', {
 			concurrency: this.config.concurrency,
 			maxSize: this.config.maxSize,
@@ -383,6 +383,6 @@ export class RequestQueueManager<T = unknown> implements IService {
 	 * Generate unique request ID
 	 */
 	private generateRequestId(): string {
-		return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+		return `req_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 	}
 }

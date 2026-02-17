@@ -1,32 +1,32 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { RetryableHttpClient } from '@/services/RetryableHttpClient';
-import axios from 'axios';
+import { __setRequestUrlHandler } from 'obsidian';
 
-// Mock axios
-vi.mock('axios');
+function makeSuccessResponse(data: unknown = { success: true }) {
+	return {
+		status: 200,
+		headers: {},
+		json: data,
+		text: JSON.stringify(data),
+		arrayBuffer: new ArrayBuffer(0),
+	};
+}
+
+function makeErrorResponse(status: number, message = 'Error') {
+	return {
+		status,
+		headers: {},
+		json: { message },
+		text: JSON.stringify({ message }),
+		arrayBuffer: new ArrayBuffer(0),
+	};
+}
 
 describe('RetryableHttpClient', () => {
 	let client: RetryableHttpClient;
-	let mockAxiosInstance: any;
 
 	beforeEach(() => {
-		mockAxiosInstance = {
-			request: vi.fn(),
-			interceptors: {
-				request: {
-					use: vi.fn(() => 0),
-					eject: vi.fn(),
-				},
-				response: {
-					use: vi.fn(() => 0),
-					eject: vi.fn(),
-				},
-			},
-		};
-
-		vi.mocked(axios.create).mockReturnValue(mockAxiosInstance as any);
-		vi.mocked(axios.isAxiosError).mockReturnValue(false);
-
+		__setRequestUrlHandler(null);
 		client = new RetryableHttpClient({
 			baseURL: 'https://api.brightdata.com',
 			timeout: 30000,
@@ -43,6 +43,10 @@ describe('RetryableHttpClient', () => {
 				jitterRange: 5,
 			},
 		});
+	});
+
+	afterEach(() => {
+		__setRequestUrlHandler(null);
 	});
 
 	describe('Initialization', () => {
@@ -69,78 +73,45 @@ describe('RetryableHttpClient', () => {
 
 	describe('Request Execution with Retries', () => {
 		it('should succeed on first attempt', async () => {
-			mockAxiosInstance.request.mockResolvedValue({
-				data: { success: true },
-				status: 200,
-				statusText: 'OK',
-				headers: {},
+			__setRequestUrlHandler(async () => makeSuccessResponse({ success: true }));
+
+			const response = await client.get('/test');
+
+			expect(response.data).toEqual({ success: true });
+		});
+
+		it('should retry on failure and succeed', async () => {
+			let callCount = 0;
+			__setRequestUrlHandler(async () => {
+				callCount++;
+				if (callCount < 3) {
+					return makeErrorResponse(500, 'Server error');
+				}
+				return makeSuccessResponse({ success: true });
 			});
 
 			const response = await client.get('/test');
 
 			expect(response.data).toEqual({ success: true });
-			expect(mockAxiosInstance.request).toHaveBeenCalledTimes(1);
-		});
-
-		it('should retry on failure and succeed', async () => {
-			vi.mocked(axios.isAxiosError).mockReturnValue(true);
-
-			const error = {
-				isAxiosError: true,
-				response: {
-					status: 500,
-					statusText: 'Internal Server Error',
-					data: { error: 'Server error' },
-					headers: {},
-				},
-				config: { url: '/test', method: 'GET' },
-			};
-
-			mockAxiosInstance.request
-				.mockRejectedValueOnce(error)
-				.mockRejectedValueOnce(error)
-				.mockResolvedValue({
-					data: { success: true },
-					status: 200,
-					statusText: 'OK',
-					headers: {},
-				});
-
-			const response = await client.get('/test');
-
-			expect(response.data).toEqual({ success: true });
-			expect(mockAxiosInstance.request).toHaveBeenCalledTimes(3);
+			expect(callCount).toBe(3);
 		});
 
 		it('should fail after max retry attempts', async () => {
-			vi.mocked(axios.isAxiosError).mockReturnValue(true);
-
-			const error = {
-				isAxiosError: true,
-				response: {
-					status: 500,
-					statusText: 'Internal Server Error',
-					data: { error: 'Server error' },
-					headers: {},
-				},
-				config: { url: '/test', method: 'GET' },
-			};
-
-			mockAxiosInstance.request.mockRejectedValue(error);
+			let callCount = 0;
+			__setRequestUrlHandler(async () => {
+				callCount++;
+				return makeErrorResponse(500, 'Server error');
+			});
 
 			await expect(client.get('/test')).rejects.toThrow();
-			expect(mockAxiosInstance.request).toHaveBeenCalledTimes(4); // Initial + 3 retries
+			// initial + maxAttempts (3) = 4 total
+			expect(callCount).toBe(4);
 		});
 	});
 
 	describe('HTTP Methods with Retries', () => {
 		beforeEach(() => {
-			mockAxiosInstance.request.mockResolvedValue({
-				data: { success: true },
-				status: 200,
-				statusText: 'OK',
-				headers: {},
-			});
+			__setRequestUrlHandler(async () => makeSuccessResponse({ success: true }));
 		});
 
 		it('should execute GET request', async () => {
@@ -172,22 +143,15 @@ describe('RetryableHttpClient', () => {
 
 	describe('Circuit Breaker Integration', () => {
 		it('should not retry when circuit is open', async () => {
-			vi.mocked(axios.isAxiosError).mockReturnValue(true);
+			let callCount = 0;
+			__setRequestUrlHandler(async () => {
+				callCount++;
+				return makeErrorResponse(500, 'Server error');
+			});
 
-			const error = {
-				isAxiosError: true,
-				response: {
-					status: 500,
-					statusText: 'Internal Server Error',
-					data: { error: 'Server error' },
-					headers: {},
-				},
-				config: { url: '/test', method: 'GET' },
-			};
-
-			mockAxiosInstance.request.mockRejectedValue(error);
-
-			// Open circuit breaker (5 failures by default)
+			// Open circuit breaker by exceeding failureThreshold (5 in config)
+			// Each attempt may retry up to maxAttempts times, so we need to do 5 individual
+			// "outer" call chains that each eventually fail
 			for (let i = 0; i < 5; i++) {
 				try {
 					await client.get('/test');
@@ -199,7 +163,7 @@ describe('RetryableHttpClient', () => {
 			// Circuit should be open now
 			expect(client.isCircuitOpen()).toBe(true);
 
-			const requestCountBefore = mockAxiosInstance.request.mock.calls.length;
+			const countBefore = callCount;
 
 			// Next request should be rejected immediately by circuit breaker
 			try {
@@ -209,7 +173,7 @@ describe('RetryableHttpClient', () => {
 			}
 
 			// No additional HTTP requests should be made
-			expect(mockAxiosInstance.request.mock.calls.length).toBe(requestCountBefore);
+			expect(callCount).toBe(countBefore);
 		});
 
 		it('should provide circuit metrics', () => {
@@ -221,20 +185,11 @@ describe('RetryableHttpClient', () => {
 		});
 
 		it('should reset circuit', async () => {
-			vi.mocked(axios.isAxiosError).mockReturnValue(true);
-
-			const error = {
-				isAxiosError: true,
-				response: {
-					status: 500,
-					statusText: 'Internal Server Error',
-					data: { error: 'Server error' },
-					headers: {},
-				},
-				config: { url: '/test', method: 'GET' },
-			};
-
-			mockAxiosInstance.request.mockRejectedValue(error);
+			let callCount = 0;
+			__setRequestUrlHandler(async () => {
+				callCount++;
+				return makeErrorResponse(500, 'Server error');
+			});
 
 			// Open circuit
 			for (let i = 0; i < 5; i++) {
@@ -261,13 +216,6 @@ describe('RetryableHttpClient', () => {
 			// Immediately abort
 			controller.abort();
 
-			mockAxiosInstance.request.mockResolvedValue({
-				data: { success: true },
-				status: 200,
-				statusText: 'OK',
-				headers: {},
-			});
-
 			await expect(
 				client.get('/test', { signal: controller.signal })
 			).rejects.toThrow('abort');
@@ -282,81 +230,56 @@ describe('RetryableHttpClient', () => {
 
 	describe('Retry with Non-Retryable Errors', () => {
 		it('should not retry on authentication errors', async () => {
-			vi.mocked(axios.isAxiosError).mockReturnValue(true);
-
-			const error = {
-				isAxiosError: true,
-				response: {
-					status: 401,
-					statusText: 'Unauthorized',
-					data: { error: 'Invalid API key' },
-					headers: {},
-				},
-				config: { url: '/test', method: 'GET' },
-			};
-
-			mockAxiosInstance.request.mockRejectedValue(error);
+			let callCount = 0;
+			__setRequestUrlHandler(async () => {
+				callCount++;
+				return makeErrorResponse(401, 'Invalid API key');
+			});
 
 			await expect(client.get('/test')).rejects.toThrow();
 
 			// Should only attempt once (no retries for 401)
-			expect(mockAxiosInstance.request).toHaveBeenCalledTimes(1);
+			expect(callCount).toBe(1);
 		});
 
 		it('should not retry on bad request errors', async () => {
-			vi.mocked(axios.isAxiosError).mockReturnValue(true);
-
-			const error = {
-				isAxiosError: true,
-				response: {
-					status: 400,
-					statusText: 'Bad Request',
-					data: { error: 'Invalid URL' },
-					headers: {},
-				},
-				config: { url: '/test', method: 'GET' },
-			};
-
-			mockAxiosInstance.request.mockRejectedValue(error);
+			let callCount = 0;
+			__setRequestUrlHandler(async () => {
+				callCount++;
+				return makeErrorResponse(400, 'Invalid URL');
+			});
 
 			await expect(client.get('/test')).rejects.toThrow();
 
 			// Should only attempt once (no retries for 400)
-			expect(mockAxiosInstance.request).toHaveBeenCalledTimes(1);
+			expect(callCount).toBe(1);
 		});
 	});
 
 	describe('Retry with Rate Limits', () => {
 		it('should retry on rate limit errors', async () => {
-			vi.mocked(axios.isAxiosError).mockReturnValue(true);
-
-			const rateLimitError = {
-				isAxiosError: true,
-				response: {
-					status: 429,
-					statusText: 'Too Many Requests',
-					data: { error: 'Rate limit exceeded' },
-					headers: {
-						'x-ratelimit-remaining': '0',
-						'retry-after': '60',
-					},
-				},
-				config: { url: '/test', method: 'GET' },
-			};
-
-			mockAxiosInstance.request
-				.mockRejectedValueOnce(rateLimitError)
-				.mockResolvedValue({
-					data: { success: true },
-					status: 200,
-					statusText: 'OK',
-					headers: {},
-				});
+			let callCount = 0;
+			__setRequestUrlHandler(async () => {
+				callCount++;
+				if (callCount === 1) {
+					return {
+						status: 429,
+						headers: {
+							'x-ratelimit-remaining': '0',
+							'retry-after': '0', // 0 seconds for fast test
+						},
+						json: { message: 'Rate limit exceeded' },
+						text: '{"message":"Rate limit exceeded"}',
+						arrayBuffer: new ArrayBuffer(0),
+					};
+				}
+				return makeSuccessResponse({ success: true });
+			});
 
 			const response = await client.get('/test');
 
 			expect(response.data).toEqual({ success: true });
-			expect(mockAxiosInstance.request).toHaveBeenCalledTimes(2);
+			expect(callCount).toBe(2);
 		});
 	});
 });

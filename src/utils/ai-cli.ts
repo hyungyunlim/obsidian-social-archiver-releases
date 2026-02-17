@@ -8,6 +8,7 @@
  */
 
 import { Platform } from 'obsidian';
+import nodeRequire from './nodeRequire';
 
 export type AICli = 'claude' | 'gemini' | 'codex';
 
@@ -182,8 +183,7 @@ export class AICliDetector {
     this.resetCache();
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-      const os = require('os');
+      const os = nodeRequire('os') as typeof import('os');
       const platform = os.platform();
 
       // Build CLI order based on preference
@@ -255,8 +255,7 @@ export class AICliDetector {
     this.resetCache();
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-      const os = require('os');
+      const os = nodeRequire('os') as typeof import('os');
       const platform = os.platform();
 
       const clis: AICli[] = ['claude', 'gemini', 'codex'];
@@ -297,13 +296,10 @@ export class AICliDetector {
     cli: AICli,
     platform: string
   ): Promise<AICliDetectionResult> {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-    const { exec } = require('child_process');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-    const { promisify } = require('util');
+    const { exec } = nodeRequire('child_process') as typeof import('child_process');
+    const { promisify } = nodeRequire('util') as typeof import('util');
     const execAsync = promisify(exec);
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-    const os = require('os');
+    const os = nodeRequire('os') as typeof import('os');
 
     const paths = this.DETECTION_PATHS[cli][platform] || [];
     const expandedPaths = paths.map((p: string) => this.expandPath(p, os));
@@ -460,12 +456,9 @@ export class AICliDetector {
    */
   private static async checkAuthentication(cli: AICli, _cliPath: string): Promise<boolean> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-      const os = require('os');
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-      const fs = require('fs');
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-      const path = require('path');
+      const os = nodeRequire('os') as typeof import('os');
+      const fs = nodeRequire('fs') as typeof import('fs');
+      const path = nodeRequire('path') as typeof import('path');
       const homeDir = os.homedir();
 
       // Helper to check if any of the given paths exist

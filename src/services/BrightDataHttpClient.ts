@@ -1,8 +1,9 @@
 /**
  * BrightData HTTP Client with interceptors and rate limiting
+ * Uses Obsidian's requestUrl for all network requests (required for Obsidian plugin compatibility)
  */
 
-import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios';
+import { requestUrl } from 'obsidian';
 import type {
 	HttpClientConfig,
 	HttpRequestConfig,
@@ -52,141 +53,84 @@ function extractRateLimitInfo(headers: Record<string, string>): RateLimitInfo | 
 }
 
 /**
- * Transform axios error to standardized HttpError
+ * Build URL with query parameters
  */
-function transformAxiosError(error: unknown): HttpError {
-	// Type guard for axios errors
-	if (axios.isAxiosError(error)) {
-		const request: HttpRequestConfig | undefined = error.config
-			? {
-					method: (error.config.method?.toUpperCase() as HttpRequestConfig['method']) ?? 'GET',
-					url: error.config.url ?? '',
-					headers: error.config.headers as Record<string, string>,
-					params: error.config.params,
-					data: error.config.data,
-					timeout: error.config.timeout,
-			  }
-			: undefined;
-
-		const response: HttpResponse | undefined = error.response
-			? {
-					data: error.response.data,
-					status: error.response.status,
-					statusText: error.response.statusText,
-					headers: error.response.headers as Record<string, string>,
-					config: request!,
-					duration: 0,
-			  }
-			: undefined;
-
-		// Network errors
-		if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
-			return new TimeoutError(
-				error.message || 'Request timeout',
-				request
-			);
-		}
-
-		if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET') {
-			return new NetworkError(
-				error.message || 'Network error',
-				request,
-				error
-			);
-		}
-
-		// HTTP status code errors
-		if (error.response) {
-			const status = error.response.status;
-
-			// Rate limit errors
-			if (status === 429) {
-				const rateLimitInfo = extractRateLimitInfo(error.response.headers as Record<string, string>);
-				return new RateLimitError(
-					error.response.data?.message || 'Rate limit exceeded',
-					{
-						statusCode: status,
-						request,
-						response,
-						retryAfter: rateLimitInfo?.retryAfter,
-						limit: rateLimitInfo?.limit,
-						remaining: rateLimitInfo?.remaining,
-					}
-				);
-			}
-
-			// Authentication errors
-			if (status === 401 || status === 403) {
-				return new AuthenticationError(
-					error.response.data?.message || 'Authentication failed',
-					status,
-					request,
-					response
-				);
-			}
-
-			// Invalid request errors
-			if (status === 400 || status === 422) {
-				return new InvalidRequestError(
-					error.response.data?.message || 'Invalid request',
-					status,
-					{
-						request,
-						response,
-						validationErrors: error.response.data?.errors,
-					}
-				);
-			}
-
-			// Server errors
-			if (status >= 500 && status <= 599) {
-				return new ServerError(
-					error.response.data?.message || 'Server error',
-					status,
-					request,
-					response
-				);
-			}
-
-			// Generic HTTP error
-			return new HttpError(
-				error.response.data?.message || error.message || 'HTTP error',
-				`HTTP_${status}`,
-				{
-					statusCode: status,
-					request,
-					response,
-					isRetryable: status >= 500,
-				}
-			);
-		}
-
-		// Request was made but no response received
-		return new NetworkError(
-			error.message || 'Network error occurred',
-			request,
-			error
-		);
+function buildUrlWithParams(url: string, params?: Record<string, string | number | boolean>): string {
+	if (!params || Object.keys(params).length === 0) {
+		return url;
 	}
+	const searchParams = new URLSearchParams();
+	for (const [key, value] of Object.entries(params)) {
+		searchParams.append(key, String(value));
+	}
+	const separator = url.includes('?') ? '&' : '?';
+	return `${url}${separator}${searchParams.toString()}`;
+}
 
-	// Non-axios errors
-	if (error instanceof Error) {
-		return new HttpError(
-			error.message,
-			'UNKNOWN_ERROR',
+/**
+ * Transform a raw HTTP error into a standardized HttpError
+ */
+function transformHttpError(
+	status: number,
+	headers: Record<string, string>,
+	data: unknown,
+	requestConfig?: HttpRequestConfig
+): HttpError {
+	const message = (data as any)?.message || `HTTP ${status} error`;
+
+	// Rate limit errors
+	if (status === 429) {
+		const rateLimitInfo = extractRateLimitInfo(headers);
+		return new RateLimitError(
+			message || 'Rate limit exceeded',
 			{
-				isRetryable: false,
-				cause: error,
+				statusCode: status,
+				request: requestConfig,
+				retryAfter: rateLimitInfo?.retryAfter,
+				limit: rateLimitInfo?.limit,
+				remaining: rateLimitInfo?.remaining,
 			}
 		);
 	}
 
-	// Unknown error type
+	// Authentication errors
+	if (status === 401 || status === 403) {
+		return new AuthenticationError(
+			message || 'Authentication failed',
+			status,
+			requestConfig
+		);
+	}
+
+	// Invalid request errors
+	if (status === 400 || status === 422) {
+		return new InvalidRequestError(
+			message || 'Invalid request',
+			status,
+			{
+				request: requestConfig,
+				validationErrors: (data as any)?.errors,
+			}
+		);
+	}
+
+	// Server errors
+	if (status >= 500 && status <= 599) {
+		return new ServerError(
+			message || 'Server error',
+			status,
+			requestConfig
+		);
+	}
+
+	// Generic HTTP error
 	return new HttpError(
-		'An unknown error occurred',
-		'UNKNOWN_ERROR',
+		message || 'HTTP error',
+		`HTTP_${status}`,
 		{
-			isRetryable: false,
+			statusCode: status,
+			request: requestConfig,
+			isRetryable: status >= 500,
 		}
 	);
 }
@@ -194,31 +138,16 @@ function transformAxiosError(error: unknown): HttpError {
 /**
  * BrightData HTTP Client
  * Provides HTTP communication with BrightData API including interceptors,
- * rate limiting, error handling, and request tracing
+ * rate limiting, error handling, and request tracing.
+ * Uses Obsidian's requestUrl API instead of axios for plugin compliance.
  */
 export class BrightDataHttpClient implements IService {
-	private readonly axios: AxiosInstance;
 	private readonly config: HttpClientConfig;
 	private readonly requestMetadataMap: Map<string, RequestMetadata>;
 
 	constructor(config: HttpClientConfig) {
 		this.config = config;
 		this.requestMetadataMap = new Map();
-
-		// Create axios instance with base configuration
-		this.axios = axios.create({
-			baseURL: config.baseURL,
-			timeout: config.timeout,
-			headers: {
-				'Content-Type': 'application/json',
-				'User-Agent': 'ObsidianSocialArchiver/1.0',
-				...config.headers,
-			},
-		});
-
-		// Setup interceptors
-		this.setupRequestInterceptor();
-		this.setupResponseInterceptor();
 	}
 
 	/**
@@ -245,123 +174,129 @@ export class BrightDataHttpClient implements IService {
 	}
 
 	/**
-	 * Setup request interceptor
-	 * Adds authentication, correlation IDs, timestamps, and request tracing
-	 */
-	private setupRequestInterceptor(): void {
-		this.axios.interceptors.request.use(
-			(config) => {
-				const requestId = generateRequestId();
-				const timestamp = new Date();
-
-				// Add authentication header
-				config.headers = config.headers ?? {};
-				config.headers['Authorization'] = `Bearer ${this.config.apiKey}`;
-
-				// Add request ID for tracing
-				config.headers['X-Request-ID'] = requestId;
-
-				// Add correlation ID if provided in custom headers
-				const correlationId = config.headers['X-Correlation-ID'] as string | undefined;
-
-				// Store request metadata for response logging
-				const metadata: RequestMetadata = {
-					requestId,
-					correlationId,
-					timestamp,
-					url: config.url ?? '',
-					method: config.method?.toUpperCase() ?? 'GET',
-				};
-
-				this.requestMetadataMap.set(requestId, metadata);
-
-				// Log request (can be extended with proper logger)
-				this.logRequest(metadata, config);
-
-				return config;
-			},
-			(error) => {
-				return Promise.reject(transformAxiosError(error));
-			}
-		);
-	}
-
-	/**
-	 * Setup response interceptor
-	 * Logs response times, extracts rate limit headers, transforms errors
-	 */
-	private setupResponseInterceptor(): void {
-		this.axios.interceptors.response.use(
-			(response: AxiosResponse) => {
-				const requestId = response.config.headers?.['X-Request-ID'] as string;
-				const requestMetadata = this.requestMetadataMap.get(requestId);
-
-				if (requestMetadata) {
-					const duration = Date.now() - requestMetadata.timestamp.getTime();
-					const rateLimit = extractRateLimitInfo(response.headers as Record<string, string>);
-
-					const responseMetadata: ResponseMetadata = {
-						...requestMetadata,
-						status: response.status,
-						duration,
-						rateLimit,
-					};
-
-					// Log response
-					this.logResponse(responseMetadata, response);
-
-					// Cleanup metadata
-					this.requestMetadataMap.delete(requestId);
-
-					// Attach metadata to response for caller access
-					(response as any).metadata = responseMetadata;
-				}
-
-				return response;
-			},
-			(error) => {
-				const requestId = error.config?.headers?.['X-Request-ID'] as string;
-				if (requestId) {
-					this.requestMetadataMap.delete(requestId);
-				}
-
-				const transformedError = transformAxiosError(error);
-
-				// Log error
-				this.logError(transformedError);
-
-				return Promise.reject(transformedError);
-			}
-		);
-	}
-
-	/**
-	 * Make HTTP request
+	 * Make HTTP request using Obsidian's requestUrl
 	 */
 	public async request<T = unknown>(config: HttpRequestConfig): Promise<HttpResponse<T>> {
+		const requestId = generateRequestId();
+		const timestamp = new Date();
+
+		// Check for abort signal
+		if (config.signal?.aborted) {
+			throw new Error('Request was aborted');
+		}
+
+		// Build full URL with base and query params
+		const fullUrl = buildUrlWithParams(
+			config.url.startsWith('http') ? config.url : `${this.config.baseURL}${config.url}`,
+			config.params
+		);
+
+		// Build merged headers (base + auth + request-specific)
+		const mergedHeaders: Record<string, string> = {
+			'Content-Type': 'application/json',
+			'User-Agent': 'ObsidianSocialArchiver/1.0',
+			...this.config.headers,
+			'Authorization': `Bearer ${this.config.apiKey}`,
+			'X-Request-ID': requestId,
+			...config.headers,
+		};
+
+		// Store request metadata for tracing
+		const metadata: RequestMetadata = {
+			requestId,
+			correlationId: mergedHeaders['X-Correlation-ID'],
+			timestamp,
+			url: fullUrl,
+			method: config.method,
+		};
+		this.requestMetadataMap.set(requestId, metadata);
+
+		// Serialize body
+		let body: string | undefined;
+		if (config.data !== undefined && config.data !== null) {
+			body = typeof config.data === 'string' ? config.data : JSON.stringify(config.data);
+		}
+
 		try {
-			const axiosConfig: AxiosRequestConfig = {
+			const response = await requestUrl({
+				url: fullUrl,
 				method: config.method,
-				url: config.url,
-				headers: config.headers,
-				params: config.params,
-				data: config.data,
-				timeout: config.timeout ?? this.config.timeout,
-				signal: config.signal,
+				headers: mergedHeaders,
+				body,
+				throw: false,
+			});
+
+			// Calculate duration
+			const duration = Date.now() - timestamp.getTime();
+			const rateLimit = extractRateLimitInfo(response.headers);
+
+			const responseMetadata: ResponseMetadata = {
+				...metadata,
+				status: response.status,
+				duration,
+				rateLimit,
 			};
 
-			const response = await this.axios.request<T>(axiosConfig);
+			this.requestMetadataMap.delete(requestId);
+
+			// Handle HTTP error status codes
+			if (response.status >= 400) {
+				let data: unknown;
+				try {
+					data = response.json;
+				} catch {
+					data = { message: response.text };
+				}
+				throw transformHttpError(response.status, response.headers, data, config);
+			}
+
+			// Parse response data
+			let data: T;
+			try {
+				data = response.json as T;
+			} catch {
+				data = response.text as unknown as T;
+			}
 
 			return {
-				data: response.data,
+				data,
 				status: response.status,
-				statusText: response.statusText,
-				headers: response.headers as Record<string, string>,
+				statusText: String(response.status),
+				headers: response.headers,
 				config,
-				duration: (response as any).metadata?.duration ?? 0,
+				duration: responseMetadata.duration,
 			};
 		} catch (error) {
-			throw transformAxiosError(error);
+			this.requestMetadataMap.delete(requestId);
+
+			// Re-throw HttpError subclasses as-is
+			if (error instanceof HttpError) {
+				throw error;
+			}
+
+			// Network/timeout errors
+			if (error instanceof Error) {
+				const message = error.message.toLowerCase();
+				if (message.includes('timeout') || message.includes('etimedout') || message.includes('econnaborted')) {
+					throw new TimeoutError(error.message, config);
+				}
+				if (
+					message.includes('network') ||
+					message.includes('enotfound') ||
+					message.includes('econnrefused') ||
+					message.includes('econnreset') ||
+					message.includes('fetch')
+				) {
+					throw new NetworkError(error.message, config, error);
+				}
+				throw new NetworkError(error.message, config, error);
+			}
+
+			throw new HttpError(
+				'An unknown error occurred',
+				'UNKNOWN_ERROR',
+				{ isRetryable: false }
+			);
 		}
 	}
 
@@ -423,32 +358,5 @@ export class BrightDataHttpClient implements IService {
 			url,
 			...config,
 		});
-	}
-
-	/**
-	 * Log request (placeholder for proper logging implementation)
-	 */
-	private logRequest(metadata: RequestMetadata, _config: AxiosRequestConfig): void {
-		if (process.env.NODE_ENV === 'development') {
-			// Request logging removed
-		}
-	}
-
-	/**
-	 * Log response (placeholder for proper logging implementation)
-	 */
-	private logResponse(metadata: ResponseMetadata, _response: AxiosResponse): void {
-		if (process.env.NODE_ENV === 'development') {
-			// Response logging removed
-		}
-	}
-
-	/**
-	 * Log error (placeholder for proper logging implementation)
-	 */
-	private logError(error: HttpError): void {
-		if (process.env.NODE_ENV === 'development') {
-			// Error logging removed
-		}
 	}
 }

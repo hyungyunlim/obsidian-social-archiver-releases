@@ -1,4 +1,4 @@
-import type { Vault, App, TFile, TAbstractFile } from 'obsidian';
+import type { Vault, App, TFile } from 'obsidian';
 import type { Platform } from '@shared/platforms/types';
 
 /**

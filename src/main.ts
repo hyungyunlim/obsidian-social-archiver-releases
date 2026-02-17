@@ -279,7 +279,7 @@ export default class SocialArchiverPlugin extends Plugin {
     // On desktop: opens in sidebar (side-by-side with notes)
     this.addRibbonIcon('calendar-clock', 'Open timeline view', () => {
       const location = ObsidianPlatform.isMobile ? 'main' : 'sidebar';
-      this.activateTimelineView(location);
+      void this.activateTimelineView(location);
     });
 
     // Add command for archive modal
@@ -296,7 +296,7 @@ export default class SocialArchiverPlugin extends Plugin {
       id: 'open-timeline-view',
       name: 'Open timeline view (sidebar)',
       callback: () => {
-        this.activateTimelineView('sidebar');
+        void this.activateTimelineView('sidebar');
       }
     });
 
@@ -305,7 +305,7 @@ export default class SocialArchiverPlugin extends Plugin {
       id: 'open-timeline-view-main',
       name: 'Open timeline view (main area)',
       callback: () => {
-        this.activateTimelineView('main');
+        void this.activateTimelineView('main');
       }
     });
 
@@ -375,7 +375,7 @@ export default class SocialArchiverPlugin extends Plugin {
       name: 'Resume batch transcription',
       checkCallback: (checking: boolean) => {
         if (this.batchTranscriptionManager?.getStatus() === 'paused') {
-          if (!checking) this.batchTranscriptionManager?.resume();
+          if (!checking) void this.batchTranscriptionManager?.resume();
           return true;
         }
         return false;
@@ -403,7 +403,7 @@ export default class SocialArchiverPlugin extends Plugin {
         const activeFile = this.app.workspace.getActiveFile();
         if (activeFile) {
           if (!checking) {
-            this.postCurrentNote();
+            void this.postCurrentNote();
           }
           return true;
         }
@@ -419,7 +419,7 @@ export default class SocialArchiverPlugin extends Plugin {
         const activeFile = this.app.workspace.getActiveFile();
         if (activeFile) {
           if (!checking) {
-            this.postAndShareCurrentNote();
+            void this.postAndShareCurrentNote();
           }
           return true;
         }
@@ -608,7 +608,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
     // Listen for truncation_warning events (when posts exceed max limit)
     this.eventRefs.push(
-      this.events.on('ws:truncation_warning', async (message: any) => {
+      this.events.on('ws:truncation_warning', (message: any) => {
         const { handle, totalFound, maxAllowed, truncatedCount, isProfileCrawl } = message;
         const handleDisplay = handle ? `@${handle}` : 'profile';
         const source = isProfileCrawl ? 'Profile crawl' : 'Subscription';
@@ -625,7 +625,7 @@ export default class SocialArchiverPlugin extends Plugin {
       this.events.on('ws:connected', () => {
         // Process any pending sync queue items missed while offline
         if (this.settings.syncClientId) {
-          this.scheduleTrackedTimeout(() => this.processPendingSyncQueue(), 2000);
+          this.scheduleTrackedTimeout(() => { void this.processPendingSyncQueue(); }, 2000);
         }
       })
     );
@@ -1317,13 +1317,13 @@ export default class SocialArchiverPlugin extends Plugin {
     this.archiveJobTracker?.destroy();
 
     // Stop Naver local subscription poller (blog + cafe)
-    this.naverPoller?.stop();
+    void this.naverPoller?.stop();
 
     // Stop Brunch local subscription poller
-    this.brunchPoller?.stop();
+    void this.brunchPoller?.stop();
 
     // Stop Webtoon sync service
-    this.webtoonSyncService?.stop();
+    void this.webtoonSyncService?.stop();
 
     // Clear all tracked pending timeouts
     for (const id of this.pendingTimeouts) {
@@ -1343,7 +1343,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
     // Cleanup services
     await this.subscriptionManager?.dispose();
-    await this.pendingJobsManager?.dispose();
+    this.pendingJobsManager?.dispose();
     await this.orchestrator?.dispose();
     await this.apiClient?.dispose();
   }
@@ -1438,9 +1438,9 @@ export default class SocialArchiverPlugin extends Plugin {
       this.app,
       currentVersion,
       releaseNote,
-      async () => {
+      () => {
         // Update lastSeenVersion after modal closes
-        await this.saveSettingsPartial({ lastSeenVersion: currentVersion });
+        void this.saveSettingsPartial({ lastSeenVersion: currentVersion });
       }
     );
     modal.open();
@@ -1471,7 +1471,7 @@ export default class SocialArchiverPlugin extends Plugin {
     // Clean up existing services
     await this.apiClient?.dispose();
     await this.orchestrator?.dispose();
-    await this.pendingJobsManager?.dispose();
+    this.pendingJobsManager?.dispose();
 
     try {
       // Initialize API client with hardcoded production endpoint
@@ -1529,12 +1529,14 @@ export default class SocialArchiverPlugin extends Plugin {
 
       const vaultManager = new VaultManager({
         vault: this.app.vault,
+        app: this.app,
         basePath: this.settings.archivePath || 'Social Archives',
         organizationStrategy: getVaultOrganizationStrategy(this.settings.archiveOrganization),
       });
 
       const mediaHandler = new MediaHandler({
         vault: this.app.vault,
+        app: this.app,
         workersClient: this.apiClient,
         basePath: this.settings.mediaPath || 'attachments/social-archives',
         optimizeImages: true,
@@ -1545,6 +1547,7 @@ export default class SocialArchiverPlugin extends Plugin {
       // Create AuthorAvatarService for author profile image management
       this.authorAvatarService = new AuthorAvatarService({
         vault: this.app.vault,
+        app: this.app,
         settings: this.settings,
         workerApiUrl: API_ENDPOINT, // Use Worker proxy for CORS-blocked domains (Instagram, etc.)
       });
@@ -1586,11 +1589,11 @@ export default class SocialArchiverPlugin extends Plugin {
         await this.subscriptionManager.initialize();
 
         // Sync pending subscription posts on startup (delayed to not block UI)
-        this.scheduleTrackedTimeout(() => this.syncSubscriptionPosts(), 3000);
+        this.scheduleTrackedTimeout(() => { void this.syncSubscriptionPosts(); }, 3000);
 
         // Catch up on pending mobile sync queue items missed while offline
         if (this.settings.syncClientId) {
-          this.scheduleTrackedTimeout(() => this.processPendingSyncQueue(), 5000);
+          this.scheduleTrackedTimeout(() => { void this.processPendingSyncQueue(); }, 5000);
         }
 
         // Start Naver local subscription poller (blog + cafe)
@@ -1599,10 +1602,10 @@ export default class SocialArchiverPlugin extends Plugin {
           // Stop existing poller if any (prevent duplicates)
           if (this.naverPoller) {
             console.debug('[Social Archiver] Stopping existing NaverPoller before restart');
-            this.naverPoller.stop();
+            void this.naverPoller.stop();
           }
           this.naverPoller = new NaverSubscriptionPoller(this);
-          this.naverPoller.start();
+          void this.naverPoller.start();
         }
 
         // Start Brunch local subscription poller
@@ -1611,10 +1614,10 @@ export default class SocialArchiverPlugin extends Plugin {
           // Stop existing poller if any (prevent duplicates)
           if (this.brunchPoller) {
             console.debug('[Social Archiver] Stopping existing BrunchPoller before restart');
-            this.brunchPoller.stop();
+            void this.brunchPoller.stop();
           }
           this.brunchPoller = new BrunchSubscriptionPoller(this);
-          this.brunchPoller.start();
+          void this.brunchPoller.start();
         }
 
         // Start Webtoon sync service
@@ -1623,10 +1626,10 @@ export default class SocialArchiverPlugin extends Plugin {
           // Stop existing service if any (prevent duplicates)
           if (this.webtoonSyncService) {
             console.debug('[Social Archiver] Stopping existing WebtoonSyncService before restart');
-            this.webtoonSyncService.stop();
+            void this.webtoonSyncService.stop();
           }
           this.webtoonSyncService = new WebtoonSyncService(this);
-          this.webtoonSyncService.start();
+          void this.webtoonSyncService.start();
         }
       }
 
@@ -1652,7 +1655,7 @@ export default class SocialArchiverPlugin extends Plugin {
       // Schedule a sync after a short delay (to coalesce multiple rapid calls)
       this.syncDebounceTimer = window.setTimeout(() => {
         this.syncDebounceTimer = undefined;
-        this.syncSubscriptionPosts();
+        void this.syncSubscriptionPosts();
       }, 500);
       return;
     }
@@ -1828,6 +1831,7 @@ export default class SocialArchiverPlugin extends Plugin {
       const basePath = pendingPost.destinationFolder || this.settings.archivePath;
       const pathVaultManager = new VaultManager({
         vault: this.app.vault,
+        app: this.app,
         basePath,
         organizationStrategy: getVaultOrganizationStrategy(this.settings.archiveOrganization),
       });
@@ -1979,6 +1983,7 @@ export default class SocialArchiverPlugin extends Plugin {
         try {
           const mediaHandler = new MediaHandler({
             vault: this.app.vault,
+            app: this.app,
             workersClient: this.apiClient,
             basePath: this.settings.mediaPath || 'attachments/social-archives',
             optimizeImages: true,
@@ -2405,6 +2410,7 @@ export default class SocialArchiverPlugin extends Plugin {
       // Generate correct file path using actual post data
       const vaultManager = new VaultManager({
         vault: this.app.vault,
+        app: this.app,
         basePath: this.settings.archivePath || 'Social Archives',
         organizationStrategy: getVaultOrganizationStrategy(this.settings.archiveOrganization),
       });
@@ -2437,7 +2443,7 @@ export default class SocialArchiverPlugin extends Plugin {
       if (filePath) {
         const preliminaryFile = this.app.vault.getAbstractFileByPath(filePath);
         if (preliminaryFile && preliminaryFile instanceof TFile) {
-          await this.app.vault.delete(preliminaryFile);
+          await this.app.fileManager.trashFile(preliminaryFile);
         } else if (preliminaryFile) {
           console.warn(`[Social Archiver] Unexpected: preliminary file path points to a folder, skipping delete: ${filePath}`);
         }
@@ -2689,6 +2695,7 @@ export default class SocialArchiverPlugin extends Plugin {
       // Generate correct file path using actual post data
       const vaultManager = new VaultManager({
         vault: this.app.vault,
+        app: this.app,
         basePath: this.settings.archivePath || 'Social Archives',
         organizationStrategy: getVaultOrganizationStrategy(this.settings.archiveOrganization),
       });
@@ -2721,7 +2728,7 @@ export default class SocialArchiverPlugin extends Plugin {
       if (filePath) {
         const preliminaryFile = this.app.vault.getAbstractFileByPath(filePath);
         if (preliminaryFile && preliminaryFile instanceof TFile) {
-          await this.app.vault.delete(preliminaryFile);
+          await this.app.fileManager.trashFile(preliminaryFile);
         } else if (preliminaryFile) {
           console.warn(`[Social Archiver] Unexpected: preliminary file path points to a folder, skipping delete: ${filePath}`);
         }
@@ -3032,6 +3039,7 @@ export default class SocialArchiverPlugin extends Plugin {
       // Generate correct file path using actual post data
       const vaultManager = new VaultManager({
         vault: this.app.vault,
+        app: this.app,
         basePath: this.settings.archivePath || 'Social Archives',
         organizationStrategy: getVaultOrganizationStrategy(this.settings.archiveOrganization),
       });
@@ -3064,7 +3072,7 @@ export default class SocialArchiverPlugin extends Plugin {
       if (filePath) {
         const preliminaryFile = this.app.vault.getAbstractFileByPath(filePath);
         if (preliminaryFile && preliminaryFile instanceof TFile) {
-          await this.app.vault.delete(preliminaryFile);
+          await this.app.fileManager.trashFile(preliminaryFile);
         } else if (preliminaryFile) {
           console.warn(`[Social Archiver] Unexpected: preliminary file path points to a folder, skipping delete: ${filePath}`);
         }
@@ -3272,6 +3280,7 @@ ${contentParts.join('')}
       // Generate correct file path using VaultManager
       const vaultManager = new VaultManager({
         vault: this.app.vault,
+        app: this.app,
         basePath: this.settings.archivePath || 'Social Archives',
         organizationStrategy: getVaultOrganizationStrategy(this.settings.archiveOrganization),
       });
@@ -3303,7 +3312,7 @@ ${contentParts.join('')}
       if (filePath) {
         const preliminaryFile = this.app.vault.getAbstractFileByPath(filePath);
         if (preliminaryFile && preliminaryFile instanceof TFile) {
-          await this.app.vault.delete(preliminaryFile);
+          await this.app.fileManager.trashFile(preliminaryFile);
         }
       }
 
@@ -3374,7 +3383,7 @@ ${contentParts.join('')}
         });
       } else {
         // Desktop: refresh by re-activating (opens sidebar if needed)
-        this.activateTimelineView();
+        void this.activateTimelineView();
       }
     }
   }
@@ -3492,6 +3501,7 @@ ${contentParts.join('')}
         const { MediaHandler } = await import('./services/MediaHandler');
         const handler = new MediaHandler({
           vault: this.app.vault,
+          app: this.app,
           workersClient: this.apiClient,
           basePath: this.settings.mediaPath,
         });
@@ -3514,7 +3524,7 @@ ${contentParts.join('')}
           await this.app.vault.createFolder(platformFolder);
         }
 
-        const sanitizedPostId = postId.replace(/[^a-z0-9\-_]/gi, '_');
+        const sanitizedPostId = postId.replace(/[^a-z0-9_-]/gi, '_');
         const filename = `${platform}_${sanitizedPostId}_${Date.now()}`;
         const absolutePath = await YtDlpDetector.downloadVideo(url, outputPath, filename, undefined, signal);
 
@@ -4071,6 +4081,7 @@ ${contentParts.join('')}
 
     const vaultManager = new VaultManager({
       vault: this.app.vault,
+      app: this.app,
       basePath: this.settings.archivePath || 'Social Archives',
       organizationStrategy: getVaultOrganizationStrategy(this.settings.archiveOrganization),
     });
@@ -4095,6 +4106,7 @@ ${contentParts.join('')}
     if (this.settings.downloadMedia !== 'text-only' && this.apiClient && postData.media && postData.media.length > 0) {
       const mediaHandler = new MediaHandler({
         vault: this.app.vault,
+        app: this.app,
         workersClient: this.apiClient,
         basePath: this.settings.mediaPath || 'attachments/social-archives',
         optimizeImages: true,
@@ -4641,7 +4653,7 @@ ${contentParts.join('')}
 
     // Reveal the leaf
     if (leaf) {
-      workspace.revealLeaf(leaf);
+      void workspace.revealLeaf(leaf);
 
       // Refresh the timeline view to load new posts
       const view = leaf.view;
@@ -5413,6 +5425,7 @@ ${contentParts.join('')}
 
         const mediaHandler = new MediaHandler({
           vault: this.app.vault,
+          app: this.app,
           workersClient: workersClient,
           basePath: this.settings.mediaPath || 'attachments/social-archives',
           optimizeImages: true,
@@ -5574,6 +5587,7 @@ ${contentParts.join('')}
       // Initialize services
       const vaultManager = new VaultManager({
         vault: this.app.vault,
+        app: this.app,
         basePath: this.settings.archivePath || 'Social Archives',
         organizationStrategy: getVaultOrganizationStrategy(this.settings.archiveOrganization),
       });
@@ -5588,7 +5602,7 @@ ${contentParts.join('')}
       const downloadedMedia: Array<import('./services/MediaHandler').MediaResult> = [];
       const shouldAttemptVideoDownloads = downloadMode === 'images-and-videos';
       const totalVideoMediaCount = shouldAttemptVideoDownloads && Array.isArray(postData.media)
-        ? postData.media.filter((item) => item.type === 'video').length
+        ? postData.media.filter((item: { type: string }) => item.type === 'video').length
         : 0;
       const failedVideoDownloads: VideoDownloadFailure[] = [];
 
@@ -5706,6 +5720,7 @@ ${contentParts.join('')}
                 const { MediaHandler } = await import('./services/MediaHandler');
                 const mediaHandler = new MediaHandler({
                   vault: this.app.vault,
+                  app: this.app,
                   workersClient: this.apiClient!,
                   basePath: this.settings.mediaPath || 'attachments/social-archives',
                   optimizeImages: true,
@@ -5860,7 +5875,7 @@ ${contentParts.join('')}
               // Update existing file content
               await this.app.vault.modify(existingFile as any, markdown.fullDocument);
               // Delete preliminary file
-              await this.app.vault.delete(file as any);
+              await this.app.fileManager.trashFile(file as any);
               filePath = correctFilePath;
             } else {
               // Rename file and update content

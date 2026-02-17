@@ -1431,7 +1431,7 @@ export class SubscriptionManager implements IService {
     // Mastodon handles can include @ and domain parts (e.g., user@mastodon.social)
     // Bluesky handles can include . (e.g., user.bsky.social)
     // Naver cafe member handles include : (e.g., cafe:12345:memberKey)
-    if (!/^[a-zA-Z0-9._@:\-]+$/.test(input.target.handle)) {
+    if (!/^[a-zA-Z0-9._@:-]+$/.test(input.target.handle)) {
       throw new SubscriptionValidationError('Invalid handle format');
     }
     if (!SUBSCRIPTION_SUPPORTED_PLATFORMS.includes(input.platform)) {

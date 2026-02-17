@@ -6,7 +6,7 @@ import type { GridImage } from '../../components/editor/MediaGrid.svelte';
 // Mock Obsidian Notice
 vi.mock('obsidian', () => ({
   Notice: vi.fn().mockImplementation(() => ({
-    noticeEl: {
+    messageEl: {
       addEventListener: vi.fn(),
     },
     hide: vi.fn(),

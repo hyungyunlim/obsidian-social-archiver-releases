@@ -1,4 +1,4 @@
-import type { Vault } from 'obsidian';
+import type { App, Vault } from 'obsidian';
 import { normalizePath, requestUrl } from 'obsidian';
 import type { Platform } from '@/types/post';
 import type { SocialArchiverSettings } from '@/types/settings';
@@ -8,6 +8,7 @@ import type { SocialArchiverSettings } from '@/types/settings';
  */
 export interface AuthorAvatarServiceConfig {
   vault: Vault;
+  app?: App;
   settings: SocialArchiverSettings;
   timeout?: number; // Download timeout in ms (default: 30000)
   workerApiUrl?: string; // Worker API URL for media proxy
@@ -91,12 +92,14 @@ const DEFAULT_AVATAR_PATTERNS = [
 
 export class AuthorAvatarService {
   private vault: Vault;
+  private app: App | undefined;
   private settings: SocialArchiverSettings;
   private timeout: number;
   private workerApiUrl: string | null;
 
   constructor(config: AuthorAvatarServiceConfig) {
     this.vault = config.vault;
+    this.app = config.app;
     this.settings = config.settings;
     this.timeout = config.timeout ?? DEFAULT_TIMEOUT;
     this.workerApiUrl = config.workerApiUrl ?? null;
@@ -204,7 +207,11 @@ export class AuthorAvatarService {
         try {
           const existingFile = this.vault.getAbstractFileByPath(existingPath);
           if (existingFile) {
-            await this.vault.delete(existingFile);
+            if (this.app) {
+              await this.app.fileManager.trashFile(existingFile as import('obsidian').TFile);
+            } else {
+              await this.vault.delete(existingFile);
+            }
           }
         } catch {
           // Ignore deletion errors
@@ -577,7 +584,11 @@ export class AuthorAvatarService {
 
       const file = this.vault.getAbstractFileByPath(existingPath);
       if (file) {
-        await this.vault.delete(file);
+        if (this.app) {
+          await this.app.fileManager.trashFile(file as import('obsidian').TFile);
+        } else {
+          await this.vault.delete(file);
+        }
         return true;
       }
       return false;

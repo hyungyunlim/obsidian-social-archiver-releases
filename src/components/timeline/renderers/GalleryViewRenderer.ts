@@ -1,5 +1,4 @@
 import { type App, type Vault, type TFile, setIcon, prepareSimpleSearch } from 'obsidian';
-import { createCustomSVG } from '../../../utils/dom-helpers';
 
 /**
  * Media item data structure for gallery view
@@ -627,7 +626,7 @@ export class GalleryViewRenderer {
     };
 
     imgEl.onload = () => {
-      imgEl.setCssStyles({ 'min-height': 'auto' });
+      imgEl.setCssStyles({ minHeight: 'auto' });
       imgEl.removeClass('sa-opacity-0');
       imgEl.addClass('sa-opacity-100');
     };
@@ -705,7 +704,7 @@ export class GalleryViewRenderer {
     };
 
     videoEl.onloadeddata = () => {
-      videoEl.setCssStyles({ 'min-height': 'auto' });
+      videoEl.setCssStyles({ minHeight: 'auto' });
       videoEl.removeClass('sa-opacity-0');
       videoEl.addClass('sa-opacity-100');
     };

@@ -239,10 +239,10 @@ export class PendingJobsManager implements IService {
 
     try {
       // Load job index from localStorage
-      await this.loadIndex();
+      this.loadIndex();
 
       // Load all jobs into cache
-      await this.loadAllJobs();
+      this.loadAllJobs();
 
       // Mark as initialized before cleanup (clearOldJobs uses ensureInitialized)
       this.isInitialized = true;
@@ -259,7 +259,7 @@ export class PendingJobsManager implements IService {
   /**
    * Dispose of the service and clean up resources
    */
-  async dispose(): Promise<void> {
+  dispose(): void {
     if (!this.isInitialized) {
       return;
     }
@@ -322,7 +322,7 @@ export class PendingJobsManager implements IService {
 
     try {
       // Save to localStorage
-      await this.saveJob(job);
+      this.saveJob(job);
 
       // Update cache
       this.jobsCache.set(job.id, job);
@@ -330,7 +330,7 @@ export class PendingJobsManager implements IService {
       // Update index
       if (!this.indexCache.includes(job.id)) {
         this.indexCache.push(job.id);
-        await this.saveIndex();
+        this.saveIndex();
       }
     } catch (error) {
       if (this.isQuotaError(error)) {
@@ -344,11 +344,11 @@ export class PendingJobsManager implements IService {
 
         // Retry save
         try {
-          await this.saveJob(job);
+          this.saveJob(job);
           this.jobsCache.set(job.id, job);
           if (!this.indexCache.includes(job.id)) {
             this.indexCache.push(job.id);
-            await this.saveIndex();
+            this.saveIndex();
           }
         } catch (retryError) {
           // Last resort: try aggressive cleanup and retry one more time
@@ -356,13 +356,13 @@ export class PendingJobsManager implements IService {
             await this.clearOldestJobs(10);
 
             try {
-              await this.saveJob(job);
+              this.saveJob(job);
               this.jobsCache.set(job.id, job);
               if (!this.indexCache.includes(job.id)) {
                 this.indexCache.push(job.id);
-                await this.saveIndex();
+                this.saveIndex();
               }
-            } catch (finalError) {
+            } catch {
               throw new StorageQuotaError(
                 'Storage quota exceeded even after aggressive cleanup. Please manually free up space or clear old jobs.'
               );
@@ -381,53 +381,69 @@ export class PendingJobsManager implements IService {
    * Get all pending jobs
    * @param filter Optional status filter
    */
-  async getJobs(filter?: { status?: JobStatus }): Promise<PendingJob[]> {
-    this.ensureInitialized();
+  getJobs(filter?: { status?: JobStatus }): Promise<PendingJob[]> {
+    try {
+      this.ensureInitialized();
+    } catch (error) {
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+    }
 
     const jobs = Array.from(this.jobsCache.values());
 
     if (filter?.status) {
-      return jobs.filter((job) => job.status === filter.status);
+      return Promise.resolve(jobs.filter((job) => job.status === filter.status));
     }
 
-    return jobs;
+    return Promise.resolve(jobs);
   }
 
   /**
    * Get a specific job by ID
    */
-  async getJob(id: string): Promise<PendingJob | null> {
-    this.ensureInitialized();
+  getJob(id: string): Promise<PendingJob | null> {
+    try {
+      this.ensureInitialized();
+    } catch (error) {
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+    }
 
-    return this.jobsCache.get(id) ?? null;
+    return Promise.resolve(this.jobsCache.get(id) ?? null);
   }
 
   /**
    * Get a job by worker job ID
    */
-  async getJobByWorkerJobId(workerJobId: string): Promise<PendingJob | null> {
-    this.ensureInitialized();
+  getJobByWorkerJobId(workerJobId: string): Promise<PendingJob | null> {
+    try {
+      this.ensureInitialized();
+    } catch (error) {
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+    }
 
     // Search through all jobs for matching workerJobId in metadata
     for (const job of this.jobsCache.values()) {
       if (job.metadata?.workerJobId === workerJobId) {
-        return job;
+        return Promise.resolve(job);
       }
     }
 
-    return null;
+    return Promise.resolve(null);
   }
 
   /**
    * Update an existing job
    * @throws {Error} If job not found
    */
-  async updateJob(id: string, updates: JobUpdate): Promise<void> {
-    this.ensureInitialized();
+  updateJob(id: string, updates: JobUpdate): Promise<void> {
+    try {
+      this.ensureInitialized();
+    } catch (error) {
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+    }
 
     const existingJob = this.jobsCache.get(id);
     if (!existingJob) {
-      throw new Error(`Job not found: ${id}`);
+      return Promise.reject(new Error(`Job not found: ${id}`));
     }
 
     // Merge updates
@@ -442,17 +458,22 @@ export class PendingJobsManager implements IService {
     this.validateJob(updatedJob);
 
     // Save to localStorage
-    await this.saveJob(updatedJob);
+    this.saveJob(updatedJob);
 
     // Update cache
     this.jobsCache.set(id, updatedJob);
+    return Promise.resolve();
   }
 
   /**
    * Remove a job
    */
-  async removeJob(id: string): Promise<void> {
-    this.ensureInitialized();
+  removeJob(id: string): Promise<void> {
+    try {
+      this.ensureInitialized();
+    } catch (error) {
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+    }
 
     // Remove from localStorage
     const key = this.getJobKey(id);
@@ -466,8 +487,9 @@ export class PendingJobsManager implements IService {
     this.indexCache = this.indexCache.filter((jobId) => jobId !== id);
 
     if (this.indexCache.length !== indexBefore) {
-      await this.saveIndex();
+      this.saveIndex();
     }
+    return Promise.resolve();
   }
 
   /**
@@ -587,7 +609,7 @@ export class PendingJobsManager implements IService {
   /**
    * Load job index from localStorage
    */
-  private async loadIndex(): Promise<void> {
+  private loadIndex(): void {
     try {
       const indexData = this.app.loadLocalStorage(this.INDEX_KEY);
       if (indexData) {
@@ -604,7 +626,7 @@ export class PendingJobsManager implements IService {
   /**
    * Save job index to localStorage
    */
-  private async saveIndex(): Promise<void> {
+  private saveIndex(): void {
     const indexData = JSON.stringify(this.indexCache);
     this.app.saveLocalStorage(this.INDEX_KEY, indexData);
   }
@@ -614,7 +636,7 @@ export class PendingJobsManager implements IService {
    * Handles corrupted data gracefully by removing invalid jobs
    * Applies schema migration and sanitization
    */
-  private async loadAllJobs(): Promise<void> {
+  private loadAllJobs(): void {
     this.jobsCache.clear();
 
     for (const id of this.indexCache) {
@@ -680,7 +702,7 @@ export class PendingJobsManager implements IService {
 
     // Update index to remove invalid/corrupted/duplicate jobs
     this.indexCache = Array.from(this.jobsCache.keys());
-    await this.saveIndex();
+    this.saveIndex();
   }
 
   /**
@@ -691,7 +713,7 @@ export class PendingJobsManager implements IService {
    *
    * @throws {Error} If localStorage save fails (including quota exceeded)
    */
-  private async saveJob(job: PendingJob): Promise<void> {
+  private saveJob(job: PendingJob): void {
     const key = this.getJobKey(job.id);
     const jobData = JSON.stringify(job);
 

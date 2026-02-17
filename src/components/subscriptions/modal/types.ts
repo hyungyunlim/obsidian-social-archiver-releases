@@ -10,7 +10,7 @@
  * Defines types for the multi-step wizard modal
  */
 
-import type { ValidationResult, ProfileMetadata, PostSummary } from '@/services/ProfileValidationPoller';
+import type { ValidationResult } from '@/services/ProfileValidationPoller';
 import type { Subscription, SubscriptionManager } from '@/services/SubscriptionManager';
 import { DEFAULT_ARCHIVE_PATH } from '@/shared/constants';
 

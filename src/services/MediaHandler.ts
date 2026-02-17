@@ -1,5 +1,5 @@
 import type { IService } from './base/IService';
-import { TFile, type Vault } from 'obsidian';
+import { App, TFile, type Vault } from 'obsidian';
 import type { Media, Platform } from '@/types/post';
 import { normalizePath, requestUrl } from 'obsidian';
 import type { WorkersAPIClient } from './WorkersAPIClient';
@@ -10,6 +10,7 @@ import { ImageOptimizer } from './ImageOptimizer';
  */
 export interface MediaHandlerConfig {
   vault: Vault;
+  app?: App;
   workersClient?: WorkersAPIClient; // Optional for proxy download
   basePath?: string;
   maxConcurrent?: number;
@@ -230,7 +231,7 @@ class MediaPathGenerator {
     if (!ext) return 'bin';
 
     // Remove any path separators
-    let sanitized = ext.replace(/[\\\/]/g, '');
+    let sanitized = ext.replace(/[\\/]/g, '');
 
     // Remove other invalid characters
     sanitized = sanitized.replace(/[*?"<>|:]/g, '');
@@ -310,6 +311,7 @@ class DownloadQueue {
  */
 export class MediaHandler implements IService {
   private vault: Vault;
+  private app: App | undefined;
   private workersClient?: WorkersAPIClient;
   private pathGenerator: MediaPathGenerator;
   private downloadQueue: DownloadQueue;
@@ -321,6 +323,7 @@ export class MediaHandler implements IService {
 
   constructor(config: MediaHandlerConfig) {
     this.vault = config.vault;
+    this.app = config.app;
     this.workersClient = config.workersClient;
     this.pathGenerator = new MediaPathGenerator(config.basePath);
     this.downloadQueue = new DownloadQueue(config.maxConcurrent || 3);
@@ -655,20 +658,14 @@ export class MediaHandler implements IService {
   private async downloadFromUrl(url: string, platform?: Platform, _originalUrl?: string): Promise<ArrayBuffer> {
     // Check if it's a blob URL (TikTok videos from BrightData)
     if (url.startsWith('blob:')) {
-      try {
-        // Download blob URL directly in browser context (Electron/browser environment)
-        // NOTE: Using fetch() for blob: URLs - requestUrl() doesn't support blob: protocol
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error(`Blob fetch failed: ${response.status} ${response.statusText}`);
-        }
-        const blob = await response.blob();
-        const arrayBuffer = await blob.arrayBuffer();
-
-        return arrayBuffer;
-      } catch (error) {
-        throw error;
+      // Download blob URL directly in browser context (Electron/browser environment)
+      // NOTE: Using fetch() for blob: URLs - requestUrl() doesn't support blob: protocol
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Blob fetch failed: ${response.status} ${response.statusText}`);
       }
+      const blob = await response.blob();
+      return blob.arrayBuffer();
     }
 
     // Check if this URL requires proxy (CORS-blocked domains)
@@ -755,11 +752,15 @@ export class MediaHandler implements IService {
   }
 
   /**
-   * Delete media file
+   * Delete media file (respects user's trash preference via fileManager)
    */
   async deleteMedia(file: TFile): Promise<void> {
     try {
-      await this.vault.delete(file);
+      if (this.app) {
+        await this.app.fileManager.trashFile(file);
+      } else {
+        await this.vault.delete(file);
+      }
     } catch (error) {
       throw new Error(
         `Failed to delete media ${file.path}: ${

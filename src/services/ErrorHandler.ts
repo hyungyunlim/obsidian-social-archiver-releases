@@ -146,7 +146,7 @@ export class ErrorHandler implements IService {
 
     try {
       return await strategy(error);
-    } catch (recoveryError) {
+    } catch {
       return false;
     }
   }
@@ -233,7 +233,7 @@ export class ErrorHandler implements IService {
    * Generate unique error ID
    */
   private generateErrorId(): string {
-    return `err_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `err_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
   }
 
   /**

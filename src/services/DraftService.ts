@@ -182,7 +182,7 @@ export class DraftService implements IService {
           };
           const storageKey = this.getStorageKey(draftId);
           this.app.saveLocalStorage(storageKey, draft);
-        } catch (retryError) {
+        } catch {
           throw new Error('Storage quota exceeded. Please delete some old drafts.');
         }
       } else {
@@ -421,7 +421,7 @@ export class DraftService implements IService {
     let deviceId = this.app.loadLocalStorage(key);
 
     if (!deviceId) {
-      deviceId = `device-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      deviceId = `device-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
       this.app.saveLocalStorage(key, deviceId);
     }
 

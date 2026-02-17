@@ -1,7 +1,7 @@
 import type { IService } from './base/IService';
 import type { PostData } from '@/types/post';
 import type { MarkdownResult } from './MarkdownConverter';
-import { Vault, TFile, TFolder, normalizePath } from 'obsidian';
+import { App, Vault, TFile, TFolder, normalizePath } from 'obsidian';
 import { getPlatformName } from '@/shared/platforms';
 
 /**
@@ -9,6 +9,7 @@ import { getPlatformName } from '@/shared/platforms';
  */
 export interface VaultManagerConfig {
   vault: Vault;
+  app?: App;
   basePath?: string;
   organizationStrategy?: 'platform' | 'platform-only' | 'date' | 'flat';
 }
@@ -98,7 +99,7 @@ class PathGenerator {
       .filter(line => line.length > 0);
 
     // Regex to detect lines starting with common symbols or emojis
-    const symbolPattern = /^[-•*#@\[\](){}<>|\/\\`~!+=_.,:;'"…]+\s*/;
+    const symbolPattern = /^[-•*#@[\](){}<>|/\\`~!+=_.,:;'"…]+\s*/;
     const emojiPattern = /^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u;
 
     // Find first line that doesn't start with symbols or emojis
@@ -213,10 +214,12 @@ class PathGenerator {
  */
 export class VaultManager implements IService {
   private vault: Vault;
+  private app: App | undefined;
   private pathGenerator: PathGenerator;
 
   constructor(config: VaultManagerConfig) {
     this.vault = config.vault;
+    this.app = config.app;
     this.pathGenerator = new PathGenerator(
       config.basePath,
       config.organizationStrategy
@@ -415,11 +418,15 @@ export class VaultManager implements IService {
   }
 
   /**
-   * Delete a file
+   * Delete a file (respects user's trash preference via fileManager)
    */
   async deleteFile(file: TFile): Promise<void> {
     try {
-      await this.vault.delete(file);
+      if (this.app) {
+        await this.app.fileManager.trashFile(file);
+      } else {
+        await this.vault.delete(file);
+      }
     } catch (error) {
       throw new Error(
         `Failed to delete file ${file.path}: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -428,11 +435,15 @@ export class VaultManager implements IService {
   }
 
   /**
-   * Move file to trash
+   * Move file to trash (respects user's trash preference via fileManager)
    */
-  async trashFile(file: TFile, useSystemTrash: boolean = true): Promise<void> {
+  async trashFile(file: TFile): Promise<void> {
     try {
-      await this.vault.trash(file, useSystemTrash);
+      if (this.app) {
+        await this.app.fileManager.trashFile(file);
+      } else {
+        await this.vault.trash(file, true);
+      }
     } catch (error) {
       throw new Error(
         `Failed to trash file ${file.path}: ${error instanceof Error ? error.message : 'Unknown error'}`

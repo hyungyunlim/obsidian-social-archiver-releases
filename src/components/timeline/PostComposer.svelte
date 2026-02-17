@@ -472,7 +472,7 @@ async function handleFileSelect(event: Event): Promise<void> {
 
       const preview = await createPreview(processedFile);
       const image: AttachedImage = {
-        id: `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: `img_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
         file: processedFile,
         preview,
         size: processedFile.size

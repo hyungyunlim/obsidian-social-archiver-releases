@@ -67,13 +67,13 @@ export class ResponseValidator implements IService {
 	/**
 	 * IService implementation
 	 */
-	async initialize(): Promise<void> {
+	initialize(): void {
 		this.logger.info('ResponseValidator initialized', {
 			platformsSupported: Array.from(this.platformSchemas.keys()),
 		});
 	}
 
-	async shutdown(): Promise<void> {
+	shutdown(): void {
 		this.logger.info('ResponseValidator shutdown');
 	}
 

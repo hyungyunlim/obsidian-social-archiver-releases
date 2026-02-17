@@ -125,10 +125,10 @@ export class BackgroundDownloadManager extends EventTarget {
   /**
    * Add and start a new download session
    */
-  async addSession(
+  addSession(
     webtoonInfo: WebtoonAPIInfo,
     episodes: Array<{ no: number; subtitle: string }>
-  ): Promise<string> {
+  ): string {
     const sessionId = this.generateSessionId(webtoonInfo);
 
     // Check if session already exists
@@ -298,10 +298,10 @@ export class BackgroundDownloadManager extends EventTarget {
    * Add episode to silent download queue (for streaming mode)
    * Downloads in background without UI feedback
    */
-  async addSilentDownload(
+  addSilentDownload(
     webtoonInfo: WebtoonAPIInfo,
     detail: EpisodeDetail
-  ): Promise<void> {
+  ): void {
     const titleId = String(detail.titleId);
     const episodeNo = detail.no;
 

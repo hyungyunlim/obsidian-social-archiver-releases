@@ -474,22 +474,18 @@ export class AuthorCatalogController {
     const { store, onUnsubscribe } = this.config;
     if (!onUnsubscribe) return;
 
-    try {
-      await onUnsubscribe(author);
+    await onUnsubscribe(author);
 
-      store.updateAuthorStatus(author.authorUrl, author.platform, 'not_subscribed', undefined);
+    store.updateAuthorStatus(author.authorUrl, author.platform, 'not_subscribed', undefined);
 
-      const currentAuthors = get(store.state).authors;
-      const updatedAuthors = currentAuthors.map((a) => {
-        if (a.platform === author.platform && a.authorUrl === author.authorUrl) {
-          return { ...a, subscriptionId: null, status: 'not_subscribed' as const };
-        }
-        return a;
-      });
-      store.setAuthors(updatedAuthors);
-    } catch (err) {
-      throw err;
-    }
+    const currentAuthors = get(store.state).authors;
+    const updatedAuthors = currentAuthors.map((a) => {
+      if (a.platform === author.platform && a.authorUrl === author.authorUrl) {
+        return { ...a, subscriptionId: null, status: 'not_subscribed' as const };
+      }
+      return a;
+    });
+    store.setAuthors(updatedAuthors);
   }
 }
 

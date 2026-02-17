@@ -1,4 +1,5 @@
 import { ProcessManager } from '../services/ProcessManager';
+import nodeRequire from './nodeRequire';
 
 /**
  * YtDlpDetector - Detects and uses yt-dlp for video downloads
@@ -19,13 +20,10 @@ export class YtDlpDetector {
     }
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-      const { exec } = require('child_process');
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-      const { promisify } = require('util');
+      const { exec } = nodeRequire('child_process') as typeof import('child_process');
+      const { promisify } = nodeRequire('util') as typeof import('util');
       const execAsync = promisify(exec);
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-      const os = require('os');
+      const os = nodeRequire('os') as typeof import('os');
 
       // Build platform-specific paths
       const isWindows = os.platform() === 'win32';
@@ -96,14 +94,11 @@ export class YtDlpDetector {
     }
 
     try {
-      // Use Electron's child_process via require
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-      const { exec } = require('child_process');
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-      const { promisify } = require('util');
+      // Use Electron's child_process via nodeRequire
+      const { exec } = nodeRequire('child_process') as typeof import('child_process');
+      const { promisify } = nodeRequire('util') as typeof import('util');
       const execAsync = promisify(exec);
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-      const os = require('os');
+      const os = nodeRequire('os') as typeof import('os');
 
       // Build platform-specific paths
       const isWindows = os.platform() === 'win32';
@@ -221,23 +216,21 @@ export class YtDlpDetector {
       throw new Error('yt-dlp is not available');
     }
 
+    const ytDlpPath = this.ytDlpPath;
+
     // Check if already aborted
     if (signal?.aborted) {
       throw new Error('Download cancelled');
     }
 
     return new Promise((resolve, reject) => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-      const { spawn } = require('child_process');
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-      const fs = require('fs');
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-      const path = require('path');
-      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-      const os = require('os');
+      const { spawn } = nodeRequire('child_process') as typeof import('child_process');
+      const fs = nodeRequire('fs') as typeof import('fs');
+      const path = nodeRequire('path') as typeof import('path');
+      const os = nodeRequire('os') as typeof import('os');
 
       // Sanitize filename (remove special characters)
-      const sanitizedFilename = filename.replace(/[^a-z0-9\-_]/gi, '_');
+      const sanitizedFilename = filename.replace(/[^a-z0-9_-]/gi, '_');
 
       // Create temporary directory OUTSIDE the Vault to avoid Obsidian Sync conflicts
       const tempDir = path.join(os.tmpdir(), 'obsidian-social-archiver', Date.now().toString());
@@ -288,7 +281,7 @@ export class YtDlpDetector {
       );
 
 
-      const process = spawn(this.ytDlpPath, args);
+      const process = spawn(ytDlpPath, args);
 
       // Register with ProcessManager for cleanup on plugin unload
       ProcessManager.register(process, 'download', `yt-dlp: ${url.slice(0, 50)}`);
@@ -307,7 +300,7 @@ export class YtDlpDetector {
           // Clean up temp directory
           try {
             fs.rmSync(tempDir, { recursive: true, force: true });
-          } catch (cleanupError) {
+          } catch {
             // Ignore cleanup errors
           }
 
@@ -386,8 +379,8 @@ export class YtDlpDetector {
               // Try to find any file in temp directory
               const files = fs.readdirSync(tempDir);
 
-              if (files.length > 0) {
-                downloadedFile = path.join(tempDir, files[0]);
+              if (files.length > 0 && files[0]) {
+                downloadedFile = path.join(tempDir, files[0] as string);
               } else {
                 reject(new Error('Downloaded file not found in temp directory'));
                 return;
@@ -408,7 +401,7 @@ export class YtDlpDetector {
             // Clean up temp directory
             try {
               fs.rmSync(tempDir, { recursive: true, force: true });
-            } catch (cleanupError) {
+            } catch {
               // Ignore cleanup errors
             }
 
@@ -437,8 +430,7 @@ export class YtDlpDetector {
       process.on('error', (error: Error) => {
         // Clean up temp directory on error
         try {
-          // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-          const fs = require('fs');
+          const fs = nodeRequire('fs') as typeof import('fs');
           fs.rmSync(tempDir, { recursive: true, force: true });
         } catch {
           // Ignore cleanup errors
@@ -457,10 +449,8 @@ export class YtDlpDetector {
       throw new Error('yt-dlp is not available');
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-    const { exec } = require('child_process');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Desktop-only: Node.js builtins required for CLI execution
-    const { promisify } = require('util');
+    const { exec } = nodeRequire('child_process') as typeof import('child_process');
+    const { promisify } = nodeRequire('util') as typeof import('util');
     const execAsync = promisify(exec);
 
     try {

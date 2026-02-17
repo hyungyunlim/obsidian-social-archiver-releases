@@ -66,7 +66,7 @@ let canAddMore = $derived(!isLimitReached && !isUploading);
  * Generate unique ID for images
  */
 function generateId(): string {
-  return `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  return `img_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 }
 
 /**

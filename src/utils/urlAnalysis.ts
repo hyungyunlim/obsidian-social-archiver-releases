@@ -177,10 +177,10 @@ const PROFILE_PATTERNS: ProfilePattern[] = [
     platform: 'linkedin',
     patterns: [
       // linkedin.com/in/username (with optional query params and hash)
-      /^https?:\/\/(?:www\.)?linkedin\.com\/in\/([a-zA-Z0-9\-]+)\/?(?:\?[^#]*)?(?:#.*)?$/i,
+      /^https?:\/\/(?:www\.)?linkedin\.com\/in\/([a-zA-Z0-9-]+)\/?(?:\?[^#]*)?(?:#.*)?$/i,
     ],
     handleExtractor: (url: URL): string | null => {
-      const match = url.pathname.match(/^\/in\/([a-zA-Z0-9\-]+)\/?$/);
+      const match = url.pathname.match(/^\/in\/([a-zA-Z0-9-]+)\/?$/);
       return match?.[1] ?? null;
     }
   },
@@ -188,26 +188,26 @@ const PROFILE_PATTERNS: ProfilePattern[] = [
     platform: 'youtube',
     patterns: [
       // youtube.com/@username or youtube.com/c/channelname or youtube.com/channel/ID (with optional query params and hash)
-      /^https?:\/\/(?:www\.)?youtube\.com\/@([a-zA-Z0-9._\-]+)\/?(?:\?[^#]*)?(?:#.*)?$/i,
-      /^https?:\/\/(?:www\.)?youtube\.com\/c\/([a-zA-Z0-9._\-]+)\/?(?:\?[^#]*)?(?:#.*)?$/i,
-      /^https?:\/\/(?:www\.)?youtube\.com\/channel\/([a-zA-Z0-9_\-]+)\/?(?:\?[^#]*)?(?:#.*)?$/i,
-      /^https?:\/\/(?:www\.)?youtube\.com\/user\/([a-zA-Z0-9._\-]+)\/?(?:\?[^#]*)?(?:#.*)?$/i,
+      /^https?:\/\/(?:www\.)?youtube\.com\/@([a-zA-Z0-9._-]+)\/?(?:\?[^#]*)?(?:#.*)?$/i,
+      /^https?:\/\/(?:www\.)?youtube\.com\/c\/([a-zA-Z0-9._-]+)\/?(?:\?[^#]*)?(?:#.*)?$/i,
+      /^https?:\/\/(?:www\.)?youtube\.com\/channel\/([a-zA-Z0-9_-]+)\/?(?:\?[^#]*)?(?:#.*)?$/i,
+      /^https?:\/\/(?:www\.)?youtube\.com\/user\/([a-zA-Z0-9._-]+)\/?(?:\?[^#]*)?(?:#.*)?$/i,
     ],
     handleExtractor: (url: URL): string | null => {
       // @handle format
-      const handleMatch = url.pathname.match(/^\/@([a-zA-Z0-9._\-]+)\/?$/);
+      const handleMatch = url.pathname.match(/^\/@([a-zA-Z0-9._-]+)\/?$/);
       if (handleMatch) return handleMatch[1] ?? null;
 
       // /c/channelname format
-      const channelNameMatch = url.pathname.match(/^\/c\/([a-zA-Z0-9._\-]+)\/?$/);
+      const channelNameMatch = url.pathname.match(/^\/c\/([a-zA-Z0-9._-]+)\/?$/);
       if (channelNameMatch) return channelNameMatch[1] ?? null;
 
       // /channel/ID format
-      const channelIdMatch = url.pathname.match(/^\/channel\/([a-zA-Z0-9_\-]+)\/?$/);
+      const channelIdMatch = url.pathname.match(/^\/channel\/([a-zA-Z0-9_-]+)\/?$/);
       if (channelIdMatch) return channelIdMatch[1] ?? null;
 
       // /user/username format
-      const userMatch = url.pathname.match(/^\/user\/([a-zA-Z0-9._\-]+)\/?$/);
+      const userMatch = url.pathname.match(/^\/user\/([a-zA-Z0-9._-]+)\/?$/);
       if (userMatch) return userMatch[1] ?? null;
 
       return null;
@@ -230,7 +230,7 @@ const PROFILE_PATTERNS: ProfilePattern[] = [
       // reddit.com/r/subredditname (subreddit profile crawling) (with optional query params and hash)
       /^https?:\/\/(?:www\.|old\.|new\.)?reddit\.com\/r\/([a-zA-Z0-9_]{2,21})\/?(?:\?[^#]*)?(?:#.*)?$/i,
       // reddit.com/user/username or reddit.com/u/username (user profiles - not supported yet) (with optional query params and hash)
-      /^https?:\/\/(?:www\.|old\.|new\.)?reddit\.com\/(?:user|u)\/([a-zA-Z0-9_\-]+)\/?(?:\?[^#]*)?(?:#.*)?$/i,
+      /^https?:\/\/(?:www\.|old\.|new\.)?reddit\.com\/(?:user|u)\/([a-zA-Z0-9_-]+)\/?(?:\?[^#]*)?(?:#.*)?$/i,
     ],
     handleExtractor: (url: URL): string | null => {
       // Subreddit format: /r/subredditname
@@ -239,7 +239,7 @@ const PROFILE_PATTERNS: ProfilePattern[] = [
         return subredditMatch[1] ?? null;
       }
       // User format: /user/username or /u/username
-      const userMatch = url.pathname.match(/^\/(?:user|u)\/([a-zA-Z0-9_\-]+)\/?$/);
+      const userMatch = url.pathname.match(/^\/(?:user|u)\/([a-zA-Z0-9_-]+)\/?$/);
       return userMatch?.[1] ?? null;
     }
   },
@@ -247,10 +247,10 @@ const PROFILE_PATTERNS: ProfilePattern[] = [
     platform: 'bluesky',
     patterns: [
       // bsky.app/profile/handle.bsky.social or bsky.app/profile/did:plc:xxx (with optional query params and hash)
-      /^https?:\/\/bsky\.app\/profile\/([a-zA-Z0-9._\-]+(?:\.[a-zA-Z0-9._\-]+)*)\/?(?:\?[^#]*)?(?:#.*)?$/i,
+      /^https?:\/\/bsky\.app\/profile\/([a-zA-Z0-9._-]+(?:\.[a-zA-Z0-9._-]+)*)\/?(?:\?[^#]*)?(?:#.*)?$/i,
     ],
     handleExtractor: (url: URL): string | null => {
-      const match = url.pathname.match(/^\/profile\/([a-zA-Z0-9._\-]+(?:\.[a-zA-Z0-9._\-]+)*)\/?$/);
+      const match = url.pathname.match(/^\/profile\/([a-zA-Z0-9._-]+(?:\.[a-zA-Z0-9._-]+)*)\/?$/);
       return match?.[1] ?? null;
     }
   },
@@ -270,18 +270,18 @@ const PROFILE_PATTERNS: ProfilePattern[] = [
     platform: 'substack',
     patterns: [
       // username.substack.com or substack.com/@username (with optional query params and hash)
-      /^https?:\/\/([a-zA-Z0-9\-]+)\.substack\.com\/?(?:\?[^#]*)?(?:#.*)?$/i,
-      /^https?:\/\/(?:www\.)?substack\.com\/@([a-zA-Z0-9_\-]+)\/?(?:\?[^#]*)?(?:#.*)?$/i,
+      /^https?:\/\/([a-zA-Z0-9-]+)\.substack\.com\/?(?:\?[^#]*)?(?:#.*)?$/i,
+      /^https?:\/\/(?:www\.)?substack\.com\/@([a-zA-Z0-9_-]+)\/?(?:\?[^#]*)?(?:#.*)?$/i,
     ],
     handleExtractor: (url: URL): string | null => {
       // subdomain format: username.substack.com
-      const subdomainMatch = url.hostname.match(/^([a-zA-Z0-9\-]+)\.substack\.com$/);
+      const subdomainMatch = url.hostname.match(/^([a-zA-Z0-9-]+)\.substack\.com$/);
       if (subdomainMatch && subdomainMatch[1] !== 'www') {
         return subdomainMatch[1] ?? null;
       }
 
       // @username format on main domain
-      const pathMatch = url.pathname.match(/^\/@([a-zA-Z0-9_\-]+)\/?$/);
+      const pathMatch = url.pathname.match(/^\/@([a-zA-Z0-9_-]+)\/?$/);
       return pathMatch?.[1] ?? null;
     }
   },
@@ -289,12 +289,12 @@ const PROFILE_PATTERNS: ProfilePattern[] = [
     platform: 'tumblr',
     patterns: [
       // username.tumblr.com or tumblr.com/username (new format) (with optional query params and hash)
-      /^https?:\/\/([a-zA-Z0-9\-]+)\.tumblr\.com\/?(?:\?[^#]*)?(?:#.*)?$/i,
-      /^https?:\/\/(?:www\.)?tumblr\.com\/([a-zA-Z0-9\-]+)\/?(?:\?[^#]*)?(?:#.*)?$/i,
+      /^https?:\/\/([a-zA-Z0-9-]+)\.tumblr\.com\/?(?:\?[^#]*)?(?:#.*)?$/i,
+      /^https?:\/\/(?:www\.)?tumblr\.com\/([a-zA-Z0-9-]+)\/?(?:\?[^#]*)?(?:#.*)?$/i,
     ],
     handleExtractor: (url: URL): string | null => {
       // subdomain format: username.tumblr.com
-      const subdomainMatch = url.hostname.match(/^([a-zA-Z0-9\-]+)\.tumblr\.com$/);
+      const subdomainMatch = url.hostname.match(/^([a-zA-Z0-9-]+)\.tumblr\.com$/);
       if (subdomainMatch && subdomainMatch[1] !== 'www') {
         return subdomainMatch[1] ?? null;
       }
@@ -1239,13 +1239,13 @@ export function parseYouTubeProfileUrl(url: string): ParseYouTubeProfileUrlResul
   // Try to match profile patterns and determine URL type
   // Note: pathname doesn't include query params or hash, so no changes needed here
   // @handle format: youtube.com/@username
-  const handleMatch = pathname.match(/^\/@([a-zA-Z0-9._\-]+)\/?$/);
+  const handleMatch = pathname.match(/^\/@([a-zA-Z0-9._-]+)\/?$/);
   if (handleMatch && handleMatch[1]) {
     return { valid: true, handle: handleMatch[1], urlType: 'handle' };
   }
 
   // /channel/ID format: youtube.com/channel/UCxxxxxxxx
-  const channelMatch = pathname.match(/^\/channel\/([a-zA-Z0-9_\-]+)\/?$/);
+  const channelMatch = pathname.match(/^\/channel\/([a-zA-Z0-9_-]+)\/?$/);
   if (channelMatch && channelMatch[1]) {
     // Validate channel ID format (should start with UC)
     if (!channelMatch[1].startsWith('UC')) {
@@ -1255,13 +1255,13 @@ export function parseYouTubeProfileUrl(url: string): ParseYouTubeProfileUrlResul
   }
 
   // /c/customname format: youtube.com/c/channelname
-  const customMatch = pathname.match(/^\/c\/([a-zA-Z0-9._\-]+)\/?$/);
+  const customMatch = pathname.match(/^\/c\/([a-zA-Z0-9._-]+)\/?$/);
   if (customMatch && customMatch[1]) {
     return { valid: true, handle: customMatch[1], urlType: 'c' };
   }
 
   // /user/username format: youtube.com/user/username
-  const userMatch = pathname.match(/^\/user\/([a-zA-Z0-9._\-]+)\/?$/);
+  const userMatch = pathname.match(/^\/user\/([a-zA-Z0-9._-]+)\/?$/);
   if (userMatch && userMatch[1]) {
     return { valid: true, handle: userMatch[1], urlType: 'user' };
   }
@@ -1297,7 +1297,7 @@ export function getRedditProfileTypeFromUrl(url: string): 'subreddit' | 'user' |
     }
 
     // Check for user profile URL pattern: /user/username or /u/username
-    if (/\/(?:user|u)\/[a-zA-Z0-9_\-]+/.test(normalizedUrl)) {
+    if (/\/(?:user|u)\/[a-zA-Z0-9_-]+/.test(normalizedUrl)) {
       return 'user';
     }
 

@@ -28,7 +28,7 @@ export class BatchTranscriptionNotice {
 
     // duration=0 → persistent Notice
     this.notice = new Notice('', 0);
-    const container = this.notice.noticeEl;
+    const container = this.notice.messageEl;
     container.empty();
     container.addClass('social-archiver-batch-notice');
     container.addClass('sa-flex-col', 'sa-gap-8', 'sa-p-12', 'sa-px-16');

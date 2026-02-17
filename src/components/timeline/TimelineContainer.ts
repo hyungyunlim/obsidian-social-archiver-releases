@@ -8,7 +8,7 @@ import {
   getPlatformLucideIcon as getIconServiceLucideIcon
 } from '../../services/IconService';
 import { TIMELINE_PLATFORM_IDS, TIMELINE_PLATFORM_LABELS } from '../../constants/timelinePlatforms';
-import { RSS_PLATFORMS_WITH_FEED_DERIVATION, needsFeedUrlDerivation, isSubscriptionSupported } from '../../constants/rssPlatforms';
+import { needsFeedUrlDerivation, isSubscriptionSupported } from '../../constants/rssPlatforms';
 import { PostDataParser } from './parsers/PostDataParser';
 import { FilterSortManager, type FilterState } from './filters/FilterSortManager';
 import { FilterPanel } from './filters/FilterPanel';
@@ -250,7 +250,7 @@ export class TimelineContainer {
     );
 
     // Initialize TagChipBar for tag-based filtering
-    this.tagChipBar = new TagChipBar(async (tagName: string | null) => {
+    this.tagChipBar = new TagChipBar((tagName: string | null) => {
       const filterState = this.filterSortManager.getFilterState();
       filterState.selectedTags.clear();
       if (tagName) {
@@ -259,7 +259,7 @@ export class TimelineContainer {
       this.filterSortManager.updateFilter({ selectedTags: filterState.selectedTags });
 
       // Phase 3: Use incremental DOM update
-      await this.updatePostsFeedIncremental();
+      void this.updatePostsFeedIncremental();
     });
 
     // Wire tag changes from PostCardRenderer to refresh tag chip bar
@@ -305,10 +305,10 @@ export class TimelineContainer {
     this.seriesGroupingService = new SeriesGroupingService(
       this.app,
       props.plugin.settings.seriesCurrentEpisode || {},
-      async (state) => {
+      (state) => {
         // Persist series episode state to plugin settings
         // Use saveSettingsPartial to avoid triggering timeline re-render
-        await props.plugin.saveSettingsPartial(
+        void props.plugin.saveSettingsPartial(
           { seriesCurrentEpisode: state },
           { reinitialize: false, notify: false }
         );
@@ -326,7 +326,7 @@ export class TimelineContainer {
         onOpenFile: (filePath) => {
           const file = this.app.vault.getFileByPath(filePath);
           if (file) {
-            this.app.workspace.getLeaf().openFile(file);
+            void this.app.workspace.getLeaf().openFile(file);
           }
         },
         renderEpisodeContent: async (container, postData) => {
@@ -364,8 +364,8 @@ export class TimelineContainer {
     // Setup callbacks
     this.setupCallbacks();
 
-    this.render();
-    this.loadPosts();
+    void this.render();
+    void this.loadPosts();
   }
 
   /**
@@ -739,17 +739,17 @@ export class TimelineContainer {
       this.persistFilterPreferences();
     });
 
-    this.filterPanel.onRerender(async () => {
+    this.filterPanel.onRerender(() => {
       // In subscription view, remount AuthorCatalog with updated filter state
       // Guard: skip if renderSubscriptionManagement() is in progress (it will mount at the end)
       if (this.isSubscriptionViewActive) {
         if (this.isRenderingSubscription) return;
-        await this.mountAuthorCatalog();
+        void this.mountAuthorCatalog();
         return;
       }
 
       // Phase 3: Use incremental DOM update for timeline mode
-      await this.updatePostsFeedIncremental();
+      void this.updatePostsFeedIncremental();
     });
 
     this.filterPanel.onGetFilterState(() => {
@@ -762,14 +762,14 @@ export class TimelineContainer {
       this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
     });
 
-    this.sortDropdown.onRerender(async () => {
+    this.sortDropdown.onRerender(() => {
       // Don't re-render posts when in subscription view
       if (this.isSubscriptionViewActive) {
         return;
       }
 
       // Phase 3: Use incremental DOM update (sort changes always trigger reorder → full re-render)
-      await this.updatePostsFeedIncremental();
+      void this.updatePostsFeedIncremental();
     });
 
     // PostCardRenderer callbacks
@@ -786,7 +786,7 @@ export class TimelineContainer {
     });
 
     this.postCardRenderer.onViewAuthor((authorUrl, platform) => {
-      this.handleViewAuthor(authorUrl, platform);
+      void this.handleViewAuthor(authorUrl, platform);
     });
 
     this.postCardRenderer.onSubscribeAuthor(async (author) => {
@@ -992,7 +992,7 @@ export class TimelineContainer {
       text: 'Retry',
       cls: 'px-4 py-2 bg-[var(--interactive-accent)] text-[var(--text-on-accent)] rounded hover:bg-[var(--interactive-accent-hover)] cursor-pointer'
     });
-    retryBtn.addEventListener('click', () => this.loadPosts());
+    retryBtn.addEventListener('click', () => { void this.loadPosts(); });
   }
 
   private renderEmpty(): void {
@@ -1136,7 +1136,7 @@ export class TimelineContainer {
       cls: 'px-4 py-2 rounded border border-[var(--interactive-accent)] text-[var(--interactive-accent)] hover:bg-[var(--interactive-accent)] hover:text-[var(--text-on-accent)] transition-colors cursor-pointer'
     });
 
-    resetBtn.addEventListener('click', async () => {
+    resetBtn.addEventListener('click', () => void (async () => {
       this.filterSortManager.resetFilters(this.getDefaultFilterState());
       this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
       this.persistFilterPreferences();
@@ -1158,7 +1158,7 @@ export class TimelineContainer {
           await this.renderPosts();
         }
       }
-    });
+    })());
   }
 
   /**
@@ -1198,7 +1198,7 @@ export class TimelineContainer {
       cls: 'px-4 py-2 rounded bg-[var(--interactive-accent)] text-[var(--text-on-accent)] hover:opacity-90 transition-colors cursor-pointer'
     });
 
-    includeBtn.addEventListener('click', async () => {
+    includeBtn.addEventListener('click', () => void (async () => {
       this.filterSortManager.updateFilter({ includeArchived: true });
       this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
       this.persistFilterPreferences();
@@ -1209,14 +1209,14 @@ export class TimelineContainer {
       } else {
         await this.renderPostsFeed();
       }
-    });
+    })());
 
     const resetBtn = buttonRow.createEl('button', {
       text: 'Reset filters',
       cls: 'px-4 py-2 rounded border border-[var(--interactive-accent)] text-[var(--interactive-accent)] hover:bg-[var(--interactive-accent)] hover:text-[var(--text-on-accent)] transition-colors cursor-pointer'
     });
 
-    resetBtn.addEventListener('click', async () => {
+    resetBtn.addEventListener('click', () => void (async () => {
       this.filterSortManager.resetFilters(this.getDefaultFilterState());
       this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
       this.persistFilterPreferences();
@@ -1238,7 +1238,7 @@ export class TimelineContainer {
           await this.renderPosts();
         }
       }
-    });
+    })());
   }
 
   /**
@@ -1268,7 +1268,7 @@ export class TimelineContainer {
       text: 'Include archived',
       cls: 'px-4 py-2 rounded bg-[var(--interactive-accent)] text-[var(--text-on-accent)] hover:opacity-90 transition-colors cursor-pointer'
     });
-    includeBtn.addEventListener('click', async () => {
+    includeBtn.addEventListener('click', () => void (async () => {
       this.filterSortManager.updateFilter({ includeArchived: true });
       this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
       this.persistFilterPreferences();
@@ -1278,20 +1278,20 @@ export class TimelineContainer {
       } else {
         await this.renderPostsFeed();
       }
-    });
+    })());
 
     // "Clear search" button
     const clearBtn = buttonRow.createEl('button', {
       text: 'Clear search',
       cls: 'px-4 py-2 rounded border border-[var(--interactive-accent)] text-[var(--interactive-accent)] hover:bg-[var(--interactive-accent)] hover:text-[var(--text-on-accent)] transition-colors cursor-pointer'
     });
-    clearBtn.addEventListener('click', async () => {
+    clearBtn.addEventListener('click', () => void (async () => {
       this.filterSortManager.updateFilter({ searchQuery: '' });
       if (this.searchInput) this.searchInput.value = '';
       this.persistFilterPreferences();
       this.updateSearchButtonState?.();
       await this.updatePostsFeedIncremental();
-    });
+    })());
   }
 
   /**
@@ -1300,7 +1300,7 @@ export class TimelineContainer {
   private renderPostComposer(): void {
     // Unmount previous instance if exists
     if (this.composerComponent) {
-      unmount(this.composerComponent);
+      void unmount(this.composerComponent);
       this.composerComponent = null;
     }
 
@@ -1413,7 +1413,7 @@ export class TimelineContainer {
                   new Notice('Post shared to web!');
                 } else {
                 }
-              } catch (shareErr) {
+              } catch {
                 new Notice('Post saved but sharing failed. You can share it later from the post card.');
               }
             }
@@ -1505,15 +1505,15 @@ export class TimelineContainer {
 
     this.archiveProgressBanner.onRetry((jobId) => {
       // Reset the pending job for retry and trigger check
-      this.plugin.pendingJobsManager.getJob(jobId).then((job) => {
+      void this.plugin.pendingJobsManager.getJob(jobId).then((job) => {
         if (job) {
-          this.plugin.pendingJobsManager.updateJob(job.id, {
+          void this.plugin.pendingJobsManager.updateJob(job.id, {
             status: 'pending',
             retryCount: 0,
             metadata: { ...job.metadata, lastError: undefined },
           });
           this.plugin.archiveJobTracker.markRetrying(jobId, 0);
-          this.plugin.checkPendingJobs?.();
+          void this.plugin.checkPendingJobs?.();
         }
       });
     });
@@ -1756,7 +1756,7 @@ export class TimelineContainer {
         window.clearTimeout(this.searchTimeout);
       }
 
-      this.searchTimeout = window.setTimeout(async () => {
+      this.searchTimeout = window.setTimeout(() => void (async () => {
         const query = this.searchInput!.value.trim();
 
         if (this.isSubscriptionViewActive) {
@@ -1786,7 +1786,7 @@ export class TimelineContainer {
         this.updateFilterButtonState?.();
 
         this.searchTimeout = null;
-      }, 300); // 300ms debounce
+      })(), 300); // 300ms debounce
     };
 
     // Input events
@@ -1805,7 +1805,7 @@ export class TimelineContainer {
     });
 
     // Keyboard shortcuts
-    this.searchInput.addEventListener('keydown', async (e) => {
+    this.searchInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         // Immediate search on Enter
         if (this.searchTimeout !== null) {
@@ -1817,7 +1817,7 @@ export class TimelineContainer {
         this.persistFilterPreferences();
 
         // Phase 3: Use incremental DOM update
-        await this.updatePostsFeedIncremental();
+        void this.updatePostsFeedIncremental();
       } else if (e.key === 'Escape') {
         // Close search bar on Escape
         this.toggleSearchBar();
@@ -2516,7 +2516,7 @@ export class TimelineContainer {
     });
 
     tagBtn.addEventListener('click', () => {
-      import('./modals/TagModal').then(({ TagModal }) => {
+      void import('./modals/TagModal').then(({ TagModal }) => {
         const tagStore = this.plugin.tagStore;
         if (!tagStore) return;
         const modal = new TagModal(this.plugin.app, tagStore, null, () => {
@@ -2594,7 +2594,7 @@ export class TimelineContainer {
       viewIcon.addClass('sa-text-muted');
     });
 
-    viewSwitcherBtn.addEventListener('click', async () => {
+    viewSwitcherBtn.addEventListener('click', () => void (async () => {
       // If in Author mode, disable it first when switching to gallery
       if (this.isSubscriptionViewActive) {
         this.isSubscriptionViewActive = false;
@@ -2613,7 +2613,7 @@ export class TimelineContainer {
         await this.loadPosts();
       }
       this.persistViewMode();
-    });
+    })());
   }
 
   /**
@@ -2661,7 +2661,7 @@ export class TimelineContainer {
       updateButtonState();
     });
 
-    subscriptionBtn.addEventListener('click', async () => {
+    subscriptionBtn.addEventListener('click', () => void (async () => {
       this.isSubscriptionViewActive = !this.isSubscriptionViewActive;
       updateButtonState();
 
@@ -2679,7 +2679,7 @@ export class TimelineContainer {
           await this.loadPosts();
         }
       }
-    });
+    })());
   }
 
   /**
@@ -3324,14 +3324,14 @@ export class TimelineContainer {
       // This sets lastRunAt to prevent duplicate polling on plugin reload
       if (author.platform === 'naver' && subscription?.id && this.plugin.naverPoller) {
         // Run in background to not block the UI
-        setTimeout(async () => {
+        setTimeout(() => void (async () => {
           try {
             console.debug('[TimelineContainer] Running initial poll for new Naver subscription:', subscription.id);
             await this.plugin.naverPoller?.runSingleSubscription(subscription.id);
           } catch (error) {
             console.warn('[TimelineContainer] Initial poll failed (will retry on next cycle):', error);
           }
-        }, 1000);
+        })(), 1000);
       }
 
       new Notice(`Subscribed to ${author.authorName}! (Daily at ${currentHour}:00 ${timezone})`);
@@ -3385,7 +3385,7 @@ export class TimelineContainer {
   private async mountAuthorCatalog(): Promise<void> {
     // Unmount existing component if exists
     if (this.authorCatalogComponent) {
-      unmount(this.authorCatalogComponent);
+      void unmount(this.authorCatalogComponent);
       this.authorCatalogComponent = null;
     }
 
@@ -3655,14 +3655,14 @@ export class TimelineContainer {
               // This sets lastRunAt to prevent duplicate polling on plugin reload
               if (author.platform === 'naver' && subscription?.id && this.plugin.naverPoller) {
                 // Run in background to not block the UI
-                setTimeout(async () => {
+                setTimeout(() => void (async () => {
                   try {
                     console.debug('[TimelineContainer] Running initial poll for new Naver subscription:', subscription.id);
                     await this.plugin.naverPoller?.runSingleSubscription(subscription.id);
                   } catch (error) {
                     console.warn('[TimelineContainer] Initial poll failed (will retry on next cycle):', error);
                   }
-                }, 1000);
+                })(), 1000);
               }
 
               // Clear subscription cache so timeline shows updated subscription status
@@ -3791,7 +3791,7 @@ export class TimelineContainer {
                   refreshTrigger++;
                   // Re-mount with updated refreshTrigger
                   if (historyPanel) {
-                    unmount(historyPanel);
+                    void unmount(historyPanel);
                     historyPanel = mount(CrawlHistoryPanel, {
                       target: modalContainer,
                       props: panelProps(refreshTrigger)
@@ -3813,7 +3813,7 @@ export class TimelineContainer {
                   subscriptionManager.off('subscription:run:failed', handleRunCompleted);
                 }
                 if (historyPanel) {
-                  unmount(historyPanel);
+                  void unmount(historyPanel);
                   historyPanel = null;
                 }
                 modalContainer.remove();
@@ -3872,7 +3872,7 @@ export class TimelineContainer {
 
             // Clean up subscription view (unmount AuthorCatalog)
             if (this.authorCatalogComponent) {
-              unmount(this.authorCatalogComponent);
+              void unmount(this.authorCatalogComponent);
               this.authorCatalogComponent = null;
             }
 
@@ -3930,13 +3930,13 @@ export class TimelineContainer {
 
     // Unmount PostComposer if exists
     if (this.composerComponent) {
-      unmount(this.composerComponent);
+      void unmount(this.composerComponent);
       this.composerComponent = null;
     }
 
     // Unmount previous author catalog component if exists
     if (this.authorCatalogComponent) {
-      unmount(this.authorCatalogComponent);
+      void unmount(this.authorCatalogComponent);
       this.authorCatalogComponent = null;
     }
 
@@ -4782,10 +4782,10 @@ export class TimelineContainer {
    * @param post - Post data to edit
    * @param filePath - File path of the post markdown file
    */
-  public async openEditMode(post: PostData, filePath: string): Promise<void> {
+  public openEditMode(post: PostData, filePath: string): void {
     // Unmount existing composer if any
     if (this.composerComponent) {
-      unmount(this.composerComponent);
+      void unmount(this.composerComponent);
       this.composerComponent = null;
     }
 
@@ -4920,7 +4920,7 @@ export class TimelineContainer {
                   });
 
                   new Notice('Post and share updated successfully');
-                } catch (shareError) {
+                } catch {
                   new Notice('Post updated, but failed to update share link');
                 }
               } else {
@@ -4984,7 +4984,7 @@ export class TimelineContainer {
                   await this.vault.modify(file, updatedContent);
 
                   new Notice('Post updated and shared to web!');
-                } catch (shareError) {
+                } catch {
                   new Notice('Post updated, but failed to share to web');
                 }
               }
@@ -4999,7 +4999,7 @@ export class TimelineContainer {
 
             // Unmount composer after successful update
             if (this.composerComponent) {
-              unmount(this.composerComponent);
+              void unmount(this.composerComponent);
               this.composerComponent = null;
             }
           } catch (error) {
@@ -5010,7 +5010,7 @@ export class TimelineContainer {
 
           // Unmount composer
           if (this.composerComponent) {
-            unmount(this.composerComponent);
+            void unmount(this.composerComponent);
             this.composerComponent = null;
           }
         }
@@ -5040,7 +5040,7 @@ export class TimelineContainer {
 
     // Unmount PostComposer if exists
     if (this.composerComponent) {
-      unmount(this.composerComponent);
+      void unmount(this.composerComponent);
       this.composerComponent = null;
     }
 
@@ -5055,7 +5055,7 @@ export class TimelineContainer {
 
     // Unmount AuthorCatalog if exists
     if (this.authorCatalogComponent) {
-      unmount(this.authorCatalogComponent);
+      void unmount(this.authorCatalogComponent);
       this.authorCatalogComponent = null;
     }
 
@@ -5309,7 +5309,7 @@ export class TimelineContainer {
     };
 
     this.readerModeOverlay = new ReaderModeOverlay(context);
-    this.readerModeOverlay.open();
+    void this.readerModeOverlay.open();
   }
 
   /**
@@ -5625,14 +5625,14 @@ export class TimelineContainer {
 
         // Hover handled by CSS :hover rule on .gallery-group-dropdown-menu > button
 
-        optionEl.addEventListener('click', async () => {
+        optionEl.addEventListener('click', () => void (async () => {
           this.galleryGroupBy = option.type;
           updateButtonText();
           dropdownMenu.removeClass('tc-dropdown-open');
           isOpen = false;
           dropdownBtn.removeClass('tc-btn-open');
           await this.renderGalleryContent();
-        });
+        })());
       });
     };
 

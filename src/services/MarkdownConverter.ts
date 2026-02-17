@@ -10,7 +10,7 @@ import { CommentFormatter } from './markdown/formatters/CommentFormatter';
 import { FactCheckFormatter } from './markdown/formatters/FactCheckFormatter';
 import { FrontmatterGenerator } from './markdown/frontmatter/FrontmatterGenerator';
 import { MediaPlaceholderGenerator } from './MediaPlaceholderGenerator';
-import { RSS_BASED_PLATFORMS, isRssBasedPlatform } from '@/constants/rssPlatforms';
+import { isRssBasedPlatform } from '@/constants/rssPlatforms';
 import { getPlatformName } from '@/shared/platforms';
 import { encodePathForMarkdownLink } from '@/utils/url';
 import type { FrontmatterCustomizationSettings } from '@/types/settings';

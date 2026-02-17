@@ -375,7 +375,7 @@ export class VaultStorageService {
         try {
           const file = this.vault.getFileByPath(result.savedPath);
           if (file) {
-            await this.vault.delete(file);
+            await this.app.fileManager.trashFile(file);
           }
         } catch (error) {
         }
@@ -667,7 +667,7 @@ export class VaultStorageService {
           deletedFiles.push({ path: mediaPath, content });
 
           // Delete the file
-          await this.vault.delete(file);
+          await this.app.fileManager.trashFile(file);
         }
       }
 
@@ -681,7 +681,7 @@ export class VaultStorageService {
       if (existingMedia.length > 0 && existingMedia[0]) {
         // Extract postId from first media path (e.g., "attachments/social-archives/post/20251102-143052/image.png")
         const firstMediaPath = existingMedia[0].url;
-        const match = firstMediaPath.match(/post\/([^\/]+)\//);
+        const match = firstMediaPath.match(/post\/([^/]+)\//);
         if (match) {
           postId = match[1];
         }
@@ -725,7 +725,7 @@ export class VaultStorageService {
       for (const deleted of deletedFiles) {
         try {
           await this.vault.createBinary(deleted.path, deleted.content);
-        } catch (rollbackError) {
+        } catch {
         }
       }
 

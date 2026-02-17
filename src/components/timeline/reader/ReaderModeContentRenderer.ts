@@ -7,7 +7,7 @@
  *   2. Author section: avatar, name, handle, platform icon, timestamp
  *   3. Tags (if present)
  *   4. Title (for YouTube/RSS/Reddit posts)
- *   5. Full body text via MarkdownRenderer.renderMarkdown() (no truncation)
+ *   5. Full body text via MarkdownRenderer.render() (no truncation)
  *   6. Media gallery via existing MediaGalleryRenderer
  *   7. Original URL link
  *   8. Action bar: engagement metrics | star, share, tag, archive, open, edit, delete
@@ -437,7 +437,7 @@ export class ReaderModeContentRenderer extends Component {
     }
 
     const sourcePath = post.filePath || '';
-    await MarkdownRenderer.renderMarkdown(source, bodyEl, sourcePath, this);
+    await MarkdownRenderer.render(this.app, source, bodyEl, sourcePath, this);
   }
 
   // ---------- Quoted / Shared Post ----------
@@ -481,7 +481,7 @@ export class ReaderModeContentRenderer extends Component {
     if (bodyText.trim()) {
       const bodyEl = wrapper.createDiv({ cls: 'reader-mode-body rmcr-quoted-body' });
       const escaped = bodyText.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      await MarkdownRenderer.renderMarkdown(escaped, bodyEl, sourcePath, this);
+      await MarkdownRenderer.render(this.app, escaped, bodyEl, sourcePath, this);
     }
 
     // Media
