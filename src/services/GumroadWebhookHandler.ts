@@ -155,7 +155,7 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
     // Parse payload
     let webhookPayload: GumroadWebhookPayload;
     try {
-      webhookPayload = JSON.parse(payload);
+      webhookPayload = JSON.parse(payload) as GumroadWebhookPayload;
     } catch (error) {
       this.logger?.error('Failed to parse webhook payload', error instanceof Error ? error : undefined);
 
@@ -172,10 +172,10 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
     const eventId = this.generateEventId(webhookPayload);
 
     // Check idempotency
-    if (await this.isEventProcessed(eventId)) {
+    if (this.isEventProcessed(eventId)) {
       this.logger?.info('Event already processed (idempotent)', { eventId });
 
-      const existingResult = this.handlerData!.processedEvents[eventId];
+      const existingResult = this.data.processedEvents[eventId];
       if (!existingResult) {
         throw new Error(`Event ${eventId} marked as processed but result not found`);
       }
@@ -196,9 +196,9 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
     };
 
     // Add to queue
-    this.handlerData!.eventQueue.push(eventRecord);
-    this.handlerData!.stats.totalReceived++;
-    this.handlerData!.stats.byType[eventType] = (this.handlerData!.stats.byType[eventType] || 0) + 1;
+    this.data.eventQueue.push(eventRecord);
+    this.data.stats.totalReceived++;
+    this.data.stats.byType[eventType] = (this.data.stats.byType[eventType] || 0) + 1;
 
     await this.saveHandlerData();
 
@@ -240,8 +240,8 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
       event.status = 'completed';
 
       // Update stats
-      this.handlerData!.stats.totalProcessed++;
-      this.handlerData!.stats.totalPending--;
+      this.data.stats.totalProcessed++;
+      this.data.stats.totalPending--;
 
       const processingTime = Date.now() - startTime;
       this.updateAverageProcessingTime(processingTime);
@@ -268,8 +268,8 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
       event.lastError = error instanceof Error ? error.message : String(error);
 
       if (event.status === 'failed') {
-        this.handlerData!.stats.totalFailed++;
-        this.handlerData!.stats.totalPending--;
+        this.data.stats.totalFailed++;
+        this.data.stats.totalPending--;
       } else {
         // Calculate next retry time with exponential backoff
         const delay = Math.min(
@@ -294,10 +294,10 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
   /**
    * Check if event has already been processed
    */
-  async isEventProcessed(eventId: string): Promise<boolean> {
+  isEventProcessed(eventId: string): boolean {
     this.ensureInitialized();
 
-    return !!this.handlerData!.processedEvents[eventId];
+    return !!this.data.processedEvents[eventId];
   }
 
   /**
@@ -306,10 +306,10 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
   async markEventProcessed(eventId: string, result: WebhookHandlerResult): Promise<void> {
     this.ensureInitialized();
 
-    this.handlerData!.processedEvents[eventId] = result;
+    this.data.processedEvents[eventId] = result;
 
     // Remove from queue
-    this.handlerData!.eventQueue = this.handlerData!.eventQueue.filter(
+    this.data.eventQueue = this.data.eventQueue.filter(
       (e) => e.id !== eventId
     );
 
@@ -322,7 +322,7 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
   getStats(): WebhookEventStats {
     this.ensureInitialized();
 
-    return { ...this.handlerData!.stats };
+    return { ...this.data.stats };
   }
 
   /**
@@ -331,7 +331,7 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
   getPendingEvents(): WebhookEventRecord[] {
     this.ensureInitialized();
 
-    return this.handlerData!.eventQueue.filter((e) => e.status === 'pending');
+    return this.data.eventQueue.filter((e) => e.status === 'pending');
   }
 
   // Private helper methods
@@ -396,7 +396,7 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
   /**
    * Process event by type
    */
-  private async processEventByType(event: WebhookEventRecord): Promise<WebhookHandlerResult> {
+  private processEventByType(event: WebhookEventRecord): Promise<WebhookHandlerResult> | WebhookHandlerResult {
     const { type, payload } = event;
 
     this.logger?.info(`Processing ${type} event`, {
@@ -441,7 +441,7 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
   /**
    * Handle sale event
    */
-  private async handleSaleEvent(event: WebhookEventRecord): Promise<WebhookHandlerResult> {
+  private handleSaleEvent(event: WebhookEventRecord): WebhookHandlerResult {
     const { payload } = event;
 
     // In a real implementation, this would:
@@ -471,7 +471,7 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
   /**
    * Handle refund event
    */
-  private async handleRefundEvent(event: WebhookEventRecord): Promise<WebhookHandlerResult> {
+  private handleRefundEvent(event: WebhookEventRecord): WebhookHandlerResult {
     const { payload } = event;
 
     // In a real implementation, this would:
@@ -497,7 +497,7 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
   /**
    * Handle dispute event
    */
-  private async handleDisputeEvent(event: WebhookEventRecord): Promise<WebhookHandlerResult> {
+  private handleDisputeEvent(event: WebhookEventRecord): WebhookHandlerResult {
     const { payload } = event;
 
     // Similar to refund
@@ -519,9 +519,9 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
   /**
    * Handle subscription updated event
    */
-  private async handleSubscriptionUpdatedEvent(
+  private handleSubscriptionUpdatedEvent(
     event: WebhookEventRecord
-  ): Promise<WebhookHandlerResult> {
+  ): WebhookHandlerResult {
     const { payload } = event;
 
     this.logger?.info('Subscription updated event processed', {
@@ -539,9 +539,9 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
   /**
    * Handle subscription ended event
    */
-  private async handleSubscriptionEndedEvent(
+  private handleSubscriptionEndedEvent(
     event: WebhookEventRecord
-  ): Promise<WebhookHandlerResult> {
+  ): WebhookHandlerResult {
     const { payload } = event;
 
     this.logger?.info('Subscription ended event processed', {
@@ -571,7 +571,7 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
    * Update average processing time
    */
   private updateAverageProcessingTime(processingTime: number): void {
-    const stats = this.handlerData!.stats;
+    const stats = this.data.stats;
     const totalProcessed = stats.totalProcessed;
 
     if (totalProcessed === 1) {
@@ -588,8 +588,8 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
   private startQueueProcessing(): void {
     this.stopQueueProcessing();
 
-    this.processingInterval = setInterval(async () => {
-      await this.processQueuedEvents();
+    this.processingInterval = setInterval(() => {
+      void this.processQueuedEvents();
     }, 60000); // Check every minute
 
     this.logger?.debug('Queue processing started');
@@ -611,7 +611,7 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
    */
   private async processQueuedEvents(): Promise<void> {
     const now = Date.now();
-    const readyEvents = this.handlerData!.eventQueue.filter(
+    const readyEvents = this.data.eventQueue.filter(
       (e) =>
         e.status === 'pending' &&
         (!e.nextRetryAt || e.nextRetryAt <= now) &&
@@ -636,10 +636,10 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
    */
   private async loadHandlerData(): Promise<void> {
     try {
-      const data = await this.config.plugin.loadData();
+      const data = await this.config.plugin.loadData() as Record<string, unknown> | undefined;
 
       if (data && data.webhookHandler) {
-        this.handlerData = data.webhookHandler;
+        this.handlerData = data.webhookHandler as WebhookHandlerData;
 
         this.logger?.debug('Webhook handler data loaded', {
           processedEvents: Object.keys(this.handlerData?.processedEvents || {}).length,
@@ -691,7 +691,7 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
    */
   private async saveHandlerData(): Promise<void> {
     try {
-      const existingData = await this.config.plugin.loadData() || {};
+      const existingData = (await this.config.plugin.loadData() as Record<string, unknown> | undefined) ?? {};
 
       existingData.webhookHandler = this.handlerData;
 
@@ -711,13 +711,13 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
     const cutoff = now - this.queueConfig.eventRetention;
 
     // Remove old processed events
-    const processedEventIds = Object.keys(this.handlerData!.processedEvents);
+    const processedEventIds = Object.keys(this.data.processedEvents);
     let cleaned = 0;
 
     for (const eventId of processedEventIds) {
-      const result = this.handlerData!.processedEvents[eventId];
+      const result = this.data.processedEvents[eventId];
       if (result && result.processedAt < cutoff) {
-        delete this.handlerData!.processedEvents[eventId];
+        Reflect.deleteProperty(this.data.processedEvents, eventId);
         cleaned++;
       }
     }
@@ -735,5 +735,15 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
     if (!this.initialized) {
       throw new Error('GumroadWebhookHandler not initialized. Call initialize() first.');
     }
+  }
+
+  /**
+   * Get handler data (guaranteed non-null after ensureInitialized)
+   */
+  private get data(): WebhookHandlerData {
+    if (!this.handlerData) {
+      throw new Error('Handler data not initialized');
+    }
+    return this.handlerData;
   }
 }

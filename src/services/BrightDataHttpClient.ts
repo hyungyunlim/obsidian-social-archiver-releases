@@ -76,7 +76,7 @@ function transformHttpError(
 	data: unknown,
 	requestConfig?: HttpRequestConfig
 ): HttpError {
-	const message = (data as any)?.message || `HTTP ${status} error`;
+	const message = (data as Record<string, unknown>)?.['message'] as string || `HTTP ${status} error`;
 
 	// Rate limit errors
 	if (status === 429) {
@@ -109,7 +109,7 @@ function transformHttpError(
 			status,
 			{
 				request: requestConfig,
-				validationErrors: (data as any)?.errors,
+				validationErrors: (data as Record<string, unknown>)?.['errors'] as string[] | undefined,
 			}
 		);
 	}
@@ -157,7 +157,7 @@ export class BrightDataHttpClient implements IService {
 		return 'BrightDataHttpClient';
 	}
 
-	public async initialize(): Promise<void> {
+	public initialize(): void {
 		// Verify API key is configured
 		if (!this.config.apiKey) {
 			throw new BrightDataError(
@@ -168,7 +168,7 @@ export class BrightDataHttpClient implements IService {
 		}
 	}
 
-	public async shutdown(): Promise<void> {
+	public shutdown(): void {
 		// Clear any pending requests
 		this.requestMetadataMap.clear();
 	}

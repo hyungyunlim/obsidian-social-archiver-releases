@@ -62,12 +62,8 @@ interface ParsedHeader {
 // Parsing Functions
 // ============================================================================
 
-/**
- * Regex pattern to match AI comment headers
- * Format: ### {emoji} {CLI} · {Type} · {Date}
- * This distinguishes AI comment headers from regular markdown headers inside comment content
- */
-const _AI_COMMENT_HEADER_PATTERN = /^### (?:🤖|✨|💡|🦙)\s*\w+\s*·\s*.+\s*·\s*.+$/gm;
+// Note: AI comment header pattern for future use:
+// /^### (?:🤖|✨|💡|🦙)\s*\w+\s*·\s*.+\s*·\s*.+$/gm
 
 /**
  * Parse existing AI comments from markdown content
@@ -222,7 +218,7 @@ function parseCommentHeader(header: string): ParsedHeader | null {
 
   return {
     id,
-    cli: cliName as AICli,
+    cli: cliName,
     type,
     date: isoDate,
   };
@@ -495,14 +491,14 @@ export async function updateFrontmatterAIComments(
   file: TFile,
   comments: AICommentMeta[]
 ): Promise<void> {
-  await app.fileManager.processFrontMatter(file, (fm) => {
+  await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
     if (comments.length === 0) {
       // Remove aiComments if empty
-      delete fm.aiComments;
+      Reflect.deleteProperty(fm, 'aiComments');
     } else {
       // Store just IDs as simple string array (Obsidian-friendly format)
       // ID format: {cli}-{type}-{timestamp} e.g. "claude-summary-20251215T020722Z"
-      fm.aiComments = comments.map(c => c.id);
+      fm['aiComments'] = comments.map(c => c.id);
     }
   });
 }

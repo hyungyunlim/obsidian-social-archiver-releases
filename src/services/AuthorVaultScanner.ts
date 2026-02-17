@@ -132,7 +132,7 @@ export class AuthorVaultScanner {
           authors.push(...result);
         } else {
           // Direct archive: single author
-          authors.push(result as RawAuthorData);
+          authors.push(result);
         }
       }
 
@@ -167,7 +167,7 @@ export class AuthorVaultScanner {
     }
     if (Array.isArray(result)) {
       // For embedded archives, return first author (use scanVault for all)
-      return result.length > 0 ? result[0] : null;
+      return result.length > 0 ? (result[0] as RawAuthorData) : null;
     }
     return result;
   }
@@ -545,7 +545,7 @@ export class AuthorVaultScanner {
    * This is different from "archivedAt" (when the note was created).
    */
   private extractTimelineArchived(frontmatter: Record<string, unknown>): boolean {
-    const v = (frontmatter as any).archive;
+    const v = (frontmatter)['archive'];
     return v === true || v === 'true' || v === 1 || v === '1';
   }
 
@@ -776,7 +776,7 @@ export class AuthorVaultScanner {
 
     // Get parent post's archived date as fallback
     const parentArchivedAt = postData.archivedDate || new Date(file.stat.mtime);
-    const parentTimelineArchived = (postData as any)?.archive === true;
+    const parentTimelineArchived = postData?.archive === true;
 
     // Extract authors from each embedded archive
     return postData.embeddedArchives

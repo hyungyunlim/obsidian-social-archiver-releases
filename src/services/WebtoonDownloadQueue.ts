@@ -12,7 +12,6 @@ import { TFile, type App } from 'obsidian';
 import {
   NaverWebtoonLocalService,
   type WebtoonAPIInfo,
-  type WebtoonEpisode,
   type EpisodeDetail,
 } from './NaverWebtoonLocalService';
 import { NaverWebtoonCommentService } from './NaverWebtoonCommentService';
@@ -197,7 +196,6 @@ export class WebtoonDownloadQueue extends EventTarget {
     this.abortController = new AbortController();
     this.startTime = Date.now();
     const signal = this.abortController.signal;
-    const titleId = String(webtoonInfo.titleId);
 
     try {
       for (let i = 0; i < this.queue.length; i++) {
@@ -337,29 +335,31 @@ export class WebtoonDownloadQueue extends EventTarget {
 
       // Check if we got a synchronous result
       if (response.result?.postData) {
-        const postData = response.result.postData;
+        const postData = response.result.postData as Record<string, unknown>;
+        const postContent = postData.content as Record<string, unknown> | undefined;
         return {
           no: episodeNo,
           titleId: parseInt(titleId, 10),
-          subtitle: postData.content?.title || postData.title || `Episode ${episodeNo}`,
-          imageUrls: postData.content?.images || [],
-          prevEpisodeNo: postData.prevEpisodeNo,
-          nextEpisodeNo: postData.nextEpisodeNo,
-          authorComment: postData.authorComment,
+          subtitle: (typeof postContent?.title === 'string' ? postContent.title : null) ?? (typeof postData.title === 'string' ? postData.title : null) ?? `Episode ${episodeNo}`,
+          imageUrls: Array.isArray(postContent?.images) ? (postContent.images as string[]) : [],
+          prevEpisodeNo: typeof postData.prevEpisodeNo === 'number' ? postData.prevEpisodeNo : undefined,
+          nextEpisodeNo: typeof postData.nextEpisodeNo === 'number' ? postData.nextEpisodeNo : undefined,
+          authorComment: typeof postData.authorComment === 'string' ? postData.authorComment : undefined,
         };
       }
 
       // If async job, wait for it
       if (response.jobId && response.status !== 'completed') {
-        const postData = await this.workerClient.waitForJob(response.jobId);
+        const postDataRaw = await this.workerClient.waitForJob(response.jobId) as Record<string, unknown>;
+        const postContent2 = postDataRaw.content as Record<string, unknown> | undefined;
         return {
           no: episodeNo,
           titleId: parseInt(titleId, 10),
-          subtitle: postData.content?.title || postData.title || `Episode ${episodeNo}`,
-          imageUrls: postData.content?.images || [],
-          prevEpisodeNo: postData.prevEpisodeNo,
-          nextEpisodeNo: postData.nextEpisodeNo,
-          authorComment: postData.authorComment,
+          subtitle: (typeof postContent2?.title === 'string' ? postContent2.title : null) ?? (typeof postDataRaw.title === 'string' ? postDataRaw.title : null) ?? `Episode ${episodeNo}`,
+          imageUrls: Array.isArray(postContent2?.images) ? (postContent2.images as string[]) : [],
+          prevEpisodeNo: typeof postDataRaw.prevEpisodeNo === 'number' ? postDataRaw.prevEpisodeNo : undefined,
+          nextEpisodeNo: typeof postDataRaw.nextEpisodeNo === 'number' ? postDataRaw.nextEpisodeNo : undefined,
+          authorComment: typeof postDataRaw.authorComment === 'string' ? postDataRaw.authorComment : undefined,
         };
       }
 
@@ -763,7 +763,7 @@ export class WebtoonDownloadQueue extends EventTarget {
     // Remove undefined values from frontmatter
     for (const key of Object.keys(frontmatter)) {
       if (frontmatter[key] === undefined) {
-        delete frontmatter[key];
+        Reflect.deleteProperty(frontmatter, key);
       }
     }
 
@@ -937,7 +937,7 @@ export class WebtoonDownloadQueue extends EventTarget {
       } else if (typeof value === 'string' && (value.includes(':') || value.includes('#'))) {
         lines.push(`${key}: "${value}"`);
       } else {
-        lines.push(`${key}: ${value}`);
+        lines.push(`${key}: ${String(value)}`);
       }
     }
     return lines.join('\n');

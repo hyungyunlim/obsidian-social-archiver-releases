@@ -14,6 +14,7 @@ import type { Platform } from '@/types/post';
 import type {
   AuthorCatalogEntry,
   AuthorSubscribeOptions,
+  NaverCafeSubscriptionOptions,
 } from '@/types/author-catalog';
 import { AuthorVaultScanner } from '@/services/AuthorVaultScanner';
 import { AuthorDeduplicator, generateAuthorKey, type SubscriptionMap } from '@/services/AuthorDeduplicator';
@@ -27,6 +28,7 @@ import {
   type AuthorCatalogStoreAPI,
 } from '@/services/AuthorCatalogStore';
 import { get } from 'svelte/store';
+import type { Subscription, RedditSubscriptionOptions } from '@/services/SubscriptionManager';
 
 // ============================================================================
 // Types
@@ -43,8 +45,8 @@ export interface AuthorCatalogControllerConfig {
   app: App;
   archivePath: string;
   store: AuthorCatalogStoreAPI;
-  fetchSubscriptions?: () => Promise<any[]>;
-  onSubscribe?: (author: AuthorCatalogEntry, options: AuthorSubscribeOptions) => Promise<any>;
+  fetchSubscriptions?: () => Promise<Subscription[]>;
+  onSubscribe?: (author: AuthorCatalogEntry, options: AuthorSubscribeOptions) => Promise<unknown>;
   onUnsubscribe?: (author: AuthorCatalogEntry) => Promise<void>;
 }
 
@@ -68,8 +70,8 @@ export function formatCronSchedule(schedule?: ScheduleInput): string {
     return 'Invalid schedule';
   }
 
-  const hour = parseInt(cronParts[1]!) || 0;
-  const weekday = cronParts[4]!;
+  const hour = parseInt(cronParts[1] ?? '0') || 0;
+  const weekday = cronParts[4] ?? '*';
   const formattedHour = String(hour).padStart(2, '0') + ':00';
 
   // Weekly schedule (specific weekday, not *)
@@ -109,13 +111,13 @@ export function formatCronSchedule(schedule?: ScheduleInput): string {
  * Maps each subscription to one or two dedup keys (primary URL + handle-based URL)
  * so that AuthorDeduplicator can match them to vault-scanned authors.
  */
-export function buildSubscriptionMapFromApi(subscriptions: any[]): SubscriptionMap {
+export function buildSubscriptionMapFromApi(subscriptions: Subscription[]): SubscriptionMap {
   const map: SubscriptionMap = new Map();
 
   for (const sub of subscriptions) {
     if (!sub.enabled) continue;
 
-    const handle = sub.handle || sub.target?.handle || sub.name;
+    const handle = sub.target?.handle || sub.name;
 
     // --- Build platform-specific authorUrl ---
     let authorUrl = '';
@@ -132,7 +134,7 @@ export function buildSubscriptionMapFromApi(subscriptions: any[]): SubscriptionM
         authorUrl = `https://www.linkedin.com/in/${handle}/`;
       }
     } else {
-      authorUrl = sub.profileUrl || sub.target?.profileUrl || '';
+      authorUrl = sub.target?.profileUrl || '';
     }
 
     // Generate URL from handle if not available
@@ -143,13 +145,13 @@ export function buildSubscriptionMapFromApi(subscriptions: any[]): SubscriptionM
     const key = generateAuthorKey(authorUrl, sub.name, sub.platform as Platform);
 
     // Parse subscription metadata
-    const lastRunAt = sub.stats?.lastRunAt ? new Date(sub.stats.lastRunAt) : null;
+    const lastRunAt = sub.state?.lastRunAt ? new Date(sub.state.lastRunAt) : null;
     const schedule = formatCronSchedule(sub.schedule);
     const maxPostsPerRun = sub.options?.maxPostsPerRun;
-    const redditOptions = sub.redditOptions
+    const redditOptions: RedditSubscriptionOptions | undefined = sub.redditOptions
       ? {
           sortBy: sub.redditOptions.sortBy || 'New',
-          sortByTime: sub.redditOptions.sortByTime || '',
+          sortByTime: (sub.redditOptions.sortByTime || ''),
           keyword: sub.redditOptions.keyword,
         }
       : undefined;
@@ -164,9 +166,9 @@ export function buildSubscriptionMapFromApi(subscriptions: any[]): SubscriptionM
     if (isNaverCafeMember && sub.name) {
       const match = sub.name.match(/^(.+?)\s*\((.+)\)$/);
       if (match) {
-        naverDisplayName = match[1].trim();
+        naverDisplayName = (match[1] ?? '').trim();
         if (!naverCafeName) {
-          naverCafeName = match[2].trim();
+          naverCafeName = (match[2] ?? '').trim();
         }
       }
     }
@@ -265,16 +267,16 @@ export class AuthorCatalogController {
     if (!archiveFolder) return 0;
 
     let count = 0;
-    const countFiles = (folder: any) => {
+    const countFiles = (folder: { children: Array<{ children?: unknown[]; extension?: string }> }) => {
       for (const child of folder.children) {
         if (child.children) {
-          countFiles(child);
+          countFiles(child as { children: Array<{ children?: unknown[]; extension?: string }> });
         } else if (child.extension === 'md') {
           count++;
         }
       }
     };
-    countFiles(archiveFolder);
+    countFiles(archiveFolder as unknown as { children: Array<{ children?: unknown[]; extension?: string }> });
     return count;
   }
 
@@ -282,7 +284,7 @@ export class AuthorCatalogController {
    * Find existing avatar file for a platform/handle combination.
    * Uses the same file naming convention as AuthorAvatarService.
    */
-  async findExistingAvatar(platform: string, handle: string): Promise<string | null> {
+  findExistingAvatar(platform: string, handle: string): string | null {
     if (!handle) return null;
 
     const sanitizedHandle = handle
@@ -352,7 +354,7 @@ export class AuthorCatalogController {
       const fetchWithTimeout = this.config.fetchSubscriptions
         ? Promise.race([
             this.config.fetchSubscriptions(),
-            new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 15000)),
+            new Promise<Subscription[]>((resolve) => setTimeout(() => resolve([]), 15000)),
           ])
         : Promise.resolve([]);
 
@@ -397,14 +399,17 @@ export class AuthorCatalogController {
       for (let i = 0; i < avatarCandidates.length; i += AVATAR_BATCH_SIZE) {
         const batch = avatarCandidates.slice(i, i + AVATAR_BATCH_SIZE);
         const results = await Promise.all(
-          batch.map(async ({ author, index }) => {
-            const avatarPath = await this.findExistingAvatar(author.platform, author.handle!);
+          batch.map(({ author, index }) => {
+            const avatarPath = this.findExistingAvatar(author.platform, author.handle ?? '');
             return { index, avatarPath };
           })
         );
         for (const { index, avatarPath } of results) {
           if (avatarPath) {
-            authorsWithAvatars[index] = { ...authorsWithAvatars[index]!, localAvatar: avatarPath };
+            const existing = authorsWithAvatars[index];
+            if (existing) {
+              authorsWithAvatars[index] = { ...existing, localAvatar: avatarPath };
+            }
           }
         }
       }
@@ -431,7 +436,8 @@ export class AuthorCatalogController {
     if (!onSubscribe) return;
 
     try {
-      const subscription = await onSubscribe(author, options);
+      const subscriptionRaw = await onSubscribe(author, options);
+      const subscription = subscriptionRaw as Subscription | null | undefined;
 
       const subscriptionId = subscription?.id || undefined;
       store.updateAuthorStatus(author.authorUrl, author.platform, 'subscribed', subscriptionId, author.authorName);
@@ -449,7 +455,7 @@ export class AuthorCatalogController {
           if (a.platform === author.platform && a.authorUrl === author.authorUrl) {
             return {
               ...a,
-              subscriptionId: subscription.id as string,
+              subscriptionId: subscription.id,
               status: 'subscribed' as const,
               schedule,
               maxPostsPerRun,
@@ -496,7 +502,7 @@ export class AuthorCatalogController {
 /**
  * Build an author URL from handle when profileUrl is unavailable.
  */
-function buildAuthorUrlFromHandle(platform: string, handle: string, sub: any): string {
+function buildAuthorUrlFromHandle(platform: string, handle: string, sub: Subscription): string {
   switch (platform) {
     case 'x':
       return `https://x.com/${handle}`;
@@ -542,7 +548,7 @@ function buildAuthorUrlFromHandle(platform: string, handle: string, sub: any): s
 /**
  * Build a secondary handle-based URL for better matching.
  */
-function buildHandleBasedUrl(platform: string, handle: string, sub: any): string {
+function buildHandleBasedUrl(platform: string, handle: string, sub: Subscription): string {
   switch (platform) {
     case 'x':
       return `https://x.com/${handle}`;
@@ -557,7 +563,7 @@ function buildHandleBasedUrl(platform: string, handle: string, sub: any): string
     case 'bluesky':
       return `https://bsky.app/profile/${handle}`;
     case 'mastodon':
-      if (sub.profileUrl) return sub.profileUrl;
+      if (sub.target?.profileUrl) return sub.target.profileUrl;
       if (handle && handle.includes('@')) {
         const [username, instance] = handle.split('@');
         return username && instance ? `https://${instance}/@${username}` : '';
@@ -591,7 +597,7 @@ function buildHandleBasedUrl(platform: string, handle: string, sub: any): string
  * Determine fetch mode for a subscription.
  */
 function determineFetchMode(
-  sub: any,
+  sub: Subscription,
   handle: string,
   isNaverSubscription: boolean
 ): 'local' | 'cloud' | 'hybrid' {
@@ -610,20 +616,21 @@ function determineFetchMode(
  * Build webtoon info from subscription data.
  */
 function buildWebtoonInfo(
-  sub: any,
+  sub: Subscription,
   handle: string
 ): AuthorCatalogEntry['webtoonInfo'] | undefined {
   if (sub.platform === 'naver-webtoon' && sub.naverWebtoonOptions) {
+    const opts = sub.naverWebtoonOptions;
     return {
-      titleId: sub.naverWebtoonOptions.titleId || handle,
-      titleName: sub.naverWebtoonOptions.titleName || sub.name || '',
-      publishDay: sub.naverWebtoonOptions.publishDay || '',
-      publishDayCode: sub.naverWebtoonOptions.publishDayCode,
-      finished: sub.naverWebtoonOptions.finished || false,
-      thumbnailUrl: sub.naverWebtoonOptions.thumbnailUrl,
-      genre: sub.naverWebtoonOptions.genre,
-      totalEpisodes: sub.naverWebtoonOptions.totalEpisodes,
-      archivedEpisodes: sub.naverWebtoonOptions.archivedEpisodes,
+      titleId: opts.titleId || handle,
+      titleName: opts.titleName || sub.name || '',
+      publishDay: opts.publishDay || '',
+      publishDayCode: undefined,
+      finished: false,
+      thumbnailUrl: opts.thumbnailUrl,
+      genre: undefined,
+      totalEpisodes: undefined,
+      archivedEpisodes: undefined,
     };
   }
 
@@ -661,13 +668,13 @@ function buildWebtoonInfo(
 
 /** Parameters for buildSubscriptionEntry */
 interface SubscriptionEntryParams {
-  sub: any;
+  sub: Subscription;
   subscriptionId: string;
   lastRunAt: Date | null;
   schedule: string;
   maxPostsPerRun: number | undefined;
-  redditOptions: any;
-  naverCafeOptions: any;
+  redditOptions: RedditSubscriptionOptions | undefined;
+  naverCafeOptions: NaverCafeSubscriptionOptions | undefined;
   fetchMode: 'local' | 'cloud' | 'hybrid';
   displayAuthorName: string;
   authorUrl: string;

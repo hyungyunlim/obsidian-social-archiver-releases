@@ -37,7 +37,7 @@ export class HtmlMediaPlaybackAdapter implements PlaybackAdapter {
   play(): Promise<void> {
     return this.element.play().catch(() => {
       // Ignore autoplay policy errors
-    }) as Promise<void>;
+    });
   }
 
   pause(): void {

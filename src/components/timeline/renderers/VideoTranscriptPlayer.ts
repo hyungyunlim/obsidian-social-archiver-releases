@@ -197,7 +197,7 @@ export class VideoTranscriptPlayer {
 
     // YouTube iframe via controller
     if (ctx.youtubeController) {
-      const duration = (post.metadata as any)?.duration ?? 0;
+      const duration = (post.metadata as unknown as Record<string, unknown>)?.['duration'] as number ?? 0;
       return new YouTubeIframePlaybackAdapter(ctx.youtubeController, duration);
     }
 
@@ -213,8 +213,8 @@ export class VideoTranscriptPlayer {
       return post.whisperTranscript.language;
     }
     // Check frontmatter-based transcription language
-    if ((post as any).transcriptionLanguage) {
-      return (post as any).transcriptionLanguage as string;
+    if ((post as PostData & { transcriptionLanguage?: string }).transcriptionLanguage) {
+      return (post as PostData & { transcriptionLanguage?: string }).transcriptionLanguage;
     }
     return undefined;
   }

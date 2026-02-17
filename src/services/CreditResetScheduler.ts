@@ -154,11 +154,11 @@ export class CreditResetScheduler implements IService {
 
       try {
         // Perform reset
-        await this.config.creditManager.resetMonthlyCredits();
+        this.config.creditManager.resetMonthlyCredits();
 
         // Update scheduler data
         this.schedulerData = {
-          ...this.schedulerData!,
+          ...this.schedulerData,
           lastResetDate: now.getTime(),
           nextResetDate: this.calculateNextResetDate(now).getTime(),
         };
@@ -195,10 +195,11 @@ export class CreditResetScheduler implements IService {
 
     const now = new Date();
 
-    await this.config.creditManager.resetMonthlyCredits();
+    this.config.creditManager.resetMonthlyCredits();
 
     this.schedulerData = {
-      ...this.schedulerData!,
+      version: this.schedulerData?.version ?? SCHEDULER_VERSION,
+      ...this.schedulerData,
       lastResetDate: now.getTime(),
       nextResetDate: this.calculateNextResetDate(now).getTime(),
     };
@@ -313,12 +314,10 @@ export class CreditResetScheduler implements IService {
   private startPeriodicCheck(): void {
     this.stopPeriodicCheck();
 
-    this.checkInterval = setInterval(async () => {
-      try {
-        await this.checkAndResetCredits();
-      } catch (error) {
+    this.checkInterval = setInterval(() => {
+      void this.checkAndResetCredits().catch(error => {
         this.logger?.error('Periodic reset check failed', error instanceof Error ? error : undefined);
-      }
+      });
     }, this.config.checkInterval);
 
     this.logger?.debug('Periodic reset check started', {
@@ -342,10 +341,10 @@ export class CreditResetScheduler implements IService {
    */
   private async loadSchedulerData(): Promise<void> {
     try {
-      const data = await this.config.plugin.loadData();
+      const data = await this.config.plugin.loadData() as Record<string, unknown> | undefined;
 
-      if (data && data.creditResetScheduler) {
-        this.schedulerData = data.creditResetScheduler;
+      if (data && data['creditResetScheduler']) {
+        this.schedulerData = data['creditResetScheduler'] as typeof this.schedulerData;
 
         this.logger?.debug('Scheduler data loaded', {
           lastReset: this.schedulerData?.lastResetDate
@@ -378,9 +377,9 @@ export class CreditResetScheduler implements IService {
    */
   private async saveSchedulerData(): Promise<void> {
     try {
-      const existingData = await this.config.plugin.loadData() || {};
+      const existingData = (await this.config.plugin.loadData() as Record<string, unknown> | undefined) ?? {};
 
-      existingData.creditResetScheduler = this.schedulerData;
+      existingData['creditResetScheduler'] = this.schedulerData;
 
       await this.config.plugin.saveData(existingData);
 

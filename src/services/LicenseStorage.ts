@@ -89,7 +89,7 @@ export class LicenseStorage implements IService {
     }
 
     // Derive encryption key
-    this.encryptionKey = await deriveEncryptionKey(this.cachedData!.deviceId!);
+    this.encryptionKey = await deriveEncryptionKey(this.data.deviceId ?? "");
 
     this.initialized = true;
     this.logger?.info('LicenseStorage initialized successfully');
@@ -123,10 +123,10 @@ export class LicenseStorage implements IService {
     });
 
     // Encrypt license key
-    const { encrypted, iv } = await encrypt(licenseKey, this.encryptionKey!);
+    const { encrypted, iv } = await encrypt(licenseKey, this.cryptoKey);
 
     // Compute integrity hash
-    const dataToHash = `${encrypted}:${iv}:${this.cachedData!.deviceId!}`;
+    const dataToHash = `${encrypted}:${iv}:${this.data.deviceId ?? ""}`;
     const integrityHash = await sha256Hash(dataToHash);
 
     // Create stored data
@@ -135,12 +135,12 @@ export class LicenseStorage implements IService {
       iv,
       cachedInfo: info,
       cachedAt: Date.now(),
-      deviceId: this.cachedData!.deviceId!,
+      deviceId: this.data.deviceId ?? "",
       integrityHash,
     };
 
     // Update cache
-    this.cachedData!.license = storedData;
+    this.data.license = storedData;
 
     // Save to disk
     await this.saveData();
@@ -177,7 +177,7 @@ export class LicenseStorage implements IService {
       const licenseKey = await decrypt(
         stored.encryptedKey,
         stored.iv,
-        this.encryptionKey!
+        this.cryptoKey
       );
 
       // Verify integrity
@@ -237,7 +237,7 @@ export class LicenseStorage implements IService {
   /**
    * Get device ID
    */
-  async getDeviceId(): Promise<string | null> {
+  getDeviceId(): string | null {
     this.ensureInitialized();
 
     return this.cachedData?.deviceId || null;
@@ -253,11 +253,11 @@ export class LicenseStorage implements IService {
   /**
    * Create backup of license data
    */
-  async createBackup(): Promise<string> {
+  createBackup(): Promise<string> {
     this.ensureInitialized();
 
     if (!this.cachedData?.license) {
-      throw new Error('No license data to backup');
+      return Promise.reject(new Error('No license data to backup'));
     }
 
     this.logger?.info('Creating license backup');
@@ -276,7 +276,7 @@ export class LicenseStorage implements IService {
 
     this.logger?.info('License backup created');
 
-    return encoded;
+    return Promise.resolve(encoded);
   }
 
   /**
@@ -290,17 +290,20 @@ export class LicenseStorage implements IService {
     try {
       // Decode backup
       const backupJson = atob(backupData);
-      const backup = JSON.parse(backupJson);
+      const backup = JSON.parse(backupJson) as Record<string, unknown>;
 
       // Validate backup structure
       if (!backup.version || !backup.license || !backup.deviceId) {
         throw new Error('Invalid backup format');
       }
 
+      const backupDeviceId = typeof backup.deviceId === 'string' ? backup.deviceId : '';
+      const backupVersion = typeof backup.version === 'number' ? backup.version : 0;
+
       // Check if backup is from same device
-      if (backup.deviceId !== this.cachedData?.deviceId) {
+      if (backupDeviceId !== this.cachedData?.deviceId) {
         this.logger?.warn('Backup is from different device', {
-          backupDevice: backup.deviceId,
+          backupDevice: backupDeviceId,
           currentDevice: this.cachedData?.deviceId,
         });
 
@@ -310,9 +313,9 @@ export class LicenseStorage implements IService {
       }
 
       // Check version compatibility
-      if (backup.version > STORAGE_VERSION) {
+      if (backupVersion > STORAGE_VERSION) {
         throw new Error(
-          `Backup version ${backup.version} is newer than current version ${STORAGE_VERSION}`
+          `Backup version ${backupVersion} is newer than current version ${STORAGE_VERSION}`
         );
       }
 
@@ -320,11 +323,11 @@ export class LicenseStorage implements IService {
       if (!this.cachedData) {
         this.cachedData = {
           version: STORAGE_VERSION,
-          deviceId: backup.deviceId,
+          deviceId: backupDeviceId,
         };
       }
 
-      this.cachedData.license = backup.license;
+      this.cachedData.license = backup.license as StoredLicenseData;
 
       // Verify integrity after restore
       if (!this.cachedData.license) {
@@ -372,10 +375,10 @@ export class LicenseStorage implements IService {
    */
   private async loadData(): Promise<void> {
     try {
-      const data = await this.config.plugin.loadData();
+      const data = await this.config.plugin.loadData() as Record<string, unknown> | undefined;
 
       if (data && data.licenseStorage) {
-        this.cachedData = data.licenseStorage;
+        this.cachedData = data.licenseStorage as LicenseStorageData;
 
         // Check version and migrate if needed
         if (this.cachedData?.version && this.cachedData.version < STORAGE_VERSION) {
@@ -409,7 +412,7 @@ export class LicenseStorage implements IService {
    */
   private async saveData(): Promise<void> {
     try {
-      const existingData = await this.config.plugin.loadData() || {};
+      const existingData = (await this.config.plugin.loadData() as Record<string, unknown> | undefined) ?? {};
 
       existingData.licenseStorage = this.cachedData;
 
@@ -459,5 +462,25 @@ export class LicenseStorage implements IService {
     if (!this.initialized) {
       throw new Error('LicenseStorage not initialized. Call initialize() first.');
     }
+  }
+
+  /**
+   * Get cached data (guaranteed non-null after ensureInitialized + loadData)
+   */
+  private get data(): LicenseStorageData {
+    if (!this.cachedData) {
+      throw new Error('License storage data not loaded');
+    }
+    return this.cachedData;
+  }
+
+  /**
+   * Get encryption key (guaranteed non-null after initialize)
+   */
+  private get cryptoKey(): CryptoKey {
+    if (!this.encryptionKey) {
+      throw new Error('Encryption key not initialized');
+    }
+    return this.encryptionKey;
   }
 }

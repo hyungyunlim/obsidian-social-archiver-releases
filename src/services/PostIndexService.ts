@@ -164,7 +164,7 @@ export class PostIndexService {
   /** Remove an entry (called on file delete). */
   removeEntry(filePath: string): void {
     if (this.index.entries[filePath]) {
-      delete this.index.entries[filePath];
+      Reflect.deleteProperty(this.index.entries, filePath);
       this.scheduleSave();
     }
   }
@@ -174,7 +174,7 @@ export class PostIndexService {
     const entry = this.index.entries[oldPath];
     if (entry) {
       entry.filePath = newPath;
-      delete this.index.entries[oldPath];
+      Reflect.deleteProperty(this.index.entries, oldPath);
       this.index.entries[newPath] = entry;
       this.scheduleSave();
     }

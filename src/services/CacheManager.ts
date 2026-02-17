@@ -53,7 +53,7 @@ async function compressString(input: string): Promise<string> {
     const bytes = new Uint8Array(arrayBuffer);
     let binary = '';
     for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]!);
+      binary += String.fromCharCode(bytes[i] ?? 0);
     }
     return btoa(binary);
   }
@@ -140,7 +140,7 @@ export class CacheManager implements IService, ICacheService {
   /**
    * Initialize the cache manager
    */
-  async initialize(): Promise<void> {
+  initialize(): void {
     if (this.initialized) {
       this.logger?.warn('CacheManager already initialized');
       return;
@@ -158,7 +158,7 @@ export class CacheManager implements IService, ICacheService {
 
     // Start cache warming if configured
     if (this.config.warming?.enabled) {
-      await this.startWarming();
+      this.startWarming();
     }
 
     this.initialized = true;
@@ -168,7 +168,7 @@ export class CacheManager implements IService, ICacheService {
   /**
    * Shutdown the cache manager
    */
-  async shutdown(): Promise<void> {
+  shutdown(): void {
     if (!this.initialized) {
       return;
     }
@@ -470,7 +470,7 @@ export class CacheManager implements IService, ICacheService {
   /**
    * Warm cache with predefined URLs
    */
-  async warm(urls: string[]): Promise<void> {
+  warm(urls: string[]): void {
     this.ensureInitialized();
 
     this.logger?.info('Warming cache', { urlCount: urls.length });
@@ -517,7 +517,7 @@ export class CacheManager implements IService, ICacheService {
     if (!this.eventListeners.has(eventType)) {
       this.eventListeners.set(eventType, new Set());
     }
-    this.eventListeners.get(eventType)!.add(listener);
+    this.eventListeners.get(eventType)?.add(listener);
   }
 
   /**
@@ -547,7 +547,7 @@ export class CacheManager implements IService, ICacheService {
   }
 
   private async deserializeEntry<T>(serialized: string): Promise<CacheEntry<T>> {
-    const entry: SerializedCacheEntry = JSON.parse(serialized);
+    const entry = JSON.parse(serialized) as SerializedCacheEntry;
 
     let data: T;
 
@@ -555,13 +555,13 @@ export class CacheManager implements IService, ICacheService {
       // Decompress data
       try {
         const decompressedString = await decompressString(entry.data);
-        data = JSON.parse(decompressedString);
+        data = JSON.parse(decompressedString) as T;
       } catch (error) {
         this.logger?.error('Decompression error', error instanceof Error ? error : undefined);
         throw new Error('Failed to decompress cache entry');
       }
     } else {
-      data = JSON.parse(entry.data);
+      data = JSON.parse(entry.data) as T;
     }
 
     return {
@@ -574,7 +574,7 @@ export class CacheManager implements IService, ICacheService {
     try {
       const serialized = await this.kvStore.get(cacheKey);
       if (serialized) {
-        const entry: SerializedCacheEntry = JSON.parse(serialized);
+        const entry = JSON.parse(serialized) as SerializedCacheEntry;
         entry.metadata = metadata;
         const ttl = Math.ceil((metadata.expiresAt - Date.now()) / 1000);
         await this.kvStore.put(cacheKey, JSON.stringify(entry), { expirationTtl: ttl });
@@ -661,7 +661,7 @@ export class CacheManager implements IService, ICacheService {
     }
   }
 
-  private async startWarming(): Promise<void> {
+  private startWarming(): void {
     if (!this.config.warming?.enabled) {
       return;
     }
@@ -672,11 +672,11 @@ export class CacheManager implements IService, ICacheService {
     });
 
     // Warm immediately
-    await this.warm(this.config.warming.urls);
+    this.warm(this.config.warming.urls);
 
     // Set up interval for continuous warming
-    this.warmingInterval = setInterval(async () => {
-      await this.warm(this.config.warming!.urls);
+    this.warmingInterval = setInterval(() => {
+      this.warm(this.config.warming?.urls ?? []);
     }, this.config.warming.interval);
   }
 }

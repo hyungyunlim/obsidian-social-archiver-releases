@@ -149,7 +149,6 @@ export class ProfileValidationPoller {
     return new Promise((resolve, reject) => {
       this.abortController = new AbortController();
       const startTime = Date.now();
-      let _lastStatus: ValidationJobStatus = 'pending';
 
       // Set up timeout (tracked for cleanup)
       this.timeoutId = setTimeout(() => {
@@ -162,7 +161,8 @@ export class ProfileValidationPoller {
       }, this.timeout);
 
       // Start polling
-      this.intervalId = setInterval(async () => {
+      this.intervalId = setInterval(() => {
+        void (async () => {
         try {
           const elapsed = Date.now() - startTime;
           const response = await this.fetchStatus(snapshotId);
@@ -178,7 +178,6 @@ export class ProfileValidationPoller {
           }
 
           const { status, result, error } = response.data;
-          _lastStatus = status;
 
           // Report progress
           this.onProgress?.(status, elapsed);
@@ -219,6 +218,7 @@ export class ProfileValidationPoller {
           console.error('[ProfileValidationPoller] Polling error:', err);
           // Don't reject immediately, let timeout handle it
         }
+        })();
       }, this.pollingInterval);
     });
   }
@@ -256,17 +256,18 @@ export class ProfileValidationPoller {
         });
 
         if (response.status !== 200) {
-          const errorData = response.json || {};
+          const errorData = (response.json as Record<string, unknown>) || {};
+          const errorObj = errorData['error'] as Record<string, unknown> | undefined;
           return {
             success: false,
             error: {
-              code: errorData.error?.code ?? 'HTTP_ERROR',
-              message: errorData.error?.message ?? `HTTP ${response.status}`,
+              code: typeof errorObj?.['code'] === 'string' ? errorObj['code'] : 'HTTP_ERROR',
+              message: typeof errorObj?.['message'] === 'string' ? errorObj['message'] : `HTTP ${response.status}`,
             },
           };
         }
 
-        return response.json;
+        return response.json as ValidationStatusResponse;
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
 

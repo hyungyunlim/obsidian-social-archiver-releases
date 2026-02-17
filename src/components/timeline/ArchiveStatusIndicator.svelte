@@ -166,7 +166,9 @@ function truncateUrl(url: string): string {
                 src={getResourcePath(state.archivedData.media[0].url)}
                 class="media-thumbnail"
                 controls
-              ></video>
+              >
+                <track kind="captions" />
+              </video>
             {/if}
             {#if state.archivedData.media.length > 1}
               <div class="media-count">+{state.archivedData.media.length - 1} more</div>

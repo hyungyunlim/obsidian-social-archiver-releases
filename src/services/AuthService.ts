@@ -58,19 +58,20 @@ export class AuthService {
         throw: false
       });
 
-      const data = response.json;
+      const data = response.json as Record<string, unknown>;
 
       if (response.status !== 200) {
+        const dataError = data['error'] as { code: string; message: string } | undefined;
         return {
           success: false,
-          error: data.error || {
+          error: dataError ?? {
             code: 'VALIDATION_FAILED',
             message: 'Token validation failed'
           }
         };
       }
 
-      return data;
+      return data as unknown as ValidateTokenResponse;
     } catch (error) {
       return {
         success: false,
@@ -104,19 +105,20 @@ export class AuthService {
         throw: false
       });
 
-      const data = response.json;
+      const data = response.json as Record<string, unknown>;
 
       if (response.status !== 200) {
+        const dataError = data['error'] as { code: string; message: string } | undefined;
         return {
           success: false,
-          error: data.error || {
+          error: dataError ?? {
             code: 'FETCH_FAILED',
             message: 'Failed to fetch user credits'
           }
         };
       }
 
-      return data;
+      return data as unknown as { success: boolean; data?: SocialArchiverSettings; error?: { code: string; message: string } };
     } catch (error) {
       return {
         success: false,

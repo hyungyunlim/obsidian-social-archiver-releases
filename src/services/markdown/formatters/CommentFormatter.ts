@@ -18,19 +18,19 @@ export class CommentFormatter {
   /**
    * Fix Reddit comment data (BrightData returns incorrect format)
    */
-  private fixRedditComment(comment: any): any {
-    const fixed = { ...comment };
+  private fixRedditComment(comment: Comment): Comment {
+    const fixed: Comment = { ...comment };
 
     // Fix author URL if empty
     if (fixed.author && (!fixed.author.url || fixed.author.url === '')) {
       const username = fixed.author.username || fixed.author.name;
-      fixed.author.url = `https://www.reddit.com/user/${username}`;
+      fixed.author = { ...fixed.author, url: `https://www.reddit.com/user/${username}` };
     }
 
     // Parse upvote info from timestamp field
     if (fixed.timestamp && typeof fixed.timestamp === 'string' && fixed.timestamp.includes('like')) {
       const match = fixed.timestamp.match(/(\d+)\s+like/);
-      if (match) {
+      if (match && match[1]) {
         fixed.likes = parseInt(match[1], 10);
         fixed.timestamp = undefined; // Clear incorrect timestamp
       }
@@ -38,7 +38,7 @@ export class CommentFormatter {
 
     // Fix replies
     if (fixed.replies && Array.isArray(fixed.replies)) {
-      fixed.replies = fixed.replies.map((reply: any) => this.fixRedditComment(reply));
+      fixed.replies = fixed.replies.map((reply: Comment) => this.fixRedditComment(reply));
     }
 
     return fixed;

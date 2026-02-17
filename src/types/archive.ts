@@ -90,6 +90,7 @@ export interface YamlFrontmatter {
   // Multi-language transcript fields
   transcriptionLanguage?: string;    // Original transcript language ISO code
   transcriptLanguages?: string[];    // All available transcript language ISO codes (e.g., ['en', 'ko', 'ja'])
+  isArticle?: boolean;               // X article (long-form) post marker
   [key: string]: unknown; // Allow custom fields
 }
 

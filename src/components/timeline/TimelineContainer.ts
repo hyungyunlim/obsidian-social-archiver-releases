@@ -8,7 +8,7 @@ import {
   getPlatformLucideIcon as getIconServiceLucideIcon
 } from '../../services/IconService';
 import { TIMELINE_PLATFORM_IDS, TIMELINE_PLATFORM_LABELS } from '../../constants/timelinePlatforms';
-import { needsFeedUrlDerivation, isSubscriptionSupported } from '../../constants/rssPlatforms';
+import { needsFeedUrlDerivation, isSubscriptionSupported, type SubscriptionSupportedPlatform } from '../../constants/rssPlatforms';
 import { PostDataParser } from './parsers/PostDataParser';
 import { FilterSortManager, type FilterState } from './filters/FilterSortManager';
 import { FilterPanel } from './filters/FilterPanel';
@@ -28,7 +28,8 @@ import { ArchiveProgressBanner } from './ArchiveProgressBanner';
 import { TagChipBar } from './filters/TagChipBar';
 import { ReaderModeOverlay, type ReaderModeContext } from './reader/ReaderModeOverlay';
 import { SeriesGroupingService, type TimelineItem, isSeriesGroup } from '../../services/SeriesGroupingService';
-import type { SeriesGroup } from '../../types/series';
+// SeriesGroup imported for type use only if needed in future
+// import type { SeriesGroup } from '../../types/series';
 import { mount, unmount } from 'svelte';
 import PostComposer from './PostComposer.svelte';
 import type { SubscriptionDisplay } from '@/types/subscription-ui';
@@ -39,6 +40,126 @@ import { DEFAULT_ARCHIVE_PATH } from '@/shared/constants';
 import { PostIndexService, type PostIndexEntry } from '../../services/PostIndexService';
 import { SearchIndexService } from '../../services/SearchIndexService';
 import { createSVGElement } from '../../utils/dom-helpers';
+import type { AuthorCatalogEntry, AuthorSubscribeOptions, PlatformAuthorCounts } from '../../types/author-catalog';
+import type { SubscriptionEvent } from '../../services/SubscriptionManager';
+
+/**
+ * Raw subscription data returned by the Worker API.
+ * Used for mapping to display models or passing directly to AuthorCatalog.
+ */
+interface RawSubscriptionApiData {
+  id?: string;
+  name?: string;
+  platform?: string;
+  enabled?: boolean;
+  target?: {
+    handle?: string;
+    profileUrl?: string;
+  };
+  avatar?: string;
+  schedule?: {
+    cron?: string;
+    timezone?: string;
+  };
+  state?: {
+    lastRunAt?: string | null;
+    lastRunStatus?: 'success' | 'failed' | 'partial';
+    error?: string;
+    failureCount?: number;
+  };
+  usage?: {
+    totalArchived?: number;
+  };
+}
+
+/**
+ * API request body for creating or updating subscriptions.
+ */
+interface SubscriptionRequestBody {
+  name: string;
+  platform: string;
+  target: {
+    handle: string;
+    profileUrl: string;
+  };
+  schedule: {
+    cron: string;
+    timezone: string;
+  };
+  destination?: {
+    folder: string;
+    templateId: string | undefined;
+  };
+  options: {
+    maxPostsPerRun: number;
+    backfillDays: number;
+  };
+  youtubeMetadata?: {
+    channelId: string;
+    channelName: string;
+    rssFeedUrl: string;
+  };
+  naverOptions?: {
+    subscriptionType: string;
+    blogId?: string;
+    cafeId?: string;
+    memberKey?: string;
+    localFetchRequired?: boolean;
+    keyword?: string;
+  };
+  naverWebtoonOptions?: {
+    titleId: string;
+    titleName: string;
+  };
+  rssMetadata?: {
+    feedUrl: string;
+    feedType: string;
+    siteTitle: string;
+  };
+  redditOptions?: {
+    sortBy?: string;
+    sortByTime?: string;
+    keyword?: string;
+  };
+  brunchOptions?: {
+    subscriptionType?: string;
+    username?: string;
+    userId?: string;
+    localFetchRequired?: boolean;
+    maxPostsPerRun?: number;
+    backfillDays?: number;
+    keyword?: string;
+    includeComments?: boolean;
+  };
+  xMetadata?: {
+    displayName?: string;
+    avatar?: string;
+    bio?: string;
+  };
+  webtoonsOptions?: {
+    titleNo?: string;
+    seriesTitle?: string;
+    language?: string;
+    genre?: string;
+    seriesSlug?: string;
+    updateDay?: string;
+    thumbnailUrl?: string;
+    authorNames?: string;
+  };
+}
+
+/**
+ * Run history entry returned by the Worker API.
+ */
+interface RunHistoryEntry {
+  id?: string;
+  subscriptionId?: string;
+  status?: string;
+  startedAt?: string;
+  completedAt?: string;
+  postsArchived?: number;
+  error?: string;
+}
 
 export interface TimelineContainerProps {
   vault: Vault;
@@ -107,14 +228,14 @@ export class TimelineContainer {
   private cleanupFunctions: Array<() => void> = [];
 
   // PostComposer (Svelte component)
-  private composerComponent: any = null;
+  private composerComponent: Record<string, unknown> | null = null;
   private composerContainer: HTMLElement | null = null;
 
   // Subscription Management UI (Svelte component)
   private isSubscriptionViewActive: boolean = false;
   /** Guard: prevent filterPanel.onRerender from triggering phantom mountAuthorCatalog during renderSubscriptionManagement */
   private isRenderingSubscription: boolean = false;
-  private authorCatalogComponent: any = null;
+  private authorCatalogComponent: Record<string, unknown> | null = null;
   private authorCatalogContainer: HTMLElement | null = null;
   private cachedAuthHeaders: Record<string, string> | null = null;
 
@@ -122,7 +243,7 @@ export class TimelineContainer {
   private authorSearchQuery: string = '';
   private authorPlatformFilter: Platform[] = [...TIMELINE_PLATFORM_IDS] as Platform[];
   private authorSortBy: 'lastRun' | 'lastRunAsc' | 'lastSeen' | 'lastSeenAsc' | 'nameAsc' | 'nameDesc' | 'archiveCount' | 'archiveCountAsc' = 'lastRun';
-  private authorPlatformCounts: Record<string, number> = {};
+  private authorPlatformCounts: PlatformAuthorCounts = { all: 0 };
 
   // Lazy loading managers
   private observerManager: IntersectionObserverManager;
@@ -179,8 +300,8 @@ export class TimelineContainer {
     this.postDataParser = new PostDataParser(this.vault, this.app);
 
     // Initialize performance services
-    const pluginDir = (this.plugin.manifest as any).dir
-      || `.obsidian/plugins/${this.plugin.manifest.id}`;
+    const pluginDir = this.plugin.manifest.dir
+      ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`;
     this.postIndexService = new PostIndexService(this.vault, this.app, pluginDir);
     this.searchIndexService = new SearchIndexService();
 
@@ -403,7 +524,7 @@ export class TimelineContainer {
         return [];
       }
 
-      const data = res.json as { data?: { subscriptions?: any[] } };
+      const data = res.json as { data?: { subscriptions?: RawSubscriptionApiData[] } };
       const subs = data?.data?.subscriptions || [];
 
        if (!subs.length) {
@@ -433,15 +554,15 @@ export class TimelineContainer {
         return [];
       }
 
-      const data = res.json as { data?: { subscriptions?: any[] } };
+      const data = res.json as { data?: { subscriptions?: RawSubscriptionApiData[] } };
       const subs = data?.data?.subscriptions || [];
 
       // Return minimal data needed for cache
       return subs
-        .filter((s: any) => s.enabled) // Only active subscriptions
-        .map((s: any) => ({
-          id: s.id,
-          platform: s.platform,
+        .filter((s) => s.enabled) // Only active subscriptions
+        .map((s) => ({
+          id: s.id ?? '',
+          platform: s.platform ?? '',
           target: {
             handle: s.target?.handle || '',
             profileUrl: s.target?.profileUrl
@@ -462,7 +583,7 @@ export class TimelineContainer {
    * - schedule.cron, schedule.timezone
    * - stats.lastRunAt
    */
-  private async fetchSubscriptionsRaw(): Promise<any[]> {
+  private async fetchSubscriptionsRaw(): Promise<RawSubscriptionApiData[]> {
     try {
       const res = await requestUrl({
         url: `${this.plugin.settings.workerUrl}/api/subscriptions`,
@@ -476,7 +597,7 @@ export class TimelineContainer {
         return [];
       }
 
-      const data = res.json as { data?: { subscriptions?: any[] } };
+      const data = res.json as { data?: { subscriptions?: RawSubscriptionApiData[] } };
       const subs = data?.data?.subscriptions || [];
 
       if (!subs.length) {
@@ -511,7 +632,7 @@ export class TimelineContainer {
    * For Naver Cafe with localFetchRequired, uses local poller instead of Worker API
    * Sync will happen automatically via WebSocket when webhook arrives
    */
-  private async triggerManualRun(subscriptionId: string, author?: any): Promise<void> {
+  private async triggerManualRun(subscriptionId: string, author?: AuthorCatalogEntry): Promise<void> {
     // Check if this subscription requires local fetch (Naver Blog/Cafe with localFetchRequired: true)
     // Use fetchMode which is set based on naverOptions.subscriptionType in buildSubscriptionMapFromApi
     const isLocalFetch = author?.fetchMode === 'local';
@@ -555,8 +676,9 @@ export class TimelineContainer {
     }
 
     if (response.status !== 200) {
-      const errorData = response.json || {};
-      throw new Error(errorData?.error?.message || `Failed to delete subscription: ${response.status}`);
+      const errorData = (response.json || {}) as Record<string, unknown>;
+      const errorMsg = ((errorData?.error as Record<string, unknown> | undefined)?.message as string | undefined);
+      throw new Error(errorMsg || `Failed to delete subscription: ${response.status}`);
     }
   }
 
@@ -580,7 +702,7 @@ export class TimelineContainer {
 
     // Detect platform from URL
     const isWebtoonsGlobal = seriesUrl.includes('webtoons.com');
-    const platform = isWebtoonsGlobal ? 'webtoons' : 'naver-webtoon';
+    const platform: SubscriptionSupportedPlatform = isWebtoonsGlobal ? 'webtoons' : 'naver-webtoon';
 
     // Use daily check at 23:45 KST for Naver Webtoon
     // For WEBTOON Global, use the publish day if available
@@ -596,7 +718,7 @@ export class TimelineContainer {
 
       const subscription = await this.plugin.subscriptionManager.addSubscription({
         name: seriesTitle,
-        platform: platform as any,
+        platform: platform,
         target: {
           handle: titleId,
           profileUrl: seriesUrl,
@@ -628,7 +750,7 @@ export class TimelineContainer {
       // Naver Webtoon subscription
       const subscription = await this.plugin.subscriptionManager.addSubscription({
         name: seriesTitle,
-        platform: platform as any,
+        platform: platform,
         target: {
           handle: titleId,
           profileUrl: seriesUrl,
@@ -659,7 +781,7 @@ export class TimelineContainer {
   /**
    * Fetch run history for a subscription
    */
-  private async fetchRunHistory(subscriptionId: string): Promise<any[]> {
+  private async fetchRunHistory(subscriptionId: string): Promise<RunHistoryEntry[]> {
     try {
       const response = await requestUrl({
         url: `${this.plugin.settings.workerUrl}/api/subscriptions/${subscriptionId}/runs?limit=20`,
@@ -673,7 +795,7 @@ export class TimelineContainer {
         return [];
       }
 
-      const data = response.json;
+      const data = response.json as { data?: { runs?: RunHistoryEntry[] } };
       return data?.data?.runs || [];
     } catch (error) {
       console.error('[TimelineContainer] fetchRunHistory error', error);
@@ -684,13 +806,13 @@ export class TimelineContainer {
   /**
    * Map worker subscription to display model
    */
-  private mapSubscriptionToDisplay(sub: any): SubscriptionDisplay {
+  private mapSubscriptionToDisplay(sub: RawSubscriptionApiData): SubscriptionDisplay {
     const handle = sub?.target?.handle || sub?.target?.profileUrl || '';
     const lastRunAt = sub?.state?.lastRunAt || null;
     const enabled = Boolean(sub?.enabled);
 
     return {
-      id: sub?.id,
+      id: sub?.id ?? '',
       name: sub?.name || handle || 'Subscription',
       platform: sub?.platform || 'instagram',
       handle,
@@ -836,7 +958,7 @@ export class TimelineContainer {
    * Handle view author event from PostCardRenderer
    * Switches to Author Catalog view and filters to show the specific author
    */
-  private async handleViewAuthor(authorUrl: string, platform: Platform): Promise<void> {
+  private async handleViewAuthor(authorUrl: string, _platform: Platform): Promise<void> {
     // Set the author search query to filter to this specific author
     this.authorSearchQuery = authorUrl;
 
@@ -1043,10 +1165,10 @@ export class TimelineContainer {
       });
       setupBtn.createEl('span', { text: 'Complete setup' });
       setupBtn.addEventListener('click', () => {
-        // @ts-ignore - app.setting is available but not typed
-        this.app.setting.open();
-        // @ts-ignore
-        this.app.setting.openTabById(this.plugin.manifest.id);
+        // @ts-expect-error — app.setting is available at runtime but not in public Obsidian types
+        (this.app.setting as { open: () => void; openTabById: (id: string) => void }).open();
+        // @ts-expect-error — app.setting is available at runtime but not in public Obsidian types
+        (this.app.setting as { open: () => void; openTabById: (id: string) => void }).openTabById(this.plugin.manifest.id);
       });
     }
 
@@ -1335,10 +1457,8 @@ export class TimelineContainer {
             const mediaFiles: File[] = [];
             if (post.media) {
               for (const media of post.media) {
-                // @ts-ignore - File object is attached in PostComposer
-                if (media.file) {
-                  // @ts-ignore - File object is attached in PostComposer
-                  mediaFiles.push(media.file);
+                if ((media as unknown as { file?: File }).file) {
+                  mediaFiles.push((media as unknown as { file: File }).file);
                 }
               }
             }
@@ -1347,8 +1467,7 @@ export class TimelineContainer {
             const saveResult = await storageService.savePost(post, mediaFiles);
 
             // Check if user wants to share on post
-            // @ts-ignore - shareOnPost is temporary property
-            if (post.shareOnPost) {
+            if ((post as { shareOnPost?: boolean }).shareOnPost) {
               try {
                 // Get the file we just saved
                 const file = this.vault.getFileByPath(saveResult.path);
@@ -1368,7 +1487,7 @@ export class TimelineContainer {
                   // Create share API client with Vault access
                   const shareClient = new ShareAPIClient({
                     baseURL: this.plugin.settings.workerUrl,
-                    apiKey: this.plugin.settings.licenseKey,
+                    apiKey: this.plugin.settings.authToken,
                     vault: this.vault,
                     pluginVersion: this.plugin.manifest.version
                   });
@@ -1411,7 +1530,6 @@ export class TimelineContainer {
                   await this.vault.modify(file, updatedContent);
 
                   new Notice('Post shared to web!');
-                } else {
                 }
               } catch {
                 new Notice('Post saved but sharing failed. You can share it later from the post card.');
@@ -1724,8 +1842,8 @@ export class TimelineContainer {
     // If there's a search query, open the search bar automatically
     if (searchQuery && searchQuery.trim().length > 0) {
       this.searchExpanded = true;
-      this.searchContainer!.addClass('tc-search-expanded');
-      this.searchContainer!.removeClass('tc-search-collapsed');
+      this.searchContainer?.addClass('tc-search-expanded');
+      this.searchContainer?.removeClass('tc-search-collapsed');
     }
 
     // Clear button
@@ -1757,7 +1875,7 @@ export class TimelineContainer {
       }
 
       this.searchTimeout = window.setTimeout(() => void (async () => {
-        const query = this.searchInput!.value.trim();
+        const query = (this.searchInput?.value ?? '').trim();
 
         if (this.isSubscriptionViewActive) {
           // Update author search query
@@ -1798,7 +1916,7 @@ export class TimelineContainer {
 
     // Clear button click
     clearButton.addEventListener('click', () => {
-      this.searchInput!.value = '';
+      if (this.searchInput) this.searchInput.value = '';
       updateClearButton();
       handleSearch();
       this.searchInput?.focus();
@@ -1812,7 +1930,7 @@ export class TimelineContainer {
           window.clearTimeout(this.searchTimeout);
           this.searchTimeout = null;
         }
-        const query = this.searchInput!.value.trim();
+        const query = (this.searchInput?.value ?? '').trim();
         this.filterSortManager.updateFilter({ searchQuery: query });
         this.persistFilterPreferences();
 
@@ -1840,8 +1958,8 @@ export class TimelineContainer {
 
     if (this.searchExpanded) {
       // Expand search bar - increased height to prevent border clipping
-      this.searchContainer!.addClass('tc-search-expanded');
-      this.searchContainer!.removeClass('tc-search-collapsed');
+      this.searchContainer?.addClass('tc-search-expanded');
+      this.searchContainer?.removeClass('tc-search-collapsed');
 
       // Focus input after animation (reduced delay for faster feel)
       setTimeout(() => {
@@ -1849,8 +1967,8 @@ export class TimelineContainer {
       }, 50);
     } else {
       // Collapse search bar
-      this.searchContainer!.addClass('tc-search-collapsed');
-      this.searchContainer!.removeClass('tc-search-expanded');
+      this.searchContainer?.addClass('tc-search-collapsed');
+      this.searchContainer?.removeClass('tc-search-expanded');
 
       // Clear search if empty
       if (this.searchInput && this.searchInput.value.trim().length === 0) {
@@ -2712,10 +2830,10 @@ export class TimelineContainer {
 
     settingsBtn.addEventListener('click', () => {
       // Open plugin settings tab
-      // @ts-ignore - app.setting is available but not typed
-      this.app.setting.open();
-      // @ts-ignore
-      this.app.setting.openTabById(this.plugin.manifest.id);
+      // @ts-expect-error — app.setting is available at runtime but not in public Obsidian types
+      (this.app.setting as { open: () => void; openTabById: (id: string) => void }).open();
+      // @ts-expect-error — app.setting is available at runtime but not in public Obsidian types
+      (this.app.setting as { open: () => void; openTabById: (id: string) => void }).openTabById(this.plugin.manifest.id);
     });
   }
 
@@ -2724,7 +2842,7 @@ export class TimelineContainer {
    * For Reddit subreddits, extracts pure subreddit name without 'r/' prefix
    * For embedded archives with non-ASCII handles, extracts from URL
    */
-  private deriveHandle(author: any): string {
+  private deriveHandle(author: AuthorCatalogEntry): string {
     // For Reddit, extract subreddit name from URL path
     if (author.platform === 'reddit' && author.authorUrl) {
       try {
@@ -3078,7 +3196,7 @@ export class TimelineContainer {
    * - GitHub Pages: https://username.github.io/2024/... -> https://username.github.io
    * - GitHub Pages (project): https://username.github.io/repo/2024/... -> https://username.github.io/repo
    */
-  private deriveRSSBaseUrl(authorUrl: string, platform: string): string {
+  private deriveRSSBaseUrl(authorUrl: string, _platform: string): string {
     if (!authorUrl) return authorUrl;
 
     try {
@@ -3156,7 +3274,7 @@ export class TimelineContainer {
   /**
    * Subscribe to an author - reusable method for both AuthorCatalog and Timeline
    */
-  private async subscribeToAuthor(author: any): Promise<void> {
+  private async subscribeToAuthor(author: AuthorCatalogEntry): Promise<void> {
     if (!isSubscriptionSupported(author.platform)) {
       new Notice('Subscriptions are only available for Instagram, Facebook, X (Twitter), LinkedIn, Reddit, TikTok, Pinterest, Bluesky, Mastodon, YouTube, Velog, Medium, and RSS-based platforms.');
       throw new Error('Platform not supported');
@@ -3166,7 +3284,7 @@ export class TimelineContainer {
     const currentHour = new Date().getHours();
 
     // Build request body
-    const requestBody: any = {
+    const requestBody: SubscriptionRequestBody = {
       name: author.authorName,
       platform: author.platform,
       target: {
@@ -3198,7 +3316,7 @@ export class TimelineContainer {
 
       requestBody.youtubeMetadata = {
         channelId: channelInfo.channelId,
-        channelName: channelInfo.channelName,
+        channelName: channelInfo.channelName ?? '',
         rssFeedUrl: channelInfo.rssFeedUrl
       };
     }
@@ -3298,16 +3416,17 @@ export class TimelineContainer {
       }
 
       // Parse response to get new subscription ID
-      const response = res.json;
-      const subscription = response.data || response;
+      const responseData = res.json as Record<string, unknown>;
+      const subscriptionRaw = (responseData.data as Record<string, unknown> | undefined) ?? responseData;
+      const subscriptionId = typeof subscriptionRaw.id === 'string' ? subscriptionRaw.id : undefined;
 
       // Update author object with new subscription ID
-      if (subscription && subscription.id) {
-        author.subscriptionId = subscription.id;
+      if (subscriptionRaw && subscriptionId) {
+        author.subscriptionId = subscriptionId;
 
         // Add to PostCardRenderer's cache for immediate unsubscribe support
         this.postCardRenderer.addSubscriptionToCache({
-          id: subscription.id,
+          id: subscriptionId,
           platform: author.platform,
           target: {
             handle: this.deriveHandle(author),
@@ -3318,16 +3437,16 @@ export class TimelineContainer {
 
       // Update AuthorCatalogStore
       const store = await import('../../services/AuthorCatalogStore').then(m => m.getAuthorCatalogStore());
-      store.updateAuthorStatus(author.authorUrl, author.platform, 'subscribed', subscription?.id, author.authorName);
+      store.updateAuthorStatus(author.authorUrl, author.platform, 'subscribed', subscriptionId, author.authorName);
 
       // For Naver subscriptions, trigger initial poll immediately
       // This sets lastRunAt to prevent duplicate polling on plugin reload
-      if (author.platform === 'naver' && subscription?.id && this.plugin.naverPoller) {
+      if (author.platform === 'naver' && subscriptionId && this.plugin.naverPoller) {
         // Run in background to not block the UI
         setTimeout(() => void (async () => {
           try {
-            console.debug('[TimelineContainer] Running initial poll for new Naver subscription:', subscription.id);
-            await this.plugin.naverPoller?.runSingleSubscription(subscription.id);
+            console.debug('[TimelineContainer] Running initial poll for new Naver subscription:', subscriptionId);
+            await this.plugin.naverPoller?.runSingleSubscription(subscriptionId);
           } catch (error) {
             console.warn('[TimelineContainer] Initial poll failed (will retry on next cycle):', error);
           }
@@ -3414,10 +3533,10 @@ export class TimelineContainer {
           externalPlatformFilter: this.authorPlatformFilter,
           externalSortBy: this.authorSortBy,
           externalIncludeArchived: this.filterSortManager.getFilterState().includeArchived,
-          onPlatformCountsChange: (counts: any) => {
+          onPlatformCountsChange: (counts: PlatformAuthorCounts) => {
             this.authorPlatformCounts = counts;
           },
-          onSubscribe: async (author: any, options: any) => {
+          onSubscribe: async (author: AuthorCatalogEntry, options: AuthorSubscribeOptions) => {
             if (!isSubscriptionSupported(author.platform)) {
               new Notice('Subscriptions are only available for Instagram, Facebook, X (Twitter), LinkedIn, Reddit, TikTok, Pinterest, Bluesky, Mastodon, YouTube, Velog, Medium, and RSS-based platforms.');
               return;
@@ -3427,7 +3546,7 @@ export class TimelineContainer {
               // Build request body
               // Webtoons update with 1 episode per week, so use smaller defaults
               const isWebtoon = author.platform === 'naver-webtoon' || author.platform === 'webtoons';
-              const requestBody: Record<string, unknown> = {
+              const requestBody: SubscriptionRequestBody = {
                 name: author.authorName,
                 platform: author.platform,
                 target: {
@@ -3472,7 +3591,7 @@ export class TimelineContainer {
                 };
                 // Also update target handle to include userId for matching
                 if (options.brunchOptions.userId) {
-                  (requestBody.target as any).handle = `${options.brunchOptions.username}:${options.brunchOptions.userId}`;
+                  requestBody.target.handle = `${options.brunchOptions.username}:${options.brunchOptions.userId}`;
                 }
               }
 
@@ -3511,7 +3630,7 @@ export class TimelineContainer {
                       titleName: author.authorName,
                     };
                     // Also set handle to titleId for matching
-                    (requestBody.target as any).handle = titleId;
+                    requestBody.target.handle = titleId;
                   }
                 } catch (e) {
                   console.warn('[TimelineContainer] Failed to extract webtoon titleId from URL:', e);
@@ -3529,7 +3648,7 @@ export class TimelineContainer {
                     if (match) {
                       const cafeId = match[1];
                       const memberKey = match[2];
-                      (requestBody.target as any).handle = `cafe:${cafeId}:${memberKey}`;
+                      requestBody.target.handle = `cafe:${cafeId}:${memberKey}`;
 
                       // Get Naver Cafe options from modal (if provided)
                       const naverCafeOpts = options.naverCafeOptions;
@@ -3543,8 +3662,8 @@ export class TimelineContainer {
 
                       // Override maxPostsPerRun and backfillDays with Naver Cafe options
                       if (naverCafeOpts) {
-                        (requestBody.options as any).maxPostsPerRun = naverCafeOpts.maxPostsPerRun || 5;
-                        (requestBody.options as any).backfillDays = naverCafeOpts.backfillDays || 3;
+                        requestBody.options.maxPostsPerRun = naverCafeOpts.maxPostsPerRun || 5;
+                        requestBody.options.backfillDays = naverCafeOpts.backfillDays || 3;
                       }
                     } else {
                       throw new Error('Could not extract cafe member info from URL. Please use a member profile URL.');
@@ -3594,13 +3713,13 @@ export class TimelineContainer {
 
                   // IMPORTANT: Set target.handle to blogId for consistent matching
                   // RSS processing may have overwritten target, so restore it
-                  (requestBody.target as any).handle = blogId;
-                  (requestBody.target as any).profileUrl = `https://blog.naver.com/${blogId}`;
+                  requestBody.target.handle = blogId;
+                  requestBody.target.profileUrl = `https://blog.naver.com/${blogId}`;
 
                   // Override maxPostsPerRun and backfillDays with modal options
                   if (naverBlogOpts) {
-                    (requestBody.options as any).maxPostsPerRun = naverBlogOpts.maxPostsPerRun || 5;
-                    (requestBody.options as any).backfillDays = naverBlogOpts.backfillDays || 3;
+                    requestBody.options.maxPostsPerRun = naverBlogOpts.maxPostsPerRun || 5;
+                    requestBody.options.backfillDays = naverBlogOpts.backfillDays || 3;
                   }
                   console.debug('[TimelineContainer] Naver Blog subscription options:', {
                     naverBlogOpts,
@@ -3635,15 +3754,16 @@ export class TimelineContainer {
               }
 
               // Parse response to get new subscription ID
-              const response = res.json;
+              const responseData2 = res.json as Record<string, unknown>;
 
               // Extract the actual subscription from the response
               // API returns {success: true, data: {...}} structure
-              const subscription = response.data || response;
+              const subscriptionRaw2 = (responseData2.data as Record<string, unknown> | undefined) ?? responseData2;
+              const subscriptionId2 = typeof subscriptionRaw2.id === 'string' ? subscriptionRaw2.id : undefined;
 
               // Update author object with new subscription ID
-              if (subscription && subscription.id) {
-                author.subscriptionId = subscription.id;
+              if (subscriptionRaw2 && subscriptionId2) {
+                author.subscriptionId = subscriptionId2;
               }
 
               // Refresh SubscriptionManager cache so NaverCafePoller can find the new subscription
@@ -3653,12 +3773,12 @@ export class TimelineContainer {
 
               // For Naver subscriptions, trigger initial poll immediately
               // This sets lastRunAt to prevent duplicate polling on plugin reload
-              if (author.platform === 'naver' && subscription?.id && this.plugin.naverPoller) {
+              if (author.platform === 'naver' && subscriptionId2 && this.plugin.naverPoller) {
                 // Run in background to not block the UI
                 setTimeout(() => void (async () => {
                   try {
-                    console.debug('[TimelineContainer] Running initial poll for new Naver subscription:', subscription.id);
-                    await this.plugin.naverPoller?.runSingleSubscription(subscription.id);
+                    console.debug('[TimelineContainer] Running initial poll for new Naver subscription:', subscriptionId2);
+                    await this.plugin.naverPoller?.runSingleSubscription(subscriptionId2);
                   } catch (error) {
                     console.warn('[TimelineContainer] Initial poll failed (will retry on next cycle):', error);
                   }
@@ -3669,22 +3789,23 @@ export class TimelineContainer {
               this.seriesCardRenderer.clearCaches();
 
               // Return the subscription for AuthorCatalog to handle
-              return subscription;
+              return subscriptionRaw2;
             } catch (error) {
               console.error('[TimelineContainer] Subscribe failed', error);
               throw error; // Re-throw for AuthorRow to show notice
             }
           },
-          onUpdateSubscription: async (author: any, options: any) => {
+          onUpdateSubscription: async (author: AuthorCatalogEntry, options: AuthorSubscribeOptions) => {
             if (!author.subscriptionId) {
               throw new Error('Cannot update: missing subscription ID');
             }
 
             // Build update request body (only options that can be updated)
+            const updateOptions: { maxPostsPerRun: number; backfillDays?: number } = {
+              maxPostsPerRun: options.maxPostsPerRun || 20,
+            };
             const updateBody: Record<string, unknown> = {
-              options: {
-                maxPostsPerRun: options.maxPostsPerRun || 20,
-              }
+              options: updateOptions
             };
 
             // Add Reddit-specific options if present
@@ -3699,8 +3820,8 @@ export class TimelineContainer {
             // Add Naver-specific options if present (both blog and cafe-member)
             if (options.naverCafeOptions && author.platform === 'naver') {
               // Include backfillDays in options update
-              (updateBody.options as any).backfillDays = options.naverCafeOptions.backfillDays || 3;
-              (updateBody.options as any).maxPostsPerRun = options.naverCafeOptions.maxPostsPerRun || 5;
+              updateOptions.backfillDays = options.naverCafeOptions.backfillDays || 3;
+              updateOptions.maxPostsPerRun = options.naverCafeOptions.maxPostsPerRun || 5;
 
               updateBody.naverOptions = {
                 keyword: options.naverCafeOptions.keyword || undefined
@@ -3741,9 +3862,9 @@ export class TimelineContainer {
               await this.plugin.subscriptionManager.refresh();
             }
 
-            return await res.json();
+            return res.json as unknown;
           },
-          onUnsubscribe: async (author: any) => {
+          onUnsubscribe: async (author: AuthorCatalogEntry) => {
             if (!author.subscriptionId) {
               throw new Error('Cannot unsubscribe: missing subscription ID');
             }
@@ -3754,14 +3875,14 @@ export class TimelineContainer {
             // Clear subscription cache so timeline shows updated subscription status
             this.seriesCardRenderer.clearCaches();
           },
-          onManualRun: async (author: any) => {
+          onManualRun: async (author: AuthorCatalogEntry) => {
             if (!author.subscriptionId) {
               throw new Error('Cannot run: missing subscription ID');
             }
 
             await this.triggerManualRun(author.subscriptionId, author);
           },
-          onViewHistory: async (author: any) => {
+          onViewHistory: async (author: AuthorCatalogEntry) => {
             // Handle view history
             if (!author.subscriptionId) {
               new Notice('No subscription found for this author');
@@ -3780,12 +3901,12 @@ export class TimelineContainer {
               // Styles handled by .crawl-history-modal-container CSS class
 
               // Store panel reference for cleanup
-              let historyPanel: any = null;
+              let historyPanel: Record<string, unknown> | null = null;
               let refreshTrigger = 0;
 
               // Subscribe to subscription events for auto-refresh
               const subscriptionManager = this.plugin.subscriptionManager;
-              const handleRunCompleted = (event: any) => {
+              const handleRunCompleted = (event: SubscriptionEvent) => {
                 // Check if the completed run is for this subscription
                 if (event.subscription?.id === author.subscriptionId || event.run?.subscriptionId === author.subscriptionId) {
                   refreshTrigger++;
@@ -3826,8 +3947,9 @@ export class TimelineContainer {
                 onClose: closeHandler,
                 refreshTrigger: trigger,
                 onRunNow: author.subscriptionId ? async () => {
+                  const subId = author.subscriptionId ?? '';
                   try {
-                    await this.triggerManualRun(author.subscriptionId, author);
+                    await this.triggerManualRun(subId, author);
                     new Notice(`Running sync for ${author.authorName}...`);
                   } catch (error) {
                     console.error('[TimelineContainer] Manual run failed:', error);
@@ -3841,7 +3963,7 @@ export class TimelineContainer {
                   });
 
                   const res = await requestUrl({
-                    url: `${this.plugin.settings.workerUrl}/api/subscriptions/${subscriptionId}/runs?${params}`,
+                    url: `${this.plugin.settings.workerUrl}/api/subscriptions/${subscriptionId}/runs?${params.toString()}`,
                     method: 'GET',
                     headers: this.getAuthHeaders(),
                     throw: false
@@ -3851,8 +3973,9 @@ export class TimelineContainer {
                     throw new Error(`Failed to fetch history: ${res.status}`);
                   }
 
-                  const response = res.json;
-                  return response.data?.runs || [];
+                  const response = res.json as Record<string, unknown>;
+                  const responseData3 = response.data as Record<string, unknown> | undefined;
+                  return Array.isArray(responseData3?.runs) ? (responseData3.runs as unknown[]) : [];
                 }
               });
 
@@ -3866,7 +3989,7 @@ export class TimelineContainer {
               new Notice('Failed to show history panel');
             }
           },
-          onViewArchives: (author: any) => {
+          onViewArchives: (author: AuthorCatalogEntry) => {
             // Switch back to timeline view
             this.isSubscriptionViewActive = false;
 
@@ -4069,7 +4192,7 @@ export class TimelineContainer {
     });
 
     // Render items with lazy loading for posts, immediate for series
-    for (const [_, items] of grouped) {
+    for (const [, items] of grouped) {
       for (const item of items) {
         if (this.isStaleFeedRender(renderGeneration)) {
           if (feed.isConnected) feed.remove();
@@ -4081,7 +4204,7 @@ export class TimelineContainer {
           await this.seriesCardRenderer.render(feed, item);
         } else {
           // Regular posts use skeleton + lazy loading
-          const post = item as PostData;
+          const post = item;
           // 1. Render lightweight skeleton placeholder
           const skeletonCard = this.skeletonRenderer.render(feed, post, {
             showPlatformIcon: false,
@@ -4129,7 +4252,7 @@ export class TimelineContainer {
     });
 
     // Render all items immediately (posts and series)
-    for (const [_, items] of grouped) {
+    for (const [, items] of grouped) {
       for (const item of items) {
         if (this.isStaleFeedRender(activeGeneration)) {
           if (feed.isConnected) feed.remove();
@@ -4297,11 +4420,11 @@ export class TimelineContainer {
 
       // If we have a PostIndexEntry, load the full PostData
       if ('filePath' in postRef && !('content' in postRef)) {
-        const loaded = await this.postDataParser.loadFullPost((postRef as PostIndexEntry).filePath);
+        const loaded = await this.postDataParser.loadFullPost((postRef as unknown as PostIndexEntry).filePath);
         if (!loaded) return;
         post = loaded;
       } else {
-        post = postRef as PostData;
+        post = postRef as unknown as PostData;
       }
 
       // Create temporary container for rendering
@@ -4476,7 +4599,7 @@ export class TimelineContainer {
       if (!grouped.has(groupLabel)) {
         grouped.set(groupLabel, []);
       }
-      grouped.get(groupLabel)!.push(post);
+      grouped.get(groupLabel)?.push(post);
     }
 
     return grouped;
@@ -4529,7 +4652,7 @@ export class TimelineContainer {
       if (!grouped.has(groupLabel)) {
         grouped.set(groupLabel, []);
       }
-      grouped.get(groupLabel)!.push(post);
+      grouped.get(groupLabel)?.push(post);
     }
 
     // Add series groups (using latest episode date for positioning)
@@ -4543,12 +4666,12 @@ export class TimelineContainer {
       if (!grouped.has(groupLabel)) {
         grouped.set(groupLabel, []);
       }
-      grouped.get(groupLabel)!.push(seriesGroup);
+      grouped.get(groupLabel)?.push(seriesGroup);
     }
 
     // Sort items within each group by date (newest first or oldest first based on sort order)
     const sortOrder = this.filterSortManager.getSortState().order;
-    for (const [_, items] of grouped) {
+    for (const [, items] of grouped) {
       items.sort((a, b) => {
         const getDate = (item: TimelineItem): Date => {
           if (isSeriesGroup(item)) {
@@ -4557,7 +4680,7 @@ export class TimelineContainer {
               ? new Date(item.latestArchived || item.latestPublished || Date.now())
               : new Date(item.latestPublished || Date.now());
           }
-          const post = item as PostData;
+          const post = item;
           return sortBy === 'archived'
             ? new Date(post.archivedDate ?? post.publishedDate ?? post.metadata.timestamp)
             : new Date(post.publishedDate ?? post.metadata.timestamp);
@@ -4595,7 +4718,8 @@ export class TimelineContainer {
     });
 
     for (const key of sortedKeys) {
-      sortedGrouped.set(key, grouped.get(key)!);
+      const groupVal = grouped.get(key);
+      if (groupVal) sortedGrouped.set(key, groupVal);
     }
 
     return sortedGrouped;
@@ -4829,19 +4953,17 @@ export class TimelineContainer {
 
             if (updatedPost.media) {
               for (const media of updatedPost.media) {
-                // @ts-ignore - media may have file property from PostComposer (new images only)
-                if (media.file) {
-                  // @ts-ignore - file property added by PostComposer for new images
-                  mediaFiles.push(media.file);
+                if ((media as unknown as { file?: File }).file) {
+                  mediaFiles.push((media as unknown as { file: File }).file);
                 }
               }
             }
 
             // Extract deletedMediaPaths from updatedPost (added by PostComposer in edit mode)
-            // @ts-ignore - temporary property passed from PostComposer
+            // @ts-expect-error — deletedMediaPaths is a temporary property passed from PostComposer, not in PostData type
             if (updatedPost.deletedMediaPaths && Array.isArray(updatedPost.deletedMediaPaths)) {
-              // @ts-ignore
-              deletedMediaPaths = updatedPost.deletedMediaPaths;
+              // @ts-expect-error — deletedMediaPaths is a temporary property, not in PostData type
+              deletedMediaPaths = updatedPost.deletedMediaPaths as string[];
             }
 
             // Update post using VaultStorageService
@@ -4854,8 +4976,8 @@ export class TimelineContainer {
             });
 
             // Check if user wants to share (either new share or update existing)
-            // @ts-ignore - shareOnPost is temporary property
-            const shouldShare = updatedPost.shareOnPost || post.share;
+            // @ts-expect-error — shareOnPost is a temporary property passed from PostComposer, not in PostData type
+            const shouldShare = (updatedPost.shareOnPost as boolean | undefined) || post.share;
 
             // Check if post was shared and update share if needed
             const file = this.vault.getFileByPath(filePath);
@@ -4878,11 +5000,11 @@ export class TimelineContainer {
               });
 
               const fileCache = this.app.metadataCache.getFileCache(file);
-              const frontmatter = fileCache?.frontmatter;
+              const frontmatter = fileCache?.frontmatter as Record<string, unknown> | undefined;
 
               // Extract shareId from shareUrl if shareId is not present
-              let shareId = frontmatter?.shareId;
-              if (!shareId && frontmatter?.shareUrl) {
+              let shareId: string | null | undefined = typeof frontmatter?.shareId === 'string' ? frontmatter.shareId : null;
+              if (!shareId && typeof frontmatter?.shareUrl === 'string') {
                 const match = frontmatter.shareUrl.match(/\/([^/]+)$/);
                 shareId = match ? match[1] : null;
               }
@@ -4906,7 +5028,7 @@ export class TimelineContainer {
                   // Initialize ShareAPIClient with Vault access for media operations
                   const shareClient = new ShareAPIClient({
                     baseURL: this.plugin.settings.workerUrl,
-                    apiKey: this.plugin.settings.licenseKey,
+                    apiKey: this.plugin.settings.authToken,
                     vault: this.vault // Provide vault for media file access
                   });
 
@@ -4915,7 +5037,7 @@ export class TimelineContainer {
                   // - Deletes removed media files from R2
                   // - Converts markdown image paths from local to R2 URLs
                   await shareClient.updateShareWithMedia(shareId, finalPostData, {
-                    username: frontmatter?.username,
+                    username: frontmatter?.username as string | undefined,
                     tier: this.plugin.settings.tier
                   });
 
@@ -4942,7 +5064,7 @@ export class TimelineContainer {
                   // Initialize ShareAPIClient with Vault access
                   const shareClient = new ShareAPIClient({
                     baseURL: this.plugin.settings.workerUrl,
-                    apiKey: this.plugin.settings.licenseKey,
+                    apiKey: this.plugin.settings.authToken,
                     vault: this.vault
                   });
 
@@ -5380,7 +5502,7 @@ export class TimelineContainer {
       imageUrls: string[];
       thumbnailUrl?: string;
     },
-    episodeTitle: string
+    _episodeTitle: string
   ): Promise<void> {
     const seriesId = seriesInfo.seriesId;
 
@@ -5716,8 +5838,8 @@ export class TimelineContainer {
     });
     // Loading styles handled by .media-gallery-loading CSS class
 
-    const spinner = loadingEl.createDiv('media-gallery-spinner');
-    const loadingText = loadingEl.createDiv({
+    loadingEl.createDiv('media-gallery-spinner');
+    loadingEl.createDiv({
       cls: 'media-gallery-loading-text',
       text: 'Loading media...'
     });
@@ -5799,20 +5921,3 @@ export class TimelineContainer {
     }
   }
 }
-// @ts-nocheck
-          const deriveHandle = (author: any): string => {
-            if (author.handle) {
-              return author.handle.replace(/^@/, '');
-            }
-            if (author.authorUrl) {
-              try {
-                const url = new URL(author.authorUrl);
-                const parts = url.pathname.split('/').filter(Boolean);
-                const last = parts[parts.length - 1] || '';
-                return last.replace(/^@/, '') || author.authorName || 'unknown';
-              } catch {
-                // fall through
-              }
-            }
-            return (author.authorName || 'unknown').replace(/\s+/g, '').toLowerCase();
-          };

@@ -4,6 +4,7 @@ import nodeRequire from './nodeRequire';
 /**
  * YtDlpDetector - Detects and uses yt-dlp for video downloads
  */
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class YtDlpDetector {
   private static ytDlpAvailable: boolean | null = null;
   private static ytDlpPath: string | null = null;
@@ -364,7 +365,7 @@ export class YtDlpDetector {
         }
       });
 
-      process.on('close', async (code: number) => {
+      process.on('close', (code: number) => {
         // Don't process if cancelled
         if (isCancelled) {
           return;
@@ -380,7 +381,7 @@ export class YtDlpDetector {
               const files = fs.readdirSync(tempDir);
 
               if (files.length > 0 && files[0]) {
-                downloadedFile = path.join(tempDir, files[0] as string);
+                downloadedFile = path.join(tempDir, files[0]);
               } else {
                 reject(new Error('Downloaded file not found in temp directory'));
                 return;
@@ -444,7 +445,7 @@ export class YtDlpDetector {
   /**
    * Get video info without downloading
    */
-  static async getVideoInfo(url: string): Promise<any> {
+  static async getVideoInfo(url: string): Promise<Record<string, unknown>> {
     if (!this.ytDlpPath) {
       throw new Error('yt-dlp is not available');
     }
@@ -456,7 +457,7 @@ export class YtDlpDetector {
     try {
       const command = `"${this.ytDlpPath}" --dump-json --no-playlist "${url}"`;
       const { stdout } = await execAsync(command);
-      return JSON.parse(stdout);
+      return JSON.parse(stdout) as Record<string, unknown>;
     } catch (error) {
       throw new Error(`Failed to get video info: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }

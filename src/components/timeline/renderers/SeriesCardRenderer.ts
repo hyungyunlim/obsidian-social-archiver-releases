@@ -19,12 +19,12 @@ import type { SeriesGroup, SeriesEpisode, SeriesViewState } from '../../../types
 import type { PostData } from '../../../types/post';
 import type { WebtoonComment } from '../../../types/webtoon';
 import type SocialArchiverPlugin from '../../../main';
-import { getPlatformSimpleIcon, type PlatformIcon as SimpleIcon } from '../../../services/IconService';
+import { getPlatformSimpleIcon } from '../../../services/IconService';
 import { WebtoonReaderRenderer } from './WebtoonReaderRenderer';
 import type { Subscription } from '../../../services/SubscriptionManager';
 import { WebtoonArchiveModal } from '../../../modals/WebtoonArchiveModal';
 import { NaverWebtoonLocalService, type EpisodeDetail, type WebtoonAPIInfo } from '../../../services/NaverWebtoonLocalService';
-import { WebtoonsLocalService, type WebtoonsUrlInfo, type WebtoonsSeriesInfo, type WebtoonsEpisodeDetail } from '../../../services/WebtoonsLocalService';
+import { WebtoonsLocalService, type WebtoonsUrlInfo, type WebtoonsSeriesInfo } from '../../../services/WebtoonsLocalService';
 import { getBackgroundDownloadManager } from '../../../services/BackgroundDownloadManager';
 import { WebtoonsDownloadQueue, type WebtoonsEpisodeJob } from '../../../services/WebtoonsDownloadQueue';
 import { VIEW_TYPE_TIMELINE } from '../../../views/TimelineView';
@@ -425,7 +425,7 @@ export class SeriesCardRenderer extends Component {
             const firstEpisode = series.episodes[0];
             if (firstEpisode) {
               const postData = this.postDataCache.get(firstEpisode.filePath);
-              thumbnailUrl = postData?.thumbnail || (postData?.series as any)?.thumbnailUrl;
+              thumbnailUrl = postData?.thumbnail || (postData?.series as Record<string, unknown> | undefined)?.['thumbnailUrl'] as string | undefined;
             }
 
             await this.callbacks.onSubscribeWebtoon(
@@ -709,7 +709,7 @@ export class SeriesCardRenderer extends Component {
     container: HTMLElement
   ): void {
     // Preserve fullscreen state - check before destroying reader
-    const _wasFullscreen = this.fullscreenSeriesId === series.seriesId;
+    // Fullscreen state tracked via this.fullscreenSeriesId
 
     // Update viewState and episode indicator for streaming episode
     series.currentEpisode = detail.no;
@@ -1059,7 +1059,7 @@ export class SeriesCardRenderer extends Component {
         // Connect to TimelineView for refresh suppression
         const timelineLeaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_TIMELINE)[0];
         if (timelineLeaf?.view) {
-          downloadManager.setTimelineView(timelineLeaf.view as any);
+          downloadManager.setTimelineView(timelineLeaf.view as Parameters<typeof downloadManager.setTimelineView>[0]);
         }
 
         // Download and wait for markdown creation
@@ -1133,7 +1133,7 @@ export class SeriesCardRenderer extends Component {
                   existingList.remove();
                   this.episodeLists.delete(series.seriesId);
                 }
-                const state = this.viewStates.get(series.seriesId)!;
+                const state = this.viewStates.get(series.seriesId) ?? this.getViewState(series);
                 const newList = this.renderEpisodeList(card, series, state);
                 this.episodeLists.set(series.seriesId, newList);
               }
@@ -1224,7 +1224,7 @@ export class SeriesCardRenderer extends Component {
             existingList.remove();
             this.episodeLists.delete(series.seriesId);
           }
-          const state = this.viewStates.get(series.seriesId)!;
+          const state = this.viewStates.get(series.seriesId) ?? this.getViewState(series);
           const newList = this.renderEpisodeList(card, series, state);
           this.episodeLists.set(series.seriesId, newList);
         }
@@ -1270,7 +1270,7 @@ export class SeriesCardRenderer extends Component {
       // Connect to TimelineView for refresh suppression
       const timelineLeaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_TIMELINE)[0];
       if (timelineLeaf?.view) {
-        downloadManager.setTimelineView(timelineLeaf.view as any);
+        downloadManager.setTimelineView(timelineLeaf.view as Parameters<typeof downloadManager.setTimelineView>[0]);
       }
 
       // Get webtoon info from cached PostData or fetch it
@@ -1427,15 +1427,17 @@ export class SeriesCardRenderer extends Component {
 
       tempQueue.addEventListener('markdown-created', ((e: CustomEvent) => {
         clearTimeout(timeoutId);
+        const detail = e.detail as Record<string, unknown>;
         resolve({
-          filePath: e.detail.filePath,
-          imageUrls: e.detail.imageUrls || [],
+          filePath: typeof detail.filePath === 'string' ? detail.filePath : '',
+          imageUrls: Array.isArray(detail.imageUrls) ? (detail.imageUrls as string[]) : [],
         });
       }) as EventListener);
 
       tempQueue.addEventListener('episode-failed', ((e: CustomEvent) => {
         clearTimeout(timeoutId);
-        console.error('[SeriesCardRenderer] WEBTOON Global episode download failed:', e.detail.error);
+        const detail = e.detail as Record<string, unknown>;
+        console.error('[SeriesCardRenderer] WEBTOON Global episode download failed:', detail.error);
         resolve(null);
       }) as EventListener);
 
@@ -1504,13 +1506,15 @@ export class SeriesCardRenderer extends Component {
    * Get or initialize view state for a series
    */
   private getViewState(series: SeriesGroup): SeriesViewState {
-    if (!this.viewStates.has(series.seriesId)) {
-      this.viewStates.set(series.seriesId, {
+    let state = this.viewStates.get(series.seriesId);
+    if (!state) {
+      state = {
         currentEpisode: series.currentEpisode,
         expandedTOC: false
-      });
+      };
+      this.viewStates.set(series.seriesId, state);
     }
-    return this.viewStates.get(series.seriesId)!;
+    return state;
   }
 
   /**
@@ -1626,7 +1630,7 @@ export class SeriesCardRenderer extends Component {
     const platformIcon = document.createElement('div');
     platformIcon.className = 'series-platform-icon';
     platformIcon.addClass('scr-platform-icon');
-    const icon = getPlatformSimpleIcon(series.platform as any);
+    const icon = getPlatformSimpleIcon(series.platform);
     if (icon) {
       const svg = createSVGElement(icon, {
         width: '16px',
@@ -1762,7 +1766,7 @@ export class SeriesCardRenderer extends Component {
     this.pendingRefreshOnFullscreenExit = false; // Reset flag on new fullscreen
 
     // Save scroll position as percentage before DOM changes
-    const scrollContainer = card.querySelector('.webtoon-scroll-container') as HTMLElement | null;
+    const scrollContainer = card.querySelector('.webtoon-scroll-container');
     let scrollPercent = 0;
     if (scrollContainer && scrollContainer.scrollHeight > scrollContainer.clientHeight) {
       const maxScroll = scrollContainer.scrollHeight - scrollContainer.clientHeight;
@@ -1826,7 +1830,7 @@ export class SeriesCardRenderer extends Component {
       }
 
       // Find scroll container dynamically (may have changed after content re-render)
-      const currentScrollContainer = card.querySelector('.webtoon-scroll-container') as HTMLElement | null;
+      const currentScrollContainer = card.querySelector('.webtoon-scroll-container');
 
       // Navigation keys - only for webtoons with scroll container
       if (!currentScrollContainer) return;
@@ -1883,7 +1887,7 @@ export class SeriesCardRenderer extends Component {
 
     // Add immersive mode toggle for webtoons (tap to hide/show UI)
     if (this.isWebtoon(series) && scrollContainer) {
-      scrollContainer.addEventListener('click', this.handleImmersiveTap.bind(this, card));
+      scrollContainer.addEventListener("click", (e: Event) => this.handleImmersiveTap(card, e as MouseEvent));
       // Add cursor hint
       scrollContainer.addClass('scr-scroll-clickable');
 
@@ -1976,7 +1980,7 @@ export class SeriesCardRenderer extends Component {
     }
 
     // Save scroll position as percentage before DOM changes
-    const scrollContainer = card.querySelector('.webtoon-scroll-container') as HTMLElement | null;
+    const scrollContainer = card.querySelector('.webtoon-scroll-container');
     let scrollPercent = 0;
     if (scrollContainer && scrollContainer.scrollHeight > scrollContainer.clientHeight) {
       const maxScroll = scrollContainer.scrollHeight - scrollContainer.clientHeight;
@@ -2403,7 +2407,7 @@ export class SeriesCardRenderer extends Component {
     // Mobile: tap on content to enter fullscreen + immersive directly
     const isMobile = window.innerWidth <= 768 || 'ontouchstart' in window;
     if (isMobile) {
-      const scrollContainer = container.querySelector('.webtoon-scroll-container') as HTMLElement | null;
+      const scrollContainer = container.querySelector('.webtoon-scroll-container');
       if (scrollContainer) {
         scrollContainer.addClass('scr-scroll-clickable');
         scrollContainer.addEventListener('click', (e) => {
@@ -2649,7 +2653,7 @@ export class SeriesCardRenderer extends Component {
 
     // Try Naver Webtoon format first
     // Format: > 🏆 **작성자** · ♥ 1,234 · 💬 56\n> 댓글 내용
-    const naverRegex = /^> (✏️|🏆) \*\*(.+?)\*\* · ♥ ([\d,]+) · 💬 ([\d,]+)\n> (.+?)(?=\n\n|\n> [✏️🏆]|$)/gm;
+    const naverRegex = /^> (✏️|🏆) \*\*(.+?)\*\* · ♥ ([\d,]+) · 💬 ([\d,]+)\n> (.+?)(?=\n\n|\n> (?:✏️|🏆)|$)/gmu;
 
     let match;
     let index = 0;
@@ -2802,7 +2806,7 @@ export class SeriesCardRenderer extends Component {
     if (!card) return;
 
     const unreadCount = series.episodes.filter(ep => !ep.isRead).length;
-    let badge = card.querySelector('.series-unread-badge') as HTMLElement | null;
+    let badge = card.querySelector('.series-unread-badge');
 
     if (unreadCount === 0) {
       // Remove badge if all read
@@ -2943,7 +2947,7 @@ export class SeriesCardRenderer extends Component {
           if (this.callbacks.onUIModify) {
             this.callbacks.onUIModify(pendingPath);
           }
-          await this.app.fileManager.processFrontMatter(file, (fm) => {
+          await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
             fm.read = pendingIsRead;
           });
         }
@@ -3080,17 +3084,17 @@ export class SeriesCardRenderer extends Component {
       for (const child of folder.children) {
         if (child instanceof TFile && child.extension === 'md') {
           const cache = this.app.metadataCache.getFileCache(child);
-          const fm = cache?.frontmatter;
+          const fm = cache?.frontmatter as Record<string, unknown> | undefined;
           if (fm && String(fm.seriesId) === String(series.seriesId) && fm.episode !== undefined) {
-            const episodeNo = fm.episode as number;
+            const episodeNo = typeof fm.episode === 'number' ? fm.episode : Number(fm.episode);
 
             // Update series author if currently Unknown (from frontmatter)
-            if ((!series.author || series.author === 'Unknown') && fm.author) {
-              series.author = fm.author as string;
+            if ((!series.author || series.author === 'Unknown') && typeof fm.author === 'string') {
+              series.author = fm.author;
             }
             // Update series authorUrl if missing
-            if (!series.authorUrl && (fm.author_url || fm.authorUrl)) {
-              series.authorUrl = (fm.author_url || fm.authorUrl) as string;
+            if (!series.authorUrl && (typeof fm.author_url === 'string' || typeof fm.authorUrl === 'string')) {
+              series.authorUrl = (typeof fm.author_url === 'string' ? fm.author_url : fm.authorUrl as string);
             }
 
             if (!existingEpisodes.has(episodeNo)) {
@@ -3098,13 +3102,13 @@ export class SeriesCardRenderer extends Component {
               const newEpisode: SeriesEpisode = {
                 episode: episodeNo,
                 file: child,
-                title: fm.title || `Episode ${episodeNo}`,
+                title: typeof fm.title === 'string' ? fm.title : `Episode ${episodeNo}`,
                 excerpt: '',
-                published: fm.published || '',
-                archived: fm.archived || new Date().toISOString(),
+                published: typeof fm.published === 'string' ? fm.published : '',
+                archived: typeof fm.archived === 'string' ? fm.archived : new Date().toISOString(),
                 isRead: fm.read === true,
                 filePath: child.path,
-                starScore: fm.starScore,
+                starScore: typeof fm.starScore === 'number' ? fm.starScore : undefined,
                 isLiked: fm.like === true
               };
               series.episodes.push(newEpisode);
@@ -3245,7 +3249,8 @@ export class SeriesCardRenderer extends Component {
 
     // Preview banner placeholder (for all webtoons - shows preview episode info)
     let previewBannerContainer: HTMLElement | null = null;
-    const { isSubscribed: _isSubscribed } = isWebtoon ? this.getSubscriptionInfo(series.seriesId) : { isSubscribed: false };
+    // getSubscriptionInfo is called for side effects (cache warm-up) when isWebtoon
+    if (isWebtoon) { this.getSubscriptionInfo(series.seriesId); }
     if (isWebtoon) {
       previewBannerContainer = listContainer.createDiv({ cls: 'preview-banner-container' });
 
@@ -3628,14 +3633,14 @@ export class SeriesCardRenderer extends Component {
 
       // Add to favorites (star icon)
       const favoriteColor = episode.isLiked ? 'var(--interactive-accent)' : 'var(--text-muted)';
-      const { btn: favoriteBtn, iconContainer: _favoriteIcon } = createActionBtn(
+      const { btn: favoriteBtn } = createActionBtn(
         'star',
         episode.isLiked ? 'Remove from favorites' : 'Add to favorites',
         () => { void (async () => {
           const file = this.app.vault.getAbstractFileByPath(episode.filePath);
           if (file instanceof TFile) {
             const newLikeStatus = !episode.isLiked;
-            await this.app.fileManager.processFrontMatter(file, (fm) => {
+            await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
               fm.like = newLikeStatus;
             });
             favoriteBtn.setAttribute('title', newLikeStatus ? 'Remove from favorites' : 'Add to favorites');
@@ -3772,7 +3777,7 @@ export class SeriesCardRenderer extends Component {
     menu.appendChild(createMenuItem('star', likeLabel, () => { void (async () => {
       const file = this.app.vault.getAbstractFileByPath(episode.filePath);
       if (file instanceof TFile) {
-        await this.app.fileManager.processFrontMatter(file, (fm) => {
+        await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
           fm.like = !episode.isLiked;
         });
         if (this.callbacks.onRefreshNeeded) {

@@ -61,7 +61,10 @@ export class ServiceContainer {
     }
 
     // Create and initialize the service
-    const meta = this.metadata.get(token)!;
+    const meta = this.metadata.get(token);
+    if (!meta) {
+      throw new Error(`No metadata found for service ${token.toString()}`);
+    }
     meta.lifecycle = ServiceLifecycle.INITIALIZING;
 
     const initPromise = this.initializeService(token, factory);

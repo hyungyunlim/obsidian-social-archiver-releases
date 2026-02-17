@@ -39,7 +39,7 @@ export class TextFormatter {
   linkifyYouTubeTimestamps(text: string, videoId: string): string {
     // Match timestamps at the beginning of lines: HH:MM:SS or MM:SS
     // Pattern: line start, optional whitespace, timestamp, optional separator (space, dash, etc), description text
-    const result = text.replace(/^(\s*)(\d{1,2}:\d{2}(?::\d{2})?)[\s-]*(.*)$/gm, (_match, whitespace, timestamp, description) => {
+    const result = text.replace(/^(\s*)(\d{1,2}:\d{2}(?::\d{2})?)[\s-]*(.*)$/gm, (_match, whitespace: string, timestamp: string, description: string) => {
       // Skip if no description (just timestamp alone)
       if (!description.trim()) {
         return _match;
@@ -51,10 +51,10 @@ export class TextFormatter {
 
       if (parts.length === 3) {
         // HH:MM:SS format
-        seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+        seconds = (parts[0] ?? 0) * 3600 + (parts[1] ?? 0) * 60 + (parts[2] ?? 0);
       } else {
         // MM:SS format
-        seconds = parts[0] * 60 + parts[1];
+        seconds = (parts[0] ?? 0) * 60 + (parts[1] ?? 0);
       }
 
       // Create YouTube timestamp link (only timestamp is clickable, not description)

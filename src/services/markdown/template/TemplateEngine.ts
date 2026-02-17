@@ -14,11 +14,12 @@ const INNERMOST_CONDITIONAL_PATTERN = /\{\{#if\s+([^}]+)\}\}((?:(?!\{\{#if)[\s\S
  * TemplateEngine - Variable substitution and conditional rendering
  * Single Responsibility: Template processing with variable interpolation and conditionals
  */
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class TemplateEngine {
   /**
    * Process template with data
    */
-  static process(template: string, data: Record<string, any>): string {
+  static process(template: string, data: Record<string, unknown>): string {
     // Ensure template is a string
     if (typeof template !== 'string') {
       return String(template || '');
@@ -42,7 +43,7 @@ export class TemplateEngine {
    * Process conditional blocks iteratively from innermost outward.
    * Supports {{#if}}...{{else}}...{{/if}} and nested conditionals.
    */
-  private static processConditionals(template: string, data: Record<string, any>): string {
+  private static processConditionals(template: string, data: Record<string, unknown>): string {
     // Ensure template is a string
     if (typeof template !== 'string') {
       return String(template || '');
@@ -56,7 +57,7 @@ export class TemplateEngine {
       const previous = result;
       result = result.replace(
         INNERMOST_CONDITIONAL_PATTERN,
-        (_match, condition, ifContent, elseContent = '') => {
+        (_match, condition: string, ifContent: string, elseContent: string = '') => {
           const value = this.resolveValue(condition.trim(), data);
 
           // Truthy check
@@ -76,8 +77,8 @@ export class TemplateEngine {
   /**
    * Process variable substitution
    */
-  private static processVariables(template: string, data: Record<string, any>): string {
-    return template.replace(TEMPLATE_VAR_PATTERN, (_match, path) => {
+  private static processVariables(template: string, data: Record<string, unknown>): string {
+    return template.replace(TEMPLATE_VAR_PATTERN, (_match, path: string) => {
       const value = this.resolveValue(path.trim(), data);
       return this.formatValue(value);
     });
@@ -86,15 +87,15 @@ export class TemplateEngine {
   /**
    * Resolve nested property path
    */
-  private static resolveValue(path: string, data: Record<string, any>): any {
+  private static resolveValue(path: string, data: Record<string, unknown>): unknown {
     const keys = path.split('.');
-    let value: any = data;
+    let value: unknown = data;
 
     for (const key of keys) {
       if (value === null || value === undefined) {
         return '';
       }
-      value = value[key];
+      value = (value as Record<string, unknown>)[key];
     }
 
     return value;
@@ -103,7 +104,7 @@ export class TemplateEngine {
   /**
    * Format value for output
    */
-  private static formatValue(value: any): string {
+  private static formatValue(value: unknown): string {
     if (value === null || value === undefined) {
       return '';
     }

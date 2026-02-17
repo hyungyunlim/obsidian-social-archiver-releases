@@ -50,7 +50,7 @@ export class ValidationError extends Error {
  */
 export class ResponseValidator implements IService {
 	private logger: Logger;
-	private platformSchemas: Map<Platform, z.ZodType<any>>;
+	private platformSchemas: Map<Platform, z.ZodType<unknown>>;
 
 	constructor(logger: Logger) {
 		this.logger = logger;
@@ -148,7 +148,7 @@ export class ResponseValidator implements IService {
 		try {
 			// Use partial() to make all fields optional
 			// Type assertion needed as ZodType doesn't have partial() method
-			const partialSchema = (schema as any).partial();
+			const partialSchema = (schema as z.ZodObject<z.ZodRawShape>).partial();
 			const result = partialSchema.parse(data);
 			this.logger.debug('Partial validation successful', { platform });
 			return result;
@@ -175,6 +175,7 @@ export class ResponseValidator implements IService {
 	safeValidate(
 		data: unknown,
 		platform?: Platform
+	// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
 	): { success: true; data: PlatformPostData | BrightDataResponse } | { success: false; error: ValidationError } {
 		try {
 			if (platform) {

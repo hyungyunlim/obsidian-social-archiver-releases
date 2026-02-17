@@ -172,7 +172,7 @@ export class BatchTranscriptionNotice {
       this.createButton(this.buttonsEl, 'Pause', 'pause', 'default', () => this.manager.pause());
       this.createButton(this.buttonsEl, 'Cancel', 'x', 'danger', () => this.manager.cancel());
     } else if (status === 'paused') {
-      this.createButton(this.buttonsEl, 'Resume', 'play', 'primary', () => this.manager.resume());
+      this.createButton(this.buttonsEl, 'Resume', 'play', 'primary', () => { void this.manager.resume(); });
       this.createButton(this.buttonsEl, 'Cancel', 'x', 'danger', () => this.manager.cancel());
     }
   }

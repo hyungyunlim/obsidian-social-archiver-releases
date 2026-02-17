@@ -1,4 +1,4 @@
-import { type TFile, type Vault, type App } from 'obsidian';
+import { type TFile, type TAbstractFile, type Vault, type App } from 'obsidian';
 import type { PostData, Comment, Media, MultiLangTranscript } from '../../../types/post';
 import type { YamlFrontmatter } from '../../../types/archive';
 import { isRssBasedPlatform } from '../../../constants/rssPlatforms';
@@ -6,6 +6,29 @@ import { detectMediaType, isImageUrl, isVideoUrl, isAudioUrl } from '../../../ut
 import { PostIndexService, type PostIndexEntry } from '../../../services/PostIndexService';
 import type { Platform } from '@shared/platforms/types';
 import { parseTranscriptSections } from '../../../services/markdown/TranscriptSectionManager';
+
+/**
+ * Vault folder node with children (Obsidian internal structure)
+ */
+interface VaultFolder extends TAbstractFile {
+  children: TAbstractFile[];
+}
+
+/**
+ * Extended frontmatter with all possible custom fields not in base YamlFrontmatter type.
+ * YamlFrontmatter has [key: string]: unknown index signature, so all custom fields
+ * are accessible via string indexing. This type alias documents them explicitly.
+ */
+type ExtendedFrontmatter = YamlFrontmatter;
+
+/**
+ * Media item used during internal parsing before dedup/resolve
+ */
+interface ParsedMediaItem {
+  type: 'image' | 'video' | 'audio' | 'document';
+  url: string;
+  altText?: string;
+}
 
 /**
  * PostDataParser - Handles parsing of archived posts from vault files
@@ -34,18 +57,22 @@ export class PostDataParser {
     }
 
     // Collect all markdown files first
-    const allFiles: any[] = [];
-    const collectFiles = (folder: any) => {
+    const allFiles: TFile[] = [];
+    const collectFiles = (folder: VaultFolder): void => {
       for (const child of folder.children) {
-        if (child.children) {
+        const childAsFolder = child as VaultFolder;
+        if (childAsFolder.children) {
           // It's a folder, recurse
-          collectFiles(child);
-        } else if (child.extension === 'md') {
-          allFiles.push(child);
+          collectFiles(childAsFolder);
+        } else {
+          const childAsFile = child as TFile;
+          if (childAsFile.extension === 'md') {
+            allFiles.push(childAsFile);
+          }
         }
       }
     };
-    collectFiles(archiveFolder);
+    collectFiles(archiveFolder as VaultFolder);
 
     // Batch process files in parallel using Promise.all() for better performance
     // This leverages MetadataCache and cachedRead() optimizations
@@ -82,21 +109,21 @@ export class PostDataParser {
       const content = await this.vault.cachedRead(file);
 
       // Try to use MetadataCache for frontmatter if available
-      let frontmatter: YamlFrontmatter | null = null;
+      let frontmatter: ExtendedFrontmatter | null = null;
       if (this.app?.metadataCache) {
         const cache = this.app.metadataCache.getFileCache(file);
         if (cache?.frontmatter) {
-          frontmatter = cache.frontmatter as YamlFrontmatter;
+          frontmatter = cache.frontmatter as ExtendedFrontmatter;
         }
       }
 
       // Check if MetadataCache might be stale (missing fields that exist in content)
       // Only do manual parsing when needed for performance
       const needsManualParsing = frontmatter && (
-        (!(frontmatter as any).linkPreviews && content.includes('linkPreviews:')) ||
-        (!(frontmatter as any).processedUrls && content.includes('processedUrls:')) ||
-        (!(frontmatter as any).downloadedUrls && content.includes('downloadedUrls:')) ||
-        (!(frontmatter as any).transcribedUrls && content.includes('transcribedUrls:'))
+        (!frontmatter['linkPreviews'] && content.includes('linkPreviews:')) ||
+        (!frontmatter['processedUrls'] && content.includes('processedUrls:')) ||
+        (!frontmatter['downloadedUrls'] && content.includes('downloadedUrls:')) ||
+        (!frontmatter['transcribedUrls'] && content.includes('transcribedUrls:'))
       );
 
       if (needsManualParsing || !frontmatter) {
@@ -104,17 +131,17 @@ export class PostDataParser {
 
         if (frontmatter && parsedFrontmatter) {
           // Merge missing fields from parsed frontmatter
-          if (!(frontmatter as any).linkPreviews && parsedFrontmatter.linkPreviews) {
-            (frontmatter as any).linkPreviews = parsedFrontmatter.linkPreviews;
+          if (!frontmatter['linkPreviews'] && parsedFrontmatter['linkPreviews']) {
+            frontmatter['linkPreviews'] = parsedFrontmatter['linkPreviews'];
           }
-          if (!(frontmatter as any).processedUrls && (parsedFrontmatter as any).processedUrls) {
-            (frontmatter as any).processedUrls = (parsedFrontmatter as any).processedUrls;
+          if (!frontmatter['processedUrls'] && parsedFrontmatter['processedUrls']) {
+            frontmatter['processedUrls'] = parsedFrontmatter['processedUrls'];
           }
-          if (!(frontmatter as any).downloadedUrls && (parsedFrontmatter as any).downloadedUrls) {
-            (frontmatter as any).downloadedUrls = (parsedFrontmatter as any).downloadedUrls;
+          if (!frontmatter['downloadedUrls'] && parsedFrontmatter['downloadedUrls']) {
+            frontmatter['downloadedUrls'] = parsedFrontmatter['downloadedUrls'];
           }
-          if (!(frontmatter as any).transcribedUrls && (parsedFrontmatter as any).transcribedUrls) {
-            (frontmatter as any).transcribedUrls = (parsedFrontmatter as any).transcribedUrls;
+          if (!frontmatter['transcribedUrls'] && parsedFrontmatter['transcribedUrls']) {
+            frontmatter['transcribedUrls'] = parsedFrontmatter['transcribedUrls'];
           }
         } else if (!frontmatter) {
           frontmatter = parsedFrontmatter;
@@ -126,11 +153,11 @@ export class PostDataParser {
       }
 
       // Check if this is a profile-only document (type: profile)
-      const isProfileDocument = (frontmatter as any).type === 'profile';
+      const isProfileDocument = frontmatter['type'] === 'profile';
 
       // For profile documents, parse and return profile-specific data
       if (isProfileDocument) {
-        return this.parseProfileDocument(file, frontmatter as any, content);
+        return this.parseProfileDocument(file, frontmatter, content);
       }
 
       // Validate platform: 'post' data
@@ -145,7 +172,8 @@ export class PostDataParser {
       // Try to extract media from MetadataCache first for better performance
       let mediaUrls: string[] = [];
       if (this.app?.metadataCache) {
-        const cache = this.app.metadataCache.getFileCache(file);
+        const app = this.app;
+        const cache = app.metadataCache.getFileCache(file);
         if (cache?.embeds && cache.embeds.length > 0) {
           // Find section boundaries to exclude media from quoted posts and embedded archives
           // MetadataCache returns ALL embeds in the file without section awareness
@@ -170,12 +198,12 @@ export class PostDataParser {
             })
             .map(embed => {
               // Resolve the link to actual file path using Obsidian's link resolution
-              const linkedFile = this.app!.metadataCache.getFirstLinkpathDest(embed.link, file.path);
+              const linkedFile = app.metadataCache.getFirstLinkpathDest(embed.link, file.path);
               if (linkedFile?.path) {
                 return linkedFile.path;
               }
               // Fallback: search vault for file by name (MetadataCache may not be indexed yet)
-              const allFiles = this.app!.vault.getFiles();
+              const allFiles = app.vault.getFiles();
               const foundFile = allFiles.find(f => f.name === embed.link || f.path.endsWith('/' + embed.link));
               return foundFile?.path || embed.link;
             })
@@ -209,20 +237,21 @@ export class PostDataParser {
 
       // If no quotedPost found in content but isReblog is true with originalAuthor fields,
       // reconstruct quotedPost from frontmatter (for X retweets via xcancel RSS)
-      if (!quotedPost && (frontmatter as any).isReblog && (frontmatter as any).originalAuthor) {
-        const fm = frontmatter as any;
+      const isReblog = frontmatter['isReblog'] === true;
+      const originalAuthor = frontmatter['originalAuthor'] as string | undefined;
+      if (!quotedPost && isReblog && originalAuthor) {
         // Extract the actual content text for the quotedPost
         // For retweets, the content shown in the main card is from the original author
         const originalContent = this.extractContentText(content);
         quotedPost = {
-          platform: frontmatter.platform as any,
-          id: fm.originalPostUrl || frontmatter.originalUrl || '',
-          url: fm.originalPostUrl || frontmatter.originalUrl || '',
+          platform: frontmatter.platform as Platform,
+          id: (frontmatter['originalPostUrl'] as string | undefined) || frontmatter.originalUrl || '',
+          url: (frontmatter['originalPostUrl'] as string | undefined) || frontmatter.originalUrl || '',
           author: {
-            name: fm.originalAuthor,
-            handle: fm.originalAuthorHandle || fm.originalAuthor,
-            url: fm.originalAuthorUrl || '',
-            avatar: fm.originalAuthorAvatar,
+            name: originalAuthor,
+            handle: (frontmatter['originalAuthorHandle'] as string | undefined) || originalAuthor,
+            url: (frontmatter['originalAuthorUrl'] as string | undefined) || '',
+            avatar: frontmatter['originalAuthorAvatar'] as string | undefined,
           },
           content: {
             text: originalContent,
@@ -235,34 +264,34 @@ export class PostDataParser {
       }
 
       // Parse embeddedArchives if exists
-      // @ts-ignore - downloadedUrls is custom field for user posts
-      const downloadedUrls: string[] = Array.isArray((frontmatter as any).downloadedUrls) ? (frontmatter as any).downloadedUrls : [];
-      // @ts-ignore - processedUrls is custom field for user posts
-      const processedUrls: string[] = Array.isArray((frontmatter as any).processedUrls) ? (frontmatter as any).processedUrls : [];
-      // @ts-ignore - transcribedUrls is custom field for podcast transcription tracking
-      const transcribedUrls: string[] = Array.isArray((frontmatter as any).transcribedUrls) ? (frontmatter as any).transcribedUrls : [];
+      const downloadedUrls: string[] = Array.isArray(frontmatter.downloadedUrls) ? frontmatter.downloadedUrls : [];
+      const processedUrls: string[] = Array.isArray(frontmatter['processedUrls']) ? (frontmatter['processedUrls'] as string[]) : [];
+      const transcribedUrls: string[] = Array.isArray(frontmatter.transcribedUrls) ? frontmatter.transcribedUrls : [];
       const embeddedArchives = this.extractEmbeddedArchives(content, downloadedUrls, processedUrls, file.path);
 
       // Embedded archives extracted successfully
 
       // Prefer YAML frontmatter media, fallback to markdown parsing
-      let mediaArray: any[] = [];
-      if ((frontmatter as any).media && Array.isArray((frontmatter as any).media)) {
+      let mediaArray: ParsedMediaItem[] = [];
+      const frontmatterMedia = frontmatter['media'];
+      if (frontmatterMedia && Array.isArray(frontmatterMedia)) {
         // Parse media from YAML frontmatter
         // Format: ["video:path/to/file.mp4", "image:path/to/image.jpg"]
-        mediaArray = (frontmatter as any).media.map((item: string) => {
+        mediaArray = (frontmatterMedia as unknown[]).map((item: unknown) => {
           if (typeof item === 'string' && item.includes(':')) {
-            const [type, url] = item.split(':', 2);
-            return { type, url };
+            const colonIdx = item.indexOf(':');
+            const type = item.substring(0, colonIdx);
+            const url = item.substring(colonIdx + 1);
+            return { type: type as ParsedMediaItem['type'], url };
           }
           // Fallback for old format or invalid format
-          return { type: 'image', url: item };
+          return { type: 'image' as const, url: typeof item === 'string' ? item : '' };
         });
       } else if (mediaUrls.length > 0) {
         // Fallback to markdown parsing (detect video/image/audio by extension)
         mediaArray = mediaUrls.map(url => {
           const type = detectMediaType(url);
-          return { type: type === 'document' ? 'image' : type, url };
+          return { type: (type === 'document' ? 'image' : type) as ParsedMediaItem['type'], url };
         });
       }
 
@@ -277,7 +306,7 @@ export class PostDataParser {
       // This enables MediaGalleryRenderer to render the custom audio player
       // Works for both local paths (downloaded) and external URLs (streaming)
       if (frontmatter.platform === 'podcast') {
-        const audioUrl = (frontmatter as any).audioUrl;
+        const audioUrl = frontmatter.audioUrl;
         if (audioUrl) {
           // Check if audio not already in media array
           const hasAudio = mediaArray.some(m => m.type === 'audio');
@@ -292,7 +321,7 @@ export class PostDataParser {
       }
 
       // For reblogs: copy media to quotedPost (media belongs to the original author's post)
-      if (quotedPost && (frontmatter as any).isReblog && mediaArray.length > 0) {
+      if (quotedPost && isReblog && mediaArray.length > 0) {
         quotedPost.media = mediaArray;
       }
 
@@ -310,7 +339,7 @@ export class PostDataParser {
       // For YouTube: extract video title from markdown header (# 📺 Title)
       // For Blog: extract article title from markdown header (# Title)
       // Priority: 1) frontmatter.title, 2) markdown header
-      let title: string | undefined = (frontmatter as any).title;
+      let title: string | undefined = frontmatter['title'] as string | undefined;
 
       // Fallback to markdown header if no frontmatter title
       if (!title) {
@@ -351,92 +380,95 @@ export class PostDataParser {
           if (titleMatch?.[1]) {
             title = titleMatch[1].trim();
           }
+        } else if (frontmatter.platform === 'x' && this.isXArticlePost(frontmatter, content)) {
+          // For X articles: extract title from first H1 heading (may be escaped as \#)
+          const titleMatch = contentWithoutFrontmatter.match(/^\\?#\s+(.+)$/m);
+          if (titleMatch?.[1]) {
+            title = titleMatch[1].trim();
+          }
         }
       }
 
+      const authorAvatarRaw = frontmatter['authorAvatar'] as string | undefined;
+      const authorAvatarIsExternal = typeof authorAvatarRaw === 'string' && authorAvatarRaw.startsWith('http');
+
       const postData: PostData = {
-        platform: frontmatter.platform as any,
+        platform: frontmatter.platform as Platform,
         id: file.basename,
         // For user posts, url is the vault file path; for archived posts, use originalUrl
         url: isUserPost ? file.path : originalUrl,
-        videoId: (frontmatter as any).videoId, // YouTube video ID
+        videoId: frontmatter.videoId, // YouTube video ID
         title, // YouTube video title (extracted from markdown header)
         filePath: file.path, // Store file path for opening
         tags: Array.isArray(frontmatter.tags) ? frontmatter.tags : [],
         comment: frontmatter.comment, // User's personal note
         like: frontmatter.like, // User's personal like
         archive: frontmatter.archive, // Archive status
-        shareUrl: (frontmatter as any).shareUrl, // Public share URL
-        linkPreviews: (frontmatter as any).linkPreviews, // Link preview URLs
-        // @ts-ignore - processedUrls is custom field for user posts
-        processedUrls: (frontmatter as any).processedUrls, // Processed archive URLs (archived & declined)
-        // @ts-ignore - downloadedUrls is custom field for user posts
-        downloadedUrls: (frontmatter as any).downloadedUrls,
-        // @ts-ignore - transcribedUrls is custom field for podcast transcription tracking
+        shareUrl: frontmatter.shareUrl, // Public share URL
+        linkPreviews: frontmatter['linkPreviews'] as string[] | undefined, // Link preview URLs (custom field)
+        processedUrls: processedUrls.length > 0 ? processedUrls : undefined,
+        downloadedUrls: downloadedUrls.length > 0 ? downloadedUrls : undefined,
         transcribedUrls: transcribedUrls.length > 0 ? transcribedUrls : undefined,
-        // @ts-ignore - video transcription workflow fields
-        videoTranscribed: (frontmatter as any).videoTranscribed,
-        // @ts-ignore
-        videoTranscriptionRequestedAt: (frontmatter as any).videoTranscriptionRequestedAt,
-        // @ts-ignore
-        videoTranscriptionError: (frontmatter as any).videoTranscriptionError,
-        // @ts-ignore
-        videoTranscribedAt: (frontmatter as any).videoTranscribedAt,
+        videoTranscribed: frontmatter['videoTranscribed'] as boolean | undefined,
+        videoTranscriptionRequestedAt: frontmatter['videoTranscriptionRequestedAt'] as string | undefined,
+        videoTranscriptionError: frontmatter['videoTranscriptionError'] as string | undefined,
+        videoTranscribedAt: frontmatter['videoTranscribedAt'] as string | undefined,
         publishedDate: publishedDate,
         archivedDate: archivedDate,
-        archiveStatus: (frontmatter as any).archiveStatus, // Archive status for loading states
-        originalUrl: (frontmatter as any).originalUrl, // Original URL (for preliminary documents)
-        subscribed: (frontmatter as any).subscribed, // Subscription-related flag
-        subscriptionId: (frontmatter as any).subscriptionId, // Subscription ID
+        archiveStatus: frontmatter['archiveStatus'] as 'archiving' | 'completed' | 'failed' | undefined, // Archive status for loading states
+        originalUrl: frontmatter.originalUrl, // Original URL (for preliminary documents)
+        subscribed: frontmatter.subscribed, // Subscription-related flag
+        subscriptionId: frontmatter.subscriptionId, // Subscription ID
         // Podcast channel title (show name)
-        channelTitle: (frontmatter as any).channelTitle,
+        channelTitle: frontmatter['channelTitle'] as string | undefined,
         // Podcast audio fields
-        audioUrl: (frontmatter as any).audioUrl,
-        audioSize: (frontmatter as any).audioSize,
-        audioType: (frontmatter as any).audioType,
-        audioLocalPath: (frontmatter as any).audioLocalPath,
+        audioUrl: frontmatter.audioUrl,
+        audioSize: frontmatter.audioSize,
+        audioType: frontmatter.audioType,
+        audioLocalPath: frontmatter['audioLocalPath'] as string | undefined,
         // Whisper transcription data (parsed from markdown content)
         // Support both flat (new) and nested (legacy) frontmatter structure
         whisperTranscript: this.parseWhisperTranscript(
           content,
-          (frontmatter as any).transcriptionLanguage || (frontmatter as any).transcription?.language
+          frontmatter.transcriptionLanguage || frontmatter.transcription?.language
         ),
         // Multi-language transcript data (parsed from markdown content)
         multilangTranscript: this.parseMultiLangTranscripts(
           content,
-          (frontmatter as any).transcriptionLanguage || (frontmatter as any).transcription?.language
+          frontmatter.transcriptionLanguage || frontmatter.transcription?.language
         ),
         author: {
           // For YouTube, just use frontmatter.author (channel name) without adding handle
           // YouTube handles are channel IDs (UC...) which aren't user-friendly to display
           name: frontmatter.author || 'Unknown',
           // Support both authorUrl (camelCase) and author_url (snake_case) for compatibility
-          url: frontmatter.authorUrl || (frontmatter as any).author_url || '',
+          url: frontmatter.authorUrl || (frontmatter['author_url'] as string | undefined) || '',
           // authorAvatar: if starts with http, it's external URL (avatar), otherwise local path (localAvatar)
-          avatar: ((frontmatter as any).authorAvatar?.startsWith('http'))
-            ? (frontmatter as any).authorAvatar as string
+          avatar: authorAvatarIsExternal ? authorAvatarRaw : undefined,
+          localAvatar: (authorAvatarRaw && !authorAvatarIsExternal)
+            ? this.stripWikilink(authorAvatarRaw)
             : undefined,
-          localAvatar: ((frontmatter as any).authorAvatar && !(frontmatter as any).authorAvatar?.startsWith('http'))
-            ? this.stripWikilink((frontmatter as any).authorAvatar as string)
-            : undefined,
-          handle: (frontmatter as any).authorHandle as string | undefined,
+          handle: frontmatter['authorHandle'] as string | undefined,
         },
         content: {
           text: contentText,
           // For RSS-based platforms: preserve raw markdown with inline images for proper rendering
+          // For X articles: extract article body and unescape markdown artifacts
           rawMarkdown: isRssBasedPlatform(frontmatter.platform)
             ? this.extractBlogContentWithImages(content)
-            : undefined,
+            : (frontmatter.platform === 'x' && this.isXArticlePost(frontmatter, content))
+              ? this.extractXArticleContent(content)
+              : undefined,
           // Community info from YAML frontmatter (Reddit subreddit or Naver cafe)
-          community: (frontmatter as any).community && (frontmatter as any).communityUrl
+          community: (frontmatter['community'] && frontmatter['communityUrl'])
             ? {
-                name: (frontmatter as any).community,
-                url: (frontmatter as any).communityUrl,
+                name: frontmatter['community'] as string,
+                url: frontmatter['communityUrl'] as string,
               }
-            : (frontmatter as any).cafeName && (frontmatter as any).cafeUrl
+            : (frontmatter['cafeName'] && frontmatter['cafeUrl'])
             ? {
-                name: (frontmatter as any).cafeName,
-                url: (frontmatter as any).cafeUrl,
+                name: frontmatter['cafeName'] as string,
+                url: frontmatter['cafeUrl'] as string,
               }
             : undefined,
         },
@@ -444,38 +476,38 @@ export class PostDataParser {
         metadata: {
           timestamp: new Date(frontmatter.published || frontmatter.archived || file.stat.ctime),
           // Prefer YAML frontmatter values, fallback to markdown footer parsing
-          likes: (frontmatter as any).likes ?? metadata.likes,
-          comments: (frontmatter as any).comments ?? metadata.comments,
-          shares: (frontmatter as any).shares ?? metadata.shares,
-          views: (frontmatter as any).views ?? metadata.views,
+          likes: frontmatter.likes ?? metadata.likes,
+          comments: frontmatter.comments ?? metadata.comments,
+          shares: frontmatter.shares ?? metadata.shares,
+          views: frontmatter.views ?? metadata.views,
           // External link metadata (Facebook, X, etc.)
-          externalLink: (frontmatter as any).externalLink,
-          externalLinkTitle: (frontmatter as any).externalLinkTitle,
-          externalLinkDescription: (frontmatter as any).externalLinkDescription,
-          externalLinkImage: (frontmatter as any).externalLinkImage,
+          externalLink: frontmatter['externalLink'] as string | undefined,
+          externalLinkTitle: frontmatter['externalLinkTitle'] as string | undefined,
+          externalLinkDescription: frontmatter['externalLinkDescription'] as string | undefined,
+          externalLinkImage: frontmatter['externalLinkImage'] as string | undefined,
           // Google Maps location coordinates
-          latitude: (frontmatter as any).latitude,
-          longitude: (frontmatter as any).longitude,
-          location: (frontmatter as any).location,
+          latitude: frontmatter['latitude'] as number | undefined,
+          longitude: frontmatter['longitude'] as number | undefined,
+          location: frontmatter['location'] as string | undefined,
           // Podcast-specific metadata
-          duration: (frontmatter as any).duration,
-          episode: (frontmatter as any).episode,
-          season: (frontmatter as any).season,
-          subtitle: (frontmatter as any).subtitle,
-          hosts: (frontmatter as any).hosts,
-          guests: (frontmatter as any).guests,
-          explicit: (frontmatter as any).explicit,
+          duration: frontmatter.duration,
+          episode: frontmatter.episode,
+          season: frontmatter.season,
+          subtitle: frontmatter.subtitle,
+          hosts: frontmatter.hosts,
+          guests: frontmatter.guests,
+          explicit: frontmatter.explicit,
           // Webtoon-specific metadata
-          commentCount: (frontmatter as any).commentCount,
+          commentCount: frontmatter.commentCount,
         },
         comments: comments.length > 0 ? comments : undefined,
         quotedPost: quotedPost || undefined,
-        isReblog: (frontmatter as any).isReblog || undefined,
+        isReblog: isReblog || undefined,
         embeddedArchives: embeddedArchives.length > 0 ? embeddedArchives : undefined,
         // Series info for Brunch brunchbook, Naver Webtoon, etc.
         series: this.extractSeriesInfo(frontmatter),
         // Thumbnail URL from frontmatter (for webtoon episode covers, YouTube, etc.)
-        thumbnail: (frontmatter as any).thumbnail,
+        thumbnail: frontmatter['thumbnail'] as string | undefined,
       };
 
       return postData;
@@ -614,6 +646,61 @@ export class PostDataParser {
     content = content.replace(/!\[\[[^\]]+\.(?:mp3|m4a|wav|ogg|flac|aac)\]\]\n*/gi, '');
 
     // Clean up excessive leading/trailing whitespace
+    content = content.trim();
+
+    return content;
+  }
+
+  /**
+   * Detect whether an archived X post is a long-form article.
+   * Checks frontmatter `isArticle` flag first (new archives), then
+   * falls back to content heuristics for older archives.
+   */
+  private isXArticlePost(frontmatter: YamlFrontmatter, content: string): boolean {
+    if (frontmatter['isArticle'] === true) return true;
+    // Heuristic: article URL pattern in content
+    if (/x\.com\/i\/article\//.test(content)) return true;
+    // Heuristic: content has escaped headings typical of article markdown
+    if (/\\#\s/.test(content) && content.length > 800) return true;
+    return false;
+  }
+
+  /**
+   * Extract X article body for blog-style rendering.
+   * Similar to extractBlogContentWithImages but also:
+   * - Un-escapes headings (\# → #, \## → ##)
+   * - Un-escapes ordered lists (1\. → 1.)
+   * - Removes [Image: mediaId=...] placeholders from older archives
+   * - Removes trailing media gallery section
+   */
+  private extractXArticleContent(markdown: string): string {
+    // Remove frontmatter
+    let content = markdown.replace(/^---\n[\s\S]*?\n---\n+/, '');
+
+    // Remove metadata footer section
+    content = content.replace(/\n---\n\n\*\*Platform:\*\*[\s\S]*$/, '');
+
+    // Remove comments section
+    content = content.replace(/\n*## 💬 Comments[\s\S]*$/, '');
+
+    // Remove trailing media gallery (standalone image blocks at the end)
+    // These are the media array images that are redundant with inline article images
+    content = content.replace(/\n+(?:!\[.*?\]\(.*?\)\s*\n*)+$/, '');
+
+    // Remove H1 title at the start (rendered separately in the card)
+    // Handle both escaped (\# Title) and normal (# Title)
+    content = content.replace(/^\\?#\s+[^\n]+\n+/, '');
+
+    // Un-escape headings: \# → #, \## → ##, \### → ###
+    content = content.replace(/^\\(#{1,6})\s/gm, '$1 ');
+
+    // Un-escape ordered lists: 1\. → 1.
+    content = content.replace(/^(\d+)\\\./gm, '$1.');
+
+    // Remove [Image: mediaId=...] placeholders from older archives
+    content = content.replace(/\[Image: mediaId=[^\]]*\]\n*/g, '');
+
+    // Clean up excessive whitespace
     content = content.trim();
 
     return content;
@@ -973,7 +1060,7 @@ export class PostDataParser {
 
     const frontmatterText = frontmatterMatch[1];
     const lines = frontmatterText.split('\n');
-    const frontmatter: any = {};
+    const frontmatter: Record<string, unknown> = {};
 
     let currentKey: string | null = null;
     let currentArray: string[] = [];
@@ -988,7 +1075,7 @@ export class PostDataParser {
             (value.startsWith("'") && value.endsWith("'"))) {
           try {
             // Try to parse as JSON to handle escaped characters
-            value = JSON.parse(value);
+            value = JSON.parse(value) as string;
           } catch {
             // If JSON parsing fails, just remove the quotes
             value = value.slice(1, -1);
@@ -1021,7 +1108,7 @@ export class PostDataParser {
             (cleanValue.startsWith("'") && cleanValue.endsWith("'"))) {
           try {
             // Try to parse as JSON to handle escaped characters
-            cleanValue = JSON.parse(cleanValue);
+            cleanValue = JSON.parse(cleanValue) as string;
           } catch {
             // If JSON parsing fails, just remove the quotes
             cleanValue = cleanValue.slice(1, -1);
@@ -1034,7 +1121,7 @@ export class PostDataParser {
         } else if (cleanValue.startsWith('[') && cleanValue.endsWith(']')) {
           // Inline array format: key: ["value1", "value2"]
           try {
-            frontmatter[key] = JSON.parse(cleanValue);
+            frontmatter[key] = JSON.parse(cleanValue) as unknown[];
           } catch {
             // If JSON parsing fails, treat as string
             frontmatter[key] = cleanValue;
@@ -1127,10 +1214,10 @@ export class PostDataParser {
         // Determine metadata boundary (last occurrence of "\n---\n\n**Platform:**")
         const metadataMarker = '\n---\n\n**Platform:**';
         const metadataStart = withoutHeader.lastIndexOf(metadataMarker);
-        let contentSection = metadataStart >= 0
+        const contentSection = metadataStart >= 0
           ? withoutHeader.substring(0, metadataStart).trim()
           : withoutHeader.trim();
-        let metadataSection = metadataStart >= 0
+        const metadataSection = metadataStart >= 0
           ? withoutHeader.substring(metadataStart + '\n---\n\n'.length).trim()
           : block;
 
@@ -1141,7 +1228,7 @@ export class PostDataParser {
           : contentSection;
 
         const mediaMatch = contentBeforeQuote.match(/\n\n\*\*Media:\*\*\n([\s\S]+)$/);
-        let content = mediaMatch
+        const content = mediaMatch
           ? contentBeforeQuote.substring(0, contentBeforeQuote.indexOf('\n\n**Media:**')).trim()
           : contentBeforeQuote;
 
@@ -1207,7 +1294,7 @@ export class PostDataParser {
 
         // Create PostData
         const archiveData: PostData = {
-          platform: platform as any,
+          platform: platform as Platform,
           id: url,
           url,
           author: {
@@ -1227,9 +1314,7 @@ export class PostDataParser {
           },
           comments: parsedComments.length > 0 ? parsedComments : undefined,
           quotedPost: quotedPost || undefined,
-          // @ts-ignore - downloadedUrls is custom field inherited from parent post
           downloadedUrls: parentDownloadedUrls,
-          // @ts-ignore - processedUrls is custom field inherited from parent post
           processedUrls: parentProcessedUrls,
         };
 
@@ -1276,7 +1361,7 @@ export class PostDataParser {
       // Extract content: everything between header and "---" line
       const withoutHeader = quotedSection.replace(/^### (?:Facebook|Instagram|X|Linkedin|Tiktok|Threads|Youtube|Reddit|Bluesky|Mastodon|Post)\s*-\s*.+?\n+/i, '');
       const contentParts = withoutHeader.split(/\n---\n/);
-      let fullContent = contentParts[0]?.trim() || '';
+      const fullContent = contentParts[0]?.trim() || '';
 
       // Separate text content and media section
       const mediaMatch = fullContent.match(/\n\n\*\*Media:\*\*\n([\s\S]+)$/);
@@ -1342,7 +1427,7 @@ export class PostDataParser {
 
       // Create quoted PostData
       const quotedPost: Omit<PostData, 'quotedPost' | 'embeddedArchives'> = {
-        platform: platform as any,
+        platform: platform as Platform,
         id: url,
         url,
         author: {
@@ -1454,51 +1539,38 @@ export class PostDataParser {
    */
   private parseProfileDocument(
     file: TFile,
-    frontmatter: {
-      type: 'profile';
-      platform: string;
-      handle?: string;
-      displayName?: string;
-      profileUrl?: string;
-      bio?: string;
-      followers?: number;
-      following?: number;
-      postsCount?: number;
-      verified?: boolean;
-      location?: string;
-      avatar?: string;
-      avatarUrl?: string;
-      crawledAt?: string;
-    },
-    content: string
+    frontmatter: YamlFrontmatter,
+    _content: string
   ): PostData {
-    const archivedDate = frontmatter.crawledAt ? new Date(frontmatter.crawledAt) : new Date(file.stat.ctime);
-    const handle = frontmatter.handle || 'Unknown';
-    const displayName = frontmatter.displayName || handle;
+    const crawledAt = frontmatter['crawledAt'] as string | undefined;
+    const archivedDate = crawledAt ? new Date(crawledAt) : new Date(file.stat.ctime);
+    const handle = (frontmatter['handle'] as string | undefined) || 'Unknown';
+    const displayName = (frontmatter['displayName'] as string | undefined) || handle;
 
     // Extract avatar path - prioritize local avatar
-    const avatarPath = frontmatter.avatar;
+    const avatarPath = frontmatter['avatar'] as string | undefined;
+    const avatarUrl = frontmatter['avatarUrl'] as string | undefined;
     const avatarIsLocal = avatarPath && !avatarPath.startsWith('http');
 
     return {
       type: 'profile',
-      platform: frontmatter.platform as any,
+      platform: frontmatter.platform as Platform,
       id: `profile-${handle}`,
-      url: frontmatter.profileUrl || '',
+      url: (frontmatter['profileUrl'] as string | undefined) || '',
       filePath: file.path,
       archivedDate,
       author: {
         name: displayName,
-        url: frontmatter.profileUrl || '',
+        url: (frontmatter['profileUrl'] as string | undefined) || '',
         handle: handle,
-        avatar: avatarIsLocal ? undefined : (frontmatter.avatarUrl || frontmatter.avatar),
+        avatar: avatarIsLocal ? undefined : (avatarUrl || avatarPath),
         localAvatar: avatarIsLocal ? avatarPath : undefined,
-        bio: frontmatter.bio,
-        followers: frontmatter.followers,
-        verified: frontmatter.verified,
+        bio: frontmatter['bio'] as string | undefined,
+        followers: frontmatter['followers'] as number | undefined,
+        verified: frontmatter['verified'] as boolean | undefined,
       },
       content: {
-        text: frontmatter.bio || '',
+        text: (frontmatter['bio'] as string | undefined) || '',
       },
       media: [], // Profile documents don't have media
       metadata: {
@@ -1507,16 +1579,17 @@ export class PostDataParser {
       profileMetadata: {
         displayName,
         handle,
-        bio: frontmatter.bio,
-        followers: frontmatter.followers,
-        following: frontmatter.following,
-        postsCount: frontmatter.postsCount,
-        verified: frontmatter.verified,
-        location: frontmatter.location,
-        profileUrl: frontmatter.profileUrl,
+        bio: frontmatter['bio'] as string | undefined,
+        followers: frontmatter['followers'] as number | undefined,
+        following: frontmatter['following'] as number | undefined,
+        postsCount: frontmatter['postsCount'] as number | undefined,
+        verified: frontmatter['verified'] as boolean | undefined,
+        location: frontmatter['location'] as string | undefined,
+        profileUrl: frontmatter['profileUrl'] as string | undefined,
         crawledAt: archivedDate,
       },
     };
+
   }
 
   /**
@@ -1526,7 +1599,7 @@ export class PostDataParser {
    */
   private extractSeriesInfo(frontmatter: YamlFrontmatter): import('../../../types/post').SeriesInfo | undefined {
     // Check for series ID - required field
-    const seriesId = (frontmatter as any).seriesId as string | undefined;
+    const seriesId = frontmatter.seriesId;
     if (!seriesId) {
       return undefined;
     }
@@ -1534,15 +1607,15 @@ export class PostDataParser {
     // Get series title (support both naming conventions)
     // - Instagram/others: series
     // - Brunch: seriesTitle
-    const seriesTitle = ((frontmatter as any).series || (frontmatter as any).seriesTitle) as string | undefined;
+    const seriesTitle = frontmatter.series || (frontmatter['seriesTitle'] as string | undefined);
 
     // Get episode number (support both naming conventions)
-    const episode = ((frontmatter as any).episode ?? (frontmatter as any).seriesEpisode) as number | undefined;
+    const episode = frontmatter.episode ?? (frontmatter['seriesEpisode'] as number | undefined);
 
     return {
       id: seriesId,
       title: seriesTitle || 'Unknown Series',
-      url: (frontmatter as any).seriesUrl as string | undefined,
+      url: frontmatter.seriesUrl,
       episode,
     };
   }
@@ -1571,51 +1644,53 @@ export class PostDataParser {
       const content = await this.vault.cachedRead(file);
 
       // Try MetadataCache first
-      let frontmatter: Record<string, any> | null = null;
+      let frontmatter: Record<string, unknown> | null = null;
       if (this.app?.metadataCache) {
         const cache = this.app.metadataCache.getFileCache(file);
         if (cache?.frontmatter) {
-          frontmatter = cache.frontmatter as Record<string, any>;
+          frontmatter = cache.frontmatter as Record<string, unknown>;
         }
       }
 
       if (!frontmatter) {
         const parsed = this.parseFrontmatter(content);
         if (!parsed) return null;
-        frontmatter = parsed as Record<string, any>;
+        frontmatter = parsed as Record<string, unknown>;
       }
 
-      if (!frontmatter.platform) return null;
+      if (!frontmatter['platform']) return null;
 
       // Profile documents
-      const isProfile = frontmatter.type === 'profile';
+      const isProfile = frontmatter['type'] === 'profile';
 
       // User-post validation
-      if (frontmatter.platform === 'post' && !isProfile) {
-        if (!frontmatter.author || !frontmatter.published && !frontmatter.archived) {
+      if (frontmatter['platform'] === 'post' && !isProfile) {
+        if (!frontmatter['author'] || !frontmatter['published'] && !frontmatter['archived']) {
           return null;
         }
       }
 
-      const platform = frontmatter.platform as Platform;
+      const platform = frontmatter['platform'] as Platform;
       const isUserPost = platform === 'post';
-      const publishedDate = frontmatter.published ? new Date(frontmatter.published) : undefined;
-      const archivedDate = frontmatter.archived ? new Date(frontmatter.archived) : undefined;
+      const publishedDate = frontmatter['published'] ? new Date(frontmatter['published'] as string) : undefined;
+      const archivedDate = frontmatter['archived'] ? new Date(frontmatter['archived'] as string) : undefined;
       const metadataTimestamp = new Date(
-        frontmatter.published || frontmatter.archived || file.stat.ctime
+        (frontmatter['published'] as string | undefined) ||
+        (frontmatter['archived'] as string | undefined) ||
+        file.stat.ctime
       );
 
       // Lightweight content extraction for search (just first section)
       const contentText = this.extractContentText(content);
 
       // Series info
-      const seriesId = frontmatter.seriesId as string | undefined;
-      const episodeNumber = (frontmatter.episode ?? frontmatter.seriesEpisode) as number | undefined;
+      const seriesId = frontmatter['seriesId'] as string | undefined;
+      const episodeNumber = (frontmatter['episode'] as number | undefined) ?? (frontmatter['seriesEpisode'] as number | undefined);
 
       // Count media: quick regex count instead of full parse
       let mediaCount = 0;
-      if (frontmatter.media && Array.isArray(frontmatter.media)) {
-        mediaCount = frontmatter.media.length;
+      if (frontmatter['media'] && Array.isArray(frontmatter['media'])) {
+        mediaCount = (frontmatter['media'] as unknown[]).length;
       } else {
         // Quick count of embedded images/videos (approximate)
         const embedMatches = content.match(/!\[/g);
@@ -1624,28 +1699,28 @@ export class PostDataParser {
 
       // Count comments from section header
       const commentsSection = content.match(/## 💬 Comments/);
-      const commentCount = commentsSection ? (frontmatter.comments ?? 0) : 0;
+      const commentCount = commentsSection ? (frontmatter['comments'] ?? 0) : 0;
 
       return PostIndexService.buildEntry(file, frontmatter, contentText, platform, {
-        authorName: (isProfile ? frontmatter.displayName : frontmatter.author) || 'Unknown',
-        authorHandle: frontmatter.authorHandle || frontmatter.handle,
-        title: frontmatter.title,
-        url: isUserPost ? file.path : (frontmatter.originalUrl || ''),
-        tags: Array.isArray(frontmatter.tags) ? frontmatter.tags : [],
-        hashtags: frontmatter.hashtags || [],
-        like: frontmatter.like === true,
-        archive: frontmatter.archive === true,
-        subscribed: frontmatter.subscribed === true,
-        subscriptionId: frontmatter.subscriptionId,
+        authorName: (isProfile ? frontmatter['displayName'] : frontmatter['author']) as string || 'Unknown',
+        authorHandle: (frontmatter['authorHandle'] as string | undefined) || (frontmatter['handle'] as string | undefined),
+        title: frontmatter['title'] as string | undefined,
+        url: isUserPost ? file.path : ((frontmatter['originalUrl'] as string | undefined) || ''),
+        tags: Array.isArray(frontmatter['tags']) ? frontmatter['tags'] as string[] : [],
+        hashtags: (frontmatter['hashtags'] as string[] | undefined) || [],
+        like: frontmatter['like'] === true,
+        archive: frontmatter['archive'] === true,
+        subscribed: frontmatter['subscribed'] === true,
+        subscriptionId: frontmatter['subscriptionId'] as string | undefined,
         publishedDate,
         archivedDate,
         mediaCount,
         commentCount: typeof commentCount === 'number' ? commentCount : 0,
-        likesCount: frontmatter.likes,
-        commentsCount: frontmatter.comments,
+        likesCount: frontmatter['likes'] as number | undefined,
+        commentsCount: frontmatter['comments'] as number | undefined,
         type: isProfile ? 'profile' : undefined,
-        comment: frontmatter.comment,
-        shareUrl: frontmatter.shareUrl,
+        comment: frontmatter['comment'] as string | undefined,
+        shareUrl: frontmatter['shareUrl'] as string | undefined,
         seriesId,
         episodeNumber,
         metadataTimestamp,
@@ -1691,16 +1766,20 @@ export class PostDataParser {
     if (!archiveFolder) return [];
 
     const files: TFile[] = [];
-    const collect = (folder: any) => {
+    const collect = (folder: VaultFolder): void => {
       for (const child of folder.children) {
-        if (child.children) {
-          collect(child);
-        } else if (child.extension === 'md') {
-          files.push(child);
+        const childAsFolder = child as VaultFolder;
+        if (childAsFolder.children) {
+          collect(childAsFolder);
+        } else {
+          const childAsFile = child as TFile;
+          if (childAsFile.extension === 'md') {
+            files.push(childAsFile);
+          }
         }
       }
     };
-    collect(archiveFolder);
+    collect(archiveFolder as VaultFolder);
     return files;
   }
 }

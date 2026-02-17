@@ -82,7 +82,7 @@ export class ReaderModeOverlay {
     this.currentIndex = context.currentIndex;
 
     // Restore persisted font size
-    const stored = this.context.app.loadLocalStorage(ReaderModeOverlay.FONT_SIZE_KEY);
+    const stored = this.context.app.loadLocalStorage(ReaderModeOverlay.FONT_SIZE_KEY) as unknown;
     this.fontSize = stored ? Math.max(ReaderModeOverlay.MIN_FONT, Math.min(ReaderModeOverlay.MAX_FONT, Number(stored))) : 19;
   }
 
@@ -124,13 +124,13 @@ export class ReaderModeOverlay {
         this.close();
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        this.navigate(-1);
+        void this.navigate(-1);
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
-        this.navigate(1);
+        void this.navigate(1);
       } else if (e.code === 'KeyA') {
         e.preventDefault();
-        this.archiveAndAdvance();
+        void this.archiveAndAdvance();
       } else if (e.code === 'KeyT') {
         e.preventDefault();
         const post = this.context.posts[this.currentIndex];
@@ -164,8 +164,8 @@ export class ReaderModeOverlay {
     if (this.container) {
       this.gestureHandler = new ReaderModeGestureHandler(this.container, {
         onSwipeProgress: (progress) => this.onSwipeProgress(progress),
-        onSwipeLeft: () => this.navigate(1, true),
-        onSwipeRight: () => this.navigate(-1, true),
+        onSwipeLeft: () => { void this.navigate(1, true); },
+        onSwipeRight: () => { void this.navigate(-1, true); },
         onSwipeCancel: () => this.onSwipeCancel(),
         isAtStart: () => this.currentIndex === 0,
         isAtEnd: () => this.currentIndex === this.context.posts.length - 1,
@@ -510,7 +510,7 @@ export class ReaderModeOverlay {
     const tagStore = this.context.plugin.tagStore;
     if (!tagStore) return;
 
-    import('../modals/TagModal').then(({ TagModal }) => {
+    void import('../modals/TagModal').then(({ TagModal }) => {
       this.modalOpen = true;
       const modal = new TagModal(this.context.app, tagStore, filePath, () => {
         post.tags = tagStore.getTagsForPost(filePath);
@@ -551,7 +551,7 @@ export class ReaderModeOverlay {
     if (!file || !(file instanceof TFile)) return;
 
     const leaf = this.context.app.workspace.getLeaf('tab');
-    leaf.openFile(file);
+    void leaf.openFile(file);
   }
 
   // ---------- Share ----------
@@ -894,7 +894,7 @@ export class ReaderModeOverlay {
       {
         onClose: () => this.close(),
         onFontSizeChange: (delta) => this.changeFontSize(delta),
-        onArchive: () => this.archiveAndAdvance(),
+        onArchive: () => { void this.archiveAndAdvance(); },
         onToggleLike: () => void this.toggleLike(post),
         onShare: () => void this.sharePost(post),
         onTag: () => this.tagPost(post),
@@ -904,7 +904,7 @@ export class ReaderModeOverlay {
         currentFontSize: this.fontSize,
         isArchived: !!post.archive,
         isLiked: !!post.like,
-        isShared: !!(post as any).shareUrl,
+        isShared: !!post.shareUrl,
         hasTags: (post.tags?.length ?? 0) > 0,
         showEdit: post.platform === 'post',
         hasComment: !!post.comment,

@@ -78,11 +78,11 @@ export class URLExpander implements IService {
     this.requestUrlFn = options.requestUrl ?? undefined;
   }
 
-  async initialize(): Promise<void> {
+  initialize(): void {
     // No async initialization needed
   }
 
-  async dispose(): Promise<void> {
+  dispose(): void {
     // Clear cache
     this.cache.clear();
   }
@@ -235,12 +235,13 @@ export class URLExpander implements IService {
     }
 
     // Fall back to native fetch (may fail with CORS)
-    // NOTE: Using fetch() here instead of requestUrl() because we need redirect: 'manual'
-    // to detect and handle redirects manually. requestUrl() auto-follows redirects.
+    // requestUrl() auto-follows redirects and doesn't support redirect: 'manual'
+    // native fetch is required here to detect and handle redirects manually
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
+      // eslint-disable-next-line no-restricted-globals -- redirect: 'manual' is not supported by requestUrl
       const response = await fetch(url, {
         method: 'HEAD', // Use HEAD to avoid downloading content
         redirect: 'manual', // Handle redirects manually
@@ -289,12 +290,13 @@ export class URLExpander implements IService {
       return requestUrlResult;
     }
 
-    // NOTE: Using fetch() here instead of requestUrl() because we need redirect: 'manual'
-    // to detect and handle redirects manually. requestUrl() auto-follows redirects.
+    // requestUrl() auto-follows redirects and doesn't support redirect: 'manual'
+    // native fetch is required here to detect and handle redirects manually
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
+      // eslint-disable-next-line no-restricted-globals -- redirect: 'manual' is not supported by requestUrl
       const response = await fetch(url, {
         method: 'GET',
         redirect: 'manual',
@@ -337,6 +339,7 @@ export class URLExpander implements IService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
+      // eslint-disable-next-line no-restricted-globals -- native fetch required for features not supported by requestUrl
       const response = await fetch(url, {
         method: 'GET',
         signal: controller.signal,
@@ -478,16 +481,16 @@ export class URLExpander implements IService {
       size: entries.length,
       urls: entries.map(([url]) => url),
       oldestEntry: entries.length > 0
-        ? entries.reduce((oldest, [, entry]) =>
+        ? new Date(entries.reduce((oldest, [, entry]) =>
             entry.timestamp < oldest ? entry.timestamp : oldest,
-            entries[0]![1].timestamp
-          )
+            entries[0]?.[1].timestamp ?? 0
+          ))
         : undefined,
       newestEntry: entries.length > 0
-        ? entries.reduce((newest, [, entry]) =>
+        ? new Date(entries.reduce((newest, [, entry]) =>
             entry.timestamp > newest ? entry.timestamp : newest,
-            entries[0]![1].timestamp
-          )
+            entries[0]?.[1].timestamp ?? 0
+          ))
         : undefined,
     };
   }
@@ -636,4 +639,3 @@ export class URLExpander implements IService {
     return null;
   }
 }
-// @ts-nocheck

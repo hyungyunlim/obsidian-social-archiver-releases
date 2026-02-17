@@ -5,7 +5,7 @@
  * Separates state management from UI components for reliable updates.
  */
 
-import { writable, derived, get, type Writable, type Readable } from 'svelte/store';
+import { writable, derived, type Writable, type Readable } from 'svelte/store';
 import type { Platform } from '@/types/post';
 import type {
   AuthorCatalogEntry,
@@ -294,20 +294,22 @@ export function createAuthorCatalogStore(): AuthorCatalogStoreAPI {
         case 'pinterest':
           // /username or /in/username
           return pathname.replace(/^\/(in\/)?/, '').replace(/\/$/, '') || null;
-        case 'reddit':
+        case 'reddit': {
           // /r/subreddit or /user/username or /u/username
           const redditMatch = pathname.match(/\/(r|user|u)\/([^/]+)/);
           return redditMatch?.[2] ?? null;
+        }
         case 'bluesky':
           // /profile/handle
           return pathname.replace(/^\/profile\//, '').replace(/\/$/, '') || null;
         case 'mastodon':
           // /@username
           return pathname.replace(/^\/@/, '').replace(/\/$/, '') || null;
-        default:
+        default: {
           // Generic: extract last path segment
           const segments = pathname.split('/').filter(Boolean);
           return segments[segments.length - 1] || null;
+        }
       }
     } catch {
       return null;

@@ -148,7 +148,6 @@ function initializeEditor(): void {
       // Notify parent when editor loses focus
       if (onBlur) {
         onBlur();
-      } else {
       }
     },
   });

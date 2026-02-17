@@ -1,7 +1,7 @@
 import { Modal, Notice, Platform, setIcon, type App } from 'obsidian';
 import type { TagStore } from '@/services/TagStore';
 import type { TagDefinition } from '@/types/tag';
-import { TAG_COLORS, TAG_NAME_MAX_LENGTH } from '@/types/tag';
+import { TAG_NAME_MAX_LENGTH } from '@/types/tag';
 
 /**
  * TagModal - Modal for managing tags
@@ -301,7 +301,7 @@ export class TagModal extends Modal {
       new Notice(`Deleting ${totalCount} tag${totalCount !== 1 ? 's' : ''}...`);
 
       // Background: delete definitions then bulk-remove auto tags
-      (async () => {
+      void (async () => {
         try {
           for (const def of definitions) {
             await this.tagStore.deleteTag(def.id);
@@ -451,26 +451,28 @@ export class TagModal extends Modal {
       });
     }
 
-    deleteBtn.addEventListener('click', async (e) => {
+    deleteBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      try {
-        if (isUndefined) {
-          // Auto-discovered tag: bulk remove from all posts
-          const count = await this.tagStore.bulkRemoveTag(tag.name);
-          new Notice(`Removed "${tag.name}" from ${count} post${count !== 1 ? 's' : ''}`);
-        } else {
-          // User-defined tag: delete definition + remove from all posts
-          await this.tagStore.deleteTag(tag.id);
-          new Notice(`Deleted tag "${tag.name}"`);
+      void (async () => {
+        try {
+          if (isUndefined) {
+            // Auto-discovered tag: bulk remove from all posts
+            const count = await this.tagStore.bulkRemoveTag(tag.name);
+            new Notice(`Removed "${tag.name}" from ${count} post${count !== 1 ? 's' : ''}`);
+          } else {
+            // User-defined tag: delete definition + remove from all posts
+            await this.tagStore.deleteTag(tag.id);
+            new Notice(`Deleted tag "${tag.name}"`);
+          }
+          // Track deleted name to filter stale metadataCache results
+          this.deletedTagNames.add(tag.name.toLowerCase());
+          this.markDirty();
+          const query = this.searchInput?.value || '';
+          this.renderTagList(container, query);
+        } catch (err) {
+          new Notice(`Failed to delete tag: ${err instanceof Error ? err.message : 'Unknown error'}`);
         }
-        // Track deleted name to filter stale metadataCache results
-        this.deletedTagNames.add(tag.name.toLowerCase());
-        this.markDirty();
-        const query = this.searchInput?.value || '';
-        this.renderTagList(container, query);
-      } catch (err) {
-        new Notice(`Failed to delete tag: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      }
+      })();
     });
 
     // Toggle on click (only in post mode) — optimistic UI
@@ -492,7 +494,7 @@ export class TagModal extends Modal {
         // Register UI modify to prevent timeline refresh from vault watcher
         if (this.onUIModify && this.filePath) this.onUIModify(this.filePath);
         // Background: actual YAML update
-        this.tagStore.toggleTagOnPost(this.filePath!, tag.name).catch(() => {
+        this.tagStore.toggleTagOnPost(this.filePath ?? '', tag.name).catch(() => {
           // Revert on failure
           if (isApplied) {
             this.toggledOffTags.delete(lower);
@@ -532,25 +534,27 @@ export class TagModal extends Modal {
     textEl.addClass('sa-text-md', 'sa-text-accent', 'sa-font-medium');
 
     // Create (and optionally apply) on click
-    row.addEventListener('click', async () => {
+    row.addEventListener('click', () => {
       this.markDirty();
       this.highlightedIndex = -1;
       if (this.searchInput) this.searchInput.value = '';
 
-      try {
-        const tag = await this.tagStore.createTag(name);
-        if (this.filePath) {
-          this.toggledOnTags.add(tag.name.toLowerCase());
-          // Register UI modify to prevent timeline refresh from vault watcher
-          if (this.onUIModify) this.onUIModify(this.filePath);
-          await this.tagStore.addTagToPost(this.filePath, tag.name);
+      void (async () => {
+        try {
+          const tag = await this.tagStore.createTag(name);
+          if (this.filePath) {
+            this.toggledOnTags.add(tag.name.toLowerCase());
+            // Register UI modify to prevent timeline refresh from vault watcher
+            if (this.onUIModify) this.onUIModify(this.filePath);
+            await this.tagStore.addTagToPost(this.filePath, tag.name);
+          }
+        } catch (err) {
+          new Notice(`Failed to create tag: ${err instanceof Error ? err.message : 'Unknown error'}`);
+          this.toggledOnTags.delete(name.toLowerCase());
         }
-      } catch (err) {
-        new Notice(`Failed to create tag: ${err instanceof Error ? err.message : 'Unknown error'}`);
-        this.toggledOnTags.delete(name.toLowerCase());
-      }
-      // Re-render after creation completes — tag is now in definitions
-      if (this.listContainer) this.renderTagList(this.listContainer, this.searchInput?.value || '');
+        // Re-render after creation completes — tag is now in definitions
+        if (this.listContainer) this.renderTagList(this.listContainer, this.searchInput?.value || '');
+      })();
     });
   }
 }

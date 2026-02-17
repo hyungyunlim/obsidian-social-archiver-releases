@@ -16,6 +16,7 @@ import type { IService } from './base/IService';
 import { Logger } from './Logger';
 import { extractYouTubeChannelInfo } from './YouTubeChannelExtractor';
 import { SUBSCRIPTION_SUPPORTED_PLATFORMS, type SubscriptionSupportedPlatform } from '@/constants/rssPlatforms';
+import type { PostData } from '../types/post';
 
 // ============================================================================
 // Types - Plugin-side subscription types mirroring Workers API
@@ -122,7 +123,7 @@ export interface PendingPost {
   id: string; // Unique ID for this pending entry
   subscriptionId: string;
   subscriptionName: string;
-  post: any; // PostData from server
+  post: PostData; // PostData from server
   destinationFolder: string;
   archivedAt: string; // ISO 8601
 }
@@ -452,7 +453,7 @@ export class SubscriptionManager implements IService {
     });
   }
 
-  async dispose(): Promise<void> {
+  dispose(): void {
     if (!this.initialized) {
       return;
     }
@@ -956,7 +957,7 @@ export class SubscriptionManager implements IService {
     // Parse JSON if string
     let data: SubscriptionExport;
     try {
-      data = typeof json === 'string' ? JSON.parse(json) : json;
+      data = (typeof json === 'string' ? JSON.parse(json) : json) as SubscriptionExport;
     } catch {
       throw new SubscriptionValidationError('Invalid JSON format');
     }
@@ -1207,10 +1208,11 @@ export class SubscriptionManager implements IService {
       });
 
       if (response.status >= 400) {
-        const errorData = response.json;
+        const errorData = response.json as Record<string, unknown>;
+        const errObj = errorData?.['error'] as Record<string, unknown> | undefined;
         throw new SubscriptionAPIError(
-          errorData?.error?.code || 'API_ERROR',
-          errorData?.error?.message || `HTTP ${response.status}`
+          typeof errObj?.['code'] === 'string' ? errObj['code'] : 'API_ERROR',
+          typeof errObj?.['message'] === 'string' ? errObj['message'] : `HTTP ${response.status}`
         );
       }
 
@@ -1261,8 +1263,8 @@ export class SubscriptionManager implements IService {
     this.logger?.debug('Starting subscription polling');
     this.isPolling = true;
 
-    this.pollingIntervalId = setInterval(async () => {
-      await this.pollForUpdates();
+    this.pollingIntervalId = setInterval(() => {
+      void this.pollForUpdates();
     }, this.config.pollingInterval);
   }
 
@@ -1365,15 +1367,13 @@ export class SubscriptionManager implements IService {
   // Private Methods - Network Handling
   // --------------------------------------------------------------------------
 
-  private handleOnline = async (): Promise<void> => {
+  private handleOnline = (): void => {
     this.logger?.info('Network online, refreshing subscriptions');
     this.isOnline = true;
 
-    try {
-      await this.refresh();
-    } catch (error) {
+    void this.refresh().catch(error => {
       this.logger?.error('Failed to refresh on reconnection', error as Error);
-    }
+    });
   };
 
   private handleOffline = (): void => {

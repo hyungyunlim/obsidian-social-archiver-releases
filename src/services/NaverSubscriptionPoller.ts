@@ -191,17 +191,15 @@ export class NaverSubscriptionPoller {
 
     // Process pending notifications first (hybrid architecture)
     // These are posts detected by Worker while Obsidian was inactive
-    this.initialDelayId = window.setTimeout(async () => {
+    this.initialDelayId = window.setTimeout(() => {
       this.initialDelayId = null;
-      await this.processPendingNotifications();
-      await this.pollAll();
+      void this.processPendingNotifications().then(() => this.pollAll());
     }, 5000);
 
     // Set up interval for periodic polling
     this.intervalId = window.setInterval(
-      async () => {
-        await this.processPendingNotifications();
-        await this.pollAll();
+      () => {
+        void this.processPendingNotifications().then(() => this.pollAll());
       },
       this.pollingInterval
     );
@@ -271,7 +269,6 @@ export class NaverSubscriptionPoller {
         if (this.isDue(sub)) {
           const result = await this.pollSubscription(sub);
           results.push(result);
-        } else {
         }
       }
 
@@ -439,8 +436,7 @@ export class NaverSubscriptionPoller {
         ? rawPosts.filter(p => p.title?.toLowerCase().includes(keyword))
         : rawPosts;
 
-      if (keyword && posts.length !== rawPosts.length) {
-      }
+      // keyword filtering applied (posts.length may differ from rawPosts.length)
 
       if (posts.length === 0) {
         result.success = true;
@@ -546,8 +542,7 @@ export class NaverSubscriptionPoller {
         ? rawPosts.filter(p => p.title?.toLowerCase().includes(keyword))
         : rawPosts;
 
-      if (keyword && posts.length !== rawPosts.length) {
-      }
+      // keyword filtering applied (posts.length may differ from rawPosts.length)
 
       if (posts.length === 0) {
         // No new posts, just update lastRunAt
@@ -884,7 +879,7 @@ export class NaverSubscriptionPoller {
   /**
    * Archive a Naver Blog post to vault
    */
-  private async archiveBlogPost(post: NaverBlogPostData, sub: Subscription): Promise<void> {
+  private async archiveBlogPost(post: NaverBlogPostData, _sub: Subscription): Promise<void> {
     // Convert NaverBlogPostData to standard PostData format
     // Map media types: 'photo' -> 'image'
     const convertedMedia = post.media.map(m => ({
@@ -924,15 +919,15 @@ export class NaverSubscriptionPoller {
       basePath: this.plugin.settings.archivePath || 'Social Archives',
       organizationStrategy: getVaultOrganizationStrategy(this.plugin.settings.archiveOrganization),
     });
-    await vaultManager.initialize();
+    vaultManager.initialize();
 
     const markdownConverter = new MarkdownConverter({
       frontmatterSettings: this.plugin.settings.frontmatter,
     });
-    await markdownConverter.initialize();
+    markdownConverter.initialize();
 
     // Convert to markdown
-    const markdown = await markdownConverter.convert(
+    const markdown = markdownConverter.convert(
       postData,
       undefined, // No custom template
       undefined, // No downloaded media yet (TODO: add media download support)
@@ -946,7 +941,7 @@ export class NaverSubscriptionPoller {
   /**
    * Archive a Naver Cafe post to vault
    */
-  private async archiveCafePost(post: NaverCafePostData, sub: Subscription): Promise<void> {
+  private async archiveCafePost(post: NaverCafePostData, _sub: Subscription): Promise<void> {
     // Convert NaverCafePostData to standard PostData format
     // Map media types: 'photo' -> 'image'
     const convertedMedia = post.media.map(m => ({
@@ -985,15 +980,15 @@ export class NaverSubscriptionPoller {
       basePath: this.plugin.settings.archivePath || 'Social Archives',
       organizationStrategy: getVaultOrganizationStrategy(this.plugin.settings.archiveOrganization),
     });
-    await vaultManager.initialize();
+    vaultManager.initialize();
 
     const markdownConverter = new MarkdownConverter({
       frontmatterSettings: this.plugin.settings.frontmatter,
     });
-    await markdownConverter.initialize();
+    markdownConverter.initialize();
 
     // Convert to markdown
-    const markdown = await markdownConverter.convert(
+    const markdown = markdownConverter.convert(
       postData,
       undefined, // No custom template
       undefined, // No downloaded media yet (TODO: add media download support)
@@ -1221,8 +1216,8 @@ export class NaverSubscriptionPoller {
       headers['Authorization'] = `Bearer ${this.plugin.settings.authToken}`;
     }
 
-    if (this.plugin.settings.licenseKey) {
-      headers['X-License-Key'] = this.plugin.settings.licenseKey;
+    if (this.plugin.settings.authToken) {
+      headers['X-License-Key'] = this.plugin.settings.authToken;
     }
 
     return headers;
@@ -1237,7 +1232,7 @@ export class NaverSubscriptionPoller {
    */
   private async loadRSSCache(): Promise<void> {
     try {
-      const data = await this.plugin.loadData();
+      const data = await this.plugin.loadData() as Record<string, unknown> | null | undefined;
       const cacheData = data?.[RSS_CACHE_STORAGE_KEY] as RSSCacheStorage | undefined;
 
       if (!cacheData || cacheData.version !== 1) {
@@ -1245,16 +1240,10 @@ export class NaverSubscriptionPoller {
       }
 
       const now = Date.now();
-      let _loadedCount = 0;
-      let _expiredCount = 0;
-
       // Load entries, filtering out expired ones
       for (const [key, entry] of Object.entries(cacheData.entries)) {
         if (now - entry.cachedAt < RSS_CACHE_TTL_MS) {
           this.rssCache.set(key, entry);
-          _loadedCount++;
-        } else {
-          _expiredCount++;
         }
       }
 
@@ -1301,7 +1290,7 @@ export class NaverSubscriptionPoller {
       };
 
       // Load existing data and merge with cache
-      const existingData = await this.plugin.loadData() || {};
+      const existingData = (await this.plugin.loadData() || {}) as Record<string, unknown>;
       existingData[RSS_CACHE_STORAGE_KEY] = cacheData;
       await this.plugin.saveData(existingData);
 

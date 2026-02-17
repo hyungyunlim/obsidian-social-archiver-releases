@@ -12,6 +12,36 @@ import * as cheerio from 'cheerio';
 import type { CheerioAPI, Cheerio } from 'cheerio';
 import type { Element, AnyNode } from 'domhandler';
 
+/** Naver API article response shape */
+interface NaverArticleApiResponse {
+  result?: {
+    article?: Record<string, unknown>;
+    cafe?: Record<string, unknown>;
+    comments?: Record<string, unknown> | Record<string, unknown>[];
+    commentList?: Record<string, unknown>[];
+  };
+}
+
+/** Raw comment object shape from Naver API responses */
+interface NaverCafeRawComment {
+  writer?: { nick?: string; nickname?: string; id?: string; memberKey?: string };
+  image?: { url?: string; src?: string; imageUrl?: string };
+  content?: string;
+  isDeleted?: boolean;
+  updateDate?: string | number;
+  writeDate?: string | number;
+  createDate?: string | number;
+  id?: string | number;
+  commentId?: string | number;
+  refId?: string | number;
+  isRef?: boolean;
+  sympathyCount?: number;
+  likeCount?: number;
+  isArticleWriter?: boolean;
+  articleWriter?: boolean;
+  replyList?: NaverCafeRawComment[];
+}
+
 const CAFE_BASE_URL = 'https://cafe.naver.com';
 const CAFE_ARTICLE_API = 'https://apis.naver.com/cafe-web/cafe-articleapi/v2.1/cafes';
 const CAFE_MEMBER_PROFILE_API = 'https://apis.naver.com/cafe-web/cafe-cafeinfo-api/v3.0/cafes';
@@ -309,11 +339,11 @@ export class NaverCafeLocalService {
       throw new Error(`Failed to fetch cafe post: ${response.status}`);
     }
 
-    const data = response.json;
+    const data = response.json as NaverArticleApiResponse;
 
     // Check for error in response body
     const result = data?.result;
-    if (result?.errorCode === 'UNAUTHORIZED' || result?.errorCode === 'NOT_LOGGED_IN') {
+    if ((result as Record<string, unknown>)?.['errorCode'] === 'UNAUTHORIZED' || (result as Record<string, unknown>)?.['errorCode'] === 'NOT_LOGGED_IN') {
       throw new Error('Authentication required for private cafe. Please check your Naver cookies in settings.');
     }
 
@@ -352,7 +382,7 @@ export class NaverCafeLocalService {
    * Parse article from API response
    */
   private parseArticle(
-    data: any,
+    data: NaverArticleApiResponse,
     originalUrl: string,
     cafeUrl: string,
     articleId: string,
@@ -366,17 +396,15 @@ export class NaverCafeLocalService {
 
     // Extract cafe info from result.cafe
     const cafe = result?.cafe || {};
-    const menu = article.menu || {};
+    const menu = (article.menu || {}) as Record<string, unknown>;
 
     // Handle scraped content (blog posts shared to cafe)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const scrap = (article as any).scrap as Record<string, unknown> | undefined;
+    const scrap = article.scrap as Record<string, unknown> | undefined;
     const scrapContentHtml = (scrap?.contentHtml || '') as string;
     const userContentHtml = (article.contentHtml || article.content || '') as string;
 
     // Process contentElements - build image map for placeholders
     // Naver API uses [[[CONTENT-ELEMENT-N]]] placeholders in contentHtml
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const contentElements = ((scrap?.contentElements || []) as Array<Record<string, unknown>>);
     const extractedImages: string[] = [];
     const placeholderMap = new Map<string, string>();
@@ -468,12 +496,14 @@ export class NaverCafeLocalService {
 
     // If no extractedImages, try article.imageList
     if (media.length === 0 && article.imageList && Array.isArray(article.imageList)) {
-      for (const img of article.imageList) {
-        if (img.url || img.imageUrl) {
+      for (const imgRaw of article.imageList) {
+        const img = imgRaw as Record<string, unknown>;
+        const imgUrl = (typeof img.url === 'string' ? img.url : null) || (typeof img.imageUrl === 'string' ? img.imageUrl : null);
+        if (imgUrl) {
           media.push({
             type: 'photo',
-            url: this.enhanceImageUrl(img.url || img.imageUrl),
-            thumbnailUrl: img.thumbnailUrl,
+            url: this.enhanceImageUrl(imgUrl),
+            thumbnailUrl: typeof img.thumbnailUrl === 'string' ? img.thumbnailUrl : undefined,
           });
         }
       }
@@ -493,65 +523,65 @@ export class NaverCafeLocalService {
     }
 
     // Parse author
-    const writer = article.writer || {};
+    const writer = (article.writer || {}) as Record<string, unknown>;
 
     // Parse timestamp
     let timestamp: Date;
     if (article.writeDate) {
-      timestamp = new Date(article.writeDate);
+      timestamp = new Date(article.writeDate as string | number);
     } else if (article.writeDateTimestamp) {
-      timestamp = new Date(article.writeDateTimestamp);
+      timestamp = new Date(article.writeDateTimestamp as string | number);
     } else {
       timestamp = new Date();
     }
 
     // Get cafe name - prefer pcCafeName for full name, fallback to name
-    const rawCafeName = cafe.pcCafeName || cafe.name || cafeUrl;
+    const rawCafeName = (cafe.pcCafeName || cafe.name || cafeUrl) as string;
     const cafeName = this.decodeHtmlEntities(rawCafeName);
 
     // Extract author avatar (from article.profileImageUrl or writer fields)
-    const authorAvatar = article.profileImageUrl
+    const authorAvatar = (article.profileImageUrl
       || writer.image
       || writer.imageUrl
       || writer.profileImageUrl
-      || undefined;
+      || undefined) as string | undefined;
 
     // Extract author grade/level if available
-    const authorGrade = article.memberGrade
+    const authorGrade = (article.memberGrade
       || article.memberLevel
       || writer.grade
       || writer.level
       || writer.memberLevelName
-      || undefined;
+      || undefined) as string | undefined;
 
     return {
       platform: 'naver',
       id: articleId,
       url: originalUrl,
-      title: article.subject || 'Untitled',
+      title: (article.subject || 'Untitled') as string,
       author: {
-        id: writer.memberId || writer.id || 'unknown',
-        name: writer.nick || writer.nickName || writer.memberNickName || 'Unknown',
+        id: (writer.memberId || writer.id || 'unknown') as string,
+        name: (writer.nick || writer.nickName || writer.memberNickName || 'Unknown') as string,
         // Member profile URL format: cafe.naver.com/f-e/cafes/{cafeId}/members/{memberKey}
         url: writer.memberKey
-          ? `https://cafe.naver.com/f-e/cafes/${cafeId}/members/${writer.memberKey}`
+          ? `https://cafe.naver.com/f-e/cafes/${cafeId}/members/${writer.memberKey as string}`
           : `https://cafe.naver.com/${cafeUrl}`,
-        memberKey: writer.memberKey || article.memberKey,
+        memberKey: (writer.memberKey || article.memberKey) as string | undefined,
         avatar: authorAvatar,
         grade: authorGrade,
       },
       text: textContent,
       timestamp,
-      likes: article.likeItCount || article.sympathyCount || 0,
-      commentCount: article.commentCount || 0,
-      viewCount: article.readCount || 0,
+      likes: ((article.likeItCount || article.sympathyCount || 0) as number),
+      commentCount: (article.commentCount || 0) as number,
+      viewCount: (article.readCount || 0) as number,
       media,
       // Cafe metadata
       cafeId,
       cafeName,
       cafeUrl: `https://cafe.naver.com/${cafeUrl}`,
-      menuId: menu.id || undefined,
-      menuName: menu.name ? this.decodeHtmlEntities(menu.name) : undefined,
+      menuId: menu.id ? Number(menu.id) : undefined,
+      menuName: menu.name ? this.decodeHtmlEntities(menu.name as string) : undefined,
     };
   }
 
@@ -580,7 +610,7 @@ export class NaverCafeLocalService {
           break;
         }
 
-        const data = response.json;
+        const data = response.json as NaverArticleApiResponse;
         const comments = this.parseCommentsFromApiJson(data);
 
         if (comments.length === 0) {
@@ -591,7 +621,7 @@ export class NaverCafeLocalService {
         }
 
         // Check if there are more pages
-        const result = data?.result;
+        const result = data?.result as (typeof data.result & { hasNext?: boolean }) | undefined;
         if (result?.hasNext === false) {
           hasMore = false;
         }
@@ -609,28 +639,31 @@ export class NaverCafeLocalService {
   /**
    * Parse comments from API JSON response
    */
-  private parseCommentsFromApiJson(data: any): NaverCafeComment[] {
+  private parseCommentsFromApiJson(data: NaverArticleApiResponse): NaverCafeComment[] {
     const comments: NaverCafeComment[] = [];
     const result = data?.result;
 
     if (!result) return comments;
 
     // Try different response structures
-    let commentList: any[] | undefined;
+    let commentList: NaverCafeRawComment[] | undefined;
 
-    const commentsObj = result.comments;
+    const commentsObj = result?.comments;
     if (commentsObj) {
       if (Array.isArray(commentsObj)) {
-        commentList = commentsObj;
-      } else if (commentsObj.items && Array.isArray(commentsObj.items)) {
-        commentList = commentsObj.items;
+        commentList = commentsObj as unknown as NaverCafeRawComment[];
+      } else if (typeof commentsObj === 'object' && commentsObj !== null && 'items' in commentsObj) {
+        const items = (commentsObj as { items: unknown }).items;
+        if (Array.isArray(items)) {
+          commentList = items as unknown as NaverCafeRawComment[];
+        }
       }
     }
 
     if (!commentList) {
-      const directList = result.commentList;
+      const directList = result?.commentList;
       if (directList && Array.isArray(directList)) {
-        commentList = directList;
+        commentList = directList as NaverCafeRawComment[];
       }
     }
 
@@ -663,7 +696,7 @@ export class NaverCafeLocalService {
    * Parse a single comment object
    */
   private parseSingleComment(
-    comment: any,
+    comment: NaverCafeRawComment,
     isReply: boolean,
     parentCommentId?: string
   ): NaverCafeComment | null {
@@ -743,14 +776,14 @@ export class NaverCafeLocalService {
     let components: Element[];
 
     if (mainContainer.length > 0) {
-      components = mainContainer.find('.se-component').toArray() as Element[];
+      components = mainContainer.find('.se-component').toArray();
       if (components.length === 0) {
-        components = mainContainer.find('.se-section').toArray() as Element[];
+        components = mainContainer.find('.se-section').toArray();
       }
     } else {
-      components = $('.se-component').toArray() as Element[];
+      components = $('.se-component').toArray();
       if (components.length === 0) {
-        components = $('.se-section').toArray() as Element[];
+        components = $('.se-section').toArray();
       }
     }
 
@@ -857,7 +890,7 @@ export class NaverCafeLocalService {
         // Process all direct children in DOM order
         textModule.children().each((_, child) => {
           const $child = $(child);
-          const tagName = (child as Element).tagName?.toLowerCase();
+          const tagName = child.tagName?.toLowerCase();
 
           if (tagName === 'p') {
             const paragraphText = $child.text().trim();
@@ -969,10 +1002,11 @@ export class NaverCafeLocalService {
         const moduleData = scriptEl.attr('data-module-v2');
         if (moduleData) {
           try {
-            const data = JSON.parse(moduleData);
-            if (data.type === 'v2_video' && data.data?.vid && data.data?.inkey) {
+            const data = JSON.parse(moduleData) as Record<string, unknown>;
+            const dataData = data.data as Record<string, unknown> | undefined;
+            if (data.type === 'v2_video' && dataData?.vid && dataData?.inkey) {
               // Use placeholder with vid and inkey for later video download
-              content += `<!--VIDEO:${data.data.vid}:${data.data.inkey}-->\n\n`;
+              content += `<!--VIDEO:${String(dataData.vid)}:${String(dataData.inkey)}-->\n\n`;
             } else {
               content += '[비디오]\n\n';
             }
@@ -1104,8 +1138,8 @@ export class NaverCafeLocalService {
 
     // Decode numeric HTML entities (&#xxx; and &#xHHH;)
     return text
-      .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(parseInt(code, 10)))
-      .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCodePoint(parseInt(code, 16)))
+      .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(parseInt(code, 10)))
+      .replace(/&#x([0-9a-fA-F]+);/g, (_, code: string) => String.fromCodePoint(parseInt(code, 16)))
       // Common named entities
       .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')
@@ -1194,17 +1228,20 @@ export class NaverCafeLocalService {
         return null;
       }
 
-      const data = response.json;
+      const data = response.json as Record<string, unknown>;
       const qualities: NaverVideoQuality[] = [];
 
       // Extract video list from response
-      if (data.videos?.list) {
-        for (const video of data.videos.list) {
+      const videos = data.videos as Record<string, unknown> | undefined;
+      if (videos?.list && Array.isArray(videos.list)) {
+        for (const videoRaw of videos.list) {
+          const video = videoRaw as Record<string, unknown>;
+          const enc = video.encodingOption as Record<string, unknown> | undefined;
           qualities.push({
-            name: video.encodingOption?.name || 'unknown',
-            width: video.encodingOption?.width || 0,
-            height: video.encodingOption?.height || 0,
-            source: video.source,
+            name: typeof enc?.name === 'string' ? enc.name : 'unknown',
+            width: typeof enc?.width === 'number' ? enc.width : 0,
+            height: typeof enc?.height === 'number' ? enc.height : 0,
+            source: typeof video.source === 'string' ? video.source : '',
           });
         }
       }
@@ -1258,8 +1295,8 @@ export class NaverCafeLocalService {
         return null;
       }
 
-      const data = response.json;
-      const result = data?.result;
+      const data = response.json as Record<string, unknown>;
+      const result = data?.result as Record<string, unknown> | undefined;
 
       if (!result) {
         return null;
@@ -1267,51 +1304,54 @@ export class NaverCafeLocalService {
 
       // Extract profile data
       // Try various possible field names for nickname
-      const nickname = result.nickname
-        || result.memberNickname
-        || result.memberNick
-        || result.nick
-        || result.displayName
+      const nickname = (typeof result.nickname === 'string' ? result.nickname : null)
+        || (typeof result.memberNickname === 'string' ? result.memberNickname : null)
+        || (typeof result.memberNick === 'string' ? result.memberNick : null)
+        || (typeof result.nick === 'string' ? result.nick : null)
+        || (typeof result.displayName === 'string' ? result.displayName : null)
         || undefined;
 
       // Prefer pcCafeName for full cafe name (may include subtitle in parentheses)
       // Fall back to cafeName if pcCafeName is not available
-      const cafe = result.cafe;
-      const rawCafeName = result.pcCafeName
-        || cafe?.pcCafeName
-        || result.cafeName
-        || cafe?.name
+      const cafe = result.cafe as Record<string, unknown> | undefined;
+      const rawCafeName = (typeof result.pcCafeName === 'string' ? result.pcCafeName : null)
+        || (typeof cafe?.pcCafeName === 'string' ? cafe.pcCafeName : null)
+        || (typeof result.cafeName === 'string' ? result.cafeName : null)
+        || (typeof cafe?.name === 'string' ? cafe.name : null)
         || undefined;
       const cafeName = rawCafeName ? this.decodeHtmlEntities(rawCafeName) : undefined;
 
+      const memberLevel = result.memberLevel as Record<string, unknown> | undefined;
       const profile: NaverCafeMemberProfile = {
         nickname,
-        avatar: result.profileImageUrl,
-        grade: result.memberLevel?.levelName,  // Used as authorBio
+        avatar: typeof result.profileImageUrl === 'string' ? result.profileImageUrl : undefined,
+        grade: typeof memberLevel?.levelName === 'string' ? memberLevel.levelName : undefined,
         cafeName,
       };
 
       // Extract cafe image if available (might be nested)
       if (cafe) {
-        profile.cafeImageUrl = cafe.cafeImageUrl || cafe.imageUrl;
+        profile.cafeImageUrl = (typeof cafe.cafeImageUrl === 'string' ? cafe.cafeImageUrl : null) || (typeof cafe.imageUrl === 'string' ? cafe.imageUrl : undefined);
       }
 
       // Extract member stats if available
-      if (result.memberStat) {
+      const memberStat = result.memberStat as Record<string, unknown> | undefined;
+      if (memberStat) {
         profile.stats = {
-          visitCount: result.memberStat.visitCount || 0,
-          articleCount: result.memberStat.articleCount || 0,
-          commentCount: result.memberStat.commentCount || 0,
-          subscriberCount: result.memberStat.subscriberCount || 0,
+          visitCount: typeof memberStat.visitCount === 'number' ? memberStat.visitCount : 0,
+          articleCount: typeof memberStat.articleCount === 'number' ? memberStat.articleCount : 0,
+          commentCount: typeof memberStat.commentCount === 'number' ? memberStat.commentCount : 0,
+          subscriberCount: typeof memberStat.subscriberCount === 'number' ? memberStat.subscriberCount : 0,
         };
       }
 
       // Extract trade review if available
-      if (result.tradeReview) {
+      const tradeReview = result.tradeReview as Record<string, unknown> | undefined;
+      if (tradeReview) {
         profile.tradeReview = {
-          bestCount: result.tradeReview.bestCount || 0,
-          goodCount: result.tradeReview.goodCount || 0,
-          sorryCount: result.tradeReview.sorryCount || 0,
+          bestCount: typeof tradeReview.bestCount === 'number' ? tradeReview.bestCount : 0,
+          goodCount: typeof tradeReview.goodCount === 'number' ? tradeReview.goodCount : 0,
+          sorryCount: typeof tradeReview.sorryCount === 'number' ? tradeReview.sorryCount : 0,
         };
       }
 
@@ -1364,7 +1404,7 @@ export class NaverCafeLocalService {
       });
 
       const response = await requestUrl({
-        url: `${CAFE_MEMBER_ARTICLES_API}?${params}`,
+        url: `${CAFE_MEMBER_ARTICLES_API}?${params.toString()}`,
         method: 'GET',
         headers: this.buildMemberApiHeaders(),
         throw: false,
@@ -1382,22 +1422,24 @@ export class NaverCafeLocalService {
         throw new Error(`Member API error: ${response.status}`);
       }
 
-      const data = response.json;
-      const result = data?.message?.result;
+      const data = response.json as Record<string, unknown>;
+      const message = data?.message as Record<string, unknown> | undefined;
+      const result = message?.result as Record<string, unknown> | undefined;
 
       // Check API-level auth errors
-      if (data?.message?.status !== '200') {
-        const errorCode = data?.message?.error?.code;
+      if (message?.status !== '200') {
+        const errorObj = message?.error as Record<string, unknown> | undefined;
+        const errorCode = errorObj?.code;
         if (errorCode === 'UNAUTHORIZED' || errorCode === 'NOT_LOGGED_IN') {
           throw new NaverCafeAuthError(
             'Naver session expired. Please re-login and update cookie.',
             true
           );
         }
-        throw new Error(data?.message?.error?.msg || 'Unknown API error');
+        throw new Error(typeof errorObj?.msg === 'string' ? errorObj.msg : 'Unknown API error');
       }
 
-      const articleList: MemberArticleListItem[] = result?.articleList || [];
+      const articleList: MemberArticleListItem[] = Array.isArray(result?.articleList) ? (result.articleList as MemberArticleListItem[]) : [];
 
       if (articleList.length === 0) {
         hasMore = false;
@@ -1405,8 +1447,9 @@ export class NaverCafeLocalService {
       }
 
       // Save total count from first page
-      if (page === 1 && result?.pageNavigation?.totalCount) {
-        totalCount = result.pageNavigation.totalCount;
+      const pageNavFirst = result?.pageNavigation as Record<string, unknown> | undefined;
+      if (page === 1 && typeof pageNavFirst?.totalCount === 'number') {
+        totalCount = pageNavFirst.totalCount;
       }
 
       // Process each article
@@ -1444,9 +1487,12 @@ export class NaverCafeLocalService {
       }
 
       // Check pagination
-      const pageNav = result?.pageNavigation;
+      const pageNav = result?.pageNavigation as Record<string, unknown> | undefined;
       if (pageNav) {
-        hasMore = hasMore && (pageNav.currentPage * pageNav.countPerPage < pageNav.totalCount);
+        const currentPage = typeof pageNav.currentPage === 'number' ? pageNav.currentPage : 0;
+        const countPerPage = typeof pageNav.countPerPage === 'number' ? pageNav.countPerPage : 0;
+        const totalCount2 = typeof pageNav.totalCount === 'number' ? pageNav.totalCount : 0;
+        hasMore = hasMore && (currentPage * countPerPage < totalCount2);
       } else {
         hasMore = hasMore && articleList.length >= DEFAULT_PER_PAGE;
       }

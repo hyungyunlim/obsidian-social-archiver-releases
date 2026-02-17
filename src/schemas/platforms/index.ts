@@ -155,7 +155,7 @@ export const NaverWebtoonURLSchema = z
 	.trim()
 	.transform((url) => {
 		// Normalize URL - handle mobile URLs and protocol
-		let normalized = url.replace(/^(https?:)?\/\/(m\.)?/, 'https://');
+		const normalized = url.replace(/^(https?:)?\/\/(m\.)?/, 'https://');
 		return normalized;
 	})
 	.refine(
@@ -215,7 +215,7 @@ export const WebtoonsURLSchema = z
 	.trim()
 	.transform((url) => {
 		// Normalize URL - handle www prefix and protocol
-		let normalized = url.replace(/^(https?:)?\/\/(www\.)?/, 'https://');
+		const normalized = url.replace(/^(https?:)?\/\/(www\.)?/, 'https://');
 		return normalized;
 	})
 	.refine(

@@ -87,11 +87,11 @@ export class LinkPreviewExtractor implements IService {
     this.excludePlatformUrls = options.excludePlatformUrls ?? true;
   }
 
-  async initialize(): Promise<void> {
+  initialize(): void {
     // No async initialization needed
   }
 
-  async dispose(): Promise<void> {
+  dispose(): void {
     // No cleanup needed
   }
 

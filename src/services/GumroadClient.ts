@@ -12,6 +12,7 @@ import {
   DeviceInfo,
   LicenseConfig,
   DEFAULT_LICENSE_CONFIG,
+  LicenseType,
 } from '../types/license';
 import { IService } from './base/IService';
 import { Logger } from './Logger';
@@ -68,7 +69,7 @@ export class GumroadClient implements IService {
   /**
    * Initialize the Gumroad client
    */
-  async initialize(): Promise<void> {
+  initialize(): void {
     if (this.initialized) {
       this.logger?.warn('GumroadClient already initialized');
       return;
@@ -92,7 +93,7 @@ export class GumroadClient implements IService {
   /**
    * Shutdown the client
    */
-  async shutdown(): Promise<void> {
+  shutdown(): void {
     if (!this.initialized) {
       return;
     }
@@ -217,7 +218,6 @@ export class GumroadClient implements IService {
     });
 
     try {
-      const controller = new AbortController();
       const response = await requestUrl({
         url: url.toString(),
         method: 'POST',
@@ -231,8 +231,8 @@ export class GumroadClient implements IService {
         throw new Error(`HTTP ${response.status}`);
       }
 
-      const data = response.json;
-      return data as T;
+      const data = response.json as T;
+      return data;
     } catch (error) {
       this.logger?.warn(`Gumroad API request failed (attempt ${attempt})`, { error });
 
@@ -294,7 +294,7 @@ export class GumroadClient implements IService {
     if (purchase.variants && !initialCredits) {
       const variantMatch = purchase.variants.match(/(\d+)\s*credits?/i);
       if (variantMatch) {
-        initialCredits = parseInt(variantMatch[1]!, 10);
+        initialCredits = parseInt(variantMatch[1] ?? '0', 10);
         if (licenseType === 'subscription' && initialCredits) {
           // If credits found in variant but no explicit type, treat as credit pack
           licenseType = 'credit_pack';
@@ -341,7 +341,7 @@ export class GumroadClient implements IService {
     return {
       licenseKey,
       provider: 'gumroad',
-      licenseType: licenseType as any,
+      licenseType: licenseType as LicenseType,
       productId: purchase.product_id,
       email: purchase.email,
       purchaseDate: new Date(purchase.sale_timestamp),

@@ -73,7 +73,7 @@ export class PromoCodeValidator implements IService {
   /**
    * Initialize the promo code validator
    */
-  async initialize(): Promise<void> {
+  initialize(): void {
     if (this.initialized) {
       this.logger?.warn('PromoCodeValidator already initialized');
       return;
@@ -100,7 +100,7 @@ export class PromoCodeValidator implements IService {
   /**
    * Shutdown the validator
    */
-  async shutdown(): Promise<void> {
+  shutdown(): void {
     if (!this.initialized) {
       return;
     }
@@ -497,8 +497,7 @@ export class PromoCodeValidator implements IService {
         throw new Error(`HTTP ${response.status}`);
       }
 
-      const data = response.json;
-      return data as T;
+      return response.json as T;
     } catch (error) {
       this.logger?.warn(`Gumroad API request failed (attempt ${attempt})`, { error });
 

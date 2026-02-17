@@ -358,7 +358,7 @@ export class AuthorAvatarService {
       headers: {
         get: (name: string) => obsidianResponse.headers[name.toLowerCase()] || null,
       },
-      arrayBuffer: async () => obsidianResponse.arrayBuffer,
+      arrayBuffer: () => Promise.resolve(obsidianResponse.arrayBuffer),
     } as unknown as Response;
   }
 
@@ -440,7 +440,7 @@ export class AuthorAvatarService {
       const pathname = new URL(url).pathname;
       const parts = pathname.split('.');
       if (parts.length > 1) {
-        let ext = parts[parts.length - 1]!.toLowerCase();
+        let ext = (parts[parts.length - 1] ?? '').toLowerCase();
         // Remove query parameters
         ext = ext.split('?')[0] || ext;
         // Validate it's a known image extension
@@ -497,9 +497,9 @@ export class AuthorAvatarService {
 
     // HEIC/HEIF/AVIF: "ftyp" + brand
     if (bytes.length >= 12) {
-      const brand = String.fromCharCode(bytes[4]!, bytes[5]!, bytes[6]!, bytes[7]!).toLowerCase();
+      const brand = String.fromCharCode(bytes[4] ?? 0, bytes[5] ?? 0, bytes[6] ?? 0, bytes[7] ?? 0).toLowerCase();
       if (brand === 'ftyp') {
-        const brandName = String.fromCharCode(bytes[8]!, bytes[9]!, bytes[10]!, bytes[11]!).toLowerCase();
+        const brandName = String.fromCharCode(bytes[8] ?? 0, bytes[9] ?? 0, bytes[10] ?? 0, bytes[11] ?? 0).toLowerCase();
         if (brandName.startsWith('heic') || brandName.startsWith('heif')) {
           return 'heic';
         }

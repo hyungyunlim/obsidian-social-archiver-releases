@@ -1330,11 +1330,11 @@ export class MarkdownConverter implements IService {
     this.frontmatterSettings = cloneFrontmatterSettings(settings);
   }
 
-  async initialize(): Promise<void> {
+  initialize(): void {
     // No async initialization needed
   }
 
-  async dispose(): Promise<void> {
+  dispose(): void {
     // No cleanup needed
   }
 
@@ -1366,12 +1366,12 @@ export class MarkdownConverter implements IService {
    * @param mediaResults - Downloaded media results (optional, if downloadMedia is enabled)
    * @param options - Conversion options (optional)
    */
-  async convert(
+  convert(
     postData: PostData,
     customTemplate?: string,
     mediaResults?: import('./MediaHandler').MediaResult[],
-    options?: ConvertOptions
-  ): Promise<MarkdownResult> {
+    _options?: ConvertOptions
+  ): MarkdownResult {
     // Generate frontmatter with options
     const frontmatter = this.frontmatterGenerator.generateFrontmatter(postData, {
       customization: this.frontmatterSettings,
@@ -1530,10 +1530,10 @@ export class MarkdownConverter implements IService {
 
       if (archive.platform === 'reddit') {
         // Reddit-specific metadata format
-        const communityName = (archive.content as any).community?.name || 'Unknown';
+        const communityName = (archive.content as { community?: { name?: string } }).community?.name || 'Unknown';
         metadataLine = `**Platform:** Reddit | **Community:** r/${communityName} | **Author:** ${archive.author.name || 'Unknown'} | **Published:** ${this.dateNumberFormatter.formatDate(archive.metadata.timestamp)}`;
-        if ((archive.metadata as any).upvotes !== undefined) {
-          metadataLine += ` | **Upvotes:** ${this.dateNumberFormatter.formatNumber((archive.metadata as any).upvotes)}`;
+        if ((archive.metadata as unknown as Record<string, unknown>).upvotes !== undefined) {
+          metadataLine += ` | **Upvotes:** ${this.dateNumberFormatter.formatNumber((archive.metadata as unknown as Record<string, unknown>).upvotes as number)}`;
         }
         if (archive.metadata.comments !== undefined) {
           metadataLine += ` | **Comments:** ${this.dateNumberFormatter.formatNumber(archive.metadata.comments)}`;
@@ -1593,20 +1593,21 @@ export class MarkdownConverter implements IService {
   private formatPinterestBoardEmbedded(archive: PostData): string | null {
     if (archive.platform !== 'pinterest') return null;
 
-    const raw = archive.raw as any;
+    const raw = archive.raw as Record<string, unknown> | Record<string, unknown>[] | undefined;
     const boardData = Array.isArray(raw) ? raw[0] : raw;
-    const pins: any[] = Array.isArray(boardData?.pins) ? boardData.pins : [];
+    const pins: unknown[] = Array.isArray(boardData?.['pins']) ? (boardData['pins'] as unknown[]) : [];
 
     // Require board metadata to avoid mis-formatting single pins
     if (!boardData?.board_name && pins.length === 0) {
       return null;
     }
 
-    const boardName = boardData?.board_name || archive.title || archive.author.name || 'Pinterest Board';
-    const boardUrl = boardData?.board_url || archive.url;
-    const creatorName = boardData?.creator_name || archive.author.name;
-    const creatorUrl = boardData?.creator_url || archive.author.url || archive.url;
-    const pinCount = boardData?.pin_count || boardData?.expected_pin_count || pins.length || archive.metadata?.comments;
+    const boardName = String(boardData?.board_name || archive.title || archive.author.name || 'Pinterest Board');
+    const boardUrl = String(boardData?.board_url || archive.url);
+    const creatorName = String(boardData?.creator_name || archive.author.name);
+    const creatorUrl = String(boardData?.creator_url || archive.author.url || archive.url);
+    const pinCountRaw = boardData?.pin_count || boardData?.expected_pin_count || pins.length || (typeof archive.metadata?.comments === 'number' ? archive.metadata.comments : undefined);
+    const pinCount = typeof pinCountRaw === 'number' ? pinCountRaw : (pinCountRaw != null ? Number(pinCountRaw) : undefined);
 
     let section = `<!-- Embedded: Pinterest Board - ${creatorName} -->\n\n`;
     section += `## 📌 Pinterest Board — [${boardName}](${boardUrl})\n\n`;
@@ -1619,8 +1620,9 @@ export class MarkdownConverter implements IService {
     if (pins.length > 0) {
       section += `Pins:\n`;
       pins.forEach((pin, index) => {
-        const title = pin.pin_title || `Pin ${index + 1}`;
-        const url = pin.pin_url || '';
+        const pinObj = pin as Record<string, unknown>;
+        const title = (pinObj.pin_title || `Pin ${index + 1}`) as string;
+        const url = (pinObj.pin_url || '') as string;
         section += `${index + 1}. ${title}\n`;
         if (url) {
           section += `${url}\n`;
@@ -1713,7 +1715,8 @@ export class MarkdownConverter implements IService {
     if (quotedPost.media && quotedPost.media.length > 0) {
       section += `**Media:**\n`;
       for (let i = 0; i < quotedPost.media.length; i++) {
-        const media = quotedPost.media[i]!;
+        const media = quotedPost.media[i];
+        if (!media) continue;
 
         // Check if this media item is expired
         const expired = expiredMedia?.find(e => e.originalUrl === media.url);
@@ -1801,7 +1804,7 @@ export class MarkdownConverter implements IService {
   private prepareTemplateData(
     postData: PostData,
     mediaResults?: import('./MediaHandler').MediaResult[]
-  ): Record<string, any> {
+  ): Record<string, unknown> {
     // Generate author mention for Instagram
     const authorMention = postData.platform === 'instagram' && postData.author.handle
       ? `[@${postData.author.handle}](https://instagram.com/${postData.author.handle})`
@@ -1822,7 +1825,7 @@ export class MarkdownConverter implements IService {
     // Format media to string BEFORE spreading postData
     const formattedMedia = this.mediaFormatter.formatMedia(
       postData.media, postData.platform, postData.url, mediaResults,
-      (postData as any)._expiredMedia
+      postData._expiredMedia as import('./MediaPlaceholderGenerator').MediaExpiredResult[] | undefined
     );
 
     // Format embedded archives (for platform: 'post' only)
@@ -1832,7 +1835,7 @@ export class MarkdownConverter implements IService {
 
     // Format quoted/shared/reblogged post (for Facebook, X, Threads, Mastodon, Bluesky)
     const formattedQuotedPost = postData.quotedPost
-      ? this.formatQuotedPost(postData.quotedPost, postData.isReblog, (postData as any)._expiredMedia)
+      ? this.formatQuotedPost(postData.quotedPost, postData.isReblog, postData._expiredMedia as import('./MediaPlaceholderGenerator').MediaExpiredResult[] | undefined)
       : undefined;
 
     const normalizeHashtagForObsidian = (tag: string) => {
@@ -1881,7 +1884,7 @@ export class MarkdownConverter implements IService {
     // X Article: append rendered article body (content.html contains Draft.js → Markdown)
     const isXArticle = postData.platform === 'x' && !!postData.content.html;
     if (isXArticle) {
-      const articleBody = postData.content.html!;
+      const articleBody = postData.content.html ?? '';
       baseText = baseText
         ? `${baseText}\n\n---\n\n${articleBody}`
         : articleBody;
@@ -1892,7 +1895,7 @@ export class MarkdownConverter implements IService {
     if (isRssBasedPlatform(postData.platform) && mediaResults && mediaResults.length > 0) {
       // Replace IMAGE placeholders with Obsidian image embeds
       // Include surrounding newlines to ensure proper paragraph separation
-      baseText = baseText.replace(/\n*\{\{IMAGE_(\d+)\}\}\n*/g, (_, indexStr) => {
+      baseText = baseText.replace(/\n*\{\{IMAGE_(\d+)\}\}\n*/g, (_, indexStr: string) => {
         const index = parseInt(indexStr, 10);
         const mediaResult = mediaResults[index];
         if (mediaResult?.localPath) {
@@ -1905,7 +1908,7 @@ export class MarkdownConverter implements IService {
       });
 
       // Replace VIDEO placeholders with Obsidian video embeds
-      baseText = baseText.replace(/\n*\{\{VIDEO_(\d+)\}\}\n*/g, (_, indexStr) => {
+      baseText = baseText.replace(/\n*\{\{VIDEO_(\d+)\}\}\n*/g, (_, indexStr: string) => {
         const index = parseInt(indexStr, 10);
         const mediaResult = mediaResults[index];
         if (mediaResult?.localPath) {
@@ -1931,11 +1934,12 @@ export class MarkdownConverter implements IService {
       }
     }
 
-    // For RSS-based platforms and X Articles, preserve markdown headings (they come from HTML/Draft.js conversion)
-    // For other platforms, escape headings to prevent rendering issues
-    const preserveHeadings = isRssBasedPlatform(postData.platform) || isXArticle;
-    const sanitizedText = preserveHeadings
-      ? this.escapeOrderedListPatterns(baseText)
+    // For RSS-based platforms and X Articles, preserve markdown headings and ordered lists
+    // (they come from HTML/Draft.js conversion and are intentional)
+    // For other platforms, escape headings and ordered lists to prevent rendering issues
+    const preserveMarkdown = isRssBasedPlatform(postData.platform) || isXArticle;
+    const sanitizedText = preserveMarkdown
+      ? baseText
       : this.escapeOrderedListPatterns(this.escapeLeadingMarkdownHeadings(baseText));
 
     // For RSS-based platforms with inline images, don't show media section at bottom

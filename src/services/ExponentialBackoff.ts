@@ -216,7 +216,7 @@ export class ExponentialBackoff {
 	/**
 	 * Log retry attempt
 	 */
-	private logRetryAttempt(attempt: RetryAttempt): void {
+	private logRetryAttempt(_attempt: RetryAttempt): void {
 		if (process.env.NODE_ENV === 'development') {
 			// Logging removed
 		}

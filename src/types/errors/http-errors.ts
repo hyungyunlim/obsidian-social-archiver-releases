@@ -43,7 +43,7 @@ export class HttpError extends Error {
 		}
 	}
 
-	toJSON(): Record<string, any> {
+	toJSON(): Record<string, unknown> {
 		return {
 			name: this.name,
 			message: this.message,
@@ -112,7 +112,7 @@ export class RateLimitError extends HttpError {
 		this.remaining = options.remaining;
 	}
 
-	override toJSON(): Record<string, any> {
+	override toJSON(): Record<string, unknown> {
 		return {
 			...super.toJSON(),
 			retryAfter: this.retryAfter,
@@ -167,7 +167,7 @@ export class InvalidRequestError extends HttpError {
 		this.validationErrors = options.validationErrors;
 	}
 
-	override toJSON(): Record<string, any> {
+	override toJSON(): Record<string, unknown> {
 		return {
 			...super.toJSON(),
 			validationErrors: this.validationErrors,
@@ -225,7 +225,7 @@ export class BrightDataError extends HttpError {
 		this.recoverySuggestions = options.recoverySuggestions || [];
 	}
 
-	override toJSON(): Record<string, any> {
+	override toJSON(): Record<string, unknown> {
 		return {
 			...super.toJSON(),
 			platform: this.platform,
@@ -801,17 +801,17 @@ export function detectPlatformError(
 	const { status, data } = response;
 
 	// Try to extract error details from response body
-	const errorMessage = typeof data === 'object' && data !== null
-		? (data as any).error?.message || (data as any).message || 'Unknown error'
+	const dataRecord = typeof data === 'object' && data !== null ? data as Record<string, unknown> : null;
+	const dataError = dataRecord?.error as Record<string, unknown> | undefined;
+	const errorMessage = dataRecord
+		? (dataError?.message as string | undefined) || (dataRecord.message as string | undefined) || 'Unknown error'
 		: 'Unknown error';
 
 	// Check for platform-specific error patterns in the response
-	if (typeof data === 'object' && data !== null) {
-		const errorData = data as any;
-
+	if (dataRecord !== null) {
 		// Facebook-specific patterns
-		if (platform === 'facebook' || errorData.error?.type === 'OAuthException') {
-			if (errorData.error?.code === 190 || errorMessage.includes('login')) {
+		if (platform === 'facebook' || dataError?.type === 'OAuthException') {
+			if (dataError?.code === 190 || errorMessage.includes('login')) {
 				return new FacebookLoginRequiredError();
 			}
 		}
@@ -878,12 +878,13 @@ export function createErrorFromResponse(
 	}
 
 	// Extract error message from response
-	const errorMessage =
-		typeof response.data === 'object' && response.data !== null
-			? (response.data as any).error?.message ||
-			  (response.data as any).message ||
-			  `HTTP ${response.status} error`
-			: `HTTP ${response.status} error`;
+	const responseData = typeof response.data === 'object' && response.data !== null
+		? response.data as Record<string, unknown>
+		: null;
+	const responseError = responseData?.error as Record<string, unknown> | undefined;
+	const errorMessage = responseData
+		? (responseError?.message as string | undefined) || (responseData.message as string | undefined) || `HTTP ${response.status} error`
+		: `HTTP ${response.status} error`;
 
 	// Extract retry-after header if present
 	const retryAfter = response.headers?.['retry-after']

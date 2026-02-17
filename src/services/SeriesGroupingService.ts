@@ -36,7 +36,7 @@ export function isSeriesGroup(item: TimelineItem): item is SeriesGroup {
   return (
     'seriesId' in item &&
     'episodes' in item &&
-    Array.isArray((item as SeriesGroup).episodes)
+    Array.isArray((item).episodes)
   );
 }
 
@@ -144,17 +144,17 @@ export class SeriesGroupingService {
       // - Instagram/others: series, episode
       // - Brunch: seriesTitle, seriesEpisode
       // Note: seriesId may be a number in YAML (e.g., 812354), so convert to string
-      const rawSeriesId = (frontmatter as any).seriesId;
+      const rawSeriesId = (frontmatter as Record<string, unknown>).seriesId;
       const seriesId = rawSeriesId != null ? String(rawSeriesId) : undefined;
-      const seriesTitle = ((frontmatter as any).series || (frontmatter as any).seriesTitle) as string | undefined;
-      let seriesUrl = (frontmatter as any).seriesUrl as string | undefined;
-      const episode = ((frontmatter as any).episode ?? (frontmatter as any).seriesEpisode) as number | undefined;
+      const seriesTitle = ((frontmatter as Record<string, unknown>).series || (frontmatter as Record<string, unknown>).seriesTitle) as string | undefined;
+      let seriesUrl = (frontmatter as Record<string, unknown>).seriesUrl as string | undefined;
+      const episode = ((frontmatter as Record<string, unknown>).episode ?? (frontmatter as Record<string, unknown>).seriesEpisode) as number | undefined;
 
       // Fallback: extract seriesUrl from author_url or episode url for WEBTOON Global
       // This handles files created before seriesUrl was added to frontmatter
       if (!seriesUrl && post.platform === 'webtoons') {
-        const authorUrl = (frontmatter as any).author_url as string | undefined;
-        const episodeUrl = (frontmatter as any).url as string | undefined;
+        const authorUrl = (frontmatter as Record<string, unknown>).author_url as string | undefined;
+        const episodeUrl = (frontmatter as Record<string, unknown>).url as string | undefined;
 
         // author_url is typically the series URL for webtoons
         if (authorUrl && authorUrl.includes('webtoons.com')) {
@@ -176,10 +176,10 @@ export class SeriesGroupingService {
       }
 
       // Extract additional metadata from frontmatter
-      const starScore = (frontmatter as any).starScore as number | undefined;
-      const isLiked = (frontmatter as any).like === true;
-      const isRead = (frontmatter as any).read === true;
-      const publishDay = (frontmatter as any).publishDay as string | undefined;
+      const starScore = (frontmatter as Record<string, unknown>).starScore as number | undefined;
+      const isLiked = (frontmatter as Record<string, unknown>).like === true;
+      const isRead = (frontmatter as Record<string, unknown>).read === true;
+      const publishDay = (frontmatter as Record<string, unknown>).publishDay as string | undefined;
 
       // Add to series map
       if (!seriesMap.has(seriesId)) {
@@ -194,7 +194,8 @@ export class SeriesGroupingService {
         });
       }
 
-      const series = seriesMap.get(seriesId)!;
+      const series = seriesMap.get(seriesId);
+      if (!series) continue;
 
       series.episodes.push({
         episode,

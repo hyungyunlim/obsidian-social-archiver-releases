@@ -226,7 +226,7 @@ export class VaultManager implements IService {
     );
   }
 
-  async initialize(): Promise<void> {
+  initialize(): void {
     // Verify vault is accessible
     try {
       this.vault.getRoot();
@@ -235,7 +235,7 @@ export class VaultManager implements IService {
     }
   }
 
-  async dispose(): Promise<void> {
+  dispose(): void {
     // No cleanup needed
   }
 
@@ -282,7 +282,7 @@ export class VaultManager implements IService {
     const existingFile = this.vault.getFileByPath(path);
     if (existingFile) {
       // Generate unique path
-      const uniquePath = await this.generateUniquePath(path);
+      const uniquePath = this.generateUniquePath(path);
       const file = await this.createFile(uniquePath, markdown.fullDocument);
       return file.path;
     }
@@ -322,7 +322,7 @@ export class VaultManager implements IService {
   /**
    * Check if file exists at path
    */
-  async fileExists(path: string): Promise<boolean> {
+  fileExists(path: string): boolean {
     return this.vault.getFileByPath(path) !== null;
   }
 
@@ -379,7 +379,7 @@ export class VaultManager implements IService {
   /**
    * Generate unique path by appending number
    */
-  async generateUniquePath(basePath: string): Promise<string> {
+  generateUniquePath(basePath: string): string {
     const extension = '.md';
     const pathWithoutExt = basePath.endsWith(extension)
       ? basePath.slice(0, -extension.length)
@@ -474,7 +474,7 @@ export class VaultManager implements IService {
   /**
    * List all files in a folder
    */
-  async listFiles(folderPath: string): Promise<TFile[]> {
+  listFiles(folderPath: string): TFile[] {
     const folder = this.vault.getFolderByPath(folderPath);
     if (!folder) {
       return [];
@@ -498,10 +498,10 @@ export class VaultManager implements IService {
   /**
    * Get vault statistics
    */
-  async getStats(): Promise<{
+  getStats(): {
     totalFiles: number;
     totalSize: number;
-  }> {
+  } {
     const allFiles = this.vault.getFiles();
     const totalSize = allFiles.reduce((sum, file) => sum + file.stat.size, 0);
 

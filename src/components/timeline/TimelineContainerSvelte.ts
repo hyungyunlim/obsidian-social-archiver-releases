@@ -24,8 +24,8 @@ export class TimelineContainer {
   private containerEl: HTMLElement;
   private app: App;
   private plugin: SocialArchiverPlugin;
-  private component: any;
-  private unmountFn: any;
+  private component: Record<string, unknown> | null = null;
+  private unmountFn: (() => void) | null = null;
 
   constructor(target: HTMLElement, props: TimelineContainerProps) {
     this.containerEl = target;
@@ -63,10 +63,11 @@ export class TimelineContainer {
 
     // Store unmount function if available
     if (typeof result === 'object' && result && 'unmount' in result) {
-      this.unmountFn = () => result.unmount();
+      const resultWithUnmount = result as { unmount: () => void };
+      this.unmountFn = () => resultWithUnmount.unmount();
     } else {
       // For older Svelte versions, the mount function might return the component directly
-      this.unmountFn = () => unmount(result);
+      this.unmountFn = () => { void unmount(result); };
     }
   }
 

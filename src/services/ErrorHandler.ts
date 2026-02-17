@@ -69,14 +69,14 @@ export class ErrorHandler implements IService {
     this.registerDefaultRecoveryStrategies();
   }
 
-  async initialize(): Promise<void> {
+  initialize(): void {
     // Clear any existing error log
     this.errorLog = [];
     this.errorCount = 0;
     this.recoveredCount = 0;
   }
 
-  async dispose(): Promise<void> {
+  dispose(): void {
     // Clear error log and strategies
     this.errorLog = [];
     this.recoveryStrategies.clear();
@@ -239,7 +239,7 @@ export class ErrorHandler implements IService {
   /**
    * Send telemetry data
    */
-  private sendTelemetry(error: ArchiveError): void {
+  private sendTelemetry(_error: ArchiveError): void {
     // TODO: Implement telemetry service integration
     // This would send error data to analytics service
   }
@@ -251,7 +251,7 @@ export class ErrorHandler implements IService {
     // Network errors - no automatic recovery (handled by retry logic)
     this.registerRecoveryStrategy(
       ErrorCode.NETWORK_ERROR,
-      async () => false
+      () => Promise.resolve(false)
     );
 
     // Rate limit errors - wait and retry
@@ -270,15 +270,15 @@ export class ErrorHandler implements IService {
     // Timeout errors - no automatic recovery
     this.registerRecoveryStrategy(
       ErrorCode.OPERATION_TIMEOUT,
-      async () => false
+      () => Promise.resolve(false)
     );
 
     // Media errors - can skip media and continue
     this.registerRecoveryStrategy(
       ErrorCode.MEDIA_ERROR,
-      async () => {
+      () => {
         // Let caller decide whether to skip media
-        return false;
+        return Promise.resolve(false);
       }
     );
   }

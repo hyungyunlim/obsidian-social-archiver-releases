@@ -401,7 +401,7 @@ export class WebtoonsDownloadQueue extends EventTarget {
       }
 
       // Fetch and update comments asynchronously (don't block)
-      this.fetchAndUpdateComments(urlInfo, job.episodeNo, filePath);
+      void this.fetchAndUpdateComments(urlInfo, job.episodeNo, filePath);
 
       return filePath;
     }
@@ -662,7 +662,7 @@ export class WebtoonsDownloadQueue extends EventTarget {
     // Remove undefined values from frontmatter
     for (const key of Object.keys(frontmatter)) {
       if (frontmatter[key] === undefined) {
-        delete frontmatter[key];
+        Reflect.deleteProperty(frontmatter, key);
       }
     }
 
@@ -751,7 +751,7 @@ export class WebtoonsDownloadQueue extends EventTarget {
       } else if (typeof value === 'string' && (value.includes(':') || value.includes('#'))) {
         lines.push(`${key}: "${value}"`);
       } else {
-        lines.push(`${key}: ${value}`);
+        lines.push(`${key}: ${String(value)}`);
       }
     }
     return lines.join('\n');

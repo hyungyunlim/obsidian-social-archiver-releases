@@ -5,8 +5,6 @@
  * These types should match the server-side definitions in workers/src/types/websocket.ts
  */
 
-import type { Platform } from './post';
-
 // ============================================================================
 // Client Sync Event (from mobile app sync)
 // ============================================================================
@@ -16,7 +14,7 @@ import type { Platform } from './post';
  */
 export interface ClientSyncArchivePreview {
   id: string;
-  platform: Platform | string;
+  platform: string;
   title: string | null;
   authorName: string | null;
   previewText: string | null;

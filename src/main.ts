@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/await-thenable */
 import { Plugin, Notice, Platform as ObsidianPlatform, Events, TFile, TFolder, EventRef, requestUrl, normalizePath, Modal, Setting, ButtonComponent } from 'obsidian';
 import { SocialArchiverSettingTab } from './settings/SettingTab';
 import { SocialArchiverSettings, DEFAULT_SETTINGS, API_ENDPOINT, MediaDownloadMode, migrateSettings, getVaultOrganizationStrategy } from './types/settings';
@@ -35,7 +36,7 @@ import { RELEASE_NOTES } from './release-notes';
 import { completeAuthentication, showAuthError, showAuthSuccess, refreshUserCredits } from './utils/auth';
 import { uniqueStrings } from './utils/array';
 import { normalizeUrlForDedup, encodePathForMarkdownLink } from './utils/url';
-import { resolvePinterestUrl } from './utils/pinterest';
+
 import { ProcessManager } from './services/ProcessManager';
 import { PostService } from './services/PostService';
 import { YtDlpDetector } from './utils/yt-dlp';
@@ -1838,6 +1839,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
       // Use displayName from platform definitions (e.g., 'naver-webtoon' -> 'Naver Webtoon')
       const platformName = post.platform
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
         ? getPlatformName(post.platform as Platform)
         : 'Unknown';
 
@@ -2096,6 +2098,7 @@ export default class SocialArchiverPlugin extends Plugin {
             const reason = CdnExpiryDetector.isEphemeralCdn(originalUrl) ? 'cdn_expired' : 'download_failed';
             expiredMedia.push({
               originalUrl,
+              // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
               type: item.type as 'image' | 'video' | 'audio' | 'document',
               reason,
               detectedAt: new Date().toISOString(),
@@ -2174,7 +2177,6 @@ export default class SocialArchiverPlugin extends Plugin {
 
       // Format timestamp (use local timezone)
       const timestamp = postData.timestamp;
-      const publishedDate = `${timestamp.getFullYear()}-${String(timestamp.getMonth() + 1).padStart(2, '0')}-${String(timestamp.getDate()).padStart(2, '0')} ${String(timestamp.getHours()).padStart(2, '0')}:${String(timestamp.getMinutes()).padStart(2, '0')}`;
       const now = new Date();
       const archivedDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
@@ -2183,8 +2185,6 @@ export default class SocialArchiverPlugin extends Plugin {
       const mediaBasePath = this.settings.mediaPath || 'attachments/social-archives';
 
       if (downloadMode !== 'text-only' && postData.media && postData.media.length > 0) {
-        const dateStr = `${timestamp.getFullYear()}-${String(timestamp.getMonth() + 1).padStart(2, '0')}-${String(timestamp.getDate()).padStart(2, '0')}`;
-
         for (let i = 0; i < postData.media.length; i++) {
           const media = postData.media[i];
           if (!media) continue;
@@ -3221,7 +3221,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
       // Build image gallery markdown
       const imageGallery = downloadedMedia.length > 0
-        ? downloadedMedia.map((m, i) => `![[${m.localPath}]]`).join('\n\n')
+        ? downloadedMedia.map((m) => `![[${m.localPath}]]`).join('\n\n')
         : postData.media.map((m, i) => `![Image ${i + 1}](${m.url})`).join('\n\n');
 
       // Build frontmatter
@@ -3253,7 +3253,7 @@ export default class SocialArchiverPlugin extends Plugin {
           } else if (typeof value === 'string') {
             return `${key}: "${value}"`;
           } else {
-            return `${key}: ${value}`;
+            return `${key}: ${String(value)}`;
           }
         })
         .join('\n');
@@ -3513,7 +3513,7 @@ ${contentParts.join('')}
       downloadWithYtDlp: async (url, platform, postId, signal) => {
         if (!await YtDlpDetector.isAvailable()) return null;
 
-        // @ts-ignore — adapter.basePath is available but not in types
+        // @ts-expect-error — adapter.basePath is available but not in types
         const vaultBasePath: string = this.app.vault.adapter.basePath;
         const basePath = this.settings.mediaPath || 'attachments/social-archives';
         const platformFolder = `${basePath}/${platform}`;
@@ -3562,9 +3562,11 @@ ${contentParts.join('')}
     this.batchTranscriptionNotice?.dismiss();
 
     // Show new notice
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     this.batchTranscriptionNotice = new BatchTranscriptionNotice(this.batchTranscriptionManager!);
     this.batchTranscriptionNotice.show();
 
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     await this.batchTranscriptionManager!.start(mode);
   }
 
@@ -3870,7 +3872,7 @@ ${contentParts.join('')}
       if (this.pendingJobsManager) {
         await this.pendingJobsManager.addJob({
           id: pendingJobId,
-          url: links[0]!, // Use first URL as representative (guaranteed non-empty by earlier check)
+          url: links[0] ?? '', // Use first URL as representative (guaranteed non-empty by earlier check)
           platform: 'googlemaps',
           status: 'processing',
           timestamp: Date.now(),
@@ -3892,7 +3894,7 @@ ${contentParts.join('')}
       // Poll for completion
       const result = await this.apiClient.waitForBatchJob(
         response.batchJobId,
-        (completed, total) => {
+        (_completed, _total) => {
           // Progress updates (optional)
         }
       );
@@ -3938,7 +3940,6 @@ ${contentParts.join('')}
     pendingJobId?: string,
     sourceNotePath?: string
   ): Promise<void> {
-    const successCount = result.batchMetadata?.completedCount || 0;
     const failCount = result.batchMetadata?.failedCount || 0;
 
     if (result.results && result.results.length > 0) {
@@ -3990,6 +3991,7 @@ ${contentParts.join('')}
    */
   private async showBatchArchiveConfirmation(links: string[]): Promise<boolean> {
     return new Promise((resolve) => {
+      // eslint-disable-next-line @typescript-eslint/no-this-alias
       const plugin = this;
 
       class BatchConfirmModal extends Modal {
@@ -4932,7 +4934,7 @@ ${contentParts.join('')}
                 result: response.result,
               };
 
-              console.debug(`[Social Archiver] 🔄 Processing completed job... (media count: ${response.result?.postData?.media?.length || 0})`);
+              console.debug(`[Social Archiver] 🔄 Processing completed job... (media count: ${(response.result?.postData as { media?: unknown[] } | undefined)?.media?.length || 0})`);
               await this.processCompletedJob(job, jobStatusData);
               this.archiveJobTracker.completeJob(job.id);
               console.debug(`[Social Archiver] 🎉 Job ${job.id} completed synchronously`);
@@ -5490,7 +5492,6 @@ ${contentParts.join('')}
         // replace the archived media with ONLY the matching local video entry
         // (not the entire parent media array, which would cause duplicate rendering).
         const downloadedUrls = Array.isArray(currentPost.downloadedUrls)
-          // @ts-ignore
           ? currentPost.downloadedUrls
           : [];
         const hasLocalVideo = downloadedUrls.some((u: string) =>
@@ -5503,7 +5504,7 @@ ${contentParts.join('')}
             m.type === 'video' && m.url && !m.url.startsWith('http')
           );
           if (localVideoEntry) {
-            embeddedMedia = [{ type: 'video' as const, url: localVideoEntry.url! }];
+            embeddedMedia = [{ type: 'video' as const, url: localVideoEntry.url ?? '' }];
           }
         }
 
@@ -5721,6 +5722,7 @@ ${contentParts.join('')}
                 const mediaHandler = new MediaHandler({
                   vault: this.app.vault,
                   app: this.app,
+                  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
                   workersClient: this.apiClient!,
                   basePath: this.settings.mediaPath || 'attachments/social-archives',
                   optimizeImages: true,
@@ -5757,6 +5759,7 @@ ${contentParts.join('')}
                 continue;
               } else {
                 // Download via Workers proxy to bypass CORS
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
                 arrayBuffer = await this.apiClient!.proxyMedia(mediaUrl);
               }
 
@@ -5850,8 +5853,6 @@ ${contentParts.join('')}
       // Regenerate fullDocument with updated frontmatter
       markdown = markdownConverter.updateFullDocument(markdown);
 
-      let filePath: string;
-
       // If we have a preliminary document, update it; otherwise create new file
       if (preliminaryFilePath) {
         const file = this.app.vault.getAbstractFileByPath(preliminaryFilePath);
@@ -5876,7 +5877,6 @@ ${contentParts.join('')}
               await this.app.vault.modify(existingFile as any, markdown.fullDocument);
               // Delete preliminary file
               await this.app.fileManager.trashFile(file as any);
-              filePath = correctFilePath;
             } else {
               // Rename file and update content
               await this.app.vault.rename(file as any, correctFilePath);
@@ -5884,21 +5884,19 @@ ${contentParts.join('')}
               if (renamedFile) {
                 await this.app.vault.modify(renamedFile as any, markdown.fullDocument);
               }
-              filePath = correctFilePath;
             }
           } else {
             // Same path, just update content
             await this.app.vault.modify(file as any, markdown.fullDocument);
-            filePath = preliminaryFilePath;
           }
 
         } else {
           // Preliminary file was deleted, create new one
-          filePath = await vaultManager.savePost(postData, markdown);
+          await vaultManager.savePost(postData, markdown);
         }
       } else {
         // No preliminary document (shouldn't happen with new flow, but fallback)
-        filePath = await vaultManager.savePost(postData, markdown);
+        await vaultManager.savePost(postData, markdown);
       }
 
       // Remove job from pending queue
@@ -6371,7 +6369,7 @@ ${contentParts.join('')}
    */
   private extractUsernameForAvatar(
     author: PostData['author'],
-    platform: Platform
+    _platform: Platform
   ): string {
     // Try handle first (remove @ prefix)
     if (author.handle) {

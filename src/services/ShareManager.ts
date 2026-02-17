@@ -78,7 +78,7 @@ export class ShareManager implements IService {
   /**
    * Initialize the service
    */
-  async initialize(): Promise<void> {
+  initialize(): void {
     // No initialization needed for client-side service
   }
 
@@ -101,8 +101,8 @@ export class ShareManager implements IService {
    */
   async createShareInfo(
     note: TFile,
-    vault: any, // Obsidian Vault
-    metadataCache: any, // Obsidian MetadataCache
+    vault: { read(file: TFile): Promise<string> }, // Obsidian Vault
+    metadataCache: { getFileCache(file: TFile): { tags?: Array<{ tag: string }> } | null }, // Obsidian MetadataCache
     options: ShareOptions = {}
   ): Promise<ShareInfo> {
     try {
@@ -173,10 +173,10 @@ export class ShareManager implements IService {
    * This is a client-side validation. Server-side validation
    * happens in the Workers endpoint
    */
-  async validateShareAccess(
+  validateShareAccess(
     shareInfo: ShareInfo,
     password?: string
-  ): Promise<ShareValidationResult> {
+  ): ShareValidationResult {
     // Check if expired
     if (shareInfo.expiresAt && new Date() > shareInfo.expiresAt) {
       return {
@@ -211,7 +211,7 @@ export class ShareManager implements IService {
   /**
    * Create API request payload for sharing
    */
-  createShareRequest(shareInfo: ShareInfo): Record<string, any> {
+  createShareRequest(shareInfo: ShareInfo): Record<string, unknown> {
     return {
       content: shareInfo.content,
       metadata: shareInfo.metadata,
@@ -226,21 +226,22 @@ export class ShareManager implements IService {
   /**
    * Parse share response from API
    */
-  parseShareResponse(response: any): {
+  parseShareResponse(response: Record<string, unknown>): {
     shareId: string;
     shareUrl: string;
     expiresAt?: number;
     passwordProtected: boolean;
   } {
     if (!response.success || !response.data) {
+      const err = response.error as Record<string, unknown> | undefined;
       throw new ShareError(
-        response.error?.message || 'Share creation failed',
-        response.error?.code || 'SHARE_FAILED',
+        typeof err?.message === 'string' ? err.message : 'Share creation failed',
+        typeof err?.code === 'string' ? err.code : 'SHARE_FAILED',
         400
       );
     }
 
-    return response.data;
+    return response.data as { shareId: string; shareUrl: string; expiresAt?: number; passwordProtected: boolean };
   }
 
   /**

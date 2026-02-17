@@ -1251,30 +1251,25 @@ async function handleSubscribe(author: AuthorCatalogEntry, options: AuthorSubscr
 async function handleUnsubscribe(author: AuthorCatalogEntry): Promise<void> {
   if (!onUnsubscribe) return;
 
-  try {
-    await onUnsubscribe(author);
+  await onUnsubscribe(author);
 
-    // Update store with new status
-    store.updateAuthorStatus(author.authorUrl, author.platform, 'not_subscribed', undefined);
+  // Update store with new status
+  store.updateAuthorStatus(author.authorUrl, author.platform, 'not_subscribed', undefined);
 
-    // Update the author in the authors array (source of truth)
-    const updatedAuthors = authors.map(a => {
-      if (a.platform === author.platform && a.authorUrl === author.authorUrl) {
-        return { ...a, subscriptionId: undefined, status: 'not_subscribed' as const };
-      }
-      return a;
-    });
+  // Update the author in the authors array (source of truth)
+  const updatedAuthors = authors.map(a => {
+    if (a.platform === author.platform && a.authorUrl === author.authorUrl) {
+      return { ...a, subscriptionId: undefined, status: 'not_subscribed' as const };
+    }
+    return a;
+  });
 
-    // Update the store with the new authors array
-    store.setAuthors(updatedAuthors);
+  // Update the store with the new authors array
+  store.setAuthors(updatedAuthors);
 
-    // Clear the subscription ID from the passed author object
-    author.subscriptionId = undefined;
-    author.status = 'not_subscribed';
-  } catch (err) {
-    // Re-throw so AuthorRow can show proper error notice
-    throw err;
-  }
+  // Clear the subscription ID from the passed author object
+  author.subscriptionId = undefined;
+  author.status = 'not_subscribed';
 }
 
 /**

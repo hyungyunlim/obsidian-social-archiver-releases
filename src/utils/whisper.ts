@@ -37,6 +37,7 @@ export const WHISPER_MODEL_INFO: Record<WhisperModel, WhisperModelInfo> = {
   'large-v3': { name: 'large-v3', size: '2.9GB', vramRequired: '~10GB', estimatedSpeed: '~1x' },
 };
 
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class WhisperDetector {
   // Cached detection results
   private static whisperAvailable: boolean | null = null;
@@ -151,7 +152,7 @@ export class WhisperDetector {
     if (customPath) {
       // Force enable mode: skip validation, just check file exists
       if (forceEnable) {
-        const forceResult = await this.forceEnableCustomPath(customPath, preferredVariant);
+        const forceResult = this.forceEnableCustomPath(customPath, preferredVariant);
         if (forceResult) {
           console.debug(`[WhisperDetector] Force enabled custom path: ${customPath}`);
           // Update cache with force-enabled result
@@ -159,7 +160,7 @@ export class WhisperDetector {
           this.whisperVariant = forceResult.variant;
           this.whisperPath = forceResult.path;
           this.whisperVersion = forceResult.version;
-          this.installedModels = await this.detectModels(forceResult.variant, forceResult.path);
+          this.installedModels = this.detectModels(forceResult.variant, forceResult.path);
           this.cachedPreference = effectivePreference;
           this.cacheTimestamp = Date.now();
 
@@ -181,7 +182,7 @@ export class WhisperDetector {
         this.whisperVariant = customResult.variant;
         this.whisperPath = customResult.path;
         this.whisperVersion = customResult.version;
-        this.installedModels = await this.detectModels(customResult.variant, customResult.path);
+        this.installedModels = this.detectModels(customResult.variant, customResult.path);
         this.cachedPreference = effectivePreference;
         this.cacheTimestamp = Date.now();
 
@@ -206,7 +207,7 @@ export class WhisperDetector {
 
     if (this.isCacheValid() && cacheMatchesRequest) {
       return {
-        available: this.whisperAvailable!,
+        available: this.whisperAvailable ?? false,
         variant: this.whisperVariant,
         path: this.whisperPath,
         version: this.whisperVersion,
@@ -244,7 +245,7 @@ export class WhisperDetector {
           this.whisperVariant = variant;
           this.whisperPath = result.path;
           this.whisperVersion = result.version;
-          this.installedModels = await this.detectModels(variant, result.path);
+          this.installedModels = this.detectModels(variant, result.path);
           this.cachedPreference = effectivePreference;
           this.cacheTimestamp = Date.now();
 
@@ -317,7 +318,7 @@ export class WhisperDetector {
         return null;
       }
     } catch (error) {
-      console.warn(`[WhisperDetector] Error checking custom path: ${error}`);
+      console.warn(`[WhisperDetector] Error checking custom path: ${String(error)}`);
       return null;
     }
 
@@ -380,10 +381,10 @@ export class WhisperDetector {
    * @param customPath - User-provided path to a Whisper binary
    * @param preferredVariant - User's preferred variant (helps determine the variant type)
    */
-  private static async forceEnableCustomPath(
+  private static forceEnableCustomPath(
     customPath: string,
     preferredVariant?: 'auto' | WhisperVariant
-  ): Promise<{ path: string; version: string; variant: WhisperVariant } | null> {
+  ): { path: string; version: string; variant: WhisperVariant } | null {
     const fs = nodeRequire('fs') as typeof import('fs');
     const path = nodeRequire('path') as typeof import('path');
     const os = nodeRequire('os') as typeof import('os');
@@ -404,7 +405,7 @@ export class WhisperDetector {
         return null;
       }
     } catch (error) {
-      console.warn(`[WhisperDetector] Force enable failed - error checking path: ${error}`);
+      console.warn(`[WhisperDetector] Force enable failed - error checking path: ${String(error)}`);
       return null;
     }
 
@@ -580,10 +581,10 @@ export class WhisperDetector {
   /**
    * Detect installed Whisper models
    */
-  private static async detectModels(
+  private static detectModels(
     variant: WhisperVariant,
     _whisperPath: string
-  ): Promise<WhisperModel[]> {
+  ): WhisperModel[] {
     const os = nodeRequire('os') as typeof import('os');
     const path = nodeRequire('path') as typeof import('path');
     const fs = nodeRequire('fs') as typeof import('fs');

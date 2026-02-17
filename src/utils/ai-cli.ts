@@ -48,6 +48,7 @@ export const AI_CLI_INFO: Record<AICli, AICliInfo> = {
   },
 };
 
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class AICliDetector {
   // Cached detection results
   private static detectedClis: Map<AICli, AICliDetectionResult> = new Map();
@@ -352,7 +353,7 @@ export class AICliDetector {
           const version = this.parseVersion(cli, output);
           if (version) {
             // Check authentication status
-            const authenticated = await this.checkAuthentication(cli, cliPath);
+            const authenticated = this.checkAuthentication(cli, cliPath);
 
             return {
               available: true,
@@ -454,7 +455,7 @@ export class AICliDetector {
    * Check authentication status for a CLI
    * Uses environment variables and config files for quick check
    */
-  private static async checkAuthentication(cli: AICli, _cliPath: string): Promise<boolean> {
+  private static checkAuthentication(cli: AICli, _cliPath: string): boolean {
     try {
       const os = nodeRequire('os') as typeof import('os');
       const fs = nodeRequire('fs') as typeof import('fs');

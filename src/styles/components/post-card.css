@@ -320,22 +320,9 @@
   text-align: left;
   padding: 0;
   background: transparent;
-  border: none;
-  outline: none;
-  box-shadow: none;
   cursor: pointer;
   transition: color 0.2s;
   font-family: inherit;
-}
-
-button.pcr-see-more-btn {
-  border: none;
-  outline: none;
-  box-shadow: none;
-}
-
-button.pcr-see-more-btn:hover {
-  background: transparent;
 }
 
 .pcr-see-more-btn:hover {
@@ -868,6 +855,15 @@ button.pcr-see-more-btn:hover {
   flex: 1;
 }
 
+.pcr-banner-message-section {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
 .pcr-banner-message-nowrap {
   font-size: 13px;
   color: var(--text-normal);
@@ -882,6 +878,16 @@ button.pcr-see-more-btn:hover {
 }
 
 .pcr-banner-button-section-tight {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pcr-banner-buttons {
+  flex-shrink: 0;
+}
+
+.pcr-banner-buttons-inner {
   display: flex;
   align-items: center;
   gap: 4px;

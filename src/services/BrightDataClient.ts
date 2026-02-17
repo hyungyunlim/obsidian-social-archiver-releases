@@ -64,13 +64,13 @@ export class BrightDataClient implements IService {
 	/**
 	 * IService implementation
 	 */
-	async initialize(): Promise<void> {
+	initialize(): void {
 		this.logger.info('BrightDataClient initialized', {
 			baseURL: this.config.baseURL,
 		});
 	}
 
-	async shutdown(): Promise<void> {
+	shutdown(): void {
 		this.logger.info('BrightDataClient shutdown');
 	}
 
@@ -376,7 +376,7 @@ export class BrightDataClient implements IService {
 				throw new InvalidURLError(url);
 			}
 
-			const shortcode = match[1]!;
+			const shortcode = match[1] ?? "";
 
 			return {
 				original: url,
@@ -404,7 +404,7 @@ export class BrightDataClient implements IService {
 				throw new InvalidURLError(url);
 			}
 
-			const activityId = match[1]!;
+			const activityId = match[1] ?? "";
 
 			return {
 				original: url,
@@ -432,7 +432,7 @@ export class BrightDataClient implements IService {
 				throw new InvalidURLError(url);
 			}
 
-			const videoId = match[1]!;
+			const videoId = match[1] ?? "";
 
 			return {
 				original: url,
@@ -460,7 +460,7 @@ export class BrightDataClient implements IService {
 				throw new InvalidURLError(url);
 			}
 
-			const tweetId = match[1]!;
+			const tweetId = match[1] ?? "";
 
 			return {
 				original: url,
@@ -488,7 +488,7 @@ export class BrightDataClient implements IService {
 				throw new InvalidURLError(url);
 			}
 
-			const postId = match[1]!;
+			const postId = match[1] ?? "";
 
 			return {
 				original: url,

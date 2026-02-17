@@ -279,7 +279,7 @@ export class PromoCodeStorage implements IService {
    */
   private async loadData(): Promise<void> {
     try {
-      const data = await this.plugin.loadData();
+      const data = (await this.plugin.loadData()) as Record<string, unknown> | undefined;
       const storedData = data?.[this.STORAGE_KEY] as StoredPromoData | undefined;
 
       if (!storedData) {
@@ -333,7 +333,7 @@ export class PromoCodeStorage implements IService {
       };
 
       // Load existing plugin data
-      const data = (await this.plugin.loadData()) || {};
+      const data = ((await this.plugin.loadData()) as Record<string, unknown> | undefined) ?? {};
 
       // Update promo code data
       data[this.STORAGE_KEY] = storedData;

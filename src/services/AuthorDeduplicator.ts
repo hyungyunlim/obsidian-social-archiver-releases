@@ -371,7 +371,7 @@ export type SubscriptionMap = Map<string, {
   schedule?: string | null;
   maxPostsPerRun?: number;
   redditOptions?: {
-    sortBy: 'Hot' | 'New' | 'Top' | 'Rising';
+    sortBy: 'Best' | 'Hot' | 'New' | 'Top' | 'Rising';
     sortByTime: 'Now' | 'Today' | 'This Week' | 'This Month' | 'This Year' | 'All Time' | '';
     keyword?: string;
   };
@@ -461,8 +461,8 @@ export class AuthorDeduplicator {
 
       if (authorMap.has(key)) {
         // Update existing accumulator
-        const acc = authorMap.get(key)!;
-        this.updateAccumulator(acc, raw);
+        const acc = authorMap.get(key);
+        if (acc) this.updateAccumulator(acc, raw);
       } else {
         // Create new accumulator
         authorMap.set(key, this.createAccumulator(raw));
@@ -543,7 +543,8 @@ export class AuthorDeduplicator {
 
     options?.onStage?.('accumulate');
     for (let i = 0; i < rawData.length; i++) {
-      const raw = rawData[i]!;
+      const raw = rawData[i];
+      if (!raw) continue;
       const key = generateAuthorKey(raw.authorUrl, raw.authorName, raw.platform);
 
       const existing = authorMap.get(key);
@@ -660,8 +661,8 @@ export class AuthorDeduplicator {
       const key = generateAuthorKey(raw.authorUrl, raw.authorName, raw.platform);
 
       if (authorMap.has(key)) {
-        const acc = authorMap.get(key)!;
-        this.updateAccumulator(acc, raw);
+        const acc = authorMap.get(key);
+        if (acc) this.updateAccumulator(acc, raw);
       } else {
         authorMap.set(key, this.createAccumulator(raw));
       }
@@ -694,8 +695,8 @@ export class AuthorDeduplicator {
   /**
    * Create a new accumulator from raw data
    */
-	  private createAccumulator(raw: RawAuthorData): AuthorAccumulator {
-	    return {
+      private createAccumulator(raw: RawAuthorData): AuthorAccumulator {
+        return {
       authorNames: [{ name: raw.authorName, count: 1 }],
       authorUrl: raw.authorUrl,
       platform: raw.platform,
@@ -706,16 +707,16 @@ export class AuthorDeduplicator {
       filePaths: [raw.filePath],
       archiveCount: 1,
       unarchivedCount: raw.timelineArchived === true ? 0 : 1,
-		      // Extended metadata (track most recent values)
-		      followers: raw.followers ?? null,
-		      postsCount: raw.postsCount ?? null,
-		      bio: normalizeBio(raw.bio),
-	      lastMetadataUpdate: raw.lastMetadataUpdate ?? null,
-	      community: raw.community ?? null,
-	      // Webtoon-specific info
-	      webtoonInfo: raw.webtoonInfo ?? null
-	    };
-	  }
+              // Extended metadata (track most recent values)
+              followers: raw.followers ?? null,
+              postsCount: raw.postsCount ?? null,
+              bio: normalizeBio(raw.bio),
+          lastMetadataUpdate: raw.lastMetadataUpdate ?? null,
+          community: raw.community ?? null,
+          // Webtoon-specific info
+          webtoonInfo: raw.webtoonInfo ?? null
+        };
+      }
 
   /**
    * Update accumulator with new raw data
@@ -771,19 +772,19 @@ export class AuthorDeduplicator {
     const rawMetadataTime = raw.lastMetadataUpdate?.getTime() ?? raw.archivedAt.getTime();
     const accMetadataTime = acc.lastMetadataUpdate?.getTime() ?? 0;
 
-	    if (rawMetadataTime >= accMetadataTime) {
+        if (rawMetadataTime >= accMetadataTime) {
       if (raw.followers !== null && raw.followers !== undefined) {
         acc.followers = raw.followers;
       }
       if (raw.postsCount !== null && raw.postsCount !== undefined) {
         acc.postsCount = raw.postsCount;
       }
-	      if (raw.bio) {
-	        const normalized = normalizeBio(raw.bio);
-	        if (normalized) {
-	          acc.bio = normalized;
-	        }
-	      }
+          if (raw.bio) {
+            const normalized = normalizeBio(raw.bio);
+            if (normalized) {
+              acc.bio = normalized;
+            }
+          }
       if (raw.community) {
         acc.community = raw.community;
       }
@@ -817,7 +818,7 @@ export class AuthorDeduplicator {
     // Look up subscription info
     const subInfo = subscriptionMap?.get(key);
 
-	    return {
+        return {
       authorName: bestName,
       authorUrl: acc.authorUrl,
       platform: acc.platform,
@@ -835,9 +836,9 @@ export class AuthorDeduplicator {
       // Extended metadata (fallback to subscription data if not in posts)
       followers: acc.followers,
       postsCount: acc.postsCount,
-	      bio: normalizeBio(acc.bio) || normalizeBio(subInfo?.bio) || null,
-	      lastMetadataUpdate: acc.lastMetadataUpdate,
-	      community: acc.community,
+          bio: normalizeBio(acc.bio) || normalizeBio(subInfo?.bio) || null,
+          lastMetadataUpdate: acc.lastMetadataUpdate,
+          community: acc.community,
       // Subscription options
       maxPostsPerRun: subInfo?.maxPostsPerRun,
       redditOptions: subInfo?.redditOptions,
@@ -859,32 +860,32 @@ export class AuthorDeduplicator {
   /**
    * Create an AuthorCatalogEntry for a subscription-only author (no posts in vault)
    */
-	  private createSubscriptionOnlyEntry(
+      private createSubscriptionOnlyEntry(
     key: string,
     subInfo: SubscriptionMap extends Map<string, infer V> ? V : never
   ): AuthorCatalogEntry | null {
     // Prefer author info from subInfo if available (set by buildSubscriptionMapFromApi)
     if (subInfo.platform && (subInfo.authorName || subInfo.handle)) {
-	      return {
+          return {
         authorName: subInfo.authorName || subInfo.handle || 'Unknown',
         authorUrl: subInfo.authorUrl || '',
         platform: subInfo.platform,
         avatar: subInfo.authorAvatar || null, // Use avatar from subscription (e.g., Naver cafe member)
         localAvatar: subInfo.localAvatarPath || null, // Use orphaned avatar if found
         lastSeenAt: new Date(), // No posts, use current time
-	        lastRunAt: subInfo.lastRunAt || null,
-	        schedule: subInfo.schedule || null,
-	        archiveCount: 0, // No posts in vault
-	        unarchivedCount: 0,
-	        subscriptionId: subInfo.subscriptionId,
-	        status: subInfo.status,
-	        handle: subInfo.handle,
-	        filePaths: [],
+            lastRunAt: subInfo.lastRunAt || null,
+            schedule: subInfo.schedule || null,
+            archiveCount: 0, // No posts in vault
+            unarchivedCount: 0,
+            subscriptionId: subInfo.subscriptionId,
+            status: subInfo.status,
+            handle: subInfo.handle,
+            filePaths: [],
         // No extended metadata for subscription-only (except bio from xMetadata)
         followers: null,
         postsCount: null,
-	        bio: normalizeBio(subInfo.bio) || null,
-	        lastMetadataUpdate: null,
+            bio: normalizeBio(subInfo.bio) || null,
+            lastMetadataUpdate: null,
         // Subscription options
         maxPostsPerRun: subInfo.maxPostsPerRun,
         redditOptions: subInfo.redditOptions,
@@ -947,8 +948,8 @@ export class AuthorDeduplicator {
   /**
    * Convert entry back to accumulator for merging
    */
-	  private entryToAccumulator(entry: AuthorCatalogEntry): AuthorAccumulator {
-	    return {
+      private entryToAccumulator(entry: AuthorCatalogEntry): AuthorAccumulator {
+        return {
       authorNames: [{ name: entry.authorName, count: entry.archiveCount }],
       authorUrl: entry.authorUrl,
       platform: entry.platform,
@@ -962,9 +963,9 @@ export class AuthorDeduplicator {
       // Extended metadata
       followers: entry.followers ?? null,
       postsCount: entry.postsCount ?? null,
-		      bio: normalizeBio(entry.bio),
-	      lastMetadataUpdate: entry.lastMetadataUpdate ?? null,
-	      community: entry.community ?? null,
+              bio: normalizeBio(entry.bio),
+          lastMetadataUpdate: entry.lastMetadataUpdate ?? null,
+          community: entry.community ?? null,
       // Webtoon info
       webtoonInfo: entry.webtoonInfo ?? null
     };
@@ -975,7 +976,7 @@ export class AuthorDeduplicator {
    */
   private selectBestName(names: Array<{ name: string; count: number }>): string {
     if (names.length === 0) return 'Unknown';
-    if (names.length === 1) return names[0]!.name;
+    if (names.length === 1) return names[0]?.name ?? 'Unknown';
 
     // Sort by count descending
     const sorted = [...names].sort((a, b) => b.count - a.count);

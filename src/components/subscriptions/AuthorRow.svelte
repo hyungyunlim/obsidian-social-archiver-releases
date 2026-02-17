@@ -884,7 +884,8 @@ function renderBio(node: HTMLElement, bio: string) {
     <!-- Bio (truncated unless expanded) -->
     {#if author.bio}
       {#if isExpanded}
-        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+        <!-- svelte-ignore a11y-click-events-have-key-events -->
+        <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
         <div
           class="author-bio expanded"
           role="note"

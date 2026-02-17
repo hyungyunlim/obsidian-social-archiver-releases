@@ -219,7 +219,7 @@ export interface ArchiveResponse {
   creditsRequired?: number;
   // Synchronous completion result (Fediverse, Podcast, Naver, Naver Webtoon episode)
   result?: {
-    postData: any;
+    postData: unknown;
     creditsUsed: number;
   };
   // Naver Webtoon series selection response fields
@@ -257,7 +257,7 @@ export interface JobStatusResponse {
 }
 
 export interface ArchiveResult {
-  postData: any;
+  postData: unknown;
   creditsUsed: number;
   processingTime: number;
   cached: boolean;
@@ -303,7 +303,7 @@ export interface BatchArchiveTriggerResponse {
 export interface BatchArchiveResult {
   url: string;
   status: 'completed' | 'failed';
-  postData?: any;
+  postData?: unknown;
   error?: string;
 }
 
@@ -333,7 +333,7 @@ export interface APIResponse<T> {
   error?: {
     code: string;
     message: string;
-    details?: any;
+    details?: unknown;
   };
 }
 
@@ -360,7 +360,7 @@ export class WorkersAPIClient implements IService {
     };
   }
 
-  async initialize(): Promise<void> {
+  initialize(): void {
     if (this.initialized) {
       return;
     }
@@ -375,7 +375,7 @@ export class WorkersAPIClient implements IService {
     this.initialized = true;
   }
 
-  async dispose(): Promise<void> {
+  dispose(): void {
     this.initialized = false;
   }
 
@@ -472,7 +472,7 @@ export class WorkersAPIClient implements IService {
   async waitForJob(
     jobId: string,
     onProgress?: (progress: number) => void
-  ): Promise<any> {
+  ): Promise<unknown> {
     const timeout = 300000; // 5 minutes (TikTok can take up to 4 minutes)
     const pollInterval = 2000; // 2 seconds default
     const startTime = Date.now();
@@ -491,7 +491,7 @@ export class WorkersAPIClient implements IService {
           throw new Error('Job completed but no result available');
         }
         // Extract postData from ArchiveResult
-        const result = status.result as ArchiveResult;
+        const result: ArchiveResult = status.result;
         return result.postData;
       }
 
@@ -510,7 +510,7 @@ export class WorkersAPIClient implements IService {
   /**
    * Validate license
    */
-  async validateLicense(licenseKey: string): Promise<any> {
+  async validateLicense(licenseKey: string): Promise<unknown> {
     this.ensureInitialized();
 
     const response = await this.request('/api/license/validate', {
@@ -667,15 +667,16 @@ export class WorkersAPIClient implements IService {
       });
 
       // Parse response
-      const data: APIResponse<T> = response.json;
+      const data = response.json as APIResponse<T>;
 
       // Handle errors
       if (!data.success) {
         const error = new Error(data.error?.message || 'Unknown API error');
-        (error as any).code = data.error?.code;
-        (error as any).details = data.error?.details;
-        (error as any).status = response.status;
-        throw error;
+        const extError = error as Error & { code?: string; details?: unknown; status?: number };
+        extError.code = data.error?.code;
+        extError.details = data.error?.details;
+        extError.status = response.status;
+        throw extError;
       }
 
       return data.data as T;
@@ -929,7 +930,7 @@ export class WorkersAPIClient implements IService {
   async deleteSyncClient(clientId: string): Promise<void> {
     this.ensureInitialized();
 
-    await this.request<void>(`/api/sync/clients/${clientId}`, {
+    await this.request<undefined>(`/api/sync/clients/${clientId}`, {
       method: 'DELETE',
     });
   }
@@ -957,7 +958,7 @@ export class WorkersAPIClient implements IService {
   async ackSyncItem(queueId: string, clientId: string): Promise<void> {
     this.ensureInitialized();
 
-    await this.request<void>('/api/sync/queue/ack', {
+    await this.request<undefined>('/api/sync/queue/ack', {
       method: 'POST',
       body: JSON.stringify({ queueId, clientId }),
     });
@@ -973,7 +974,7 @@ export class WorkersAPIClient implements IService {
   async failSyncItem(queueId: string, clientId: string, error?: string): Promise<void> {
     this.ensureInitialized();
 
-    await this.request<void>('/api/sync/queue/fail', {
+    await this.request<undefined>('/api/sync/queue/fail', {
       method: 'POST',
       body: JSON.stringify({ queueId, clientId, error }),
     });

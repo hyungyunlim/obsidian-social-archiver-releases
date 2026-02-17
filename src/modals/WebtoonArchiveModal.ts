@@ -31,7 +31,6 @@ import {
   type WebtoonsUrlInfo,
   type WebtoonsSeriesInfo,
   type WebtoonsEpisode as WebtoonsGlobalEpisode,
-  WEBTOONS_LANGUAGES,
 } from '../services/WebtoonsLocalService';
 import {
   WebtoonDownloadQueue,
@@ -40,12 +39,11 @@ import {
 import {
   WebtoonsDownloadQueue,
   type WebtoonsEpisodeJob,
-  type WebtoonsDownloadProgress,
 } from '../services/WebtoonsDownloadQueue';
 import { WEBTOON_DAILY_CRON_LOCAL, WEBTOONS_PUBLISH_DAY_TO_CRON } from '@/shared/platforms/definitions';
 import { DEFAULT_ARCHIVE_PATH } from '@/shared/constants';
 import { getPlatformName } from '@/shared/platforms';
-import type { Subscription } from '../services/SubscriptionManager';
+import type { Subscription, SubscriptionPlatform } from '../services/SubscriptionManager';
 import { invalidateAuthorCatalogCache } from '../services/AuthorCatalogStore';
 
 // ============================================================================
@@ -501,8 +499,9 @@ export class WebtoonArchiveModal extends Modal {
 
       void (async () => {
         try {
+          if (!this.webtoonsUrlInfo) return;
           const localized = await this.webtoonsService.findLocalizedSeries(
-            this.webtoonsUrlInfo!,
+            this.webtoonsUrlInfo,
             targetLanguage,
             this.webtoonsSeriesInfo?.title,
           );
@@ -1545,7 +1544,7 @@ export class WebtoonArchiveModal extends Modal {
       this.webtoonsHasMorePages = firstPageResult.totalPages > 1;
 
       // Check which episodes are already archived
-      await this.checkWebtoonsArchivedEpisodes(firstPageResult.episodes);
+      this.checkWebtoonsArchivedEpisodes(firstPageResult.episodes);
 
       // Convert episodes to selection format
       this.webtoonsEpisodes = firstPageResult.episodes.map(ep => ({
@@ -1558,7 +1557,7 @@ export class WebtoonArchiveModal extends Modal {
       if (this.sortOrder === 'oldest') {
         // For oldest first, start from the last page
         const lastPageResult = await this.webtoonsService.fetchEpisodeList(urlInfo, this.webtoonsTotalPages);
-        await this.checkWebtoonsArchivedEpisodes(lastPageResult.episodes);
+        this.checkWebtoonsArchivedEpisodes(lastPageResult.episodes);
         this.webtoonsEpisodes = lastPageResult.episodes.map(ep => ({
           episode: ep,
           selected: this.selectedEpisodeNos.has(ep.episodeNo),
@@ -1594,7 +1593,7 @@ export class WebtoonArchiveModal extends Modal {
       const pageResult = await this.webtoonsService.fetchEpisodeList(this.webtoonsUrlInfo, page);
 
       // Check archived status for new episodes
-      await this.checkWebtoonsArchivedEpisodes(pageResult.episodes);
+      this.checkWebtoonsArchivedEpisodes(pageResult.episodes);
 
       // Replace episodes with new page
       this.webtoonsEpisodes = pageResult.episodes.map(ep => ({
@@ -1633,7 +1632,7 @@ export class WebtoonArchiveModal extends Modal {
       const pageResult = await this.webtoonsService.fetchEpisodeList(this.webtoonsUrlInfo, nextPage);
 
       // Check archived status for new episodes
-      await this.checkWebtoonsArchivedEpisodes(pageResult.episodes);
+      this.checkWebtoonsArchivedEpisodes(pageResult.episodes);
 
       // Append new episodes
       const newEpisodes = pageResult.episodes.map(ep => ({
@@ -1657,7 +1656,7 @@ export class WebtoonArchiveModal extends Modal {
   /**
    * Check which WEBTOON (Global) episodes are already archived
    */
-  private async checkWebtoonsArchivedEpisodes(episodes: WebtoonsGlobalEpisode[]): Promise<void> {
+  private checkWebtoonsArchivedEpisodes(episodes: WebtoonsGlobalEpisode[]): void {
     if (!this.webtoonsSeriesInfo) return;
 
     const seriesTitle = this.sanitizeFilename(this.webtoonsSeriesInfo.title);
@@ -1753,7 +1752,7 @@ export class WebtoonArchiveModal extends Modal {
       this.hasMorePages = this.pageInfo.totalPages > 1; // For mobile infinite scroll
 
       // Check which episodes are already archived
-      await this.checkArchivedEpisodes(episodeList.articleList);
+      this.checkArchivedEpisodes(episodeList.articleList);
 
       // Check if already subscribed to this webtoon
       await this.checkSubscriptionStatus();
@@ -1877,7 +1876,7 @@ export class WebtoonArchiveModal extends Modal {
       );
 
       // Check which episodes are already archived
-      await this.checkArchivedEpisodes(episodeList.articleList);
+      this.checkArchivedEpisodes(episodeList.articleList);
 
       this.pageInfo = episodeList.pageInfo;
       this.totalEpisodeCount = episodeList.totalCount;
@@ -1923,7 +1922,7 @@ export class WebtoonArchiveModal extends Modal {
       );
 
       // Check which episodes are already archived
-      await this.checkArchivedEpisodes(episodeList.articleList);
+      this.checkArchivedEpisodes(episodeList.articleList);
 
       // Append new episodes to existing list
       const newEpisodes = episodeList.articleList.map(ep => ({
@@ -2026,7 +2025,7 @@ export class WebtoonArchiveModal extends Modal {
    * Check which episodes are already archived in the vault
    * Uses episode number prefix matching since subtitle may differ between LIST and DETAIL APIs
    */
-  private async checkArchivedEpisodes(episodes: WebtoonEpisode[]): Promise<void> {
+  private checkArchivedEpisodes(episodes: WebtoonEpisode[]): void {
     if (!this.webtoonInfo) return;
 
     const seriesTitle = this.sanitizeFilename(this.webtoonInfo.titleName);
@@ -2292,7 +2291,7 @@ export class WebtoonArchiveModal extends Modal {
 
     const subscription = await this.plugin.subscriptionManager.addSubscription({
       name: this.webtoonInfo.titleName,
-      platform: 'naver-webtoon' as any,
+      platform: 'naver-webtoon' as SubscriptionPlatform,
       target: {
         handle: this.titleId,
         profileUrl: `https://comic.naver.com/webtoon/list?titleId=${this.titleId}`,
@@ -2332,7 +2331,7 @@ export class WebtoonArchiveModal extends Modal {
 
     const subscription = await this.plugin.subscriptionManager.addSubscription({
       name: this.webtoonsSeriesInfo.title,
-      platform: 'webtoons' as any,
+      platform: 'webtoons' as SubscriptionPlatform,
       target: {
         handle: this.webtoonsUrlInfo.titleNo,
         profileUrl: this.webtoonsService.buildSeriesUrl(this.webtoonsUrlInfo),
@@ -2595,13 +2594,15 @@ export class WebtoonArchiveModal extends Modal {
 
     this.trackEventListener(this.downloadQueue, 'episode-failed', ((e: CustomEvent) => {
       updateNaverProgress();
-      new Notice(`Failed: ${e.detail.error}`);
+      const detail = e.detail as Record<string, unknown>;
+      new Notice(`Failed: ${String(detail.error ?? 'Unknown error')}`);
     }) as EventListener);
 
     this.trackEventListener(this.downloadQueue, 'queue-completed', ((e: CustomEvent) => {
       this.state = 'completed';
       this.downloadProgress = this.downloadQueue.getProgress();
-      new Notice(`✓ ${e.detail.completed} episodes archived!`);
+      const detail = e.detail as Record<string, unknown>;
+      new Notice(`✓ ${String(detail.completed ?? 0)} episodes archived!`);
 
       // Invalidate Author Catalog cache to refresh with new cover/data
       invalidateAuthorCatalogCache();
@@ -2620,19 +2621,21 @@ export class WebtoonArchiveModal extends Modal {
     // Naver Webtoon: markdown-created event for stream-first mode
     // First episode opens fullscreen, subsequent episodes just update timeline
     this.trackEventListener(this.downloadQueue, 'markdown-created', ((e: CustomEvent) => {
+      const detail = e.detail as Record<string, unknown>;
       if (this.streamFirstHandled) {
         // Already handled first episode - just refresh timeline for new episodes
-        void this.refreshTimelineForNewEpisode(e.detail.episodeDetail.no);
+        const episodeDetail = detail.episodeDetail as Record<string, unknown> | undefined;
+        void this.refreshTimelineForNewEpisode(typeof episodeDetail?.no === 'number' ? episodeDetail.no : 0);
         return;
       }
       this.streamFirstHandled = true;
 
       void this.handleMarkdownCreated(
-        e.detail.filePath,
-        e.detail.imageUrls,
+        typeof detail.filePath === 'string' ? detail.filePath : '',
+        Array.isArray(detail.imageUrls) ? (detail.imageUrls as string[]) : [],
         'naver-webtoon',
-        e.detail.webtoonInfo,
-        e.detail.episodeDetail
+        detail.webtoonInfo as Parameters<typeof this.handleMarkdownCreated>[3],
+        detail.episodeDetail as Parameters<typeof this.handleMarkdownCreated>[4]
       );
     }) as EventListener);
 
@@ -2648,13 +2651,15 @@ export class WebtoonArchiveModal extends Modal {
 
     this.trackEventListener(this.webtoonsDownloadQueue, 'episode-failed', ((e: CustomEvent) => {
       updateWebtoonsProgress();
-      new Notice(`Failed: ${e.detail.error}`);
+      const detail = e.detail as Record<string, unknown>;
+      new Notice(`Failed: ${String(detail.error ?? 'Unknown error')}`);
     }) as EventListener);
 
     this.trackEventListener(this.webtoonsDownloadQueue, 'queue-completed', ((e: CustomEvent) => {
       this.state = 'completed';
       this.downloadProgress = this.webtoonsDownloadQueue.getProgress();
-      new Notice(`✓ ${e.detail.completed} episodes archived!`);
+      const detail = e.detail as Record<string, unknown>;
+      new Notice(`✓ ${String(detail.completed ?? 0)} episodes archived!`);
 
       // Invalidate Author Catalog cache to refresh with new cover/data
       invalidateAuthorCatalogCache();
@@ -2673,28 +2678,36 @@ export class WebtoonArchiveModal extends Modal {
     // WEBTOON Global: markdown-created event for stream-first mode
     // Only handle first episode - rest download in background
     this.trackEventListener(this.webtoonsDownloadQueue, 'markdown-created', ((e: CustomEvent) => {
+      const detail = e.detail as Record<string, unknown>;
+      const episodeDetailRaw = detail.episodeDetail as Record<string, unknown> | undefined;
+      const urlInfoRaw = detail.urlInfo as Record<string, unknown> | undefined;
+      const seriesInfoRaw = detail.seriesInfo as Record<string, unknown> | undefined;
+
       if (this.streamFirstHandled) {
         // Already handled first episode - just refresh timeline for new episodes
-        void this.refreshTimelineForNewEpisode(e.detail.episodeDetail.episodeNo);
+        void this.refreshTimelineForNewEpisode(typeof episodeDetailRaw?.episodeNo === 'number' ? episodeDetailRaw.episodeNo : 0);
         return;
       }
       this.streamFirstHandled = true;
 
+      const titleNo = typeof urlInfoRaw?.titleNo === 'string' ? urlInfoRaw.titleNo : '';
+      const episodeNo = typeof episodeDetailRaw?.episodeNo === 'number' ? episodeDetailRaw.episodeNo : 0;
+
       void this.handleMarkdownCreated(
-        e.detail.filePath,
-        e.detail.imageUrls,
+        typeof detail.filePath === 'string' ? detail.filePath : '',
+        Array.isArray(detail.imageUrls) ? (detail.imageUrls as string[]) : [],
         'webtoons',
         {
-          titleId: parseInt(e.detail.urlInfo.titleNo, 10),
-          titleName: e.detail.seriesInfo.title,
-          thumbnailUrl: e.detail.seriesInfo.thumbnailUrl,
-          communityArtists: [{ name: e.detail.seriesInfo.authorNames || 'Unknown' }],
+          titleId: parseInt(titleNo, 10),
+          titleName: typeof seriesInfoRaw?.title === 'string' ? seriesInfoRaw.title : '',
+          thumbnailUrl: typeof seriesInfoRaw?.thumbnailUrl === 'string' ? seriesInfoRaw.thumbnailUrl : undefined,
+          communityArtists: [{ name: typeof seriesInfoRaw?.authorNames === 'string' ? seriesInfoRaw.authorNames : 'Unknown' }],
         },
         {
-          no: e.detail.episodeDetail.episodeNo,
-          titleId: parseInt(e.detail.urlInfo.titleNo, 10),
-          subtitle: e.detail.episodeDetail.title || `Episode ${e.detail.episodeDetail.episodeNo}`,
-          imageUrls: e.detail.imageUrls,
+          no: episodeNo,
+          titleId: parseInt(titleNo, 10),
+          subtitle: typeof episodeDetailRaw?.title === 'string' ? episodeDetailRaw.title : `Episode ${episodeNo}`,
+          imageUrls: Array.isArray(detail.imageUrls) ? (detail.imageUrls as string[]) : [],
         }
       );
     }) as EventListener);

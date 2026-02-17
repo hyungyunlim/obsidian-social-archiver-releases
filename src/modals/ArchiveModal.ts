@@ -1,6 +1,6 @@
-import { Modal, App, Notice, Setting, Platform, TFile, setIcon } from 'obsidian';
+import { Modal, App, Notice, Setting, Platform, setIcon } from 'obsidian';
 import type SocialArchiverPlugin from '../main';
-import type { Platform as PlatformType } from '../types/post';
+import type { Platform as PlatformType, PostData } from '../types/post';
 import type { MediaDownloadMode } from '../types/settings';
 import { getVaultOrganizationStrategy } from '../types/settings';
 import { isAuthenticated } from '../utils/auth';
@@ -39,9 +39,9 @@ import {
   isLocalFetchPlatform,
 } from '@/types/profile-crawl';
 import { detectUserTimezone } from '@/utils/date';
+import type { CreateSubscriptionInput } from '@/services/SubscriptionManager';
 import {
   getPlatformSimpleIcon,
-  type PlatformIcon,
 } from '@/services/IconService';
 
 /**
@@ -150,10 +150,12 @@ export class ArchiveModal extends Modal {
     const workerUrl = plugin.settings.workerUrl;
     if (workerUrl) {
       this.quickPreviewService = new ProfileQuickPreview({ endpoint: workerUrl });
-      this.quickPreviewService.initialize().catch(() => {
+      try {
+        this.quickPreviewService.initialize();
+      } catch {
         // Silently fail - fallback to URL parsing
         this.quickPreviewService = null;
-      });
+      }
     }
   }
 
@@ -368,7 +370,7 @@ export class ArchiveModal extends Modal {
       cls: 'mod-cta',
       attr: { disabled: 'true' }
     });
-    this.archiveBtn.addEventListener('click', () => this.handleArchive());
+    this.archiveBtn.addEventListener('click', () => { void this.handleArchive(); });
 
     // Make button full width on mobile
     if (Platform.isMobile) {
@@ -394,9 +396,9 @@ export class ArchiveModal extends Modal {
       if (this.isValidUrl) {
         // Route to correct handler based on URL type
         if (this.urlAnalysis?.type === 'profile') {
-          this.handleProfileCrawl();
+          void this.handleProfileCrawl();
         } else {
-          this.handleArchive();
+          void this.handleArchive();
         }
       }
       return false;
@@ -404,7 +406,7 @@ export class ArchiveModal extends Modal {
 
     // Try to paste from clipboard if no initial URL provided
     if (!this.url) {
-      this.tryPasteFromClipboard();
+      void this.tryPasteFromClipboard();
     }
 
     // Focus input
@@ -515,7 +517,7 @@ export class ArchiveModal extends Modal {
             // Let WebtoonArchiveModal handle the search (avoids double search)
             this.isResolving = false;
             this.close();
-            import('./WebtoonArchiveModal').then(({ WebtoonArchiveModal }) => {
+            void import('./WebtoonArchiveModal').then(({ WebtoonArchiveModal }) => {
               const modal = new WebtoonArchiveModal(this.app, this.plugin, originalInput);
               modal.open();
             });
@@ -537,7 +539,7 @@ export class ArchiveModal extends Modal {
         this.isResolving = false;
         this.close();
         // Import and open WebtoonArchiveModal
-        import('./WebtoonArchiveModal').then(({ WebtoonArchiveModal }) => {
+        void import('./WebtoonArchiveModal').then(({ WebtoonArchiveModal }) => {
           const modal = new WebtoonArchiveModal(this.app, this.plugin, trimmedUrl);
           modal.open();
         });
@@ -638,7 +640,7 @@ export class ArchiveModal extends Modal {
 
       // If profile URL detected, load quick preview
       if (this.urlAnalysis?.type === 'profile') {
-        this.loadQuickPreview(trimmedUrl);
+        void this.loadQuickPreview(trimmedUrl);
       }
 
     } catch {
@@ -1213,7 +1215,7 @@ export class ArchiveModal extends Modal {
               .setValue(this.timeRangePreset)
               .onChange((value: string) => {
                 this.timeRangePreset = value as TimeRangePreset;
-                this.updateCrawlHint(timeRangeSetting!);
+                if (timeRangeSetting) this.updateCrawlHint(timeRangeSetting);
               });
           });
 
@@ -1661,7 +1663,7 @@ export class ArchiveModal extends Modal {
         this.subscribeOnlyButton = this.profileActionButtons.createEl('button', {
           text: this.isProcessing ? 'Processing...' : 'Subscribe Only'
         });
-        this.subscribeOnlyButton.addEventListener('click', () => this.handleSubscribeOnly());
+        this.subscribeOnlyButton.addEventListener('click', () => { void this.handleSubscribeOnly(); });
         if (this.isProcessing) {
           this.subscribeOnlyButton.disabled = true;
         }
@@ -1676,7 +1678,7 @@ export class ArchiveModal extends Modal {
         text: this.isProcessing ? 'Processing...' : fetchButtonText,
         cls: 'mod-cta'
       });
-      this.crawlButton.addEventListener('click', () => this.handleRSSFetch());
+      this.crawlButton.addEventListener('click', () => { void this.handleRSSFetch(); });
       if (this.isProcessing) {
         this.crawlButton.disabled = true;
       }
@@ -1692,7 +1694,7 @@ export class ArchiveModal extends Modal {
       this.subscribeOnlyButton = this.profileActionButtons.createEl('button', {
         text: this.isProcessing ? 'Processing...' : 'Subscribe Only'
       });
-      this.subscribeOnlyButton.addEventListener('click', () => this.handleSubscribeOnly());
+      this.subscribeOnlyButton.addEventListener('click', () => { void this.handleSubscribeOnly(); });
       if (this.isProcessing) {
         this.subscribeOnlyButton.disabled = true;
       }
@@ -1707,7 +1709,7 @@ export class ArchiveModal extends Modal {
       text: this.isProcessing ? 'Processing...' : buttonText,
       cls: 'mod-cta'
     });
-    this.crawlButton.addEventListener('click', () => this.handleProfileCrawl());
+    this.crawlButton.addEventListener('click', () => { void this.handleProfileCrawl(); });
     if (this.isProcessing) {
       this.crawlButton.disabled = true;
     }
@@ -1756,7 +1758,7 @@ export class ArchiveModal extends Modal {
 
     // Brunch requires local fetching (similar to Naver Blog) - uses RSS + full content scraping
     if (this.detectedPlatform === 'brunch') {
-      await this.handleBrunchFetch();
+      this.handleBrunchFetch();
       return;
     }
 
@@ -1875,7 +1877,7 @@ export class ArchiveModal extends Modal {
           {
             jobId: response.jobId,
             handle: handle,
-            platform: this.detectedPlatform!,
+            platform: this.detectedPlatform ?? 'unknown',
             estimatedPosts: response.estimatedPosts,
           },
           response.jobId // workerJobId for WebSocket event matching
@@ -1985,7 +1987,7 @@ export class ArchiveModal extends Modal {
     const isBrunch = this.detectedPlatform === 'brunch' ||
       this.url.includes('brunch.co.kr');
     if (isBrunch) {
-      await this.handleBrunchFetch();
+      this.handleBrunchFetch();
       return;
     }
 
@@ -2042,7 +2044,7 @@ export class ArchiveModal extends Modal {
 
     try {
       // Submit to Worker API (immediate crawl)
-      const response = await this.plugin.workersApiClient.crawlProfile(request);
+      await this.plugin.workersApiClient.crawlProfile(request);
 
       // Close modal
       this.close();
@@ -2377,7 +2379,7 @@ export class ArchiveModal extends Modal {
       this.plugin.archiveJobTracker.startJob({
         jobId,
         url: archiveUrl,
-        platform: this.detectedPlatform!,
+        platform: this.detectedPlatform ?? 'unknown',
       });
 
       // Step 5: Show notice
@@ -2663,12 +2665,12 @@ export class ArchiveModal extends Modal {
         basePath: this.plugin.settings.archivePath || 'Social Archives',
         organizationStrategy: getVaultOrganizationStrategy(this.plugin.settings.archiveOrganization),
       });
-      await vaultManager.initialize();
+      vaultManager.initialize();
 
       const markdownConverter = new MarkdownConverter({
         frontmatterSettings: this.plugin.settings.frontmatter,
       });
-      await markdownConverter.initialize();
+      markdownConverter.initialize();
 
       let savedCount = 0;
       for (const post of filteredPosts) {
@@ -2679,7 +2681,7 @@ export class ArchiveModal extends Modal {
             type: m.type === 'photo' ? 'image' as const : m.type as 'video',
           }));
 
-          const postData = {
+          const postData: PostData = {
             platform: 'naver' as const,
             id: post.id,
             url: post.url,
@@ -2704,14 +2706,14 @@ export class ArchiveModal extends Modal {
             title: post.title,
           };
 
-          const markdown = await markdownConverter.convert(
-            postData as any,
+          const markdown = markdownConverter.convert(
+            postData,
             undefined,
             undefined,
             undefined
           );
 
-          await vaultManager.savePost(postData as any, markdown);
+          await vaultManager.savePost(postData, markdown);
           savedCount++;
         } catch (error) {
           console.error(`[ArchiveModal] Failed to save post ${post.id}:`, error);
@@ -2755,7 +2757,7 @@ export class ArchiveModal extends Modal {
             },
           };
 
-          await subscriptionManager.addSubscription(subscriptionInput as any);
+          await subscriptionManager.addSubscription(subscriptionInput as CreateSubscriptionInput);
           subscriptionCreated = true;
 
           try {
@@ -2834,12 +2836,12 @@ export class ArchiveModal extends Modal {
         basePath: this.plugin.settings.archivePath || 'Social Archives',
         organizationStrategy: getVaultOrganizationStrategy(this.plugin.settings.archiveOrganization),
       });
-      await vaultManager.initialize();
+      vaultManager.initialize();
 
       const markdownConverter = new MarkdownConverter({
         frontmatterSettings: this.plugin.settings.frontmatter,
       });
-      await markdownConverter.initialize();
+      markdownConverter.initialize();
 
       let savedCount = 0;
       for (const post of posts) {
@@ -2850,7 +2852,7 @@ export class ArchiveModal extends Modal {
             type: m.type === 'photo' ? 'image' as const : m.type as 'video',
           }));
 
-          const postData = {
+          const postData: PostData = {
             platform: 'naver' as const,
             id: post.id,
             url: post.url,
@@ -2875,14 +2877,14 @@ export class ArchiveModal extends Modal {
             title: post.title,
           };
 
-          const markdown = await markdownConverter.convert(
-            postData as any,
+          const markdown = markdownConverter.convert(
+            postData,
             undefined,
             undefined,
             undefined
           );
 
-          await vaultManager.savePost(postData as any, markdown);
+          await vaultManager.savePost(postData, markdown);
           savedCount++;
         } catch (error) {
           console.error(`[ArchiveModal] Failed to save post ${post.id}:`, error);
@@ -2924,7 +2926,7 @@ export class ArchiveModal extends Modal {
             },
           };
 
-          await subscriptionManager.addSubscription(subscriptionInput as any);
+          await subscriptionManager.addSubscription(subscriptionInput as CreateSubscriptionInput);
           subscriptionCreated = true;
 
           try {
@@ -2966,7 +2968,7 @@ export class ArchiveModal extends Modal {
    * Now uses background processing - modal closes immediately and
    * progress is shown in Timeline's CrawlStatusBanner
    */
-  private async handleBrunchFetch(): Promise<void> {
+  private handleBrunchFetch(): void {
     const handle = this.urlAnalysis?.handle ?? this.quickPreview?.handle;
 
     if (!handle) {
@@ -3041,7 +3043,6 @@ export class ArchiveModal extends Modal {
   }): Promise<void> {
     const {
       jobId,
-      handle,
       identifier,
       displayName,
       isBrunchbook,
@@ -3094,12 +3095,12 @@ export class ArchiveModal extends Modal {
         basePath: archivePath,
         organizationStrategy: getVaultOrganizationStrategy(this.plugin.settings.archiveOrganization),
       });
-      await vaultManager.initialize();
+      vaultManager.initialize();
 
       const markdownConverter = new MarkdownConverter({
         frontmatterSettings: this.plugin.settings.frontmatter,
       });
-      await markdownConverter.initialize();
+      markdownConverter.initialize();
 
       let savedCount = 0;
       for (const post of posts) {
@@ -3146,7 +3147,7 @@ export class ArchiveModal extends Modal {
             }
           }
 
-          const postData = {
+          const postData: PostData = {
             platform: 'brunch' as const,
             id: post.id,
             url: post.url,
@@ -3170,16 +3171,16 @@ export class ArchiveModal extends Modal {
             },
             title: post.title,
             // Brunch series/book info
-            series: post.series,
+            series: post.series ? { id: post.series.id ?? '', title: post.series.title, url: post.series.url, episode: post.series.episode, totalEpisodes: post.series.totalEpisodes } : undefined,
           };
 
-          const markdown = await markdownConverter.convert(
-            postData as any,
+          const markdown = markdownConverter.convert(
+            postData,
             undefined,
             undefined
           );
 
-          await vaultManager.savePost(postData as any, markdown);
+          await vaultManager.savePost(postData, markdown);
           savedCount++;
 
           // Update progress in CrawlJobTracker
@@ -3222,7 +3223,7 @@ export class ArchiveModal extends Modal {
             },
           };
 
-          await subscriptionManager.addSubscription(subscriptionInput as any);
+          await subscriptionManager.addSubscription(subscriptionInput as unknown as CreateSubscriptionInput);
           subscriptionCreated = true;
 
           try {
@@ -3313,7 +3314,7 @@ export class ArchiveModal extends Modal {
         },
       };
 
-      await subscriptionManager.addSubscription(subscriptionInput as any);
+      await subscriptionManager.addSubscription(subscriptionInput as CreateSubscriptionInput);
 
       try {
         await subscriptionManager.refresh();
@@ -3441,7 +3442,7 @@ export class ArchiveModal extends Modal {
         },
       };
 
-      await subscriptionManager.addSubscription(subscriptionInput as any);
+      await subscriptionManager.addSubscription(subscriptionInput as CreateSubscriptionInput);
 
       try {
         await subscriptionManager.refresh();
@@ -3541,12 +3542,11 @@ export class ArchiveModal extends Modal {
     settingsBtn.addEventListener('click', () => {
       this.close();
       // Open settings and navigate to Social Archiver tab
-      // @ts-ignore - Obsidian internal API
-      if (this.app.setting.open) {
-        // @ts-ignore
-        this.app.setting.open();
-        // @ts-ignore - Access the plugin settings tab
-        this.app.setting.openTabById(this.plugin.manifest.id);
+      // @ts-expect-error — app.setting is available at runtime but not in public Obsidian types
+      const appSetting = this.app.setting as { open?: () => void; openTabById?: (id: string) => void } | undefined;
+      if (appSetting?.open) {
+        appSetting.open();
+        appSetting.openTabById?.(this.plugin.manifest.id);
       }
     });
 

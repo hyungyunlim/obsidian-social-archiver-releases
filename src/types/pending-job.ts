@@ -188,7 +188,7 @@ export function isServerPendingJob(obj: unknown): obj is ServerPendingJob {
     typeof job.url === 'string' &&
     typeof job.platform === 'string' &&
     typeof job.status === 'string' &&
-    ['processing', 'completed', 'failed', 'cancelled'].includes(job.status as string) &&
+    ['processing', 'completed', 'failed', 'cancelled'].includes(job.status) &&
     (job.filePath === undefined || typeof job.filePath === 'string') &&
     typeof job.createdAt === 'number' &&
     typeof job.updatedAt === 'number'

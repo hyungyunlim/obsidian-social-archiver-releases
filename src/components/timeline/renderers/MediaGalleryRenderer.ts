@@ -261,7 +261,7 @@ export class MediaGalleryRenderer {
     playBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (audio.paused) {
-        audio.play();
+        void audio.play();
       } else {
         audio.pause();
       }
@@ -571,7 +571,7 @@ export class MediaGalleryRenderer {
 
     // Create media elements lazily - only the first item is created immediately,
     // subsequent items are created on-demand when navigated to (saves CPU/memory/network)
-    const mediaElements: (HTMLElement | null)[] = new Array(media.length).fill(null);
+    const mediaElements: (HTMLElement | null)[] = (new Array(media.length) as (HTMLElement | null)[]).fill(null);
 
     const createMediaElement = (i: number): HTMLElement | null => {
       const mediaItem = media[i];

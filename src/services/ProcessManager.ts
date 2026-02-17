@@ -151,7 +151,7 @@ class ProcessManagerSingleton {
    * Get list of active processes (for debugging)
    */
   getActiveProcesses(): Array<Omit<ManagedProcess, 'process'>> {
-    return Array.from(this.processes.values()).map(({ process, ...rest }) => rest);
+    return Array.from(this.processes.values()).map(({ process: _process, ...rest }) => rest);
   }
 }
 

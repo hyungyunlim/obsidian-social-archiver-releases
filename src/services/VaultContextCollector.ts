@@ -66,10 +66,9 @@ export interface VaultContextOptions {
 /** Default max files to collect */
 const DEFAULT_MAX_FILES = 500;
 
-/** Default paths to exclude */
-const DEFAULT_EXCLUDE_PATHS = [
+/** Default paths to exclude (excluding the vault config folder dynamically) */
+const DEFAULT_STATIC_EXCLUDE_PATHS = [
   'templates',
-  '.obsidian',
   '.trash',
   'Social Archives', // Don't include archived posts in connections
 ];
@@ -103,7 +102,9 @@ export class VaultContextCollector {
    * @returns Aggregated vault context
    */
   async collectContext(options?: VaultContextOptions): Promise<VaultContext> {
-    const excludePaths = options?.excludePaths ?? DEFAULT_EXCLUDE_PATHS;
+    const configDir = this.app.vault.configDir;
+    const defaultExcludePaths = [...DEFAULT_STATIC_EXCLUDE_PATHS, configDir];
+    const excludePaths = options?.excludePaths ?? defaultExcludePaths;
     const maxFiles = options?.maxFiles ?? DEFAULT_MAX_FILES;
     const includeExcerpts = options?.includeExcerpts ?? false;
     const filterByTags = options?.filterByTags;
@@ -217,7 +218,7 @@ export class VaultContextCollector {
     const frontmatter = cache.frontmatter;
     if (!frontmatter?.aliases) return [];
 
-    const aliases = frontmatter.aliases;
+    const aliases = frontmatter.aliases as unknown;
 
     if (Array.isArray(aliases)) {
       return aliases.filter((a): a is string => typeof a === 'string');
@@ -237,7 +238,7 @@ export class VaultContextCollector {
     const tags = new Set<string>();
 
     // Frontmatter tags
-    const frontmatterTags = cache.frontmatter?.tags;
+    const frontmatterTags = cache.frontmatter?.tags as unknown;
     if (Array.isArray(frontmatterTags)) {
       frontmatterTags.forEach(tag => {
         if (typeof tag === 'string') {
@@ -583,14 +584,16 @@ export async function getRelevantVaultContext(
     if (estimatedTokens + fileTokens > maxTokens) {
       // If we haven't selected any files yet, include at least one
       if (selectedFiles.length === 0) {
-        const { score, ...fileWithoutScore } = file;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { score: _score, ...fileWithoutScore } = file;
         selectedFiles.push(fileWithoutScore);
       }
       break;
     }
 
     // Remove score property before adding to result
-    const { score, ...fileWithoutScore } = file;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { score: _score, ...fileWithoutScore } = file;
     selectedFiles.push(fileWithoutScore);
     estimatedTokens += fileTokens;
   }

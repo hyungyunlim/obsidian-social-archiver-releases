@@ -73,13 +73,13 @@ export class DraftService implements IService {
   /**
    * Initialize the service
    */
-  async initialize(): Promise<void> {
+  initialize(): void {
     if (this.isInitialized) {
       return;
     }
 
     // Clean up old drafts on initialization
-    await this.cleanupOldDrafts();
+    this.cleanupOldDrafts();
 
     this.isInitialized = true;
   }
@@ -87,7 +87,7 @@ export class DraftService implements IService {
   /**
    * Cleanup resources
    */
-  async cleanup(): Promise<void> {
+  cleanup(): void {
     this.stopAutoSave();
     this.clearDebounce();
     this.isInitialized = false;
@@ -112,7 +112,7 @@ export class DraftService implements IService {
     this.autoSaveTimer = window.setInterval(() => {
       const content = getContent();
       if (content.trim()) {
-        this.saveDraft(draftId, content, { immediate: true });
+        void this.saveDraft(draftId, content, { immediate: true });
       }
     }, this.AUTO_SAVE_INTERVAL);
   }
@@ -133,11 +133,11 @@ export class DraftService implements IService {
    * @param content - Draft content
    * @param options - Save options
    */
-  async saveDraft(
+  saveDraft(
     draftId: string,
     content: string,
     options: DraftSaveOptions = {}
-  ): Promise<void> {
+  ): void {
     if (!content.trim()) {
       return;
     }
@@ -153,7 +153,7 @@ export class DraftService implements IService {
       // Check storage quota before saving
       const storageInfo = this.getStorageInfo();
       if (storageInfo.isNearLimit) {
-        await this.cleanupOldDrafts();
+        this.cleanupOldDrafts();
       }
 
       const draft: DraftData = {
@@ -170,7 +170,7 @@ export class DraftService implements IService {
 
       // Handle quota exceeded error
       if (error instanceof Error && error.name === 'QuotaExceededError') {
-        await this.handleStorageQuotaExceeded();
+        this.handleStorageQuotaExceeded();
         // Retry once after cleanup
         try {
           const draft: DraftData = {
@@ -198,7 +198,7 @@ export class DraftService implements IService {
     this.clearDebounce();
 
     this.debounceTimer = window.setTimeout(() => {
-      this.saveDraft(draftId, content, { immediate: true });
+      void this.saveDraft(draftId, content, { immediate: true });
       this.debounceTimer = null;
     }, this.DEBOUNCE_DELAY);
   }
@@ -221,7 +221,7 @@ export class DraftService implements IService {
   loadDraft(draftId: string): DraftData | null {
     try {
       const storageKey = this.getStorageKey(draftId);
-      const data = this.app.loadLocalStorage(storageKey);
+      const data = this.app.loadLocalStorage(storageKey) as unknown;
 
       if (!data) {
         return null;
@@ -257,7 +257,7 @@ export class DraftService implements IService {
    * @param draftId - Expected draft ID
    * @returns Recovery result with draft and any conflicts
    */
-  async recoverDrafts(draftId: string): Promise<DraftRecoveryResult> {
+  recoverDrafts(draftId: string): DraftRecoveryResult {
     const draft = this.loadDraft(draftId);
 
     if (!draft) {
@@ -305,16 +305,13 @@ export class DraftService implements IService {
   /**
    * Clean up drafts older than MAX_DRAFT_AGE
    */
-  private async cleanupOldDrafts(): Promise<void> {
+  private cleanupOldDrafts(): void {
     try {
       const drafts = this.listDrafts();
       const now = Date.now();
-      let cleaned = 0;
-
       for (const draft of drafts) {
         if (now - draft.timestamp > this.MAX_DRAFT_AGE) {
           this.deleteDraft(draft.id);
-          cleaned++;
         }
       }
     } catch (error) {
@@ -325,9 +322,9 @@ export class DraftService implements IService {
   /**
    * Handle storage quota exceeded error
    */
-  private async handleStorageQuotaExceeded(): Promise<void> {
+  private handleStorageQuotaExceeded(): void {
     // First, try to clean up old drafts
-    await this.cleanupOldDrafts();
+    this.cleanupOldDrafts();
 
     // If still full, implement LRU cleanup
     const drafts = this.listDrafts();
@@ -418,7 +415,7 @@ export class DraftService implements IService {
    */
   private getDeviceId(): string {
     const key = `${this.STORAGE_KEY_PREFIX}-device-id`;
-    let deviceId = this.app.loadLocalStorage(key);
+    let deviceId = this.app.loadLocalStorage(key) as string | null;
 
     if (!deviceId) {
       deviceId = `device-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;

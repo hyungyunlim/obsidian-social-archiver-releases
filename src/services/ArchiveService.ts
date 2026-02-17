@@ -16,6 +16,7 @@ export interface ArchiveServiceConfig {
 /**
  * Request builder for constructing platform-specific requests
  */
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 class RequestBuilder {
   /**
    * Detect platform from URL
@@ -88,6 +89,7 @@ class RequestBuilder {
 /**
  * Response transformer for converting API responses to PostData
  */
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 class ResponseTransformer {
   /**
    * Transform and validate API response to PostData
@@ -98,7 +100,8 @@ class ResponseTransformer {
       const validated = PostDataSchema.parse(raw);
 
       // Convert to PostData format (remove schemaVersion)
-      const { schemaVersion, ...postData } = validated;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { schemaVersion: _schemaVersion, ...postData } = validated;
 
       return postData as PostData;
     } catch (error) {
@@ -182,11 +185,11 @@ export class ArchiveService implements IService {
     }
   }
 
-  async dispose(): Promise<void> {
+  dispose(): void {
     // Cleanup handled by ApiClient
   }
 
-  async isHealthy(): Promise<boolean> {
+  isHealthy(): Promise<boolean> {
     return this.apiClient.isHealthy();
   }
 

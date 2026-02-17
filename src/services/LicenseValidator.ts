@@ -83,7 +83,7 @@ export class LicenseValidator implements IService {
     this.logger?.info('Initializing LicenseValidator');
 
     // Initialize dependencies
-    await this.gumroadClient.initialize();
+    this.gumroadClient.initialize();
     await this.storage.initialize();
 
     // Load device info
@@ -128,7 +128,7 @@ export class LicenseValidator implements IService {
 
     // Shutdown dependencies
     await this.storage.shutdown();
-    await this.gumroadClient.shutdown();
+    this.gumroadClient.shutdown();
 
     this.initialized = false;
   }
@@ -305,7 +305,7 @@ export class LicenseValidator implements IService {
     }
 
     const cacheAge = Date.now() - (cached.cachedAt || 0);
-    const offlineGracePeriod = this.config.licenseConfig.offlineGracePeriodDays! * 24 * 60 * 60 * 1000;
+    const offlineGracePeriod = (this.config.licenseConfig.offlineGracePeriodDays ?? 30) * 24 * 60 * 60 * 1000;
 
     return cacheAge < offlineGracePeriod;
   }
@@ -314,7 +314,7 @@ export class LicenseValidator implements IService {
    * Load or create device info
    */
   private async loadDeviceInfo(): Promise<void> {
-    let deviceId = await this.storage.getDeviceId();
+    let deviceId = this.storage.getDeviceId();
 
     if (!deviceId) {
       deviceId = generateDeviceId();
@@ -354,13 +354,12 @@ export class LicenseValidator implements IService {
   private startAutoRefresh(): void {
     this.stopAutoRefresh();
 
-    this.refreshTimer = setInterval(async () => {
-      try {
+    this.refreshTimer = setInterval(() => {
+      void this.refreshLicense().then(() => {
         this.logger?.debug('Auto-refreshing license');
-        await this.refreshLicense();
-      } catch (error) {
+      }).catch((error: unknown) => {
         this.logger?.error('Auto-refresh failed', error instanceof Error ? error : undefined);
-      }
+      });
     }, this.config.autoRefreshInterval);
 
     this.logger?.debug('Auto-refresh timer started', {

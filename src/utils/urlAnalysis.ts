@@ -676,7 +676,7 @@ export function analyzeUrl(url: string): UrlAnalysisResult {
     }
 
     // First, detect the platform using existing PlatformDetector
-    let platform = detector.detectPlatform(normalizedUrl);
+    const platform = detector.detectPlatform(normalizedUrl);
 
     // Special handling for Mastodon profile URLs
     // PlatformDetector only matches Mastodon posts (/@user/123), not profiles (/@user)

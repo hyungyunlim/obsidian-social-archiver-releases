@@ -56,12 +56,13 @@ export class MediaGalleryView2 extends ItemView {
     await this.loadMediaGallery();
   }
 
-  async onClose(): Promise<void> {
+  onClose(): Promise<void> {
     // Cleanup
     if (this.contentContainer) {
       this.contentContainer.empty();
       this.contentContainer = null;
     }
+    return Promise.resolve();
   }
 
   /**
@@ -180,7 +181,7 @@ export class MediaGalleryView2 extends ItemView {
 
         // Click to open source file
         cardEl.addEventListener('click', () => {
-          this.app.workspace.getLeaf().openFile(item.file);
+          void this.app.workspace.getLeaf().openFile(item.file);
         });
       }
 

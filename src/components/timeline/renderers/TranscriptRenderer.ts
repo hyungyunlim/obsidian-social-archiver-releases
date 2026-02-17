@@ -90,7 +90,7 @@ export class TranscriptRenderer {
     this.captionActive = options.captionActive ?? false;
     // Initialize multilang fields
     this.languages = options.languages || [];
-    this.multilangSegments = options.multilangSegments || new Map();
+    this.multilangSegments = options.multilangSegments || new Map<string, TranscriptionSegment[]>();
     this.currentLanguage = options.language || 'en';
     this.onLanguageChange = options.onLanguageChange;
 
@@ -486,7 +486,7 @@ export class TranscriptRenderer {
       type: 'text',
       placeholder: this.isMobile ? 'Search...' : 'Search transcript...',
       cls: 'transcript-search-input sa-w-full sa-border sa-rounded-4 sa-bg-primary tr-search-input'
-    }) as HTMLInputElement;
+    });
     if (this.isMobile) {
       input.addClass('tr-search-input-mobile');
     }
@@ -620,7 +620,7 @@ export class TranscriptRenderer {
     if (!this.audioElement) return;
 
     this.boundTimeUpdateHandler = () => {
-      const currentTime = this.audioElement!.currentTime;
+      const currentTime = this.audioElement?.currentTime ?? 0;
       this.updateHighlight(currentTime);
     };
 
@@ -769,7 +769,7 @@ export class TranscriptRenderer {
   private seekToTime(seconds: number): void {
     if (this.adapter) {
       this.adapter.seekTo(seconds);
-      this.adapter.play();
+      void this.adapter.play();
     } else if (this.audioElement) {
       this.audioElement.currentTime = seconds;
       this.audioElement.play().catch(() => {

@@ -67,7 +67,7 @@ export class PostService {
   async postNote(file: TFile, options?: PostOptions): Promise<PostResult> {
     try {
       // Check for existing post
-      const existingPost = await this.findExistingPost(file.path);
+      const existingPost = this.findExistingPost(file.path);
 
       if (existingPost) {
         // Update existing post instead of creating new
@@ -91,7 +91,7 @@ export class PostService {
   /**
    * Create a new post from a note
    */
-  private async createNewPost(file: TFile, options?: PostOptions): Promise<PostResult> {
+  private async createNewPost(file: TFile, _options?: PostOptions): Promise<PostResult> {
     const now = new Date();
     const postId = this.generatePostId(file, now);
 
@@ -151,7 +151,7 @@ export class PostService {
   private async updateExistingPost(
     existingPost: TFile,
     sourceFile: TFile,
-    options?: PostOptions
+    _options?: PostOptions
   ): Promise<PostResult> {
     const now = new Date();
     const postId = this.generatePostId(sourceFile, now);
@@ -210,7 +210,7 @@ export class PostService {
   /**
    * Find existing post by originalPath in frontmatter
    */
-  private async findExistingPost(originalPath: string): Promise<TFile | null> {
+  private findExistingPost(originalPath: string): TFile | null {
     const postFolder = `${this.settings.archivePath}/Post`;
 
     // Filter to Post folder first to avoid scanning entire vault

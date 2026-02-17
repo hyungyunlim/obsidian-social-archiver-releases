@@ -20,6 +20,7 @@ const TYPE_LABELS: Record<string, string> = {
   document: 'document',
 };
 
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class MediaPlaceholderGenerator {
   /**
    * Generate a parseable Obsidian callout placeholder for an expired/failed media item.
@@ -59,7 +60,7 @@ export class MediaPlaceholderGenerator {
     if (!match) return null;
 
     const type = match[1] as MediaExpiredResult['type'];
-    const originalUrl = match[2]!;
+    const originalUrl = match[2] ?? '';
 
     // Detect reason from the callout text
     const reason: MediaExpiredResult['reason'] = markdown.includes('CDN URL expired')

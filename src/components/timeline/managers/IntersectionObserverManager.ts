@@ -190,7 +190,7 @@ export class IntersectionObserverManager {
 
       // Debounce callback to prevent rapid re-renders
       metadata.debounceTimer = window.setTimeout(() => {
-        this.triggerCallback(element, metadata);
+        void this.triggerCallback(element, metadata);
       }, DEBOUNCE_DELAY);
     }
   }

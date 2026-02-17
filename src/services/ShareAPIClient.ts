@@ -12,7 +12,7 @@
  */
 
 import { requestUrl, Platform, type Vault } from 'obsidian';
-import type { PostData } from '@/types/post';
+import type { PostData, Media } from '@/types/post';
 import type { IService } from './base/IService';
 import type { UserTier } from '@/types/settings';
 import {
@@ -134,9 +134,9 @@ function transformHttpError(
   status: number,
   headers: Record<string, string>,
   data: unknown,
-  url: string
+  _url: string
 ): HttpError {
-  const message = (data as any)?.message || `HTTP ${status} error`;
+  const message = (data as Record<string, unknown>)?.['message'] as string || `HTTP ${status} error`;
 
   if (status === 429) {
     const retryAfter = headers['retry-after'] ? parseInt(headers['retry-after'], 10) : undefined;
@@ -154,7 +154,7 @@ function transformHttpError(
 
   if (status === 400 || status === 422) {
     return new InvalidRequestError(message || 'Invalid request', status, {
-      validationErrors: (data as any)?.errors
+      validationErrors: (data as Record<string, unknown>)?.['errors'] as string[] | undefined
     });
   }
 
@@ -302,7 +302,7 @@ export class ShareAPIClient implements IService {
       if (result && typeof result === 'object' && 'success' in result && 'data' in result) {
         return (result as { success: boolean; data: ShareAPIResponse }).data;
       }
-      return result as ShareAPIResponse;
+      return result;
     });
   }
 
@@ -333,7 +333,7 @@ export class ShareAPIClient implements IService {
         if (result && typeof result === 'object' && 'success' in result && 'data' in result) {
           return (result as { success: boolean; data: ShareAPIResponse }).data;
         }
-        return result as ShareAPIResponse;
+        return result;
       });
     }).finally(() => {
       // Clean up queue entry after completion
@@ -360,25 +360,26 @@ export class ShareAPIClient implements IService {
    */
   async getShareInfo(shareId: string): Promise<ShareAPIResponse> {
     return this.executeWithRetry(async () => {
-      const result = await this.httpRequest<{ success: boolean; data: any } | any>(
+      const result = await this.httpRequest<{ success: boolean; data: Record<string, unknown> } | Record<string, unknown>>(
         'GET',
         `/api/share/${shareId}`
       );
       // Workers API returns { success: true, data: shareData }
       if (result && typeof result === 'object' && 'success' in result && 'data' in result) {
-        const data = result.data;
+        const data = result.data as Record<string, unknown>;
         return {
-          shareId: data.shareId,
-          shareUrl: data.shareUrl || '',
-          passwordProtected: !!data.options?.password
+          shareId: data.shareId as string,
+          shareUrl: (data.shareUrl || '') as string,
+          passwordProtected: !!(data.options as Record<string, unknown> | undefined)?.password,
         };
       }
       // Unwrapped format (tests return response directly)
+      const r = result;
       return {
-        shareId: result.shareId,
-        shareUrl: result.shareUrl || '',
-        passwordProtected: !!result.options?.password,
-        expiresAt: result.expiresAt,
+        shareId: r.shareId as string,
+        shareUrl: (r.shareUrl || '') as string,
+        passwordProtected: !!(r.options as Record<string, unknown> | undefined)?.password,
+        expiresAt: r.expiresAt != null ? Number(r.expiresAt) : undefined,
       };
     });
   }
@@ -402,12 +403,12 @@ export class ShareAPIClient implements IService {
       throw new Error('Vault is required for media operations. Please provide vault in ShareAPIClient config.');
     }
 
-    const uploadedMedia: any[] = [];
+    const uploadedMedia: Record<string, unknown>[] = [];
 
     try {
       // STEP 1: Fetch existing share data to detect changes
       const existingShareData = await this.executeWithRetry(async () => {
-        const result = await this.httpRequest<{ success: boolean; data: any } | any>(
+        const result = await this.httpRequest<{ success: boolean; data: Record<string, unknown> } | Record<string, unknown>>(
           'GET',
           `/api/share/${shareId}`
         );
@@ -419,9 +420,9 @@ export class ShareAPIClient implements IService {
 
       // STEP 2: Build filename maps
       // Map: filename -> existing R2 media object
-      const existingMediaByFilename = new Map<string, any>();
-      (existingShareData?.media || []).forEach((m: any) => {
-        const filename = m?.url?.split('/').pop();
+      const existingMediaByFilename = new Map<string, Record<string, unknown>>();
+      ((existingShareData as Record<string, unknown> | undefined)?.['media'] as Record<string, unknown>[] || []).forEach((m) => {
+        const filename = (m?.['url'] as string | undefined)?.split('/').pop();
         if (filename) {
           existingMediaByFilename.set(filename, m);
         }
@@ -429,7 +430,7 @@ export class ShareAPIClient implements IService {
 
       // Map: filename -> new local media object
       // Include media from main post AND embedded archives
-      const newMediaByFilename = new Map<string, any>();
+      const newMediaByFilename = new Map<string, Media>();
 
       // Add main post media
       postData.media.forEach(m => {
@@ -453,13 +454,14 @@ export class ShareAPIClient implements IService {
 
       // Determine what to upload and what to keep
       const mediaToUpload: typeof postData.media = [];
-      const mediaToKeep: any[] = [];
+      const mediaToKeep: Record<string, unknown>[] = [];
 
       for (const [filename, localMedia] of newMediaByFilename.entries()) {
         if (existingMediaByFilename.has(filename)) {
           // File already exists in R2, keep the R2 version (but skip videos and podcast audio)
           if (localMedia.type !== 'video' && !(postData.platform === 'podcast' && localMedia.type === 'audio')) {
-            mediaToKeep.push(existingMediaByFilename.get(filename));
+            const existingMedia = existingMediaByFilename.get(filename);
+            if (existingMedia) mediaToKeep.push(existingMedia);
           }
         } else {
           // Videos are expensive for R2 - only admin tier can upload
@@ -487,7 +489,7 @@ export class ShareAPIClient implements IService {
       for (const [filename, existingMedia] of existingMediaByFilename.entries()) {
         if (!newMediaByFilename.has(filename)) {
           // File exists in R2 but not in new postData, delete it
-          const url = existingMedia?.url;
+          const url = existingMedia?.url as string | undefined;
           if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
             mediaToDelete.push(url);
           }
@@ -503,7 +505,7 @@ export class ShareAPIClient implements IService {
       }
 
       // STEP 3: Upload new media files to R2
-      const remoteMedia: any[] = [...mediaToKeep];
+      const remoteMedia: (import('../types/post').Media | Record<string, unknown>)[] = [...mediaToKeep];
 
       for (let i = 0; i < mediaToUpload.length; i++) {
         const mediaItem = mediaToUpload[i];
@@ -529,7 +531,7 @@ export class ShareAPIClient implements IService {
           }
 
           // Read media as binary
-          const mediaBuffer = await this.vault.readBinary(mediaFile as any);
+          const mediaBuffer = await this.vault.readBinary(mediaFile as import('obsidian').TFile);
 
           // Convert to base64
           const base64 = this.arrayBufferToBase64(mediaBuffer);
@@ -587,9 +589,9 @@ export class ShareAPIClient implements IService {
 
         try {
           await this.httpRequest('DELETE', `/api/upload-share-media/${shareId}/${filename}`);
-        } catch (err: any) {
+        } catch (err: unknown) {
           // Ignore 404 errors (file already deleted or never existed)
-          if (err?.statusCode !== 404) {
+          if ((err as Record<string, unknown>)?.['statusCode'] !== 404) {
             console.error(`[ShareAPIClient] Failed to delete media ${filename}:`, err);
           }
           // Continue with other deletions even if one fails
@@ -604,12 +606,12 @@ export class ShareAPIClient implements IService {
         const remoteItem = remoteMedia.find(r => {
           // Find by matching filename
           const localFilename = localMedia.url.split('/').pop();
-          const remoteFilename = r.url.split('/').pop();
+          const remoteFilename = (r.url as string | undefined)?.split('/').pop();
           return localFilename === remoteFilename;
         });
 
-        if (remoteItem && remoteItem.url !== localMedia.url) {
-          pathMapping.set(localMedia.url, remoteItem.url);
+        if (remoteItem && (remoteItem.url as string | undefined) !== localMedia.url) {
+          pathMapping.set(localMedia.url, remoteItem.url as string);
         }
       }
 
@@ -619,12 +621,12 @@ export class ShareAPIClient implements IService {
           (archive.media || []).forEach(localMedia => {
             const remoteItem = remoteMedia.find(r => {
               const localFilename = localMedia.url.split('/').pop();
-              const remoteFilename = r.url.split('/').pop();
+              const remoteFilename = (r.url as string | undefined)?.split('/').pop();
               return localFilename === remoteFilename;
             });
 
-            if (remoteItem && remoteItem.url !== localMedia.url) {
-              pathMapping.set(localMedia.url, remoteItem.url);
+            if (remoteItem && (remoteItem.url as string | undefined) !== localMedia.url) {
+              pathMapping.set(localMedia.url, remoteItem.url as string);
             }
           });
         });
@@ -678,13 +680,13 @@ export class ShareAPIClient implements IService {
           hashtags: postData.content.hashtags,
           community: postData.content.community  // Reddit subreddit info
         },
-        media: remoteMedia,
+        media: remoteMedia as import('../types/post').Media[],
         embeddedArchives: updatedEmbeddedArchives,
         metadata: {
           ...postData.metadata,
           timestamp: typeof postData.metadata.timestamp === 'string'
             ? postData.metadata.timestamp
-            : (postData.metadata.timestamp as Date).toISOString()
+            : (postData.metadata.timestamp).toISOString()
         },
         // CRITICAL: Don't include aiComments in media updates
         // Setting to undefined tells the Worker to preserve existing aiComments
@@ -717,10 +719,12 @@ export class ShareAPIClient implements IService {
       if (uploadedMedia.length > 0) {
         for (const media of uploadedMedia) {
           try {
-            const urlParts = media.url.split('/');
+            const mediaUrl = media.url as string | undefined;
+            const urlParts = (mediaUrl ?? '').split('/');
             const filename = urlParts[urlParts.length - 1];
             await this.httpRequest('DELETE', `/api/upload-share-media/${shareId}/${filename}`);
           } catch {
+            // best-effort cleanup, ignore errors
           }
         }
       }
@@ -868,14 +872,14 @@ export class ShareAPIClient implements IService {
   /**
    * Initialize the service
    */
-  async initialize(): Promise<void> {
+  initialize(): void {
     // No initialization needed
   }
 
   /**
    * Cleanup resources
    */
-  async cleanup(): Promise<void> {
+  cleanup(): void {
     // No cleanup needed
   }
 }

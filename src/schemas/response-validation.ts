@@ -56,7 +56,7 @@ export const MediaSchema = z.object({
 /**
  * Comment schema (recursive)
  */
-export const CommentSchema: z.ZodType<any> = z.lazy(() =>
+export const CommentSchema: z.ZodType<unknown> = z.lazy(() =>
 	z.object({
 		id: z.string(),
 		author: AuthorSchema,
@@ -178,7 +178,7 @@ export const TikTokPostDataSchema = BaseScrapedPostDataSchema.extend({
 /**
  * X (Twitter) post data schema
  */
-export const XPostDataSchema: z.ZodType<any> = z.lazy(() =>
+export const XPostDataSchema: z.ZodType<unknown> = z.lazy(() =>
 	BaseScrapedPostDataSchema.extend({
 		platform: z.literal('x'),
 		retweetCount: numberTransform.optional().default(0),

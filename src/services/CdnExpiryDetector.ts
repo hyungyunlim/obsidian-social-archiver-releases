@@ -21,6 +21,7 @@ const EPHEMERAL_CDN_DOMAINS = [
   'licdn.com',
 ] as const;
 
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class CdnExpiryDetector {
   /**
    * Check if a URL belongs to an ephemeral CDN that uses time-limited URLs.
@@ -48,13 +49,13 @@ export class CdnExpiryDetector {
     }
 
     // Check HTTP status codes typical of expired CDN URLs
-    const status = (error as any)?.status ?? 0;
+    const status = (error as Record<string, unknown>)?.['status'] as number ?? 0;
     if (status === 403 || status === 404 || status === 410) {
       return true;
     }
 
     // Check error message for common CDN expiry patterns
-    const message = error instanceof Error ? error.message : (error as any)?.message ?? '';
+    const message = error instanceof Error ? error.message : (error as Record<string, unknown>)?.['message'] as string ?? '';
     const lowerMessage = message.toLowerCase();
     if (
       lowerMessage.includes('403') ||

@@ -91,7 +91,7 @@ export class ErrorTracker implements IService {
   /**
    * Initialize the service
    */
-  async initialize(): Promise<void> {
+  initialize(): void {
     if (this.isInitialized) {
       return;
     }
@@ -105,7 +105,7 @@ export class ErrorTracker implements IService {
   /**
    * Cleanup resources
    */
-  async cleanup(): Promise<void> {
+  cleanup(): void {
     // Optionally persist error log before cleanup
     // (Could be saved to a file for debugging)
 
@@ -312,7 +312,7 @@ export class ErrorTracker implements IService {
         logs = logs.filter(entry => entry.severity === filter.severity);
       }
       if (filter.since !== undefined) {
-        logs = logs.filter(entry => entry.timestamp >= filter.since!);
+        logs = logs.filter(entry => entry.timestamp >= (filter.since ?? 0));
       }
       if (filter.limit) {
         logs = logs.slice(-filter.limit);
@@ -365,7 +365,7 @@ export class ErrorTracker implements IService {
   /**
    * Log to console in debug mode
    */
-  private logToConsole(entry: ErrorLogEntry): void {
+  private logToConsole(_entry: ErrorLogEntry): void {
     // Silent - debug logging removed
   }
 

@@ -754,15 +754,6 @@ export class WebtoonsLocalService {
     //   Date
     //   like count
     // </a>
-    const _episodeRegex = /<a[^>]*href="([^"]*viewer\?title_no=\d+&episode_no=(\d+))"[^>]*>[\s\S]*?<img[^>]*src="([^"]+)"[^>]*>[\s\S]*?<\/a>/gi;
-
-    // Alternative pattern for more structured extraction
-    const _listItemRegex = /<li[^>]*class="[^"]*_episodeItem[^"]*"[^>]*>[\s\S]*?<a[^>]*href="([^"]*episode_no=(\d+))"[\s\S]*?<img[^>]*src="([^"]+)"[\s\S]*?<span[^>]*class="[^"]*subj[^"]*"[^>]*>([^<]+)<[\s\S]*?<span[^>]*class="[^"]*date[^"]*"[^>]*>([^<]+)<[\s\S]*?<\/li>/gi;
-
-    // Try to find episodes using common patterns
-    // Episode links typically have: /viewer?title_no=XXX&episode_no=YY
-    const _linkRegex = /href="([^"]*\/viewer\?title_no=(\d+)&episode_no=(\d+))"[^>]*>[\s\S]*?<img[^>]*src="([^"]+)"[^>]*alt="([^"]*)"[\s\S]*?(?:<span[^>]*>([^<]*)<\/span>[\s\S]*?)?(?:like[^<]*<[^>]*>[\s]*(\d[\d,]*)|<[^>]*>(\d[\d,]*)\s*<\/span>)/gi;
-
     let match;
     const seenEpisodes = new Set<number>();
 
@@ -1090,23 +1081,29 @@ export class WebtoonsLocalService {
         return { comments: [], totalCount: 0 };
       }
 
-      const data = response.json;
+      const data = response.json as Record<string, unknown>;
       if (data?.status !== 'success' || !data?.result) {
         return { comments: [], totalCount: 0 };
       }
 
+      const result = data.result as Record<string, unknown>;
+
       // Get total comment count
-      const totalCount = data.result.activeRootPostCount || data.result.rootPostCount || 0;
+      const totalCount = (typeof result.activeRootPostCount === 'number' ? result.activeRootPostCount : 0)
+        || (typeof result.rootPostCount === 'number' ? result.rootPostCount : 0)
+        || 0;
 
       // Parse pinned "tops" comments (usually 3 best comments)
-      const topsComments: WebtoonsBestComment[] = (data.result.tops || [])
-        .map((comment: any) => this.parseComment(comment))
-        .filter((c: WebtoonsBestComment | null): c is WebtoonsBestComment => c !== null);
+      const topsRaw = Array.isArray(result.tops) ? result.tops : [];
+      const topsComments: WebtoonsBestComment[] = (topsRaw as Record<string, unknown>[])
+        .map((comment) => this.parseComment(comment))
+        .filter((c): c is WebtoonsBestComment => c !== null);
 
       // Parse regular "posts" comments
-      const postsComments: WebtoonsBestComment[] = (data.result.posts || [])
-        .map((comment: any) => this.parseComment(comment))
-        .filter((c: WebtoonsBestComment | null): c is WebtoonsBestComment => c !== null);
+      const postsRaw = Array.isArray(result.posts) ? result.posts : [];
+      const postsComments: WebtoonsBestComment[] = (postsRaw as Record<string, unknown>[])
+        .map((comment) => this.parseComment(comment))
+        .filter((c): c is WebtoonsBestComment => c !== null);
 
       // Get IDs of tops to avoid duplicates
       const topsIds = new Set(topsComments.map(c => c.id));
@@ -1134,21 +1131,27 @@ export class WebtoonsLocalService {
   /**
    * Parse a comment object from the API response
    */
-  private parseComment(comment: any): WebtoonsBestComment | null {
+  private parseComment(comment: Record<string, unknown>): WebtoonsBestComment | null {
     try {
-      const reactions = comment.reactions?.[0]?.emotions || [];
-      const likeEmotion = reactions.find((e: any) => e.emotionId === 'like');
-      const dislikeEmotion = reactions.find((e: any) => e.emotionId === 'dislike');
+      const reactionsArr = comment.reactions;
+      const firstReaction = Array.isArray(reactionsArr) ? (reactionsArr[0] as Record<string, unknown> | undefined) : undefined;
+      const emotions = Array.isArray(firstReaction?.emotions) ? (firstReaction.emotions as Record<string, unknown>[]) : [];
+      const likeEmotion = emotions.find((e) => e.emotionId === 'like');
+      const dislikeEmotion = emotions.find((e) => e.emotionId === 'dislike');
+
+      const createdBy = comment.createdBy as Record<string, unknown> | undefined;
 
       return {
-        id: comment.id || '',
-        body: comment.body || '',
-        authorName: comment.createdBy?.name || 'Anonymous',
-        authorId: comment.createdBy?.id || '',
-        likeCount: likeEmotion?.count || 0,
-        dislikeCount: dislikeEmotion?.count || 0,
-        replyCount: comment.activeChildPostCount || comment.childPostCount || 0,
-        createdAt: new Date(comment.createdAt || Date.now()),
+        id: typeof comment.id === 'string' ? comment.id : '',
+        body: typeof comment.body === 'string' ? comment.body : '',
+        authorName: typeof createdBy?.name === 'string' ? createdBy.name : 'Anonymous',
+        authorId: typeof createdBy?.id === 'string' ? createdBy.id : '',
+        likeCount: typeof likeEmotion?.count === 'number' ? likeEmotion.count : 0,
+        dislikeCount: typeof dislikeEmotion?.count === 'number' ? dislikeEmotion.count : 0,
+        replyCount: (typeof comment.activeChildPostCount === 'number' ? comment.activeChildPostCount : 0)
+          || (typeof comment.childPostCount === 'number' ? comment.childPostCount : 0)
+          || 0,
+        createdAt: new Date(typeof comment.createdAt === 'string' || typeof comment.createdAt === 'number' ? comment.createdAt : Date.now()),
       };
     } catch {
       return null;

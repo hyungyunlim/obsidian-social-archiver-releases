@@ -31,15 +31,6 @@ export interface AICommentRendererOptions {
 }
 
 /**
- * CLI display icons (emoji style for avatar)
- */
-const CLI_ICONS: Record<AICli, string> = {
-  claude: '🤖',
-  gemini: '✨',
-  codex: '💡',
-};
-
-/**
  * CLI display names
  */
 const CLI_NAMES: Record<AICli, string> = {
@@ -242,36 +233,33 @@ export class AICommentRenderer {
       setIcon(applyBtn, 'check');
       applyBtn.setAttribute('aria-label', 'Apply to content');
 
-      applyBtn.addEventListener('click', async (e) => {
+      const applyBtnRef = applyBtn;
+      applyBtnRef.addEventListener('click', (e) => {
         e.stopPropagation();
         if (this.onApplyReformat) {
           // Show loading state
-          applyBtn!.removeClass('sa-opacity-0');
-          applyBtn!.addClass('sa-opacity-50');
-          applyBtn!.addClass('sa-pointer-none');
-          try {
-            await this.onApplyReformat(meta.id, text);
-          } finally {
-            if (applyBtn) {
-              applyBtn.removeClass('sa-opacity-50');
-              applyBtn.addClass('sa-opacity-100');
-              applyBtn.removeClass('sa-pointer-none');
-            }
-          }
+          applyBtnRef.removeClass('sa-opacity-0');
+          applyBtnRef.addClass('sa-opacity-50');
+          applyBtnRef.addClass('sa-pointer-none');
+          void this.onApplyReformat(meta.id, text).finally(() => {
+            applyBtnRef.removeClass('sa-opacity-50');
+            applyBtnRef.addClass('sa-opacity-100');
+            applyBtnRef.removeClass('sa-pointer-none');
+          });
         }
       });
 
-      applyBtn.addEventListener('mouseenter', () => {
-        applyBtn!.removeClass('sa-text-faint');
-        applyBtn!.addClass('sa-text-success');
-        applyBtn!.setCssProps({ '--sa-bg': 'var(--background-modifier-success)' });
-        applyBtn!.addClass('sa-dynamic-bg');
+      applyBtnRef.addEventListener('mouseenter', () => {
+        applyBtnRef.removeClass('sa-text-faint');
+        applyBtnRef.addClass('sa-text-success');
+        applyBtnRef.setCssProps({ '--sa-bg': 'var(--background-modifier-success)' });
+        applyBtnRef.addClass('sa-dynamic-bg');
       });
-      applyBtn.addEventListener('mouseleave', () => {
-        applyBtn!.addClass('sa-text-faint');
-        applyBtn!.removeClass('sa-text-success');
-        applyBtn!.removeClass('sa-dynamic-bg');
-        applyBtn!.addClass('sa-bg-transparent');
+      applyBtnRef.addEventListener('mouseleave', () => {
+        applyBtnRef.addClass('sa-text-faint');
+        applyBtnRef.removeClass('sa-text-success');
+        applyBtnRef.removeClass('sa-dynamic-bg');
+        applyBtnRef.addClass('sa-bg-transparent');
       });
     }
 
@@ -311,9 +299,9 @@ export class AICommentRenderer {
       deleteBtn.addClass('sa-opacity-0');
     });
 
-    deleteBtn.addEventListener('click', async (e) => {
+    deleteBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      await this.handleDelete(meta.id, commentDiv);
+      void this.handleDelete(meta.id, commentDiv);
     });
 
     deleteBtn.addEventListener('mouseenter', () => {
@@ -341,13 +329,16 @@ export class AICommentRenderer {
 
     // Render markdown content
     if (this.component) {
-      MarkdownRenderer.render(
-        (window as any).app,
-        text,
-        textSpan,
-        this.sourcePath,
-        this.component
-      );
+      const globalApp = (window as Window & { app?: App }).app;
+      if (globalApp) {
+        void MarkdownRenderer.render(
+          globalApp,
+          text,
+          textSpan,
+          this.sourcePath,
+          this.component
+        );
+      }
 
       // Add click handlers for internal links (wiki links)
       this.addInternalLinkHandlers(textSpan);
@@ -549,7 +540,7 @@ export class AICommentRenderer {
    * Makes [[Note Name]] links clickable to open the file
    */
   private addInternalLinkHandlers(container: HTMLElement): void {
-    const app = (window as any).app;
+    const app = (window as Window & { app?: App }).app;
     if (!app) return;
 
     // Find all internal links (Obsidian renders wiki links with class 'internal-link')
@@ -560,19 +551,19 @@ export class AICommentRenderer {
       const href = anchor.getAttribute('href') || anchor.dataset.href || '';
 
       // Remove default href behavior and add custom click handler
-      anchor.addEventListener('click', async (e) => {
+      anchor.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
 
         // Get the link path (decoded)
-        let linkPath = decodeURIComponent(href);
+        const linkPath = decodeURIComponent(href);
 
         // Try to find the file
         const file = app.metadataCache.getFirstLinkpathDest(linkPath, this.sourcePath);
 
         if (file) {
           // Open the file in a new leaf
-          await app.workspace.openLinkText(linkPath, this.sourcePath, false);
+          void app.workspace.openLinkText(linkPath, this.sourcePath, false);
         } else {
           // File not found - could show a notice or create the file
           console.warn(`[AICommentRenderer] File not found: ${linkPath}`);
@@ -633,7 +624,7 @@ export class AICommentRenderer {
 
       for (const match of matches) {
         const fullMatch = match[0];
-        const index = match.index!;
+        const index = match.index ?? 0;
 
         // Add text before the timestamp
         if (index > lastIndex) {

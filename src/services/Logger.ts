@@ -48,7 +48,7 @@ export class Logger implements IService {
 	/**
 	 * IService implementation
 	 */
-	async initialize(): Promise<void> {
+	initialize(): void {
 		this.info('Logger initialized', {
 			level: this.config.level,
 			debugMode: this.config.debugMode,
@@ -112,9 +112,9 @@ export class Logger implements IService {
 						name: error.name,
 						message: error.message,
 						stack: error.stack,
-						code: (error as any).code,
+						code: (error as unknown as Record<string, unknown>)['code'],
 					},
-			  }
+				}
 			: {};
 
 		this.log('ERROR' as LogLevel, message, {
@@ -262,8 +262,8 @@ export class Logger implements IService {
 		// Emit to all transports
 		this.transports.forEach((transport) => {
 			try {
-				transport.log(entry);
-			} catch (error) {
+				void transport.log(entry);
+			} catch {
 				// Avoid infinite loop by not logging transport errors
 			}
 		});
@@ -392,13 +392,17 @@ export class ConsoleTransport implements LogTransport {
 	log(entry: LogEntry): void {
 		const level = entry.level.toLowerCase();
 		const timestamp = new Date(entry.timestamp).toISOString();
-		const message = `[${timestamp}] [${entry.level}] ${entry.message}`;
+		const logMessage = `[${timestamp}] [${entry.level}] ${entry.message}`;
 
 		// Use appropriate console method
 		if (level === 'error') {
+			console.error(logMessage);
 		} else if (level === 'warn') {
+			console.warn(logMessage);
 		} else if (level === 'debug') {
+			console.debug(logMessage);
 		} else {
+			console.log(logMessage);
 		}
 	}
 }

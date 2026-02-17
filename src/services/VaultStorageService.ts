@@ -192,7 +192,7 @@ export class VaultStorageService {
       const existingFile = this.vault.getFileByPath(mediaPath);
       if (existingFile) {
         // Generate unique path
-        const uniquePath = await this.generateUniqueMediaPath(mediaPath);
+        const uniquePath = this.generateUniqueMediaPath(mediaPath);
         const savedFile = await this.vault.createBinary(uniquePath, arrayBuffer);
 
         return {
@@ -223,7 +223,7 @@ export class VaultStorageService {
   /**
    * Generate unique media path by appending counter
    */
-  private async generateUniqueMediaPath(basePath: string): Promise<string> {
+  private generateUniqueMediaPath(basePath: string): string {
     const extension = basePath.substring(basePath.lastIndexOf('.'));
     const pathWithoutExt = basePath.substring(0, basePath.lastIndexOf('.'));
 
@@ -323,14 +323,14 @@ export class VaultStorageService {
           localPath: result.savedPath,
           type: result.originalFile.type.startsWith('video/') ? 'video' as const : 'image' as const,
           size: result.originalFile.size,
-          file: file!,
+          file: file as import('obsidian').TFile,
         };
       });
 
     // Convert PostData to Markdown with media results
     // IMPORTANT: convert() signature is (postData, customTemplate?, mediaResults?, options?)
     // Pass undefined for customTemplate to use default, then mediaResults
-    const markdown = await this.markdownConverter.convert(postData, undefined, mediaResults);
+    const markdown = this.markdownConverter.convert(postData, undefined, mediaResults);
 
     // Generate file path (use explicit targetFilePath, then PostData.url, then generate)
     // For subscription posts, targetFilePath is provided to avoid using URL as path
@@ -377,7 +377,8 @@ export class VaultStorageService {
           if (file) {
             await this.app.fileManager.trashFile(file);
           }
-        } catch (error) {
+        } catch {
+          // best-effort cleanup, ignore errors
         }
       }
     }
@@ -470,7 +471,7 @@ export class VaultStorageService {
           localPath: result.savedPath,
           type: result.originalFile.type.startsWith('video/') ? 'video' as const : 'image' as const,
           size: result.originalFile.size,
-          file: file!,
+          file: file as import('obsidian').TFile,
         };
       });
 
@@ -482,7 +483,7 @@ export class VaultStorageService {
         localPath: media.url,
         type: media.type as 'image' | 'video',
         size: media.size || 0,
-        file: file!,
+        file: file as import('obsidian').TFile,
       };
     });
 
@@ -497,16 +498,17 @@ export class VaultStorageService {
 
     // Convert PostData to Markdown with updated media references
     // Pass undefined for customTemplate to use default
-    const markdown = await this.markdownConverter.convert(postData, undefined, allMediaResults);
+    const markdown = this.markdownConverter.convert(postData, undefined, allMediaResults);
 
     // Merge existing frontmatter with new frontmatter
     // Preserve share-related fields AND download tracking (processedUrls comes from new data)
     const preservedFields = ['share', 'shareId', 'shareUrl', 'sharePassword', 'downloadedUrls', 'transcribedUrls'];
-    const mergedFrontmatter: Record<string, any> = { ...markdown.frontmatter };
+    const mergedFrontmatter: Record<string, unknown> = { ...markdown.frontmatter };
 
     for (const field of preservedFields) {
-      if (existingFrontmatter[field] !== undefined) {
-        mergedFrontmatter[field] = existingFrontmatter[field];
+      const existingFm = existingFrontmatter as Record<string, unknown>;
+      if (existingFm[field] !== undefined) {
+        mergedFrontmatter[field] = existingFm[field];
       }
     }
 
@@ -534,7 +536,7 @@ export class VaultStorageService {
 
     // Extract media gallery (everything after interaction bar line, before end of file)
     // Pattern: **Author:** ... \n\n [media gallery content]
-    const interactionBarEndIndex = interactionBarMatch.index! + interactionBarMatch[0].length;
+    const interactionBarEndIndex = (interactionBarMatch.index ?? 0) + interactionBarMatch[0].length;
     const contentAfterInteractionBar = contentAfterFrontmatter.substring(interactionBarEndIndex);
 
     // Find where interaction bar content ends (after the "**Author: ... | Published: ..." line)
@@ -588,7 +590,7 @@ export class VaultStorageService {
         } else if (typeof value === 'object' && value !== null) {
           return `${key}: ${JSON.stringify(value)}`;
         }
-        return `${key}: ${value}`;
+        return `${key}: ${String(value)}`;
       })
       .join('\n');
 
@@ -608,10 +610,10 @@ export class VaultStorageService {
    */
   private async updateFrontmatter(
     file: TFile,
-    updates: Record<string, any>
+    updates: Record<string, unknown>
   ): Promise<void> {
     try {
-      await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+      await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
         // Apply all updates to frontmatter
         for (const [key, value] of Object.entries(updates)) {
           frontmatter[key] = value;
@@ -719,13 +721,14 @@ export class VaultStorageService {
         mediaSaved
       };
 
-    } catch (error) {
+    } catch (error: unknown) {
 
       // Rollback: Restore deleted media files
       for (const deleted of deletedFiles) {
         try {
           await this.vault.createBinary(deleted.path, deleted.content);
         } catch {
+          // best-effort rollback, ignore errors
         }
       }
 
@@ -784,4 +787,3 @@ export class VaultStorageService {
     };
   }
 }
-// @ts-nocheck

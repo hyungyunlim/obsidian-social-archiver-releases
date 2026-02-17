@@ -141,7 +141,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     // Clean up existing Svelte components synchronously before display
     this.cleanupComponents();
     // Call async display method
-    this.displayAsync();
+    void this.displayAsync();
   }
 
   /**
@@ -150,7 +150,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   private cleanupComponents(): void {
     if (this.authComponent) {
       try {
-        unmount(this.authComponent);
+        void unmount(this.authComponent);
       } catch {
         // Ignore unmount errors
       }
@@ -158,7 +158,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     }
     if (this.dangerZoneComponent) {
       try {
-        unmount(this.dangerZoneComponent);
+        void unmount(this.dangerZoneComponent);
       } catch {
         // Ignore unmount errors
       }
@@ -166,7 +166,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     }
     if (this.syncSettingsComponent) {
       try {
-        unmount(this.syncSettingsComponent);
+        void unmount(this.syncSettingsComponent);
       } catch {
         // Ignore unmount errors
       }
@@ -184,9 +184,9 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     try {
       containerEl.empty();
 
-    // Plugin Title - Largest size
-    const titleEl = containerEl.createEl('h1', { text: 'Social Archiver' });
-    titleEl.addClass('sa-settings-title');
+    // Plugin Title - using Setting heading API
+    new Setting(containerEl).setName('Social Archiver').setHeading()
+      .settingEl.addClass('sa-settings-title');
 
     // Plugin Description
     const descEl = containerEl.createEl('p', {
@@ -195,8 +195,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     descEl.addClass('sa-settings-desc');
 
     // Account Section Header
-    const accountHeader = containerEl.createEl('h2', { text: 'Account' });
-    accountHeader.addClass('sa-settings-section-header-first');
+    new Setting(containerEl).setName('Account').setHeading()
+      .settingEl.addClass('sa-settings-section-header-first');
 
     // Account Section (Auth Component)
     const authContainer = containerEl.createDiv({ cls: 'social-archiver-auth-section' });
@@ -207,17 +207,17 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     });
 
     // Archive Settings Section
-    const archiveHeader = containerEl.createEl('h2', { text: 'Archive Settings' });
-    archiveHeader.addClass('sa-settings-section-header');
+    new Setting(containerEl).setName('Archive settings').setHeading()
+      .settingEl.addClass('sa-settings-section-header');
 
     new Setting(containerEl)
-      .setName('Archive Folder')
+      .setName('Archive folder')
       .setDesc('Folder where archived posts will be saved')
       .addText(text => {
         text
           .setPlaceholder('Social Archives')
           .setValue(this.plugin.settings.archivePath)
-          .onChange(async (value) => {
+          .onChange((value) => {
             // Set to default if empty
             this.plugin.settings.archivePath = value || 'Social Archives';
             this.markDirty();
@@ -235,19 +235,19 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         .addOption('platform-only', 'ArchiveFolder/Platform')
         .addOption('flat', 'ArchiveFolder only')
         .setValue(this.plugin.settings.archiveOrganization)
-        .onChange(async (value: string) => {
+        .onChange((value: string) => {
           this.plugin.settings.archiveOrganization = value as ArchiveOrganizationMode;
           this.markDirty();
         }));
 
     new Setting(containerEl)
-      .setName('Media Folder')
+      .setName('Media folder')
       .setDesc('Folder where downloaded media files will be saved')
       .addText(text => {
         text
           .setPlaceholder('attachments/social-archives')
           .setValue(this.plugin.settings.mediaPath)
-          .onChange(async (value) => {
+          .onChange((value) => {
             // Set to default if empty
             this.plugin.settings.mediaPath = value || 'attachments/social-archives';
             this.markDirty();
@@ -265,7 +265,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         .addOption('images-only', 'Images only')
         .addOption('images-and-videos', 'Images and videos')
         .setValue(this.plugin.settings.downloadMedia)
-        .onChange(async (value: string) => {
+        .onChange((value: string) => {
           this.plugin.settings.downloadMedia = value as MediaDownloadMode;
           this.markDirty();
         }));
@@ -275,7 +275,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setDesc('Include platform comments in archived notes. When disabled, only the post content and your personal notes are saved. This setting serves as the default for the archive modal.')
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.includeComments)
-        .onChange(async (value) => {
+        .onChange((value) => {
           this.plugin.settings.includeComments = value;
           this.markDirty();
         }));
@@ -283,15 +283,15 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     this.renderFrontmatterSettings(containerEl);
 
     // Author Profile Management Section
-    const authorProfileHeader = containerEl.createEl('h2', { text: 'Author Profile Management' });
-    authorProfileHeader.addClass('sa-settings-section-header');
+    new Setting(containerEl).setName('Author profile management').setHeading()
+      .settingEl.addClass('sa-settings-section-header');
 
     new Setting(containerEl)
       .setName('Download author avatars')
       .setDesc('Save author profile images locally for offline access. Avatars are stored in the media folder under "authors".')
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.downloadAuthorAvatars)
-        .onChange(async (value) => {
+        .onChange((value) => {
           this.plugin.settings.downloadAuthorAvatars = value;
           this.markDirty();
         }));
@@ -301,7 +301,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setDesc('Track author statistics (followers, posts count, bio) on each archive. Useful for Author Catalog insights.')
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.updateAuthorMetadata)
-        .onChange(async (value) => {
+        .onChange((value) => {
           this.plugin.settings.updateAuthorMetadata = value;
           this.markDirty();
         }));
@@ -311,14 +311,14 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setDesc('Replace local avatar file when a new URL is provided. When disabled, existing avatars are preserved.')
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.overwriteAuthorAvatar)
-        .onChange(async (value) => {
+        .onChange((value) => {
           this.plugin.settings.overwriteAuthorAvatar = value;
           this.markDirty();
         }));
 
     // Sharing Settings Section
-    const sharingHeader = containerEl.createEl('h2', { text: 'Sharing Settings' });
-    sharingHeader.addClass('sa-settings-section-header');
+    new Setting(containerEl).setName('Sharing settings').setHeading()
+      .settingEl.addClass('sa-settings-section-header');
 
     // Share Mode setting
     new Setting(containerEl)
@@ -328,7 +328,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         .addOption('preview', 'Preview (Copyright-safe)')
         .addOption('full', 'Full content (Original)')
         .setValue(this.plugin.settings.shareMode)
-        .onChange(async (value: string) => {
+        .onChange((value: string) => {
           this.plugin.settings.shareMode = value as ShareMode;
           this.markDirty();
           updatePreviewLengthVisibility(); // Update visibility when mode changes
@@ -341,7 +341,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .addText(text => text
         .setPlaceholder('280')
         .setValue(String(this.plugin.settings.sharePreviewLength))
-        .onChange(async (value) => {
+        .onChange((value) => {
           const num = parseInt(value) || 280;
           this.plugin.settings.sharePreviewLength = Math.max(100, Math.min(1000, num));
           this.markDirty();
@@ -360,8 +360,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     updatePreviewLengthVisibility();
 
     // Transcription Settings Section (Desktop Only)
-    const transcriptionHeader = containerEl.createEl('h2', { text: 'Transcription Settings' });
-    transcriptionHeader.addClass('sa-settings-section-header');
+    new Setting(containerEl).setName('Transcription settings').setHeading()
+      .settingEl.addClass('sa-settings-section-header');
 
     // Mobile notice - transcription requires local Whisper CLI
     if (Platform.isMobile) {
@@ -374,7 +374,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     // Whisper status display
     const statusContainer = containerEl.createDiv({ cls: 'whisper-status-container' });
     statusContainer.addClass('sa-settings-subsection');
-    this.renderWhisperStatus(statusContainer);
+    void this.renderWhisperStatus(statusContainer);
 
     // Enable transcription toggle
     new Setting(containerEl)
@@ -382,7 +382,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setDesc('Transcribe podcast audio using locally installed Whisper (Desktop only)')
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.transcription.enabled)
-        .onChange(async (value) => {
+        .onChange((value) => {
           this.plugin.settings.transcription.enabled = value;
           this.markDirty();
         }));
@@ -421,7 +421,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         .addOption('medium', 'Medium (~5GB VRAM)')
         .addOption('large', 'Large (~10GB VRAM, most accurate)')
         .setValue(this.plugin.settings.transcription.preferredModel)
-        .onChange(async (value) => {
+        .onChange((value) => {
           this.plugin.settings.transcription.preferredModel = value as 'tiny' | 'base' | 'small' | 'medium' | 'large';
           this.markDirty();
         }));
@@ -444,7 +444,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         .addOption('ru', 'Russian')
         .addOption('ar', 'Arabic')
         .setValue(this.plugin.settings.transcription.language)
-        .onChange(async (value) => {
+        .onChange((value) => {
           this.plugin.settings.transcription.language = value;
           this.markDirty();
         }));
@@ -617,8 +617,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     };
     syncPropertyOrder();
 
-    const frontmatterHeader = containerEl.createEl('h2', { text: 'Frontmatter' });
-    frontmatterHeader.addClass('sa-settings-section-header');
+    new Setting(containerEl).setName('Frontmatter').setHeading()
+      .settingEl.addClass('sa-settings-section-header');
 
     const frontmatterDesc = containerEl.createEl('p', {
       text: 'Choose built-in properties and add custom properties for all archived notes.'
@@ -632,7 +632,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setDesc('Apply visibility rules and custom properties to newly archived notes.')
       .addToggle((toggle) => toggle
         .setValue(frontmatterSettings.enabled)
-        .onChange(async (value) => {
+        .onChange((value) => {
           frontmatterSettings.enabled = value;
           this.markDirty();
           updateVisibility();
@@ -640,10 +640,9 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     const bodyContainer = containerEl.createDiv({ cls: 'social-archiver-frontmatter-body' });
 
-    const defaultPropertiesHeader = bodyContainer.createEl('h3', { text: 'Property Order' });
-    defaultPropertiesHeader.addClass('sa-text-md', 'sa-font-semibold', 'sa-text-normal');
-    defaultPropertiesHeader.setCssProps({ '--st-margin': '12px 0 8px 0' });
-    defaultPropertiesHeader.addClass('st-margin-custom');
+    const defaultPropertiesHeaderSetting = new Setting(bodyContainer).setName('Property order').setHeading();
+    defaultPropertiesHeaderSetting.settingEl.addClass('sa-text-md', 'sa-font-semibold', 'sa-text-normal', 'st-margin-custom');
+    defaultPropertiesHeaderSetting.settingEl.setCssProps({ '--st-margin': '12px 0 8px 0' });
     const defaultPropertiesDesc = bodyContainer.createEl('p', {
       text: 'Reorder rows. Add new rows at the bottom and move them with ↑/↓.',
     });
@@ -901,7 +900,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       if (toIndex < 0 || toIndex >= mixedOrderItems.length || fromIndex === toIndex) {
         return;
       }
-      [mixedOrderItems[fromIndex], mixedOrderItems[toIndex]] = [mixedOrderItems[toIndex]!, mixedOrderItems[fromIndex]!];
+      [mixedOrderItems[fromIndex], mixedOrderItems[toIndex]] = [mixedOrderItems[toIndex] as typeof mixedOrderItems[0], mixedOrderItems[fromIndex] as typeof mixedOrderItems[0]];
       rebuildPropertyOrderFromMixedOrder();
       renderMixedPropertyRows();
     };
@@ -909,18 +908,18 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     const renderCustomValueRow = (property: CustomFrontmatterProperty, propertyType: FrontmatterPropertyType): void => {
       if (propertyType === 'checkbox') {
         const valueSetting = new Setting(orderListContainer)
-          .setName('Checkbox Value')
+          .setName('Checkbox value')
           .setDesc('Template override has priority. If empty, checkbox value is used.')
           .addToggle((toggle) => toggle
             .setValue(property.checked === true)
-            .onChange(async (value) => {
+            .onChange((value) => {
               property.checked = value;
               this.markDirty();
             }))
           .addText((text) => text
             .setPlaceholder('Optional template override, e.g. {{platform}}')
             .setValue(property.template || '')
-            .onChange(async (value) => {
+            .onChange((value) => {
               property.template = value;
               this.markDirty();
             }));
@@ -930,12 +929,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
       if (propertyType === 'date') {
         const valueSetting = new Setting(orderListContainer)
-          .setName('Date Value')
+          .setName('Date value')
           .setDesc('Template override has priority. If empty, date picker value is used.')
           .addText((text) => {
             text
               .setValue(property.dateValue || '')
-              .onChange(async (value) => {
+              .onChange((value) => {
                 property.dateValue = value;
                 this.markDirty();
               });
@@ -944,7 +943,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           .addText((text) => text
             .setPlaceholder('Optional template override, e.g. {{dates.archived}}')
             .setValue(property.template || '')
-            .onChange(async (value) => {
+            .onChange((value) => {
               property.template = value;
               this.markDirty();
             }));
@@ -954,12 +953,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
       if (propertyType === 'date-time') {
         const valueSetting = new Setting(orderListContainer)
-          .setName('Date & Time Value')
+          .setName('Date & time value')
           .setDesc('Template override has priority. If empty, date-time picker value is used.')
           .addText((text) => {
             text
               .setValue(property.dateTimeValue || '')
-              .onChange(async (value) => {
+              .onChange((value) => {
                 property.dateTimeValue = value;
                 this.markDirty();
               });
@@ -968,7 +967,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           .addText((text) => text
             .setPlaceholder('Optional template override, e.g. {{dates.archived}}')
             .setValue(property.template || '')
-            .onChange(async (value) => {
+            .onChange((value) => {
               property.template = value;
               this.markDirty();
             }));
@@ -978,13 +977,13 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
       if (propertyType === 'list') {
         const valueSetting = new Setting(orderListContainer)
-          .setName('List Value')
+          .setName('List value')
           .setDesc('One item per line. Template variables are supported in each line.')
           .addTextArea((text) => {
             text
               .setPlaceholder('first item\nsecond item\n{{platform}}')
               .setValue(property.value || '')
-              .onChange(async (value) => {
+              .onChange((value) => {
                 property.value = value;
                 this.markDirty();
               });
@@ -1001,7 +1000,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         .addText((text) => text
           .setPlaceholder(propertyType === 'number' ? '123 or {{post.id}}' : 'inbox or {{platform}}')
           .setValue(property.value || '')
-          .onChange(async (value) => {
+          .onChange((value) => {
             property.value = value;
             this.markDirty();
           }));
@@ -1033,7 +1032,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             .setDesc(aliasCount > 0 ? `${category.desc} · Aliases: ${aliasCount}` : category.desc)
             .addToggle((toggle) => toggle
               .setValue(frontmatterSettings.fieldVisibility[category.key])
-              .onChange(async (value) => {
+              .onChange((value) => {
                 frontmatterSettings.fieldVisibility[category.key] = value;
                 this.markDirty();
               }));
@@ -1093,7 +1092,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                 const nextValue = inputEl.value.trim();
 
                 if (!nextValue) {
-                  delete nextAliases[field];
+                  Reflect.deleteProperty(nextAliases, field);
                 } else {
                   nextAliases[field] = nextValue;
                 }
@@ -1125,7 +1124,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
               dropdown.addOption(key, key);
             }
             dropdown.setValue(isCustomKey ? customKeyOptionValue : property.key);
-            dropdown.onChange(async (value) => {
+            dropdown.onChange((value) => {
               if (value === customKeyOptionValue) {
                 if (vaultFrontmatterKeys.includes(property.key)) {
                   property.key = '';
@@ -1145,7 +1144,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             text
               .setPlaceholder('status')
               .setValue(property.key)
-              .onChange(async (value) => {
+              .onChange((value) => {
                 property.key = value;
                 propertySetting.setName(String(value || '').trim() || 'Untitled');
                 this.markDirty();
@@ -1164,7 +1163,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
               .addOption('date-time', 'Date & Time')
               .addOption('list', 'List')
               .setValue(propertyType)
-              .onChange(async (value) => {
+              .onChange((value) => {
                 property.type = this.normalizeFrontmatterPropertyType(value);
                 this.markDirty();
                 renderMixedPropertyRows();
@@ -1172,7 +1171,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           })
           .addToggle((toggle) => toggle
             .setValue(property.enabled)
-            .onChange(async (value) => {
+            .onChange((value) => {
               property.enabled = value;
               this.markDirty();
             }))
@@ -1239,10 +1238,9 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     coreLockedNote.setCssProps({ '--st-margin': '4px 0 12px 0' });
     coreLockedNote.addClass('st-margin-custom');
 
-    const tagSettingsHeader = bodyContainer.createEl('h3', { text: 'Archive Tags' });
-    tagSettingsHeader.addClass('sa-text-md', 'sa-font-semibold', 'sa-text-normal');
-    tagSettingsHeader.setCssProps({ '--st-margin': '14px 0 8px 0' });
-    tagSettingsHeader.addClass('st-margin-custom');
+    const tagSettingsHeaderSetting = new Setting(bodyContainer).setName('Archive tags').setHeading();
+    tagSettingsHeaderSetting.settingEl.addClass('sa-text-md', 'sa-font-semibold', 'sa-text-normal', 'st-margin-custom');
+    tagSettingsHeaderSetting.settingEl.setCssProps({ '--st-margin': '14px 0 8px 0' });
 
     new Setting(bodyContainer)
       .setName('Main archive tag')
@@ -1250,7 +1248,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .addText((text) => text
         .setPlaceholder('maintag')
         .setValue(frontmatterSettings.tagRoot || '')
-        .onChange(async (value) => {
+        .onChange((value) => {
           frontmatterSettings.tagRoot = value.trim();
           this.markDirty();
         }));
@@ -1263,7 +1261,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         .addOption('platform-only', '#maintag/socialnetwork')
         .addOption('platform-year-month', '#maintag/socialnetwork/year/month')
         .setValue(frontmatterSettings.tagOrganization || 'flat')
-        .onChange(async (value: string) => {
+        .onChange((value: string) => {
           frontmatterSettings.tagOrganization = value as ArchiveOrganizationMode;
           this.markDirty();
         }));
@@ -1408,8 +1406,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    */
   private renderNaverSettings(containerEl: HTMLElement): void {
     // Section Header
-    const naverHeader = containerEl.createEl('h2', { text: '🇰🇷 Naver Settings' });
-    naverHeader.addClass('sa-settings-section-header');
+    new Setting(containerEl).setName('Naver settings').setHeading()
+      .settingEl.addClass('sa-settings-section-header');
 
     // Description
     const naverDesc = containerEl.createEl('p', {
@@ -1443,7 +1441,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         text
           .setPlaceholder('Paste NID_AUT value')
           .setValue(this.plugin.settings.nidAut)
-          .onChange(async (value) => {
+          .onChange((value) => {
             // Clean the value - remove "NID_AUT=" prefix if user pasted it
             const cleanValue = value.replace(/^NID_AUT\s*=\s*/i, '').trim();
             this.plugin.settings.nidAut = cleanValue;
@@ -1461,7 +1459,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         text
           .setPlaceholder('Paste NID_SES value')
           .setValue(this.plugin.settings.nidSes)
-          .onChange(async (value) => {
+          .onChange((value) => {
             // Clean the value - remove "NID_SES=" prefix if user pasted it
             const cleanValue = value.replace(/^NID_SES\s*=\s*/i, '').trim();
             this.plugin.settings.nidSes = cleanValue;
@@ -1488,8 +1486,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    */
   private renderRedditSettings(containerEl: HTMLElement): void {
     // Section Header with Reddit icon
-    const redditHeader = containerEl.createEl('h2', { text: 'Reddit Sync' });
-    redditHeader.addClass('sa-settings-section-header');
+    new Setting(containerEl).setName('Reddit sync').setHeading()
+      .settingEl.addClass('sa-settings-section-header');
 
     // Description
     const redditDesc = containerEl.createEl('p', {
@@ -1504,7 +1502,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Connect/Disconnect button
     const connectSetting = new Setting(containerEl)
-      .setName('Reddit Account')
+      .setName('Reddit account')
       .setDesc(this.plugin.settings.redditConnected
         ? `Connected as u/${this.plugin.settings.redditUsername}`
         : 'Connect your Reddit account to enable sync');
@@ -1535,7 +1533,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         .setDesc('Automatically sync saved posts on a schedule')
         .addToggle(toggle => toggle
           .setValue(this.plugin.settings.redditSyncEnabled)
-          .onChange(async (value) => {
+          .onChange((value) => {
             this.plugin.settings.redditSyncEnabled = value;
             this.markDirty();
           }));
@@ -1548,7 +1546,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           text
             .setPlaceholder('Social Archives/Reddit Saved')
             .setValue(this.plugin.settings.redditSyncFolder)
-            .onChange(async (value) => {
+            .onChange((value) => {
               this.plugin.settings.redditSyncFolder = value || 'Social Archives/Reddit Saved';
               this.markDirty();
             });
@@ -1675,8 +1673,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    */
   private renderWebtoonStreamingSettings(containerEl: HTMLElement): void {
     // Section Header
-    const streamingHeader = containerEl.createEl('h2', { text: 'Webtoon Streaming' });
-    streamingHeader.addClass('sa-settings-section-header');
+    new Setting(containerEl).setName('Webtoon streaming').setHeading()
+      .settingEl.addClass('sa-settings-section-header');
 
     // Info callout explaining the feature
     const infoDiv = containerEl.createDiv({ cls: 'setting-info' });
@@ -1697,7 +1695,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         .addOption('stream-first', 'Stream First (Recommended)')
         .addOption('download-first', 'Download First')
         .setValue(this.plugin.settings.webtoonStreaming?.viewMode || 'stream-first')
-        .onChange(async (value) => {
+        .onChange((value) => {
           const viewMode = value as 'stream-first' | 'download-first';
           if (!this.plugin.settings.webtoonStreaming) {
             this.plugin.settings.webtoonStreaming = {
@@ -1718,7 +1716,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setDesc('Automatically download streamed episodes to vault for offline access.')
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.webtoonStreaming?.backgroundDownload !== false)
-        .onChange(async (value) => {
+        .onChange((value) => {
           if (!this.plugin.settings.webtoonStreaming) {
             this.plugin.settings.webtoonStreaming = {
               viewMode: 'stream-first',
@@ -1742,7 +1740,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setDesc('Pre-load next episode data when reaching end of current episode for faster transitions.')
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.webtoonStreaming?.prefetchNextEpisode !== false)
-        .onChange(async (value) => {
+        .onChange((value) => {
           if (!this.plugin.settings.webtoonStreaming) {
             this.plugin.settings.webtoonStreaming = {
               viewMode: 'stream-first',
@@ -1766,7 +1764,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         .setDesc('Load lower quality images to reduce data usage on mobile networks.')
         .addToggle(toggle => toggle
           .setValue(this.plugin.settings.webtoonStreaming?.mobileDataSaver ?? false)
-          .onChange(async (value) => {
+          .onChange((value) => {
             if (!this.plugin.settings.webtoonStreaming) {
               this.plugin.settings.webtoonStreaming = {
                 viewMode: 'stream-first',
@@ -1788,8 +1786,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    */
   private renderMobileSyncSettings(containerEl: HTMLElement): void {
     // Section Header
-    const syncHeader = containerEl.createEl('h2', { text: 'Mobile Sync' });
-    syncHeader.addClass('sa-settings-section-header');
+    new Setting(containerEl).setName('Mobile sync').setHeading()
+      .settingEl.addClass('sa-settings-section-header');
 
     // Sync Settings Component (Svelte)
     const syncContainer = containerEl.createDiv({ cls: 'social-archiver-sync-section' });
@@ -1805,8 +1803,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    */
   private renderUpdateNotificationsSettings(containerEl: HTMLElement): void {
     // Section Header
-    const updateHeader = containerEl.createEl('h2', { text: 'Update Notifications' });
-    updateHeader.addClass('sa-settings-section-header');
+    new Setting(containerEl).setName('Update notifications').setHeading()
+      .settingEl.addClass('sa-settings-section-header');
 
     // Show release notes toggle
     new Setting(containerEl)
@@ -1826,8 +1824,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    */
   private async renderAICommentSettings(containerEl: HTMLElement): Promise<void> {
     // Section Header
-    const aiHeader = containerEl.createEl('h2', { text: 'AI Comment Settings' });
-    aiHeader.addClass('sa-settings-section-header');
+    new Setting(containerEl).setName('AI comment settings').setHeading()
+      .settingEl.addClass('sa-settings-section-header');
 
     // Mobile notice
     if (Platform.isMobile) {
@@ -1847,7 +1845,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setDesc('Show AI comment suggestions on archived posts. Requires local AI CLI tools.')
       .addToggle(toggle => toggle
         .setValue(settings.enabled)
-        .onChange(async (value) => {
+        .onChange((value) => {
           this.plugin.settings.aiComment.enabled = value;
           this.markDirty();
         }));
@@ -1872,7 +1870,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         dropdown.addOption(cli, label);
       }
       dropdown.setValue(settings.defaultCli);
-      dropdown.onChange(async (value: string) => {
+      dropdown.onChange((value: string) => {
         this.plugin.settings.aiComment.defaultCli = value as AICli;
         this.markDirty();
       });
@@ -1888,7 +1886,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           dropdown.addOption(type, COMMENT_TYPE_DISPLAY_NAMES[type]);
         }
         dropdown.setValue(settings.defaultType);
-        dropdown.onChange(async (value: string) => {
+        dropdown.onChange((value: string) => {
           this.plugin.settings.aiComment.defaultType = value as AICommentType;
           this.markDirty();
         });
@@ -1904,17 +1902,17 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           dropdown.addOption(lang, displayName);
         }
         dropdown.setValue(settings.outputLanguage || 'auto');
-        dropdown.onChange(async (value: string) => {
+        dropdown.onChange((value: string) => {
           this.plugin.settings.aiComment.outputLanguage = value as AIOutputLanguage;
           this.markDirty();
         });
       });
 
     // Platform Visibility Section (collapsible)
-    await this.renderPlatformVisibilitySettings(containerEl);
+    this.renderPlatformVisibilitySettings(containerEl);
 
     // Vault Context Settings (collapsible)
-    await this.renderVaultContextSettings(containerEl);
+    this.renderVaultContextSettings(containerEl);
   }
 
   /**
@@ -2010,7 +2008,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   /**
    * Render Platform Visibility settings (collapsible)
    */
-  private async renderPlatformVisibilitySettings(containerEl: HTMLElement): Promise<void> {
+  private renderPlatformVisibilitySettings(containerEl: HTMLElement): void {
     const settings = this.plugin.settings.aiComment;
 
     // Collapsible header
@@ -2041,21 +2039,21 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Category toggles
     new Setting(contentEl)
-      .setName('Social Media')
+      .setName('Social media')
       .setDesc('Facebook, Instagram, X, Threads, LinkedIn, TikTok, Bluesky, Mastodon, Reddit, Pinterest, Tumblr')
       .addToggle(toggle => toggle
         .setValue(settings.platformVisibility.socialMedia)
-        .onChange(async (value) => {
+        .onChange((value) => {
           this.plugin.settings.aiComment.platformVisibility.socialMedia = value;
           this.markDirty();
         }));
 
     new Setting(contentEl)
-      .setName('Blog & News')
+      .setName('Blog & news')
       .setDesc('Blog, Substack, Medium, Velog')
       .addToggle(toggle => toggle
         .setValue(settings.platformVisibility.blogNews)
-        .onChange(async (value) => {
+        .onChange((value) => {
           this.plugin.settings.aiComment.platformVisibility.blogNews = value;
           this.markDirty();
         }));
@@ -2065,7 +2063,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setDesc('YouTube, Podcast')
       .addToggle(toggle => toggle
         .setValue(settings.platformVisibility.videoAudio)
-        .onChange(async (value) => {
+        .onChange((value) => {
           this.plugin.settings.aiComment.platformVisibility.videoAudio = value;
           this.markDirty();
         }));
@@ -2097,7 +2095,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
       const checkbox = label.createEl('input', { type: 'checkbox' });
       checkbox.checked = isExcluded;
-      checkbox.onchange = async () => {
+      checkbox.onchange = () => {
         const excluded = this.plugin.settings.aiComment.platformVisibility.excludedPlatforms;
         if (checkbox.checked) {
           if (!excluded.includes(platform)) {
@@ -2119,7 +2117,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   /**
    * Render Vault Context settings (collapsible)
    */
-  private async renderVaultContextSettings(containerEl: HTMLElement): Promise<void> {
+  private renderVaultContextSettings(containerEl: HTMLElement): void {
     const settings = this.plugin.settings.aiComment;
 
     // Collapsible header
@@ -2154,7 +2152,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setDesc('Allow AI to scan your vault for related notes when using "Connections" comment type')
       .addToggle(toggle => toggle
         .setValue(settings.vaultContext.enabled)
-        .onChange(async (value) => {
+        .onChange((value) => {
           this.plugin.settings.aiComment.vaultContext.enabled = value;
           this.markDirty();
         }));
@@ -2165,7 +2163,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setDesc('Use keyword matching to select only relevant notes for context')
       .addToggle(toggle => toggle
         .setValue(settings.vaultContext.smartFiltering)
-        .onChange(async (value) => {
+        .onChange((value) => {
           this.plugin.settings.aiComment.vaultContext.smartFiltering = value;
           this.markDirty();
         }));
@@ -2177,7 +2175,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .addText(text => text
         .setPlaceholder('10')
         .setValue(String(settings.vaultContext.maxContextNotes || 10))
-        .onChange(async (value) => {
+        .onChange((value) => {
           const num = parseInt(value) || 10;
           this.plugin.settings.aiComment.vaultContext.maxContextNotes = Math.max(1, Math.min(50, num));
           this.markDirty();
@@ -2245,7 +2243,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   hide(): void {
     // Save settings if changed
     if (this.settingsDirty) {
-      this.plugin.saveSettings();
+      void this.plugin.saveSettings();
       this.settingsDirty = false;
     }
     // Clean up Svelte components when settings are closed

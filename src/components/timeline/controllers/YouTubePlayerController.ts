@@ -47,33 +47,33 @@ export class YouTubePlayerController {
     // Only process messages from the iframe's origin
     if (!this.iframe.src) return;
 
-    let data: any;
+    let data: Record<string, unknown>;
     try {
-      data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      data = typeof event.data === 'string' ? JSON.parse(event.data) as Record<string, unknown> : event.data as Record<string, unknown>;
     } catch {
       return; // Not JSON, ignore
     }
 
-    if (!data || data.event !== 'infoDelivery' || !data.info) return;
+    if (!data || data['event'] !== 'infoDelivery' || !data['info']) return;
 
-    const info = data.info;
+    const info = data['info'] as Record<string, unknown>;
 
     // Time update
-    if (typeof info.currentTime === 'number' && this.timeUpdateCallbacks.length > 0) {
+    if (typeof info['currentTime'] === 'number' && this.timeUpdateCallbacks.length > 0) {
       for (const cb of this.timeUpdateCallbacks) {
-        cb(info.currentTime);
+        cb(info['currentTime']);
       }
     }
 
     // State change (1=playing, 2=paused, 0=ended, 3=buffering, 5=cued)
-    if (typeof info.playerState === 'number' && this.stateChangeCallbacks.length > 0) {
+    if (typeof info['playerState'] === 'number' && this.stateChangeCallbacks.length > 0) {
       for (const cb of this.stateChangeCallbacks) {
-        cb(info.playerState);
+        cb(info['playerState']);
       }
     }
   }
 
-  private sendCommand(func: string, args: any[] = []): void {
+  private sendCommand(func: string, args: unknown[] = []): void {
     if (!this.ready) {
       return;
     }

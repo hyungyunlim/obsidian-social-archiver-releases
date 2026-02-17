@@ -5,7 +5,7 @@
  * to generate wikilink suggestions based on vault content.
  */
 
-import type { App, TFile } from 'obsidian';
+import type { App } from 'obsidian';
 import type { AICommentSettings } from '../../types/ai-comment';
 import { DEFAULT_PROMPTS } from '../../types/ai-comment';
 import {
@@ -306,10 +306,10 @@ function parseTagsSection(sectionText: string): string[] {
  * @param links - Array of link targets to validate
  * @returns Validation result with link status
  */
-export async function validateWikilinks(
+export function validateWikilinks(
   app: App,
   links: string[]
-): Promise<ValidationResult> {
+): ValidationResult {
   const linkStatus = new Map<string, boolean>();
   const existingNotes: string[] = [];
   const missingNotes: string[] = [];
@@ -388,10 +388,10 @@ export function formatConnectionsOutput(
  * @param aiResponse - Raw AI response
  * @returns Formatted connections comment
  */
-export async function processConnectionsComment(
+export function processConnectionsComment(
   app: App,
   aiResponse: string
-): Promise<string> {
+): string {
   // Parse the AI response
   const parsed = parseWikilinkOutput(aiResponse);
 
@@ -402,7 +402,7 @@ export async function processConnectionsComment(
   ];
 
   // Validate against vault
-  const validation = await validateWikilinks(app, allLinks);
+  const validation = validateWikilinks(app, allLinks);
 
   // Format output
   return formatConnectionsOutput(parsed, validation);

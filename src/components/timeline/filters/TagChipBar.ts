@@ -1,4 +1,3 @@
-import { setIcon } from 'obsidian';
 import type { TagWithCount } from '@/types/tag';
 
 /**

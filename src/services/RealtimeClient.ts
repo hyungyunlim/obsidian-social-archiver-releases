@@ -20,9 +20,9 @@ export interface RealtimeMessage {
   type: RealtimeMessageType;
   jobId?: string;
   status?: string;
-  result?: any;
+  result?: unknown;
   shareId?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -76,7 +76,7 @@ export class RealtimeClient {
 
       this.ws.onmessage = (event) => {
         try {
-          const message = JSON.parse(event.data) as RealtimeMessage;
+          const message = JSON.parse(String(event.data)) as RealtimeMessage;
 
           // Skip logging pong messages (too verbose)
           // Emit specific event based on message type

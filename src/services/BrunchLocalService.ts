@@ -10,7 +10,7 @@
 import { requestUrl } from 'obsidian';
 import * as cheerio from 'cheerio';
 import type { CheerioAPI, Cheerio } from 'cheerio';
-import type { Element, AnyNode } from 'domhandler';
+import type { AnyNode } from 'domhandler';
 import type {
   BrunchPostData,
   BrunchAuthor,
@@ -416,7 +416,7 @@ export class BrunchLocalService {
 
     // Extract content - convert HTML to Markdown
     // videoIds are collected for later API calls to get MP4 URLs
-    const { text, media, videos, videoIds: _videoIds } = this.extractContent($);
+    const { text, media, videos } = this.extractContent($);
 
     // Extract tags
     const tags = this.extractTags($);
@@ -751,10 +751,10 @@ export class BrunchLocalService {
     // Process each wrap_item
     $wrapBody.find('.wrap_item').each((_, item) => {
       const $item = $(item);
-      const classList = (item as Element).attribs?.class?.split(' ') || [];
+      const classList = (item).attribs?.class?.split(' ') || [];
 
       if (classList.includes('item_type_text')) {
-        const tagName = (item as Element).tagName?.toLowerCase();
+        const tagName = (item).tagName?.toLowerCase();
 
         // Replace <br> tags with newlines before extracting text
         $item.find('br').replaceWith('\n');
@@ -1385,7 +1385,7 @@ export class BrunchLocalService {
   } {
     let likes = 0;
     let commentCount = 0;
-    let viewCount = 0;
+    const viewCount = 0;
 
     // Method 1: Find buttons with engagement data (matches naver-blog-importer approach)
     // Look for "라이킷 N" or "N 라이킷" patterns in button text
@@ -1934,9 +1934,10 @@ export class BrunchLocalService {
         );
       }
 
-      const apiData = JSON.parse(apiResponse.text);
+      const apiData = JSON.parse(apiResponse.text) as Record<string, unknown>;
+      const apiDataData = apiData.data as Record<string, unknown> | undefined;
 
-      if (apiData.code !== 200 || !apiData.data?.list) {
+      if (apiData.code !== 200 || !Array.isArray(apiDataData?.list)) {
         throw new BrunchError(
           'Invalid magazine API response',
           'PARSE_ERROR',
@@ -1951,16 +1952,17 @@ export class BrunchLocalService {
       // bookUrl is already defined above
 
       // Step 3: Fetch each post's full content
-      const articleList = apiData.data.list;
+      const articleList = apiDataData.list as Record<string, unknown>[];
       const posts: BrunchPostData[] = [];
       const totalEpisodes = articleList.length;
 
       for (let i = 0; i < Math.min(articleList.length, limit); i++) {
-        const article = articleList[i].article;
-        if (!article?.no) continue;
+        const articleItem = articleList[i] as Record<string, unknown> | undefined;
+        const article = articleItem?.article as Record<string, unknown> | undefined;
+        if (!article || !article.no) continue;
 
         try {
-          const postUrl = `${BRUNCH_BASE_URL}/@${authorProfileId}/${article.no}`;
+          const postUrl = `${BRUNCH_BASE_URL}/@${authorProfileId}/${String(article.no)}`;
           const postData = await this.fetchPost(postUrl);
 
           // Override series info with brunchbook context
@@ -1979,7 +1981,7 @@ export class BrunchLocalService {
             await new Promise(r => setTimeout(r, 500));
           }
         } catch (error) {
-          console.warn(`[BrunchLocalService] Failed to fetch brunchbook post ${article.no}:`, error);
+          console.warn(`[BrunchLocalService] Failed to fetch brunchbook post ${String(article.no)}:`, error);
         }
       }
 
@@ -2074,8 +2076,10 @@ export class BrunchLocalService {
 
     let postCount = 0;
     if (apiResponse.status === 200) {
-      const apiData = JSON.parse(apiResponse.text);
-      postCount = apiData.data?.list?.length || 0;
+      const apiData = JSON.parse(apiResponse.text) as Record<string, unknown>;
+      const apiDataData = apiData.data as Record<string, unknown> | undefined;
+      const apiList = Array.isArray(apiDataData?.list) ? apiDataData.list : [];
+      postCount = apiList.length;
     }
 
     return {
@@ -2118,8 +2122,8 @@ export class BrunchLocalService {
       .replace(/&#39;/g, "'")
       .replace(/&apos;/g, "'")
       .replace(/&nbsp;/g, ' ')
-      .replace(/&#(\d+);/g, (_, num) => String.fromCharCode(parseInt(num, 10)))
-      .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+      .replace(/&#(\d+);/g, (_, num: string) => String.fromCharCode(parseInt(num, 10)))
+      .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)));
   }
 
   // ==========================================================================
@@ -2156,9 +2160,9 @@ export class BrunchLocalService {
       }
 
       // Parse JSON from text to handle both response.json and response.text
-      let data;
+      let data: unknown;
       try {
-        data = typeof response.json === 'object' ? response.json : JSON.parse(response.text);
+        data = typeof response.json === 'object' ? (response.json as unknown) : (JSON.parse(response.text) as unknown);
       } catch {
         console.warn('[BrunchLocalService] Failed to parse comments JSON');
         return [];
@@ -2534,9 +2538,9 @@ export class BrunchLocalService {
 
       console.warn(`[BrunchLocalService] Could not extract author from RSS for ${internalId}`);
       return null;
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Handle 429 from exception (Obsidian requestUrl throws on non-2xx)
-      if (error?.message?.includes('429') && retryCount < MAX_RETRIES) {
+      if (error instanceof Error && error.message?.includes('429') && retryCount < MAX_RETRIES) {
         console.warn(`[BrunchLocalService] Rate limited for ${internalId}, retrying in ${RETRY_DELAY_MS}ms...`);
         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * (retryCount + 1)));
         return this.resolveInternalId(internalId, retryCount + 1);
@@ -2612,7 +2616,7 @@ export class BrunchLocalService {
   static convertMentions(text: string, authorMap: Map<string, string>): string {
     return text.replace(
       /@\[([^\]:]+):([^\]]+)\]/g,
-      (match, userId, name) => {
+      (match, userId: string, name: string) => {
         // Check if it's an internal ID that was resolved
         if (BrunchLocalService.isInternalId(userId)) {
           const resolvedAuthor = authorMap.get(userId);

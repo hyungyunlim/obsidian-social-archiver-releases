@@ -213,9 +213,9 @@ async function expand(): Promise<void> {
       const recovery = await draftService.recoverDrafts(DRAFT_ID);
       if (recovery.hasDraft && recovery.draft) {
         content = recovery.draft.content;
-      } else {
       }
-    } catch (err) {
+    } catch {
+      // Draft recovery failed silently
     }
   }
 
@@ -581,7 +581,7 @@ function detectUrls(text: string): string[] {
       let cleaned = url.trim();
 
       // Remove any remaining leading/trailing special characters
-      cleaned = cleaned.replace(/^[<(\[]+/, '');
+      cleaned = cleaned.replace(/^[<([]+/, '');
       cleaned = cleaned.replace(/[>)\]]+$/, '');
 
       return cleaned;
@@ -722,7 +722,7 @@ function extractUrlsFromText(text: string): string[] {
   const validUrls = urls
     .map(url => {
       let cleaned = url.trim();
-      cleaned = cleaned.replace(/^[<(\[]+/, '');
+      cleaned = cleaned.replace(/^[<([]+/, '');
       cleaned = cleaned.replace(/[>)\]]+$/, '');
       return cleaned;
     })

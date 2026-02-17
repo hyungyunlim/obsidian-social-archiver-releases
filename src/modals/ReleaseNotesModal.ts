@@ -71,7 +71,7 @@ export class ReleaseNotesModal extends Modal {
     const contentContainer = contentEl.createDiv({ cls: 'release-notes-content' });
 
     // Render markdown content
-    MarkdownRenderer.render(
+    void MarkdownRenderer.render(
       this.app,
       this.releaseNote.notes.trim(),
       contentContainer,

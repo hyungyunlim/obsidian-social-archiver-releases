@@ -10,7 +10,7 @@
  * - No BrightData credit usage
  */
 
-import { requestUrl, type RequestUrlParam } from 'obsidian';
+import { requestUrl } from 'obsidian';
 import type { WebtoonComment } from '../types/webtoon';
 
 // ============================================================================
@@ -144,9 +144,9 @@ const COMMON_HEADERS: Record<string, string> = {
   'Referer': 'https://comic.naver.com/',
 };
 
-// Retry configuration
-const MAX_RETRIES = 2;
-const RETRY_DELAY_MS = 1000;
+// Retry configuration (reserved for future use)
+// const MAX_RETRIES = 2;
+// const RETRY_DELAY_MS = 1000;
 
 // ============================================================================
 // Service Class
@@ -382,16 +382,16 @@ export class NaverWebtoonLocalService {
       throw new Error(`Failed to fetch webtoon info: ${response.status}`);
     }
 
-    const data = response.json;
+    const data = response.json as Record<string, unknown>;
 
     // Handle wrapped or unwrapped response
-    const result = data.result || data;
+    const result = (data.result ?? data) as Record<string, unknown>;
 
-    if (!result.titleId) {
+    if (!result['titleId']) {
       throw new Error('Invalid webtoon info response');
     }
 
-    return result as WebtoonAPIInfo;
+    return result as unknown as WebtoonAPIInfo;
   }
 
   /**
@@ -412,15 +412,15 @@ export class NaverWebtoonLocalService {
       throw new Error(`Failed to fetch episode list: ${response.status}`);
     }
 
-    const data = response.json;
-    const result = data.result || data;
+    const data = response.json as Record<string, unknown>;
+    const result = (data.result ?? data) as Record<string, unknown>;
 
     return {
-      titleId: result.titleId,
-      totalCount: result.totalCount,
-      articleList: result.articleList || [],
-      pageInfo: result.pageInfo,
-      previewEpisodes: result.chargeFolderArticleList || [],
+      titleId: typeof result['titleId'] === 'number' ? result['titleId'] : 0,
+      totalCount: typeof result['totalCount'] === 'number' ? result['totalCount'] : 0,
+      articleList: Array.isArray(result['articleList']) ? result['articleList'] as WebtoonListResponse['articleList'] : [],
+      pageInfo: result['pageInfo'] as WebtoonListResponse['pageInfo'],
+      previewEpisodes: Array.isArray(result['chargeFolderArticleList']) ? result['chargeFolderArticleList'] as WebtoonListResponse['previewEpisodes'] : [],
     };
   }
 

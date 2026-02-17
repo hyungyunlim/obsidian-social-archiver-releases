@@ -73,7 +73,8 @@ export class TagStore {
     const index = definitions.findIndex(t => t.id === id);
     if (index === -1) return undefined;
 
-    const existing = definitions[index]!;
+    const existing = definitions[index];
+    if (!existing) return undefined;
 
     // Validate name uniqueness if changing
     if (changes.name && changes.name !== existing.name) {
@@ -130,10 +131,10 @@ export class TagStore {
     if (!file || !(file instanceof TFile)) return [];
 
     const cache = this.app.metadataCache.getFileCache(file);
-    const tags = cache?.frontmatter?.tags;
-    if (!Array.isArray(tags)) return [];
+    const rawTags: unknown = cache?.frontmatter?.tags;
+    if (!Array.isArray(rawTags)) return [];
 
-    return tags.filter((t: unknown): t is string => typeof t === 'string');
+    return rawTags.filter((t: unknown): t is string => typeof t === 'string');
   }
 
   /** Add a tag to a post's YAML frontmatter */
@@ -141,14 +142,15 @@ export class TagStore {
     const file = this.app.vault.getAbstractFileByPath(filePath);
     if (!file || !(file instanceof TFile)) return;
 
-    await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+    await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
       if (!Array.isArray(frontmatter.tags)) {
         frontmatter.tags = [];
       }
+      const tagsArr = frontmatter.tags as string[];
       // Avoid duplicates (case-insensitive)
       const lower = tagName.toLowerCase();
-      if (!frontmatter.tags.some((t: string) => t.toLowerCase() === lower)) {
-        frontmatter.tags.push(tagName);
+      if (!tagsArr.some((t: string) => t.toLowerCase() === lower)) {
+        tagsArr.push(tagName);
       }
     });
   }
@@ -158,7 +160,7 @@ export class TagStore {
     const file = this.app.vault.getAbstractFileByPath(filePath);
     if (!file || !(file instanceof TFile)) return;
 
-    await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+    await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
       if (!Array.isArray(frontmatter.tags)) return;
       const lower = tagName.toLowerCase();
       frontmatter.tags = frontmatter.tags.filter((t: string) => t.toLowerCase() !== lower);
@@ -197,7 +199,8 @@ export class TagStore {
       const files = this.getMarkdownFiles(folder);
       for (const file of files) {
         const cache = this.app.metadataCache.getFileCache(file);
-        const tags = cache?.frontmatter?.tags;
+        const rawTagsValue: unknown = cache?.frontmatter?.tags;
+        const tags = Array.isArray(rawTagsValue) ? rawTagsValue : [];
         if (Array.isArray(tags)) {
           for (const tag of tags) {
             if (typeof tag !== 'string') continue;
@@ -238,11 +241,12 @@ export class TagStore {
 
     for (const file of files) {
       const cache = this.app.metadataCache.getFileCache(file);
-      const tags = cache?.frontmatter?.tags;
+      const rawTagsValue: unknown = cache?.frontmatter?.tags;
+        const tags = Array.isArray(rawTagsValue) ? rawTagsValue : [];
       if (!Array.isArray(tags)) continue;
       if (!tags.some((t: string) => typeof t === 'string' && t.toLowerCase() === lower)) continue;
 
-      await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+      await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
         if (!Array.isArray(frontmatter.tags)) return;
         frontmatter.tags = frontmatter.tags.filter((t: string) => t.toLowerCase() !== lower);
       });
@@ -332,11 +336,12 @@ export class TagStore {
 
     for (const file of files) {
       const cache = this.app.metadataCache.getFileCache(file);
-      const tags = cache?.frontmatter?.tags;
+      const rawTagsValue: unknown = cache?.frontmatter?.tags;
+        const tags = Array.isArray(rawTagsValue) ? rawTagsValue : [];
       if (!Array.isArray(tags)) continue;
       if (!tags.some((t: string) => t.toLowerCase() === oldLower)) continue;
 
-      await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+      await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
         if (!Array.isArray(frontmatter.tags)) return;
         frontmatter.tags = frontmatter.tags.map((t: string) =>
           t.toLowerCase() === oldLower ? newName : t
@@ -356,11 +361,12 @@ export class TagStore {
 
     for (const file of files) {
       const cache = this.app.metadataCache.getFileCache(file);
-      const tags = cache?.frontmatter?.tags;
+      const rawTagsValue: unknown = cache?.frontmatter?.tags;
+        const tags = Array.isArray(rawTagsValue) ? rawTagsValue : [];
       if (!Array.isArray(tags)) continue;
       if (!tags.some((t: string) => t.toLowerCase() === lower)) continue;
 
-      await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+      await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
         if (!Array.isArray(frontmatter.tags)) return;
         frontmatter.tags = frontmatter.tags.filter((t: string) => t.toLowerCase() !== lower);
       });
@@ -387,7 +393,8 @@ export class TagStore {
         this.countTagsInFolder(child, countMap, originalNames);
       } else if (child instanceof TFile && child.extension === 'md') {
         const cache = this.app.metadataCache.getFileCache(child);
-        const tags = cache?.frontmatter?.tags;
+        const rawTagsValue: unknown = cache?.frontmatter?.tags;
+        const tags = Array.isArray(rawTagsValue) ? rawTagsValue : [];
         if (Array.isArray(tags)) {
           for (const tag of tags) {
             if (typeof tag !== 'string') continue;

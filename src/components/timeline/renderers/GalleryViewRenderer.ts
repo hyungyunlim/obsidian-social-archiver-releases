@@ -116,7 +116,7 @@ export class GalleryViewRenderer {
       const imageRegex = /!\[.*?\]\((.*?)\)/g;
       let match;
       while ((match = imageRegex.exec(content)) !== null) {
-        let mediaPath = match[1];
+        const mediaPath = match[1];
         if (mediaPath && !mediaPath.startsWith('http')) {
           const linkedFile = this.app.metadataCache.getFirstLinkpathDest(mediaPath, file.path);
           if (linkedFile && !seenMedia.has(linkedFile.path)) {
@@ -145,7 +145,7 @@ export class GalleryViewRenderer {
       // Extract videos: <video src="path">
       const videoRegex = /<video[^>]+src=["']([^"']+)["']/g;
       while ((match = videoRegex.exec(content)) !== null) {
-        let mediaPath = match[1];
+        const mediaPath = match[1];
         if (mediaPath && !mediaPath.startsWith('http')) {
           const linkedFile = this.app.metadataCache.getFirstLinkpathDest(mediaPath, file.path);
           if (linkedFile && !seenMedia.has(linkedFile.path)) {
@@ -238,7 +238,7 @@ export class GalleryViewRenderer {
       if (!authorGroups.has(author)) {
         authorGroups.set(author, []);
       }
-      authorGroups.get(author)!.push(item);
+      authorGroups.get(author)?.push(item);
     }
 
     // Filter out empty groups (maintain insertion order from mediaItems)
@@ -278,7 +278,7 @@ export class GalleryViewRenderer {
         if (!postGroups.has(postKey)) {
           postGroups.set(postKey, { items: [], file: item.sourceFile });
         }
-        postGroups.get(postKey)!.items.push(item);
+        postGroups.get(postKey)?.items.push(item);
       }
 
       // Filter posts (maintain insertion order from authorItems)
@@ -307,7 +307,7 @@ export class GalleryViewRenderer {
         // Add external link icon
         if (postData.file) {
           postHeader.addEventListener('click', () => {
-            this.app.workspace.getLeaf().openFile(postData.file!);
+            void this.app.workspace.getLeaf().openFile(postData.file as TFile);
           });
 
           // Hover effect handled by CSS .gvr-post-subheader:hover
@@ -346,7 +346,7 @@ export class GalleryViewRenderer {
       if (!groups.has(key)) {
         groups.set(key, { items: [], file: groupBy === 'post' ? item.sourceFile : undefined });
       }
-      groups.get(key)!.items.push(item);
+      groups.get(key)?.items.push(item);
     }
 
     // Filter out empty groups (maintain insertion order from mediaItems)
@@ -393,7 +393,7 @@ export class GalleryViewRenderer {
         // Hover effect handled by CSS .gvr-group-header--clickable:hover
 
         groupHeader.addEventListener('click', () => {
-          this.app.workspace.getLeaf().openFile(groupData.file!);
+          void this.app.workspace.getLeaf().openFile(groupData.file as TFile);
         });
 
         // Add Lucide external-link icon (smaller and more subtle)
@@ -498,15 +498,15 @@ export class GalleryViewRenderer {
     );
 
     // Store cleanup function
-    (gridEl as any).__cleanup = () => {
+    (gridEl as unknown as Record<string, unknown>)['__cleanup'] = () => {
       resizeObserver.disconnect();
       lazyLoadObserver.disconnect();
     };
 
     // Render all cards at once (no staggered animation)
     // Store all media items on the grid for filter updates
-    (gridEl as any).__allMediaItems = mediaItems;
-    (gridEl as any).__lazyLoadObserver = lazyLoadObserver;
+    (gridEl as unknown as Record<string, unknown>)['__allMediaItems'] = mediaItems;
+    (gridEl as unknown as Record<string, unknown>)['__lazyLoadObserver'] = lazyLoadObserver;
 
     for (const item of mediaItems) {
       this.renderMediaCard(gridEl, item, mediaItems);
@@ -521,11 +521,11 @@ export class GalleryViewRenderer {
     const gridEl = container.querySelector('.media-gallery-masonry') as HTMLElement;
     if (!gridEl) return;
 
-    const allMediaItems = (gridEl as any).__allMediaItems as MediaItemData[];
+    const allMediaItems = (gridEl as unknown as Record<string, unknown>)['__allMediaItems'] as MediaItemData[];
     if (!allMediaItems) return;
 
-    const lazyLoadObserver = (gridEl as any).__lazyLoadObserver as IntersectionObserver;
-    const cards = Array.from(gridEl.querySelectorAll('.media-card')) as HTMLElement[];
+    const lazyLoadObserver = (gridEl as unknown as Record<string, unknown>)['__lazyLoadObserver'] as IntersectionObserver;
+    const cards = Array.from(gridEl.querySelectorAll('.media-card'));
 
     cards.forEach((card, index) => {
       const item = allMediaItems[index];
@@ -641,7 +641,7 @@ export class GalleryViewRenderer {
     const card = container.closest('.media-card') as HTMLElement;
     if (card) {
       const gridEl = card.parentElement;
-      const observer = (gridEl as any).__lazyLoadObserver as IntersectionObserver;
+      const observer = (gridEl as unknown as Record<string, unknown>)['__lazyLoadObserver'] as IntersectionObserver;
       if (observer) {
         observer.observe(card);
       }
@@ -719,7 +719,7 @@ export class GalleryViewRenderer {
     const card = container.closest('.media-card') as HTMLElement;
     if (card) {
       const gridEl = card.parentElement;
-      const observer = (gridEl as any).__lazyLoadObserver as IntersectionObserver;
+      const observer = (gridEl as unknown as Record<string, unknown>)['__lazyLoadObserver'] as IntersectionObserver;
       if (observer) {
         observer.observe(card);
       }
@@ -759,7 +759,7 @@ export class GalleryViewRenderer {
     // Metadata click to open source file
     metadataEl.addEventListener('click', (e) => {
       e.stopPropagation();
-      this.app.workspace.getLeaf().openFile(item.sourceFile);
+      void this.app.workspace.getLeaf().openFile(item.sourceFile);
     });
   }
 

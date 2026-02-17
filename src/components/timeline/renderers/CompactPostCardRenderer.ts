@@ -1,9 +1,8 @@
 import type { PostData, Platform } from '../../../types/post';
 import {
   getPlatformSimpleIcon,
-  type PlatformIcon as SimpleIcon
 } from '../../../services/IconService';
-import { setIcon, Platform as ObsidianPlatform, MarkdownRenderer, Component } from 'obsidian';
+import { App, setIcon, Platform as ObsidianPlatform, Component, TFile } from 'obsidian';
 import type { LinkPreviewRenderer } from './LinkPreviewRenderer';
 import { createSVGElement } from '../../../utils/dom-helpers';
 
@@ -20,7 +19,7 @@ import { createSVGElement } from '../../../utils/dom-helpers';
  */
 export class CompactPostCardRenderer extends Component {
   private onExpandCallback?: (post: PostData, expandedContainer: HTMLElement) => Promise<void>;
-  private app?: any; // Obsidian App for resource path conversion
+  private app?: App; // Obsidian App for resource path conversion
   private linkPreviewRenderer?: LinkPreviewRenderer;
   private parentPost?: PostData; // Parent post for self-boost avatar lookup
 
@@ -36,7 +35,7 @@ export class CompactPostCardRenderer extends Component {
   /**
    * Set Obsidian app instance
    */
-  public setApp(app: any): void {
+  public setApp(app: App): void {
     this.app = app;
   }
 
@@ -95,7 +94,7 @@ export class CompactPostCardRenderer extends Component {
 
     // If starting in expanded state, immediately render full content
     if (isExpanded && this.onExpandCallback && expandedContent.children.length === 0) {
-      this.onExpandCallback(post, expandedContent);
+      void this.onExpandCallback(post, expandedContent);
     }
 
     // Hover effect handled by CSS .cpcr-card:hover
@@ -147,10 +146,10 @@ export class CompactPostCardRenderer extends Component {
     };
 
     // Click summary card to expand
-    card.addEventListener('click', toggleExpanded);
+    card.addEventListener('click', (e) => { void toggleExpanded(e); });
 
     // Click expanded content to collapse
-    expandedContent.addEventListener('click', toggleExpanded);
+    expandedContent.addEventListener('click', (e) => { void toggleExpanded(e); });
 
     // Platform icon removed for embedded archives
     // Embedded archives don't need platform identification as context is clear
@@ -177,7 +176,7 @@ export class CompactPostCardRenderer extends Component {
         // Convert vault paths to resource paths (skip for external URLs like YouTube thumbnails)
         if (this.app && !imagePath.startsWith('http')) {
           const file = this.app.vault.getAbstractFileByPath(imagePath);
-          if (file) {
+          if (file instanceof TFile) {
             imagePath = this.app.vault.getResourcePath(file);
           }
         }
@@ -375,7 +374,7 @@ export class CompactPostCardRenderer extends Component {
   /**
    * Render platform icon (Simple Icons SVG)
    * @unused - Reserved for future use
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- reserved for future platform icon rendering
    */
   private _renderPlatformIcon(container: HTMLElement, platform: Platform): void {
     // For user posts, render user initial avatar
@@ -403,7 +402,7 @@ export class CompactPostCardRenderer extends Component {
     const candidates: Array<string | undefined> = [
       post.url,
       post.originalUrl,
-      (post.metadata as any)?.originalUrl,
+      (post.metadata as unknown as Record<string, unknown>)?.['originalUrl'] as string | undefined,
       post.shareUrl
     ];
 
@@ -513,7 +512,7 @@ export class CompactPostCardRenderer extends Component {
     });
 
     // Fire and forget - async rendering via LinkPreviewRenderer
-    this.linkPreviewRenderer.renderCompact(linkPreviewContainer, metadata.externalLink);
+    void this.linkPreviewRenderer.renderCompact(linkPreviewContainer, metadata.externalLink);
   }
 
   /**
@@ -601,7 +600,7 @@ export class CompactPostCardRenderer extends Component {
 
     if (avatarSrc) {
       // Show actual avatar image
-      const avatarImg = container.createEl('img') as HTMLImageElement;
+      const avatarImg = container.createEl('img');
       avatarImg.addClass('sa-icon-32', 'sa-rounded-full', 'sa-object-cover');
       avatarImg.src = avatarSrc;
       avatarImg.alt = post.author.name;
@@ -628,4 +627,3 @@ export class CompactPostCardRenderer extends Component {
     // Platform badge removed - platform icon now shown in header via renderOriginalPostLink
   }
 }
-// @ts-nocheck

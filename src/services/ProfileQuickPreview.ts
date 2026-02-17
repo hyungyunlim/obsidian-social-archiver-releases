@@ -130,7 +130,7 @@ export class ProfileQuickPreview implements IService {
     };
   }
 
-  async initialize(): Promise<void> {
+  initialize(): void {
     if (this.initialized) {
       return;
     }
@@ -145,7 +145,7 @@ export class ProfileQuickPreview implements IService {
     this.initialized = true;
   }
 
-  async dispose(): Promise<void> {
+  dispose(): void {
     this.cache.clear();
     this.initialized = false;
   }
@@ -231,7 +231,7 @@ export class ProfileQuickPreview implements IService {
         throw: false,
       });
 
-      const data: ExpandUrlResponse = response.json;
+      const data = response.json as ExpandUrlResponse;
 
       if (!data.success || !data.data) {
         throw new QuickPreviewFailedError(
@@ -301,7 +301,7 @@ export class ProfileQuickPreview implements IService {
       // Handle timeout (requestUrl doesn't support AbortController well)
       // We rely on server-side timeout (3 seconds)
 
-      const data: WorkerQuickPreviewResponse = response.json;
+      const data = response.json as WorkerQuickPreviewResponse;
 
       if (!data.success) {
         throw new QuickPreviewFailedError(

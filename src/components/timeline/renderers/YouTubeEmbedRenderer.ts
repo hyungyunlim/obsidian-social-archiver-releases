@@ -61,12 +61,12 @@ export class YouTubeEmbedRenderer {
     // - https://vm.tiktok.com/ZMabcdefg/ (short URL - cannot extract ID)
     // - https://vt.tiktok.com/ZSyUa2Y4q/ (short URL - cannot extract ID)
     const videoIdMatch = url.match(/\/video\/(\d+)/);
-    let finalVideoId = videoIdMatch ? videoIdMatch[1] : null;
+    const finalVideoId = videoIdMatch ? videoIdMatch[1] : null;
 
     if (!finalVideoId) {
       // Fallback: show link
       const linkContainer = container.createDiv({ cls: 'yte-tiktok-fallback' });
-      const link = linkContainer.createEl('a', {
+      linkContainer.createEl('a', {
         cls: 'yte-link-accent',
         text: 'View on TikTok',
         attr: {

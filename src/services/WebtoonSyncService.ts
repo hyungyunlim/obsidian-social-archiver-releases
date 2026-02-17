@@ -12,7 +12,7 @@
 
 import { Notice, requestUrl } from 'obsidian';
 import type SocialArchiverPlugin from '../main';
-import type { PostData, Platform } from '../types/post';
+import type { PostData } from '../types/post';
 import { getVaultOrganizationStrategy } from '../types/settings';
 import { VaultManager } from './VaultManager';
 import { MarkdownConverter } from './MarkdownConverter';
@@ -106,18 +106,18 @@ export class WebtoonSyncService {
   /**
    * Start the sync service (called on plugin load)
    */
-  async start(): Promise<void> {
+  start(): void {
     // Guard against duplicate starts
     if (this.intervalId !== null) {
       return;
     }
 
     // Initial sync after short delay (10 seconds)
-    setTimeout(() => this.sync(), 10000);
+    setTimeout(() => { void this.sync(); }, 10000);
 
     // Set up interval for periodic polling
     this.intervalId = window.setInterval(
-      () => this.sync(),
+      () => { void this.sync(); },
       this.pollingInterval
     );
   }
@@ -125,7 +125,7 @@ export class WebtoonSyncService {
   /**
    * Stop the sync service (called on plugin unload)
    */
-  async stop(): Promise<void> {
+  stop(): void {
     if (this.intervalId !== null) {
       window.clearInterval(this.intervalId);
       this.intervalId = null;
@@ -315,12 +315,12 @@ export class WebtoonSyncService {
       basePath: this.plugin.settings.archivePath || 'Social Archives',
       organizationStrategy: getVaultOrganizationStrategy(this.plugin.settings.archiveOrganization),
     });
-    await vaultManager.initialize();
+    vaultManager.initialize();
 
     const markdownConverter = new MarkdownConverter({
       frontmatterSettings: this.plugin.settings.frontmatter,
     });
-    await markdownConverter.initialize();
+    markdownConverter.initialize();
 
     // Download media if enabled
     let mediaResults: MediaResult[] | undefined;
@@ -329,7 +329,7 @@ export class WebtoonSyncService {
         vault: this.plugin.app.vault,
         basePath: this.plugin.settings.archivePath || 'Social Archives',
       });
-      await mediaHandler.initialize();
+      mediaHandler.initialize();
       mediaResults = await mediaHandler.downloadMedia(
         post.media,
         post.platform,
@@ -339,7 +339,7 @@ export class WebtoonSyncService {
     }
 
     // Convert to markdown
-    const markdown = await markdownConverter.convert(
+    const markdown = markdownConverter.convert(
       post,
       undefined, // No custom template
       mediaResults
@@ -361,8 +361,8 @@ export class WebtoonSyncService {
       headers['Authorization'] = `Bearer ${this.plugin.settings.authToken}`;
     }
 
-    if (this.plugin.settings.licenseKey) {
-      headers['X-License-Key'] = this.plugin.settings.licenseKey;
+    if (this.plugin.settings.authToken) {
+      headers['X-License-Key'] = this.plugin.settings.authToken;
     }
 
     return headers;

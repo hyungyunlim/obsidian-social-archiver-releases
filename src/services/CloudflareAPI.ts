@@ -281,14 +281,14 @@ export class CloudflareAPI implements IService {
         });
 
         // Parse response
-        const data: CloudflareAPIResponse<T> = response.json;
+        const data = response.json as CloudflareAPIResponse<T>;
 
         // Handle error responses
         if (!data.success) {
           const error = new Error(data.error?.message ?? 'Unknown API error');
-          (error as any).code = data.error?.code;
-          (error as any).details = data.error?.details;
-          (error as any).status = response.status;
+          (error as unknown as Record<string, unknown>)['code'] = data.error?.code;
+          (error as unknown as Record<string, unknown>)['details'] = data.error?.details;
+          (error as unknown as Record<string, unknown>)['status'] = response.status;
           throw error;
         }
 
@@ -303,7 +303,7 @@ export class CloudflareAPI implements IService {
         });
 
         // Don't retry on client errors (4xx)
-        if ((error as any).status >= 400 && (error as any).status < 500) {
+        if (((error as Record<string, unknown>)['status'] as number) >= 400 && ((error as Record<string, unknown>)['status'] as number) < 500) {
           throw error;
         }
 

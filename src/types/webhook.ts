@@ -68,7 +68,7 @@ export interface IWebhookEventProcessor {
   /**
    * Check if event has already been processed (idempotency)
    */
-  isEventProcessed(eventId: string): Promise<boolean>;
+  isEventProcessed(eventId: string): Promise<boolean> | boolean;
 
   /**
    * Mark event as processed

@@ -39,6 +39,7 @@ export type DownloadProgressCallback = (downloaded: number, total: number) => vo
 /**
  * Media type detector
  */
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 class MediaTypeDetector {
   private static imageExtensions = new Set([
     'jpg', 'jpeg', 'png', 'pnj', 'gif', 'webp', 'svg', 'bmp', 'ico', 'heic', 'heif', 'avif'
@@ -114,7 +115,7 @@ class MediaTypeDetector {
     try {
       const pathname = new URL(url).pathname;
       const parts = pathname.split('.');
-      return parts.length > 1 ? parts[parts.length - 1]!.toLowerCase() : '';
+      return parts.length > 1 ? (parts[parts.length - 1] ?? '').toLowerCase() : '';
     } catch {
       return '';
     }
@@ -187,7 +188,7 @@ class MediaPathGenerator {
       const pathname = new URL(url).pathname;
       const parts = pathname.split('.');
       if (parts.length > 1) {
-        let ext = parts[parts.length - 1]!.toLowerCase();
+        let ext = (parts[parts.length - 1] ?? '').toLowerCase();
         // Remove query parameters
         ext = ext.split('?')[0] || ext;
         // If extension contains '/', it's not a valid extension (e.g., LinkedIn URL paths)
@@ -288,7 +289,7 @@ class DownloadQueue {
       const task = this.queue.shift();
       if (task) {
         this.activeCount++;
-        task();
+        void task();
       }
     }
   }
@@ -334,11 +335,11 @@ export class MediaHandler implements IService {
     this.imageQuality = config.imageQuality || 0.8;
   }
 
-  async initialize(): Promise<void> {
+  initialize(): void {
     // No async initialization needed
   }
 
-  async dispose(): Promise<void> {
+  dispose(): void {
     // Clean up image optimizer resources
     this.imageOptimizer.dispose();
   }
@@ -659,7 +660,8 @@ export class MediaHandler implements IService {
     // Check if it's a blob URL (TikTok videos from BrightData)
     if (url.startsWith('blob:')) {
       // Download blob URL directly in browser context (Electron/browser environment)
-      // NOTE: Using fetch() for blob: URLs - requestUrl() doesn't support blob: protocol
+      // requestUrl() does not support the blob: protocol, so native fetch is required here
+      // eslint-disable-next-line no-restricted-globals -- blob: URLs are not supported by requestUrl
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`Blob fetch failed: ${response.status} ${response.statusText}`);
@@ -781,7 +783,7 @@ export class MediaHandler implements IService {
    * Cleanup orphaned media files
    * (Media files that don't have corresponding notes)
    */
-  async cleanupOrphanedMedia(_dryRun: boolean = true): Promise<TFile[]> {
+  cleanupOrphanedMedia(_dryRun: boolean = true): TFile[] {
     const mediaFolder = this.vault.getFolderByPath(this.pathGenerator['basePath']);
     if (!mediaFolder) {
       return [];
@@ -893,9 +895,9 @@ export class MediaHandler implements IService {
 
     // HEIC/HEIF/AVIF: "ftyp" + brand
     if (bytes.length >= 12) {
-      const brand = String.fromCharCode(bytes[4]!, bytes[5]!, bytes[6]!, bytes[7]!).toLowerCase();
+      const brand = String.fromCharCode(bytes[4] ?? 0, bytes[5] ?? 0, bytes[6] ?? 0, bytes[7] ?? 0).toLowerCase();
       if (brand === 'ftyp') {
-        const brandName = String.fromCharCode(bytes[8]!, bytes[9]!, bytes[10]!, bytes[11]!).toLowerCase();
+        const brandName = String.fromCharCode(bytes[8] ?? 0, bytes[9] ?? 0, bytes[10] ?? 0, bytes[11] ?? 0).toLowerCase();
         if (brandName.startsWith('heic') || brandName.startsWith('heif')) {
           return 'heic';
         }
@@ -919,7 +921,7 @@ export class MediaHandler implements IService {
 
     // MP4/MOV: 4 bytes size + "ftyp" + brand
     if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
-      const brand = String.fromCharCode(bytes[8]!, bytes[9]!, bytes[10]!, bytes[11]!).toLowerCase();
+      const brand = String.fromCharCode(bytes[8] ?? 0, bytes[9] ?? 0, bytes[10] ?? 0, bytes[11] ?? 0).toLowerCase();
       if (brand.startsWith('qt')) return 'mov';
       return 'mp4';
     }

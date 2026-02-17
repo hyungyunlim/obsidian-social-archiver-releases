@@ -7,7 +7,7 @@
 
 import { setIcon } from 'obsidian';
 import type { AICli, AICommentType, AICommentProgress, AIOutputLanguage } from '../../../types/ai-comment';
-import { COMMENT_TYPE_DISPLAY_NAMES, OUTPUT_LANGUAGE_NAMES } from '../../../types/ai-comment';
+import { COMMENT_TYPE_DISPLAY_NAMES } from '../../../types/ai-comment';
 import { AI_CLI_INFO } from '../../../utils/ai-cli';
 
 // ============================================================================
@@ -339,7 +339,7 @@ export class AICommentBanner {
     const yesButton = this.createIconButton(buttonSection, 'check', 'Yes');
     yesButton.addClass('sa-text-accent');
     yesButton.addEventListener('click', () => {
-      this.handleGenerate();
+      void this.handleGenerate();
     });
     yesButton.addEventListener('mouseenter', () => {
       yesButton.removeClass('sa-bg-transparent');
@@ -375,7 +375,7 @@ export class AICommentBanner {
     promptInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && promptInput.value.trim()) {
         e.preventDefault();
-        this.handleGenerate();
+        void this.handleGenerate();
       }
     });
 

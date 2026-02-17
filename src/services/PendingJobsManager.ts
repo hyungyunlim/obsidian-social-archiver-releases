@@ -137,6 +137,12 @@ export interface PendingJob {
 
     /** Include platform comments in archived note */
     includeComments?: boolean;
+
+    /** Destination folder for archived posts (subscription/crawl jobs) */
+    destinationFolder?: string;
+
+    /** Original URL before platform-specific resolution (e.g., Pinterest board resolution) */
+    originalUrl?: string;
   };
 }
 
@@ -565,7 +571,7 @@ export class PendingJobsManager implements IService {
 
     // If still need to remove more, remove any oldest jobs
     if (removedCount < targetCount) {
-      for (const { id, status } of allJobs) {
+      for (const { id } of allJobs) {
         if (removedCount >= targetCount) break;
 
         // Skip if already removed
@@ -611,7 +617,7 @@ export class PendingJobsManager implements IService {
    */
   private loadIndex(): void {
     try {
-      const indexData = this.app.loadLocalStorage(this.INDEX_KEY);
+      const indexData = this.app.loadLocalStorage(this.INDEX_KEY) as string | null;
       if (indexData) {
         this.indexCache = JSON.parse(indexData) as string[];
       } else {
@@ -641,12 +647,12 @@ export class PendingJobsManager implements IService {
 
     for (const id of this.indexCache) {
       try {
-        const jobData = this.app.loadLocalStorage(this.getJobKey(id));
+        const jobData = this.app.loadLocalStorage(this.getJobKey(id)) as string | null;
         if (jobData) {
           // Parse JSON with error recovery
-          let rawJob: any;
+          let rawJob: Record<string, unknown>;
           try {
-            rawJob = JSON.parse(jobData);
+            rawJob = JSON.parse(jobData) as Record<string, unknown>;
           } catch (parseError) {
             console.warn(`[PendingJobsManager] Corrupted job data for ${id}, removing:`, parseError);
             this.app.saveLocalStorage(this.getJobKey(id), null);
@@ -807,21 +813,21 @@ export class PendingJobsManager implements IService {
    * Sanitize and migrate job data to current schema version
    * Handles schema migrations and missing/invalid fields
    */
-  private sanitizeJob(job: any): PendingJob {
+  private sanitizeJob(job: Record<string, unknown>): PendingJob {
     const sanitized: PendingJob = {
       // Set schema version if missing
-      schemaVersion: job.schemaVersion ?? PENDING_JOB_SCHEMA_VERSION,
+      schemaVersion: (job.schemaVersion as number | undefined) ?? PENDING_JOB_SCHEMA_VERSION,
 
       // Required fields (kept as-is, validation will catch issues)
-      id: job.id,
-      url: job.url,
-      platform: job.platform,
-      status: job.status,
-      timestamp: job.timestamp,
-      retryCount: job.retryCount ?? 0, // Default to 0 if missing
+      id: job.id as string,
+      url: job.url as string,
+      platform: job.platform as Platform,
+      status: job.status as JobStatus,
+      timestamp: job.timestamp as number,
+      retryCount: (job.retryCount as number | undefined) ?? 0, // Default to 0 if missing
 
       // Optional metadata (preserve if exists)
-      metadata: job.metadata,
+      metadata: job.metadata as PendingJob['metadata'],
     };
 
     // Schema migration logic (for future versions)

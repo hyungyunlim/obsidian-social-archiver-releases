@@ -570,7 +570,7 @@ export class CreditManager implements IService {
     }
 
     // Only reset for subscription and free tier licenses
-    const licenseType = (this.license as any).licenseType;
+    const licenseType = (this.license as unknown as Record<string, unknown>)['licenseType'];
     if (licenseType === 'credit_pack') {
       this.logger?.debug('Skipping reset for credit pack license');
       return;
@@ -651,7 +651,7 @@ export class CreditManager implements IService {
     }
 
     // Only reset for subscription and free tier licenses
-    const licenseType = (this.license as any).licenseType;
+    const licenseType = (this.license as unknown as Record<string, unknown>)['licenseType'];
     if (licenseType === 'credit_pack') {
       return false; // Credit packs don't reset
     }
@@ -678,7 +678,7 @@ export class CreditManager implements IService {
       return false;
     }
 
-    const licenseType = (this.license as any).licenseType;
+    const licenseType = (this.license as unknown as Record<string, unknown>)['licenseType'];
     return licenseType === 'credit_pack';
   }
 
@@ -690,7 +690,7 @@ export class CreditManager implements IService {
       return 'free_tier';
     }
 
-    return (this.license as any).licenseType || 'subscription';
+    return (this.license as License & { licenseType?: string }).licenseType || 'subscription';
   }
 
   /**
@@ -819,7 +819,7 @@ export class CreditManager implements IService {
     const { benefit } = appliedCode;
 
     switch (benefit.type) {
-      case PromoCodeType.BONUS_CREDITS:
+      case PromoCodeType.BONUS_CREDITS: {
         // Add bonus credits to balance
         const previousBalance = this.balance;
         this.balance += benefit.amount;
@@ -849,6 +849,7 @@ export class CreditManager implements IService {
 
         this.tracker.recordTransaction(transaction);
         break;
+      }
 
       case PromoCodeType.EXTENDED_TRIAL:
         // Extended trial is handled at the license level
@@ -880,7 +881,7 @@ export class CreditManager implements IService {
     if (!this.eventListeners.has(eventType)) {
       this.eventListeners.set(eventType, new Set());
     }
-    this.eventListeners.get(eventType)!.add(listener);
+    this.eventListeners.get(eventType)?.add(listener);
   }
 
   /**
@@ -913,10 +914,10 @@ export class CreditManager implements IService {
     const percentage = (this.balance / this.license.creditLimit) * 100;
 
     for (const threshold of this.config.alerts.thresholds) {
-      if (percentage <= threshold && !this.alertedThresholds.has(threshold)) {
+      if (percentage <= Number(threshold) && !this.alertedThresholds.has(threshold)) {
         this.triggerAlert(threshold, percentage);
         this.alertedThresholds.add(threshold);
-      } else if (percentage > threshold && this.alertedThresholds.has(threshold)) {
+      } else if (percentage > Number(threshold) && this.alertedThresholds.has(threshold)) {
         // Reset alert if balance increased above threshold
         this.alertedThresholds.delete(threshold);
       }
@@ -927,7 +928,7 @@ export class CreditManager implements IService {
     const alert: CreditAlert = {
       threshold,
       creditsRemaining: this.balance,
-      creditLimit: this.license!.creditLimit,
+      creditLimit: this.license?.creditLimit ?? 0,
       percentageRemaining,
       timestamp: Date.now(),
       message: this.getAlertMessage(threshold, this.balance),

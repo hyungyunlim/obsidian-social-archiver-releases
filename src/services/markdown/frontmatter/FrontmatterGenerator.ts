@@ -34,8 +34,7 @@ function normalizeAuthorUrl(url: string | undefined, platform: Platform): string
     const isMedium = hostname === 'medium.com' || hostname === 'www.medium.com' || hostname.endsWith('.medium.com');
     if (isMedium) {
       // Remove query params
-      let _cleanUrl = `${parsedUrl.protocol}//${parsedUrl.hostname}${parsedUrl.pathname}`;
-      _cleanUrl = _cleanUrl.replace(/\/+$/, ''); // Remove trailing slashes
+      // URL is cleaned via parsedUrl fields accessed below
 
       if (hostname === 'medium.com' || hostname === 'www.medium.com') {
         // Extract @username from path
@@ -158,7 +157,7 @@ export class FrontmatterGenerator {
       : normalizeAuthorUrl(postData.author.url, postData.platform);
 
     // Build frontmatter object, only including defined values
-    const frontmatter: any = {
+    const frontmatter: Record<string, unknown> = {
       share: false,
       platform: postData.platform,
       author: postData.author.name,
@@ -205,8 +204,7 @@ export class FrontmatterGenerator {
     if (postData.metadata.views !== undefined) frontmatter.views = postData.metadata.views;
     const uniqueLinkPreviews = uniqueStrings(postData.linkPreviews, normalizeUrlForDedup);
     if (uniqueLinkPreviews.length > 0) frontmatter.linkPreviews = uniqueLinkPreviews;
-    // @ts-ignore - processedUrls is custom field for user posts
-    const uniqueProcessedUrls = uniqueStrings(postData.processedUrls as string[] | undefined, normalizeUrlForDedup);
+    const uniqueProcessedUrls = uniqueStrings((postData as unknown as { processedUrls?: string[] }).processedUrls, normalizeUrlForDedup);
     if (uniqueProcessedUrls.length > 0) frontmatter.processedUrls = uniqueProcessedUrls;
     if (postData.ai?.summary) frontmatter.ai_summary = postData.ai.summary;
     if (postData.ai?.sentiment) frontmatter.sentiment = postData.ai.sentiment;
@@ -215,6 +213,9 @@ export class FrontmatterGenerator {
     // Subscription-related fields
     if (postData.subscribed) frontmatter.subscribed = true;
     if (postData.subscriptionId) frontmatter.subscriptionId = postData.subscriptionId;
+
+    // X article (long-form post) marker — enables rich blog-style rendering in timeline
+    if (postData.platform === 'x' && postData.content.html) frontmatter.isArticle = true;
 
     // Reddit community/subreddit info
     if (postData.content.community) {
@@ -290,7 +291,7 @@ export class FrontmatterGenerator {
     }
 
     // Expired media metadata (CDN URLs that couldn't be downloaded)
-    const expiredMedia = (postData as any)?._expiredMedia as Array<{ originalUrl: string }> | undefined;
+    const expiredMedia = postData._expiredMedia;
     if (expiredMedia && expiredMedia.length > 0) {
       frontmatter.media_expired = expiredMedia.length;
       frontmatter.media_expired_urls = expiredMedia.map(e => e.originalUrl);
@@ -299,12 +300,13 @@ export class FrontmatterGenerator {
     const customization = options?.customization;
 
     if (!customization?.enabled) {
-      return frontmatter;
+      return frontmatter as unknown as YamlFrontmatter;
     }
 
+    const typedFrontmatter = frontmatter as unknown as YamlFrontmatter;
     const visibilityApplied = customization.fieldVisibility
-      ? this.applyFieldVisibility(frontmatter, customization.fieldVisibility)
-      : { ...frontmatter };
+      ? this.applyFieldVisibility(typedFrontmatter, customization.fieldVisibility)
+      : { ...typedFrontmatter };
 
     const customApplied = this.applyCustomProperties(
       visibilityApplied,
@@ -343,7 +345,7 @@ ${content}`;
   /**
    * Format value for YAML
    */
-  private formatYamlValue(value: any): string {
+  private formatYamlValue(value: unknown): string {
     if (value instanceof Date) {
       return value.toISOString();
     }
@@ -425,9 +427,10 @@ ${content}`;
       if (enabled) continue;
 
       const fields = CATEGORY_FIELDS[category];
+      const resultRecord = result as Record<string, unknown>;
       for (const field of fields) {
         if (CORE_LOCKED_FRONTMATTER_FIELDS.has(field)) continue;
-        delete result[field];
+        Reflect.deleteProperty(resultRecord, field);
       }
     }
 
@@ -567,7 +570,7 @@ ${content}`;
         result[targetKey] = merged;
       }
 
-      delete result[sourceKey];
+      Reflect.deleteProperty(result as Record<string, unknown>, sourceKey);
     }
 
     return result;
@@ -623,9 +626,9 @@ ${content}`;
 
   private resolveCustomPropertyValue(
     customProperty: CustomFrontmatterProperty,
-    context: Record<string, any>
+    context: Record<string, unknown>
   ): unknown {
-    const type = (customProperty.type || 'text') as FrontmatterPropertyType;
+    const type: FrontmatterPropertyType = customProperty.type || 'text';
     const template = String(customProperty.template ?? '').trim();
 
     const supportsTemplateOverride = type === 'checkbox' || type === 'date' || type === 'date-time';

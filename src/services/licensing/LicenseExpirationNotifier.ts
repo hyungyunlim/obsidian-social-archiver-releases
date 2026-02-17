@@ -85,7 +85,7 @@ export class LicenseExpirationNotifier implements IService {
   /**
    * Initialize the notifier
    */
-  async initialize(): Promise<void> {
+  initialize(): void {
     if (this.initialized) {
       this.logger?.warn('LicenseExpirationNotifier already initialized');
       return;
@@ -108,7 +108,7 @@ export class LicenseExpirationNotifier implements IService {
   /**
    * Shutdown the notifier
    */
-  async shutdown(): Promise<void> {
+  shutdown(): void {
     if (!this.initialized) {
       return;
     }
@@ -262,7 +262,7 @@ export class LicenseExpirationNotifier implements IService {
 
     // Check each threshold
     for (const threshold of this.config.thresholds) {
-      if (daysUntilExpiration <= threshold && !this.wasNotified(threshold, expiresAt)) {
+      if (daysUntilExpiration <= Number(threshold) && !this.wasNotified(threshold, expiresAt)) {
         this.sendNotification(threshold, expiresAt, daysUntilExpiration);
         this.recordNotification(threshold, expiresAt);
       }

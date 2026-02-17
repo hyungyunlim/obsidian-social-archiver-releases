@@ -59,9 +59,6 @@ function handleError(err: Error, info: { componentStack?: string } = {}): void {
     onError(err, info);
   }
 
-  // Log error
-  if (info.componentStack) {
-  }
 }
 
 /**
@@ -107,26 +104,20 @@ onMount(() => {
 
 {#if hasError}
   {#if fallback}
-    {@render fallback(error!)}
+    {@render fallback(error as Error)}
   {:else}
     <!-- Default fallback UI -->
     <div class="error-boundary-fallback">
       <div class="error-icon">⚠️</div>
       <h3 class="error-title">Something went wrong</h3>
-      <p class="error-message">{error!.message}</p>
+      <p class="error-message">{error?.message}</p>
       <button class="error-retry-button" onclick={resetError}>
         Try Again
       </button>
     </div>
   {/if}
 {:else}
-  {#try}
-    {@render children()}
-  {:catch err}
-    {#if err instanceof Error}
-      {handleError(err)}
-    {/if}
-  {/try}
+  {@render children()}
 {/if}
 
 <style>

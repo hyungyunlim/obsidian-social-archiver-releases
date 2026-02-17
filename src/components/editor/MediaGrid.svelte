@@ -311,7 +311,11 @@ function formatFileSize(bytes: number): string {
 
 <!-- Alt Text Modal -->
 {#if editingImageId && editingImage}
+  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div class="modal-overlay" onclick={closeAltTextModal}>
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div class="modal-content" onclick={(e) => e.stopPropagation()}>
       <div class="modal-header">
         <h3>Edit Alt Text</h3>

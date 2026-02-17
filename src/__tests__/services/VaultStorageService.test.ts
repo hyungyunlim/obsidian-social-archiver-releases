@@ -31,11 +31,11 @@ class MockFile implements File {
     this.lastModified = Date.now();
   }
 
-  async arrayBuffer(): Promise<ArrayBuffer> {
-    return this.buffer.buffer.slice(
+  arrayBuffer(): Promise<ArrayBuffer> {
+    return Promise.resolve(this.buffer.buffer.slice(
       this.buffer.byteOffset,
       this.buffer.byteOffset + this.buffer.byteLength
-    );
+    ));
   }
 
   slice(start?: number, end?: number, contentType?: string): Blob {

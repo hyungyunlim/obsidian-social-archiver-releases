@@ -109,7 +109,7 @@ export class ReaderModeContentRenderer extends Component {
     if (post.metadata?.externalLink) {
       const linkContainer = content.createDiv({ cls: 'reader-mode-external-link' });
       linkContainer.addClass('sa-my-16');
-      this.linkPreviewRenderer.renderCompact(linkContainer, post.metadata.externalLink);
+      void this.linkPreviewRenderer.renderCompact(linkContainer, post.metadata.externalLink);
     }
 
     // 6. Quoted/Shared post
@@ -178,10 +178,10 @@ export class ReaderModeContentRenderer extends Component {
     const copyBtn = rightGroup.createDiv({ cls: 'reader-mode-header-btn' });
     copyBtn.setAttribute('title', 'Copy text');
     setIcon(copyBtn, 'copy');
-    copyBtn.addEventListener('click', async (e) => {
+    copyBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const text = post.content.text || post.content.markdown || '';
-      await navigator.clipboard.writeText(text);
+      void navigator.clipboard.writeText(text);
       new Notice('Text copied to clipboard');
     });
   }
@@ -676,10 +676,10 @@ export class ReaderModeContentRenderer extends Component {
   private getPostOriginalUrl(post: PostData): string | null {
     const candidates: Array<string | undefined> = [
       post.url,
-      (post as any).originalUrl,
-      (post.metadata as any)?.originalUrl,
+      (post as PostData & { originalUrl?: string }).originalUrl,
+      (post.metadata as unknown as Record<string, unknown>)?.['originalUrl'] as string | undefined,
       post.quotedPost?.url,
-      (post.quotedPost as any)?.originalUrl,
+      (post.quotedPost as (PostData & { originalUrl?: string }) | undefined)?.originalUrl,
       post.shareUrl,
     ];
     for (const candidate of candidates) {

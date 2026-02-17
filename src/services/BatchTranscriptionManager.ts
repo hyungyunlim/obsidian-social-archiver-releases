@@ -182,11 +182,12 @@ export class BatchTranscriptionManager {
   }
 
   tryRestore(): void {
-    const raw = this.deps.app.loadLocalStorage(STORAGE_KEY);
-    if (!raw || typeof raw !== 'string') return;
+    const rawValue: unknown = this.deps.app.loadLocalStorage(STORAGE_KEY);
+    if (!rawValue || typeof rawValue !== 'string') return;
+    const raw = rawValue;
 
     try {
-      const state: PersistedBatchState = JSON.parse(raw);
+      const state = JSON.parse(raw) as PersistedBatchState;
       if (state.version !== 1 || !Array.isArray(state.items)) return;
 
       this.mode = state.mode;
@@ -228,8 +229,8 @@ export class BatchTranscriptionManager {
     let skippedCount = 0;
 
     for (let i = this.currentIndex; i < this.items.length; i++) {
-      const item = this.items[i]!;
-      if (item.status !== 'pending') continue;
+      const item = this.items[i];
+      if (!item || item.status !== 'pending') continue;
 
       const file = this.deps.app.vault.getAbstractFileByPath(item.filePath);
       if (!file || !('extension' in file) || 'children' in file) {
@@ -335,7 +336,8 @@ export class BatchTranscriptionManager {
         return;
       }
 
-      const item = this.items[this.currentIndex]!;
+      const item = this.items[this.currentIndex];
+      if (!item) { this.currentIndex++; continue; }
 
       // Skip already-terminal items (from a restored batch)
       if (item.status === 'completed' || item.status === 'failed' || item.status === 'skipped') {
@@ -395,7 +397,7 @@ export class BatchTranscriptionManager {
         }
 
         const requestedAt = new Date().toISOString();
-        await this.deps.app.fileManager.processFrontMatter(rawFile, (fm) => {
+        await this.deps.app.fileManager.processFrontMatter(rawFile, (fm: Record<string, unknown>) => {
           fm.videoTranscribed = false;
           fm.videoTranscriptionRequestedAt = requestedAt;
           delete fm.videoTranscriptionError;
@@ -423,7 +425,7 @@ export class BatchTranscriptionManager {
 
         const completedAt = new Date().toISOString();
 
-        await this.deps.app.fileManager.processFrontMatter(rawFile, (fm) => {
+        await this.deps.app.fileManager.processFrontMatter(rawFile, (fm: Record<string, unknown>) => {
           fm.videoTranscribed = true;
           fm.videoTranscribedAt = completedAt;
           delete fm.videoTranscriptionError;
@@ -463,7 +465,7 @@ export class BatchTranscriptionManager {
         try {
           const errFile = this.deps.app.vault.getAbstractFileByPath(item.filePath);
           if (errFile && errFile instanceof TFile) {
-            await this.deps.app.fileManager.processFrontMatter(errFile, (fm) => {
+            await this.deps.app.fileManager.processFrontMatter(errFile, (fm: Record<string, unknown>) => {
               fm.videoTranscribed = false;
               fm.videoTranscriptionError = errorMessage;
             });
@@ -498,6 +500,7 @@ export class BatchTranscriptionManager {
 
   private async downloadVideo(item: BatchItem): Promise<string | null> {
     if (!item.videoUrl) return null;
+    const videoUrl = item.videoUrl;
 
     try {
       // Extract platform and postId from the note's frontmatter
@@ -520,11 +523,12 @@ export class BatchTranscriptionManager {
         );
 
         if (vaultRelativePath) {
-          await this.deps.app.fileManager.processFrontMatter(rawFile, (frontmatter) => {
+          await this.deps.app.fileManager.processFrontMatter(rawFile, (frontmatter: Record<string, unknown>) => {
             frontmatter.videoDownloaded = true;
             if (!Array.isArray(frontmatter.downloadedUrls)) frontmatter.downloadedUrls = [];
-            if (!frontmatter.downloadedUrls.includes(item.videoUrl)) {
-              frontmatter.downloadedUrls.push(item.videoUrl);
+            const dlUrls = frontmatter.downloadedUrls as string[];
+            if (!dlUrls.includes(videoUrl)) {
+              dlUrls.push(videoUrl);
             }
             delete frontmatter.videoDownloadFailed;
             delete frontmatter.videoDownloadFailedUrls;
@@ -533,7 +537,7 @@ export class BatchTranscriptionManager {
         }
 
         // yt-dlp failed — update frontmatter and return null
-        await this.deps.app.fileManager.processFrontMatter(rawFile, (frontmatter) => {
+        await this.deps.app.fileManager.processFrontMatter(rawFile, (frontmatter: Record<string, unknown>) => {
           frontmatter.videoDownloadFailed = true;
           frontmatter.videoDownloadFailedUrls = [item.videoUrl];
         });
@@ -544,7 +548,7 @@ export class BatchTranscriptionManager {
       const media: Media[] = [{ type: 'video', url: item.videoUrl }];
       const results = await this.deps.downloadMedia(media, platform, postId, author);
       if (results.length > 0 && results[0]?.localPath) {
-        await this.deps.app.fileManager.processFrontMatter(rawFile, (frontmatter) => {
+        await this.deps.app.fileManager.processFrontMatter(rawFile, (frontmatter: Record<string, unknown>) => {
           frontmatter.videoDownloaded = true;
           delete frontmatter.videoDownloadFailed;
           delete frontmatter.videoDownloadFailedUrls;
@@ -552,7 +556,7 @@ export class BatchTranscriptionManager {
         return results[0].localPath;
       }
 
-      await this.deps.app.fileManager.processFrontMatter(rawFile, (frontmatter) => {
+      await this.deps.app.fileManager.processFrontMatter(rawFile, (frontmatter: Record<string, unknown>) => {
         frontmatter.videoDownloadFailed = true;
         frontmatter.videoDownloadFailedUrls = [item.videoUrl];
       });

@@ -22,7 +22,6 @@ interface ChildProcess {
 import type {
   AICommentResult,
   AICommentOptions,
-  AICommentProgress,
   AICommentMeta,
   AICommentType,
   MultiAIGenerationResult,
@@ -355,8 +354,6 @@ export class AICommentService {
       return [];
     }
 
-    const startTime = Date.now();
-
     // Prepare content file once for all CLIs
     const tempFile = await this.prepareContentFile(content);
 
@@ -639,7 +636,7 @@ Content:
         return this.buildCodexCommand(cliPath, finalPrompt, options.type, isWindows);
 
       default:
-        throw new AICommentError('CLI_NOT_INSTALLED', `Unknown CLI: ${cli}`);
+        throw new AICommentError('CLI_NOT_INSTALLED', `Unknown CLI: ${String(cli)}`);
     }
   }
 
@@ -918,7 +915,7 @@ Content:
       this.currentProcess = childProcess;
 
       // Register with ProcessManager for cleanup
-      const processId = ProcessManager.register(
+      ProcessManager.register(
         childProcess,
         'ai-comment',
         `${options.cli} ${options.type} comment`
@@ -1222,7 +1219,7 @@ Content:
     options: AICommentOptions
   ): { result?: string; text?: string } {
     try {
-      const event: ClaudeStreamEvent = JSON.parse(jsonLine);
+      const event = JSON.parse(jsonLine) as ClaudeStreamEvent;
 
       // Handle result event - extract final output
       if (event.type === 'result' && event.result) {
@@ -1290,7 +1287,7 @@ Content:
     options: AICommentOptions
   ): { text?: string; eventType?: string } {
     try {
-      const event = JSON.parse(jsonLine);
+      const event = JSON.parse(jsonLine) as Record<string, unknown>;
 
       // Handle init event - update progress
       if (event.type === 'init') {
@@ -1321,7 +1318,7 @@ Content:
 
         // Extract text content from assistant messages
         if (event.role === 'assistant' && event.content) {
-          return { text: event.content, eventType: 'message' };
+          return { text: typeof event.content === 'string' ? event.content : undefined, eventType: 'message' };
         }
         return { eventType: 'message' };
       }
@@ -1329,7 +1326,7 @@ Content:
       // Handle tool_use events - update progress
       if (event.type === 'tool_use') {
         if (event.tool_name && options.onProgress) {
-          const toolName = event.tool_name.toLowerCase();
+          const toolName = typeof event.tool_name === 'string' ? event.tool_name.toLowerCase() : '';
           if (toolName.includes('search') || toolName.includes('web')) {
             if (this.lastReportedPercentage < 35) {
               this.lastReportedPercentage = 35;
@@ -1355,7 +1352,7 @@ Content:
               this.lastReportedPercentage = 40;
               options.onProgress({
                 percentage: 40,
-                status: `Using ${event.tool_name}...`,
+                status: `Using ${typeof event.tool_name === 'string' ? event.tool_name : 'tool'}...`,
                 cli: options.cli,
                 phase: 'generating',
               });
@@ -1411,7 +1408,7 @@ Content:
     options: AICommentOptions
   ): { text?: string } {
     try {
-      const event = JSON.parse(jsonLine);
+      const event = JSON.parse(jsonLine) as Record<string, unknown>;
 
       // Handle thread.started - update progress
       if (event.type === 'thread.started' && options.onProgress) {
@@ -1441,7 +1438,8 @@ Content:
 
       // Handle item.started - show real-time progress for reasoning, command execution, etc.
       if (event.type === 'item.started' && event.item && options.onProgress) {
-        const itemType = event.item.type;
+        const item = event.item as Record<string, unknown>;
+        const itemType = item.type;
 
         if (itemType === 'reasoning') {
           if (this.lastReportedPercentage < 35) {
@@ -1454,7 +1452,7 @@ Content:
             });
           }
         } else if (itemType === 'command_execution') {
-          const cmd = event.item.command || '';
+          const cmd = typeof item.command === 'string' ? item.command : '';
           let statusMsg = 'Running command...';
 
           // Show more descriptive message based on command
@@ -1481,7 +1479,7 @@ Content:
             phase: 'generating',
           });
         } else if (itemType === 'function_call') {
-          const funcName = event.item.name || 'tool';
+          const funcName = typeof item.name === 'string' ? item.name : 'tool';
           if (this.lastReportedPercentage < 45) {
             this.lastReportedPercentage = 45;
             options.onProgress({
@@ -1506,11 +1504,12 @@ Content:
 
       // Handle item.updated - show streaming progress
       if (event.type === 'item.updated' && event.item && options.onProgress) {
-        const itemType = event.item.type;
+        const itemUpdated = event.item as Record<string, unknown>;
+        const itemType = itemUpdated.type;
 
-        if (itemType === 'reasoning' && event.item.text) {
+        if (itemType === 'reasoning' && itemUpdated.text) {
           // Show first few words of reasoning
-          const preview = event.item.text.slice(0, 30).replace(/\n/g, ' ');
+          const preview = (typeof itemUpdated.text === 'string' ? itemUpdated.text : '').slice(0, 30).replace(/\n/g, ' ');
           options.onProgress({
             percentage: Math.min(50, this.lastReportedPercentage + 5),
             status: `Thinking: ${preview}...`,
@@ -1522,7 +1521,8 @@ Content:
 
       // Handle item.completed - extract agent_message text and show progress for other types
       if (event.type === 'item.completed' && event.item) {
-        const itemType = event.item.type;
+        const itemCompleted = event.item as Record<string, unknown>;
+        const itemType = itemCompleted.type;
 
         // Show progress for completed reasoning
         if (itemType === 'reasoning' && options.onProgress) {
@@ -1539,10 +1539,10 @@ Content:
 
         // Show progress for completed command execution
         if (itemType === 'command_execution' && options.onProgress) {
-          const exitCode = event.item.exit_code;
+          const exitCode = itemCompleted.exit_code;
           if (exitCode === 0) {
             // Success - show what succeeded
-            const cmd = event.item.command || '';
+            const cmd = typeof itemCompleted.command === 'string' ? itemCompleted.command : '';
             let statusMsg = 'Command completed';
             if (cmd.includes('curl') && cmd.includes('bing')) {
               statusMsg = 'Bing search completed';
@@ -1583,7 +1583,7 @@ Content:
         }
 
         // agent_message type contains the response text
-        if (itemType === 'agent_message' && event.item.text) {
+        if (itemType === 'agent_message' && itemCompleted.text) {
           if (options.onProgress && this.lastReportedPercentage < 75) {
             this.lastReportedPercentage = 75;
             options.onProgress({
@@ -1593,18 +1593,18 @@ Content:
               phase: 'generating',
             });
           }
-          return { text: event.item.text };
+          return { text: typeof itemCompleted.text === 'string' ? itemCompleted.text : undefined };
         }
 
         // Handle other item types with content
-        if (event.item.content) {
-          if (typeof event.item.content === 'string') {
-            return { text: event.item.content };
+        if (itemCompleted.content) {
+          if (typeof itemCompleted.content === 'string') {
+            return { text: itemCompleted.content };
           }
-          if (Array.isArray(event.item.content)) {
-            const textParts = event.item.content
-              .filter((c: { type: string; text?: string }) => c.type === 'text' && c.text)
-              .map((c: { text: string }) => c.text);
+          if (Array.isArray(itemCompleted.content)) {
+            const textParts = (itemCompleted.content as Array<Record<string, unknown>>)
+              .filter((c) => c.type === 'text' && c.text)
+              .map((c) => c.text as string);
             if (textParts.length > 0) {
               return { text: textParts.join('') };
             }
@@ -1641,9 +1641,9 @@ Content:
           return { text: event.content };
         }
         if (Array.isArray(event.content)) {
-          const textParts = event.content
-            .filter((c: { type: string; text?: string }) => c.type === 'text' && c.text)
-            .map((c: { text: string }) => c.text);
+          const textParts = (event.content as Array<Record<string, unknown>>)
+            .filter((c) => c.type === 'text' && c.text)
+            .map((c) => c.text as string);
           if (textParts.length > 0) {
             return { text: textParts.join('') };
           }
@@ -1652,7 +1652,7 @@ Content:
 
       // Handle function_call events - update progress
       if (event.type === 'function_call' && event.name && options.onProgress) {
-        const toolName = event.name;
+        const toolName = typeof event.name === 'string' ? event.name : '';
         if (toolName.includes('search') || toolName.includes('web')) {
           this.lastReportedPercentage = 35;
           options.onProgress({
@@ -1836,14 +1836,14 @@ Content:
     const lines = output.replace(/\r\n/g, '\n').split('\n');
     let result = '';
     let accumulatedText = '';
-    let errorResult: { subtype?: string; is_error?: boolean } | null = null;
+    let errorResult: Record<string, unknown> | null = null;
 
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) continue;
 
       try {
-        const event = JSON.parse(trimmed);
+        const event = JSON.parse(trimmed) as Record<string, unknown>;
 
         // Check for error results (e.g., max_turns exceeded)
         if (event.type === 'result') {
@@ -1851,15 +1851,19 @@ Content:
             errorResult = event;
           }
           if (event.result) {
-            result = event.result;
+            result = typeof event.result === 'string' ? event.result : '';
           }
         }
 
         // Extract text from assistant messages
-        if (event.type === 'assistant' && event.message?.content) {
-          for (const content of event.message.content) {
-            if (content.type === 'text' && content.text) {
-              accumulatedText += content.text;
+        const message = event.message as Record<string, unknown> | undefined;
+        if (event.type === 'assistant' && message?.content) {
+          const content = message.content;
+          if (Array.isArray(content)) {
+            for (const c of content as Array<Record<string, unknown>>) {
+              if (c.type === 'text' && typeof c.text === 'string') {
+                accumulatedText += c.text;
+              }
             }
           }
         }

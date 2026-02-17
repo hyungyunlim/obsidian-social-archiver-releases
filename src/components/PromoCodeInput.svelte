@@ -5,19 +5,27 @@
    * Mobile-first design with Obsidian theming
    */
 
-  import { onMount } from 'svelte';
   import type {
     PromoCodeValidationResult,
-    AppliedPromoCode,
-    PromoCodeErrorCode
+    AppliedPromoCode
   } from '../types/license';
 
   // Props
-  export let onApply: (code: string) => Promise<AppliedPromoCode>;
-  export let onValidate: (code: string) => Promise<PromoCodeValidationResult>;
-  export let disabled: boolean = false;
-  export let placeholder: string = 'Enter promo code';
-  export let appliedCodes: AppliedPromoCode[] = [];
+  interface PromoCodeInputProps {
+    onApply: (code: string) => Promise<AppliedPromoCode>;
+    onValidate: (code: string) => Promise<PromoCodeValidationResult>;
+    disabled?: boolean;
+    placeholder?: string;
+    appliedCodes?: AppliedPromoCode[];
+  }
+
+  const {
+    onApply,
+    onValidate,
+    disabled = false,
+    placeholder = 'Enter promo code',
+    appliedCodes = []
+  }: PromoCodeInputProps = $props();
 
   // State
   let code = $state('');

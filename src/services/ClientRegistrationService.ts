@@ -73,14 +73,14 @@ export class ClientRegistrationService implements IService {
    * Dispose the service
    * Note: We don't unregister on dispose - the client stays registered
    */
-  async dispose(): Promise<void> {
+  dispose(): void {
     this.initialized = false;
   }
 
   /**
    * Check if service is healthy
    */
-  async isHealthy(): Promise<boolean> {
+  isHealthy(): boolean {
     return this.initialized && !!this.settings.syncClientId;
   }
 

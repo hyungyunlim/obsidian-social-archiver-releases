@@ -242,6 +242,8 @@ export interface PostData {
   comment?: string;         // User's personal note/comment
   like?: boolean;           // User's personal like (for sorting/filtering)
   archive?: boolean;        // Whether post is archived (hidden by default)
+  share?: boolean;          // YAML frontmatter share flag (true when published to web)
+  shareId?: string;         // Share ID from the web share service
   shareUrl?: string;        // Public share URL (if published)
   shareMode?: 'full' | 'preview'; // How to display shared post ('preview' for copyright-safe mode)
   publishedDate?: Date;     // Original post publication date
@@ -263,6 +265,21 @@ export interface PostData {
     content: string;
   }>;
   raw?: unknown; // Original API response
+  /**
+   * Whether the user has declined AI comment generation for this post
+   * Set when user clicks the "No" button on the AI comment banner
+   */
+  aiCommentDeclined?: boolean;
+  /**
+   * Error message from failed archive attempt
+   * Stored in frontmatter when archive status is 'failed'
+   */
+  errorMessage?: string;
+  /**
+   * Language detected during transcription
+   * Stored as frontmatter after Whisper transcription completes
+   */
+  transcriptionLanguage?: string;
   archiveStatus?: 'archiving' | 'completed' | 'failed'; // Archive status for loading states
   originalUrl?: string;     // Original URL (for preliminary documents with loading state)
   downloadedUrls?: string[]; // Downloaded URLs (for YouTube local video tracking)
@@ -310,6 +327,17 @@ export interface PostData {
    * Built when multiple ## Transcript / ## Transcript (Language) sections exist
    */
   multilangTranscript?: MultiLangTranscript;
+
+  /**
+   * Expired media items detected during download (CDN expired, download failed)
+   * Set at runtime during subscription post processing; not persisted to frontmatter.
+   */
+  _expiredMedia?: Array<{
+    originalUrl: string;
+    type: 'image' | 'video' | 'audio' | 'document';
+    reason: string;
+    detectedAt: string;
+  }>;
 
   /**
    * Transcription tracking (same pattern as downloadedUrls)

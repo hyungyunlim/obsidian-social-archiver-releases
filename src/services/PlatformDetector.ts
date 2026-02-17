@@ -315,11 +315,11 @@ export class PlatformDetector implements IService {
     this.patterns = PLATFORM_PATTERNS;
   }
 
-  async initialize(): Promise<void> {
+  initialize(): void {
     // No async initialization needed
   }
 
-  async dispose(): Promise<void> {
+  dispose(): void {
     // No cleanup needed
   }
 

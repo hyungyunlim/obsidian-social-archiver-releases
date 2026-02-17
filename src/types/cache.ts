@@ -7,15 +7,15 @@
  */
 export enum CacheTTL {
   /** 5 minutes - for frequently changing content */
-  SHORT = 5 * 60,
+  SHORT = 300,
   /** 1 hour - for moderately dynamic content */
-  MEDIUM = 60 * 60,
+  MEDIUM = 3600,
   /** 24 hours - for successful responses (default) */
-  STANDARD = 24 * 60 * 60,
+  STANDARD = 86400,
   /** 48 hours - for permanent content (images, videos) */
-  LONG = 48 * 60 * 60,
+  LONG = 172800,
   /** 7 days - for static content */
-  EXTENDED = 7 * 24 * 60 * 60,
+  EXTENDED = 604800,
 }
 
 /**
@@ -297,7 +297,7 @@ export interface ICacheService {
   /**
    * Warm cache with predefined URLs
    */
-  warm(urls: string[]): Promise<void>;
+  warm(urls: string[]): Promise<void> | void;
 
   /**
    * Clear all cache entries

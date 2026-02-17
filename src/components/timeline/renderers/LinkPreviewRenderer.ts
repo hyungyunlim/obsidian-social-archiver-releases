@@ -57,7 +57,7 @@ export class LinkPreviewRenderer {
    */
   public async renderPreviews(
     container: HTMLElement,
-    urls: (string | { url: string; [key: string]: any })[],
+    urls: (string | { url: string; [key: string]: unknown })[],
     onDelete?: (url: string) => Promise<void>
   ): Promise<void> {
     if (!urls || urls.length === 0) return;
@@ -205,7 +205,7 @@ export class LinkPreviewRenderer {
     });
 
     // Delete action
-    deleteIcon.addEventListener('click', async (e) => {
+    deleteIcon.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
 
@@ -215,9 +215,8 @@ export class LinkPreviewRenderer {
       wrapper.addClass('sa-dynamic-opacity');
 
       // Wait for animation
-      setTimeout(async () => {
-        await onDelete(url);
-        wrapper.remove();
+      setTimeout(() => {
+        void onDelete(url).then(() => { wrapper.remove(); });
       }, 200);
     });
 
@@ -271,7 +270,7 @@ export class LinkPreviewRenderer {
    * Update placeholder card with error state
    * @deprecated - Currently unused but kept for future error handling
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for future error handling, currently deprecated
   private _updateCardWithError(card: HTMLElement, preview: LinkPreview, _onRetry: () => void): void {
     if (!preview.error) return;
 
@@ -503,11 +502,13 @@ export class LinkPreviewRenderer {
         throw: false
       });
 
-      const result = response.json;
+      const result = response.json as Record<string, unknown>;
 
       if (response.status !== 200) {
         // API returned error - parse error details
-        const errorPreview = this.createErrorPreview(url, response.status, result.error?.message || `Error ${response.status}`);
+        const resultError = result['error'] as Record<string, unknown> | undefined;
+        const errorMsg = typeof resultError?.['message'] === 'string' ? resultError['message'] : `Error ${response.status}`;
+        const errorPreview = this.createErrorPreview(url, response.status, errorMsg);
 
         // Cache permanent errors (404, 403, 410), don't cache temporary errors (5xx, timeout)
         if (errorPreview.error && !errorPreview.error.retryable) {
@@ -517,8 +518,8 @@ export class LinkPreviewRenderer {
         return errorPreview;
       }
 
-      if (result.success && result.data) {
-        const preview: LinkPreview = result.data;
+      if (result['success'] && result['data']) {
+        const preview: LinkPreview = result['data'] as LinkPreview;
         // Cache successful result (evict oldest if over limit)
         this.previewCache.set(url, preview);
         this.evictOldestIfNeeded();

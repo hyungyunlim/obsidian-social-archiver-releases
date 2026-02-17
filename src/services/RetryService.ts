@@ -106,7 +106,7 @@ export class RetryService implements IService {
   /**
    * Initialize the service
    */
-  async initialize(): Promise<void> {
+  initialize(): void {
     if (this.isInitialized) {
       return;
     }
@@ -117,7 +117,7 @@ export class RetryService implements IService {
   /**
    * Cleanup resources
    */
-  async cleanup(): Promise<void> {
+  cleanup(): void {
     this.circuits.clear();
     this.isInitialized = false;
   }
@@ -151,7 +151,7 @@ export class RetryService implements IService {
       this.checkCircuit(circuitKey);
     }
 
-    let lastError: Error;
+    let lastError: Error = new Error('All retry attempts failed');
     let attempt = 0;
 
     while (attempt < retryConfig.maxAttempts) {
@@ -200,7 +200,7 @@ export class RetryService implements IService {
     }
 
     // All retries failed
-    throw lastError!;
+    throw lastError ?? new Error('All retry attempts failed');
   }
 
   /**
@@ -348,7 +348,7 @@ export class RetryService implements IService {
         state: CircuitState.CLOSED
       });
     }
-    return this.circuits.get(key)!;
+    return this.circuits.get(key) as CircuitStats;
   }
 
   /**

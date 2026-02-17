@@ -367,7 +367,7 @@ export class WebtoonReaderRenderer {
   private renderProgressIndicator(
     container: HTMLElement,
     scrollContainer: HTMLElement,
-    totalImages: number
+    _totalImages: number
   ): void {
     const progressBar = container.createDiv({ cls: 'webtoon-progress-bar wrr-progress-bar' });
 

@@ -228,7 +228,7 @@ export class ErrorNotificationService implements IService {
   /**
    * Initialize the service
    */
-  async initialize(): Promise<void> {
+  initialize(): void {
     if (this.isInitialized) {
       return;
     }
@@ -239,7 +239,7 @@ export class ErrorNotificationService implements IService {
   /**
    * Cleanup resources
    */
-  async cleanup(): Promise<void> {
+  cleanup(): void {
     // Clear all pending notice timers
     for (const timer of this.pendingTimers) {
       clearTimeout(timer);
@@ -297,7 +297,7 @@ export class ErrorNotificationService implements IService {
         cls: 'error-action-button'
       });
       buttonEl.addEventListener('click', () => {
-        options.action!.callback();
+        options.action?.callback();
         notice.hide();
       });
     }

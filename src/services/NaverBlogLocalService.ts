@@ -285,7 +285,6 @@ export class NaverBlogLocalService {
           if (response.text.includes('se-main-container') || response.text.includes('se-component')) {
             html = response.text;
             break;
-          } else {
           }
         }
       } catch (error) {
@@ -719,7 +718,7 @@ export class NaverBlogLocalService {
   /**
    * Extract stats from HTML
    */
-  private extractStats($: CheerioAPI): { likes: number; commentCount: number; viewCount: number } {
+  private extractStats(_$: CheerioAPI): { likes: number; commentCount: number; viewCount: number } {
     // These are often not available in the HTML
     return {
       likes: 0,
@@ -828,12 +827,12 @@ export class NaverBlogLocalService {
     for (const selector of contentSelectors) {
       const container = $(selector);
       if (container.length > 0) {
-        components = container.find('.se-component').toArray() as Element[];
+        components = container.find('.se-component').toArray();
         if (components.length > 0) {
           break;
         }
         // Also try .se-section
-        components = container.find('.se-section').toArray() as Element[];
+        components = container.find('.se-section').toArray();
         if (components.length > 0) {
           break;
         }
@@ -890,10 +889,10 @@ export class NaverBlogLocalService {
             // Try to extract JSON data with components
             const jsonMatch = scriptContent.match(/\{.*"components".*\}/s);
             if (jsonMatch) {
-              const data = JSON.parse(jsonMatch[0]);
-              const components = data.components || [];
-              if (Array.isArray(components) && components.length > 0) {
-                return this.extractContentFromComponents(components);
+              const data = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+              const components = Array.isArray(data.components) ? data.components : [];
+              if (components.length > 0) {
+                return this.extractContentFromComponents(components as BlogComponent[]);
               }
             }
           } catch {
@@ -1056,7 +1055,7 @@ export class NaverBlogLocalService {
       if (textModule.length > 0) {
         textModule.children().each((_, child) => {
           const $child = $(child);
-          const tagName = (child as Element).tagName?.toLowerCase();
+          const tagName = child.tagName?.toLowerCase();
 
           if (tagName === 'p') {
             const paragraphText = $child.text().trim();
@@ -1193,13 +1192,14 @@ export class NaverBlogLocalService {
         const moduleData = scriptEl.attr('data-module-v2') || scriptEl.attr('data-module');
         if (moduleData) {
           try {
-            const data = JSON.parse(moduleData);
-            if (data.type === 'v2_video' && data.data?.vid && data.data?.inkey) {
+            const data = JSON.parse(moduleData) as Record<string, unknown>;
+            const dataData = data.data as Record<string, unknown> | undefined;
+            if (data.type === 'v2_video' && dataData?.vid && dataData?.inkey) {
               // Use placeholder with vid:inkey for video download
-              content += `<!--VIDEO:${data.data.vid}:${data.data.inkey}-->\n\n`;
-            } else if (data.data?.vid) {
+              content += `<!--VIDEO:${String(dataData.vid)}:${String(dataData.inkey)}-->\n\n`;
+            } else if (dataData?.vid) {
               // Just vid, will need to fetch inkey separately
-              content += `<!--VIDEO:${data.data.vid}-->\n\n`;
+              content += `<!--VIDEO:${String(dataData.vid)}-->\n\n`;
             } else {
               content += '[비디오]\n\n';
             }
@@ -1220,11 +1220,11 @@ export class NaverBlogLocalService {
         const moduleData = scriptEl.attr('data-module-v2') || scriptEl.attr('data-module');
         if (moduleData) {
           try {
-            const data = JSON.parse(moduleData);
-            const oembedData = data.data;
+            const data = JSON.parse(moduleData) as Record<string, unknown>;
+            const oembedData = data.data as Record<string, unknown> | undefined;
             if (oembedData) {
-              const url = oembedData.inputUrl || oembedData.url || '';
-              const title = oembedData.title || '';
+              const url = (typeof oembedData.inputUrl === 'string' ? oembedData.inputUrl : null) || (typeof oembedData.url === 'string' ? oembedData.url : '') || '';
+              const title = typeof oembedData.title === 'string' ? oembedData.title : '';
               if (url) {
                 if (url.includes('youtube.com') || url.includes('youtu.be')) {
                   content += `![${title || 'YouTube'}](${url})\n\n`;
@@ -1409,11 +1409,12 @@ export class NaverBlogLocalService {
       });
 
       if (response.status === 200 && response.text) {
-        const data = JSON.parse(response.text);
+        const data = JSON.parse(response.text) as Record<string, unknown>;
 
         if (data.taglist && Array.isArray(data.taglist)) {
-          for (const tagInfo of data.taglist) {
-            if (tagInfo.logno === logNo && tagInfo.tagName) {
+          for (const tagInfoRaw of data.taglist) {
+            const tagInfo = tagInfoRaw as Record<string, unknown>;
+            if (tagInfo.logno === logNo && typeof tagInfo.tagName === 'string') {
               const decodedTags = decodeURIComponent(tagInfo.tagName);
               return decodedTags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0);
             }
@@ -1481,8 +1482,8 @@ export class NaverBlogLocalService {
       });
 
       if (response.status === 200) {
-        const data = response.json;
-        if (data.inkey) {
+        const data = response.json as Record<string, unknown>;
+        if (typeof data.inkey === 'string') {
           return data.inkey;
         }
       }
@@ -1526,17 +1527,20 @@ export class NaverBlogLocalService {
         return null;
       }
 
-      const data = response.json;
+      const data = response.json as Record<string, unknown>;
       const qualities: NaverVideoQuality[] = [];
 
       // Extract video list from response
-      if (data.videos?.list) {
-        for (const video of data.videos.list) {
+      const videos = data.videos as Record<string, unknown> | undefined;
+      if (videos?.list && Array.isArray(videos.list)) {
+        for (const videoRaw of videos.list) {
+          const video = videoRaw as Record<string, unknown>;
+          const enc = video.encodingOption as Record<string, unknown> | undefined;
           qualities.push({
-            name: video.encodingOption?.name || 'unknown',
-            width: video.encodingOption?.width || 0,
-            height: video.encodingOption?.height || 0,
-            source: video.source,
+            name: typeof enc?.name === 'string' ? enc.name : 'unknown',
+            width: typeof enc?.width === 'number' ? enc.width : 0,
+            height: typeof enc?.height === 'number' ? enc.height : 0,
+            source: typeof video.source === 'string' ? video.source : '',
           });
         }
       }
@@ -1924,7 +1928,7 @@ export class NaverBlogLocalService {
       .replace(/&#39;/g, "'")
       .replace(/&apos;/g, "'")
       .replace(/&nbsp;/g, ' ')
-      .replace(/&#(\d+);/g, (_, num) => String.fromCharCode(parseInt(num, 10)))
-      .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+      .replace(/&#(\d+);/g, (_, num: string) => String.fromCharCode(parseInt(num, 10)))
+      .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)));
   }
 }

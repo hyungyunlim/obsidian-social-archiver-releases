@@ -13,6 +13,7 @@ import {
 	type QueueEventHandler,
 	type QueueConfig,
 	type DeduplicationKeyFn,
+	type QueueEventType,
 } from '@/types/queue';
 
 /**
@@ -170,7 +171,7 @@ export class RequestQueueManager<T = unknown> implements IService {
 				const result = await Promise.race([fn(), timeoutPromise]);
 
 				queuedRequest.completedAt = new Date();
-				const processingTime = queuedRequest.completedAt.getTime() - queuedRequest.startedAt!.getTime();
+				const processingTime = queuedRequest.completedAt.getTime() - (queuedRequest.startedAt?.getTime() ?? 0);
 
 				this.trackProcessingTime(processingTime);
 				this.metrics.completed++;
@@ -285,7 +286,7 @@ export class RequestQueueManager<T = unknown> implements IService {
 		if (!this.eventHandlers.has(event)) {
 			this.eventHandlers.set(event, []);
 		}
-		this.eventHandlers.get(event)!.push(handler);
+		this.eventHandlers.get(event)?.push(handler);
 	}
 
 	/**
@@ -336,7 +337,7 @@ export class RequestQueueManager<T = unknown> implements IService {
 	 */
 	private emit(type: string, data: Partial<QueueEvent<T>>): void {
 		const event: QueueEvent<T> = {
-			type: type as any,
+			type: type as QueueEventType,
 			timestamp: new Date(),
 			...data,
 		};

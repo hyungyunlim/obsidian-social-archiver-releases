@@ -77,7 +77,7 @@ export class TranscriptionService {
     }
 
     // 2. Validate media file exists and format
-    await this.validateAudioFile(mediaPath);
+    this.validateAudioFile(mediaPath);
 
     // 3. Convert video input to WAV for Whisper CLI compatibility (especially whisper.cpp)
     const preparedInput = await this.prepareInputForTranscription(mediaPath, options.signal);
@@ -120,7 +120,7 @@ export class TranscriptionService {
   /**
    * Validate media file exists and has supported format
    */
-  private async validateAudioFile(audioPath: string): Promise<void> {
+  private validateAudioFile(audioPath: string): void {
     const fs = nodeRequire('fs') as typeof import('fs');
     const path = nodeRequire('path') as typeof import('path');
 
@@ -237,6 +237,7 @@ export class TranscriptionService {
     const wavPath = await this.extractAudioFromVideo(mediaPath, signal);
     return {
       path: wavPath,
+      // eslint-disable-next-line @typescript-eslint/require-await
       cleanup: async () => {
         const fs = nodeRequire('fs') as typeof import('fs');
         try {
@@ -492,7 +493,7 @@ export class TranscriptionService {
       }
 
       default:
-        throw new TranscriptionError('UNKNOWN', `Unsupported Whisper variant: ${variant}`);
+        throw new TranscriptionError('UNKNOWN', `Unsupported Whisper variant: ${String(variant)}`);
     }
   }
 
@@ -611,7 +612,7 @@ export class TranscriptionService {
       this.currentProcess = childProcess;
 
       // Register with ProcessManager for cleanup on plugin unload
-      const processId = ProcessManager.register(childProcess, 'transcription', `Whisper ${options.model}`);
+      ProcessManager.register(childProcess, 'transcription', `Whisper ${options.model}`);
 
       // Setup timeout handler
       let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -656,7 +657,7 @@ export class TranscriptionService {
         this.parseProgress(output, audioDuration, options.onProgress);
       });
 
-      childProcess.on('close', async (code: number | null) => {
+      childProcess.on('close', (code: number | null) => { (() => {
         this.currentProcess = null;
 
         // Clear timeout handler
@@ -708,7 +709,7 @@ export class TranscriptionService {
           console.error(`[TranscriptionService] Process failed. Exit code: ${code}, stderr: ${stderrData.slice(0, 500)}`);
           reject(this.parseError(stderrData, code));
         }
-      });
+      })(); });
 
       childProcess.on('error', (error: Error) => {
         console.error(`[TranscriptionService] Process spawn error:`, error);
@@ -822,10 +823,11 @@ export class TranscriptionService {
     model: WhisperModel,
     processingTime: number
   ): TranscriptionResult {
-    const json = JSON.parse(jsonContent);
+    const json = JSON.parse(jsonContent) as Record<string, unknown>;
 
     // Handle different JSON formats from different Whisper variants
-    const rawSegments = json.segments || json.transcription || [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawSegments = (Array.isArray(json.segments) ? json.segments : (Array.isArray(json.transcription) ? json.transcription : []));
     const segments: TranscriptionSegment[] = rawSegments.map(
       (segment: {
         id?: number;
@@ -911,14 +913,19 @@ export class TranscriptionService {
 
     // Calculate duration from last segment
     const lastSegment = segments[segments.length - 1];
-    const duration = lastSegment?.end || json.duration || 0;
+    const jsonResult = json.result as Record<string, unknown> | undefined;
+    const jsonInfo = json.info as Record<string, unknown> | undefined;
+    const duration = lastSegment?.end || (typeof json.duration === 'number' ? json.duration : 0);
 
     return {
       segments,
       // whisper.cpp: detected language is in result.language
       // faster-whisper: may be in info.language
       // openai-whisper: language is at top level
-      language: json.result?.language || json.info?.language || json.language || 'en',
+      language: (typeof jsonResult?.language === 'string' ? jsonResult.language : null)
+        ?? (typeof jsonInfo?.language === 'string' ? jsonInfo.language : null)
+        ?? (typeof json.language === 'string' ? json.language : null)
+        ?? 'en',
       duration,
       processingTime,
       model,

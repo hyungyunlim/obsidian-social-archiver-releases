@@ -20,9 +20,22 @@ export const VIEW_TYPE_TIMELINE = 'social-archiver-timeline';
  *
  * @extends ItemView
  */
+interface TimelineComponent {
+  isFullscreenActive?(): boolean;
+  handleVaultFileChange?(type: string, filePath: string, oldPath?: string): Promise<void>;
+  reload?(): Promise<void>;
+  destroy?(): void;
+  softRefresh?(): Promise<void>;
+  openStreamingFullscreen?(
+    seriesInfo: { seriesId: string; seriesTitle: string; author: string; platform: string; thumbnailUrl?: string },
+    episodeDetail: { titleId: number; no: number; subtitle: string; imageUrls: string[]; thumbnailUrl?: string },
+    episodeTitle: string
+  ): Promise<void>;
+}
+
 export class TimelineView extends ItemView {
   private plugin: SocialArchiverPlugin;
-  private component: any;
+  private component: TimelineComponent | undefined;
   private suppressRefresh = false; // Suppress refresh during batch operations
   private uiDeletedPaths: Set<string> = new Set(); // Track files deleted via UI to skip refresh
   private uiModifiedPaths: Set<string> = new Set(); // Track files modified via UI to skip refresh
@@ -48,7 +61,7 @@ export class TimelineView extends ItemView {
     if (this.suppressRefresh) return;
     // Don't refresh while fullscreen or reader mode is active - would destroy overlay state
     if (this.component?.isFullscreenActive?.()) return;
-    this.refresh();
+    void this.refresh();
   }, 1000, true);
 
   /**
@@ -75,7 +88,7 @@ export class TimelineView extends ItemView {
     if (!this.component?.handleVaultFileChange) {
       // Fallback: full refresh if component doesn't support incremental updates
       this.incrementalUpdateInProgress = false;
-      this.refresh();
+      void this.refresh();
       return;
     }
 
@@ -89,7 +102,7 @@ export class TimelineView extends ItemView {
 
         // If too many changes, fall back to full reload (batch operations)
         if (changes.length > 20) {
-          await this.component.reload();
+          await this.component?.reload?.();
           continue;
         }
 
@@ -184,7 +197,7 @@ export class TimelineView extends ItemView {
    * Called when the view is opened
    * Initializes the timeline container and renders content
    */
-  async onOpen(): Promise<void> {
+  onOpen(): Promise<void> {
     // Add archive button to header (before containerEl.empty())
     this.addAction('bookmark-plus', 'Archive social media post', () => {
       // Open archive modal via plugin
@@ -297,7 +310,7 @@ export class TimelineView extends ItemView {
                     const { ShareAPIClient } = await import('../services/ShareAPIClient');
                     const shareClient = new ShareAPIClient({
                       baseURL: this.plugin.settings.workerUrl,
-                      apiKey: this.plugin.settings.licenseKey,
+                      apiKey: this.plugin.settings.authToken,
                       vault: this.app.vault
                     });
 
@@ -360,13 +373,15 @@ export class TimelineView extends ItemView {
         this.debouncedRefresh();
       })
     );
+
+    return Promise.resolve();
   }
 
   /**
    * Called when the view is closed
    * Cleanup resources and destroy timeline
    */
-  async onClose(): Promise<void> {
+  onClose(): Promise<void> {
     this.teardownTimelineSafeAreaFallback();
 
     // Cancel any pending debounced refresh
@@ -381,9 +396,10 @@ export class TimelineView extends ItemView {
     this.pendingCleanupTimers.clear();
 
     if (this.component) {
-      this.component.destroy();
+      this.component?.destroy?.();
       this.component = undefined;
     }
+    return Promise.resolve();
   }
 
   /**
@@ -393,7 +409,7 @@ export class TimelineView extends ItemView {
   public async refresh(): Promise<void> {
     // Reload the timeline without re-mounting
     if (this.component && this.component.reload) {
-      await this.component.reload();
+      await this.component?.reload?.();
     }
   }
 
@@ -463,7 +479,7 @@ export class TimelineView extends ItemView {
    * Open streaming episode in fullscreen mode
    * Used by WebtoonArchiveModal for stream-first mode
    */
-  public async openStreamingFullscreen(
+  public openStreamingFullscreen(
     seriesInfo: {
       seriesId: string;
       seriesTitle: string;
@@ -483,6 +499,7 @@ export class TimelineView extends ItemView {
     if (this.component?.openStreamingFullscreen) {
       return this.component.openStreamingFullscreen(seriesInfo, episodeDetail, episodeTitle);
     }
+    return Promise.resolve();
   }
 
   /**

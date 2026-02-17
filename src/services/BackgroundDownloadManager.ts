@@ -15,7 +15,6 @@ import {
   WebtoonDownloadQueue,
   type DownloadQueueConfig,
   type DownloadProgress,
-  type EpisodeDownloadJob,
 } from './WebtoonDownloadQueue';
 import type { WebtoonAPIInfo, EpisodeDetail } from './NaverWebtoonLocalService';
 import type { TimelineView } from '../views/TimelineView';
@@ -317,8 +316,8 @@ export class BackgroundDownloadManager extends EventTarget {
     const episodeFolder = `${this.mediaBasePath}/naver-webtoon/${titleId}/${episodeNo}`;
     const folder = this.app.vault.getAbstractFileByPath(episodeFolder);
     if (folder) {
-      const files = (folder as any).children || [];
-      const hasImages = files.some((f: any) => f.name && /\.(jpg|jpeg|png|webp|gif)$/i.test(f.name));
+      const files = (folder as { children?: Array<{ name?: string }> }).children || [];
+      const hasImages = files.some((f) => f.name && /\.(jpg|jpeg|png|webp|gif)$/i.test(f.name));
       if (hasImages) {
         return;
       }
@@ -380,9 +379,10 @@ export class BackgroundDownloadManager extends EventTarget {
 
       tempQueue.addEventListener('markdown-created', ((e: CustomEvent) => {
         clearTimeout(timeoutId);
+        const detail = e.detail as Record<string, unknown>;
         resolve({
-          filePath: e.detail.filePath,
-          imageUrls: e.detail.imageUrls || [],
+          filePath: typeof detail['filePath'] === 'string' ? detail['filePath'] : '',
+          imageUrls: Array.isArray(detail['imageUrls']) ? (detail['imageUrls'] as string[]) : [],
         });
       }) as EventListener);
 
@@ -475,7 +475,7 @@ export class BackgroundDownloadManager extends EventTarget {
     this.isProcessing = true;
 
     try {
-      while (true) {
+      for (;;) {
         // Find next pending session
         const pendingSession = this.getAllSessions().find(s => s.status === 'pending');
         if (!pendingSession) break;
@@ -539,21 +539,23 @@ export class BackgroundDownloadManager extends EventTarget {
   private setupSessionEvents(session: DownloadSession): void {
     const queue = session.queue;
 
-    queue.addEventListener('episode-progress', ((e: CustomEvent) => {
+    queue.addEventListener('episode-progress', ((_e: CustomEvent) => {
       session.progress = queue.getProgress();
       this.emit('session-progress', { session, progress: session.progress });
       this.updateStatusBar();
     }) as EventListener);
 
-    queue.addEventListener('episode-completed', ((e: CustomEvent) => {
+    queue.addEventListener('episode-completed', ((_e: CustomEvent) => {
       session.progress = queue.getProgress();
       this.updateStatusBar();
     }) as EventListener);
 
     queue.addEventListener('episode-failed', ((e: CustomEvent) => {
       session.progress = queue.getProgress();
+      const detail = e.detail as Record<string, unknown>;
+      const job = detail['job'] as Record<string, unknown> | undefined;
       console.warn(
-        `[BackgroundDownloadManager] Episode failed: ${e.detail.job?.episodeNo} - ${e.detail.error}`
+        `[BackgroundDownloadManager] Episode failed: ${String(job?.['episodeNo'])} - ${String(detail['error'])}`
       );
     }) as EventListener);
   }

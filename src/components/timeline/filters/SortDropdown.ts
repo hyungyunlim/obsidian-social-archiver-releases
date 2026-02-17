@@ -124,19 +124,19 @@ export class SortDropdown {
       orderIcon.addClass('sa-text-muted');
     });
 
-    orderBtn.addEventListener('click', async () => {
+    orderBtn.addEventListener('click', () => {
       // Toggle order
       const newOrder = sortState.order === 'newest' ? 'oldest' : 'newest';
       sortState.order = newOrder;
 
       // Save to settings
       this.plugin.settings.timelineSortOrder = newOrder;
-      await this.plugin.saveSettings();
-
-      // Update UI and notify
-      updateOrderButton();
-      this.onSortChangeCallback?.({ order: newOrder });
-      this.onRerenderCallback?.();
+      void this.plugin.saveSettings().then(() => {
+        // Update UI and notify
+        updateOrderButton();
+        this.onSortChangeCallback?.({ order: newOrder });
+        this.onRerenderCallback?.();
+      });
     });
   }
 
@@ -162,7 +162,7 @@ export class SortDropdown {
     ];
 
     sortOptions.forEach((option, index) => {
-      this.renderSortOption(this.dropdownEl!, option, sortState, index > 0, updateSortByButton);
+      this.renderSortOption(this.dropdownEl as HTMLElement, option, sortState, index > 0, updateSortByButton);
     });
 
     this.attachOutsideClickHandler(sortByBtn);
@@ -199,17 +199,17 @@ export class SortDropdown {
     const label = item.createSpan({ text: option.label });
     label.addClass('sa-text-base', 'sa-flex-1');
 
-    item.addEventListener('click', async () => {
+    item.addEventListener('click', () => {
       sortState.by = option.by;
 
       // Save to settings
       this.plugin.settings.timelineSortBy = sortState.by;
-      await this.plugin.saveSettings();
-
-      this.close();
-      updateSortByButton();
-      this.onSortChangeCallback?.({ by: option.by });
-      this.onRerenderCallback?.();
+      void this.plugin.saveSettings().then(() => {
+        this.close();
+        updateSortByButton();
+        this.onSortChangeCallback?.({ by: option.by });
+        this.onRerenderCallback?.();
+      });
     });
 
     item.addEventListener('mouseenter', () => {

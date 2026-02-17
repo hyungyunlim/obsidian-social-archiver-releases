@@ -63,14 +63,8 @@ interface UpdateStateRequest {
   creditsUsed?: number;
 }
 
-interface UpdateStateResponse {
-  success: boolean;
-  subscription?: Subscription;
-  error?: {
-    code: string;
-    message: string;
-  };
-}
+// UpdateStateResponse kept for future use
+// interface UpdateStateResponse { ... }
 
 /**
  * Pending notification from Worker (hybrid architecture)
@@ -104,18 +98,8 @@ interface PendingNotificationsResponse {
   };
 }
 
-interface AckNotificationsResponse {
-  success: boolean;
-  data?: {
-    acknowledged: string[];
-    failed: string[];
-    total: number;
-  };
-  error?: {
-    code: string;
-    message: string;
-  };
-}
+// AckNotificationsResponse kept for future use
+// interface AckNotificationsResponse { ... }
 
 // ============================================================================
 // RSS Cache Types
@@ -176,16 +160,14 @@ export class BrunchSubscriptionPoller {
 
     // Process pending notifications first (hybrid architecture)
     // These are posts detected by Worker while Obsidian was inactive
-    this.initialDelayId = window.setTimeout(async () => {
+    this.initialDelayId = window.setTimeout(() => {
       this.initialDelayId = null;
-      await this.processPendingNotifications();
-      await this.pollAll();
+      void this.processPendingNotifications().then(() => this.pollAll());
     }, 5000);
 
     this.intervalId = window.setInterval(
-      async () => {
-        await this.processPendingNotifications();
-        await this.pollAll();
+      () => {
+        void this.processPendingNotifications().then(() => this.pollAll());
       },
       this.pollingInterval
     );
@@ -541,7 +523,7 @@ export class BrunchSubscriptionPoller {
 
   private async archivePost(
     brunchPost: BrunchPostData,
-    subscription: Subscription
+    _subscription: Subscription
   ): Promise<void> {
     // Convert BrunchPostData to PostData format
     const postData: PostData = {
@@ -573,7 +555,7 @@ export class BrunchSubscriptionPoller {
     const markdownConverter = new MarkdownConverter({
       frontmatterSettings: this.plugin.settings.frontmatter,
     });
-    const markdown = await markdownConverter.convert(postData);
+    const markdown = markdownConverter.convert(postData);
 
     // Save to vault
     const vaultManager = new VaultManager({
@@ -675,7 +657,7 @@ export class BrunchSubscriptionPoller {
 
   private async loadRSSCache(): Promise<void> {
     try {
-      const stored = await this.plugin.loadData();
+      const stored = await this.plugin.loadData() as Record<string, unknown> | undefined;
       if (stored?.[RSS_CACHE_STORAGE_KEY]) {
         const cacheData = stored[RSS_CACHE_STORAGE_KEY] as RSSCacheStorage;
         if (cacheData.version === 1 && cacheData.entries) {
@@ -706,7 +688,7 @@ export class BrunchSubscriptionPoller {
         entries: Object.fromEntries(this.rssCache),
       };
 
-      const existingData = (await this.plugin.loadData()) || {};
+      const existingData = ((await this.plugin.loadData() as Record<string, unknown> | undefined) ?? {});
       existingData[RSS_CACHE_STORAGE_KEY] = cacheData;
       await this.plugin.saveData(existingData);
     } catch (error) {

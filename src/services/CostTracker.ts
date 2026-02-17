@@ -152,7 +152,7 @@ export class CostTracker implements IService {
    */
   getAllTransactions(): CreditTransaction[] {
     this.ensureInitialized();
-    return this.transactionIndex.map((id) => this.transactions.get(id)!).filter(Boolean);
+    return this.transactionIndex.map((id) => this.transactions.get(id)).filter((t): t is CreditTransaction => t !== undefined);
   }
 
   /**

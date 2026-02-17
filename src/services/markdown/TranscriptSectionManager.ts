@@ -52,7 +52,8 @@ export function parseTranscriptSections(
   }
 
   for (let i = 0; i < matches.length; i++) {
-    const match = matches[i]!;
+    const match = matches[i];
+    if (!match) continue;
     const nextMatch = matches[i + 1];
 
     const headerEnd = match.index + match.fullMatch.length;
@@ -66,7 +67,7 @@ export function parseTranscriptSections(
       const afterHeader = markdown.substring(headerEnd);
       const nextSectionMatch = afterHeader.match(/\n(?=## |---\s*$)/m);
       bodyEnd = nextSectionMatch
-        ? headerEnd + nextSectionMatch.index!
+        ? headerEnd + (nextSectionMatch.index ?? 0)
         : markdown.length;
     }
 
@@ -138,7 +139,8 @@ export function insertTranscriptSection(
 
   if (sections.length > 0) {
     // Insert after the last transcript section
-    const lastSection = sections[sections.length - 1]!;
+    const lastSection = sections[sections.length - 1];
+    if (!lastSection) return markdown + sectionText;
     const insertPos = lastSection.end;
     return markdown.slice(0, insertPos) + sectionText + markdown.slice(insertPos);
   }

@@ -71,7 +71,7 @@ export class ApiClient implements IService {
     await this.healthCheck();
   }
 
-  async dispose(): Promise<void> {
+  dispose(): void {
     // Cancel any pending requests
     this.abortController?.abort();
   }
@@ -213,7 +213,7 @@ export class ApiClient implements IService {
   async submitStats(platform: string, downloadTime: number): Promise<void> {
     // Don't block or throw errors - this is optional telemetry
     try {
-      await this.request<void>('/api/stats/download-time', {
+      await this.request<undefined>('/api/stats/download-time', {
         method: 'POST',
         body: JSON.stringify({
           platform,
@@ -260,7 +260,7 @@ export class ApiClient implements IService {
         clearTimeout(timeoutId);
 
         // Parse response
-        const data = response.json;
+        const data = response.json as Record<string, unknown>;
 
         if (response.status !== 200) {
           return {

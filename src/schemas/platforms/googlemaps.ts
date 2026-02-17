@@ -15,10 +15,9 @@ export const GoogleMapsPlaceIdSchema = z
  * Google Maps domain validation
  * Supports various Google Maps URL formats including country-specific domains
  */
-const googleMapsDomainRegex =
-  /^(https?:\/\/)?(www\.)?(maps\.)?google\.[a-z.]+\/maps\//i;
-
-const googleMapsShortlinkRegex = /^(https?:\/\/)?goo\.gl\/maps\/[A-Za-z0-9]+/i;
+// Note: These patterns are for future URL validation use:
+// Domain regex: /^(https?:\/\/)?(www\.)?(maps\.)?google\.[a-z.]+\/maps\//i
+// Shortlink regex: /^(https?:\/\/)?goo\.gl\/maps\/[A-Za-z0-9]+/i
 
 /**
  * Google Maps Place URL validation

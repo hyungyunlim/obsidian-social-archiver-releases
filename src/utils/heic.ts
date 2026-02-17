@@ -14,11 +14,11 @@ export function isHEIC(data: ArrayBuffer): boolean {
 
   // HEIC/HEIF files start with ftyp box
   // Check for 'ftyp' signature at bytes 4-7
-  const brand = String.fromCharCode(bytes[4]!, bytes[5]!, bytes[6]!, bytes[7]!);
+  const brand = String.fromCharCode(bytes[4] ?? 0, bytes[5] ?? 0, bytes[6] ?? 0, bytes[7] ?? 0);
   if (brand !== 'ftyp') return false;
 
   // Check brand name at bytes 8-11 (heic, heix, hevc, heim, heis, heif, mif1, msf1, etc)
-  const brandName = String.fromCharCode(bytes[8]!, bytes[9]!, bytes[10]!, bytes[11]!).toLowerCase();
+  const brandName = String.fromCharCode(bytes[8] ?? 0, bytes[9] ?? 0, bytes[10] ?? 0, bytes[11] ?? 0).toLowerCase();
   return brandName.startsWith('heic') || brandName.startsWith('heif') ||
          brandName.startsWith('heix') || brandName.startsWith('heim') ||
          brandName.startsWith('heis') || brandName.startsWith('hevx') ||
@@ -40,16 +40,16 @@ export function getHEICBrandInfo(data: ArrayBuffer): {
   if (bytes.length < 12) return null;
 
   // Read ftyp box size (first 4 bytes, big-endian)
-  const ftypSize = (bytes[0]! << 24) | (bytes[1]! << 16) | (bytes[2]! << 8) | bytes[3]!;
+  const ftypSize = ((bytes[0] ?? 0) << 24) | ((bytes[1] ?? 0) << 16) | ((bytes[2] ?? 0) << 8) | (bytes[3] ?? 0);
 
-  const brand = String.fromCharCode(bytes[4]!, bytes[5]!, bytes[6]!, bytes[7]!);
-  const brandName = String.fromCharCode(bytes[8]!, bytes[9]!, bytes[10]!, bytes[11]!);
+  const brand = String.fromCharCode(bytes[4] ?? 0, bytes[5] ?? 0, bytes[6] ?? 0, bytes[7] ?? 0);
+  const brandName = String.fromCharCode(bytes[8] ?? 0, bytes[9] ?? 0, bytes[10] ?? 0, bytes[11] ?? 0);
 
   // Extract compatible brands (after minor_version at bytes 12-15)
   const compatibleBrands: string[] = [];
   for (let i = 16; i < Math.min(ftypSize, bytes.length); i += 4) {
     if (i + 4 <= bytes.length) {
-      const cb = String.fromCharCode(bytes[i]!, bytes[i + 1]!, bytes[i + 2]!, bytes[i + 3]!);
+      const cb = String.fromCharCode(bytes[i] ?? 0, bytes[i + 1] ?? 0, bytes[i + 2] ?? 0, bytes[i + 3] ?? 0);
       if (cb.trim()) compatibleBrands.push(cb);
     }
   }
@@ -84,8 +84,16 @@ async function tryLibheifJsConversion(
 ): Promise<ArrayBuffer | null> {
   try {
     // Use the pre-bundled WASM version for browser compatibility
-    const libheif = await import('libheif-js/wasm-bundle');
-    const decoder = new libheif.HeifDecoder();
+    // libheif-js doesn't have TS declarations so we cast as needed
+    const libheif = await import('libheif-js/wasm-bundle') as Record<string, unknown>;
+    const HeifDecoderClass = libheif.HeifDecoder as new () => {
+      decode(data: Uint8Array): Array<{
+        get_width(): number;
+        get_height(): number;
+        display(imageData: ImageData, callback: (data: ImageData | null) => void): void;
+      }>;
+    };
+    const decoder = new HeifDecoderClass();
 
     const heifData = decoder.decode(new Uint8Array(data));
     if (!heifData || heifData.length === 0) {
@@ -125,9 +133,9 @@ async function tryLibheifJsConversion(
     // Convert to JPEG
     return new Promise((resolve) => {
       canvas.toBlob(
-        async (blob) => {
+        (blob) => {
           if (blob) {
-            resolve(await blob.arrayBuffer());
+            void blob.arrayBuffer().then(resolve);
           } else {
             resolve(null);
           }
@@ -173,10 +181,10 @@ async function tryNativeHEICConversion(
 
         ctx.drawImage(img, 0, 0);
         canvas.toBlob(
-          async (jpegBlob) => {
+          (jpegBlob) => {
             cleanup();
             if (jpegBlob) {
-              resolve(await jpegBlob.arrayBuffer());
+              void jpegBlob.arrayBuffer().then(resolve);
             } else {
               resolve(null);
             }

@@ -93,7 +93,7 @@ export class GracePeriodManager implements IService {
   /**
    * Initialize the manager
    */
-  async initialize(): Promise<void> {
+  initialize(): void {
     if (this.initialized) {
       this.logger?.warn('GracePeriodManager already initialized');
       return;
@@ -113,7 +113,7 @@ export class GracePeriodManager implements IService {
   /**
    * Shutdown the manager
    */
-  async shutdown(): Promise<void> {
+  shutdown(): void {
     if (!this.initialized) {
       return;
     }

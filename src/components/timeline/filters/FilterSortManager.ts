@@ -85,8 +85,8 @@ export class FilterSortManager {
    * Apply filters and sorting to posts
    */
   applyFiltersAndSort(posts: PostData[]): PostData[] {
-    let filtered = this.applyFilters(posts);
-    let sorted = this.applySort(filtered);
+    const filtered = this.applyFilters(posts);
+    const sorted = this.applySort(filtered);
     return sorted;
   }
 
@@ -229,8 +229,8 @@ export class FilterSortManager {
    * Returns sorted array of PostIndexEntry.
    */
   applyFiltersAndSortIndex(entries: PostIndexEntry[]): PostIndexEntry[] {
-    let filtered = this.applyFiltersIndex(entries);
-    let sorted = this.applySortIndex(filtered);
+    const filtered = this.applyFiltersIndex(entries);
+    const sorted = this.applySortIndex(filtered);
 
     // Caller should explicitly call updatePreviousFiltered() after computing diff
     return sorted;

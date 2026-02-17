@@ -1,5 +1,6 @@
 import { BasesView, QueryController, Keymap, HoverPopover, HoverParent, TFile, setIcon } from 'obsidian';
 import type { App } from 'obsidian';
+import type { PostData } from '../types/post';
 import { PLATFORMS } from '@/shared/platforms/types';
 
 /**
@@ -91,8 +92,8 @@ export class MediaGalleryView extends BasesView implements HoverParent {
 
     try {
       // Collect all entries first
-      const allEntries: any[] = [];
-      for (const group of this.data.groupedData) {
+      const allEntries: Array<Record<string, unknown>> = [];
+      for (const group of this.data.groupedData as unknown as Array<{ entries: Array<Record<string, unknown>> }>) {
         for (const entry of group.entries) {
           allEntries.push(entry);
         }
@@ -113,7 +114,7 @@ export class MediaGalleryView extends BasesView implements HoverParent {
 
         // Render all media from this batch
         for (let j = 0; j < batch.length; j++) {
-          const entry = batch[j];
+          const entry = batch[j] as Record<string, unknown>;
           const media = mediaArrays[j];
           if (!media) continue;
 
@@ -151,9 +152,9 @@ export class MediaGalleryView extends BasesView implements HoverParent {
    *
    * Note: Uses a simple cache to avoid re-parsing the same files
    */
-  private static parseCache = new Map<string, any>();
+  private static parseCache = new Map<string, PostData | null>();
 
-  private async extractMediaFromEntry(entry: any, app: App): Promise<MediaItem[]> {
+  private async extractMediaFromEntry(entry: Record<string, unknown>, app: App): Promise<MediaItem[]> {
     const media: MediaItem[] = [];
     if (!(entry.file instanceof TFile)) return [];
     const file = entry.file;
@@ -265,8 +266,8 @@ export class MediaGalleryView extends BasesView implements HoverParent {
         }
 
         // Extract platform from media file path if postData.platform is generic or invalid
-        let platform = postData.platform;
-        if (!platform || platform === 'post' || platform === 'unknown') {
+        let platform: string = postData.platform;
+        if (!platform || platform === 'post') {
           const mediaPath = resolvedFile?.path || (typeof mediaItem.url === 'string' ? mediaItem.url : '');
           const pathParts = mediaPath.toLowerCase().split('/');
           const platformIndex = pathParts.indexOf('social-archives');
@@ -274,20 +275,23 @@ export class MediaGalleryView extends BasesView implements HoverParent {
           if (platformIndex >= 0 && platformIndex < pathParts.length - 1) {
             const folderName = pathParts[platformIndex + 1];
 
-            for (const knownPlatform of KNOWN_PLATFORMS) {
-              if (folderName.includes(knownPlatform)) {
-                platform = knownPlatform;
-                break;
+            if (folderName) {
+              for (const knownPlatform of KNOWN_PLATFORMS) {
+                if (folderName.includes(knownPlatform)) {
+                  platform = knownPlatform;
+                  break;
+                }
               }
             }
           }
         }
 
+        const mediaType = (mediaItem.type === 'image' || mediaItem.type === 'video') ? mediaItem.type : 'image';
         media.push({
           file: resolvedFile,
           url: typeof mediaItem.url === 'string' ? mediaItem.url : '',
           sourceFile: file,
-          type: mediaItem.type,
+          type: mediaType,
           platform: platform,
           author: postData.author?.name || 'Unknown',
           publishDate: postData.metadata?.timestamp
@@ -318,7 +322,7 @@ export class MediaGalleryView extends BasesView implements HoverParent {
   /**
    * Render a single media card
    */
-  private renderMediaCard(mediaItem: MediaItem, entry: any, app: App): void {
+  private renderMediaCard(mediaItem: MediaItem, entry: Record<string, unknown>, app: App): void {
     if (!this.galleryEl) return;
 
     const card = this.galleryEl.createDiv('media-card');
@@ -380,7 +384,7 @@ export class MediaGalleryView extends BasesView implements HoverParent {
       });
 
       // Add click handler for lightbox
-      img.addEventListener('click', (evt) => {
+      img.addEventListener('click', (_evt) => {
         this.openLightbox(mediaItem, app);
       });
     } else {
@@ -424,7 +428,7 @@ export class MediaGalleryView extends BasesView implements HoverParent {
       });
 
       // Add click handler for lightbox
-      video.addEventListener('click', (evt) => {
+      video.addEventListener('click', (_evt) => {
         this.openLightbox(mediaItem, app);
       });
     }

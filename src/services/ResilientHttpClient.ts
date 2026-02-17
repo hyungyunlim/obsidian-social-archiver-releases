@@ -50,19 +50,19 @@ export class ResilientHttpClient implements IService {
 	 * Setup circuit breaker event logging
 	 */
 	private setupCircuitBreakerLogging(): void {
-		this.circuitBreaker.on(CircuitBreakerEvent.OPEN, (data) => {
+		this.circuitBreaker.on(CircuitBreakerEvent.OPEN, (_data) => {
 			if (process.env.NODE_ENV === 'development') {
 				// Logging removed
 			}
 		});
 
-		this.circuitBreaker.on(CircuitBreakerEvent.HALF_OPEN, (data) => {
+		this.circuitBreaker.on(CircuitBreakerEvent.HALF_OPEN, (_data) => {
 			if (process.env.NODE_ENV === 'development') {
 				// Logging removed
 			}
 		});
 
-		this.circuitBreaker.on(CircuitBreakerEvent.CLOSE, (data) => {
+		this.circuitBreaker.on(CircuitBreakerEvent.CLOSE, (_data) => {
 			if (process.env.NODE_ENV === 'development') {
 				// Logging removed
 			}
@@ -76,13 +76,13 @@ export class ResilientHttpClient implements IService {
 		return 'ResilientHttpClient';
 	}
 
-	public async initialize(): Promise<void> {
-		await this.httpClient.initialize();
+	public initialize(): void {
+		this.httpClient.initialize();
 	}
 
-	public async shutdown(): Promise<void> {
+	public shutdown(): void {
 		this.circuitBreaker.destroy();
-		await this.httpClient.shutdown();
+		this.httpClient.shutdown();
 	}
 
 	/**

@@ -59,12 +59,12 @@ export class RetryableHttpClient implements IService {
 		return 'RetryableHttpClient';
 	}
 
-	public async initialize(): Promise<void> {
-		await this.resilientClient.initialize();
+	public initialize(): void {
+		this.resilientClient.initialize();
 	}
 
-	public async shutdown(): Promise<void> {
-		await this.resilientClient.shutdown();
+	public shutdown(): void {
+		this.resilientClient.shutdown();
 	}
 
 	/**
@@ -84,7 +84,7 @@ export class RetryableHttpClient implements IService {
 			throw result.error;
 		}
 
-		return result.value!;
+		return result.value as HttpResponse<T>;
 	}
 
 	/**
@@ -105,7 +105,7 @@ export class RetryableHttpClient implements IService {
 			throw result.error;
 		}
 
-		return result.value!;
+		return result.value as HttpResponse<T>;
 	}
 
 	/**
@@ -127,7 +127,7 @@ export class RetryableHttpClient implements IService {
 			throw result.error;
 		}
 
-		return result.value!;
+		return result.value as HttpResponse<T>;
 	}
 
 	/**
@@ -149,7 +149,7 @@ export class RetryableHttpClient implements IService {
 			throw result.error;
 		}
 
-		return result.value!;
+		return result.value as HttpResponse<T>;
 	}
 
 	/**
@@ -170,7 +170,7 @@ export class RetryableHttpClient implements IService {
 			throw result.error;
 		}
 
-		return result.value!;
+		return result.value as HttpResponse<T>;
 	}
 
 	/**

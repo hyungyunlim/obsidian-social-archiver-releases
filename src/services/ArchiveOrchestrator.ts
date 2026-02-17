@@ -45,7 +45,7 @@ export type OrchestratorEvent =
   | { type: 'progress'; data: ArchiveProgress }
   | { type: 'stage-complete'; data: { stage: ArchiveProgress['stage'] } }
   | { type: 'error'; data: Error }
-  | { type: 'cancelled'; data: void };
+  | { type: 'cancelled'; data: undefined };
 
 /**
  * Event listener type
@@ -62,7 +62,8 @@ class EventEmitter {
     if (!this.listeners.has(eventType)) {
       this.listeners.set(eventType, new Set());
     }
-    this.listeners.get(eventType)!.add(listener);
+    const set = this.listeners.get(eventType);
+    if (set) set.add(listener);
   }
 
   off(eventType: string, listener: EventListener): void {
@@ -104,6 +105,7 @@ interface TransactionState {
 /**
  * Retry utility
  */
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 class RetryHelper {
   /**
    * Execute function with retry logic
@@ -116,7 +118,7 @@ class RetryHelper {
       onRetry?: (attempt: number, error: Error) => void;
     }
   ): Promise<T> {
-    let lastError: Error;
+    let lastError: Error = new Error("No attempts made");
 
     for (let attempt = 0; attempt <= options.maxRetries; attempt++) {
       try {
@@ -143,7 +145,8 @@ class RetryHelper {
       }
     }
 
-    throw lastError!;
+    // lastError is always assigned because maxRetries >= 0, so at least one attempt runs
+    throw lastError ?? new Error('No attempts made');
   }
 
   /**
@@ -306,7 +309,7 @@ export class ArchiveOrchestrator implements IService {
 
       // Stage 1: Validate URL
       this.emitProgress('fetching', 0, 'Validating URL...');
-      await this.validateUrl(url);
+      this.validateUrl(url);
 
       // Stage 2: Detect platform
       this.emitProgress('fetching', 5, 'Detecting platform...');
@@ -377,7 +380,7 @@ export class ArchiveOrchestrator implements IService {
       if (postData.quotedPost && postData.quotedPost.media) {
         postData.quotedPost.media.forEach((media, mediaIndex) => {
           // Skip YouTube embeds (they use iframe, no download needed)
-          if (postData.quotedPost!.platform === 'youtube' || postData.quotedPost!.platform === 'tiktok') {
+          if (postData.quotedPost?.platform === 'youtube' || postData.quotedPost?.platform === 'tiktok') {
             return;
           }
 
@@ -461,20 +464,21 @@ export class ArchiveOrchestrator implements IService {
             } else {
               // Update quoted post media URL
               if (postData.quotedPost && postData.quotedPost.media[sourceItem.mediaIndex]) {
-                postData.quotedPost.media[sourceItem.mediaIndex]!.url = result.localPath;
+                const quotedMedia = postData.quotedPost.media[sourceItem.mediaIndex];
+                if (quotedMedia) quotedMedia.url = result.localPath;
               }
             }
           } else if (sourceItem.archiveIndex !== undefined) {
             // Update embedded archive media URL
-            const archive = postData.embeddedArchives![sourceItem.archiveIndex];
+            const archive = postData.embeddedArchives?.[sourceItem.archiveIndex];
             if (archive && archive.media[sourceItem.mediaIndex]) {
-              archive.media[sourceItem.mediaIndex]!.url = result.localPath;
+              const archiveMedia = archive.media[sourceItem.mediaIndex];
+              if (archiveMedia) archiveMedia.url = result.localPath;
             }
           } else {
             // Update main post media URL
-            if (postData.media[sourceItem.mediaIndex]) {
-              postData.media[sourceItem.mediaIndex]!.url = result.localPath;
-            }
+            const mainMedia = postData.media[sourceItem.mediaIndex];
+            if (mainMedia) mainMedia.url = result.localPath;
           }
         });
 
@@ -487,7 +491,7 @@ export class ArchiveOrchestrator implements IService {
 
       // Stage 5: Convert to markdown
       this.emitProgress('processing', 70, 'Converting to markdown...');
-      let markdown = await this.markdownConverter.convert(
+      let markdown = this.markdownConverter.convert(
         postData,
         options.customTemplate,
         mediaResults.length > 0 ? mediaResults : undefined,
@@ -572,7 +576,7 @@ export class ArchiveOrchestrator implements IService {
   /**
    * Validate URL
    */
-  private async validateUrl(url: string): Promise<void> {
+  private validateUrl(url: string): void {
     if (!this.archiveService.validateUrl(url)) {
       throw new Error('Invalid URL format');
     }
@@ -674,7 +678,7 @@ export class ArchiveOrchestrator implements IService {
       // Delete created media files
       await Promise.all(
         transaction.createdMediaFiles.map(file =>
-          this.mediaHandler.deleteMedia(file).catch(err => {
+          this.mediaHandler.deleteMedia(file).catch(_err => {
           })
         )
       );
@@ -682,7 +686,7 @@ export class ArchiveOrchestrator implements IService {
       // Delete created note files
       await Promise.all(
         transaction.createdFiles.map(file =>
-          this.vaultManager.deleteFile(file).catch(err => {
+          this.vaultManager.deleteFile(file).catch(_err => {
           })
         )
       );
@@ -720,16 +724,16 @@ export class ArchiveOrchestrator implements IService {
       size: entries.length,
       urls: entries.map(([url]) => url),
       oldestEntry: entries.length > 0
-        ? entries.reduce((oldest, [, entry]) =>
+        ? new Date(entries.reduce((oldest, [, entry]) =>
             entry.timestamp < oldest ? entry.timestamp : oldest,
-            entries[0]![1].timestamp
-          )
+            (entries[0]?.[1].timestamp) ?? 0
+          ))
         : undefined,
       newestEntry: entries.length > 0
-        ? entries.reduce((newest, [, entry]) =>
+        ? new Date(entries.reduce((newest, [, entry]) =>
             entry.timestamp > newest ? entry.timestamp : newest,
-            entries[0]![1].timestamp
-          )
+            (entries[0]?.[1].timestamp) ?? 0
+          ))
         : undefined,
     };
   }
@@ -763,7 +767,7 @@ export class ArchiveOrchestrator implements IService {
   ): Promise<PostData> {
     try {
       // Stage 1: Validate URL
-      await this.validateUrl(url);
+      this.validateUrl(url);
 
       // Stage 2: Detect platform
       const platform = this.archiveService.detectPlatform(url);
@@ -838,7 +842,7 @@ export class ArchiveOrchestrator implements IService {
       // Extract profile data using ProfileDataMapper
       // Use postData.raw (original BrightData response) for accurate field mapping
       // Fall back to postData for platforms that don't include raw data
-      const rawData = (postData as any).raw ?? postData;
+      const rawData = postData.raw ?? postData;
       const profileData = ProfileDataMapper.mapPlatformData(platform, rawData);
 
       // Update author metadata if enabled
