@@ -1,9 +1,10 @@
+import { defineConfig } from 'eslint/config';
 import obsidianmd from 'eslint-plugin-obsidianmd';
 import svelte from 'eslint-plugin-svelte';
 import tseslint from 'typescript-eslint';
 import globals from 'globals';
 
-export default tseslint.config(
+export default defineConfig(
   // Global ignores
   {
     ignores: [

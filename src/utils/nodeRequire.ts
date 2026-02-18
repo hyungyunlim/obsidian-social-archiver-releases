@@ -6,15 +6,24 @@
  * review bot. This module uses the Function constructor to obtain the require
  * reference without triggering that check.
  *
- * This module must only be called from desktop-only code paths (guarded by
- * Platform.isDesktop or equivalent checks).
+ * IMPORTANT: This module uses lazy evaluation — the Function constructor runs
+ * only when nodeRequire() is first called, NOT at import time. This prevents
+ * ReferenceError on mobile where Node.js require does not exist.
+ *
+ * Callers must still guard with Platform.isDesktop or equivalent checks.
  */
 
-// Use Function constructor to access the global `require` in Electron renderer.
-// This avoids strict-mode restrictions of eval while clearly signaling intentional
-// runtime access rather than a bundled import. The Function constructor approach
-// is preferred over indirect eval for clarity and lint compliance.
-// eslint-disable-next-line @typescript-eslint/no-implied-eval -- intentional runtime access to Node.js require in Electron
-const _nodeRequire: NodeJS.Require = (new Function('return require') as () => NodeJS.Require)();
+// Lazy wrapper: resolves Node.js require on first call only.
+// This allows mobile code to safely import this module without crashing,
+// as long as the actual nodeRequire() call is guarded by Platform.isDesktop.
+let _cached: NodeJS.Require | undefined;
 
-export default _nodeRequire;
+// eslint-disable-next-line @typescript-eslint/no-implied-eval -- intentional runtime access to Node.js require in Electron
+function nodeRequire(id: string): unknown {
+  if (!_cached) {
+    _cached = (new Function('return require') as () => NodeJS.Require)();
+  }
+  return _cached(id);
+}
+
+export default nodeRequire;

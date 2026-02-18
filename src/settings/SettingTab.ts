@@ -378,7 +378,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     // Enable transcription toggle
     new Setting(containerEl)
       .setName('Enable Whisper transcription')
-      .setDesc('Transcribe Podcast audio using locally installed Whisper (desktop only)')
+      .setDesc('Transcribe podcast audio using locally installed Whisper (desktop only)')
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.transcription.enabled)
         .onChange((value) => {
@@ -1395,7 +1395,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       const errorEl = container.createEl('div', {
         cls: 'setting-item-description'
       });
-      errorEl.textContent = '⚠ could not detect Whisper';
+      errorEl.textContent = '⚠ Could not detect Whisper';
       errorEl.addClass('sa-status-warning');
     }
   }
