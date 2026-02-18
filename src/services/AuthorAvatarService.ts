@@ -206,12 +206,8 @@ export class AuthorAvatarService {
       if (existingPath && overwrite) {
         try {
           const existingFile = this.vault.getAbstractFileByPath(existingPath);
-          if (existingFile) {
-            if (this.app) {
-              await this.app.fileManager.trashFile(existingFile as import('obsidian').TFile);
-            } else {
-              await this.vault.delete(existingFile);
-            }
+          if (existingFile && this.app) {
+            await this.app.fileManager.trashFile(existingFile as import('obsidian').TFile);
           }
         } catch {
           // Ignore deletion errors
@@ -583,12 +579,8 @@ export class AuthorAvatarService {
       }
 
       const file = this.vault.getAbstractFileByPath(existingPath);
-      if (file) {
-        if (this.app) {
-          await this.app.fileManager.trashFile(file as import('obsidian').TFile);
-        } else {
-          await this.vault.delete(file);
-        }
+      if (file && this.app) {
+        await this.app.fileManager.trashFile(file as import('obsidian').TFile);
         return true;
       }
       return false;

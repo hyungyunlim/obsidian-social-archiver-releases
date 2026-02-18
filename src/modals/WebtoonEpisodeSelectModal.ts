@@ -342,7 +342,7 @@ export class WebtoonEpisodeSelectModal extends Modal {
       } else {
         prevBtn.addClass('sa-bg-primary', 'sa-text-normal', 'sa-clickable');
       }
-      prevBtn.setText('← Prev');
+      prevBtn.setText('← prev');
       prevBtn.disabled = this.currentPage === 1;
       prevBtn.addEventListener('click', () => {
         if (this.currentPage > 1) {

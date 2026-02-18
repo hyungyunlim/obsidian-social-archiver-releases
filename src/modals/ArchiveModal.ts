@@ -307,7 +307,7 @@ export class ArchiveModal extends Modal {
     this.commentContainer.addClass('sa-mt-12');
 
     const commentLabel = this.commentContainer.createDiv({ cls: 'archive-comment-label' });
-    commentLabel.setText('💭 My notes (optional)');
+    commentLabel.setText('💭 my notes (optional)');
 
     this.commentTextarea = this.commentContainer.createEl('textarea', {
       cls: 'archive-comment-textarea',
@@ -1459,7 +1459,7 @@ export class ArchiveModal extends Modal {
 
       new Setting(this.redditOptionsContainer)
         .setName('Time range')
-        .setDesc('Time period for sorting (applies to Hot and Top)')
+        .setDesc('Time period for sorting (applies to hot and top)')
         .addDropdown(dropdown => {
           for (const opt of REDDIT_SORT_BY_TIME_OPTIONS) {
             dropdown.addOption(opt.value, opt.label);
@@ -1472,7 +1472,7 @@ export class ArchiveModal extends Modal {
 
       new Setting(this.redditOptionsContainer)
         .setName('Keyword filter')
-        .setDesc('Optional: Filter posts by keyword')
+        .setDesc('Optional: filter posts by keyword')
         .addText(text => {
           text
             .setPlaceholder('Optional keyword')
@@ -2326,19 +2326,19 @@ export class ArchiveModal extends Modal {
 
     // Double-check authentication before proceeding
     if (!isAuthenticated(this.plugin)) {
-      new Notice('❌ Authentication required. Please authenticate in settings first.', 8000);
+      new Notice('❌ authentication required. Please authenticate in settings first.', 8000);
       return;
     }
 
     if (!this.detectedPlatform) {
-      new Notice('❌ Unable to detect platform from URL');
+      new Notice('❌ unable to detect platform from URL');
       return;
     }
 
     const archiveUrl = (this.resolvedUrl ?? this.url).trim();
     const submissionLockKey = this.plugin.tryAcquireArchiveQueueLock(archiveUrl, this.detectedPlatform ?? undefined);
     if (!submissionLockKey) {
-      new Notice('⏳ This URL is already being queued. Please wait.');
+      new Notice('⏳ this URL is already being queued. Please wait.');
       return;
     }
 
@@ -2383,7 +2383,7 @@ export class ArchiveModal extends Modal {
       });
 
       // Step 5: Show notice
-      new Notice('📄 Archive queued. Processing in background...');
+      new Notice('📄 archive queued. Processing in background...');
 
       // Step 6: Trigger immediate background check
       try {
@@ -2395,7 +2395,7 @@ export class ArchiveModal extends Modal {
 
     } catch (error) {
       if (error instanceof Error && error.message.includes('Duplicate job already exists')) {
-        new Notice('⏳ Archive is already queued for this URL.');
+        new Notice('⏳ archive is already queued for this URL.');
         return;
       }
 
@@ -3501,7 +3501,7 @@ export class ArchiveModal extends Modal {
     mainMessage.addClass('am-unauth-main-message');
 
     const subMessage = messageContainer.createEl('p', {
-      text: 'Free during beta • No password needed • magic link authentication'
+      text: 'Free during beta • no password needed • magic link authentication'
     });
     subMessage.addClass('am-unauth-sub-message');
 

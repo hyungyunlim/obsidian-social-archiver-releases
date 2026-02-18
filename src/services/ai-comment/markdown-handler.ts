@@ -526,10 +526,10 @@ export function readFrontmatterAIComments(
     // Handle legacy object format
     if (typeof item === 'object' && item !== null) {
       return {
-        id: String(item.id || ''),
+        id: (item.id as string | undefined) || '',
         cli: (item.cli as AICli) || 'claude',
         type: (item.type as AICommentType) || 'summary',
-        generatedAt: String(item.generatedAt || new Date().toISOString()),
+        generatedAt: (item.generatedAt as string | undefined) || new Date().toISOString(),
         processingTime: 0,
         contentHash: '',
       };

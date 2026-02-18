@@ -39,7 +39,7 @@ export type DownloadProgressCallback = (downloaded: number, total: number) => vo
 /**
  * Media type detector
  */
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- utility class with only static methods; instantiation not needed
+ 
 class MediaTypeDetector {
   private static imageExtensions = new Set([
     'jpg', 'jpeg', 'png', 'pnj', 'gif', 'webp', 'svg', 'bmp', 'ico', 'heic', 'heif', 'avif'
@@ -510,7 +510,7 @@ export class MediaHandler implements IService {
           processedData = optimizationResult.data;
           // Use the actual optimized format (likely webp, but may fall back to jpeg if unsupported)
           outputExtension = this.normalizeImageExtension(optimizationResult.format || 'webp');
-        } catch (error) {
+        } catch {
           // Fallback to original data if optimization fails
           processedData = selectedData;
           // Use actual detected format, not URL extension
@@ -759,8 +759,6 @@ export class MediaHandler implements IService {
     try {
       if (this.app) {
         await this.app.fileManager.trashFile(file);
-      } else {
-        await this.vault.delete(file);
       }
     } catch (error) {
       throw new Error(

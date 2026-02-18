@@ -1557,7 +1557,7 @@ export class PostCardRenderer extends Component {
             updateBadgeStyle(false, false);
             // Update all other badges for this author
             this.updateBadgesForAuthor(post.author.url, post.platform, false);
-          } catch (error) {
+          } catch {
             // Revert to subscribed state on error
             currentSubscribed = true;
             isLoading = false;
@@ -1595,7 +1595,7 @@ export class PostCardRenderer extends Component {
             updateBadgeStyle(true, false);
             // Update all other badges for this author
             this.updateBadgesForAuthor(post.author.url, post.platform, true);
-          } catch (error) {
+          } catch {
             // Revert to original state on error
             isLoading = false;
             updateBadgeStyle(false, false);
@@ -3054,7 +3054,7 @@ export class PostCardRenderer extends Component {
       }
       // Check if user is logged in
       if (!this.plugin.settings.isVerified || !this.plugin.settings.authToken) {
-        new Notice('Please log in to share posts. Go to Settings → Social Archiver → Authentication');
+        new Notice('Please log in to share posts. Go to settings → Social Archiver → authentication');
         return;
       }
 
@@ -3199,7 +3199,7 @@ export class PostCardRenderer extends Component {
           });
       }
 
-    } catch (err) {
+    } catch {
       new Notice('Failed to publish post');
 
       // Reset button state
@@ -3275,7 +3275,7 @@ export class PostCardRenderer extends Component {
         const videoMsg = !isAdmin && hasVideos ? ' (Videos excluded from upload)' : '';
         new Notice(successMsg + videoMsg);
       } else if (hasVideos && !isAdmin) {
-        new Notice('⚠️ Videos cannot be uploaded to web (excluded)');
+        new Notice('⚠️ videos cannot be uploaded to web (excluded)');
       }
     } catch (err) {
       // Hide progress notice on error
@@ -3355,9 +3355,9 @@ export class PostCardRenderer extends Component {
       // Update icon to share icon
       setIcon(shareIcon, 'share-2');
 
-      new Notice('✅ Post unshared successfully');
+      new Notice('✅ post unshared successfully');
 
-    } catch (err) {
+    } catch {
       new Notice('Failed to unshare post');
 
       // Reset button state
@@ -3388,7 +3388,7 @@ export class PostCardRenderer extends Component {
       } else {
         // Not a TFile (e.g. TFolder) - no action needed
       }
-    } catch (err) {
+    } catch {
     // Intentional: error silenced, action already complete
     }
   }
@@ -3588,7 +3588,7 @@ export class PostCardRenderer extends Component {
           if (response.status !== 200) {
             // Continue with deletion even if unshare fails
           }
-        } catch (err) {
+        } catch {
           // Continue with deletion even if unshare fails
         }
       }
@@ -3647,7 +3647,7 @@ export class PostCardRenderer extends Component {
               await this.app.fileManager.trashFile(mediaFile);
               deletedMedia.push(media.url);
             }
-          } catch (err) {
+          } catch {
             failedMedia.push(media.url);
           }
         }
@@ -3670,7 +3670,7 @@ export class PostCardRenderer extends Component {
           if (mediaFolder && !('extension' in mediaFolder)) {
             await this.vault.adapter.rmdir(folderPath, true); // recursive delete
           }
-        } catch (err) {
+        } catch {
         // Intentional: error silenced, action already complete
         }
       }
@@ -3693,7 +3693,7 @@ export class PostCardRenderer extends Component {
         try {
           const parentFolder = this.vault.getAbstractFileByPath(parentPath);
           if (parentFolder instanceof TFolder && parentFolder.children.length === 0) {
-            await this.vault.delete(parentFolder);
+            await this.app.fileManager.trashFile(parentFolder);
             // Move up one level
             parentPath = parentPath.substring(0, parentPath.lastIndexOf('/'));
           } else {
@@ -3717,7 +3717,7 @@ export class PostCardRenderer extends Component {
         // Failed media deletions are non-critical; main post was deleted
       }
 
-    } catch (err) {
+    } catch {
       new Notice('Failed to delete post. Check console for details.');
     }
   }
@@ -3767,7 +3767,7 @@ export class PostCardRenderer extends Component {
         svgEl.toggleClass('pcr-svg-filled', newLikeStatus);
       }
 
-    } catch (err) {
+    } catch {
     // Intentional: error silenced, action already complete
     }
   }
@@ -3902,7 +3902,7 @@ export class PostCardRenderer extends Component {
 
           // Restore UI manually (since we skip auto-refresh for UI-initiated changes)
           restoreOriginalUI();
-        } catch (err) {
+        } catch {
           new Notice('Failed to save note');
           // Restore original on error
           this.app.keymap.popScope(editScope);
@@ -3942,7 +3942,7 @@ export class PostCardRenderer extends Component {
       // Push scope to keymap stack
       this.app.keymap.pushScope(editScope);
 
-    } catch (err) {
+    } catch {
     // Intentional: error silenced, action already complete
     }
   }
@@ -3997,7 +3997,7 @@ export class PostCardRenderer extends Component {
       if (this.onArchiveToggleCallback) {
         this.onArchiveToggleCallback(post, newArchiveStatus, rootElement);
       }
-    } catch (err) {
+    } catch {
     // Intentional: error silenced, action already complete
     }
   }
@@ -4026,7 +4026,8 @@ export class PostCardRenderer extends Component {
         // Serialize remaining objects to JSON to avoid '[object Object]' output
         return JSON.stringify(value);
       }
-      return String(value);
+      // At this point value is number | boolean | bigint | symbol
+      return String(value as number | boolean | bigint | symbol);
     };
 
     // Helper function to format YAML key-value pair (handles arrays)
@@ -4600,7 +4601,7 @@ export class PostCardRenderer extends Component {
         updatedContent = updatedContent.replace(fullMatch, `![${alt}](${r2Url})`);
 
 
-      } catch (error) {
+      } catch {
       // Intentional: error silenced, action already complete
       }
     }
@@ -4737,7 +4738,7 @@ export class PostCardRenderer extends Component {
       // Note: The preview card is already removed by LinkPreviewRenderer's animation
       // No need to re-render the entire post card
 
-    } catch (err) {
+    } catch {
       new Notice('Failed to remove link preview');
     }
   }
@@ -5159,7 +5160,7 @@ export class PostCardRenderer extends Component {
             rootElement.empty();
             void this.render(rootElement, post);
           }, 500);
-        } catch (error) {
+        } catch {
           banner.remove();
         }
       })();
@@ -5278,7 +5279,7 @@ export class PostCardRenderer extends Component {
         try {
           await this.markUrlAsDownloadDeclined(post, audioUrl);
           banner.remove();
-        } catch (error) {
+        } catch {
           banner.remove();
         }
       })();
@@ -5711,7 +5712,7 @@ export class PostCardRenderer extends Component {
       // Save transcript to markdown file
       await this.saveTranscriptToPost(post, result, mediaPath, mode);
 
-      messageEl.textContent = '✓ Transcript added!';
+      messageEl.textContent = '✓ transcript added!';
       messageEl.addClass('pcr-text-success');
 
       // Refresh the post after a short delay
@@ -6225,7 +6226,7 @@ export class PostCardRenderer extends Component {
       if (!videoPath.toLowerCase().endsWith('.mp4')) {
         const hasFFmpeg = await YtDlpDetector.isFfmpegAvailable();
         if (!hasFFmpeg) {
-          new Notice('⚠️ This video may not play in browser.\nffmpeg is required for browser-compatible videos.\n\nVisit: ffmpeg.org', 10000);
+          new Notice('⚠️ this video may not play in browser.\nffmpeg is required for browser-compatible videos.\n\nVisit: ffmpeg.org', 10000);
         }
       }
 
@@ -6716,7 +6717,7 @@ export class PostCardRenderer extends Component {
       }
 
       return null;
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -6889,7 +6890,7 @@ export class PostCardRenderer extends Component {
 
       // Final fallback: return first resolved local video.
       return resolvedFiles[0] || null;
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -7088,7 +7089,7 @@ export class PostCardRenderer extends Component {
     if (post.originalUrl || post.url) {
       const urlLink = card.createEl('a', {
         cls: 'pcr-error-url',
-        text: '→ View original source',
+        text: '→ view original source',
         href: post.originalUrl || post.url
       });
       urlLink.setAttribute('target', '_blank');

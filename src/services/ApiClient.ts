@@ -222,7 +222,7 @@ export class ApiClient implements IService {
         }),
       });
 
-    } catch (error) {
+    } catch {
       // Silently fail - stats collection is not critical
     }
   }

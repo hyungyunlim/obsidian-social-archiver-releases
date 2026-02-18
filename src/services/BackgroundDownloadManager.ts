@@ -415,7 +415,7 @@ export class BackgroundDownloadManager extends EventTarget {
 
         try {
           await this.downloadEpisodeSilently(item.webtoonInfo, item.detail);
-        } catch (error) {
+        } catch {
           // Silent failure - continue with next episode
         }
 

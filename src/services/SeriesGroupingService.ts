@@ -145,7 +145,7 @@ export class SeriesGroupingService {
       // - Brunch: seriesTitle, seriesEpisode
       // Note: seriesId may be a number in YAML (e.g., 812354), so convert to string
       const rawSeriesId = (frontmatter as Record<string, unknown>).seriesId;
-      const seriesId = rawSeriesId != null ? String(rawSeriesId) : undefined;
+      const seriesId = rawSeriesId != null ? String(rawSeriesId as string | number | boolean) : undefined;
       const seriesTitle = ((frontmatter as Record<string, unknown>).series || (frontmatter as Record<string, unknown>).seriesTitle) as string | undefined;
       let seriesUrl = (frontmatter as Record<string, unknown>).seriesUrl as string | undefined;
       const episode = ((frontmatter as Record<string, unknown>).episode ?? (frontmatter as Record<string, unknown>).seriesEpisode) as number | undefined;

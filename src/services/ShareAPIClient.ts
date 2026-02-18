@@ -574,7 +574,7 @@ export class ShareAPIClient implements IService {
               remoteMedia.push(mediaItem);
             }
           }
-        } catch (err) {
+        } catch {
           if (mediaItem) {
             remoteMedia.push(mediaItem);
           }

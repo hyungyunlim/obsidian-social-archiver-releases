@@ -182,7 +182,7 @@ export class ImageOptimizer {
             currentImage: image.name || `Image ${index + 1}`,
           });
         }
-      } catch (error) {
+      } catch {
         failed++;
 
         // Continue with other images

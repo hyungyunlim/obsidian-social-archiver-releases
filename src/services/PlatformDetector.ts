@@ -340,7 +340,7 @@ export class PlatformDetector implements IService {
       }
 
       return platform;
-    } catch (error) {
+    } catch {
       // Invalid URL
       return null;
     }
@@ -395,7 +395,7 @@ export class PlatformDetector implements IService {
         confidence: 0.8,
         matchedPattern: 'shared-definition',
       };
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -525,7 +525,7 @@ export class PlatformDetector implements IService {
         default:
           return null;
       }
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -742,7 +742,7 @@ export class PlatformDetector implements IService {
         default:
           return this.basicCanonicalization(urlObj);
       }
-    } catch (error) {
+    } catch {
       // If canonicalization fails, return original URL
       return url;
     }

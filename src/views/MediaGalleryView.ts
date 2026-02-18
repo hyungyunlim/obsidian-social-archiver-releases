@@ -59,8 +59,8 @@ export class MediaGalleryView extends BasesView implements HoverParent {
     const { app } = this;
 
     // Get user configuration
-    const mediaType = String(this.config.get('mediaType') || 'all');
-    const layout = String(this.config.get('layout') || 'grid');
+    const mediaType = (this.config.get('mediaType') as string | undefined) || 'all';
+    const layout = (this.config.get('layout') as string | undefined) || 'grid';
     const columns = Number(this.config.get('columns')) || 3;
 
     // Clear previous content

@@ -184,9 +184,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     try {
       containerEl.empty();
 
-    // Plugin Title - using Setting heading API
-    new Setting(containerEl).setName('General').setHeading()
-      .settingEl.addClass('sa-settings-title');
+    // Plugin Title styling applied to first section header
+
 
     // Plugin Description
     const descEl = containerEl.createEl('p', {
@@ -215,7 +214,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setDesc('Folder where archived posts will be saved')
       .addText(text => {
         text
-          .setPlaceholder('Social Archives')
+          .setPlaceholder('Social archives')
           .setValue(this.plugin.settings.archivePath)
           .onChange((value) => {
             // Set to default if empty
@@ -245,7 +244,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setDesc('Folder where downloaded media files will be saved')
       .addText(text => {
         text
-          .setPlaceholder('attachments/social-archives')
+          .setPlaceholder('Attachments/social-archives')
           .setValue(this.plugin.settings.mediaPath)
           .onChange((value) => {
             // Set to default if empty
@@ -298,7 +297,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Update author metadata')
-      .setDesc('Track author statistics (followers, posts count, bio) on each archive. Useful for Author Catalog insights.')
+      .setDesc('Track author statistics (followers, posts count, bio) on each archive. Useful for author catalog insights.')
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.updateAuthorMetadata)
         .onChange((value) => {
@@ -323,7 +322,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     // Share Mode setting
     new Setting(containerEl)
       .setName('Share mode')
-      .setDesc('Choose how shared posts appear on the web. "Preview" mode protects copyright by showing only excerpts without media.')
+      .setDesc('Choose how shared posts appear on the web. "preview" mode protects copyright by showing only excerpts without media.')
       .addDropdown(dropdown => dropdown
         .addOption('preview', 'Preview (copyright-safe)')
         .addOption('full', 'Full content (original)')
@@ -337,7 +336,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     // Preview Length setting (conditionally shown based on share mode)
     const previewLengthSetting = new Setting(containerEl)
       .setName('Preview length')
-      .setDesc('Maximum character count for text preview in "Preview" mode. Platform link is always included in preview mode.')
+      .setDesc('Maximum character count for text preview in "preview" mode. Platform link is always included in preview mode.')
       .addText(text => text
         .setPlaceholder('280')
         .setValue(String(this.plugin.settings.sharePreviewLength))
@@ -379,7 +378,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     // Enable transcription toggle
     new Setting(containerEl)
       .setName('Enable Whisper transcription')
-      .setDesc('Transcribe podcast audio using locally installed Whisper (desktop only)')
+      .setDesc('Transcribe Podcast audio using locally installed Whisper (desktop only)')
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.transcription.enabled)
         .onChange((value) => {
@@ -494,7 +493,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     // Batch mode dropdown
     new Setting(containerEl)
       .setName('Batch transcription mode')
-      .setDesc('transcribe-only: transcribe existing local videos. download-and-transcribe: also download videos from URLs before transcribing.')
+      .setDesc('Transcribe-only: transcribe existing local videos. Download-and-transcribe: also download videos from URLs before transcribing.')
       .addDropdown((dropdown) => {
         dropdown
           .addOption('transcribe-only', 'Transcribe only')
@@ -1142,7 +1141,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         if (isCustomKey) {
           propertySetting.addText((text) => {
             text
-              .setPlaceholder('status')
+              .setPlaceholder('Status')
               .setValue(property.key)
               .onChange((value) => {
                 property.key = value;
@@ -1206,7 +1205,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       const addRowSetting = new Setting(orderListContainer)
         .setName('Add row')
         .addButton((button) => button
-          .setButtonText('+ Add row')
+          .setButtonText('+ add row')
           .setTooltip('Add row')
           .onClick(() => {
             const newProperty: CustomFrontmatterProperty = {
@@ -1246,7 +1245,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setName('Main archive tag')
       .setDesc('Base tag for archived notes. Example: maintag or #maintag. Leave empty to disable auto tags.')
       .addText((text) => text
-        .setPlaceholder('maintag')
+        .setPlaceholder('Maintag')
         .setValue(frontmatterSettings.tagRoot || '')
         .onChange((value) => {
           frontmatterSettings.tagRoot = value.trim();
@@ -1304,7 +1303,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       const mobileNote = container.createEl('div', {
         cls: 'setting-item-description'
       });
-      mobileNote.textContent = 'ⓘ Transcription is only available on desktop';
+      mobileNote.textContent = 'ⓘ transcription is only available on desktop';
       mobileNote.addClass('sa-settings-info');
       return;
     }
@@ -1391,12 +1390,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           hintEl.addClass('sa-settings-hint');
         }
       }
-    } catch (error) {
+    } catch {
       container.empty();
       const errorEl = container.createEl('div', {
         cls: 'setting-item-description'
       });
-      errorEl.textContent = '⚠ Could not detect Whisper';
+      errorEl.textContent = '⚠ could not detect Whisper';
       errorEl.addClass('sa-status-warning');
     }
   }
@@ -1411,7 +1410,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Description
     const naverDesc = containerEl.createEl('p', {
-      text: 'Configure settings for archiving content from Naver Blog, Cafe, and News.'
+      text: 'Configure settings for archiving content from Naver blog, cafe, and news.'
     });
     naverDesc.addClass('sa-settings-info');
 
@@ -1544,7 +1543,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         .setDesc('Folder where synced Reddit posts will be saved')
         .addText(text => {
           text
-            .setPlaceholder('Social Archives/Reddit Saved')
+            .setPlaceholder('Social archives/Reddit saved')
             .setValue(this.plugin.settings.redditSyncFolder)
             .onChange((value) => {
               this.plugin.settings.redditSyncFolder = value || 'Social Archives/Reddit Saved';
@@ -1690,7 +1689,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     // View Mode dropdown
     new Setting(containerEl)
       .setName('Episode loading mode')
-      .setDesc('Stream-first: Load immediately via proxy (faster). Download-first: Wait for full download (offline ready).')
+      .setDesc('Stream-first: load immediately via proxy (faster). Download-first: wait for full download (offline ready).')
       .addDropdown(dropdown => dropdown
         .addOption('stream-first', 'Stream first (recommended)')
         .addOption('download-first', 'Download first')
@@ -1895,7 +1894,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     // Output language setting
     new Setting(containerEl)
       .setName('Output language')
-      .setDesc('Language for AI responses. "Auto" matches the content language (e.g., Korean content → Korean summary)')
+      .setDesc('Language for AI responses. "auto" matches the content language (e.g., Korean content → Korean summary)')
       .addDropdown(dropdown => {
         // Add all language options
         for (const [lang, displayName] of Object.entries(OUTPUT_LANGUAGE_NAMES)) {
@@ -1974,12 +1973,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         AICliDetector.resetCache();
         await this.renderAIToolsStatus(container);
       };
-    } catch (error) {
+    } catch {
       container.empty();
       const errorEl = container.createEl('div', {
         cls: 'setting-item-description'
       });
-      errorEl.textContent = '⚠ Could not detect AI tools';
+      errorEl.textContent = '⚠ could not detect AI tools';
       errorEl.addClass('sa-status-warning');
     }
   }
@@ -2149,7 +2148,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     // Enable vault context
     new Setting(contentEl)
       .setName('Enable vault context')
-      .setDesc('Allow AI to scan your vault for related notes when using "Connections" comment type')
+      .setDesc('Allow AI to scan your vault for related notes when using "connections" comment type')
       .addToggle(toggle => toggle
         .setValue(settings.vaultContext.enabled)
         .onChange((value) => {

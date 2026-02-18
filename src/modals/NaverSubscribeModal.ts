@@ -313,7 +313,7 @@ export class NaverSubscribeModal extends Modal {
       keywordInput.addClass('sa-px-10', 'sa-text-sm', 'sa-border', 'nsm-mobile-input');
       keywordInput.setCssProps({'--sa-height': '32px', '--sa-width': '150px', '--sa-bg': 'var(--background-modifier-form-field)'});
       keywordInput.addClass('sa-dynamic-height', 'sa-dynamic-width', 'sa-dynamic-bg', 'sa-text-normal');
-      keywordInput.placeholder = 'e.g., review';
+      keywordInput.placeholder = 'E.g., review';
       keywordInput.value = this.keyword;
       keywordInput.addEventListener('input', () => {
         this.keyword = keywordInput.value.trim();

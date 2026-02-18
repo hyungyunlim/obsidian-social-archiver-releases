@@ -316,7 +316,7 @@ export class RedditSubscribeModal extends Modal {
 
       new Setting(optionsContainer)
         .setName('Keyword filter')
-        .setDesc('Optional: Filter posts by keyword')
+        .setDesc('Optional: filter posts by keyword')
         .addText(text => {
           text
             .setPlaceholder('Optional keyword')

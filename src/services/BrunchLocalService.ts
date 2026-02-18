@@ -1962,7 +1962,7 @@ export class BrunchLocalService {
         if (!article || !article.no) continue;
 
         try {
-          const postUrl = `${BRUNCH_BASE_URL}/@${authorProfileId}/${String(article.no)}`;
+          const postUrl = `${BRUNCH_BASE_URL}/@${authorProfileId}/${article.no as string | number}`;
           const postData = await this.fetchPost(postUrl);
 
           // Override series info with brunchbook context
@@ -1981,7 +1981,7 @@ export class BrunchLocalService {
             await new Promise(r => setTimeout(r, 500));
           }
         } catch (error) {
-          console.warn(`[BrunchLocalService] Failed to fetch brunchbook post ${String(article.no)}:`, error);
+          console.warn(`[BrunchLocalService] Failed to fetch brunchbook post ${article.no as string | number}:`, error);
         }
       }
 

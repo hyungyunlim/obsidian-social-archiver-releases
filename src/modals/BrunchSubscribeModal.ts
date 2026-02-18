@@ -160,7 +160,7 @@ export class BrunchSubscribeModal extends Modal {
 
     const platform = info.createDiv({ cls: 'brunch-platform' });
     platform.addClass('sa-text-sm', 'sa-text-muted', 'sa-mt-2');
-    platform.setText('Brunch (brunch.co.kr)');
+    platform.setText('Brunch (Brunch.co.kr)');
 
     if (this.author.archiveCount > 0) {
       const stats = info.createDiv({ cls: 'brunch-stats' });
@@ -315,7 +315,7 @@ export class BrunchSubscribeModal extends Modal {
       keywordInput.addClass('sa-px-10', 'sa-text-sm', 'sa-border', 'bsm-mobile-input');
       keywordInput.setCssProps({'--sa-height': '32px', '--sa-width': '150px', '--sa-bg': 'var(--background-modifier-form-field)'});
       keywordInput.addClass('sa-dynamic-height', 'sa-dynamic-width', 'sa-dynamic-bg', 'sa-text-normal');
-      keywordInput.placeholder = 'e.g., review';
+      keywordInput.placeholder = 'E.g., review';
       keywordInput.value = this.keyword;
       keywordInput.addEventListener('input', () => {
         this.keyword = keywordInput.value.trim();

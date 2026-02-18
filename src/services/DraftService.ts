@@ -234,7 +234,7 @@ export class DraftService implements IService {
 
       this.deleteDraft(draftId);
       return null;
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -247,7 +247,7 @@ export class DraftService implements IService {
     try {
       const storageKey = this.getStorageKey(draftId);
       this.app.saveLocalStorage(storageKey, null);
-    } catch (error) {
+    } catch {
       // Silent fail
     }
   }
@@ -297,7 +297,7 @@ export class DraftService implements IService {
       // For now, we return an empty array
 
       return drafts;
-    } catch (error) {
+    } catch {
       return [];
     }
   }
@@ -314,7 +314,7 @@ export class DraftService implements IService {
           this.deleteDraft(draft.id);
         }
       }
-    } catch (error) {
+    } catch {
       // Silent fail
     }
   }
@@ -368,7 +368,7 @@ export class DraftService implements IService {
         percentage: 0,
         isNearLimit: false
       };
-    } catch (error) {
+    } catch {
       return {
         used: 0,
         available: 0,
@@ -398,7 +398,7 @@ export class DraftService implements IService {
       }
 
       return this.getStorageInfo();
-    } catch (error) {
+    } catch {
       return this.getStorageInfo();
     }
   }

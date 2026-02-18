@@ -222,7 +222,7 @@ export class LinkPreviewExtractor implements IService {
       }
 
       return false;
-    } catch (error) {
+    } catch {
       // Invalid URL, exclude it
       return true;
     }

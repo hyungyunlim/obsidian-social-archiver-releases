@@ -114,7 +114,7 @@ export class URLExpander implements IService {
       this.setCached(normalizedUrl, expanded);
 
       return expanded;
-    } catch (error) {
+    } catch {
       // If expansion fails, return original URL
       return url;
     }
@@ -163,7 +163,7 @@ export class URLExpander implements IService {
         hops,
         cached: false,
       };
-    } catch (error) {
+    } catch {
       return {
         originalUrl,
         expandedUrl: normalizedUrl,

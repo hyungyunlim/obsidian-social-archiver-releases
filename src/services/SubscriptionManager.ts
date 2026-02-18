@@ -978,7 +978,7 @@ export class SubscriptionManager implements IService {
       for (const sub of this.cache.values()) {
         try {
           await this.deleteSubscription(sub.id);
-        } catch (error) {
+        } catch {
           this.logger?.warn('Failed to delete subscription during replace', { id: sub.id });
         }
       }
@@ -1358,7 +1358,7 @@ export class SubscriptionManager implements IService {
 
         new Notice(`"${subscription.name}": Archive run failed - ${run.error || 'Unknown error'}`, 10000);
       }
-    } catch (error) {
+    } catch {
       this.logger?.debug('Failed to check run status', { subscriptionId, runId });
     }
   }

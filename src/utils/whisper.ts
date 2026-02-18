@@ -37,7 +37,7 @@ export const WHISPER_MODEL_INFO: Record<WhisperModel, WhisperModelInfo> = {
   'large-v3': { name: 'large-v3', size: '2.9GB', vramRequired: '~10GB', estimatedSpeed: '~1x' },
 };
 
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- static-only utility class used as a namespace for cached Whisper detection
+ 
 export class WhisperDetector {
   // Cached detection results
   private static whisperAvailable: boolean | null = null;

@@ -528,9 +528,9 @@ export class SeriesCardRenderer extends Component {
             }
           }
           // Then delete the empty folder
-          await this.app.vault.delete(mediaFolder);
+          await this.app.fileManager.trashFile(mediaFolder);
         }
-      } catch (error) {
+      } catch {
         // Don't fail the whole operation if media cleanup fails
       }
     }
@@ -1281,7 +1281,7 @@ export class SeriesCardRenderer extends Component {
 
       // Add to silent download queue
       downloadManager.addSilentDownload(webtoonInfo, detail);
-    } catch (error) {
+    } catch {
       // Silent failure - background download is optional
     }
   }
@@ -1478,7 +1478,7 @@ export class SeriesCardRenderer extends Component {
       if (detail) {
         this.prefetchCache.set(cacheKey, detail);
       }
-    } catch (error) {
+    } catch {
       // Silent fail - prefetch is optional optimization
     }
   }
@@ -3002,7 +3002,7 @@ export class SeriesCardRenderer extends Component {
 
       // Re-render episode list to show badges (if list exists)
       this.updateEpisodeListCommentBadges(seriesId);
-    } catch (error) {
+    } catch {
       // Silent failure - comment counts are optional
     } finally {
       this.episodeCommentCountsLoading.set(seriesId, false);
@@ -3993,7 +3993,7 @@ export class SeriesCardRenderer extends Component {
       } else {
         label.textContent = 'Best comments';
       }
-    } catch (error) {
+    } catch {
       // Silently fail, keep default label
       label.textContent = 'Best comments';
     }
@@ -4452,7 +4452,7 @@ export class SeriesCardRenderer extends Component {
       for (const folderPath of sortedFolders) {
         const folder = vault.getAbstractFileByPath(folderPath);
         if (folder instanceof TFolder && folder.children.length === 0) {
-          await vault.delete(folder);
+          await this.app.fileManager.trashFile(folder);
         }
       }
 

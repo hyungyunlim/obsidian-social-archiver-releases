@@ -98,6 +98,7 @@ export class TranscriptRenderer {
     if (options.adapter) {
       this.adapter = options.adapter;
       this.audioElement = null;
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- audioElement kept for backward compatibility with podcast flow
     } else if (options.audioElement) {
       // eslint-disable-next-line @typescript-eslint/no-deprecated -- audioElement kept for backward compatibility with podcast flow
       this.audioElement = options.audioElement;

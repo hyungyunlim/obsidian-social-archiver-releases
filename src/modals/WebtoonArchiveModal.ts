@@ -2595,14 +2595,14 @@ export class WebtoonArchiveModal extends Modal {
     this.trackEventListener(this.downloadQueue, 'episode-failed', ((e: CustomEvent) => {
       updateNaverProgress();
       const detail = e.detail as Record<string, unknown>;
-      new Notice(`Failed: ${String(detail.error ?? 'Unknown error')}`);
+      new Notice(`Failed: ${(detail.error as string | undefined) ?? 'Unknown error'}`);
     }) as EventListener);
 
     this.trackEventListener(this.downloadQueue, 'queue-completed', ((e: CustomEvent) => {
       this.state = 'completed';
       this.downloadProgress = this.downloadQueue.getProgress();
       const detail = e.detail as Record<string, unknown>;
-      new Notice(`✓ ${String(detail.completed ?? 0)} episodes archived!`);
+      new Notice(`✓ ${(detail.completed as number | undefined) ?? 0} episodes archived!`);
 
       // Invalidate Author Catalog cache to refresh with new cover/data
       invalidateAuthorCatalogCache();
@@ -2652,14 +2652,14 @@ export class WebtoonArchiveModal extends Modal {
     this.trackEventListener(this.webtoonsDownloadQueue, 'episode-failed', ((e: CustomEvent) => {
       updateWebtoonsProgress();
       const detail = e.detail as Record<string, unknown>;
-      new Notice(`Failed: ${String(detail.error ?? 'Unknown error')}`);
+      new Notice(`Failed: ${(detail.error as string | undefined) ?? 'Unknown error'}`);
     }) as EventListener);
 
     this.trackEventListener(this.webtoonsDownloadQueue, 'queue-completed', ((e: CustomEvent) => {
       this.state = 'completed';
       this.downloadProgress = this.webtoonsDownloadQueue.getProgress();
       const detail = e.detail as Record<string, unknown>;
-      new Notice(`✓ ${String(detail.completed ?? 0)} episodes archived!`);
+      new Notice(`✓ ${(detail.completed as number | undefined) ?? 0} episodes archived!`);
 
       // Invalidate Author Catalog cache to refresh with new cover/data
       invalidateAuthorCatalogCache();

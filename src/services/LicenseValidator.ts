@@ -193,7 +193,7 @@ export class LicenseValidator implements IService {
 
         try {
           return await this.validateLicense(licenseKey, true);
-        } catch (error) {
+        } catch {
           throw new Error('Cached license expired and cannot validate online');
         }
       }

@@ -230,7 +230,7 @@ export class VaultManager implements IService {
     // Verify vault is accessible
     try {
       this.vault.getRoot();
-    } catch (error) {
+    } catch {
       throw new Error('Vault is not accessible');
     }
   }
@@ -424,8 +424,6 @@ export class VaultManager implements IService {
     try {
       if (this.app) {
         await this.app.fileManager.trashFile(file);
-      } else {
-        await this.vault.delete(file);
       }
     } catch (error) {
       throw new Error(
@@ -441,8 +439,6 @@ export class VaultManager implements IService {
     try {
       if (this.app) {
         await this.app.fileManager.trashFile(file);
-      } else {
-        await this.vault.trash(file, true);
       }
     } catch (error) {
       throw new Error(

@@ -1601,10 +1601,10 @@ export class MarkdownConverter implements IService {
       return null;
     }
 
-    const boardName = String(boardData?.board_name || archive.title || archive.author.name || 'Pinterest Board');
-    const boardUrl = String(boardData?.board_url || archive.url);
-    const creatorName = String(boardData?.creator_name || archive.author.name);
-    const creatorUrl = String(boardData?.creator_url || archive.author.url || archive.url);
+    const boardName = (boardData?.board_name as string | undefined) || archive.title || archive.author.name || 'Pinterest Board';
+    const boardUrl = (boardData?.board_url as string | undefined) || archive.url;
+    const creatorName = (boardData?.creator_name as string | undefined) || archive.author.name;
+    const creatorUrl = (boardData?.creator_url as string | undefined) || archive.author.url || archive.url;
     const pinCountRaw = boardData?.pin_count || boardData?.expected_pin_count || pins.length || (typeof archive.metadata?.comments === 'number' ? archive.metadata.comments : undefined);
     const pinCount = typeof pinCountRaw === 'number' ? pinCountRaw : (pinCountRaw != null ? Number(pinCountRaw) : undefined);
 

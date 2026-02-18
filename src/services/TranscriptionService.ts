@@ -237,7 +237,7 @@ export class TranscriptionService {
     const wavPath = await this.extractAudioFromVideo(mediaPath, signal);
     return {
       path: wavPath,
-      // eslint-disable-next-line @typescript-eslint/require-await -- cleanup must match async interface signature even though it calls only sync fs methods
+       
       cleanup: async () => {
         const fs = nodeRequire('fs') as typeof import('fs');
         try {

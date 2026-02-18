@@ -1750,7 +1750,7 @@ export default class SocialArchiverPlugin extends Plugin {
         }
       }
 
-    } catch (error) {
+    } catch {
       new Notice('Failed to initialize Social Archiver. Check console for details.');
     }
   }
@@ -3494,7 +3494,7 @@ ${contentParts.join('')}
         leaves.forEach(leaf => {
           const view = leaf.view;
           if (view && 'refresh' in view && typeof view.refresh === 'function') {
-            view.refresh();
+            (view.refresh as () => void)();
           }
         });
       } else {
@@ -3949,7 +3949,7 @@ ${contentParts.join('')}
    */
   public async batchArchiveGoogleMapsLinks(content: string, sourceNotePath?: string): Promise<void> {
     if (!this.apiClient) {
-      new Notice('⚠️ Please configure API endpoint in settings first');
+      new Notice('⚠️ please configure API endpoint in settings first');
       return;
     }
 
@@ -4102,7 +4102,7 @@ ${contentParts.join('')}
         8000
       );
     } else {
-      new Notice(`⚠️ Batch completed but no results received`);
+      new Notice(`⚠️ batch completed but no results received`);
     }
   }
 
@@ -4375,7 +4375,7 @@ ${contentParts.join('')}
     }
 
     // Show loading notice
-    const loadingNotice = new Notice('🔐 Completing authentication...', 0);
+    const loadingNotice = new Notice('🔐 completing authentication...', 0);
 
     try {
       // Complete authentication using utility function
@@ -4780,7 +4780,7 @@ ${contentParts.join('')}
       // Refresh the timeline view to load new posts
       const view = leaf.view;
       if (view && 'refresh' in view && typeof view.refresh === 'function') {
-        await view.refresh();
+        await (view.refresh as () => Promise<void>)();
       }
     }
   }
@@ -5089,7 +5089,7 @@ ${contentParts.join('')}
             // Update archive banner with failure
             this.archiveJobTracker.failJob(job.id, 'Please use a specific episode URL instead of series URL.');
 
-            new Notice('📚 Naver Webtoon: Please use episode URL instead of series URL', 8000);
+            new Notice('📚 Naver Webtoon: please use episode URL instead of series URL', 8000);
             continue;
           }
 
@@ -5804,7 +5804,7 @@ ${contentParts.join('')}
             // Check if file already exists
             const existingFile = this.app.vault.getAbstractFileByPath(fullPath);
 
-            if (existingFile) {
+            if (existingFile instanceof TFile) {
               // File already exists, reuse it
               const stat = await this.app.vault.adapter.stat(fullPath);
               downloadedMedia.push({
@@ -5812,7 +5812,7 @@ ${contentParts.join('')}
                 localPath: fullPath,
                 type: media.type,
                 size: stat?.size || 0,
-                file: existingFile as TFile,
+                file: existingFile,
               });
             } else {
               let arrayBuffer: ArrayBuffer;
@@ -5976,8 +5976,9 @@ ${contentParts.join('')}
 
       // If we have a preliminary document, update it; otherwise create new file
       if (preliminaryFilePath) {
-        const file = this.app.vault.getAbstractFileByPath(preliminaryFilePath);
-        if (file) {
+        const abstractFile = this.app.vault.getAbstractFileByPath(preliminaryFilePath);
+        if (abstractFile instanceof TFile) {
+          const file = abstractFile;
           // Generate the correct final filename
           const correctFilePath = vaultManager.generateFilePath(postData);
 
@@ -5993,22 +5994,22 @@ ${contentParts.join('')}
 
             // Check if destination file already exists
             const existingFile = this.app.vault.getAbstractFileByPath(correctFilePath);
-            if (existingFile) {
+            if (existingFile instanceof TFile) {
               // Update existing file content
-              await this.app.vault.modify(existingFile as TFile, markdown.fullDocument);
+              await this.app.vault.modify(existingFile, markdown.fullDocument);
               // Delete preliminary file
               await this.app.fileManager.trashFile(file);
             } else {
               // Rename file and update content
               await this.app.vault.rename(file, correctFilePath);
               const renamedFile = this.app.vault.getAbstractFileByPath(correctFilePath);
-              if (renamedFile) {
-                await this.app.vault.modify(renamedFile as TFile, markdown.fullDocument);
+              if (renamedFile instanceof TFile) {
+                await this.app.vault.modify(renamedFile, markdown.fullDocument);
               }
             }
           } else {
             // Same path, just update content
-            await this.app.vault.modify(file as TFile, markdown.fullDocument);
+            await this.app.vault.modify(file, markdown.fullDocument);
           }
 
         } else {

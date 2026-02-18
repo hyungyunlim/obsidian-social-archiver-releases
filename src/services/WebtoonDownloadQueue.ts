@@ -937,7 +937,7 @@ export class WebtoonDownloadQueue extends EventTarget {
       } else if (typeof value === 'string' && (value.includes(':') || value.includes('#'))) {
         lines.push(`${key}: "${value}"`);
       } else {
-        lines.push(`${key}: ${String(value)}`);
+        lines.push(`${key}: ${String(value as string | number | boolean | bigint)}`);
       }
     }
     return lines.join('\n');

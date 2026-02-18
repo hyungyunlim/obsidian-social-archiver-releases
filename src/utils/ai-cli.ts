@@ -48,7 +48,7 @@ export const AI_CLI_INFO: Record<AICli, AICliInfo> = {
   },
 };
 
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- static-only utility class used as a namespace for cached CLI detection
+ 
 export class AICliDetector {
   // Cached detection results
   private static detectedClis: Map<AICli, AICliDetectionResult> = new Map();

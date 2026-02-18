@@ -1196,10 +1196,10 @@ export class NaverBlogLocalService {
             const dataData = data.data as Record<string, unknown> | undefined;
             if (data.type === 'v2_video' && dataData?.vid && dataData?.inkey) {
               // Use placeholder with vid:inkey for video download
-              content += `<!--VIDEO:${String(dataData.vid)}:${String(dataData.inkey)}-->\n\n`;
+              content += `<!--VIDEO:${dataData.vid as string | number}:${dataData.inkey as string | number}-->\n\n`;
             } else if (dataData?.vid) {
               // Just vid, will need to fetch inkey separately
-              content += `<!--VIDEO:${String(dataData.vid)}-->\n\n`;
+              content += `<!--VIDEO:${dataData.vid as string | number}-->\n\n`;
             } else {
               content += '[비디오]\n\n';
             }

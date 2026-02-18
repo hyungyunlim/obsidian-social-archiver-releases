@@ -100,7 +100,7 @@ export async function decrypt(encryptedData: string, iv: string, key: CryptoKey)
     // Decode
     const decoder = new TextDecoder();
     return decoder.decode(decrypted);
-  } catch (error) {
+  } catch {
     throw new Error('Decryption failed: data may be corrupted or tampered with');
   }
 }
@@ -183,7 +183,7 @@ export async function verifyHmacSignature(
 
     // Compare signatures (constant-time comparison)
     return timingSafeEqual(expectedSignature, signature);
-  } catch (error) {
+  } catch {
     return false;
   }
 }

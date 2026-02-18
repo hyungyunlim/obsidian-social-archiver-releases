@@ -34,7 +34,7 @@ export interface AuthorProfileData {
  * - Bluesky: author_avatar
  * - Substack: author_image
  */
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- utility class with only static methods; instantiation not needed
+ 
 export class ProfileDataMapper {
   /**
    * Map platform-specific API response to normalized AuthorProfileData

@@ -105,7 +105,7 @@ interface TransactionState {
 /**
  * Retry utility
  */
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- utility class with only static methods; instantiation not needed
+ 
 class RetryHelper {
   /**
    * Execute function with retry logic
@@ -690,7 +690,7 @@ export class ArchiveOrchestrator implements IService {
           })
         )
       );
-    } catch (error) {
+    } catch {
       // Don't throw - rollback should be best-effort
     }
   }
@@ -804,7 +804,7 @@ export class ArchiveOrchestrator implements IService {
           if (linkPreviews.length > 0) {
             postData.linkPreviews = linkPreviews;
           }
-        } catch (error) {
+        } catch {
           // Link preview extraction is non-critical, log error but continue
         }
       }

@@ -142,7 +142,7 @@ export class ReaderModeContentRenderer extends Component {
 
     // Left group: close button
     const closeBtn = header.createDiv({ cls: 'reader-mode-header-btn' });
-    closeBtn.setAttribute('title', 'Close reader (Esc)');
+    closeBtn.setAttribute('title', 'Close reader (esc)');
     setIcon(closeBtn, 'x');
     closeBtn.addEventListener('click', (e) => {
       e.stopPropagation();

@@ -651,7 +651,7 @@ export class ReaderModeOverlay {
     closeBtn.addClass('sa-icon-24');
     closeBtn.addClass('sa-rounded-4');
     closeBtn.addClass('sa-text-muted');
-    closeBtn.setAttribute('title', 'Close (Escape)');
+    closeBtn.setAttribute('title', 'Close (escape)');
     setIcon(closeBtn, 'x');
     closeBtn.addEventListener('mouseenter', () => {
       closeBtn.setCssProps({ '--sa-bg': 'var(--background-modifier-hover)' });

@@ -16,7 +16,7 @@ export interface ArchiveServiceConfig {
 /**
  * Request builder for constructing platform-specific requests
  */
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- utility class with only static methods; instantiation not needed
+ 
 class RequestBuilder {
   /**
    * Detect platform from URL
@@ -89,7 +89,7 @@ class RequestBuilder {
 /**
  * Response transformer for converting API responses to PostData
  */
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- utility class with only static methods; instantiation not needed
+ 
 class ResponseTransformer {
   /**
    * Transform and validate API response to PostData

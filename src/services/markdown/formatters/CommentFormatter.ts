@@ -167,7 +167,7 @@ export class CommentFormatter {
         })
         .filter(c => c.length > 0)
         .join('\n\n---\n\n');
-    } catch (error) {
+    } catch {
       return '';
     }
   }

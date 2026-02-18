@@ -14,7 +14,7 @@
 // This avoids strict-mode restrictions of eval while clearly signaling intentional
 // runtime access rather than a bundled import. The Function constructor approach
 // is preferred over indirect eval for clarity and lint compliance.
-// eslint-disable-next-line @typescript-eslint/no-implied-eval -- intentional runtime access to Node.js require in Electron
+// eslint-disable-next-line @typescript-eslint/no-implied-eval, @typescript-eslint/no-unsafe-call -- intentional runtime access to Node.js require in Electron; Function constructor call is cast to NodeJS.Require
 const _nodeRequire: NodeJS.Require = new Function('return require')() as NodeJS.Require;
 
 export default _nodeRequire;

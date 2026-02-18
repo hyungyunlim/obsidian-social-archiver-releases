@@ -78,7 +78,7 @@ export class TimelineContainer {
   public async reload(): Promise<void> {
     // Trigger reload in Svelte component if it has a reload method
     if (this.component && typeof this.component.reload === 'function') {
-      await this.component.reload();
+      await (this.component.reload as () => Promise<void>)();
     } else {
       // Otherwise, remount the component
       this.destroy();

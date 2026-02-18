@@ -772,7 +772,7 @@ export class WorkersAPIClient implements IService {
           timestamp: Date.now(),
         }),
       });
-    } catch (error) {
+    } catch {
       // Silently fail - stats collection is not critical
     }
   }

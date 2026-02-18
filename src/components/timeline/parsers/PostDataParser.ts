@@ -84,7 +84,7 @@ export class PostDataParser {
         batch.map(async (file) => {
           try {
             return await this.parseFile(file);
-          } catch (err) {
+          } catch {
             return null; // Silent fail
           }
         })
@@ -510,7 +510,7 @@ export class PostDataParser {
       };
 
       return postData;
-    } catch (err) {
+    } catch {
       return null;
     }
   }
@@ -1320,7 +1320,7 @@ export class PostDataParser {
         };
 
         archives.push(archiveData);
-      } catch (err) {
+      } catch {
         // Silent fail
       }
     }

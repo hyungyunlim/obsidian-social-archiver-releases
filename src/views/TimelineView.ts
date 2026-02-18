@@ -322,7 +322,7 @@ export class TimelineView extends ItemView {
                 }
               }
             }
-          } catch (error) {
+          } catch {
             // Silent fail
           }
 

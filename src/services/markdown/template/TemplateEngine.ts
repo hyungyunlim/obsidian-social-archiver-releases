@@ -14,7 +14,7 @@ const INNERMOST_CONDITIONAL_PATTERN = /\{\{#if\s+([^}]+)\}\}((?:(?!\{\{#if)[\s\S
  * TemplateEngine - Variable substitution and conditional rendering
  * Single Responsibility: Template processing with variable interpolation and conditionals
  */
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- utility class with only static methods; instantiation not needed
+ 
 export class TemplateEngine {
   /**
    * Process template with data
@@ -122,6 +122,7 @@ export class TemplateEngine {
       return JSON.stringify(value, null, 2);
     }
 
-    return String(value);
+    // At this point value is string | number | boolean | bigint | symbol
+    return String(value as string | number | boolean | bigint | symbol);
   }
 }

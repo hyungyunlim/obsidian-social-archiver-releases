@@ -73,7 +73,7 @@ export class CloudflareAPI implements IService {
 
     try {
       new URL(this.config.endpoint);
-    } catch (error) {
+    } catch {
       throw new Error(`Invalid API endpoint: ${this.config.endpoint}`);
     }
 
