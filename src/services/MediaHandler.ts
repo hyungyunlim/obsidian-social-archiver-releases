@@ -39,7 +39,7 @@ export type DownloadProgressCallback = (downloaded: number, total: number) => vo
 /**
  * Media type detector
  */
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- utility class with only static methods; instantiation not needed
 class MediaTypeDetector {
   private static imageExtensions = new Set([
     'jpg', 'jpeg', 'png', 'pnj', 'gif', 'webp', 'svg', 'bmp', 'ico', 'heic', 'heif', 'avif'
@@ -269,7 +269,7 @@ class DownloadQueue {
           const result = await task();
           resolve(result);
         } catch (error) {
-          reject(error);
+          reject(error instanceof Error ? error : new Error(String(error)));
         } finally {
           this.activeCount--;
           this.processQueue();
@@ -660,9 +660,8 @@ export class MediaHandler implements IService {
     // Check if it's a blob URL (TikTok videos from BrightData)
     if (url.startsWith('blob:')) {
       // Download blob URL directly in browser context (Electron/browser environment)
-      // requestUrl() does not support the blob: protocol, so native fetch is required here
-      // eslint-disable-next-line no-restricted-globals -- blob: URLs are not supported by requestUrl
-      const response = await fetch(url);
+      // requestUrl() does not support the blob: protocol; use window.fetch for blob: URLs
+      const response = await window.fetch(url);
       if (!response.ok) {
         throw new Error(`Blob fetch failed: ${response.status} ${response.statusText}`);
       }

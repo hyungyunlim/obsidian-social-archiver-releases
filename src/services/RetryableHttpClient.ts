@@ -81,7 +81,7 @@ export class RetryableHttpClient implements IService {
 		);
 
 		if (!result.success) {
-			throw result.error;
+			throw result.error ?? new Error('HTTP request failed');
 		}
 
 		return result.value as HttpResponse<T>;
@@ -102,7 +102,7 @@ export class RetryableHttpClient implements IService {
 		);
 
 		if (!result.success) {
-			throw result.error;
+			throw result.error ?? new Error('HTTP request failed');
 		}
 
 		return result.value as HttpResponse<T>;
@@ -124,7 +124,7 @@ export class RetryableHttpClient implements IService {
 		);
 
 		if (!result.success) {
-			throw result.error;
+			throw result.error ?? new Error('HTTP request failed');
 		}
 
 		return result.value as HttpResponse<T>;
@@ -146,7 +146,7 @@ export class RetryableHttpClient implements IService {
 		);
 
 		if (!result.success) {
-			throw result.error;
+			throw result.error ?? new Error('HTTP request failed');
 		}
 
 		return result.value as HttpResponse<T>;
@@ -167,7 +167,7 @@ export class RetryableHttpClient implements IService {
 		);
 
 		if (!result.success) {
-			throw result.error;
+			throw result.error ?? new Error('HTTP request failed');
 		}
 
 		return result.value as HttpResponse<T>;

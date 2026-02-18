@@ -105,7 +105,7 @@ interface TransactionState {
 /**
  * Retry utility
  */
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- utility class with only static methods; instantiation not needed
 class RetryHelper {
   /**
    * Execute function with retry logic
@@ -220,22 +220,22 @@ export class ArchiveOrchestrator implements IService {
   async initialize(): Promise<void> {
     // Initialize all services
     await Promise.all([
-      this.archiveService.initialize?.(),
-      this.markdownConverter.initialize?.(),
-      this.vaultManager.initialize?.(),
-      this.mediaHandler.initialize?.(),
-      this.linkPreviewExtractor.initialize?.(),
+      Promise.resolve(this.archiveService.initialize?.()),
+      Promise.resolve(this.markdownConverter.initialize?.()),
+      Promise.resolve(this.vaultManager.initialize?.()),
+      Promise.resolve(this.mediaHandler.initialize?.()),
+      Promise.resolve(this.linkPreviewExtractor.initialize?.()),
     ]);
   }
 
   async dispose(): Promise<void> {
     // Clean up all services
     await Promise.all([
-      this.archiveService.dispose?.(),
-      this.markdownConverter.dispose?.(),
-      this.vaultManager.dispose?.(),
-      this.mediaHandler.dispose?.(),
-      this.linkPreviewExtractor.dispose?.(),
+      Promise.resolve(this.archiveService.dispose?.()),
+      Promise.resolve(this.markdownConverter.dispose?.()),
+      Promise.resolve(this.vaultManager.dispose?.()),
+      Promise.resolve(this.mediaHandler.dispose?.()),
+      Promise.resolve(this.linkPreviewExtractor.dispose?.()),
     ]);
 
     // Clear cache and listeners
@@ -246,11 +246,11 @@ export class ArchiveOrchestrator implements IService {
   async isHealthy(): Promise<boolean> {
     // Check all services are healthy
     const healthChecks = await Promise.all([
-      this.archiveService.isHealthy?.() ?? true,
-      this.markdownConverter.isHealthy?.() ?? true,
-      this.vaultManager.isHealthy?.() ?? true,
-      this.mediaHandler.isHealthy?.() ?? true,
-      this.linkPreviewExtractor.isHealthy?.() ?? true,
+      Promise.resolve(this.archiveService.isHealthy?.() ?? true),
+      Promise.resolve(this.markdownConverter.isHealthy?.() ?? true),
+      Promise.resolve(this.vaultManager.isHealthy?.() ?? true),
+      Promise.resolve(this.mediaHandler.isHealthy?.() ?? true),
+      Promise.resolve(this.linkPreviewExtractor.isHealthy?.() ?? true),
     ]);
 
     return healthChecks.every((healthy: boolean) => healthy);

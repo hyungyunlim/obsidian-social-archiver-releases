@@ -584,7 +584,7 @@ export async function getRelevantVaultContext(
     if (estimatedTokens + fileTokens > maxTokens) {
       // If we haven't selected any files yet, include at least one
       if (selectedFiles.length === 0) {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructuring to strip the internal scoring property before returning
         const { score: _score, ...fileWithoutScore } = file;
         selectedFiles.push(fileWithoutScore);
       }
@@ -592,7 +592,7 @@ export async function getRelevantVaultContext(
     }
 
     // Remove score property before adding to result
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructuring to strip the internal scoring property before returning
     const { score: _score, ...fileWithoutScore } = file;
     selectedFiles.push(fileWithoutScore);
     estimatedTokens += fileTokens;

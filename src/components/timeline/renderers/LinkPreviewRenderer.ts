@@ -270,7 +270,6 @@ export class LinkPreviewRenderer {
    * Update placeholder card with error state
    * @deprecated - Currently unused but kept for future error handling
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for future error handling, currently deprecated
   private _updateCardWithError(card: HTMLElement, preview: LinkPreview, _onRetry: () => void): void {
     if (!preview.error) return;
 

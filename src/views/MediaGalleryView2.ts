@@ -24,7 +24,7 @@ export class MediaGalleryView2 extends ItemView {
   }
 
   getDisplayText(): string {
-    return 'Media Gallery';
+    return 'Media gallery';
   }
 
   getIcon(): string {

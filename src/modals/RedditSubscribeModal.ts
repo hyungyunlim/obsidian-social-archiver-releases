@@ -120,10 +120,10 @@ export class RedditSubscribeModal extends Modal {
 
     // Title - different text for subreddits vs user profiles
     const titleText = this.isEditMode
-      ? 'Edit Subscription'
+      ? 'Edit subscription'
       : this.isUserProfile
-        ? 'Subscribe to User'
-        : 'Subscribe to Subreddit';
+        ? 'Subscribe to user'
+        : 'Subscribe to subreddit';
     contentEl.createEl('h2', { text: titleText });
 
     // Profile card

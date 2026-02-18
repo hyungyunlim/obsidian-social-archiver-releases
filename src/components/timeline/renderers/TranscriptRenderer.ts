@@ -99,7 +99,9 @@ export class TranscriptRenderer {
       this.adapter = options.adapter;
       this.audioElement = null;
     } else if (options.audioElement) {
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- audioElement kept for backward compatibility with podcast flow
       this.audioElement = options.audioElement;
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- audioElement kept for backward compatibility with podcast flow
       this.adapter = new HtmlMediaPlaybackAdapter(options.audioElement);
     } else {
       this.adapter = null;
@@ -158,6 +160,7 @@ export class TranscriptRenderer {
     if (this.adapter) {
       this.bindAdapterEvents();
     } else if (this.audioElement) {
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- bindAudioEvents kept for backward compatibility with podcast flow
       this.bindAudioEvents();
     }
   }

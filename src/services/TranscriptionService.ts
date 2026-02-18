@@ -237,7 +237,7 @@ export class TranscriptionService {
     const wavPath = await this.extractAudioFromVideo(mediaPath, signal);
     return {
       path: wavPath,
-      // eslint-disable-next-line @typescript-eslint/require-await
+      // eslint-disable-next-line @typescript-eslint/require-await -- cleanup must match async interface signature even though it calls only sync fs methods
       cleanup: async () => {
         const fs = nodeRequire('fs') as typeof import('fs');
         try {
@@ -826,7 +826,6 @@ export class TranscriptionService {
     const json = JSON.parse(jsonContent) as Record<string, unknown>;
 
     // Handle different JSON formats from different Whisper variants
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rawSegments = (Array.isArray(json.segments) ? json.segments : (Array.isArray(json.transcription) ? json.transcription : []));
     const segments: TranscriptionSegment[] = rawSegments.map(
       (segment: {

@@ -185,7 +185,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       containerEl.empty();
 
     // Plugin Title - using Setting heading API
-    new Setting(containerEl).setName('Social Archiver').setHeading()
+    new Setting(containerEl).setName('General').setHeading()
       .settingEl.addClass('sa-settings-title');
 
     // Plugin Description
@@ -207,7 +207,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     });
 
     // Archive Settings Section
-    new Setting(containerEl).setName('Archive settings').setHeading()
+    new Setting(containerEl).setName('Archive').setHeading()
       .settingEl.addClass('sa-settings-section-header');
 
     new Setting(containerEl)
@@ -229,10 +229,10 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Archive folder structure')
-      .setDesc('Choose how notes are organized under Archive Folder')
+      .setDesc('Choose how notes are organized under archive folder')
       .addDropdown(dropdown => dropdown
-        .addOption('platform-year-month', 'ArchiveFolder/Platform/Year/Month')
-        .addOption('platform-only', 'ArchiveFolder/Platform')
+        .addOption('platform-year-month', 'ArchiveFolder/platform/year/month')
+        .addOption('platform-only', 'ArchiveFolder/platform')
         .addOption('flat', 'ArchiveFolder only')
         .setValue(this.plugin.settings.archiveOrganization)
         .onChange((value: string) => {
@@ -317,7 +317,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         }));
 
     // Sharing Settings Section
-    new Setting(containerEl).setName('Sharing settings').setHeading()
+    new Setting(containerEl).setName('Sharing').setHeading()
       .settingEl.addClass('sa-settings-section-header');
 
     // Share Mode setting
@@ -325,8 +325,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setName('Share mode')
       .setDesc('Choose how shared posts appear on the web. "Preview" mode protects copyright by showing only excerpts without media.')
       .addDropdown(dropdown => dropdown
-        .addOption('preview', 'Preview (Copyright-safe)')
-        .addOption('full', 'Full content (Original)')
+        .addOption('preview', 'Preview (copyright-safe)')
+        .addOption('full', 'Full content (original)')
         .setValue(this.plugin.settings.shareMode)
         .onChange((value: string) => {
           this.plugin.settings.shareMode = value as ShareMode;
@@ -360,7 +360,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     updatePreviewLengthVisibility();
 
     // Transcription Settings Section (Desktop Only)
-    new Setting(containerEl).setName('Transcription settings').setHeading()
+    new Setting(containerEl).setName('Transcription').setHeading()
       .settingEl.addClass('sa-settings-section-header');
 
     // Mobile notice - transcription requires local Whisper CLI
@@ -379,7 +379,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     // Enable transcription toggle
     new Setting(containerEl)
       .setName('Enable Whisper transcription')
-      .setDesc('Transcribe podcast audio using locally installed Whisper (Desktop only)')
+      .setDesc('Transcribe podcast audio using locally installed Whisper (desktop only)')
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.transcription.enabled)
         .onChange((value) => {
@@ -417,7 +417,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .addDropdown(dropdown => dropdown
         .addOption('tiny', 'Tiny (~1GB VRAM, fastest)')
         .addOption('base', 'Base (~1GB VRAM)')
-        .addOption('small', 'Small (~2GB VRAM) - Recommended')
+        .addOption('small', 'Small (~2GB VRAM) - recommended')
         .addOption('medium', 'Medium (~5GB VRAM)')
         .addOption('large', 'Large (~10GB VRAM, most accurate)')
         .setValue(this.plugin.settings.transcription.preferredModel)
@@ -498,7 +498,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .addDropdown((dropdown) => {
         dropdown
           .addOption('transcribe-only', 'Transcribe only')
-          .addOption('download-and-transcribe', 'Download & Transcribe')
+          .addOption('download-and-transcribe', 'Download & transcribe')
           .setValue(this.plugin.settings.transcription.batchMode || 'transcribe-only')
           .onChange(async (value) => {
             this.plugin.settings.transcription.batchMode = value as 'transcribe-only' | 'download-and-transcribe';
@@ -1160,7 +1160,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
               .addOption('number', 'Number')
               .addOption('checkbox', 'Checkbox')
               .addOption('date', 'Date')
-              .addOption('date-time', 'Date & Time')
+              .addOption('date-time', 'Date & time')
               .addOption('list', 'List')
               .setValue(propertyType)
               .onChange((value) => {
@@ -1406,7 +1406,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    */
   private renderNaverSettings(containerEl: HTMLElement): void {
     // Section Header
-    new Setting(containerEl).setName('Naver settings').setHeading()
+    new Setting(containerEl).setName('Naver').setHeading()
       .settingEl.addClass('sa-settings-section-header');
 
     // Description
@@ -1560,7 +1560,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         .setName('Sync now')
         .setDesc('Manually trigger a sync of your Reddit saved posts')
         .addButton(button => button
-          .setButtonText('Sync Now')
+          .setButtonText('Sync now')
           .onClick(async () => {
             button.setDisabled(true);
             button.setButtonText('Syncing...');
@@ -1574,7 +1574,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
               new Notice(`Sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
             } finally {
               button.setDisabled(false);
-              button.setButtonText('Sync Now');
+              button.setButtonText('Sync now');
             }
           }));
     }
@@ -1582,7 +1582,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     // Info callout
     const infoDiv = containerEl.createDiv({ cls: 'setting-info' });
     infoDiv.addClass('sa-settings-info-box', 'sa-mt-16');
-    infoDiv.createEl('strong', { text: 'About Reddit Sync' });
+    infoDiv.createEl('strong', { text: 'About Reddit sync' });
     const ul = infoDiv.createEl('ul');
     ul.addClass('sa-settings-info-list');
     ul.createEl('li', { text: 'Syncs posts you\'ve saved on Reddit' });
@@ -1679,12 +1679,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     // Info callout explaining the feature
     const infoDiv = containerEl.createDiv({ cls: 'setting-info' });
     infoDiv.addClass('sa-settings-info-box');
-    infoDiv.createEl('strong', { text: 'Streaming Mode' });
+    infoDiv.createEl('strong', { text: 'Streaming mode' });
     infoDiv.appendChild(document.createTextNode(' loads webtoon episodes instantly without waiting for downloads.'));
     const ul = infoDiv.createEl('ul');
     ul.addClass('sa-settings-info-list');
     ul.createEl('li', { text: 'Images are proxied through our server to bypass CORS restrictions' });
-    ul.createEl('li', { text: 'Background Download saves episodes for offline reading' });
+    ul.createEl('li', { text: 'Background download saves episodes for offline reading' });
     ul.createEl('li', { text: 'Prefetch pre-loads the next episode for seamless transitions' });
 
     // View Mode dropdown
@@ -1692,8 +1692,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setName('Episode loading mode')
       .setDesc('Stream-first: Load immediately via proxy (faster). Download-first: Wait for full download (offline ready).')
       .addDropdown(dropdown => dropdown
-        .addOption('stream-first', 'Stream First (Recommended)')
-        .addOption('download-first', 'Download First')
+        .addOption('stream-first', 'Stream first (recommended)')
+        .addOption('download-first', 'Download first')
         .setValue(this.plugin.settings.webtoonStreaming?.viewMode || 'stream-first')
         .onChange((value) => {
           const viewMode = value as 'stream-first' | 'download-first';
@@ -1824,7 +1824,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    */
   private async renderAICommentSettings(containerEl: HTMLElement): Promise<void> {
     // Section Header
-    new Setting(containerEl).setName('AI comment settings').setHeading()
+    new Setting(containerEl).setName('AI comments').setHeading()
       .settingEl.addClass('sa-settings-section-header');
 
     // Mobile notice
@@ -1832,7 +1832,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       const mobileNote = containerEl.createEl('div', {
         cls: 'setting-item-description'
       });
-      mobileNote.textContent = 'AI Comments are only available on desktop (requires local CLI tools)';
+      mobileNote.textContent = 'AI comments are only available on desktop (requires local CLI tools)';
       mobileNote.addClass('sa-settings-info');
       return;
     }
@@ -2016,7 +2016,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     headerEl.addClass('sa-settings-collapsible-header');
 
     const headerInfo = headerEl.createDiv({ cls: 'setting-item-info' });
-    const headerName = headerInfo.createDiv({ cls: 'setting-item-name', text: '▶ Platform Visibility' });
+    const headerName = headerInfo.createDiv({ cls: 'setting-item-name', text: '▶ Platform visibility' });
     headerInfo.createDiv({
       cls: 'setting-item-description',
       text: 'Choose which platform types show AI comment banners'
@@ -2028,7 +2028,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     let isExpanded = false;
     headerEl.onclick = () => {
       isExpanded = !isExpanded;
-      headerName.textContent = isExpanded ? '▼ Platform Visibility' : '▶ Platform Visibility';
+      headerName.textContent = isExpanded ? '▼ Platform visibility' : '▶ Platform visibility';
       if (isExpanded) {
         contentEl.addClass('st-collapsible-visible');
         contentEl.removeClass('sa-hidden');
@@ -2059,7 +2059,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         }));
 
     new Setting(contentEl)
-      .setName('Video & Audio')
+      .setName('Video & audio')
       .setDesc('YouTube, Podcast')
       .addToggle(toggle => toggle
         .setValue(settings.platformVisibility.videoAudio)
@@ -2075,7 +2075,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     const excludeHeader = excludeEl.createEl('div', {
       cls: 'setting-item-name',
-      text: 'Excluded Platforms'
+      text: 'Excluded platforms'
     });
     excludeHeader.addClass('sa-mb-8');
 
@@ -2125,7 +2125,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     headerEl.addClass('sa-settings-collapsible-header');
 
     const headerInfo = headerEl.createDiv({ cls: 'setting-item-info' });
-    const headerName = headerInfo.createDiv({ cls: 'setting-item-name', text: '▶ Vault Context (Connections)' });
+    const headerName = headerInfo.createDiv({ cls: 'setting-item-name', text: '▶ Vault context (connections)' });
     headerInfo.createDiv({
       cls: 'setting-item-description',
       text: 'Configure how AI finds connections to your notes'
@@ -2137,7 +2137,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     let isExpanded = false;
     headerEl.onclick = () => {
       isExpanded = !isExpanded;
-      headerName.textContent = isExpanded ? '▼ Vault Context (Connections)' : '▶ Vault Context (Connections)';
+      headerName.textContent = isExpanded ? '▼ Vault context (connections)' : '▶ Vault context (connections)';
       if (isExpanded) {
         contentEl.addClass('st-collapsible-visible');
         contentEl.removeClass('sa-hidden');

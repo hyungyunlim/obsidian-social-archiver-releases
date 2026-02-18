@@ -1264,10 +1264,9 @@ export interface MarkdownResult {
 
 /**
  * Options for markdown conversion
+ * Reserved for future options
  */
-export interface ConvertOptions {
-  // Reserved for future options
-}
+export type ConvertOptions = object;
 
 interface MarkdownConverterConfig {
   frontmatterSettings?: FrontmatterCustomizationSettings;

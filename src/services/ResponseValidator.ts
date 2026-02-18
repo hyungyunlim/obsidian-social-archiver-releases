@@ -175,7 +175,7 @@ export class ResponseValidator implements IService {
 	safeValidate(
 		data: unknown,
 		platform?: Platform
-	// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
+	// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- union includes BrightDataResponse which is a broad type; explicit union aids readability
 	): { success: true; data: PlatformPostData | BrightDataResponse } | { success: false; error: ValidationError } {
 		try {
 			if (platform) {

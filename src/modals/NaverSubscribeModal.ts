@@ -104,8 +104,8 @@ export class NaverSubscribeModal extends Modal {
     }
 
     // Title based on subscription type
-    const typeLabel = this.subscriptionType === 'blog' ? 'Naver Blog' : 'Cafe Member';
-    const titleText = this.isEditMode ? 'Edit Subscription' : `Subscribe to ${typeLabel}`;
+    const typeLabel = this.subscriptionType === 'blog' ? 'Naver Blog' : 'Cafe member';
+    const titleText = this.isEditMode ? 'Edit subscription' : `Subscribe to ${typeLabel}`;
     contentEl.createEl('h2', { text: titleText });
 
     // Profile card

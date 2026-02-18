@@ -131,7 +131,7 @@ export class WebtoonEpisodeSelectModal extends Modal {
 
     const title = titleRow.createEl('h2');
     title.addClass('sa-m-0', 'sa-text-md');
-    title.setText(this.multiSelect ? 'Select Episodes' : 'Select Episode');
+    title.setText(this.multiSelect ? 'Select episodes' : 'Select episode');
 
     // Series info
     const seriesRow = header.createDiv();
@@ -438,7 +438,7 @@ export class WebtoonEpisodeSelectModal extends Modal {
       if (freeEpisodes.length > 0) {
         const selectAllBtn = leftSide.createEl('button');
         selectAllBtn.addClass('sa-py-6', 'sa-px-12', 'sa-bg-transparent', 'sa-text-accent', 'sa-border', 'sa-clickable', 'sa-text-xs', 'wesm-select-all-btn');
-        selectAllBtn.setText(this.selectedEpisodes.size === freeEpisodes.length ? 'Deselect All' : 'Select All Free');
+        selectAllBtn.setText(this.selectedEpisodes.size === freeEpisodes.length ? 'Deselect all' : 'Select all free');
         selectAllBtn.addEventListener('click', () => {
           if (this.selectedEpisodes.size === freeEpisodes.length) {
             this.selectedEpisodes.clear();
@@ -448,7 +448,7 @@ export class WebtoonEpisodeSelectModal extends Modal {
           this.renderEpisodeList();
           this.updateSelectionInfo();
           this.updateSubmitButton();
-          selectAllBtn.setText(this.selectedEpisodes.size === freeEpisodes.length ? 'Deselect All' : 'Select All Free');
+          selectAllBtn.setText(this.selectedEpisodes.size === freeEpisodes.length ? 'Deselect all' : 'Select all free');
         });
       }
     }
@@ -465,7 +465,7 @@ export class WebtoonEpisodeSelectModal extends Modal {
 
     // Submit button
     this.submitBtn = rightSide.createEl('button');
-    this.submitBtn.setText(this.multiSelect ? 'Archive Selected' : 'Archive');
+    this.submitBtn.setText(this.multiSelect ? 'Archive selected' : 'Archive');
     this.submitBtn.disabled = true;
     this.submitBtn.addClass('sa-py-8', 'sa-px-16', 'sa-clickable', 'sa-font-medium', 'sa-opacity-50', 'wesm-submit-btn');
     this.submitBtn.setCssProps({'--sa-bg': '#00DC64', '--sa-color': 'white'});
@@ -493,7 +493,7 @@ export class WebtoonEpisodeSelectModal extends Modal {
       const message = error instanceof Error ? error.message : 'Archive failed';
       this.showError(message);
       this.submitBtn.disabled = false;
-      this.submitBtn.setText(this.multiSelect ? 'Archive Selected' : 'Archive');
+      this.submitBtn.setText(this.multiSelect ? 'Archive selected' : 'Archive');
     } finally {
       this.isSubmitting = false;
     }

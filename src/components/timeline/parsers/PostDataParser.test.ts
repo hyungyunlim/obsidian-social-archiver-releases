@@ -204,6 +204,85 @@ Shared post text.
   });
 });
 
+describe('PostDataParser - extractContentText excludes media-only sections', () => {
+  const parser = new PostDataParser({} as any);
+
+  it('excludes multi-image carousel section after separator (Instagram style)', () => {
+    const markdown = `---
+platform: instagram
+author: testuser
+published: 2025-11-06
+---
+
+Caption text about the post.
+
+---
+
+![image 1](attachments/social-archives/instagram/abc/img-1.jpg)
+
+![image 2](attachments/social-archives/instagram/abc/img-2.jpg)
+
+![image 3](attachments/social-archives/instagram/abc/img-3.jpg)
+
+---
+
+**Platform:** Instagram | **Author:** testuser | **Published:** 2025-11-06
+
+**Original URL:** https://www.instagram.com/p/abc
+`;
+
+    const content = parser.extractContentText(markdown);
+    expect(content).toBe('Caption text about the post.');
+    expect(content).not.toContain('![image');
+  });
+
+  it('excludes single image section after separator', () => {
+    const markdown = `---
+platform: instagram
+author: testuser
+published: 2025-11-06
+---
+
+Single photo caption.
+
+---
+
+![image](attachments/social-archives/instagram/xyz/img-1.jpg)
+
+---
+
+**Platform:** Instagram | **Author:** testuser | **Published:** 2025-11-06
+`;
+
+    const content = parser.extractContentText(markdown);
+    expect(content).toBe('Single photo caption.');
+    expect(content).not.toContain('![image');
+  });
+
+  it('preserves horizontal rules within actual post body', () => {
+    const markdown = `---
+platform: x
+author: testuser
+published: 2025-11-06
+---
+
+First paragraph.
+
+---
+
+Second paragraph after horizontal rule.
+
+---
+
+**Platform:** X | **Author:** testuser | **Published:** 2025-11-06
+`;
+
+    const content = parser.extractContentText(markdown);
+    expect(content).toContain('First paragraph.');
+    expect(content).toContain('Second paragraph after horizontal rule.');
+  });
+});
+
 describe('PostDataParser - media deduplication', () => {
   it('removes duplicate media entries when parsing a post file', async () => {
     const duplicateMarkdown = `---

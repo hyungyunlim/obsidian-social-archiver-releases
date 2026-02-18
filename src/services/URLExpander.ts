@@ -218,7 +218,9 @@ export class URLExpander implements IService {
   }
 
   /**
-   * Fetch a single redirect
+   * Fetch a single redirect using Obsidian's requestUrl (CORS-safe).
+   * requestUrl auto-follows redirects; we detect the final URL via Location headers
+   * or canonical URL extraction from HTML.
    */
   private async fetchRedirect(url: string): Promise<string | null> {
     // Try HEAD with requestUrl first
@@ -234,55 +236,16 @@ export class URLExpander implements IService {
       return getResult;
     }
 
-    // Fall back to native fetch (may fail with CORS)
-    // requestUrl() auto-follows redirects and doesn't support redirect: 'manual'
-    // native fetch is required here to detect and handle redirects manually
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
-    try {
-      // eslint-disable-next-line no-restricted-globals -- redirect: 'manual' is not supported by requestUrl
-      const response = await fetch(url, {
-        method: 'HEAD', // Use HEAD to avoid downloading content
-        redirect: 'manual', // Handle redirects manually
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      // Check for HTTP redirects
-      if (this.isRedirectStatus(response.status)) {
-        const location = response.headers.get('location');
-        if (location) {
-          return this.resolveUrl(url, location);
-        }
-      }
-
-      // If HEAD didn't work, try GET with meta refresh check
-      if (this.followMetaRefresh && response.status === 200) {
-        return await this.checkMetaRefresh(url);
-      }
-
-      // No redirect found
-      return null;
-    } catch (error) {
-      clearTimeout(timeoutId);
-
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('URL expansion timeout');
-      }
-
-      // Try with GET if HEAD failed
-      try {
-        return await this.fetchRedirectWithGet(url);
-      } catch {
-        throw error;
-      }
+    // If meta refresh following is enabled, try that as a last resort
+    if (this.followMetaRefresh) {
+      return this.checkMetaRefresh(url);
     }
+
+    return null;
   }
 
   /**
-   * Fetch redirect using GET method
+   * Fetch redirect using GET method via requestUrl
    */
   private async fetchRedirectWithGet(url: string): Promise<string | null> {
     const requestUrlResult = await this.tryRequestUrlRedirect(url, 'GET');
@@ -290,69 +253,21 @@ export class URLExpander implements IService {
       return requestUrlResult;
     }
 
-    // requestUrl() auto-follows redirects and doesn't support redirect: 'manual'
-    // native fetch is required here to detect and handle redirects manually
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
-    try {
-      // eslint-disable-next-line no-restricted-globals -- redirect: 'manual' is not supported by requestUrl
-      const response = await fetch(url, {
-        method: 'GET',
-        redirect: 'manual',
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (this.isRedirectStatus(response.status)) {
-        const location = response.headers.get('location');
-        if (location) {
-          return this.resolveUrl(url, location);
-        }
-      }
-
-      // Check for meta refresh
-      if (this.followMetaRefresh && response.status === 200) {
-        const html = await response.text();
-        return this.extractMetaRefresh(html, url);
-      }
-
-      return null;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      throw error;
+    // Check for meta refresh if enabled
+    if (this.followMetaRefresh) {
+      return this.checkMetaRefresh(url);
     }
+
+    return null;
   }
 
   /**
-   * Check for meta refresh redirect in HTML
+   * Check for meta refresh redirect in HTML using requestUrl
    */
   private async checkMetaRefresh(url: string): Promise<string | null> {
     try {
       const requestUrlResult = await this.tryRequestUrlMetaRefresh(url);
-      if (requestUrlResult !== undefined) {
-        return requestUrlResult;
-      }
-
-      // NOTE: Using fetch() as fallback when requestUrl fails (rare edge case)
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
-      // eslint-disable-next-line no-restricted-globals -- native fetch required for features not supported by requestUrl
-      const response = await fetch(url, {
-        method: 'GET',
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (response.ok) {
-        const html = await response.text();
-        return this.extractMetaRefresh(html, url);
-      }
-
-      return null;
+      return requestUrlResult ?? null;
     } catch {
       return null;
     }
@@ -546,7 +461,7 @@ export class URLExpander implements IService {
           }
         }
 
-        // Allow fallback to native fetch if we couldn't derive a target URL
+        // Could not derive a target URL from this response
         return undefined;
       }
 

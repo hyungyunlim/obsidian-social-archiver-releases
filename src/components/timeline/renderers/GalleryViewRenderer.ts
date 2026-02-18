@@ -1,4 +1,4 @@
-import { type App, type Vault, type TFile, setIcon, prepareSimpleSearch } from 'obsidian';
+import { type App, type Vault, TFile, setIcon, prepareSimpleSearch } from 'obsidian';
 
 /**
  * Media item data structure for gallery view
@@ -307,7 +307,9 @@ export class GalleryViewRenderer {
         // Add external link icon
         if (postData.file) {
           postHeader.addEventListener('click', () => {
-            void this.app.workspace.getLeaf().openFile(postData.file as TFile);
+            if (postData.file instanceof TFile) {
+              void this.app.workspace.getLeaf().openFile(postData.file);
+            }
           });
 
           // Hover effect handled by CSS .gvr-post-subheader:hover
@@ -393,7 +395,9 @@ export class GalleryViewRenderer {
         // Hover effect handled by CSS .gvr-group-header--clickable:hover
 
         groupHeader.addEventListener('click', () => {
-          void this.app.workspace.getLeaf().openFile(groupData.file as TFile);
+          if (groupData.file instanceof TFile) {
+            void this.app.workspace.getLeaf().openFile(groupData.file);
+          }
         });
 
         // Add Lucide external-link icon (smaller and more subtle)

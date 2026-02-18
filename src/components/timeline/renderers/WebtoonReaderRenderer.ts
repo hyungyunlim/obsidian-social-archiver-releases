@@ -203,7 +203,7 @@ export class WebtoonReaderRenderer {
         dayBadge.addClass('sa-px-6', 'sa-py-4', 'sa-bg-hover', 'sa-rounded-4', 'sa-text-muted');
         dayBadge.textContent = metadata.publishDay;
         if (metadata.finished) {
-          dayBadge.textContent += ' (Complete)';
+          dayBadge.textContent += ' (complete)';
         }
       }
     }

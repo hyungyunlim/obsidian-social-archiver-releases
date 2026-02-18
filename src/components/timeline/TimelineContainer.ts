@@ -973,7 +973,7 @@ export class TimelineContainer {
     }
 
     // Show notice
-    new Notice('Switched to Author Catalog');
+    new Notice('Switched to author catalog');
   }
 
   /**

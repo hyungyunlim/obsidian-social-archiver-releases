@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/await-thenable */
 import { Plugin, Notice, Platform as ObsidianPlatform, Events, TFile, TFolder, EventRef, requestUrl, normalizePath, Modal, Setting, ButtonComponent } from 'obsidian';
 import { SocialArchiverSettingTab } from './settings/SettingTab';
 import { SocialArchiverSettings, DEFAULT_SETTINGS, API_ENDPOINT, MediaDownloadMode, migrateSettings, getVaultOrganizationStrategy } from './types/settings';
@@ -56,6 +55,7 @@ const JOB_SUBMISSION_GRACE_PERIOD = 15000; // Wait 15 seconds after submission b
 const MOBILE_SYNC_ARCHIVE_FETCH_MAX_ATTEMPTS = 5; // Retry transient archive lookup misses
 const MOBILE_SYNC_ARCHIVE_FETCH_RETRY_DELAY = 2000; // Base delay for archive lookup retries
 const MOBILE_SYNC_PENDING_RETRY_DELAY = 30000; // Re-run pending queue sync after not-found
+const MOBILE_SYNC_QUEUE_MAX_RETRIES = 1; // Max queue-level retries per item before giving up (inner 5-attempt retry already covers replication lag)
 
 interface VideoDownloadFailure {
   index: number;
@@ -63,6 +63,96 @@ interface VideoDownloadFailure {
   attemptedUrl: string;
   reason: string;
   thumbnailFallback: boolean;
+}
+
+/** Shape of the ws:job_completed WebSocket event payload. */
+interface WsJobCompletedMessage {
+  jobId: string;
+  result: unknown;
+  metadata?: {
+    url?: string;
+    platform?: string;
+    filePath?: string;
+    archiveOptions?: {
+      downloadMedia?: boolean;
+      includeTranscript?: boolean;
+      includeFormattedTranscript?: boolean;
+    };
+  };
+}
+
+/** Shape of the ws:job_failed WebSocket event payload. */
+interface WsJobFailedMessage {
+  jobId?: string;
+  error?: { message: string; code?: string };
+  handle?: string;
+}
+
+/** Shape of the ws:truncation_warning WebSocket event payload. */
+interface WsTruncationWarningMessage {
+  handle?: string;
+  totalFound: number;
+  maxAllowed: number;
+  truncatedCount: number;
+  isProfileCrawl: boolean;
+}
+
+/** Shape of the ws:subscription_post WebSocket event payload. */
+interface WsSubscriptionPostMessage {
+  post?: PostData;
+  destinationFolder?: string;
+  pendingPostId?: string;
+  subscriptionId?: string;
+  subscriptionName?: string;
+  isProfileCrawl?: boolean;
+}
+
+/** Profile metadata sent with ws:profile_metadata events. */
+interface WsProfileMetadata {
+  avatarUrl?: string;
+  displayName?: string;
+  bio?: string;
+  followers?: number;
+  following?: number;
+  postsCount?: number;
+  verified?: boolean;
+  location?: string;
+}
+
+/** Shape of the ws:profile_metadata WebSocket event payload. */
+interface WsProfileMetadataMessage {
+  metadata: WsProfileMetadata;
+  handle: string;
+  platform: string;
+  profileUrl: string;
+}
+
+/** Minimal shape of a job status response passed to processCompletedJob. */
+interface CompletedJobResponse {
+  result?: {
+    type?: string;
+    postData?: unknown;
+    creditsUsed?: number;
+    processingTime?: number;
+    cached?: boolean;
+  };
+  metadata?: { type?: string };
+}
+
+/** Shape of the ws:profile_crawl_complete WebSocket event payload. */
+interface WsProfileCrawlCompleteMessage {
+  jobId?: string;
+  handle: string;
+  platform: string;
+  posts?: PostData[];
+  stats?: {
+    processedCount?: number;
+    allDuplicates?: boolean;
+  };
+  isFediverse?: boolean;
+  isYouTube?: boolean;
+  isBlog?: boolean;
+  isXcancel?: boolean;
 }
 
 export default class SocialArchiverPlugin extends Plugin {
@@ -85,6 +175,8 @@ export default class SocialArchiverPlugin extends Plugin {
   private isSyncingSubscriptions = false; // Track if sync is in progress
   private isSyncingMobileQueue = false; // Track if mobile sync queue catch-up is in progress
   private scheduledMobileSyncRetries = new Set<string>(); // queueId set for delayed mobile sync retries
+  private mobileSyncRetryCount = new Map<string, number>(); // queueId → retry count
+  private failedSyncQueueIds = new Set<string>(); // queueIds permanently failed this session (skip on re-fetch)
   private authorAvatarService?: AuthorAvatarService; // Author avatar download service
   private wsPostBatchTimer?: number; // Timer for batching WebSocket posts
   private recentlyArchivedUrls = new Set<string>(); // Dedup guard for ws:client_sync (tracks URLs archived locally)
@@ -239,13 +331,13 @@ export default class SocialArchiverPlugin extends Plugin {
       options: () => ([
         {
           type: 'dropdown' as const,
-          displayName: 'Media Type',
+          displayName: 'Media type',
           key: 'mediaType',
           default: 'all',
           options: {
-            'all': 'All Media',
-            'images': 'Images Only',
-            'videos': 'Videos Only'
+            'all': 'All media',
+            'images': 'Images only',
+            'videos': 'Videos only'
           } as Record<string, string>
         },
         {
@@ -415,7 +507,7 @@ export default class SocialArchiverPlugin extends Plugin {
     // Add command for posting and sharing current note
     this.addCommand({
       id: 'post-and-share',
-      name: 'Post and Share',
+      name: 'Post and share',
       checkCallback: (checking: boolean) => {
         const activeFile = this.app.workspace.getActiveFile();
         if (activeFile) {
@@ -477,8 +569,8 @@ export default class SocialArchiverPlugin extends Plugin {
 
     // Listen for job_completed events
     this.eventRefs.push(
-      this.events.on('ws:job_completed', async (message: any) => {
-
+      this.events.on('ws:job_completed', async (data: unknown) => {
+        const message = data as WsJobCompletedMessage;
         const { jobId, result, metadata } = message;
         if (!jobId) {
           console.warn('[Social Archiver] job_completed event missing jobId');
@@ -500,14 +592,14 @@ export default class SocialArchiverPlugin extends Plugin {
           job = {
             id: jobId, // Use workerJobId as local id
             url: metadata.url || '',
-            platform: metadata.platform || 'unknown',
+            platform: (metadata.platform || 'unknown') as Platform,
             status: 'processing',
             timestamp: Date.now(),
             retryCount: 0,
             metadata: {
               filePath: metadata.filePath, // May be undefined in single-write mode
               workerJobId: jobId,
-              downloadMedia: metadata.archiveOptions?.downloadMedia,
+              downloadMedia: metadata.archiveOptions?.downloadMedia !== undefined ? String(metadata.archiveOptions.downloadMedia) : undefined,
               includeTranscript: metadata.archiveOptions?.includeTranscript,
               includeFormattedTranscript: metadata.archiveOptions?.includeFormattedTranscript,
             }
@@ -538,7 +630,7 @@ export default class SocialArchiverPlugin extends Plugin {
           }
 
           // Process the completed job immediately
-          await this.processCompletedJob(job, { result });
+          await this.processCompletedJob(job, { result: result as CompletedJobResponse['result'] });
 
           // Update archive banner
           const completedLocalJob = await this.pendingJobsManager.getJobByWorkerJobId(jobId);
@@ -572,7 +664,8 @@ export default class SocialArchiverPlugin extends Plugin {
 
     // Listen for job_failed events (from profile crawl webhook when BrightData returns errors)
     this.eventRefs.push(
-      this.events.on('ws:job_failed', async (message: any) => {
+      this.events.on('ws:job_failed', async (data: unknown) => {
+        const message = data as WsJobFailedMessage;
         const { jobId, error, handle } = message;
 
         // Update CrawlJobTracker for failed jobs (jobId is workerJobId)
@@ -609,7 +702,8 @@ export default class SocialArchiverPlugin extends Plugin {
 
     // Listen for truncation_warning events (when posts exceed max limit)
     this.eventRefs.push(
-      this.events.on('ws:truncation_warning', (message: any) => {
+      this.events.on('ws:truncation_warning', (data: unknown) => {
+        const message = data as WsTruncationWarningMessage;
         const { handle, totalFound, maxAllowed, truncatedCount, isProfileCrawl } = message;
         const handleDisplay = handle ? `@${handle}` : 'profile';
         const source = isProfileCrawl ? 'Profile crawl' : 'Subscription';
@@ -638,7 +732,7 @@ export default class SocialArchiverPlugin extends Plugin {
     );
 
     this.eventRefs.push(
-      this.events.on('ws:error', (error: any) => {
+      this.events.on('ws:error', (error: unknown) => {
         console.error('[Social Archiver] WebSocket error:', error);
       })
     );
@@ -647,7 +741,8 @@ export default class SocialArchiverPlugin extends Plugin {
     // WebSocket message contains full post data, so save directly without KV fetch
     // Uses batch processing to prevent timeline flicker when multiple posts arrive
     this.eventRefs.push(
-      this.events.on('ws:subscription_post', async (message: any) => {
+      this.events.on('ws:subscription_post', async (data: unknown) => {
+        const message = data as WsSubscriptionPostMessage;
         // If message contains post data, save it directly (bypasses KV eventual consistency)
         if (message.post && message.destinationFolder) {
           try {
@@ -673,14 +768,13 @@ export default class SocialArchiverPlugin extends Plugin {
               this.crawlJobTracker.incrementProgressByWorkerJobId(message.subscriptionId);
             }
 
-            const pendingPost = {
+            const pendingPost: PendingPost = {
               id: message.pendingPostId || crypto.randomUUID(), // Use server-side ID if available
-              subscriptionId: message.subscriptionId,
-              subscriptionName: message.subscriptionName,
+              subscriptionId: message.subscriptionId ?? '',
+              subscriptionName: message.subscriptionName ?? '',
               post: message.post,
               destinationFolder: message.destinationFolder,
               archivedAt: new Date().toISOString(),
-              isProfileCrawl: message.isProfileCrawl || false,
             };
 
             const saved = await this.saveSubscriptionPost(pendingPost);
@@ -747,7 +841,8 @@ export default class SocialArchiverPlugin extends Plugin {
 
     // Listen for profile_metadata events (when posts fail to load but profile data is available)
     this.eventRefs.push(
-      this.events.on('ws:profile_metadata', async (message: any) => {
+      this.events.on('ws:profile_metadata', async (data: unknown) => {
+        const message = data as WsProfileMetadataMessage;
         // Create profile-only note when posts fail to load
         if (message.metadata && message.profileUrl) {
           try {
@@ -762,7 +857,8 @@ export default class SocialArchiverPlugin extends Plugin {
     // Listen for profile_crawl_complete events (from Fediverse direct API crawls)
     // Fediverse crawls complete synchronously and send posts via WebSocket
     this.eventRefs.push(
-      this.events.on('ws:profile_crawl_complete', async (message: any) => {
+      this.events.on('ws:profile_crawl_complete', async (data: unknown) => {
+        const message = data as WsProfileCrawlCompleteMessage;
         const { jobId, handle, platform, posts, stats, isFediverse, isYouTube, isBlog, isXcancel } = message;
         // Free API platforms: Fediverse (Bluesky, Mastodon), YouTube (RSS), Blog (Generic RSS), X (xcancel RSS)
         const isFreeApiPlatform = isFediverse || isYouTube || isBlog || isXcancel;
@@ -795,7 +891,7 @@ export default class SocialArchiverPlugin extends Plugin {
                     this.crawlJobTracker.startJob({
                       jobId,
                       handle,
-                      platform: platform || 'bluesky',
+                      platform: (platform || 'bluesky') as Platform,
                       estimatedPosts: postCount,
                     }, jobId);
                     this.crawlJobTracker.completeJob(jobId, postCount);
@@ -809,8 +905,8 @@ export default class SocialArchiverPlugin extends Plugin {
         // Process posts from Fediverse/YouTube crawl (free API platforms)
         if (isFreeApiPlatform && posts && posts.length > 0) {
           // Get destination folder from pending job or use default
-          const pendingJob = await this.pendingJobsManager?.getJob(jobId);
-          const destinationFolder = (pendingJob?.metadata as any)?.destinationFolder
+          const pendingJob = jobId ? await this.pendingJobsManager?.getJob(jobId) : null;
+          const destinationFolder = pendingJob?.metadata?.destinationFolder
             || this.settings.archivePath
             || 'Social Archives';
 
@@ -827,14 +923,13 @@ export default class SocialArchiverPlugin extends Plugin {
           let savedCount = 0;
           for (const post of posts) {
             try {
-              const pendingPost = {
+              const pendingPost: PendingPost = {
                 id: crypto.randomUUID(),
-                subscriptionId: jobId,
+                subscriptionId: jobId ?? '',
                 subscriptionName: `Profile Crawl: @${handle}`,
                 post,
                 destinationFolder,
                 archivedAt: new Date().toISOString(),
-                isProfileCrawl: true,
               };
 
               const saved = await this.saveSubscriptionPost(pendingPost);
@@ -954,7 +1049,7 @@ export default class SocialArchiverPlugin extends Plugin {
     this.scheduledMobileSyncRetries.add(queueId);
     this.scheduleTrackedTimeout(() => {
       this.scheduledMobileSyncRetries.delete(queueId);
-      this.processPendingSyncQueue().catch((error) => {
+      this.processPendingSyncQueue().catch((error: unknown) => {
         console.error('[Social Archiver] Deferred mobile sync retry failed:', {
           queueId,
           archiveId,
@@ -1003,6 +1098,7 @@ export default class SocialArchiverPlugin extends Plugin {
           throw new Error('API client not initialized');
         }
         await this.apiClient.ackSyncItem(queueId, clientId);
+        this.mobileSyncRetryCount.delete(queueId);
         const displayTitle = archive.title || archive.authorName || archive.platform || 'Archive';
         new Notice(`✅ Saved to vault: ${displayTitle}`, 3000);
         return true;
@@ -1012,10 +1108,25 @@ export default class SocialArchiverPlugin extends Plugin {
 
     } catch (error) {
       if (this.isArchiveNotFoundError(error)) {
-        console.warn('[Social Archiver] Archive not found during client sync; leaving queue item pending for retry', {
-          queueId,
-          archiveId,
-          clientId,
+        const retryCount = (this.mobileSyncRetryCount.get(queueId) ?? 0) + 1;
+        this.mobileSyncRetryCount.set(queueId, retryCount);
+
+        if (retryCount >= MOBILE_SYNC_QUEUE_MAX_RETRIES) {
+          console.warn('[Social Archiver] Archive not found after max retries; giving up', {
+            queueId, archiveId, clientId, retryCount,
+          });
+          this.mobileSyncRetryCount.delete(queueId);
+          this.failedSyncQueueIds.add(queueId); // Permanently skip this item for the rest of the session
+          if (this.apiClient) {
+            try {
+              await this.apiClient.failSyncItem(queueId, clientId, `Archive ${archiveId} not found after ${retryCount} retries`);
+            } catch { /* non-fatal */ }
+          }
+          return false;
+        }
+
+        console.warn('[Social Archiver] Archive not found during client sync; scheduling retry', {
+          queueId, archiveId, clientId, retryCount, maxRetries: MOBILE_SYNC_QUEUE_MAX_RETRIES,
         });
         this.schedulePendingSyncRetry(queueId, archiveId);
         return false;
@@ -1050,7 +1161,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
     try {
       const { items } = await this.apiClient.getSyncQueue(clientId);
-      const pendingItems = items.filter(item => item.status === 'pending');
+      const pendingItems = items.filter(item => item.status === 'pending' && !this.failedSyncQueueIds.has(item.queueId));
 
       if (pendingItems.length === 0) {
         return;
@@ -1203,7 +1314,9 @@ export default class SocialArchiverPlugin extends Plugin {
       },
       content: {
         text: archive.fullContent || archive.previewText || '',
-        html: undefined,
+        // For X articles, pass articleMarkdown as html so FrontmatterGenerator
+        // sets isArticle:true and MarkdownConverter preserves markdown formatting
+        html: (archive.isArticle || archive.articleMarkdown) ? (archive.articleMarkdown ?? undefined) : undefined,
       },
       media: normalizedMedia,
       metadata: {
@@ -1280,7 +1393,7 @@ export default class SocialArchiverPlugin extends Plugin {
     };
   }
 
-  async onunload(): Promise<void> {
+  onunload(): void {
     // Kill all spawned child processes (yt-dlp, whisper, etc.)
     const killedCount = ProcessManager.killAll();
     if (killedCount > 0) {
@@ -1341,17 +1454,20 @@ export default class SocialArchiverPlugin extends Plugin {
     // Clear dedup URL set
     this.recentlyArchivedUrls.clear();
     this.scheduledMobileSyncRetries.clear();
+    this.mobileSyncRetryCount.clear();
+    this.failedSyncQueueIds.clear();
 
-    // Cleanup services
-    await this.subscriptionManager?.dispose();
+    // Cleanup services (fire-and-forget; onunload must be synchronous per Obsidian Plugin API)
+    void this.subscriptionManager?.dispose();
     this.pendingJobsManager?.dispose();
-    await this.orchestrator?.dispose();
-    await this.apiClient?.dispose();
+    void this.orchestrator?.dispose();
+    void this.apiClient?.dispose();
   }
 
   async loadSettings(): Promise<void> {
-    const savedData = await this.loadData() || {};
-    this.settings = migrateSettings(savedData as Partial<SocialArchiverSettings>);
+    const rawData: unknown = await this.loadData();
+    const savedData: Partial<SocialArchiverSettings> = (rawData ?? {}) as Partial<SocialArchiverSettings>;
+    this.settings = migrateSettings(savedData);
 
     // Rebuild naverCookie from individual fields (in case migration populated them)
     this.rebuildNaverCookie();
@@ -1470,7 +1586,7 @@ export default class SocialArchiverPlugin extends Plugin {
    */
   private async initializeServices(): Promise<void> {
     // Clean up existing services
-    await this.apiClient?.dispose();
+    this.apiClient?.dispose();
     await this.orchestrator?.dispose();
     this.pendingJobsManager?.dispose();
 
@@ -1478,11 +1594,10 @@ export default class SocialArchiverPlugin extends Plugin {
       // Initialize API client with hardcoded production endpoint
       this.apiClient = new WorkersAPIClient({
         endpoint: API_ENDPOINT,
-        licenseKey: this.settings.licenseKey,
         authToken: this.settings.authToken,
         pluginVersion: this.manifest.version,
       });
-      await this.apiClient.initialize();
+      this.apiClient.initialize();
 
       // Initialize PendingJobsManager (for async archiving)
       this.pendingJobsManager = new PendingJobsManager(this.app);
@@ -1513,7 +1628,7 @@ export default class SocialArchiverPlugin extends Plugin {
         excludeImages: true,
         excludePlatformUrls: false // Include platform URLs for link previews
       });
-      await this.linkPreviewExtractor.initialize();
+      this.linkPreviewExtractor.initialize();
 
       // Initialize ArchiveOrchestrator with all required services
       // Import services dynamically to avoid circular dependencies
@@ -1521,7 +1636,8 @@ export default class SocialArchiverPlugin extends Plugin {
       const { MediaHandler } = await import('./services/MediaHandler');
 
       const archiveService = new ArchiveService({
-        apiClient: this.apiClient as any, // WorkersAPIClient implements compatible interface
+        // WorkersAPIClient implements a compatible interface but doesn't extend ApiClient
+        apiClient: this.apiClient as unknown as import('./services/ApiClient').ApiClient,
       });
 
       const markdownConverter = new MarkdownConverter({
@@ -1722,7 +1838,7 @@ export default class SocialArchiverPlugin extends Plugin {
    * Create a profile-only note when posts fail to load
    * Contains author metadata (bio, avatar, followers) without timeline posts
    */
-  private async createProfileNote(message: any): Promise<void> {
+  private async createProfileNote(message: WsProfileMetadataMessage): Promise<void> {
     const { metadata, handle, platform, profileUrl } = message;
 
     // Download avatar if available
@@ -1731,7 +1847,7 @@ export default class SocialArchiverPlugin extends Plugin {
       try {
         localAvatarPath = await this.authorAvatarService.downloadAndSaveAvatar(
           metadata.avatarUrl,
-          platform,
+          platform as Platform,
           handle,
           this.settings.overwriteAuthorAvatar
         );
@@ -1839,7 +1955,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
       // Use displayName from platform definitions (e.g., 'naver-webtoon' -> 'Naver Webtoon')
       const platformName = post.platform
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- post.platform may be a superset type; cast ensures getPlatformName receives the exact Platform union
         ? getPlatformName(post.platform as Platform)
         : 'Unknown';
 
@@ -1853,7 +1969,7 @@ export default class SocialArchiverPlugin extends Plugin {
           .replace(/[\\/:*?"<>|]/g, '-')
           .trim();
         const episodeNo = String(post.series.episode || 0).padStart(3, '0');
-        const subtitle = ((post.raw as any)?.subtitle || titlePart || 'Episode')
+        const subtitle = ((post.raw as Record<string, unknown>)?.subtitle as string | undefined || titlePart || 'Episode')
           .replace(/[\\/:*?"<>|]/g, '-')
           .substring(0, 50)
           .trim();
@@ -1905,8 +2021,8 @@ export default class SocialArchiverPlugin extends Plugin {
           const mediaBasePath = this.settings.mediaPath || 'attachments/social-archives';
 
           // Extract series info for folder structure
-          const seriesId = (post as any).series?.id || post.id.split('-')[1] || 'unknown';
-          const episodeNo = (post as any).series?.episode || 1;
+          const seriesId = post.series?.id || post.id.split('-')[1] || 'unknown';
+          const episodeNo = post.series?.episode || 1;
           const postMediaFolder = `${mediaBasePath}/naver-webtoon/${seriesId}/${episodeNo}`;
 
           // Ensure folder exists
@@ -2093,12 +2209,12 @@ export default class SocialArchiverPlugin extends Plugin {
 
         const expiredMedia: MER[] = [];
         for (const item of allOriginalMedia) {
-          const originalUrl = (item as any).originalUrl ?? item.url;
+          const originalUrl = (item as Media & { originalUrl?: string }).originalUrl ?? item.url;
           if (!downloadedUrls.has(originalUrl)) {
             const reason = CdnExpiryDetector.isEphemeralCdn(originalUrl) ? 'cdn_expired' : 'download_failed';
             expiredMedia.push({
               originalUrl,
-              // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+              // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- MER.type is a narrower literal union than Media['type']; explicit cast required for assignment
               type: item.type as 'image' | 'video' | 'audio' | 'document',
               reason,
               detectedAt: new Date().toISOString(),
@@ -2107,7 +2223,7 @@ export default class SocialArchiverPlugin extends Plugin {
         }
 
         if (expiredMedia.length > 0) {
-          (post as any)._expiredMedia = expiredMedia;
+          post._expiredMedia = expiredMedia;
           new Notice(
             `\u26A0\uFE0F ${expiredMedia.length} media item(s) could not be downloaded (CDN expired).`,
             8000
@@ -2414,7 +2530,7 @@ export default class SocialArchiverPlugin extends Plugin {
         basePath: this.settings.archivePath || 'Social Archives',
         organizationStrategy: getVaultOrganizationStrategy(this.settings.archiveOrganization),
       });
-      await vaultManager.initialize();
+      vaultManager.initialize();
 
       // Create proper PostData for file path generation
       const properPostData: PostData = {
@@ -2699,7 +2815,7 @@ export default class SocialArchiverPlugin extends Plugin {
         basePath: this.settings.archivePath || 'Social Archives',
         organizationStrategy: getVaultOrganizationStrategy(this.settings.archiveOrganization),
       });
-      await vaultManager.initialize();
+      vaultManager.initialize();
 
       // Create proper PostData for file path generation
       const properPostData: PostData = {
@@ -3043,7 +3159,7 @@ export default class SocialArchiverPlugin extends Plugin {
         basePath: this.settings.archivePath || 'Social Archives',
         organizationStrategy: getVaultOrganizationStrategy(this.settings.archiveOrganization),
       });
-      await vaultManager.initialize();
+      vaultManager.initialize();
 
       // Create proper PostData for file path generation
       const properPostData: PostData = {
@@ -3284,7 +3400,7 @@ ${contentParts.join('')}
         basePath: this.settings.archivePath || 'Social Archives',
         organizationStrategy: getVaultOrganizationStrategy(this.settings.archiveOrganization),
       });
-      await vaultManager.initialize();
+      vaultManager.initialize();
 
       // Create proper PostData for file path generation
       const properPostData: PostData = {
@@ -3513,8 +3629,8 @@ ${contentParts.join('')}
       downloadWithYtDlp: async (url, platform, postId, signal) => {
         if (!await YtDlpDetector.isAvailable()) return null;
 
-        // @ts-expect-error — adapter.basePath is available but not in types
-        const vaultBasePath: string = this.app.vault.adapter.basePath;
+        // adapter.basePath exists at runtime on the desktop FileSystemAdapter but is not in the Obsidian type definitions
+        const vaultBasePath = (this.app.vault.adapter as unknown as { basePath: string }).basePath;
         const basePath = this.settings.mediaPath || 'attachments/social-archives';
         const platformFolder = `${basePath}/${platform}`;
         const outputPath = `${vaultBasePath}/${platformFolder}`;
@@ -3558,16 +3674,20 @@ ${contentParts.join('')}
       this.initBatchTranscriptionManager();
     }
 
+    const manager = this.batchTranscriptionManager;
+    if (!manager) {
+      console.error('[Social Archiver] BatchTranscriptionManager could not be initialized');
+      return;
+    }
+
     // Dismiss previous notice if any
     this.batchTranscriptionNotice?.dismiss();
 
     // Show new notice
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    this.batchTranscriptionNotice = new BatchTranscriptionNotice(this.batchTranscriptionManager!);
+    this.batchTranscriptionNotice = new BatchTranscriptionNotice(manager);
     this.batchTranscriptionNotice.show();
 
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    await this.batchTranscriptionManager!.start(mode);
+    await manager.start(mode);
   }
 
   /**
@@ -3991,7 +4111,7 @@ ${contentParts.join('')}
    */
   private async showBatchArchiveConfirmation(links: string[]): Promise<boolean> {
     return new Promise((resolve) => {
-      // eslint-disable-next-line @typescript-eslint/no-this-alias
+      // eslint-disable-next-line @typescript-eslint/no-this-alias -- `plugin` alias needed to reference outer class instance inside inner class definition
       const plugin = this;
 
       class BatchConfirmModal extends Modal {
@@ -4007,7 +4127,7 @@ ${contentParts.join('')}
           const { contentEl } = this;
           contentEl.empty();
 
-          contentEl.createEl('h2', { text: 'Batch Archive Google Maps' });
+          contentEl.createEl('h2', { text: 'Batch archive Google Maps' });
 
           contentEl.createEl('p', {
             text: `Found ${this.modalLinks.length} Google Maps location${this.modalLinks.length > 1 ? 's' : ''} in this note.`
@@ -4087,7 +4207,7 @@ ${contentParts.join('')}
       basePath: this.settings.archivePath || 'Social Archives',
       organizationStrategy: getVaultOrganizationStrategy(this.settings.archiveOrganization),
     });
-    await vaultManager.initialize();
+    vaultManager.initialize();
 
     const markdownConverter = new MarkdownConverter({
       frontmatterSettings: this.settings.frontmatter,
@@ -4136,7 +4256,7 @@ ${contentParts.join('')}
     const filePath = vaultManager.generateFilePath(postData, timestamp);
 
     // Convert to markdown with media results
-    const result = await markdownConverter.convert(
+    const result = markdownConverter.convert(
       postData,
       undefined,  // customTemplate
       mediaResults  // mediaResults from MediaHandler
@@ -4888,7 +5008,6 @@ ${contentParts.join('')}
               includeFormattedTranscript: job.metadata?.includeFormattedTranscript,
               pinterestBoard: job.metadata?.isPinterestBoard,
             },
-            licenseKey: this.settings.licenseKey,
             // Naver: pass cookie for private cafe access
             naverCookie: this.settings.naverCookie || undefined,
             // Tell server to skip dispatching sync back to this Obsidian client
@@ -5368,8 +5487,8 @@ ${contentParts.join('')}
    * Converts PostData to markdown and saves to vault
    */
   private async processCompletedJob(
-    pendingJob: any,
-    jobStatusResponse: any
+    pendingJob: PendingJob,
+    jobStatusResponse: CompletedJobResponse
   ): Promise<void> {
     try {
       const result = jobStatusResponse.result;
@@ -5389,7 +5508,7 @@ ${contentParts.join('')}
         throw new Error('No postData in completed job result');
       }
 
-      const postData = result.postData;
+      const postData = result.postData as PostData;
 
       // ========== Embedded Archive Mode ==========
       if (pendingJob.metadata?.embeddedArchive === true) {
@@ -5436,7 +5555,7 @@ ${contentParts.join('')}
         });
 
         const totalMedia = archivedData.media?.length || 0;
-        let mediaResults: any[] = [];
+        let mediaResults: import('./services/MediaHandler').MediaResult[] = [];
 
         try {
           if (totalMedia > 0) {
@@ -5463,7 +5582,7 @@ ${contentParts.join('')}
             mediaResultMap.set(result.originalUrl, result);
           });
 
-          archivedData.media = archivedData.media.map((media: any, index: number) => {
+          archivedData.media = archivedData.media.map((media: Media, index: number) => {
             const result = mediaResults[index];
             const matchedResult = (result && result.originalUrl === media.url)
               ? result
@@ -5596,8 +5715,8 @@ ${contentParts.join('')}
         frontmatterSettings: this.settings.frontmatter,
       });
 
-      await vaultManager.initialize();
-      await markdownConverter.initialize();
+      vaultManager.initialize();
+      markdownConverter.initialize();
 
       // Track downloaded media for markdown conversion
       const downloadedMedia: Array<import('./services/MediaHandler').MediaResult> = [];
@@ -5634,6 +5753,8 @@ ${contentParts.join('')}
 
         for (let i = 0; i < postData.media.length; i++) {
           const media = postData.media[i];
+          // noUncheckedIndexedAccess: guard against undefined (should not happen with valid media arrays)
+          if (!media) continue;
 
           // Update progress for large downloads (webtoon episodes, etc.)
           if (totalMediaCount > 5 && i > 0 && i % 5 === 0) {
@@ -5691,14 +5812,14 @@ ${contentParts.join('')}
                 localPath: fullPath,
                 type: media.type,
                 size: stat?.size || 0,
-                file: existingFile as any,
+                file: existingFile as TFile,
               });
             } else {
               let arrayBuffer: ArrayBuffer;
 
               // Check if it's a blob URL (TikTok videos)
               if (mediaUrl.startsWith('blob:')) {
-                // NOTE: Using fetch() for blob: URLs - requestUrl() doesn't support blob: protocol
+                // eslint-disable-next-line no-restricted-globals -- blob: URLs are not network requests; requestUrl() does not support the blob: protocol
                 const response = await fetch(mediaUrl);
                 if (!response.ok) {
                   throw new Error(`Blob fetch failed: ${response.status} ${response.statusText}`);
@@ -5719,11 +5840,11 @@ ${contentParts.join('')}
               } else if (postData.platform === 'naver' && media.type === 'video' && mediaUrl.includes('apis.naver.com/rmcnmv')) {
                 // Naver videos: Use MediaHandler which fetches video stream from API
                 const { MediaHandler } = await import('./services/MediaHandler');
+                if (!this.apiClient) throw new Error('WorkersAPIClient not initialized');
                 const mediaHandler = new MediaHandler({
                   vault: this.app.vault,
                   app: this.app,
-                  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                  workersClient: this.apiClient!,
+                  workersClient: this.apiClient,
                   basePath: this.settings.mediaPath || 'attachments/social-archives',
                   optimizeImages: true,
                   imageQuality: 0.8,
@@ -5759,8 +5880,8 @@ ${contentParts.join('')}
                 continue;
               } else {
                 // Download via Workers proxy to bypass CORS
-                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                arrayBuffer = await this.apiClient!.proxyMedia(mediaUrl);
+                if (!this.apiClient) throw new Error('WorkersAPIClient not initialized');
+                arrayBuffer = await this.apiClient.proxyMedia(mediaUrl);
               }
 
               // Detect actual format from binary data and convert HEIC if needed
@@ -5822,7 +5943,7 @@ ${contentParts.join('')}
       }
 
       // Convert to markdown (with downloaded media paths)
-      let markdown = await markdownConverter.convert(postData, undefined, downloadedMedia.length > 0 ? downloadedMedia : undefined);
+      let markdown = markdownConverter.convert(postData, undefined, downloadedMedia.length > 0 ? downloadedMedia : undefined);
 
       // Add metadata to frontmatter
       markdown.frontmatter.download_time = Math.round((Date.now() - startTime) / 100) / 10;
@@ -5874,20 +5995,20 @@ ${contentParts.join('')}
             const existingFile = this.app.vault.getAbstractFileByPath(correctFilePath);
             if (existingFile) {
               // Update existing file content
-              await this.app.vault.modify(existingFile as any, markdown.fullDocument);
+              await this.app.vault.modify(existingFile as TFile, markdown.fullDocument);
               // Delete preliminary file
-              await this.app.fileManager.trashFile(file as any);
+              await this.app.fileManager.trashFile(file);
             } else {
               // Rename file and update content
-              await this.app.vault.rename(file as any, correctFilePath);
+              await this.app.vault.rename(file, correctFilePath);
               const renamedFile = this.app.vault.getAbstractFileByPath(correctFilePath);
               if (renamedFile) {
-                await this.app.vault.modify(renamedFile as any, markdown.fullDocument);
+                await this.app.vault.modify(renamedFile as TFile, markdown.fullDocument);
               }
             }
           } else {
             // Same path, just update content
-            await this.app.vault.modify(file as any, markdown.fullDocument);
+            await this.app.vault.modify(file as TFile, markdown.fullDocument);
           }
 
         } else {
@@ -5929,7 +6050,7 @@ ${contentParts.join('')}
    * Implements retry logic with exponential backoff
    */
   private async processFailedJob(
-    pendingJob: any,
+    pendingJob: PendingJob,
     errorMessage: string
   ): Promise<void> {
     try {
@@ -6192,7 +6313,7 @@ ${contentParts.join('')}
       // Step 5: Create PostData from the posted note
       const postData: PostData = {
         platform: 'post' as Platform,
-        id: frontmatter.originalPath || postedFile.path,
+        id: (typeof frontmatter.originalPath === 'string' ? frontmatter.originalPath : null) || postedFile.path,
         url: '', // User posts don't have an original URL
         title: postedFile.basename,
         author: {
@@ -6201,11 +6322,11 @@ ${contentParts.join('')}
         },
         content: {
           text: this.extractBodyContent(content),
-          hashtags: frontmatter.tags || [],
+          hashtags: Array.isArray(frontmatter.tags) ? (frontmatter.tags as string[]) : [],
         },
         media,
         metadata: {
-          timestamp: new Date(frontmatter.postedAt || Date.now()),
+          timestamp: new Date(typeof frontmatter.postedAt === 'string' || typeof frontmatter.postedAt === 'number' ? frontmatter.postedAt : Date.now()),
           likes: 0,
           comments: 0,
           shares: 0,

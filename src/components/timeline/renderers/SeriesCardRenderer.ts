@@ -745,7 +745,7 @@ export class SeriesCardRenderer extends Component {
       const existsLocally = series.episodes.some(ep => ep.episode === detail.no);
       if (!existsLocally) {
         // Streaming episode not downloaded yet - no comment data available
-        commentsRefs.label.textContent = `Best Comments (—)`;
+        commentsRefs.label.textContent = `Best comments (—)`;
       } else {
         // Episode exists locally - sync comments normally
         void this.syncCommentsForEpisode(series, detail.no);
@@ -2457,7 +2457,7 @@ export class SeriesCardRenderer extends Component {
     // Label (will be updated with count)
     const label = toggleHeader.createEl('span', { cls: 'comments-list-label' });
     label.addClass('sa-text-base', 'sa-font-medium', 'sa-text-muted', 'sa-flex-1');
-    label.textContent = 'Best Comments';
+    label.textContent = 'Best comments';
 
     // Load comment count asynchronously and update label
     void this.updateCommentsLabelCount(series, currentEpisodeNo, label);
@@ -3989,13 +3989,13 @@ export class SeriesCardRenderer extends Component {
       const count = this.countBestCommentsInMarkdown(content);
 
       if (count > 0) {
-        label.textContent = `Best Comments (${count})`;
+        label.textContent = `Best comments (${count})`;
       } else {
-        label.textContent = 'Best Comments';
+        label.textContent = 'Best comments';
       }
     } catch (error) {
       // Silently fail, keep default label
-      label.textContent = 'Best Comments';
+      label.textContent = 'Best comments';
     }
   }
 

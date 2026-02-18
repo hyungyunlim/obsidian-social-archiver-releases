@@ -401,7 +401,7 @@ export class AuthorCatalogController {
         const results = await Promise.all(
           batch.map(({ author, index }) => {
             const avatarPath = this.findExistingAvatar(author.platform, author.handle ?? '');
-            return { index, avatarPath };
+            return Promise.resolve({ index, avatarPath });
           })
         );
         for (const { index, avatarPath } of results) {

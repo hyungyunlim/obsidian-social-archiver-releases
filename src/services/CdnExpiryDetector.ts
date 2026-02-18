@@ -21,7 +21,7 @@ const EPHEMERAL_CDN_DOMAINS = [
   'licdn.com',
 ] as const;
 
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- utility class with only static methods; instantiation not needed
 export class CdnExpiryDetector {
   /**
    * Check if a URL belongs to an ephemeral CDN that uses time-limited URLs.

@@ -97,7 +97,7 @@ export class BrunchSubscribeModal extends Modal {
     }
 
     // Title
-    const titleText = this.isEditMode ? 'Edit Subscription' : 'Subscribe to Brunch Author';
+    const titleText = this.isEditMode ? 'Edit subscription' : 'Subscribe to Brunch author';
     contentEl.createEl('h2', { text: titleText });
 
     // Profile card

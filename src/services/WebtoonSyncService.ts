@@ -141,7 +141,7 @@ export class WebtoonSyncService {
     if (result.postsArchived > 0) {
       new Notice(`Webtoon: Synced ${result.postsArchived} episode(s)`);
     } else if (result.success) {
-      new Notice('Webtoon: No new episodes to sync');
+      new Notice('Webtoon: no new episodes to sync');
     } else {
       new Notice(`Webtoon sync failed: ${result.error || 'Unknown error'}`);
     }

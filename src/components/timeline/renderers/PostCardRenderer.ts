@@ -3178,7 +3178,7 @@ export class PostCardRenderer extends Component {
       // Update UI to show shared state
       shareBtn.removeClass('pcr-action-btn-loading');
       shareBtn.addClass('pcr-action-btn-active');
-      shareBtn.setAttribute('title', 'Shared - Click to copy link');
+      shareBtn.setAttribute('title', 'Shared - click to copy link');
 
       // Update icon to link icon
       setIcon(shareIcon, 'link');
@@ -4022,6 +4022,10 @@ export class PostCardRenderer extends Component {
         // Format object with url property (for linkPreviews items)
         return `url: ${(value as { url: string }).url}`;
       }
+      if (typeof value === 'object' && value !== null) {
+        // Serialize remaining objects to JSON to avoid '[object Object]' output
+        return JSON.stringify(value);
+      }
       return String(value);
     };
 
@@ -4641,7 +4645,7 @@ export class PostCardRenderer extends Component {
   private async deleteLinkPreview(post: PostData, urlToDelete: string, _rootElement: HTMLElement): Promise<void> {
 
     if (!post.filePath) {
-      new Notice('Cannot delete preview: No file path');
+      new Notice('Cannot delete preview: no file path');
       return;
     }
 
@@ -4649,7 +4653,7 @@ export class PostCardRenderer extends Component {
       // Get file
       const file = this.vault.getAbstractFileByPath(post.filePath);
       if (!file || !(file instanceof TFile)) {
-        new Notice('Cannot delete preview: File not found');
+        new Notice('Cannot delete preview: file not found');
         return;
       }
 
@@ -4659,14 +4663,14 @@ export class PostCardRenderer extends Component {
       // Parse frontmatter and body
       const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
       if (!frontmatterMatch) {
-        new Notice('Cannot delete preview: Invalid file format');
+        new Notice('Cannot delete preview: invalid file format');
         return;
       }
 
       const [, frontmatterText, body] = frontmatterMatch;
 
       if (!frontmatterText) {
-        new Notice('Cannot delete preview: Empty frontmatter');
+        new Notice('Cannot delete preview: empty frontmatter');
         return;
       }
 
@@ -6129,7 +6133,7 @@ export class PostCardRenderer extends Component {
 
         banner.createSpan({ cls: 'pcr-banner-message', text: 'Sign in required to archive posts' });
 
-        const settingsButton = banner.createEl('button', { cls: 'pcr-settings-btn', text: 'Open Settings' });
+        const settingsButton = banner.createEl('button', { cls: 'pcr-settings-btn', text: 'Open settings' });
         settingsButton.addEventListener('click', () => {
           // @ts-expect-error — app.setting is available at runtime but not in public Obsidian types
           const appSetting = this.app.setting as { open?: () => void; openTabById?: (id: string) => void } | undefined;
@@ -7084,7 +7088,7 @@ export class PostCardRenderer extends Component {
     if (post.originalUrl || post.url) {
       const urlLink = card.createEl('a', {
         cls: 'pcr-error-url',
-        text: '→ View Original Source',
+        text: '→ View original source',
         href: post.originalUrl || post.url
       });
       urlLink.setAttribute('target', '_blank');
@@ -7095,7 +7099,7 @@ export class PostCardRenderer extends Component {
     const retryMsg = card.createDiv({ cls: 'pcr-error-retry-msg' });
     retryMsg.createEl('strong', { text: 'You can:' });
     const ul = retryMsg.createEl('ul', { cls: 'pcr-error-list' });
-    ul.createEl('li', { text: 'Try archiving again using the Archive Modal' });
+    ul.createEl('li', { text: 'Try archiving again using the archive modal' });
     ul.createEl('li', { text: 'Check your internet connection' });
     ul.createEl('li', { text: 'Verify the URL is still accessible' });
 
@@ -7742,7 +7746,7 @@ export class PostCardRenderer extends Component {
     directionsLink.addEventListener('click', (e) => e.stopPropagation());
 
     // Google Maps link
-    const gmapLink = linksDiv.createEl('a', { text: 'Open in Maps', cls: 'pcr-map-link' });
+    const gmapLink = linksDiv.createEl('a', { text: 'Open in maps', cls: 'pcr-map-link' });
     gmapLink.href = post.url || `https://www.google.com/maps?q=${lat},${lng}`;
     gmapLink.target = '_blank';
     gmapLink.addEventListener('click', (e) => e.stopPropagation());

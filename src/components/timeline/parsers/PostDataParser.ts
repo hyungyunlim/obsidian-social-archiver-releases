@@ -1,4 +1,4 @@
-import { type TFile, type TAbstractFile, type Vault, type App } from 'obsidian';
+import { TFile, type TAbstractFile, type Vault, type App } from 'obsidian';
 import type { PostData, Comment, Media, MultiLangTranscript } from '../../../types/post';
 import type { YamlFrontmatter } from '../../../types/archive';
 import { isRssBasedPlatform } from '../../../constants/rssPlatforms';
@@ -65,9 +65,8 @@ export class PostDataParser {
           // It's a folder, recurse
           collectFiles(childAsFolder);
         } else {
-          const childAsFile = child as TFile;
-          if (childAsFile.extension === 'md') {
-            allFiles.push(childAsFile);
+          if (child instanceof TFile && child.extension === 'md') {
+            allFiles.push(child);
           }
         }
       }
@@ -567,9 +566,11 @@ export class PostDataParser {
           trimmedSection.startsWith('**Author:**')) {
         break;
       }
-      // Also stop if this section is just an image followed by metadata
-      // e.g., "![image](path)\n\n---\n\n**Platform:**"
-      if (/^!\[.*?\]\(.*?\)\s*$/.test(trimmedSection)) {
+      // Also stop if this section contains only images (media gallery section)
+      // e.g., "![image 1](path)\n\n![image 2](path)\n..." or single "![image](path)"
+      // Handles both markdown images ![alt](url) and wikilink images ![[file]]
+      const nonEmptyLines = trimmedSection.split('\n').filter(l => l.trim());
+      if (nonEmptyLines.length > 0 && nonEmptyLines.every(l => /^!\[/.test(l.trim()))) {
         break;
       }
       contentSections.push(section);
@@ -1772,9 +1773,8 @@ export class PostDataParser {
         if (childAsFolder.children) {
           collect(childAsFolder);
         } else {
-          const childAsFile = child as TFile;
-          if (childAsFile.extension === 'md') {
-            files.push(childAsFile);
+          if (child instanceof TFile && child.extension === 'md') {
+            files.push(child);
           }
         }
       }

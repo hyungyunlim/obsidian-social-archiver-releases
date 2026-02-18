@@ -191,7 +191,7 @@ export class ArchiveModal extends Modal {
     }
 
     // Title with id for ARIA labelledby
-    const title = contentEl.createEl('h2', { text: 'Archive Social Post', cls: 'archive-modal-title' });
+    const title = contentEl.createEl('h2', { text: 'Archive social post', cls: 'archive-modal-title' });
     title.id = 'archive-modal-title';
 
     // URL Input (full width, separate line)
@@ -307,7 +307,7 @@ export class ArchiveModal extends Modal {
     this.commentContainer.addClass('sa-mt-12');
 
     const commentLabel = this.commentContainer.createDiv({ cls: 'archive-comment-label' });
-    commentLabel.setText('💭 My Notes (optional)');
+    commentLabel.setText('💭 My notes (optional)');
 
     this.commentTextarea = this.commentContainer.createEl('textarea', {
       cls: 'archive-comment-textarea',
@@ -3488,7 +3488,7 @@ export class ArchiveModal extends Modal {
     contentEl.addClass('am-unauth-content');
 
     // Title (no icon)
-    const title = contentEl.createEl('h2', { text: 'Sign in to Archive' });
+    const title = contentEl.createEl('h2', { text: 'Sign in to archive' });
     title.addClass('am-unauth-title');
 
     // Centered message
@@ -3501,7 +3501,7 @@ export class ArchiveModal extends Modal {
     mainMessage.addClass('am-unauth-main-message');
 
     const subMessage = messageContainer.createEl('p', {
-      text: 'Free during beta • No password needed • Magic link authentication'
+      text: 'Free during beta • No password needed • magic link authentication'
     });
     subMessage.addClass('am-unauth-sub-message');
 
@@ -3536,7 +3536,7 @@ export class ArchiveModal extends Modal {
     closeBtn.addEventListener('click', () => this.close());
 
     const settingsBtn = footer.createEl('button', {
-      text: 'Open Settings →',
+      text: 'Open settings →',
       cls: 'mod-cta am-unauth-btn'
     });
     settingsBtn.addEventListener('click', () => {

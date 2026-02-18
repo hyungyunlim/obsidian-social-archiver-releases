@@ -4,7 +4,7 @@ import nodeRequire from './nodeRequire';
 /**
  * YtDlpDetector - Detects and uses yt-dlp for video downloads
  */
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- static-only utility class used as a namespace for cached yt-dlp detection
 export class YtDlpDetector {
   private static ytDlpAvailable: boolean | null = null;
   private static ytDlpPath: string | null = null;

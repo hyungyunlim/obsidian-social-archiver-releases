@@ -174,6 +174,9 @@ export interface UserArchive {
     }>;
   }>;
   isReblog?: boolean;
+  // X article (long-form post) derived fields
+  isArticle?: boolean;
+  articleMarkdown?: string | null;
   metadata: Record<string, unknown> | null;
   isLiked: boolean;
   isArchived: boolean;

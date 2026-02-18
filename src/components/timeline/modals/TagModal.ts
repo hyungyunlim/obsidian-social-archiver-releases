@@ -287,7 +287,7 @@ export class TagModal extends Modal {
     });
 
     // Confirm delete
-    const confirmBtn = btnRow.createEl('button', { text: 'Delete All' });
+    const confirmBtn = btnRow.createEl('button', { text: 'Delete all' });
     confirmBtn.addClass('sa-py-8', 'sa-px-20', 'sa-rounded-6', 'sa-text-md', 'sa-clickable', 'sa-font-semibold', 'tm-confirm-delete-btn');
     confirmBtn.addEventListener('click', () => {
       // Collect everything to delete before closing

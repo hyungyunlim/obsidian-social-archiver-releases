@@ -20,7 +20,7 @@ const TYPE_LABELS: Record<string, string> = {
   document: 'document',
 };
 
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- utility class with only static methods; instantiation not needed
 export class MediaPlaceholderGenerator {
   /**
    * Generate a parseable Obsidian callout placeholder for an expired/failed media item.

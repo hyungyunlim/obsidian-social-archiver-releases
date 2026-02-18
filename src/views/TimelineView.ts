@@ -183,7 +183,7 @@ export class TimelineView extends ItemView {
    * Returns the display text shown in the view header
    */
   getDisplayText(): string {
-    return 'Social Archive Timeline';
+    return 'Social archive timeline';
   }
 
   /**

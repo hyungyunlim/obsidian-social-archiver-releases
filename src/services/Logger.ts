@@ -402,7 +402,7 @@ export class ConsoleTransport implements LogTransport {
 		} else if (level === 'debug') {
 			console.debug(logMessage);
 		} else {
-			console.log(logMessage);
+			console.debug(logMessage);
 		}
 	}
 }
