@@ -230,15 +230,15 @@ export class TranscriptionService {
     if (!VIDEO_MEDIA_FORMATS.includes(ext)) {
       return {
         path: mediaPath,
-        cleanup: async () => {},
+        cleanup: (): Promise<void> => Promise.resolve(),
       };
     }
 
     const wavPath = await this.extractAudioFromVideo(mediaPath, signal);
     return {
       path: wavPath,
-       
-      cleanup: async () => {
+
+      cleanup: (): Promise<void> => {
         const fs = nodeRequire('fs') as typeof import('fs');
         try {
           if (fs.existsSync(wavPath)) {
@@ -247,6 +247,7 @@ export class TranscriptionService {
         } catch {
           // Ignore cleanup errors for temp files
         }
+        return Promise.resolve();
       },
     };
   }

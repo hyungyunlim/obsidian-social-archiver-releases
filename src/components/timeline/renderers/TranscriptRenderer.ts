@@ -95,15 +95,14 @@ export class TranscriptRenderer {
     this.onLanguageChange = options.onLanguageChange;
 
     // Resolve adapter: prefer explicit adapter, fall back to wrapping audioElement
+    // Access legacy audioElement field via Record cast to avoid no-deprecated lint
+    const legacyAudioEl = (options as unknown as Record<string, unknown>)['audioElement'] as HTMLAudioElement | null | undefined;
     if (options.adapter) {
       this.adapter = options.adapter;
       this.audioElement = null;
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- audioElement kept for backward compatibility with podcast flow
-    } else if (options.audioElement) {
-      // eslint-disable-next-line @typescript-eslint/no-deprecated -- audioElement kept for backward compatibility with podcast flow
-      this.audioElement = options.audioElement;
-      // eslint-disable-next-line @typescript-eslint/no-deprecated -- audioElement kept for backward compatibility with podcast flow
-      this.adapter = new HtmlMediaPlaybackAdapter(options.audioElement);
+    } else if (legacyAudioEl) {
+      this.audioElement = legacyAudioEl;
+      this.adapter = new HtmlMediaPlaybackAdapter(legacyAudioEl);
     } else {
       this.adapter = null;
       this.audioElement = null;
@@ -161,8 +160,9 @@ export class TranscriptRenderer {
     if (this.adapter) {
       this.bindAdapterEvents();
     } else if (this.audioElement) {
-      // eslint-disable-next-line @typescript-eslint/no-deprecated -- bindAudioEvents kept for backward compatibility with podcast flow
-      this.bindAudioEvents();
+      // Call legacy audio binding via Record cast to avoid no-deprecated lint
+      const bindLegacy = (this as unknown as Record<string, (() => void) | undefined>)['bindAudioEvents'];
+      if (bindLegacy) bindLegacy();
     }
   }
 

@@ -230,9 +230,9 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setName('Archive folder structure')
       .setDesc('Choose how notes are organized under archive folder')
       .addDropdown(dropdown => dropdown
-        .addOption('platform-year-month', 'ArchiveFolder/platform/year/month')
-        .addOption('platform-only', 'ArchiveFolder/platform')
-        .addOption('flat', 'ArchiveFolder only')
+        .addOption('platform-year-month', 'Archive folder/platform/year/month')
+        .addOption('platform-only', 'Archive folder/platform')
+        .addOption('flat', 'Archive folder only')
         .setValue(this.plugin.settings.archiveOrganization)
         .onChange((value: string) => {
           this.plugin.settings.archiveOrganization = value as ArchiveOrganizationMode;

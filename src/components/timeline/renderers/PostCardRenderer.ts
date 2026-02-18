@@ -6226,7 +6226,7 @@ export class PostCardRenderer extends Component {
       if (!videoPath.toLowerCase().endsWith('.mp4')) {
         const hasFFmpeg = await YtDlpDetector.isFfmpegAvailable();
         if (!hasFFmpeg) {
-          new Notice('⚠️ this video may not play in browser.\nffmpeg is required for browser-compatible videos.\n\nVisit: ffmpeg.org', 10000);
+          new Notice('⚠️ this video may not play in the browser.\nInstall ffmpeg for browser-compatible video playback.\n\nVisit: ffmpeg.org', 10000);
         }
       }
 

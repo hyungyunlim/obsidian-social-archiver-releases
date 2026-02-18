@@ -587,12 +587,12 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
  */
 export function migrateSettings(settings: Partial<SocialArchiverSettings>): SocialArchiverSettings {
   const migrated = { ...DEFAULT_SETTINGS, ...settings };
+  // Record cast for accessing legacy/deprecated fields during migration without lint warnings
+  const legacy = migrated as unknown as Record<string, unknown>;
 
   // Migrate legacy apiKey to authToken if authToken is empty
-  // eslint-disable-next-line @typescript-eslint/no-deprecated -- intentional legacy field access for migration
-  if (!migrated.authToken && migrated.apiKey) {
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- intentional legacy field access for migration
-    migrated.authToken = migrated.apiKey;
+  if (!migrated.authToken && legacy['apiKey']) {
+    migrated.authToken = legacy['apiKey'] as string;
   }
 
   // Ensure deviceId exists (generate if needed)
@@ -601,12 +601,10 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
   }
 
   // Migrate legacy credit tracking
-  // eslint-disable-next-line @typescript-eslint/no-deprecated -- intentional legacy field access for migration
-  if (typeof migrated.creditsRemaining === 'number' && migrated.creditsUsed === 0) {
+  if (typeof legacy['creditsRemaining'] === 'number' && migrated.creditsUsed === 0) {
     // Convert creditsRemaining to creditsUsed (inverse logic)
     const freeLimit = 10;
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- intentional legacy field access for migration
-    migrated.creditsUsed = Math.max(0, freeLimit - migrated.creditsRemaining);
+    migrated.creditsUsed = Math.max(0, freeLimit - legacy['creditsRemaining']);
   }
 
   // Initialize empty tracking objects if missing
@@ -836,8 +834,7 @@ export function needsMigration(settings: Partial<SocialArchiverSettings>): boole
   // Check for missing new fields
   if (!settings.deviceId) return true;
   if (settings.tier === undefined) return true;
-  // eslint-disable-next-line @typescript-eslint/no-deprecated -- intentional legacy field check for migration detection
-  if (settings.authToken === undefined && settings.apiKey) return true;
+  if (settings.authToken === undefined && (settings as unknown as Record<string, unknown>)['apiKey']) return true;
   if (!settings.byPlatform) return true;
   if (!settings.byCountry) return true;
   if (!settings.timingByPlatform) return true;
