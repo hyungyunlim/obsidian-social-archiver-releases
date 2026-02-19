@@ -852,7 +852,7 @@
   top: var(--sa-close-btn-top, 8px) !important;
 }
 
-.sa-mobile-content {
+.social-archiver-modal .sa-mobile-content {
   padding: 16px;
   padding-bottom: 12px;
   padding-left: var(--sa-padding-left, 16px);

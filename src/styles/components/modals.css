@@ -676,9 +676,8 @@
   max-height: 80vh !important;
 }
 
-.wesm-content--mobile {
-  padding-left: 8px;
-  padding-right: 8px;
+.social-archiver-modal .wesm-content--mobile {
+  padding: 4px 16px 12px;
 }
 
 .wesm-content-layout {
@@ -932,9 +931,8 @@
   overflow-y: auto !important;
 }
 
-.am-content--mobile {
-  padding-left: 12px;
-  padding-right: 12px;
+.social-archiver-modal .am-content--mobile {
+  padding: 4px 20px 16px;
 }
 
 /* Mobile form input shared style */

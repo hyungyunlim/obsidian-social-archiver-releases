@@ -2305,7 +2305,7 @@ export default class SocialArchiverPlugin extends Plugin {
           const media = postData.media[i];
           if (!media) continue;
 
-          if (downloadMode === 'images-only' && media.type !== 'photo') {
+          if (downloadMode === 'images-only' && media.type !== 'image') {
             continue;
           }
 
@@ -2647,7 +2647,7 @@ export default class SocialArchiverPlugin extends Plugin {
           const media = postData.media[i];
           if (!media) continue;
 
-          if (downloadMode === 'images-only' && media.type !== 'photo') {
+          if (downloadMode === 'images-only' && media.type !== 'image') {
             continue;
           }
 
@@ -2930,7 +2930,7 @@ export default class SocialArchiverPlugin extends Plugin {
           const media = postData.media[i];
           if (!media) continue;
 
-          if (downloadMode === 'images-only' && media.type !== 'photo') {
+          if (downloadMode === 'images-only' && media.type !== 'image') {
             continue;
           }
 
