@@ -234,7 +234,7 @@ export class CommentRenderer {
     // Comment content: **name** content (on same line)
     const contentSpan = commentDiv.createSpan();
 
-    const usernameSpan = contentSpan.createEl('strong');
+    const usernameSpan = contentSpan.createSpan();
     usernameSpan.addClass('sa-font-semibold', 'sa-text-normal', 'sa-clickable');
     // Use author.name for display (e.g., "Charlie Moon" for LinkedIn)
     usernameSpan.setText(comment.author.name);

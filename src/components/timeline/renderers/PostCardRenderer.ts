@@ -416,9 +416,7 @@ export class PostCardRenderer extends Component {
       commentHeader.addClass('sa-text-base');
       commentHeader.addClass('sa-text-muted');
 
-      const userNameSpan = commentHeader.createSpan({ text: userName });
-      userNameSpan.addClass('sa-font-semibold');
-      userNameSpan.addClass('sa-text-normal');
+      commentHeader.createSpan({ text: userName, cls: 'pcr-comment-username' });
 
       // Use "commented on this user" for profile documents
       const commentOnText = post.type === 'profile' ? ' commented on this user' : ' commented on this post';
@@ -482,9 +480,7 @@ export class PostCardRenderer extends Component {
       savedHeader.addClass('sa-text-muted');
       savedHeader.addClass('sa-inline-block');
 
-      const userNameSpan = savedHeader.createSpan({ text: userName });
-      userNameSpan.addClass('sa-font-semibold');
-      userNameSpan.addClass('sa-text-normal');
+      savedHeader.createSpan({ text: userName, cls: 'pcr-comment-username' });
 
       // Use "saved this user" for profile documents, "saved this place" for Google Maps, "saved this post" for regular posts
       let savedText = ' saved this post';
@@ -5564,6 +5560,13 @@ export class PostCardRenderer extends Component {
         const newTime = getTimeEstimate(selectedModel);
         timeEstimate.textContent = newTime ? `(~${newTime})` : '';
         adjustSelectWidth();
+      });
+
+      // Click on wrapper (including arrow) opens the select dropdown
+      selectWrapper.addEventListener('click', (e) => {
+        if (e.target !== modelSelect) {
+          modelSelect.showPicker();
+        }
       });
     }
 

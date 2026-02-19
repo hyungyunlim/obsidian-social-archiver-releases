@@ -224,6 +224,7 @@ export interface PostData {
      * Used by PostCardRenderer to render images inline instead of gallery
      */
     rawMarkdown?: string;
+    snippet?: string; // Threads Notes long-form content
     hashtags?: string[]; // TikTok/X hashtags
     community?: {        // Reddit subreddit info
       name: string;

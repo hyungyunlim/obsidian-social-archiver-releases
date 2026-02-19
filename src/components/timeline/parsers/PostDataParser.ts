@@ -166,6 +166,7 @@ export class PostDataParser {
         }
       }
       const contentText = this.extractContentText(content);
+      const snippet = frontmatter.platform === 'threads' ? this.extractSnippet(content) : undefined;
       const metadata = this.extractMetadata(content);
 
       // Try to extract media from MetadataCache first for better performance
@@ -451,6 +452,7 @@ export class PostDataParser {
         },
         content: {
           text: contentText,
+          snippet,
           // For RSS-based platforms: preserve raw markdown with inline images for proper rendering
           // For X articles: extract article body and unescape markdown artifacts
           rawMarkdown: isRssBasedPlatform(frontmatter.platform)
@@ -550,6 +552,11 @@ export class PostDataParser {
     // Remove comments section to avoid duplicate rendering
     withoutFrontmatter = withoutFrontmatter.replace(/\n*## 💬 Comments[\s\S]*$/, '');
 
+    // Remove Threads Notes snippet callout (parsed separately into content.snippet)
+    withoutFrontmatter = withoutFrontmatter.replace(
+      /\n*> \[!note\]\+?\s*Threads Note\s*\n(?:> .*(?:\n|$))*/m, ''
+    );
+
     // Split into sections by horizontal rules
     const sections = withoutFrontmatter.split(/\n---+\n/);
 
@@ -610,6 +617,28 @@ export class PostDataParser {
     }
 
     return contentLines.join('\n').trim();
+  }
+
+  /**
+   * Extract Threads Notes snippet from markdown callout block
+   * Matches: > [!note]+ Threads Note\n> content...
+   * Returns the snippet text (without callout prefix) or undefined
+   */
+  private extractSnippet(markdown: string): string | undefined {
+    // Match the callout block: > [!note]+ Threads Note followed by > prefixed lines
+    const calloutMatch = markdown.match(
+      /^> \[!note\]\+?\s*Threads Note\s*\n((?:> .*(?:\n|$))*)/m
+    );
+    if (!calloutMatch?.[1]) return undefined;
+
+    // Strip the "> " prefix from each line
+    const snippetText = calloutMatch[1]
+      .split('\n')
+      .map(line => line.replace(/^> ?/, ''))
+      .join('\n')
+      .trim();
+
+    return snippetText || undefined;
   }
 
   /**
@@ -801,7 +830,7 @@ export class PostDataParser {
       // Parse main comment header: **[@username](url)** [· timestamp] [· likes]
       // Timestamp is optional since Instagram comments don't have timestamp from API
       // Support various Unicode separator dots: · (U+00B7), • (U+2022), ∙ (U+2219), and regular hyphen
-      const headerMatch = lines[0].match(/\*\*\[?@?([^\]]*)\]?\(?([^)]*)\)?\*\*(?:(?: [-·•∙] ([^-·•∙\n]+))?)(?: [-·•∙] (\d+) likes)?/);
+      const headerMatch = lines[0].match(/\*\*\[?@?([^\]]*)\]?\(?([^)]*)\)?\*\*(?:(?: [-·•∙] ([^·•∙\n]+))?)(?: [-·•∙] (\d+) likes)?/);
       if (!headerMatch) continue;
 
       const [, username, url, timestamp, likesStr] = headerMatch;
@@ -824,7 +853,7 @@ export class PostDataParser {
         if (currentLine && currentLine.trim().startsWith('↳')) {
           // Reply header: ↳ **[@username](url)** [· timestamp] [· likes]
           // Support various Unicode separator dots: · (U+00B7), • (U+2022), ∙ (U+2219), and regular hyphen
-          const replyHeaderMatch = currentLine.match(/↳ \*\*\[?@?([^\]]*)\]?\(?([^)]*)\)?\*\*(?:(?: [-·•∙] ([^-·•∙\n]+))?)(?: [-·•∙] (\d+) likes)?/);
+          const replyHeaderMatch = currentLine.match(/↳ \*\*\[?@?([^\]]*)\]?\(?([^)]*)\)?\*\*(?:(?: [-·•∙] ([^·•∙\n]+))?)(?: [-·•∙] (\d+) likes)?/);
           if (replyHeaderMatch) {
             const [, replyUsername, replyUrl, replyTimestamp, replyLikesStr] = replyHeaderMatch;
             i++;

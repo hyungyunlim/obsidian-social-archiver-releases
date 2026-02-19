@@ -492,7 +492,7 @@ export class BrightDataClient implements IService {
 
 			return {
 				original: url,
-				canonical: `https://www.threads.net/@/post/${postId}`,
+				canonical: `https://www.threads.com/@/post/${postId}`,
 				platform: 'threads',
 				postId,
 			};

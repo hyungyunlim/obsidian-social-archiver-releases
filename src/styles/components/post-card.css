@@ -995,7 +995,16 @@
   width: auto;
 }
 
-.pcr-model-arrow {
+.pcr-model-select:hover,
+.pcr-model-select:focus,
+.pcr-model-select:active {
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+.pcr-model-select-arrow {
   width: 14px;
   height: 14px;
   display: flex;
@@ -1003,6 +1012,14 @@
   justify-content: center;
   color: var(--text-muted);
   pointer-events: none;
+}
+
+.pcr-model-select-measure {
+  position: absolute;
+  visibility: hidden;
+  white-space: nowrap;
+  font-size: 13px;
+  font-family: inherit;
 }
 
 .pcr-transcription-right {
@@ -1078,6 +1095,11 @@
 
 .pcr-comment-username {
   font-weight: 600;
+  color: var(--text-normal);
+}
+
+/* Override Obsidian's --bold-color via high-specificity ancestor */
+.social-archiver-timeline-view .pcr-comment-username {
   color: var(--text-normal);
 }
 

@@ -31,8 +31,8 @@ export const SUPPORTED_PLATFORMS = {
   },
   THREADS: {
     name: 'Threads',
-    domains: ['threads.net'],
-    patterns: [/threads\.net\/@(.*?)\/post\/(.*)/],
+    domains: ['threads.net', 'threads.com'],
+    patterns: [/threads\.(?:net|com)\/@(.*?)\/post\/(.*)/],
     icon: '🧵'
   }
 } as const;

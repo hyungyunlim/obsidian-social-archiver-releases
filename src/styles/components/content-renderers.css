@@ -759,6 +759,15 @@
   width: auto;
 }
 
+.acb-minimal-select:hover,
+.acb-minimal-select:focus,
+.acb-minimal-select:active {
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+}
+
 /* Icon button (24x24, no browser chrome) */
 .acb-icon-btn {
   padding: 0 !important;

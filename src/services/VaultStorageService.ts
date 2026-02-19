@@ -327,14 +327,14 @@ export class VaultStorageService {
         };
       });
 
-    // Convert PostData to Markdown with media results
-    // IMPORTANT: convert() signature is (postData, customTemplate?, mediaResults?, options?)
-    // Pass undefined for customTemplate to use default, then mediaResults
-    const markdown = this.markdownConverter.convert(postData, undefined, mediaResults);
-
     // Generate file path (use explicit targetFilePath, then PostData.url, then generate)
     // For subscription posts, targetFilePath is provided to avoid using URL as path
     const filePath = targetFilePath || (postData.url && !postData.url.startsWith('http') ? postData.url : this.generateFilePath(postData));
+
+    // Convert PostData to Markdown with media results
+    // IMPORTANT: convert() signature is (postData, customTemplate?, mediaResults?, options?)
+    // Pass undefined for customTemplate to use default, then mediaResults
+    const markdown = this.markdownConverter.convert(postData, undefined, mediaResults, { outputFilePath: filePath });
 
     // Ensure parent folder exists
     const parentPath = this.getParentPath(filePath);
@@ -498,7 +498,7 @@ export class VaultStorageService {
 
     // Convert PostData to Markdown with updated media references
     // Pass undefined for customTemplate to use default
-    const markdown = this.markdownConverter.convert(postData, undefined, allMediaResults);
+    const markdown = this.markdownConverter.convert(postData, undefined, allMediaResults, { outputFilePath: existingFile.path });
 
     // Merge existing frontmatter with new frontmatter
     // Preserve share-related fields AND download tracking (processedUrls comes from new data)

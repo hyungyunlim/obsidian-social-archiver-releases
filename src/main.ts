@@ -1211,7 +1211,7 @@ export default class SocialArchiverPlugin extends Plugin {
       case 'facebook':
         return `https://www.facebook.com/${handle}`;
       case 'threads':
-        return `https://www.threads.net/@${handle}`;
+        return `https://www.threads.com/@${handle}`;
       case 'tiktok':
         return `https://www.tiktok.com/@${handle}`;
       case 'reddit':
@@ -4259,7 +4259,8 @@ ${contentParts.join('')}
     const result = markdownConverter.convert(
       postData,
       undefined,  // customTemplate
-      mediaResults  // mediaResults from MediaHandler
+      mediaResults,  // mediaResults from MediaHandler
+      { outputFilePath: filePath }
     );
 
     // Ensure folder exists
@@ -5943,7 +5944,8 @@ ${contentParts.join('')}
       }
 
       // Convert to markdown (with downloaded media paths)
-      let markdown = markdownConverter.convert(postData, undefined, downloadedMedia.length > 0 ? downloadedMedia : undefined);
+      const outputFilePath = vaultManager.generateFilePath(postData);
+      let markdown = markdownConverter.convert(postData, undefined, downloadedMedia.length > 0 ? downloadedMedia : undefined, { outputFilePath });
 
       // Add metadata to frontmatter
       markdown.frontmatter.download_time = Math.round((Date.now() - startTime) / 100) / 10;

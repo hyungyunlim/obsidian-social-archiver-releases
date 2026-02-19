@@ -38,3 +38,4 @@ export {
   type WhisperModelInfo,
 } from './whisper';
 export { TrackedTimerManager } from './TrackedTimerManager';
+export { toRelativeMediaPath } from './path';

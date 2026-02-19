@@ -13,6 +13,7 @@ import { MediaPlaceholderGenerator } from './MediaPlaceholderGenerator';
 import { isRssBasedPlatform } from '@/constants/rssPlatforms';
 import { getPlatformName } from '@/shared/platforms';
 import { encodePathForMarkdownLink } from '@/utils/url';
+import { toRelativeMediaPath } from '@/utils/path';
 import type { FrontmatterCustomizationSettings } from '@/types/settings';
 import {
   DEFAULT_FRONTMATTER_CUSTOMIZATION_SETTINGS,
@@ -316,6 +317,11 @@ const DEFAULT_TEMPLATES: Record<Platform, string> = {
 
 {{/if}}{{content.text}}
 
+{{#if content.snippet}}
+
+{{content.snippet}}
+
+{{/if}}
 {{#if media}}
 
 ---
@@ -1264,9 +1270,12 @@ export interface MarkdownResult {
 
 /**
  * Options for markdown conversion
- * Reserved for future options
  */
-export type ConvertOptions = object;
+export interface ConvertOptions {
+  /** Vault-root-relative path of the output markdown file.
+   *  Used to compute correct relative paths for embedded media. */
+  outputFilePath?: string;
+}
 
 interface MarkdownConverterConfig {
   frontmatterSettings?: FrontmatterCustomizationSettings;
@@ -1369,8 +1378,10 @@ export class MarkdownConverter implements IService {
     postData: PostData,
     customTemplate?: string,
     mediaResults?: import('./MediaHandler').MediaResult[],
-    _options?: ConvertOptions
+    options?: ConvertOptions
   ): MarkdownResult {
+    const outputFilePath = options?.outputFilePath;
+
     // Generate frontmatter with options
     const frontmatter = this.frontmatterGenerator.generateFrontmatter(postData, {
       customization: this.frontmatterSettings,
@@ -1380,7 +1391,7 @@ export class MarkdownConverter implements IService {
     const template = customTemplate || this.templates.get(postData.platform) || DEFAULT_TEMPLATES[postData.platform];
 
     // Prepare template data
-    const templateData = this.prepareTemplateData(postData, mediaResults);
+    const templateData = this.prepareTemplateData(postData, mediaResults, outputFilePath);
 
     // Process template
     const content = TemplateEngine.process(template, templateData);
@@ -1410,11 +1421,11 @@ export class MarkdownConverter implements IService {
    * @param archives - Array of archived PostData to format
    * @returns Formatted markdown string
    */
-  private formatEmbeddedArchives(archives: PostData[]): string {
+  private formatEmbeddedArchives(archives: PostData[], outputFilePath?: string): string {
     const sections: string[] = [];
 
     for (const archive of archives) {
-      const pinterestBoardSection = this.formatPinterestBoardEmbedded(archive);
+      const pinterestBoardSection = this.formatPinterestBoardEmbedded(archive, outputFilePath);
       if (pinterestBoardSection) {
         sections.push(pinterestBoardSection);
         continue;
@@ -1493,10 +1504,8 @@ export class MarkdownConverter implements IService {
           section += `**Media:**\n`;
           for (const media of archive.media) {
             // At this point, media.url should already be updated to local path by ArchiveOrchestrator
-            // Convert to relative path for User Post files (Post/YYYY/MM/file.md -> ../../../../attachments/...)
-            const relativePath = media.url.startsWith('attachments/')
-              ? `../../../../${media.url}`
-              : media.url;
+            // Convert to relative path based on output file depth
+            const relativePath = toRelativeMediaPath(media.url, outputFilePath);
 
             if (media.type === 'image') {
               const altText = media.altText || media.alt || 'Image';
@@ -1513,7 +1522,7 @@ export class MarkdownConverter implements IService {
       // NOTE: Include quotedPost in markdown so it appears in the content
       // PostDataParser will extract it from markdown and PostCardRenderer will render it as UI
       if (archive.quotedPost) {
-        section += this.formatQuotedPost(archive.quotedPost, archive.isReblog);
+        section += this.formatQuotedPost(archive.quotedPost, archive.isReblog, undefined, outputFilePath);
         section += `\n`;
       }
 
@@ -1589,7 +1598,7 @@ export class MarkdownConverter implements IService {
   /**
    * Format Pinterest board archives (board URL with pin list)
    */
-  private formatPinterestBoardEmbedded(archive: PostData): string | null {
+  private formatPinterestBoardEmbedded(archive: PostData, outputFilePath?: string): string | null {
     if (archive.platform !== 'pinterest') return null;
 
     const raw = archive.raw as Record<string, unknown> | Record<string, unknown>[] | undefined;
@@ -1637,9 +1646,7 @@ export class MarkdownConverter implements IService {
     if (archive.media && archive.media.length > 0) {
       section += `**Media:**\n`;
       for (const media of archive.media) {
-        const relativePath = media.url.startsWith('attachments/')
-          ? `../../../../${media.url}`
-          : media.url;
+        const relativePath = toRelativeMediaPath(media.url, outputFilePath);
 
         if (media.type === 'image') {
           const altText = media.altText || media.alt || 'Image';
@@ -1675,7 +1682,8 @@ export class MarkdownConverter implements IService {
   private formatQuotedPost(
     quotedPost: Omit<PostData, 'quotedPost' | 'embeddedArchives'>,
     isReblog?: boolean,
-    expiredMedia?: import('./MediaPlaceholderGenerator').MediaExpiredResult[]
+    expiredMedia?: import('./MediaPlaceholderGenerator').MediaExpiredResult[],
+    outputFilePath?: string
   ): string {
     const platformName = getPlatformName(quotedPost.platform);
     const authorName = quotedPost.author.name;
@@ -1702,9 +1710,7 @@ export class MarkdownConverter implements IService {
       // Render external link preview image if available (downloaded by ArchiveOrchestrator)
       if (quotedPost.metadata.externalLinkImage) {
         const imagePath = quotedPost.metadata.externalLinkImage;
-        const relativePath = imagePath.startsWith('attachments/')
-          ? `../../../../${imagePath}`
-          : imagePath;
+        const relativePath = toRelativeMediaPath(imagePath, outputFilePath);
         section += `![Link Preview](${encodePathForMarkdownLink(relativePath)})\n`;
       }
       section += `\n`;
@@ -1725,9 +1731,7 @@ export class MarkdownConverter implements IService {
         }
 
         // Convert to relative path for local attachments
-        const relativePath = media.url.startsWith('attachments/')
-          ? `../../../../${media.url}`
-          : media.url;
+        const relativePath = toRelativeMediaPath(media.url, outputFilePath);
 
         if (media.type === 'image') {
           const altText = media.altText || media.alt || 'Image';
@@ -1802,7 +1806,8 @@ export class MarkdownConverter implements IService {
    */
   private prepareTemplateData(
     postData: PostData,
-    mediaResults?: import('./MediaHandler').MediaResult[]
+    mediaResults?: import('./MediaHandler').MediaResult[],
+    outputFilePath?: string
   ): Record<string, unknown> {
     // Generate author mention for Instagram
     const authorMention = postData.platform === 'instagram' && postData.author.handle
@@ -1829,12 +1834,12 @@ export class MarkdownConverter implements IService {
 
     // Format embedded archives (for platform: 'post' only)
     const formattedEmbeddedArchives = postData.embeddedArchives && postData.embeddedArchives.length > 0
-      ? this.formatEmbeddedArchives(postData.embeddedArchives)
+      ? this.formatEmbeddedArchives(postData.embeddedArchives, outputFilePath)
       : undefined;
 
     // Format quoted/shared/reblogged post (for Facebook, X, Threads, Mastodon, Bluesky)
     const formattedQuotedPost = postData.quotedPost
-      ? this.formatQuotedPost(postData.quotedPost, postData.isReblog, postData._expiredMedia as import('./MediaPlaceholderGenerator').MediaExpiredResult[] | undefined)
+      ? this.formatQuotedPost(postData.quotedPost, postData.isReblog, postData._expiredMedia as import('./MediaPlaceholderGenerator').MediaExpiredResult[] | undefined, outputFilePath)
       : undefined;
 
     const normalizeHashtagForObsidian = (tag: string) => {
@@ -1949,6 +1954,11 @@ export class MarkdownConverter implements IService {
       ? postData.series.genre.join(', ')
       : undefined;
 
+    // Format Threads Notes snippet as Obsidian callout
+    const formattedSnippet = postData.content.snippet
+      ? `> [!note]+ Threads Note\n> ${postData.content.snippet.replace(/\n/g, '\n> ')}`
+      : undefined;
+
     return {
       ...postData,
       authorMention,
@@ -1957,6 +1967,7 @@ export class MarkdownConverter implements IService {
         ...postData.content,
         text: sanitizedText,
         hashtagsText,
+        ...(formattedSnippet && { snippet: formattedSnippet }),
       },
       metadata: {
         ...postData.metadata,

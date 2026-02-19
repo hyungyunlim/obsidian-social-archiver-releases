@@ -161,16 +161,16 @@ const PLATFORM_PATTERNS: URLPattern[] = [
   },
   {
     platform: 'threads',
-    domains: ['threads.net', 'www.threads.net'],
+    domains: ['threads.net', 'www.threads.net', 'threads.com', 'www.threads.com'],
     patterns: [
       // Standard post URLs
-      /threads\.net\/@[^/]+\/post\/[A-Za-z0-9_-]+/i,
+      /threads\.(?:net|com)\/@[^/]+\/post\/[A-Za-z0-9_-]+/i,
 
       // Thread URLs (using /t/ path)
-      /threads\.net\/t\/[A-Za-z0-9_-]+/i,
+      /threads\.(?:net|com)\/t\/[A-Za-z0-9_-]+/i,
 
       // Direct post link format
-      /threads\.net\/[A-Za-z0-9_-]+/i,
+      /threads\.(?:net|com)\/[A-Za-z0-9_-]+/i,
     ],
   },
   {
@@ -1020,8 +1020,8 @@ export class PlatformDetector implements IService {
    * Threads-specific canonicalization
    */
   private canonicalizeThreadsUrl(urlObj: URL): string {
-    // Remove www
-    urlObj.hostname = urlObj.hostname.replace(/^www\./, '');
+    // Normalize to threads.com (canonical domain since April 2025)
+    urlObj.hostname = urlObj.hostname.replace(/^www\./, '').replace('threads.net', 'threads.com');
 
     // Remove ALL query parameters (post ID is in path)
     urlObj.search = '';

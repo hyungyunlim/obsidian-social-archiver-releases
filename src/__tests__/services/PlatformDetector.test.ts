@@ -629,16 +629,22 @@ describe('PlatformDetector', () => {
     });
 
     describe('Threads canonicalization', () => {
-      it('should remove all query parameters', () => {
+      it('should remove all query parameters and normalize to threads.com', () => {
         const url = 'https://www.threads.net/@user/post/ABC123?utm_source=share';
         const canonical = detector.canonicalizeUrl(url);
-        expect(canonical).toBe('https://threads.net/@user/post/ABC123');
+        expect(canonical).toBe('https://threads.com/@user/post/ABC123');
       });
 
       it('should remove trailing slash', () => {
         const url = 'https://threads.net/t/XYZ789/';
         const canonical = detector.canonicalizeUrl(url);
-        expect(canonical).toBe('https://threads.net/t/XYZ789');
+        expect(canonical).toBe('https://threads.com/t/XYZ789');
+      });
+
+      it('should keep threads.com as-is', () => {
+        const url = 'https://www.threads.com/@user/post/ABC123';
+        const canonical = detector.canonicalizeUrl(url);
+        expect(canonical).toBe('https://threads.com/@user/post/ABC123');
       });
     });
 

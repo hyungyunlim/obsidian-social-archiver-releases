@@ -491,11 +491,12 @@ export class ArchiveOrchestrator implements IService {
 
       // Stage 5: Convert to markdown
       this.emitProgress('processing', 70, 'Converting to markdown...');
+      const outputFilePath = this.vaultManager.generateFilePath(postData);
       let markdown = this.markdownConverter.convert(
         postData,
         options.customTemplate,
         mediaResults.length > 0 ? mediaResults : undefined,
-        undefined
+        { outputFilePath }
       );
 
       // Update frontmatter with processing time

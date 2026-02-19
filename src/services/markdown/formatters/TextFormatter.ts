@@ -109,7 +109,7 @@ export class TextFormatter {
         case 'tiktok':
           return `https://www.tiktok.com/tag/${encoded}`;
         case 'threads':
-          return `https://www.threads.net/tag/${encoded}`;
+          return `https://www.threads.com/tag/${encoded}`;
         case 'youtube':
           return `https://www.youtube.com/hashtag/${encoded}`;
         case 'reddit':

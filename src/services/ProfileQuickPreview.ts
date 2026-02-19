@@ -415,7 +415,7 @@ export class ProfileQuickPreview implements IService {
       if (hostname.includes('facebook.com') || hostname.includes('fb.com')) return 'facebook';
       if (hostname.includes('linkedin.com')) return 'linkedin';
       if (hostname.includes('youtube.com')) return 'youtube';
-      if (hostname.includes('threads.net')) return 'threads';
+      if (hostname.includes('threads.net') || hostname.includes('threads.com')) return 'threads';
       if (hostname.includes('reddit.com')) return 'reddit';
       if (hostname.includes('bsky.app')) return 'bluesky';
       if (hostname.includes('pinterest.com')) return 'pinterest';
