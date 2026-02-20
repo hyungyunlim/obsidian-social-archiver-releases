@@ -3411,7 +3411,7 @@ export class TimelineContainer {
         throw: false
       });
 
-      if (res.status !== 200) {
+      if (res.status !== 200 && res.status !== 201) {
         throw new Error(`Subscription create failed: ${res.status} ${res.text || ''}`.trim());
       }
 
@@ -3749,7 +3749,7 @@ export class TimelineContainer {
                 throw: false
               });
 
-              if (res.status !== 200) {
+              if (res.status !== 200 && res.status !== 201) {
                 throw new Error(`Subscription create failed: ${res.status} ${res.text || ''}`.trim());
               }
 
