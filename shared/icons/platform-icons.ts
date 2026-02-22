@@ -159,3 +159,10 @@ export const siBrunch: PlatformIcon = {
  * webtoons.com is the global version of Naver Webtoon
  */
 export const siWebtoons: PlatformIcon = siNaverWebtoon;
+
+export const siReadwise: PlatformIcon = {
+  title: 'Readwise',
+  hex: 'FFB800',
+  // Readwise "R" lettermark scaled to 24x24 viewBox
+  path: 'M17.386 17.177C17.892 18.019 18.305 18.299 19.149 18.399V19.241H14.985L11.083 12.732H10.109V17C10.109 18.142 10.391 18.301 11.592 18.401V19.243H5.305V18.401C6.506 18.301 6.788 18.14 6.788 17V7.464C6.788 6.303 6.543 6.163 5.305 6.063V5.221H11.776C15.677 5.221 17.715 6.042 17.715 8.927C17.715 11.109 16.654 12.152 14.516 12.511L17.386 17.177ZM10.671 6.583C10.332 6.583 10.109 6.823 10.109 7.185V11.37H11.722C13.392 11.37 14.385 10.769 14.385 8.927C14.385 7.063 13.392 6.583 11.778 6.583H10.671Z'
+};

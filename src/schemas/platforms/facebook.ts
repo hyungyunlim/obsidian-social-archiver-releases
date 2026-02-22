@@ -62,10 +62,10 @@ const facebookShareUrlSchema = z
 		message: 'Invalid Facebook share URL format',
 	});
 
-// Story URL: facebook.com/stories/{storyId}
+// Story URL: facebook.com/stories/{storyId} or story.php?story_fbid={id}
 const facebookStoryUrlSchema = z
 	.string()
-	.regex(/facebook\.com\/stories\/\d+/i, {
+	.regex(/facebook\.com\/(?:stories\/\d+|story\.php\?story_fbid=\d+)/i, {
 		message: 'Invalid Facebook story URL format',
 	});
 
@@ -79,7 +79,7 @@ const facebookGroupUrlSchema = z
 		}
 	);
 
-// Mobile URL: m.facebook.com/story.php?story_fbid={id} or m.facebook.com/photo.php?fbid={id}
+// Mobile URL: m.facebook.com with story.php or photo.php patterns
 const facebookMobileUrlSchema = z
 	.string()
 	.regex(
@@ -88,6 +88,13 @@ const facebookMobileUrlSchema = z
 			message: 'Invalid Facebook mobile URL format',
 		}
 	);
+
+// Reel URL: facebook.com/reel/{id}
+const facebookReelUrlSchema = z
+	.string()
+	.regex(/facebook\.com\/reel\/\d+/i, {
+		message: 'Invalid Facebook reel URL format',
+	});
 
 /**
  * Comprehensive Facebook URL schema
@@ -116,6 +123,7 @@ export const FacebookURLSchema = z
 				facebookStoryUrlSchema,
 				facebookGroupUrlSchema,
 				facebookMobileUrlSchema,
+				facebookReelUrlSchema,
 			];
 
 			return patterns.some((schema) => schema.safeParse(url).success);

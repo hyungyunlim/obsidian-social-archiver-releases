@@ -244,6 +244,8 @@ export const MOBILE_PLATFORMS = [
   'threads',
   'linkedin',
   'youtube',
+  'bluesky',
+  'mastodon',
 ] as const;
 
 export type MobilePlatform = typeof MOBILE_PLATFORMS[number];
@@ -259,6 +261,8 @@ export const MOBILE_PLATFORM_INFO: Record<MobilePlatform, { name: string; placeh
   threads: { name: 'Threads', placeholder: 'Threads post' },
   linkedin: { name: 'LinkedIn', placeholder: 'LinkedIn post or article' },
   youtube: { name: 'YouTube', placeholder: 'YouTube video, short, or live stream' },
+  bluesky: { name: 'Bluesky', placeholder: 'Bluesky post' },
+  mastodon: { name: 'Mastodon', placeholder: 'Mastodon post' },
 };
 
 // ============================================================================

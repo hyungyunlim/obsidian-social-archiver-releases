@@ -8,6 +8,7 @@ import {
   AICli,
   AI_CLI_INFO,
 } from '../../utils/ai-cli';
+import * as nodeRequireModule from '../../utils/nodeRequire';
 
 // Mock Obsidian Platform
 vi.mock('obsidian', () => ({
@@ -24,6 +25,7 @@ describe('AI CLI Detection Utilities', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     AICliDetector.resetCache();
   });
 
@@ -145,6 +147,83 @@ describe('AI CLI Detection Utilities', () => {
         writable: true,
         configurable: true,
       });
+    });
+  });
+
+  describe('AICliDetector.detect preferred CLI behavior', () => {
+    it('should only probe the requested CLI', async () => {
+      vi.spyOn(nodeRequireModule, 'default').mockImplementation((id: string) => {
+        if (id === 'os') {
+          return {
+            platform: () => 'darwin',
+          } as unknown as typeof import('os');
+        }
+        throw new Error(`Unexpected nodeRequire id in test: ${id}`);
+      });
+
+      const detectCliSpy = vi.spyOn(AICliDetector as any, 'detectCli').mockImplementation(
+        async (cli: AICli) => ({
+          available: true,
+          cli,
+          path: `/mock/${cli}`,
+          version: '1.0.0',
+          authenticated: true,
+        })
+      );
+
+      const result = await AICliDetector.detect('codex');
+
+      expect(detectCliSpy).toHaveBeenCalledTimes(1);
+      expect(detectCliSpy).toHaveBeenCalledWith('codex', expect.any(String));
+      expect(result.available).toBe(true);
+      expect(result.cli).toBe('codex');
+    });
+
+    it('should not fall back to another CLI when requested CLI is unavailable', async () => {
+      vi.spyOn(nodeRequireModule, 'default').mockImplementation((id: string) => {
+        if (id === 'os') {
+          return {
+            platform: () => 'darwin',
+          } as unknown as typeof import('os');
+        }
+        throw new Error(`Unexpected nodeRequire id in test: ${id}`);
+      });
+
+      const detectCliSpy = vi.spyOn(AICliDetector as any, 'detectCli').mockImplementation(
+        async (cli: AICli) => {
+          if (cli === 'codex') {
+            return {
+              available: false,
+              cli: null,
+              path: null,
+              version: null,
+              authenticated: false,
+            };
+          }
+
+          return {
+            available: true,
+            cli,
+            path: `/mock/${cli}`,
+            version: '1.0.0',
+            authenticated: true,
+          };
+        }
+      );
+
+      const result = await AICliDetector.detect('codex');
+
+      expect(detectCliSpy).toHaveBeenCalledTimes(1);
+      expect(detectCliSpy).toHaveBeenCalledWith('codex', expect.any(String));
+      expect(result.available).toBe(false);
+      expect(result.cli).toBeNull();
+    });
+  });
+
+  describe('AICliDetector detection paths', () => {
+    it('should not probe the macOS Codex GUI app binary', () => {
+      const paths = (AICliDetector as any).DETECTION_PATHS.codex.darwin as string[];
+      expect(paths).not.toContain('/Applications/Codex.app/Contents/MacOS/codex');
     });
   });
 

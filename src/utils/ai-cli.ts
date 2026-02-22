@@ -48,16 +48,25 @@ export const AI_CLI_INFO: Record<AICli, AICliInfo> = {
   },
 };
 
- 
 export class AICliDetector {
-  // Cached detection results
+  private static readonly SUPPORTED_CLIS: AICli[] = ['claude', 'gemini', 'codex'];
+
+  // Cached per-CLI detection results (includes unavailable results)
   private static detectedClis: Map<AICli, AICliDetectionResult> = new Map();
+  private static cliCacheTimestamps: Map<AICli, number> = new Map();
   private static primaryCli: AICli | null = null;
   private static primaryResult: AICliDetectionResult | null = null;
 
-  // Cache TTL: 5 minutes
-  private static cacheTimestamp: number = 0;
+  // Full scan cache TTL: 5 minutes
+  private static fullCacheTimestamp: number = 0;
   private static readonly CACHE_TTL = 5 * 60 * 1000;
+
+  // In-flight detection dedupe
+  private static inFlightDetectAll: Promise<Map<AICli, AICliDetectionResult>> | null = null;
+  private static inFlightCliDetections: Map<AICli, Promise<AICliDetectionResult>> = new Map();
+
+  // Incremented on reset to prevent stale async commits from repopulating cache
+  private static cacheGeneration = 0;
 
   /**
    * Detection paths for each AI CLI tool by platform
@@ -110,7 +119,6 @@ export class AICliDetector {
         '~/.npm-global/bin/codex',
         '~/.local/bin/codex',
         '~/.bun/bin/codex',
-        '/Applications/Codex.app/Contents/MacOS/codex',
       ],
       linux: [
         '/usr/bin/codex',
@@ -151,90 +159,59 @@ export class AICliDetector {
   }
 
   /**
-   * Detect first available AI CLI with full details
+   * Detect first available AI CLI with full details.
    * Results are cached for 5 minutes
-   * @param preferredCli - If specified, try this CLI first
+   * @param preferredCli - If specified, detect only that CLI
    */
   static async detect(preferredCli?: AICli): Promise<AICliDetectionResult> {
-    // Check mobile first
     if (this.isMobile()) {
-      return {
-        available: false,
-        cli: null,
-        path: null,
-        version: null,
-        authenticated: false,
-      };
+      return this.createUnavailableResult();
     }
 
-    // Return cached result if valid
-    if (this.isCacheValid() && this.primaryResult) {
-      // If preferred CLI matches cached, return it
-      if (!preferredCli || this.primaryCli === preferredCli) {
-        return this.primaryResult;
-      }
-      // If preferred CLI is different and already detected, return it
-      const cachedPreferred = this.detectedClis.get(preferredCli);
-      if (cachedPreferred) {
-        return cachedPreferred;
-      }
+    this.pruneExpiredCache();
+
+    // No target specified: use a full scan and return the primary available CLI.
+    if (!preferredCli) {
+      await this.detectAll();
+      return this.primaryResult ?? this.createUnavailableResult();
     }
 
-    // Reset cache for fresh detection
-    this.resetCache();
-
-    try {
-      const os = nodeRequire('os') as typeof import('os');
-      const platform = os.platform();
-
-      // Build CLI order based on preference
-      let clis: AICli[];
-      if (preferredCli) {
-        clis = [preferredCli, ...(['claude', 'gemini', 'codex'] as AICli[]).filter(c => c !== preferredCli)];
-      } else {
-        // Default order: claude (most capable), gemini, codex
-        clis = ['claude', 'gemini', 'codex'];
-      }
-
-      for (const cli of clis) {
-        const result = await this.detectCli(cli, platform);
-        if (result.available) {
-          this.detectedClis.set(cli, result);
-
-          // Set as primary if it's the first available or matches preference
-          if (!this.primaryResult || cli === preferredCli) {
-            this.primaryCli = cli;
-            this.primaryResult = result;
-          }
-        }
-      }
-
-      this.cacheTimestamp = Date.now();
-
-      if (this.primaryResult) {
-        return this.primaryResult;
-      }
-
-      // No CLI found
-      return {
-        available: false,
-        cli: null,
-        path: null,
-        version: null,
-        authenticated: false,
-      };
-    } catch (error) {
-      console.error('[AICliDetector] Detection failed:', error);
-      this.cacheTimestamp = Date.now();
-
-      return {
-        available: false,
-        cli: null,
-        path: null,
-        version: null,
-        authenticated: false,
-      };
+    const cachedResult = this.getValidCachedCliResult(preferredCli);
+    if (cachedResult) {
+      return cachedResult;
     }
+
+    // If a full scan is already running, wait for it instead of starting duplicate probes.
+    if (this.inFlightDetectAll) {
+      await this.inFlightDetectAll;
+      this.pruneExpiredCache();
+      return this.getValidCachedCliResult(preferredCli) ?? this.createUnavailableResult();
+    }
+
+    const inFlight = this.inFlightCliDetections.get(preferredCli);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const generation = this.cacheGeneration;
+    const promise = (async () => {
+      try {
+        const os = nodeRequire('os') as typeof import('os');
+        const platform = os.platform();
+        const result = await this.detectCli(preferredCli, platform);
+
+        this.commitCliResult(preferredCli, result, generation);
+        return result;
+      } catch (error) {
+        console.error('[AICliDetector] Detection failed:', error);
+        return this.createUnavailableResult();
+      } finally {
+        this.inFlightCliDetections.delete(preferredCli);
+      }
+    })();
+
+    this.inFlightCliDetections.set(preferredCli, promise);
+    return promise;
   }
 
   /**
@@ -242,52 +219,54 @@ export class AICliDetector {
    * @returns Map of detected CLIs and their results
    */
   static async detectAll(): Promise<Map<AICli, AICliDetectionResult>> {
-    // Check mobile first
     if (this.isMobile()) {
       return new Map();
     }
 
-    // Return cached results if valid
-    if (this.isCacheValid() && this.detectedClis.size > 0) {
-      return new Map(this.detectedClis);
+    this.pruneExpiredCache();
+
+    if (this.isTimestampValid(this.fullCacheTimestamp)) {
+      return this.getAvailableResults();
     }
 
-    // Reset cache for fresh detection
-    this.resetCache();
+    if (this.inFlightDetectAll) {
+      return this.inFlightDetectAll;
+    }
 
-    try {
-      const os = nodeRequire('os') as typeof import('os');
-      const platform = os.platform();
+    const generation = this.cacheGeneration;
+    this.inFlightDetectAll = (async () => {
+      try {
+        const os = nodeRequire('os') as typeof import('os');
+        const platform = os.platform();
+        const results = new Map<AICli, AICliDetectionResult>();
 
-      const clis: AICli[] = ['claude', 'gemini', 'codex'];
-
-      for (const cli of clis) {
-        const result = await this.detectCli(cli, platform);
-        if (result.available) {
-          this.detectedClis.set(cli, result);
-
-          // Set first available as primary
-          if (!this.primaryResult) {
-            this.primaryCli = cli;
-            this.primaryResult = result;
-          }
+        for (const cli of this.SUPPORTED_CLIS) {
+          const inFlightCli = this.inFlightCliDetections.get(cli);
+          const result = inFlightCli
+            ? await inFlightCli
+            : await this.detectCli(cli, platform);
+          results.set(cli, result);
         }
-      }
 
-      this.cacheTimestamp = Date.now();
-      return new Map(this.detectedClis);
-    } catch (error) {
-      console.error('[AICliDetector] DetectAll failed:', error);
-      this.cacheTimestamp = Date.now();
-      return new Map();
-    }
+        this.commitAllResults(results, generation);
+        return this.getAvailableResults();
+      } catch (error) {
+        console.error('[AICliDetector] DetectAll failed:', error);
+        return this.getAvailableResults();
+      } finally {
+        this.inFlightDetectAll = null;
+      }
+    })();
+
+    return this.inFlightDetectAll;
   }
 
   /**
    * Get list of detected CLI names
    */
   static getDetectedClis(): AICli[] {
-    return Array.from(this.detectedClis.keys());
+    this.pruneExpiredCache();
+    return this.SUPPORTED_CLIS.filter(cli => this.detectedClis.get(cli)?.available);
   }
 
   /**
@@ -369,13 +348,7 @@ export class AICliDetector {
       }
     }
 
-    return {
-      available: false,
-      cli: null,
-      path: null,
-      version: null,
-      authenticated: false,
-    };
+    return this.createUnavailableResult();
   }
 
   /**
@@ -525,17 +498,135 @@ export class AICliDetector {
   }
 
   /**
-   * Check if cache is still valid
+   * Create an unavailable detection result
    */
-  private static isCacheValid(): boolean {
-    if (this.cacheTimestamp === 0) return false;
-    return Date.now() - this.cacheTimestamp < this.CACHE_TTL;
+  private static createUnavailableResult(): AICliDetectionResult {
+    return {
+      available: false,
+      cli: null,
+      path: null,
+      version: null,
+      authenticated: false,
+    };
+  }
+
+  /**
+   * Check whether a cached timestamp is still valid
+   */
+  private static isTimestampValid(timestamp: number): boolean {
+    if (timestamp === 0) return false;
+    return Date.now() - timestamp < this.CACHE_TTL;
+  }
+
+  /**
+   * Get a valid cached result for a specific CLI (available or unavailable)
+   */
+  private static getValidCachedCliResult(cli: AICli): AICliDetectionResult | null {
+    const timestamp = this.cliCacheTimestamps.get(cli);
+    if (!timestamp || !this.isTimestampValid(timestamp)) {
+      return null;
+    }
+
+    return this.detectedClis.get(cli) ?? this.createUnavailableResult();
+  }
+
+  /**
+   * Get only available results for callers that need detected CLIs
+   */
+  private static getAvailableResults(): Map<AICli, AICliDetectionResult> {
+    const results = new Map<AICli, AICliDetectionResult>();
+    for (const cli of this.SUPPORTED_CLIS) {
+      const result = this.detectedClis.get(cli);
+      if (result?.available) {
+        results.set(cli, result);
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Commit a single CLI detection result into cache if the generation matches.
+   */
+  private static commitCliResult(
+    cli: AICli,
+    result: AICliDetectionResult,
+    generation: number
+  ): void {
+    if (generation !== this.cacheGeneration) {
+      return;
+    }
+
+    const now = Date.now();
+    this.detectedClis.set(cli, result);
+    this.cliCacheTimestamps.set(cli, now);
+    this.recomputePrimary();
+  }
+
+  /**
+   * Commit a full detection pass into cache atomically.
+   */
+  private static commitAllResults(
+    results: Map<AICli, AICliDetectionResult>,
+    generation: number
+  ): void {
+    if (generation !== this.cacheGeneration) {
+      return;
+    }
+
+    const now = Date.now();
+    for (const cli of this.SUPPORTED_CLIS) {
+      this.detectedClis.set(cli, results.get(cli) ?? this.createUnavailableResult());
+      this.cliCacheTimestamps.set(cli, now);
+    }
+
+    this.fullCacheTimestamp = now;
+    this.recomputePrimary();
+  }
+
+  /**
+   * Remove expired per-CLI cache entries and keep primary selection consistent.
+   */
+  private static pruneExpiredCache(): void {
+    const now = Date.now();
+
+    for (const cli of this.SUPPORTED_CLIS) {
+      const timestamp = this.cliCacheTimestamps.get(cli);
+      if (!timestamp) continue;
+      if (now - timestamp >= this.CACHE_TTL) {
+        this.cliCacheTimestamps.delete(cli);
+        this.detectedClis.delete(cli);
+      }
+    }
+
+    if (!this.isTimestampValid(this.fullCacheTimestamp)) {
+      this.fullCacheTimestamp = 0;
+    }
+
+    this.recomputePrimary();
+  }
+
+  /**
+   * Keep primary CLI/result deterministic based on fixed CLI priority.
+   */
+  private static recomputePrimary(): void {
+    this.primaryCli = null;
+    this.primaryResult = null;
+
+    for (const cli of this.SUPPORTED_CLIS) {
+      const result = this.detectedClis.get(cli);
+      if (result?.available) {
+        this.primaryCli = cli;
+        this.primaryResult = result;
+        return;
+      }
+    }
   }
 
   /**
    * Get cached primary CLI path
    */
   static getPath(): string | null {
+    this.pruneExpiredCache();
     return this.primaryResult?.path ?? null;
   }
 
@@ -543,6 +634,7 @@ export class AICliDetector {
    * Get cached primary CLI
    */
   static getCli(): AICli | null {
+    this.pruneExpiredCache();
     return this.primaryCli;
   }
 
@@ -550,6 +642,7 @@ export class AICliDetector {
    * Get cached primary CLI version
    */
   static getVersion(): string | null {
+    this.pruneExpiredCache();
     return this.primaryResult?.version ?? null;
   }
 
@@ -557,6 +650,7 @@ export class AICliDetector {
    * Get cached authentication status
    */
   static isAuthenticated(): boolean {
+    this.pruneExpiredCache();
     return this.primaryResult?.authenticated ?? false;
   }
 
@@ -564,16 +658,22 @@ export class AICliDetector {
    * Get result for a specific CLI
    */
   static getCliResult(cli: AICli): AICliDetectionResult | null {
-    return this.detectedClis.get(cli) ?? null;
+    this.pruneExpiredCache();
+    const result = this.detectedClis.get(cli);
+    return result?.available ? result : null;
   }
 
   /**
    * Reset detection cache
    */
   static resetCache(): void {
+    this.cacheGeneration += 1;
     this.detectedClis.clear();
+    this.cliCacheTimestamps.clear();
     this.primaryCli = null;
     this.primaryResult = null;
-    this.cacheTimestamp = 0;
+    this.fullCacheTimestamp = 0;
+    this.inFlightDetectAll = null;
+    this.inFlightCliDetections.clear();
   }
 }

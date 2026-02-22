@@ -259,6 +259,36 @@ Single photo caption.
     expect(content).not.toContain('![image');
   });
 
+  it('excludes media-only section when a trailing separator remains after comment stripping (Reddit style)', () => {
+    const markdown = `---
+platform: reddit
+author: testuser
+published: 2026-02-20
+---
+
+Reddit body text.
+
+---
+
+![image 1](attachments/social-archives/reddit/post-1.webp)
+
+---
+
+## 💬 Comments
+
+**commenter** · 2026-02-20 03:36 · 1 likes
+Nice post.
+
+---
+
+**Platform:** Reddit | **Author:** testuser | **Published:** 2026-02-20
+`;
+
+    const content = parser.extractContentText(markdown);
+    expect(content).toBe('Reddit body text.');
+    expect(content).not.toContain('![image');
+  });
+
   it('preserves horizontal rules within actual post body', () => {
     const markdown = `---
 platform: x

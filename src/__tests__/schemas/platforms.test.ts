@@ -48,6 +48,11 @@ describe('Platform URL Schemas', () => {
 
 				// Story URLs
 				'https://facebook.com/stories/123456789',
+				'https://www.facebook.com/story.php?story_fbid=26962375163380634&id=100001045441523',
+				'https://facebook.com/story.php?story_fbid=123456789',
+
+				// Reel URLs
+				'https://facebook.com/reel/123456789',
 
 				// Group posts
 				'https://facebook.com/groups/mygroup/posts/123456789',

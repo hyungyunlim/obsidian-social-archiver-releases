@@ -1987,21 +1987,11 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    * Get detected AI CLIs
    */
   private async getDetectedClis(): Promise<Map<AICli, AICliDetectionResult>> {
-    const results = new Map<AICli, AICliDetectionResult>();
-    const clis: AICli[] = ['claude', 'gemini', 'codex'];
-
-    await Promise.all(clis.map(async (cli) => {
-      try {
-        const result = await AICliDetector.detect(cli);
-        if (result.available) {
-          results.set(cli, result);
-        }
-      } catch {
-        // Ignore detection errors
-      }
-    }));
-
-    return results;
+    try {
+      return await AICliDetector.detectAll();
+    } catch {
+      return new Map();
+    }
   }
 
   /**

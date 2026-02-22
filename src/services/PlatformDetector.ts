@@ -60,6 +60,10 @@ const PLATFORM_PATTERNS: URLPattern[] = [
 
       // Story URLs
       /facebook\.com\/stories\/\d+/i,
+      /facebook\.com\/story\.php\?story_fbid=\d+/i,
+
+      // Reel URLs
+      /facebook\.com\/reel\/\d+/i,
 
       // Group posts
       /facebook\.com\/groups\/[^/]+\/posts\/\d+/i,

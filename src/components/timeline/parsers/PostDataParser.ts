@@ -576,8 +576,14 @@ export class PostDataParser {
       // Also stop if this section contains only images (media gallery section)
       // e.g., "![image 1](path)\n\n![image 2](path)\n..." or single "![image](path)"
       // Handles both markdown images ![alt](url) and wikilink images ![[file]]
-      const nonEmptyLines = trimmedSection.split('\n').filter(l => l.trim());
-      if (nonEmptyLines.length > 0 && nonEmptyLines.every(l => /^!\[/.test(l.trim()))) {
+      // Ignore trailing horizontal rules left after stripping comments/footer sections.
+      const meaningfulLines = trimmedSection
+        .split('\n')
+        .map(l => l.trim())
+        .filter(l => l.length > 0 && !/^[-*_]{3,}$/.test(l));
+      const isMediaOnlySection = meaningfulLines.length > 0 &&
+        meaningfulLines.every(l => /^!\[/.test(l) || /^\*\*Media:\*\*$/.test(l));
+      if (isMediaOnlySection) {
         break;
       }
       contentSections.push(section);

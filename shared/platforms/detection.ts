@@ -223,7 +223,7 @@ export function extractPostIdFromUrl(platform: Platform, url: string): string | 
         // Multiple formats:
         // /posts/{id}, /permalink/{id}, /photo?fbid={id}
         // pfbid in URL path, /videos/{id}/, /{pageId}/posts/{id}
-        // story_fbid in query params
+        // /share/{p|v|r}/{code}, story_fbid/fbid/v query params
         const pfbidMatch = pathname.match(/(pfbid[A-Za-z0-9]+)/);
         if (pfbidMatch) return pfbidMatch[1] ?? null;
 
@@ -233,6 +233,9 @@ export function extractPostIdFromUrl(platform: Platform, url: string): string | 
         const fbid = parsed.searchParams.get('fbid');
         if (fbid) return fbid;
 
+        const v = parsed.searchParams.get('v');
+        if (v) return v;
+
         // /posts/{id} or /permalink/{id} or /videos/{id}
         const postMatch = pathname.match(/\/(?:posts|permalink|videos)\/(\d+)/);
         if (postMatch) return postMatch[1] ?? null;
@@ -240,6 +243,10 @@ export function extractPostIdFromUrl(platform: Platform, url: string): string | 
         // /{user}/posts/{id}
         const userPostMatch = pathname.match(/\/[^/]+\/posts\/(\d+)/);
         if (userPostMatch) return userPostMatch[1] ?? null;
+
+        // /share/p/{code}, /share/v/{code}, /share/r/{code}
+        const shareMatch = pathname.match(/\/share\/[pvr]\/([A-Za-z0-9]+)/);
+        if (shareMatch) return shareMatch[1] ?? null;
 
         return null;
       }

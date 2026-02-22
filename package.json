@@ -1,6 +1,6 @@
 {
   "name": "obsidian-social-archiver",
-  "version": "2.6.3",
+  "version": "2.6.4",
   "description": "Save social media posts directly into your Obsidian vault",
   "main": "main.js",
   "type": "module",
