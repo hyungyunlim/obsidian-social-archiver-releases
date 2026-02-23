@@ -18,6 +18,8 @@ export interface PendingJobArchiveOptions {
   includeTranscript?: boolean;
   includeFormattedTranscript?: boolean;
   comment?: string;
+  /** User-selected tags to apply to archived note frontmatter */
+  tags?: string[];
 }
 
 /**

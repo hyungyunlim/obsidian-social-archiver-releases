@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/definitions.ts
- * Generated: 2026-02-22T13:51:52.300Z
+ * Generated: 2026-02-23T05:44:54.603Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -344,8 +344,12 @@ export const PLATFORM_DEFINITIONS: Record<Platform, PlatformDefinition> = {
     displayName: 'Blog',
     emoji: '📝',
     domains: ['github.io'], // GitHub Pages / Jekyll blogs
-    // Matches: *.github.io, RSS feed URLs (/feed.xml, /rss, /atom.xml, etc.), Feedburner, or date-based blog post paths
-    urlPattern: /(?:\.github\.io|\/feed(?:\.xml|\.json)?$|\/rss(?:\.xml|2)?$|\/atom(?:\.xml)?$|\/index\.xml$|\/feeds?\/|feedburner\.com|\/\d{4}\/\d{2}\/(?:\d{2}\/)?[a-z0-9-]+|\/(?:posts?|blog|articles?)\/\d{4})/i,
+    // Matches: *.github.io, RSS feed URLs (/feed.xml, /rss, /atom.xml, etc.), Feedburner, or prefixed blog post paths
+    // Note: Bare date patterns (e.g., /2024/03/slug) are intentionally excluded from detection
+    // because news sites (theatlantic.com, nytimes.com) also use date-based URLs.
+    // Those URLs correctly fall through to 'web' platform via the HTTP(S) fallback in detectPlatform().
+    // Only explicit blog-prefixed paths (/posts/YYYY/, /blog/YYYY/, /articles/YYYY/) are matched here.
+    urlPattern: /(?:\.github\.io|\/feed(?:\.xml|\.json)?$|\/rss(?:\.xml|2)?$|\/atom(?:\.xml)?$|\/index\.xml$|\/feeds?\/|feedburner\.com|\/(?:posts?|blog|articles?)\/\d{4}\/)/i,
     allowCustomDomains: true,
     supportsMedia: true,
     supportsAI: true,
@@ -435,6 +439,19 @@ export const PLATFORM_DEFINITIONS: Record<Platform, PlatformDefinition> = {
     maxMediaSize: 100 * 1024 * 1024, // 100MB
     rateLimit: { requestsPerHour: 200, requestsPerDay: 2000 },
     features: { stories: false, live: false, reels: false, threads: true },
+  },
+
+  web: {
+    id: 'web',
+    displayName: 'Web Article',
+    emoji: '🌐',
+    domains: [], // No specific domains - generic HTTP(S) URL fallback
+    urlPattern: /^$/, // Never matches via pattern (detected via URL parsing fallback in detectPlatform)
+    supportsMedia: true,
+    supportsAI: true,
+    maxMediaSize: 50 * 1024 * 1024, // 50MB
+    rateLimit: { requestsPerHour: 200, requestsPerDay: 2000 },
+    features: { stories: false, live: false, reels: false, threads: false },
   },
 
   post: {
@@ -655,6 +672,12 @@ export const PLATFORM_AI_COMMENT_CONFIG: Record<Platform, PlatformAICommentConfi
     requiresTranscription: false,
     defaultEnabled: true,
     contentSource: 'rawMarkdown',
+  },
+  web: {
+    showBanner: true,
+    requiresTranscription: false,
+    defaultEnabled: true,
+    contentSource: 'rawMarkdown', // Defuddle extracts markdown from web pages
   },
   post: {
     showBanner: false, // User-created posts don't need AI analysis banner

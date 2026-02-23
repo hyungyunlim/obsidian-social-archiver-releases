@@ -23,6 +23,41 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '2.7.0': {
+    title: 'Web Archiving + Archive-Time Tags + Filename Templates',
+    date: '2026-02-23',
+    notes: `## 🌐 General Web Archiving (Major)
+
+You can now archive **general web pages/articles** (blogs, docs, newsletters, etc.) directly into Social Archiver, including pages you found from web search.
+
+- Added a new **Web** platform flow for one-off archiving
+- Improved URL detection/routing for blog-style pages (including Medium/Velog/Brunch and similar sites)
+- Better article content extraction + cleanup for cleaner markdown output
+- Web article images now render inline and integrate better with timeline/media views
+- Added **Web** platform filter/timeline support (with icon + rendering improvements)
+
+## 🏷️ Choose Tags While Archiving
+
+You can now assign tags **during the archive flow** instead of tagging only after the post is saved.
+
+- Select tags in the archive modal before starting the archive
+- Tags are preserved through async/pending job completion flows
+- Works with the existing tag filter/timeline tag chips
+
+## 📝 Custom Obsidian Filename Templates
+
+Choose how archived note filenames are generated in Settings.
+
+- Token-based filename templates (for example date, platform, author, title/snippet)
+- Safer filename sanitization and duplicate-name handling
+- Improved settings UX (preview, token chips, reset/default handling)
+
+## 💛 Support
+
+- Added a **Support** section at the bottom of Settings with a **Buy Me a Coffee** link
+`,
+    isImportant: true,
+  },
   '2.6.0': {
     title: 'Video Transcription & Batch Processing',
     date: '2026-02-15',

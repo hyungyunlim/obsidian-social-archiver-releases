@@ -55,10 +55,13 @@ const facebookWatchUrlSchema = z
 		}
 	);
 
-// Share URL: facebook.com/share/{shareId} or facebook.com/share.php
+// Share URL:
+// - facebook.com/share/{shareId}
+// - facebook.com/share/{p|v|r}/{shareId}
+// - facebook.com/share.php
 const facebookShareUrlSchema = z
 	.string()
-	.regex(/(facebook\.com\/share\/[a-zA-Z0-9]+|facebook\.com\/share\.php)/i, {
+	.regex(/(facebook\.com\/share\/(?:[pvr]\/)?[a-zA-Z0-9]+|facebook\.com\/share\.php)/i, {
 		message: 'Invalid Facebook share URL format',
 	});
 

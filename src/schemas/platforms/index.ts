@@ -20,6 +20,7 @@ import { GoogleMapsURLSchema, GoogleMapsPlaceIdSchema } from './googlemaps';
 import { VelogURLSchema, extractVelogUsername } from './velog';
 import { BlogURLSchema, isGitHubPagesBlogUrl } from './blog';
 import { MediumURLSchema, isMediumLikeUrl } from './medium';
+import { WebURLSchema } from './web';
 import { PodcastURLSchema, isPodcastLikeUrl, isKnownPodcastPlatformUrl } from './podcast';
 import {
 	NaverURLSchema,
@@ -138,6 +139,8 @@ export {
 	// Naver Webtoon (defined inline below)
 	// NaverWebtoonURLSchema,
 	// extractNaverWebtoonInfo,
+	// Web (generic catch-all)
+	WebURLSchema,
 };
 
 /**
@@ -314,6 +317,7 @@ const PLATFORM_SCHEMA_MAP = {
 	'naver-webtoon': NaverWebtoonURLSchema,
 	webtoons: WebtoonsURLSchema,
 	brunch: BrunchURLSchema,
+	web: WebURLSchema,
 } as const satisfies Record<ExternalPlatform, z.ZodType>;
 
 /**

@@ -160,6 +160,12 @@ export const siBrunch: PlatformIcon = {
  */
 export const siWebtoons: PlatformIcon = siNaverWebtoon;
 
+export const siWeb: PlatformIcon = {
+  title: 'Web',
+  hex: '607D8B', // Blue Grey 500 - neutral for generic web content
+  path: 'M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm8.94 11h-4.04c-.14-2.41-.73-4.59-1.66-6.26A9.97 9.97 0 0 1 20.94 11zM12 2.04c1.73 0 3.4 3.04 3.9 8.96H8.1c.5-5.92 2.17-8.96 3.9-8.96zM8.76 4.74C7.83 6.41 7.24 8.59 7.1 11H3.06a9.97 9.97 0 0 1 5.7-6.26zM3.06 13H7.1c.14 2.41.73 4.59 1.66 6.26A9.97 9.97 0 0 1 3.06 13zM12 21.96c-1.73 0-3.4-3.04-3.9-8.96h7.8c-.5 5.92-2.17 8.96-3.9 8.96zm3.24-2.7c.93-1.67 1.52-3.85 1.66-6.26h4.04a9.97 9.97 0 0 1-5.7 6.26z',
+};
+
 export const siReadwise: PlatformIcon = {
   title: 'Readwise',
   hex: 'FFB800',

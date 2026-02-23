@@ -483,7 +483,7 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
   // Storage Settings
   archivePath: 'Social Archives',
   mediaPath: 'attachments/social-archives',
-  fileNameFormat: '[YYYY-MM-DD] {platform}-{slug}-{shortId}',
+  fileNameFormat: '{published_date} - {author} - {title} ({short_id})',
   archiveOrganization: 'platform-year-month',
 
   // Feature Toggles
@@ -752,6 +752,11 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
   // Initialize archive organization mode if missing/invalid (migration)
   if (!isArchiveOrganizationMode(migrated.archiveOrganization)) {
     migrated.archiveOrganization = DEFAULT_SETTINGS.archiveOrganization;
+  }
+
+  // Migrate old fileNameFormat default to new token-based format
+  if (migrated.fileNameFormat === '[YYYY-MM-DD] {platform}-{slug}-{shortId}') {
+    migrated.fileNameFormat = DEFAULT_SETTINGS.fileNameFormat;
   }
 
   // Initialize frontmatter customization settings if missing (migration)

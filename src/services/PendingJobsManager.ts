@@ -143,6 +143,9 @@ export interface PendingJob {
 
     /** Original URL before platform-specific resolution (e.g., Pinterest board resolution) */
     originalUrl?: string;
+
+    /** User-selected tags to apply on archive completion */
+    selectedTags?: string[];
   };
 }
 

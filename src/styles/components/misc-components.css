@@ -665,6 +665,93 @@
   animation: spin 1s linear infinite;
 }
 
+/* View switching overlay to mask heavy list/gallery rerenders */
+.tc-view-switching {
+  position: relative;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.tc-view-switching > * {
+  opacity: 0.24;
+}
+
+.tc-view-switching::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  background: var(--background-primary);
+  opacity: 0.76;
+  pointer-events: none;
+}
+
+.tc-view-switching::after {
+  content: "";
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 92px;
+  height: 180px;
+  border-radius: 12px;
+  z-index: 41;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    var(--background-secondary) 0%,
+    var(--background-modifier-hover) 50%,
+    var(--background-secondary) 100%
+  );
+  background-size: 220% 100%;
+  animation: tc-view-switch-shimmer 1.05s linear infinite;
+}
+
+@media (max-width: 768px) {
+  .tc-view-switching::after {
+    top: 72px;
+    height: 148px;
+  }
+}
+
+@keyframes tc-view-switch-shimmer {
+  from {
+    background-position: 220% 0;
+  }
+
+  to {
+    background-position: -220% 0;
+  }
+}
+
+.tc-view-switch-btn-loading {
+  cursor: wait;
+  opacity: 0.8;
+}
+
+.tc-view-switch-icon-spinning svg {
+  animation: tc-view-switch-spin 1s linear infinite;
+}
+
+@keyframes tc-view-switch-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tc-view-switching::after {
+    animation: none;
+  }
+
+  .tc-view-switch-icon-spinning svg {
+    animation: none;
+  }
+}
+
 /* Search container animation */
 .tc-search-container {
   transition: height 0.15s cubic-bezier(0.4, 0, 0.2, 1);

@@ -443,6 +443,7 @@ export class CompactPostCardRenderer extends Component {
       'naver-webtoon': 'Naver Webtoon',
       webtoons: 'WEBTOON',
       brunch: 'Brunch',
+      web: 'Web Article',
       post: 'Post'
     };
     return names[platform] || platform;

@@ -14,6 +14,7 @@ import type {
 import {
   DEFAULT_FRONTMATTER_CUSTOMIZATION_SETTINGS,
   DEFAULT_FRONTMATTER_PROPERTY_ORDER,
+  DEFAULT_SETTINGS,
   FRONTMATTER_CORE_LOCKED_FIELDS,
   isArchiveOrganizationMode,
   normalizeFrontmatterFieldAliases,
@@ -34,6 +35,8 @@ import {
 } from '../shared/platforms/types';
 import type { Platform as SocialPlatform } from '../shared/platforms/types';
 import { getPlatformDefinition } from '../shared/platforms/definitions';
+
+const BUY_ME_A_COFFEE_URL = 'https://buymeacoffee.com/junlim';
 
 export class SocialArchiverSettingTab extends PluginSettingTab {
   plugin: SocialArchiverPlugin;
@@ -255,6 +258,136 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         // Add folder suggestions
         new FolderSuggest(this.app, text.inputEl);
       });
+
+    // --- Filename format (integrated block) ---
+    {
+      // Header (no controls — input row is below)
+      const headerSetting = new Setting(containerEl)
+        .setName('Filename format')
+        .setDesc('Template for archived note filenames. Click tokens to insert at cursor.');
+
+      // Force the block to wrap below the header row
+      headerSetting.settingEl.style.flexWrap = 'wrap';
+      const blockEl = headerSetting.settingEl.createDiv();
+      blockEl.style.flexBasis = '100%';
+      blockEl.style.paddingTop = '4px';
+      blockEl.style.paddingBottom = '4px';
+
+      // Input row: full-width input + reset button
+      let filenameInputEl: HTMLInputElement | null = null;
+      const inputRowEl = blockEl.createDiv();
+      inputRowEl.style.display = 'flex';
+      inputRowEl.style.alignItems = 'center';
+      inputRowEl.style.gap = '6px';
+
+      const inputEl = inputRowEl.createEl('input', { type: 'text' });
+      inputEl.value = this.plugin.settings.fileNameFormat;
+      inputEl.placeholder = DEFAULT_SETTINGS.fileNameFormat;
+      inputEl.style.flex = '1';
+      inputEl.style.minWidth = '0';
+      inputEl.style.padding = '6px 10px';
+      inputEl.style.borderRadius = '4px';
+      inputEl.style.border = '1px solid var(--background-modifier-border)';
+      inputEl.style.background = 'var(--background-primary)';
+      inputEl.style.color = 'var(--text-normal)';
+      inputEl.style.fontSize = '0.9em';
+      inputEl.style.fontFamily = 'var(--font-monospace)';
+      inputEl.addEventListener('input', () => {
+        this.plugin.settings.fileNameFormat = inputEl.value || DEFAULT_SETTINGS.fileNameFormat;
+        this.markDirty();
+        updateFilenamePreview(this.plugin.settings.fileNameFormat);
+      });
+      filenameInputEl = inputEl;
+
+      // Reset button next to input
+      const resetBtn = inputRowEl.createDiv({ cls: 'clickable-icon', attr: { 'aria-label': 'Reset to default' } });
+      resetBtn.title = 'Reset to default';
+      resetBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>';
+      resetBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.plugin.settings.fileNameFormat = DEFAULT_SETTINGS.fileNameFormat;
+        this.markDirty();
+        inputEl.value = DEFAULT_SETTINGS.fileNameFormat;
+        updateFilenamePreview(DEFAULT_SETTINGS.fileNameFormat);
+      });
+
+      // Token chips row
+      const chipsEl = blockEl.createDiv();
+      chipsEl.style.display = 'flex';
+      chipsEl.style.flexWrap = 'wrap';
+      chipsEl.style.gap = '4px';
+      chipsEl.style.marginTop = '6px';
+
+      const tokenDefs: { token: string; label: string }[] = [
+        { token: 'published_date', label: 'Date' },
+        { token: 'archived_date', label: 'Archived' },
+        { token: 'platform', label: 'Platform' },
+        { token: 'author', label: 'Author' },
+        { token: 'title', label: 'Title' },
+        { token: 'slug', label: 'Slug' },
+        { token: 'post_id', label: 'Post ID' },
+        { token: 'short_id', label: 'Short ID' },
+      ];
+
+      for (const { token, label } of tokenDefs) {
+        const chip = chipsEl.createEl('button', { text: label });
+        chip.style.fontSize = '0.78em';
+        chip.style.padding = '2px 8px';
+        chip.style.borderRadius = '10px';
+        chip.style.border = '1px solid var(--background-modifier-border)';
+        chip.style.background = 'var(--background-secondary)';
+        chip.style.color = 'var(--text-muted)';
+        chip.style.cursor = 'pointer';
+        chip.title = `Insert {${token}}`;
+        chip.addEventListener('click', (e) => {
+          e.preventDefault();
+          const input = filenameInputEl!;
+          const start = input.selectionStart ?? input.value.length;
+          const end = input.selectionEnd ?? start;
+          const tokenStr = `{${token}}`;
+          const before = input.value.slice(0, start);
+          const after = input.value.slice(end);
+          input.value = before + tokenStr + after;
+          this.plugin.settings.fileNameFormat = input.value || DEFAULT_SETTINGS.fileNameFormat;
+          this.markDirty();
+          updateFilenamePreview(this.plugin.settings.fileNameFormat);
+          const newPos = start + tokenStr.length;
+          input.setSelectionRange(newPos, newPos);
+          input.focus();
+        });
+      }
+
+      // Preview line
+      const previewEl = blockEl.createDiv();
+      previewEl.style.marginTop = '6px';
+      previewEl.style.fontSize = '0.83em';
+      previewEl.style.color = 'var(--text-muted)';
+
+      const sampleTokens: Record<string, string> = {
+        published_date: '2024-01-15',
+        archived_date: new Date().toISOString().slice(0, 10),
+        platform: 'Facebook',
+        author: 'John Doe',
+        title: 'My awesome post',
+        slug: 'my-awesome-post',
+        post_id: 'pfbid02ABC123',
+        short_id: 'BC123',
+        shortId: 'BC123',
+      };
+
+      const updateFilenamePreview = (format: string) => {
+        let preview = format;
+        for (const [token, value] of Object.entries(sampleTokens)) {
+          preview = preview.replace(new RegExp(`\\{${token}\\}`, 'g'), value);
+        }
+        previewEl.empty();
+        const label = previewEl.createSpan({ text: 'Preview: ' });
+        label.style.color = 'var(--text-faint)';
+        previewEl.createEl('code', { text: `${preview}.md` });
+      };
+
+      updateFilenamePreview(this.plugin.settings.fileNameFormat);
+    }
 
     new Setting(containerEl)
       .setName('Download media')
@@ -591,6 +724,23 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       target: dangerZoneContainer,
       props: { plugin: this.plugin }
     });
+
+    // Support Section (very bottom, below danger zone)
+    const supportDivider = containerEl.createDiv({ cls: 'social-archiver-support-divider' });
+    supportDivider.style.margin = '12px 0 0 0';
+    supportDivider.style.borderTop = '1px solid var(--background-modifier-border)';
+
+    new Setting(containerEl).setName('Support').setHeading()
+      .settingEl.addClass('sa-settings-section-header');
+
+    new Setting(containerEl)
+      .setName('Support development')
+      .setDesc('Optional. If Social Archiver is useful to you, you can support ongoing development (opens in browser).')
+      .addButton((button) => button
+        .setButtonText('☕ Buy Me a Coffee')
+        .onClick(() => {
+          window.open(BUY_ME_A_COFFEE_URL, '_blank');
+        }));
     } finally {
       this.isDisplaying = false;
     }

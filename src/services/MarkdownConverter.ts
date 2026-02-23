@@ -1229,6 +1229,51 @@ const DEFAULT_TEMPLATES: Record<Platform, string> = {
 **Original URL:** {{url}}
 `,
 
+  web: `{{#if comment}}
+> **My Note:**
+> {{comment}}
+
+---
+
+{{/if}}{{#if title}}# {{title}}
+
+{{/if}}{{#if content.text}}{{content.text}}
+
+{{/if}}
+
+{{#if media}}
+
+---
+
+{{media}}
+{{/if}}
+
+{{#if ai}}
+
+---
+
+## AI Analysis
+
+**Summary:** {{ai.summary}}
+
+**Sentiment:** {{ai.sentiment}}
+
+**Topics:** {{ai.topics}}
+
+{{#if ai.factCheck}}
+
+### Fact Checks
+{{ai.factCheck}}
+{{/if}}
+{{/if}}
+
+---
+
+**Platform:** 🌐 Web Article{{#if metadata.siteName}} | **Site:** {{metadata.siteName}}{{/if}} | **Author:** {{author.name}}{{#if metadata.timestamp}} | **Published:** {{metadata.timestamp}}{{/if}}
+
+**Original URL:** {{url}}
+`,
+
   post: `{{#if comment}}
 > **My Note:**
 > {{comment}}
@@ -1794,6 +1839,7 @@ export class MarkdownConverter implements IService {
       'naver-webtoon': '📖',
       webtoons: '📚',
       brunch: '📝',
+      web: '🌐',
       post: '📝'
     };
     return icons[platform] || '🔗';
@@ -1938,10 +1984,11 @@ export class MarkdownConverter implements IService {
       }
     }
 
-    // For RSS-based platforms and X Articles, preserve markdown headings and ordered lists
+    // For RSS-based platforms, web articles, and X Articles, preserve markdown headings and ordered lists
     // (they come from HTML/Draft.js conversion and are intentional)
     // For other platforms, escape headings and ordered lists to prevent rendering issues
-    const preserveMarkdown = isRssBasedPlatform(postData.platform) || isXArticle;
+    const isWebArticle = postData.platform === 'web';
+    const preserveMarkdown = isRssBasedPlatform(postData.platform) || isWebArticle || isXArticle;
     const sanitizedText = preserveMarkdown
       ? baseText
       : this.escapeOrderedListPatterns(this.escapeLeadingMarkdownHeadings(baseText));

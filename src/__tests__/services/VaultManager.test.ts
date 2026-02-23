@@ -243,6 +243,197 @@ describe('VaultManager', () => {
     });
   });
 
+  describe('filename template (fileNameFormat)', () => {
+    it('should use template when fileNameFormat is provided', async () => {
+      vaultManager = new VaultManager({
+        vault: mockVault,
+        fileNameFormat: '{published_date} {platform}-{slug}-{short_id}',
+      });
+
+      const path = await vaultManager.savePost(mockPostData, mockMarkdown);
+      const filename = path.split('/').pop() || '';
+
+      expect(filename).toBe('2024-01-15 Facebook-this-is-a-test-post-st-123.md');
+    });
+
+    it('should substitute all supported tokens', async () => {
+      vaultManager = new VaultManager({
+        vault: mockVault,
+        fileNameFormat: '{published_date} - {author} - {title} ({short_id})',
+      });
+
+      const path = await vaultManager.savePost(mockPostData, mockMarkdown);
+      const filename = path.split('/').pop() || '';
+
+      expect(filename).toContain('2024-01-15');
+      expect(filename).toContain('Test User');
+      expect(filename).toContain('This is a test post');
+      expect(filename).toContain('t-123');
+    });
+
+    it('should support {post_id} token with full post ID', async () => {
+      vaultManager = new VaultManager({
+        vault: mockVault,
+        fileNameFormat: '{author} - {post_id}',
+      });
+
+      const path = await vaultManager.savePost(mockPostData, mockMarkdown);
+      const filename = path.split('/').pop() || '';
+
+      expect(filename).toBe('Test User - test-123.md');
+    });
+
+    it('should support {platform} token', async () => {
+      vaultManager = new VaultManager({
+        vault: mockVault,
+        fileNameFormat: '{platform} - {title}',
+      });
+
+      const path = await vaultManager.savePost(mockPostData, mockMarkdown);
+      const filename = path.split('/').pop() || '';
+
+      expect(filename).toContain('Facebook');
+    });
+
+    it('should support {slug} token with lowercase hyphenated text', async () => {
+      vaultManager = new VaultManager({
+        vault: mockVault,
+        fileNameFormat: '{slug}',
+      });
+
+      const path = await vaultManager.savePost(mockPostData, mockMarkdown);
+      const filename = path.split('/').pop() || '';
+
+      expect(filename).toBe('this-is-a-test-post.md');
+    });
+
+    it('should support {shortId} alias for {short_id}', async () => {
+      vaultManager = new VaultManager({
+        vault: mockVault,
+        fileNameFormat: '{author} ({shortId})',
+      });
+
+      const path = await vaultManager.savePost(mockPostData, mockMarkdown);
+      const filename = path.split('/').pop() || '';
+
+      expect(filename).toContain('t-123');
+    });
+
+    it('should leave unknown tokens as literal text after sanitization', async () => {
+      vaultManager = new VaultManager({
+        vault: mockVault,
+        fileNameFormat: '{author} - {unknown_token}',
+      });
+
+      const path = await vaultManager.savePost(mockPostData, mockMarkdown);
+      const filename = path.split('/').pop() || '';
+
+      // Unknown token braces remain as literal text (sanitized: { and } are kept)
+      expect(filename).toContain('Test User');
+      expect(filename).toContain('{unknown_token}');
+    });
+
+    it('should truncate filename to 200 chars before .md', async () => {
+      const longTitlePost = {
+        ...mockPostData,
+        content: {
+          text: 'A'.repeat(300),
+        },
+      };
+
+      vaultManager = new VaultManager({
+        vault: mockVault,
+        fileNameFormat: '{title} - {author} - extra text padding to make it longer',
+      });
+
+      const path = await vaultManager.savePost(longTitlePost, mockMarkdown);
+      const filename = path.split('/').pop() || '';
+      const basenameLength = filename.replace('.md', '').length;
+
+      expect(basenameLength).toBeLessThanOrEqual(200);
+    });
+
+    it('should fallback to default filename if template produces empty result', async () => {
+      vaultManager = new VaultManager({
+        vault: mockVault,
+        fileNameFormat: '   ',
+      });
+
+      const path = await vaultManager.savePost(mockPostData, mockMarkdown);
+      const filename = path.split('/').pop() || '';
+
+      // Should use default format: "YYYY-MM-DD - author - title (shortId).md"
+      expect(filename).toContain('2024-01-15');
+      expect(filename).toContain('Test User');
+    });
+
+    it('should fallback to default when fileNameFormat is not set', async () => {
+      vaultManager = new VaultManager({
+        vault: mockVault,
+        // no fileNameFormat
+      });
+
+      const path = await vaultManager.savePost(mockPostData, mockMarkdown);
+      const filename = path.split('/').pop() || '';
+
+      // Default format: "YYYY-MM-DD - author - title (shortId).md"
+      expect(filename).toContain('2024-01-15');
+      expect(filename).toContain('Test User');
+      expect(filename).toContain('t-123');
+    });
+
+    it('should support {archived_date} token with current date', async () => {
+      const today = new Date().toISOString().slice(0, 10);
+
+      vaultManager = new VaultManager({
+        vault: mockVault,
+        fileNameFormat: '{archived_date} - {author}',
+      });
+
+      const path = await vaultManager.savePost(mockPostData, mockMarkdown);
+      const filename = path.split('/').pop() || '';
+
+      expect(filename).toContain(today);
+    });
+
+    it('should use postData.title when available (e.g., YouTube)', async () => {
+      const youtubePost = {
+        ...mockPostData,
+        platform: 'youtube' as Platform,
+        title: 'My YouTube Video Title',
+      };
+
+      vaultManager = new VaultManager({
+        vault: mockVault,
+        fileNameFormat: '{title} ({short_id})',
+      });
+
+      const path = await vaultManager.savePost(youtubePost, mockMarkdown);
+      const filename = path.split('/').pop() || '';
+
+      expect(filename).toContain('My YouTube Video Title');
+    });
+
+    it('should sanitize invalid characters in template output', async () => {
+      const postWithSpecialChars = {
+        ...mockPostData,
+        author: { ...mockPostData.author, name: 'User:With*Invalid"Chars' },
+      };
+
+      vaultManager = new VaultManager({
+        vault: mockVault,
+        fileNameFormat: '{author} - {title}',
+      });
+
+      const path = await vaultManager.savePost(postWithSpecialChars, mockMarkdown);
+      const filename = path.split('/').pop() || '';
+
+      expect(filename).not.toContain(':');
+      expect(filename).not.toContain('*');
+      expect(filename).not.toContain('"');
+    });
+  });
+
   describe('updateNote', () => {
     it('should update existing file content', async () => {
       const file = await mockVault.create('test.md', 'old content');

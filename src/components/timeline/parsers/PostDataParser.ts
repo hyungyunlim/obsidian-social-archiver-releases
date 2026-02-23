@@ -320,6 +320,24 @@ export class PostDataParser {
         }
       }
 
+      // For web articles: extract external image URLs (OG/hero images from CDN)
+      // Unlike other platforms, web articles keep images as external URLs (not downloaded locally)
+      if (frontmatter.platform === 'web' && mediaArray.length === 0) {
+        const externalImageRegex = /!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g;
+        let imgMatch;
+        while ((imgMatch = externalImageRegex.exec(content)) !== null) {
+          const altText = imgMatch[1] || 'Article image';
+          const imageUrl = imgMatch[2];
+          if (imageUrl) {
+            mediaArray.push({
+              type: 'image',
+              url: imageUrl,
+              altText,
+            });
+          }
+        }
+      }
+
       // For reblogs: copy media to quotedPost (media belongs to the original author's post)
       if (quotedPost && isReblog && mediaArray.length > 0) {
         quotedPost.media = mediaArray;
@@ -453,9 +471,9 @@ export class PostDataParser {
         content: {
           text: contentText,
           snippet,
-          // For RSS-based platforms: preserve raw markdown with inline images for proper rendering
+          // For RSS-based platforms and web articles: preserve raw markdown with inline images for proper rendering
           // For X articles: extract article body and unescape markdown artifacts
-          rawMarkdown: isRssBasedPlatform(frontmatter.platform)
+          rawMarkdown: (isRssBasedPlatform(frontmatter.platform) || frontmatter.platform === 'web')
             ? this.extractBlogContentWithImages(content)
             : (frontmatter.platform === 'x' && this.isXArticlePost(frontmatter, content))
               ? this.extractXArticleContent(content)
@@ -680,6 +698,12 @@ export class PostDataParser {
     content = content.replace(/\n*---\n*\n*!\[\[[^\]]+\.(?:mp3|m4a|wav|ogg|flac|aac)\]\]\n*/gi, '');
     // Also remove standalone audio embeds without surrounding ---
     content = content.replace(/!\[\[[^\]]+\.(?:mp3|m4a|wav|ogg|flac|aac)\]\]\n*/gi, '');
+
+    // Remove trailing media sections separated by --- (OG images, downloaded attachments)
+    // These images are rendered via MediaGalleryRenderer, so strip from rawMarkdown to avoid duplicates
+    // Matches both external URLs (https://...) and local paths (attachments/...)
+    // Handles single or multiple images in the trailing section
+    content = content.replace(/\n*---\n+(?:!\[[^\]]*\]\([^)]+\)\s*\n*)+$/, '');
 
     // Clean up excessive leading/trailing whitespace
     content = content.trim();

@@ -891,8 +891,16 @@ export class PostCardRenderer extends Component {
       // Share button
       this.renderShareButton(actionsBar, post);
 
+      // Tag button
+      if (!isEmbedded) {
+        this.renderTagButton(actionsBar, post, rootElement);
+      }
+
       // Archive button
       this.renderArchiveButton(actionsBar, post, rootElement);
+
+      // Reader mode button
+      this.renderReaderModeButton(actionsBar, post);
 
       // Open Note button
       this.renderOpenNoteButton(actionsBar, post);
@@ -1652,8 +1660,8 @@ export class PostCardRenderer extends Component {
       titleEl.setText(`📺 ${post.title}`);
     }
 
-    // For RSS-based platforms: show article title at top of content area with larger, bolder styling
-    if (isRssBasedPlatform(post.platform) && post.title) {
+    // For RSS-based platforms and web articles: show article title at top of content area with larger, bolder styling
+    if ((isRssBasedPlatform(post.platform) || post.platform === 'web') && post.title) {
       const titleEl = contentContainer.createDiv({ cls: 'blog-article-title pcr-title-blog' });
       titleEl.setText(post.title);
     }
@@ -1670,8 +1678,8 @@ export class PostCardRenderer extends Component {
       titleEl.setText(post.title);
     }
 
-    // For RSS-based platforms and X articles: use rawMarkdown with inline images
-    if ((isRssBasedPlatform(post.platform) || (post.platform === 'x' && post.content.rawMarkdown))
+    // For RSS-based platforms, web articles, and X articles: use rawMarkdown with inline images
+    if ((isRssBasedPlatform(post.platform) || post.platform === 'web' || (post.platform === 'x' && post.content.rawMarkdown))
         && post.content.rawMarkdown) {
       await this.renderBlogContent(contentContainer, post);
       return;

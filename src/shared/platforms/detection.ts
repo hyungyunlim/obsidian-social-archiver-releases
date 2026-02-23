@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/detection.ts
- * Generated: 2026-02-22T13:51:52.302Z
+ * Generated: 2026-02-23T05:44:54.605Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -71,7 +71,17 @@ export function detectPlatform(url: string): Platform {
     }
   }
 
-  return 'post'; // Default fallback for unknown URLs
+  // Fallback: valid HTTP(S) URLs that don't match any known platform => 'web'
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return 'web';
+    }
+  } catch {
+    // Not a valid URL - fall through to 'post'
+  }
+
+  return 'post'; // Default fallback for non-URL text input
 }
 
 /**

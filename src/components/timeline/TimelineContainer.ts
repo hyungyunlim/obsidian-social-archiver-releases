@@ -191,6 +191,7 @@ export class TimelineContainer {
 
   // View mode: 'timeline' or 'gallery'
   private viewMode: 'timeline' | 'gallery' = 'timeline';
+  private isViewSwitching: boolean = false;
   private contentContainer: HTMLElement | null = null;
 
   // Parser for loading posts from vault
@@ -2692,13 +2693,28 @@ export class TimelineContainer {
     viewIcon.addClass('sa-transition-color');
 
     const updateViewButton = () => {
+      if (this.isViewSwitching) {
+        setIcon(viewIcon, 'loader-2');
+        viewIcon.addClass('tc-view-switch-icon-spinning');
+        viewSwitcherBtn.addClass('tc-view-switch-btn-loading');
+        viewSwitcherBtn.setAttribute('title', 'Switching view...');
+        viewSwitcherBtn.setAttribute('aria-busy', 'true');
+        return;
+      }
+
       const isGallery = this.viewMode === 'gallery';
+      viewIcon.removeClass('tc-view-switch-icon-spinning');
+      viewSwitcherBtn.removeClass('tc-view-switch-btn-loading');
+      viewSwitcherBtn.removeAttribute('aria-busy');
       setIcon(viewIcon, isGallery ? 'list' : 'layout-grid');
       viewSwitcherBtn.setAttribute('title', isGallery ? 'Switch to Timeline' : 'Switch to Media Gallery');
     };
     updateViewButton();
 
     viewSwitcherBtn.addEventListener('mouseenter', () => {
+      if (this.isViewSwitching) {
+        return;
+      }
       viewSwitcherBtn.removeClass('sa-bg-transparent');
       viewSwitcherBtn.addClass('sa-bg-hover');
       viewIcon.removeClass('sa-text-muted');
@@ -2706,6 +2722,9 @@ export class TimelineContainer {
     });
 
     viewSwitcherBtn.addEventListener('mouseleave', () => {
+      if (this.isViewSwitching) {
+        return;
+      }
       viewSwitcherBtn.removeClass('sa-bg-hover');
       viewSwitcherBtn.addClass('sa-bg-transparent');
       viewIcon.removeClass('sa-text-accent');
@@ -2713,25 +2732,66 @@ export class TimelineContainer {
     });
 
     viewSwitcherBtn.addEventListener('click', () => void (async () => {
-      // If in Author mode, disable it first when switching to gallery
+      if (this.isViewSwitching) {
+        return;
+      }
+
+      const nextMode = this.viewMode === 'timeline' ? 'gallery' : 'timeline';
+      viewSwitcherBtn.addClass('tc-view-switch-btn-loading');
+      viewIcon.addClass('tc-view-switch-icon-spinning');
+      setIcon(viewIcon, 'loader-2');
+      viewSwitcherBtn.setAttribute('title', nextMode === 'gallery'
+        ? 'Switching to Media Gallery...'
+        : 'Switching to Timeline...');
+
+      await this.switchViewMode(nextMode);
+
+      if (viewSwitcherBtn.isConnected) {
+        updateViewButton();
+      }
+    })());
+  }
+
+  private async switchViewMode(nextMode: 'timeline' | 'gallery'): Promise<void> {
+    if (this.isViewSwitching || this.viewMode === nextMode) {
+      return;
+    }
+
+    this.isViewSwitching = true;
+    this.containerEl.addClass('tc-view-switching');
+    const switchStartedAt = Date.now();
+
+    try {
+      // If in Author mode, disable it first before switching views
       if (this.isSubscriptionViewActive) {
         this.isSubscriptionViewActive = false;
-        // Sync filters from Author to Timeline
         this.syncFiltersAuthorToTimeline();
       }
 
-      // Toggle view mode
-      if (this.viewMode === 'timeline') {
-        this.viewMode = 'gallery';
-        updateViewButton();
+      this.viewMode = nextMode;
+      this.persistViewMode();
+
+      // Let the overlay paint before heavy render work starts.
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+
+      if (nextMode === 'gallery') {
         await this.renderGalleryView();
       } else {
-        this.viewMode = 'timeline';
-        updateViewButton();
         await this.loadPosts();
       }
-      this.persistViewMode();
-    })());
+    } finally {
+      // Keep transition state briefly visible to avoid flicker on very fast toggles.
+      const elapsed = Date.now() - switchStartedAt;
+      const minimumSwitchMs = 140;
+      if (elapsed < minimumSwitchMs) {
+        await new Promise((resolve) => window.setTimeout(resolve, minimumSwitchMs - elapsed));
+      }
+
+      this.isViewSwitching = false;
+      this.containerEl.removeClass('tc-view-switching');
+    }
   }
 
   /**
@@ -5189,6 +5249,7 @@ export class TimelineContainer {
     this.cleanupFunctions.forEach(cleanup => cleanup());
     this.cleanupFunctions = [];
 
+    this.containerEl.removeClass('tc-view-switching');
     this.containerEl.empty();
     this.youtubeControllers.clear();
   }

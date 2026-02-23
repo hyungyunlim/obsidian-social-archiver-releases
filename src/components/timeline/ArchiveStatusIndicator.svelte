@@ -87,6 +87,7 @@ function getPlatformName(platform: Platform): string {
     substack: 'Substack',
     mastodon: 'Mastodon',
     bluesky: 'Bluesky',
+    web: 'Web Article',
     post: 'Post'
   };
   return names[platform] || platform;

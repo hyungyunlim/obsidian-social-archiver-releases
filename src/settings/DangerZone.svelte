@@ -237,7 +237,7 @@ function removeShareMetadata(content: string): { updated: boolean; output: strin
 .setting-item {
   display: flex;
   align-items: flex-start;
-  padding: 18px 0;
+  padding: 18px 16px;
   border-top: 1px solid var(--background-modifier-border);
 }
 

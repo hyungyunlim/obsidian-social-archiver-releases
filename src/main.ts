@@ -35,6 +35,7 @@ import { RELEASE_NOTES } from './release-notes';
 import { completeAuthentication, showAuthError, showAuthSuccess, refreshUserCredits } from './utils/auth';
 import { uniqueStrings } from './utils/array';
 import { normalizeUrlForDedup, encodePathForMarkdownLink } from './utils/url';
+import { mergeTagsCaseInsensitive, sanitizeTagNames } from './utils/tags';
 
 import { ProcessManager } from './services/ProcessManager';
 import { PostService } from './services/PostService';
@@ -77,6 +78,7 @@ interface WsJobCompletedMessage {
       downloadMedia?: boolean;
       includeTranscript?: boolean;
       includeFormattedTranscript?: boolean;
+      tags?: string[];
     };
   };
 }
@@ -602,6 +604,7 @@ export default class SocialArchiverPlugin extends Plugin {
               downloadMedia: metadata.archiveOptions?.downloadMedia !== undefined ? String(metadata.archiveOptions.downloadMedia) : undefined,
               includeTranscript: metadata.archiveOptions?.includeTranscript,
               includeFormattedTranscript: metadata.archiveOptions?.includeFormattedTranscript,
+              selectedTags: metadata.archiveOptions?.tags,
             }
           };
           console.debug(`[Social Archiver] Processing job ${jobId} from WebSocket metadata (cross-device)`);
@@ -1649,6 +1652,7 @@ export default class SocialArchiverPlugin extends Plugin {
         app: this.app,
         basePath: this.settings.archivePath || 'Social Archives',
         organizationStrategy: getVaultOrganizationStrategy(this.settings.archiveOrganization),
+        fileNameFormat: this.settings.fileNameFormat,
       });
 
       const mediaHandler = new MediaHandler({
@@ -1951,6 +1955,7 @@ export default class SocialArchiverPlugin extends Plugin {
         app: this.app,
         basePath,
         organizationStrategy: getVaultOrganizationStrategy(this.settings.archiveOrganization),
+        fileNameFormat: this.settings.fileNameFormat,
       });
 
       // Use displayName from platform definitions (e.g., 'naver-webtoon' -> 'Naver Webtoon')
@@ -2529,6 +2534,7 @@ export default class SocialArchiverPlugin extends Plugin {
         app: this.app,
         basePath: this.settings.archivePath || 'Social Archives',
         organizationStrategy: getVaultOrganizationStrategy(this.settings.archiveOrganization),
+        fileNameFormat: this.settings.fileNameFormat,
       });
       vaultManager.initialize();
 
@@ -2814,6 +2820,7 @@ export default class SocialArchiverPlugin extends Plugin {
         app: this.app,
         basePath: this.settings.archivePath || 'Social Archives',
         organizationStrategy: getVaultOrganizationStrategy(this.settings.archiveOrganization),
+        fileNameFormat: this.settings.fileNameFormat,
       });
       vaultManager.initialize();
 
@@ -3158,6 +3165,7 @@ export default class SocialArchiverPlugin extends Plugin {
         app: this.app,
         basePath: this.settings.archivePath || 'Social Archives',
         organizationStrategy: getVaultOrganizationStrategy(this.settings.archiveOrganization),
+        fileNameFormat: this.settings.fileNameFormat,
       });
       vaultManager.initialize();
 
@@ -3399,6 +3407,7 @@ ${contentParts.join('')}
         app: this.app,
         basePath: this.settings.archivePath || 'Social Archives',
         organizationStrategy: getVaultOrganizationStrategy(this.settings.archiveOrganization),
+        fileNameFormat: this.settings.fileNameFormat,
       });
       vaultManager.initialize();
 
@@ -4206,6 +4215,7 @@ ${contentParts.join('')}
       app: this.app,
       basePath: this.settings.archivePath || 'Social Archives',
       organizationStrategy: getVaultOrganizationStrategy(this.settings.archiveOrganization),
+      fileNameFormat: this.settings.fileNameFormat,
     });
     vaultManager.initialize();
 
@@ -5114,6 +5124,7 @@ ${contentParts.join('')}
                 includeTranscript: job.metadata?.includeTranscript,
                 includeFormattedTranscript: job.metadata?.includeFormattedTranscript,
                 comment: job.metadata?.notes,
+                tags: job.metadata?.selectedTags,
               };
 
               await this.apiClient.createPendingJob({
@@ -5474,6 +5485,7 @@ ${contentParts.join('')}
         includeTranscript: serverJob.archiveOptions?.includeTranscript,
         includeFormattedTranscript: serverJob.archiveOptions?.includeFormattedTranscript,
         notes: serverJob.archiveOptions?.comment,
+        selectedTags: serverJob.archiveOptions?.tags,
       }
     };
 
@@ -5711,6 +5723,7 @@ ${contentParts.join('')}
         app: this.app,
         basePath: this.settings.archivePath || 'Social Archives',
         organizationStrategy: getVaultOrganizationStrategy(this.settings.archiveOrganization),
+        fileNameFormat: this.settings.fileNameFormat,
       });
       const markdownConverter = new MarkdownConverter({
         frontmatterSettings: this.settings.frontmatter,
@@ -5953,6 +5966,17 @@ ${contentParts.join('')}
       // Add user notes if provided
       if (pendingJob.metadata?.notes) {
         markdown.frontmatter.comment = pendingJob.metadata.notes;
+      }
+
+      // Merge user-selected tags into frontmatter (archive-time tagging)
+      if (pendingJob.metadata?.selectedTags && pendingJob.metadata.selectedTags.length > 0) {
+        const cleanedTags = sanitizeTagNames(pendingJob.metadata.selectedTags);
+        if (cleanedTags.length > 0) {
+          const existingTags = Array.isArray(markdown.frontmatter.tags)
+            ? (markdown.frontmatter.tags as string[])
+            : [];
+          markdown.frontmatter.tags = mergeTagsCaseInsensitive(existingTags, cleanedTags);
+        }
       }
 
       // Add URL to processedUrls

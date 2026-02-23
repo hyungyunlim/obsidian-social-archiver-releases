@@ -18,6 +18,7 @@ import {
 	validatePlatformUrl,
 	isSupportedPlatformUrl,
 } from '@/schemas/platforms';
+import { detectPlatform } from '@/shared/platforms';
 
 describe('Platform URL Schemas', () => {
 	describe('FacebookURLSchema', () => {
@@ -44,6 +45,9 @@ describe('Platform URL Schemas', () => {
 
 				// Share URLs
 				'https://facebook.com/share/abc123xyz',
+				'https://www.facebook.com/share/p/1CDB4kL8zv/?mibextid=wwXIfr',
+				'https://www.facebook.com/share/v/ABC123/',
+				'https://www.facebook.com/share/r/XYZ789/',
 				'https://facebook.com/share.php?id=123',
 
 				// Story URLs
@@ -364,10 +368,8 @@ describe('Platform URL Schemas', () => {
 			});
 		});
 
-			it('should reject unsupported platform URLs', () => {
+			it('should reject non-URL strings', () => {
 				const invalidUrls = [
-					'https://pinterestboard.com/pin/123',
-					'https://example.com/post/123',
 					'not a url',
 					'',
 				];
@@ -375,6 +377,18 @@ describe('Platform URL Schemas', () => {
 			invalidUrls.forEach((url) => {
 				const result = AnySocialMediaURLSchema.safeParse(url);
 				expect(result.success).toBe(false);
+			});
+		});
+
+		it('should accept generic HTTP(S) URLs via web platform', () => {
+			const webUrls = [
+				'https://pinterestboard.com/pin/123',
+				'https://example.com/post/123',
+			];
+
+			webUrls.forEach((url) => {
+				const result = AnySocialMediaURLSchema.safeParse(url);
+				expect(result.success).toBe(true);
 			});
 		});
 	});
@@ -489,6 +503,13 @@ describe('PinterestURLSchema', () => {
 		describe('validateAndDetectPlatform', () => {
 		it('should detect and validate Facebook URLs', () => {
 			const result = validateAndDetectPlatform('https://facebook.com/user/posts/123');
+			expect(result.valid).toBe(true);
+			expect(result.platform).toBe('facebook');
+			expect(result.errors).toEqual([]);
+		});
+
+		it('should detect and validate Facebook share/p URLs', () => {
+			const result = validateAndDetectPlatform('https://www.facebook.com/share/p/1CDB4kL8zv/?mibextid=wwXIfr');
 			expect(result.valid).toBe(true);
 			expect(result.platform).toBe('facebook');
 			expect(result.errors).toEqual([]);
@@ -631,8 +652,11 @@ describe('PinterestURLSchema', () => {
 			expect(isSupportedPlatformUrl('https://www.tumblr.com/samferd/799292732308865024/what')).toBe(true);
 		});
 
-			it('should return false for unsupported URLs', () => {
-				expect(isSupportedPlatformUrl('https://example.com/pin/123')).toBe(false);
+			it('should accept generic HTTP(S) URLs via web platform', () => {
+				expect(isSupportedPlatformUrl('https://example.com/pin/123')).toBe(true);
+			});
+
+			it('should return false for non-URL strings', () => {
 				expect(isSupportedPlatformUrl('not a url')).toBe(false);
 				expect(isSupportedPlatformUrl('')).toBe(false);
 			});
@@ -960,5 +984,43 @@ describe('isSupportedPlatformUrl for Naver Webtoon', () => {
 
 	it('should return true for mobile Naver Webtoon URLs', () => {
 		expect(isSupportedPlatformUrl('https://m.comic.naver.com/webtoon/list?titleId=650305')).toBe(true);
+	});
+});
+
+describe('web platform detection', () => {
+	it('should detect generic HTTPS URLs as web', () => {
+		expect(detectPlatform('https://example.com/article')).toBe('web');
+		expect(detectPlatform('https://blog.example.org/post/123')).toBe('web');
+		expect(detectPlatform('https://news.ycombinator.com/item?id=12345')).toBe('web');
+		expect(detectPlatform('https://www.bbc.com/news/technology-12345')).toBe('web');
+	});
+
+	it('should detect generic HTTP URLs as web', () => {
+		expect(detectPlatform('http://example.com')).toBe('web');
+		expect(detectPlatform('http://blog.example.org')).toBe('web');
+	});
+
+	it('should return post for non-URL text', () => {
+		expect(detectPlatform('hello world')).toBe('post');
+		expect(detectPlatform('just some text')).toBe('post');
+		expect(detectPlatform('')).toBe('post');
+	});
+
+	it('should return post for non-HTTP schemes', () => {
+		expect(detectPlatform('mailto:user@example.com')).toBe('post');
+		expect(detectPlatform('file:///path/to/file')).toBe('post');
+		expect(detectPlatform('obsidian://open?vault=test')).toBe('post');
+		expect(detectPlatform('ftp://files.example.com/doc')).toBe('post');
+	});
+
+	it('should NOT detect known platform URLs as web', () => {
+		// Ensure existing platforms still work (regression check)
+		expect(detectPlatform('https://twitter.com/user/status/123')).toBe('x');
+		expect(detectPlatform('https://www.facebook.com/post/456')).toBe('facebook');
+		expect(detectPlatform('https://www.instagram.com/p/ABC123')).toBe('instagram');
+		expect(detectPlatform('https://www.youtube.com/watch?v=xyz')).toBe('youtube');
+		expect(detectPlatform('https://www.reddit.com/r/test/comments/abc/title')).toBe('reddit');
+		expect(detectPlatform('https://bsky.app/profile/user.bsky.social/post/abc')).toBe('bluesky');
+		expect(detectPlatform('https://mastodon.social/@user/123456')).toBe('mastodon');
 	});
 });

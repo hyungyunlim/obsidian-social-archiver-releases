@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/types.ts
- * Generated: 2026-02-22T13:51:52.302Z
+ * Generated: 2026-02-23T05:44:54.606Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -41,6 +41,7 @@ export type Platform =
   | 'naver-webtoon'
   | 'webtoons'
   | 'brunch'
+  | 'web'
   | 'post';
 
 /**
@@ -70,6 +71,7 @@ export const PLATFORMS = [
   'naver-webtoon',
   'webtoons',
   'brunch',
+  'web',
   'post',
 ] as const;
 
@@ -256,6 +258,7 @@ export const MOBILE_PLATFORMS = [
   'youtube',
   'bluesky',
   'mastodon',
+  'web',
 ] as const;
 
 export type MobilePlatform = typeof MOBILE_PLATFORMS[number];
@@ -273,6 +276,7 @@ export const MOBILE_PLATFORM_INFO: Record<MobilePlatform, { name: string; placeh
   youtube: { name: 'YouTube', placeholder: 'YouTube video, short, or live stream' },
   bluesky: { name: 'Bluesky', placeholder: 'Bluesky post' },
   mastodon: { name: 'Mastodon', placeholder: 'Mastodon post' },
+  web: { name: 'Web Article', placeholder: 'Web page or article URL' },
 };
 
 // ============================================================================

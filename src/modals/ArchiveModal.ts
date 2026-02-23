@@ -4,6 +4,8 @@ import type { Platform as PlatformType, PostData } from '../types/post';
 import type { MediaDownloadMode } from '../types/settings';
 import { getVaultOrganizationStrategy } from '../types/settings';
 import { isAuthenticated } from '../utils/auth';
+import { TAG_NAME_MAX_LENGTH } from '@/types/tag';
+import { sanitizeTagNames } from '@/utils/tags';
 import { validateAndDetectPlatform } from '@/schemas/platforms';
 import { resolvePinterestUrl } from '@/utils/pinterest';
 import { analyzeUrl, type UrlAnalysisResult } from '@/utils/urlAnalysis';
@@ -77,6 +79,10 @@ export class ArchiveModal extends Modal {
   private commentTextarea!: HTMLTextAreaElement;
   private resolvedUrl: string | null = null;
   private validationRequestId = 0;
+
+  // Archive-time tag selection
+  private selectedTags: string[] = [];
+  private tagSelectorContainer!: HTMLElement;
 
   // Profile detection state
   private urlAnalysis: UrlAnalysisResult | null = null;
@@ -317,6 +323,14 @@ export class ArchiveModal extends Modal {
       const target = e.target as HTMLTextAreaElement;
       this.comment = target.value;
     });
+
+    // ============================================================================
+    // Tag Selector Section (hidden by default, shown for post URLs)
+    // ============================================================================
+    this.tagSelectorContainer = contentEl.createDiv({ cls: 'archive-tag-selector' });
+    this.tagSelectorContainer.addClass('sa-hidden');
+    this.tagSelectorContainer.addClass('sa-mt-12');
+    this.buildTagSelector();
 
     // ============================================================================
     // Profile Options Section (hidden by default, shown for profile URLs)
@@ -885,6 +899,7 @@ export class ArchiveModal extends Modal {
       this.generalOptions.addClass('sa-hidden');
       this.youtubeOptions.addClass('sa-hidden');
       this.commentContainer.addClass('sa-hidden');
+      this.tagSelectorContainer.addClass('sa-hidden');
       this.postFooterEl.addClass('sa-hidden');
       this.disclaimerEl.addClass('sa-hidden');
 
@@ -912,10 +927,12 @@ export class ArchiveModal extends Modal {
 
       if (this.isValidUrl && !this.isResolving) {
         this.commentContainer.removeClass('sa-hidden');
+        this.tagSelectorContainer.removeClass('sa-hidden');
         this.postFooterEl.removeClass('sa-hidden');
         this.disclaimerEl.removeClass('sa-hidden');
       } else {
         this.commentContainer.addClass('sa-hidden');
+        this.tagSelectorContainer.addClass('sa-hidden');
         this.postFooterEl.addClass('sa-hidden');
         this.disclaimerEl.addClass('sa-hidden');
       }
@@ -2369,6 +2386,7 @@ export class ArchiveModal extends Modal {
             includeFormattedTranscript: this.detectedPlatform === 'youtube' ? this.includeFormattedTranscript : undefined,
             isPinterestBoard: this.detectedPlatform === 'pinterest' ? this.isPinterestBoard : undefined,
             originalUrl: this.url,
+            selectedTags: this.selectedTags.length > 0 ? sanitizeTagNames(this.selectedTags) : undefined,
           }
         };
 
@@ -2412,6 +2430,257 @@ export class ArchiveModal extends Modal {
         this.archiveBtn.addClass('sa-opacity-100');
         this.updateArchiveButton();
       }
+    }
+  }
+
+  // ============================================================================
+  // Tag Selector (Archive-Time Tagging)
+  // ============================================================================
+
+  /**
+   * Build the tag selector UI inside tagSelectorContainer
+   * Provides search, multi-select, and inline tag creation
+   */
+  private buildTagSelector(): void {
+    const container = this.tagSelectorContainer;
+    container.empty();
+
+    const label = container.createDiv({ cls: 'archive-tag-label' });
+    label.setText('🏷️ tags (optional)');
+
+    // Tag chips display area
+    const chipsArea = container.createDiv({ cls: 'archive-tag-chips' });
+    chipsArea.addClass('sa-flex-row', 'sa-flex-wrap', 'sa-gap-4', 'sa-mt-4');
+    this.renderTagChips(chipsArea);
+
+    // Search input
+    const searchRow = container.createDiv({ cls: 'archive-tag-search' });
+    searchRow.addClass('sa-mt-8');
+
+    const searchInput = searchRow.createEl('input', {
+      type: 'text',
+      placeholder: 'Search or create tag...',
+      cls: 'archive-tag-search-input',
+    });
+    searchInput.addClass('sa-box-border');
+    searchInput.style.width = '100%';
+    searchInput.style.padding = '6px 8px';
+    searchInput.style.fontSize = '13px';
+
+    // Dropdown list
+    const dropdown = container.createDiv({ cls: 'archive-tag-dropdown' });
+    dropdown.addClass('sa-hidden');
+    dropdown.style.maxHeight = '150px';
+    dropdown.style.overflowY = 'auto';
+    dropdown.style.border = '1px solid var(--background-modifier-border)';
+    dropdown.style.borderRadius = '6px';
+    dropdown.style.marginTop = '4px';
+    dropdown.style.backgroundColor = 'var(--background-primary)';
+
+    let highlightedIndex = -1;
+
+    const renderDropdown = (query: string): void => {
+      dropdown.empty();
+      highlightedIndex = -1;
+      const trimmed = query.trim().toLowerCase();
+
+      // Get all tags (defined + discovered from vault)
+      const tagStore = this.plugin.tagStore;
+      const allTags = tagStore.getTagsWithCounts();
+
+      // Filter by query
+      const filtered = trimmed
+        ? allTags.filter(t => t.name.toLowerCase().includes(trimmed))
+        : allTags;
+
+      // Exclude already selected
+      const selectedLower = new Set(this.selectedTags.map(t => t.toLowerCase()));
+      const available = filtered.filter(t => !selectedLower.has(t.name.toLowerCase()));
+
+      if (available.length === 0 && !trimmed) {
+        dropdown.addClass('sa-hidden');
+        return;
+      }
+
+      dropdown.removeClass('sa-hidden');
+
+      // Render available tags
+      for (const tag of available.slice(0, 10)) {
+        const row = dropdown.createDiv({ cls: 'archive-tag-dropdown-item' });
+        row.style.padding = '6px 10px';
+        row.style.cursor = 'pointer';
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.gap = '8px';
+        row.style.fontSize = '13px';
+
+        if (tag.color) {
+          const dot = row.createSpan();
+          dot.style.width = '8px';
+          dot.style.height = '8px';
+          dot.style.borderRadius = '50%';
+          dot.style.backgroundColor = tag.color;
+          dot.style.flexShrink = '0';
+        }
+
+        row.createSpan({ text: tag.name });
+
+        if (tag.archiveCount > 0) {
+          const count = row.createSpan({ text: String(tag.archiveCount) });
+          count.style.marginLeft = 'auto';
+          count.style.opacity = '0.5';
+          count.style.fontSize = '11px';
+        }
+
+        row.addEventListener('mouseenter', () => {
+          row.style.backgroundColor = 'var(--background-modifier-hover)';
+        });
+        row.addEventListener('mouseleave', () => {
+          row.style.backgroundColor = '';
+        });
+        row.addEventListener('click', () => {
+          this.selectedTags.push(tag.name);
+          searchInput.value = '';
+          this.renderTagChips(chipsArea);
+          renderDropdown('');
+          dropdown.addClass('sa-hidden');
+          searchInput.focus();
+        });
+      }
+
+      // "Create new tag" option if query doesn't match any existing tag exactly
+      if (trimmed && !allTags.some(t => t.name.toLowerCase() === trimmed)) {
+        const createRow = dropdown.createDiv({ cls: 'archive-tag-dropdown-item' });
+        createRow.style.padding = '6px 10px';
+        createRow.style.cursor = 'pointer';
+        createRow.style.display = 'flex';
+        createRow.style.alignItems = 'center';
+        createRow.style.gap = '6px';
+        createRow.style.fontSize = '13px';
+        createRow.style.fontStyle = 'italic';
+        createRow.style.color = 'var(--text-accent)';
+
+        createRow.createSpan({ text: `+ Create "${query.trim()}"` });
+
+        createRow.addEventListener('mouseenter', () => {
+          createRow.style.backgroundColor = 'var(--background-modifier-hover)';
+        });
+        createRow.addEventListener('mouseleave', () => {
+          createRow.style.backgroundColor = '';
+        });
+        createRow.addEventListener('click', () => {
+          const newTagName = query.trim();
+          if (newTagName.length > 0 && newTagName.length <= TAG_NAME_MAX_LENGTH) {
+            this.selectedTags.push(newTagName);
+            searchInput.value = '';
+            this.renderTagChips(chipsArea);
+            renderDropdown('');
+            dropdown.addClass('sa-hidden');
+            searchInput.focus();
+          }
+        });
+      }
+    };
+
+    searchInput.addEventListener('input', () => {
+      renderDropdown(searchInput.value);
+    });
+
+    searchInput.addEventListener('focus', () => {
+      renderDropdown(searchInput.value);
+    });
+
+    // Close dropdown on outside click
+    searchInput.addEventListener('blur', () => {
+      // Delay to allow dropdown click to register
+      setTimeout(() => {
+        dropdown.addClass('sa-hidden');
+      }, 200);
+    });
+
+    // Keyboard: Enter to select highlighted or create new
+    searchInput.addEventListener('keydown', (e) => {
+      const items = dropdown.querySelectorAll('.archive-tag-dropdown-item');
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        highlightedIndex = Math.min(highlightedIndex + 1, items.length - 1);
+        items.forEach((item, idx) => {
+          (item as HTMLElement).style.backgroundColor = idx === highlightedIndex ? 'var(--background-modifier-hover)' : '';
+        });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        highlightedIndex = Math.max(highlightedIndex - 1, 0);
+        items.forEach((item, idx) => {
+          (item as HTMLElement).style.backgroundColor = idx === highlightedIndex ? 'var(--background-modifier-hover)' : '';
+        });
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        // Don't propagate to modal's Mod+Enter handler
+        e.stopPropagation();
+        if (highlightedIndex >= 0 && highlightedIndex < items.length) {
+          (items[highlightedIndex] as HTMLElement).click();
+        } else if (searchInput.value.trim()) {
+          // Create or select the typed tag
+          const typed = searchInput.value.trim();
+          const existing = this.plugin.tagStore.getTagByName(typed);
+          const tagName = existing ? existing.name : typed;
+          const alreadySelected = this.selectedTags.some(t => t.toLowerCase() === tagName.toLowerCase());
+          if (!alreadySelected && tagName.length <= TAG_NAME_MAX_LENGTH) {
+            this.selectedTags.push(tagName);
+            searchInput.value = '';
+            this.renderTagChips(chipsArea);
+            renderDropdown('');
+            dropdown.addClass('sa-hidden');
+          }
+        }
+      } else if (e.key === 'Escape') {
+        dropdown.addClass('sa-hidden');
+      }
+    });
+  }
+
+  /**
+   * Render selected tag chips
+   */
+  private renderTagChips(chipsArea: HTMLElement): void {
+    chipsArea.empty();
+
+    if (this.selectedTags.length === 0) return;
+
+    for (const tagName of this.selectedTags) {
+      const chip = chipsArea.createDiv({ cls: 'archive-tag-chip' });
+      chip.style.display = 'inline-flex';
+      chip.style.alignItems = 'center';
+      chip.style.gap = '4px';
+      chip.style.padding = '2px 8px';
+      chip.style.borderRadius = '12px';
+      chip.style.fontSize = '12px';
+      chip.style.cursor = 'pointer';
+      chip.style.backgroundColor = 'var(--background-modifier-hover)';
+      chip.style.border = '1px solid var(--background-modifier-border)';
+
+      // Color dot from tag definition
+      const tagDef = this.plugin.tagStore.getTagByName(tagName);
+      if (tagDef?.color) {
+        const dot = chip.createSpan();
+        dot.style.width = '6px';
+        dot.style.height = '6px';
+        dot.style.borderRadius = '50%';
+        dot.style.backgroundColor = tagDef.color;
+      }
+
+      chip.createSpan({ text: tagName });
+
+      // Remove button
+      const removeBtn = chip.createSpan({ text: '×' });
+      removeBtn.style.marginLeft = '2px';
+      removeBtn.style.fontWeight = 'bold';
+      removeBtn.style.opacity = '0.6';
+
+      chip.addEventListener('click', () => {
+        this.selectedTags = this.selectedTags.filter(t => t !== tagName);
+        this.renderTagChips(chipsArea);
+      });
     }
   }
 
@@ -2664,6 +2933,7 @@ export class ArchiveModal extends Modal {
         vault: this.plugin.app.vault,
         basePath: this.plugin.settings.archivePath || 'Social Archives',
         organizationStrategy: getVaultOrganizationStrategy(this.plugin.settings.archiveOrganization),
+        fileNameFormat: this.plugin.settings.fileNameFormat,
       });
       vaultManager.initialize();
 
@@ -2835,6 +3105,7 @@ export class ArchiveModal extends Modal {
         vault: this.plugin.app.vault,
         basePath: this.plugin.settings.archivePath || 'Social Archives',
         organizationStrategy: getVaultOrganizationStrategy(this.plugin.settings.archiveOrganization),
+        fileNameFormat: this.plugin.settings.fileNameFormat,
       });
       vaultManager.initialize();
 
@@ -3094,6 +3365,7 @@ export class ArchiveModal extends Modal {
         vault: this.plugin.app.vault,
         basePath: archivePath,
         organizationStrategy: getVaultOrganizationStrategy(this.plugin.settings.archiveOrganization),
+        fileNameFormat: this.plugin.settings.fileNameFormat,
       });
       vaultManager.initialize();
 

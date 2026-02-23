@@ -20,7 +20,8 @@ export const TIMELINE_PLATFORM_IDS = [
   'blog',
   'naver',
   'naver-webtoon',
-  'brunch'
+  'brunch',
+  'web'
 ] as const;
 
 /**
@@ -55,5 +56,6 @@ export const TIMELINE_PLATFORM_LABELS: Record<TimelinePlatformId, string> = {
   blog: 'Blog',
   naver: 'Naver',
   'naver-webtoon': 'Webtoon',
-  brunch: 'Brunch'
+  brunch: 'Brunch',
+  web: 'Web Article'
 };

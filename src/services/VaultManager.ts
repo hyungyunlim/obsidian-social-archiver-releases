@@ -12,6 +12,8 @@ export interface VaultManagerConfig {
   app?: App;
   basePath?: string;
   organizationStrategy?: 'platform' | 'platform-only' | 'date' | 'flat';
+  /** User-defined filename template (e.g., '{published_date} - {author} - {title} ({short_id})') */
+  fileNameFormat?: string;
 }
 
 /**
@@ -29,13 +31,16 @@ export interface SaveResult {
 class PathGenerator {
   private basePath: string;
   private strategy: 'platform' | 'platform-only' | 'date' | 'flat';
+  private fileNameFormat: string | undefined;
 
   constructor(
     basePath: string = 'Social Archives',
-    strategy: 'platform' | 'platform-only' | 'date' | 'flat' = 'platform'
+    strategy: 'platform' | 'platform-only' | 'date' | 'flat' = 'platform',
+    fileNameFormat?: string
   ) {
     this.basePath = basePath;
     this.strategy = strategy;
+    this.fileNameFormat = fileNameFormat;
   }
 
   /**
@@ -59,10 +64,26 @@ class PathGenerator {
   }
 
   /**
-   * Generate filename from post data
-   * Includes postId suffix for platforms with potentially duplicate titles (Pinterest, etc.)
+   * Generate filename from post data.
+   * If a user-defined fileNameFormat is set, uses template-based generation.
+   * Falls back to the built-in default format on invalid/empty template.
    */
   private generateFilename(postData: PostData): string {
+    // Try template-based generation first
+    if (this.fileNameFormat && this.fileNameFormat.trim()) {
+      const templated = this.generateFilenameFromTemplate(postData);
+      if (templated) return templated;
+    }
+
+    // Default built-in logic
+    return this.generateDefaultFilename(postData);
+  }
+
+  /**
+   * Default filename generation (built-in logic).
+   * Format: YYYY-MM-DD - author - title (shortId).md
+   */
+  private generateDefaultFilename(postData: PostData): string {
     const date = this.formatDate(postData.metadata.timestamp);
     const author = this.sanitizeFilename(postData.author.name);
 
@@ -87,6 +108,93 @@ class PathGenerator {
     const postIdSuffix = postData.id ? ` (${postData.id.slice(-6)})` : '';
 
     return `${date} - ${author} - ${title}${postIdSuffix}.md`;
+  }
+
+  /**
+   * Template-based filename generation.
+   * Supported tokens:
+   *   {published_date}  -> YYYY-MM-DD (from post metadata timestamp)
+   *   {archived_date}   -> YYYY-MM-DD (current date)
+   *   {platform}        -> platform display name (e.g., "Facebook")
+   *   {author}          -> author name (sanitized)
+   *   {title}           -> post title or extracted content title (max 50 chars, sanitized)
+   *   {slug}            -> title slug (lowercase, hyphens)
+   *   {post_id}         -> full post ID
+   *   {short_id}        -> last 6 chars of post ID
+   *
+   * Aliases for backward compatibility: {shortId} -> {short_id}
+   *
+   * Returns null if the template produces an empty/whitespace-only filename.
+   */
+  private generateFilenameFromTemplate(postData: PostData): string | null {
+    const template = this.fileNameFormat!;
+
+    // Build token values
+    const publishedDate = this.formatDate(postData.metadata.timestamp);
+    const archivedDate = this.formatDate(new Date());
+    const platform = getPlatformName(postData.platform);
+    const author = this.sanitizeFilename(postData.author.name);
+
+    let title: string;
+    if (postData.title && postData.title.trim().length > 0) {
+      title = postData.title.length > 50
+        ? postData.title.substring(0, 50) + '...'
+        : postData.title;
+    } else {
+      title = this.extractMeaningfulTitle(postData.content.text);
+    }
+    const sanitizedTitle = this.sanitizeFilename(title);
+
+    const slug = this.generateSlug(title);
+    const postId = postData.id || '';
+    const shortId = postId.slice(-6);
+
+    const tokenMap: Record<string, string> = {
+      published_date: publishedDate,
+      archived_date: archivedDate,
+      platform,
+      author,
+      title: sanitizedTitle,
+      slug,
+      post_id: postId,
+      short_id: shortId,
+      // Backward-compatible aliases
+      shortId: shortId,
+    };
+
+    // Replace tokens
+    let result = template;
+    for (const [token, value] of Object.entries(tokenMap)) {
+      result = result.replace(new RegExp(`\\{${token}\\}`, 'g'), value);
+    }
+
+    // Sanitize the entire result
+    result = this.sanitizeFilename(result).trim();
+
+    // Enforce max filename length (200 chars before .md)
+    if (result.length > 200) {
+      result = result.substring(0, 200).trim();
+    }
+
+    // Return null if empty (triggers fallback)
+    if (!result) return null;
+
+    return `${result}.md`;
+  }
+
+  /**
+   * Generate a URL-style slug from text.
+   * Lowercase, replace spaces/special chars with hyphens, collapse multiple hyphens.
+   */
+  private generateSlug(text: string): string {
+    return text
+      .toLowerCase()
+      .replace(/[\u200B-\u200D\u2060\u00A0\uFEFF\u200E\u200F\u202A-\u202E]/g, '')
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .substring(0, 60);
   }
 
   /**
@@ -222,7 +330,8 @@ export class VaultManager implements IService {
     this.app = config.app;
     this.pathGenerator = new PathGenerator(
       config.basePath,
-      config.organizationStrategy
+      config.organizationStrategy,
+      config.fileNameFormat
     );
   }
 
