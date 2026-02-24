@@ -185,6 +185,7 @@ export class ArchiveModal extends Modal {
     modalEl.setAttribute('aria-labelledby', 'archive-modal-title');
 
     // Mobile modal size adjustments
+    contentEl.addClass('am-content--archive');
     if (Platform.isMobile) {
       modalEl.addClass('am-modal--mobile');
       contentEl.addClass('am-content--mobile');
@@ -1608,6 +1609,7 @@ export class ArchiveModal extends Modal {
    */
   private buildSubscribeOptions(): void {
     this.subscribeOptionsContainer.empty();
+    this.subscribeOptionsContainer.removeClass('sa-hidden');
     this.subscribeOptionsContainer.show();
 
     // Add ARIA attributes
@@ -1654,6 +1656,7 @@ export class ArchiveModal extends Modal {
    */
   private buildProfileActionButtons(): void {
     this.profileActionButtons.empty();
+    this.profileActionButtons.removeClass('sa-hidden');
     const isRss = this.urlAnalysis?.type === 'rss';
 
     // Container styling

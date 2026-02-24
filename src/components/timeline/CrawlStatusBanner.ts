@@ -91,7 +91,11 @@ export class CrawlStatusBanner {
       }
     }
 
-    this.jobs = [...newJobs];
+    // Snapshot jobs to avoid sharing mutable references with CrawlJobTracker.
+    // Tracker mutates job objects in place, so without cloning we cannot detect
+    // status transitions (e.g. crawling -> failed) and the dismiss button/icon
+    // won't update.
+    this.jobs = newJobs.map((job) => ({ ...job }));
 
     // Toggle visibility
     this.containerEl.toggleClass('csb-visible', this.jobs.length > 0);

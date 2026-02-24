@@ -82,7 +82,9 @@ export class ArchiveProgressBanner {
       }
     }
 
-    this.jobs = [...newJobs];
+    // Snapshot jobs to avoid shared mutable references from ArchiveJobTracker.
+    // Without cloning, in-place status mutations are invisible to our diff logic.
+    this.jobs = newJobs.map((job) => ({ ...job }));
 
     // Toggle visibility
     this.containerEl.toggleClass('apb-visible', this.jobs.length > 0);

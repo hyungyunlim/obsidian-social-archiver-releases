@@ -931,6 +931,14 @@
   overflow-y: auto !important;
 }
 
+.social-archiver-modal .am-content--archive {
+  /* Prevent profile/subscription action buttons from being clipped off-screen */
+  max-height: min(82vh, 760px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+}
+
 .social-archiver-modal .am-content--mobile {
   padding: 4px 20px 16px;
 }
