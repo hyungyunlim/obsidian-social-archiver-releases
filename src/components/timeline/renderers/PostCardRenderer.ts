@@ -662,8 +662,17 @@ export class PostCardRenderer extends Component {
     // Exception: podcast platform needs audio player rendered via media gallery
     // Exception: blog with audio media should also render audio player (podcast-like feeds without iTunes namespace)
     const hasAudioMedia = post.media.some(m => m.type === 'audio');
+    const rawMarkdown = post.content.rawMarkdown || '';
+    const hasInlineImageMarkdown =
+      /!\[\[[^\]]+\]\]/.test(rawMarkdown) ||
+      /!\[[\s\S]*?\]\([^)]+\)/.test(rawMarkdown) ||
+      /<img\b/i.test(rawMarkdown);
     const isXArticleWithInline = post.platform === 'x' && !!post.content.rawMarkdown;
-    const isBlogWithInlineImages = (isRssBasedPlatform(post.platform) && post.platform !== 'podcast' && !hasAudioMedia && post.content.rawMarkdown) || isXArticleWithInline;
+    const isWebArticleWithInlineImages = post.platform === 'web' && !!post.content.rawMarkdown && hasInlineImageMarkdown;
+    const isBlogWithInlineImages =
+      (isRssBasedPlatform(post.platform) && post.platform !== 'podcast' && !hasAudioMedia && post.content.rawMarkdown)
+      || isXArticleWithInline
+      || isWebArticleWithInlineImages;
 
     if (post.media.length > 0 && !hasEmbeddedArchives && !isReblogWithQuote && !isVideoEmbed && !hasLocalVideoForEmbed && !isBlogWithInlineImages) {
       // Use renderWithTranscript for podcast/audio posts to display Whisper transcripts
@@ -3141,7 +3150,7 @@ export class PostCardRenderer extends Component {
         throw: false
       });
 
-      if (response.status !== 200) {
+      if (response.status < 200 || response.status >= 300) {
         throw new Error(`Share creation failed: ${response.status}`);
       }
 
@@ -3595,6 +3604,32 @@ export class PostCardRenderer extends Component {
         } catch {
           // Continue with deletion even if unshare fails
         }
+      }
+
+      // Delete cross-posted Threads post if metadata exists (fire-and-forget)
+      // Read fresh frontmatter from metadata cache — the cached PostData may be
+      // stale because cross-post metadata is written AFTER the card is rendered.
+      const tFile = file as TFile;
+      const cache = this.app.metadataCache.getFileCache(tFile);
+      const crossPostId = cache?.frontmatter?.['crossPostId'] as string | undefined;
+      const threadsPostId = cache?.frontmatter?.['threadsPostId'] as string | undefined;
+
+      if (crossPostId && threadsPostId) {
+        // Non-blocking: card deletion proceeds immediately, Threads API result shown via Notice
+        void (async () => {
+          try {
+            const { CrossPostAPIClient } = await import('../../../services/CrossPostAPIClient');
+            const client = new CrossPostAPIClient({
+              endpoint: this.plugin.settings.workerUrl,
+              authToken: this.plugin.settings.authToken,
+            });
+            client.initialize();
+            await client.deletePlatformPost(crossPostId, 'threads');
+            new Notice('Threads post also deleted');
+          } catch {
+            new Notice('Failed to delete Threads post — it may need to be removed manually');
+          }
+        })();
       }
 
       // Animate card removal (fade out and slide up)

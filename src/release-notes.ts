@@ -23,38 +23,60 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '2.8.0': {
+    title: 'Reader + Editor TTS',
+    date: '2026-03-01',
+    notes: `## TTS Is Now a Core Workflow
+
+This release makes text-to-speech a first-class reading mode across archived posts and regular Markdown documents.
+
+## Reader Mode TTS (Dual Engine)
+
+- New Reader Mode TTS playback for archived posts
+- Dual-engine support:
+  - Supertonic on-device TTS (desktop)
+  - Azure cloud TTS as fallback when needed
+- Better language-aware voice selection, including broader Latin-script detection plus Arabic, Hindi, and Thai coverage
+- Improved autoplay, sentence prefetching, and skip reliability for smoother long-form reading
+- Improved sentence highlighting and playback stability across mixed block layouts
+
+## Editor TTS (New)
+
+- Added command palette actions:
+  - Read document aloud (TTS)
+  - Read selection aloud (TTS)
+  - Pause / Resume reading (TTS)
+  - Stop reading (TTS)
+- Added a status bar mini player with progress, sentence navigation, and speed controls
+- Added CodeMirror 6 synchronized highlighting during playback
+`,
+    isImportant: true,
+  },
   '2.7.0': {
     title: 'Web Archiving + Archive-Time Tags + Filename Templates',
     date: '2026-02-23',
-    notes: `## 🌐 General Web Archiving (Major)
+    notes: `## General Web Archiving (Beta)
 
-You can now archive **general web pages/articles** (blogs, docs, newsletters, etc.) directly into Social Archiver, including pages you found from web search.
+You can now archive general web pages and articles (blogs, docs, newsletters, etc.) directly into Social Archiver, including pages found via web search.
 
-- Added a new **Web** platform flow for one-off archiving
-- Improved URL detection/routing for blog-style pages (including Medium/Velog/Brunch and similar sites)
-- Better article content extraction + cleanup for cleaner markdown output
-- Web article images now render inline and integrate better with timeline/media views
-- Added **Web** platform filter/timeline support (with icon + rendering improvements)
+- New Web platform flow for one-off archiving
+- Uses the same open-source extraction foundation that powers Obsidian Web Clipper
+- Improved URL routing, extraction cleanup, and inline image rendering for web articles
+- Added Web platform filter and timeline support
 
-## 🏷️ Choose Tags While Archiving
+## Archive-Time Tags
 
-You can now assign tags **during the archive flow** instead of tagging only after the post is saved.
-
-- Select tags in the archive modal before starting the archive
+- Choose tags in the archive modal before starting the archive
 - Tags are preserved through async/pending job completion flows
-- Works with the existing tag filter/timeline tag chips
 
-## 📝 Custom Obsidian Filename Templates
+## Custom Filename Templates
 
-Choose how archived note filenames are generated in Settings.
+- Configure Obsidian filename format in Settings using tokens
+- Improved filename sanitization, duplicate-name handling, and settings UX
 
-- Token-based filename templates (for example date, platform, author, title/snippet)
-- Safer filename sanitization and duplicate-name handling
-- Improved settings UX (preview, token chips, reset/default handling)
+## Support
 
-## 💛 Support
-
-- Added a **Support** section at the bottom of Settings with a **Buy Me a Coffee** link
+- Added a Support section in Settings with a Buy Me a Coffee link
 `,
     isImportant: true,
   },

@@ -1,7 +1,7 @@
 import { setIcon, Notice, Platform as ObsidianPlatform, requestUrl, TFile, type Vault, type App } from 'obsidian';
 import type { PostData, Platform } from '../../types/post';
 import type SocialArchiverPlugin from '../../main';
-import type { TimelineFilterPreferences } from '../../types/settings';
+import type { SocialArchiverSettings, TimelineFilterPreferences } from '../../types/settings';
 import { siObsidian, type PlatformIcon as SimpleIcon } from '../../constants/platform-icons';
 import {
   getPlatformSimpleIcon as getIconServiceSimpleIcon,
@@ -25,6 +25,7 @@ import { IntersectionObserverManager } from './managers/IntersectionObserverMana
 import { SkeletonCardRenderer } from './managers/SkeletonCardRenderer';
 import { CrawlStatusBanner } from './CrawlStatusBanner';
 import { ArchiveProgressBanner } from './ArchiveProgressBanner';
+import { CrossPostStatusBanner } from './CrossPostStatusBanner';
 import { TagChipBar } from './filters/TagChipBar';
 import { ReaderModeOverlay, type ReaderModeContext } from './reader/ReaderModeOverlay';
 import { SeriesGroupingService, type TimelineItem, isSeriesGroup } from '../../services/SeriesGroupingService';
@@ -279,6 +280,9 @@ export class TimelineContainer {
   // Archive progress banner component
   private archiveProgressBanner: ArchiveProgressBanner | null = null;
   private archiveProgressBannerUnsubscribe: (() => void) | null = null;
+
+  // Cross-post status banner component (ephemeral, no tracker)
+  private crossPostBanner: CrossPostStatusBanner | null = null;
 
   // Tag chip bar for filtering by user-defined tags
   private tagChipBar: TagChipBar;
@@ -1442,6 +1446,13 @@ export class TimelineContainer {
         app: this.app,
         settings: this.plugin.settings,
         archiveOrchestrator: orchestrator,
+        onSaveSettings: async (partial?: Partial<SocialArchiverSettings>) => {
+          if (partial && Object.keys(partial).length > 0) {
+            await this.plugin.saveSettingsPartial(partial);
+          } else {
+            await this.plugin.saveSettings();
+          }
+        },
         onPostCreated: async (post: PostData): Promise<string> => {
           try {
             // Import VaultStorageService
@@ -1555,6 +1566,34 @@ export class TimelineContainer {
             // Re-throw so PostComposer knows it failed
             throw err;
           }
+        },
+        onCrossPostComplete: async (
+          filePath: string,
+          crossPostId: string,
+          threadsResult: { postId?: string; postUrl?: string }
+        ): Promise<void> => {
+          try {
+            const file = this.vault.getFileByPath(filePath);
+            if (!file) return;
+
+            const fileContent = await this.vault.read(file);
+            const updatedContent = this.updateFrontmatterWithCrossPost(
+              fileContent,
+              crossPostId,
+              threadsResult.postId,
+              threadsResult.postUrl
+            );
+            await this.vault.modify(file, updatedContent);
+          } catch {
+            // Cross-post metadata save is best-effort
+          }
+        },
+        onCrossPostStart: (): CrossPostStatusBanner => {
+          // Lazy-create banner if needed (destroyed between renders)
+          if (!this.crossPostBanner) {
+            this.renderCrossPostStatusBanner();
+          }
+          return this.crossPostBanner!;
         }
       }
     });
@@ -1655,6 +1694,31 @@ export class TimelineContainer {
     if (this.archiveProgressBanner) {
       this.archiveProgressBanner.destroy();
       this.archiveProgressBanner = null;
+    }
+  }
+
+  /**
+   * Render CrossPostStatusBanner below other banners.
+   * Unlike CrawlStatusBanner this is ephemeral — no tracker subscription.
+   * PostComposer calls `onCrossPostStart()` which returns the banner instance.
+   */
+  private renderCrossPostStatusBanner(): void {
+    this.destroyCrossPostStatusBanner();
+
+    const bannerContainer = this.containerEl.createDiv({
+      cls: 'max-w-2xl mx-auto'
+    });
+
+    this.crossPostBanner = new CrossPostStatusBanner(bannerContainer);
+  }
+
+  /**
+   * Clean up CrossPostStatusBanner resources
+   */
+  private destroyCrossPostStatusBanner(): void {
+    if (this.crossPostBanner) {
+      this.crossPostBanner.destroy();
+      this.crossPostBanner = null;
     }
   }
 
@@ -4072,6 +4136,7 @@ export class TimelineContainer {
             this.renderTagChipBar();
             this.renderCrawlStatusBanner();
             this.renderArchiveProgressBanner();
+            this.renderCrossPostStatusBanner();
 
             void this.loadPosts();
           },
@@ -4132,6 +4197,7 @@ export class TimelineContainer {
     // Render CrawlStatusBanner below header (search/filter/archive buttons)
     this.renderCrawlStatusBanner();
     this.renderArchiveProgressBanner();
+    this.renderCrossPostStatusBanner();
 
     // Add Subscriptions header
     const subscriptionsHeader = this.containerEl.createDiv({
@@ -4197,6 +4263,7 @@ export class TimelineContainer {
     // Render CrawlStatusBanner below header (search/filter/archive buttons)
     this.renderCrawlStatusBanner();
     this.renderArchiveProgressBanner();
+    this.renderCrossPostStatusBanner();
 
     // Mark that posts have been rendered (for subsequent reloads)
     this.hasRenderedPosts = true;
@@ -4990,6 +5057,13 @@ export class TimelineContainer {
         app: this.app,
         settings: this.plugin.settings,
         archiveOrchestrator: this.plugin.archiveOrchestratorOptional, // Use optional getter to avoid error when not initialized
+        onSaveSettings: async (partial?: Partial<SocialArchiverSettings>) => {
+          if (partial && Object.keys(partial).length > 0) {
+            await this.plugin.saveSettingsPartial(partial);
+          } else {
+            await this.plugin.saveSettings();
+          }
+        },
         editMode: true,
         initialData: post,
         filePath: filePath,
@@ -5231,6 +5305,9 @@ export class TimelineContainer {
 
     // Clean up ArchiveProgressBanner
     this.destroyArchiveProgressBanner();
+
+    // Clean up CrossPostStatusBanner
+    this.destroyCrossPostStatusBanner();
 
     // Clean up TagChipBar
     this.tagChipBar.destroy();
@@ -5662,6 +5739,80 @@ export class TimelineContainer {
     return content;
   }
 
+  /**
+   * Update frontmatter with cross-post metadata (Threads)
+   */
+  private updateFrontmatterWithCrossPost(
+    content: string,
+    crossPostId: string,
+    threadsPostId?: string,
+    threadsPostUrl?: string
+  ): string {
+    const lines = content.split('\n');
+    let inFrontmatter = false;
+    let frontmatterEnd = -1;
+    const newLines: string[] = [];
+    let crossPostIdFound = false;
+    let threadsPostIdFound = false;
+    let threadsPostUrlFound = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line && line !== '') continue;
+
+      if (line.trim() === '---') {
+        if (!inFrontmatter) {
+          inFrontmatter = true;
+          newLines.push(line);
+        } else {
+          frontmatterEnd = i;
+          break;
+        }
+      } else if (inFrontmatter) {
+        if (line.trim().startsWith('crossPostId:')) {
+          newLines.push(`crossPostId: ${crossPostId}`);
+          crossPostIdFound = true;
+        } else if (line.trim().startsWith('threadsPostId:')) {
+          newLines.push(`threadsPostId: "${threadsPostId}"`);
+          threadsPostIdFound = true;
+        } else if (line.trim().startsWith('threadsPostUrl:')) {
+          newLines.push(`threadsPostUrl: ${threadsPostUrl}`);
+          threadsPostUrlFound = true;
+        } else {
+          newLines.push(line);
+        }
+      }
+    }
+
+    if (frontmatterEnd > 0) {
+      if (!crossPostIdFound) {
+        newLines.push(`crossPostId: ${crossPostId}`);
+      }
+      if (!threadsPostIdFound && threadsPostId) {
+        newLines.push(`threadsPostId: "${threadsPostId}"`);
+      }
+      if (!threadsPostUrlFound && threadsPostUrl) {
+        newLines.push(`threadsPostUrl: ${threadsPostUrl}`);
+      }
+
+      const closingLine = lines[frontmatterEnd];
+      if (closingLine) {
+        newLines.push(closingLine); // closing ---
+      }
+
+      for (let i = frontmatterEnd + 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (line !== undefined) {
+          newLines.push(line);
+        }
+      }
+
+      return newLines.join('\n');
+    }
+
+    return content;
+  }
+
   // Store gallery renderer instance for filter updates
   private galleryRenderer: GalleryViewRenderer | null = null;
   private galleryGroupBy: 'none' | 'author' | 'post' | 'author-post' = 'none';
@@ -5694,6 +5845,7 @@ export class TimelineContainer {
     // Render CrawlStatusBanner below header (search/filter/archive buttons)
     this.renderCrawlStatusBanner();
     this.renderArchiveProgressBanner();
+    this.renderCrossPostStatusBanner();
 
     // Render gallery group controls (below header)
     this.renderGalleryGroupControls();

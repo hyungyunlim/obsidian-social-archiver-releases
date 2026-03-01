@@ -1,7 +1,269 @@
 import { Modal, Notice, Platform, setIcon, type App } from 'obsidian';
 import type { TagStore } from '@/services/TagStore';
 import type { TagDefinition } from '@/types/tag';
-import { TAG_NAME_MAX_LENGTH } from '@/types/tag';
+import { TAG_COLORS, TAG_NAME_MAX_LENGTH } from '@/types/tag';
+
+const HEX_COLOR_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+function normalizeHexColor(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!HEX_COLOR_PATTERN.test(trimmed)) return null;
+  return trimmed.toLowerCase();
+}
+
+function toColorPickerHex(value: string | null): string {
+  const normalized = value ? normalizeHexColor(value) : null;
+  if (!normalized) return TAG_COLORS[0] as string;
+  if (normalized.length === 4) {
+    const [r, g, b] = [normalized[1], normalized[2], normalized[3]];
+    return `#${r}${r}${g}${g}${b}${b}`;
+  }
+  return normalized;
+}
+
+class TagEditModal extends Modal {
+  private tagStore: TagStore;
+  private tag: TagDefinition;
+  private onSaved: (updatedTag: TagDefinition, previousName: string) => void;
+  private nameInput: HTMLInputElement | null = null;
+  private colorInput: HTMLInputElement | null = null;
+  private nativeColorInput: HTMLInputElement | null = null;
+  private previewDot: HTMLElement | null = null;
+  private previewText: HTMLElement | null = null;
+  private paletteButtons: Map<string, HTMLButtonElement> = new Map();
+  private currentColor: string | null;
+  private pickerColor: string;
+
+  constructor(
+    app: App,
+    tagStore: TagStore,
+    tag: TagDefinition,
+    onSaved: (updatedTag: TagDefinition, previousName: string) => void
+  ) {
+    super(app);
+    this.tagStore = tagStore;
+    this.tag = tag;
+    this.onSaved = onSaved;
+    this.currentColor = typeof tag.color === 'string' ? normalizeHexColor(tag.color) : null;
+    this.pickerColor = toColorPickerHex(this.currentColor);
+  }
+
+  onOpen(): void {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass('social-archiver-tag-modal', 'tm-edit-modal');
+
+    if (Platform.isMobile) {
+      this.modalEl.addClass('tm-mobile');
+      contentEl.addClass('tm-mobile-content');
+    }
+
+    const titleEl = contentEl.createEl('h3', { text: 'Edit tag' });
+    titleEl.addClass('tm-edit-title');
+    const desc = contentEl.createEl('p', {
+      text: 'Rename the tag or change its color. Renaming updates all archived posts that use this tag.',
+    });
+    desc.addClass('tm-edit-desc');
+
+    const nameLabel = contentEl.createEl('label', { text: 'Tag name' });
+    nameLabel.addClass('tm-edit-label');
+
+    this.nameInput = contentEl.createEl('input', {
+      type: 'text',
+      value: this.tag.name,
+      placeholder: 'Tag name',
+    });
+    this.nameInput.maxLength = TAG_NAME_MAX_LENGTH;
+    this.nameInput.addClass('sa-w-full', 'sa-p-8', 'sa-border', 'sa-rounded-8', 'sa-bg-primary', 'sa-text-normal', 'sa-text-md', 'sa-box-border', 'tm-edit-input');
+    this.nameInput.addEventListener('input', () => this.refreshPreviewTagName());
+
+    const colorHeader = contentEl.createDiv();
+    colorHeader.addClass('tm-edit-color-header');
+
+    const colorLabel = colorHeader.createEl('label', { text: 'Color' });
+    colorLabel.addClass('tm-edit-label');
+
+    const colorRow = contentEl.createDiv();
+    colorRow.addClass('tm-edit-color-row');
+
+    this.nativeColorInput = colorRow.createEl('input', {
+      type: 'color',
+      value: this.pickerColor,
+    });
+    this.nativeColorInput.addClass('tm-edit-color-picker');
+    this.nativeColorInput.setAttribute('aria-label', 'Color picker');
+    this.nativeColorInput.addEventListener('input', () => {
+      const pickedColor = this.nativeColorInput?.value || this.pickerColor;
+      this.setColor(pickedColor);
+      this.colorInput?.focus();
+      this.colorInput?.select();
+    });
+
+    const colorInputWrap = colorRow.createDiv();
+    colorInputWrap.addClass('tm-edit-color-input-wrap', 'sa-flex-1');
+
+    this.colorInput = colorInputWrap.createEl('input', {
+      type: 'text',
+      placeholder: '#3b82f6',
+      value: this.currentColor ?? '',
+    });
+    this.colorInput.addClass('sa-w-full', 'sa-p-8', 'sa-border', 'sa-rounded-8', 'sa-bg-primary', 'sa-text-normal', 'sa-text-md', 'sa-box-border', 'tm-edit-input', 'tm-edit-color-input');
+    this.colorInput.maxLength = 7;
+    this.colorInput.addEventListener('input', () => {
+      const normalized = normalizeHexColor(this.colorInput?.value || '');
+      this.currentColor = normalized;
+      if (normalized) {
+        this.pickerColor = toColorPickerHex(normalized);
+      }
+      this.refreshColorPreview();
+    });
+
+    const clearBtn = colorInputWrap.createEl('button');
+    clearBtn.type = 'button';
+    clearBtn.addClass('tm-edit-color-clear');
+    clearBtn.setAttribute('aria-label', 'Clear color');
+    clearBtn.setAttribute('title', 'Clear color');
+    setIcon(clearBtn, 'rotate-ccw');
+    clearBtn.querySelector('svg')?.setAttribute('width', '14');
+    clearBtn.querySelector('svg')?.setAttribute('height', '14');
+    clearBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.setColor(null);
+      this.colorInput?.focus();
+    });
+
+    const previewRow = contentEl.createDiv();
+    previewRow.addClass('tm-edit-preview-row');
+    const previewLabel = previewRow.createSpan({ text: 'Preview' });
+    previewLabel.addClass('tm-edit-preview-label');
+
+    const previewChip = previewRow.createDiv();
+    previewChip.addClass('tm-edit-preview-chip');
+
+    this.previewDot = previewChip.createDiv();
+    this.previewDot.addClass('tm-edit-preview-dot');
+
+    this.previewText = previewChip.createSpan();
+    this.previewText.addClass('tm-edit-preview-text');
+
+    const colorHint = contentEl.createEl('p', {
+      text: 'Use the picker, palette, or type #RGB / #RRGGBB.',
+    });
+    colorHint.addClass('tm-edit-hint');
+
+    const paletteWrap = contentEl.createDiv();
+    paletteWrap.addClass('tm-edit-palette');
+
+    for (const paletteColor of TAG_COLORS) {
+      const btn = paletteWrap.createEl('button');
+      btn.type = 'button';
+      btn.setAttribute('aria-label', `Select color ${paletteColor}`);
+      btn.addClass('tm-edit-swatch');
+      btn.style.background = paletteColor;
+      btn.addEventListener('click', () => {
+        this.setColor(paletteColor);
+      });
+      this.paletteButtons.set(paletteColor.toLowerCase(), btn);
+    }
+
+    const footer = contentEl.createDiv();
+    footer.addClass('tm-edit-footer');
+
+    const cancelButton = footer.createEl('button', { text: 'Cancel' });
+    cancelButton.addClass('tm-edit-btn', 'tm-edit-btn-secondary');
+    cancelButton.addEventListener('click', () => this.close());
+
+    const saveButton = footer.createEl('button', { text: 'Save changes' });
+    saveButton.addClass('tm-edit-btn', 'tm-edit-btn-primary');
+    saveButton.addEventListener('click', () => {
+      void this.save();
+    });
+
+    const submitOnEnter = (e: KeyboardEvent): void => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        void this.save();
+      }
+    };
+    this.nameInput.addEventListener('keydown', submitOnEnter);
+    this.colorInput.addEventListener('keydown', submitOnEnter);
+
+    this.refreshColorPreview();
+    this.refreshPreviewTagName();
+    this.nameInput.focus();
+    this.nameInput.select();
+  }
+
+  private setColor(color: string | null): void {
+    const normalized = color ? normalizeHexColor(color) : null;
+    this.currentColor = normalized;
+    if (normalized) {
+      this.pickerColor = toColorPickerHex(normalized);
+    }
+    if (this.colorInput) {
+      this.colorInput.value = this.currentColor ?? '';
+    }
+    this.refreshColorPreview();
+  }
+
+  private refreshColorPreview(): void {
+    if (this.previewDot) {
+      this.previewDot.style.background = this.currentColor || 'var(--background-modifier-border)';
+    }
+    if (this.nativeColorInput && this.nativeColorInput.value !== this.pickerColor) {
+      this.nativeColorInput.value = this.pickerColor;
+    }
+
+    const selected = this.currentColor?.toLowerCase() || '';
+    for (const [paletteColor, button] of this.paletteButtons) {
+      const isSelected = paletteColor === selected;
+      button.style.boxShadow = isSelected ? '0 0 0 2px var(--interactive-accent)' : 'none';
+      button.style.borderColor = isSelected ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+    }
+  }
+
+  private refreshPreviewTagName(): void {
+    if (!this.previewText) return;
+    const nextName = this.nameInput?.value.trim() || this.tag.name;
+    this.previewText.textContent = nextName;
+  }
+
+  private async save(): Promise<void> {
+    const rawName = this.nameInput?.value ?? '';
+    const trimmedName = rawName.trim();
+
+    if (!trimmedName || trimmedName.length > TAG_NAME_MAX_LENGTH) {
+      new Notice(`Tag name must be 1-${TAG_NAME_MAX_LENGTH} characters`);
+      this.nameInput?.focus();
+      return;
+    }
+
+    const rawHex = this.colorInput?.value ?? '';
+    const normalizedColor = rawHex.trim() ? normalizeHexColor(rawHex) : null;
+    if (rawHex.trim() && !normalizedColor) {
+      new Notice('Invalid HEX color. Use #RGB or #RRGGBB (example: #3b82f6)');
+      this.colorInput?.focus();
+      return;
+    }
+
+    try {
+      const updated = await this.tagStore.updateTag(this.tag.id, {
+        name: trimmedName,
+        color: normalizedColor,
+      });
+      if (!updated) {
+        new Notice('Tag not found');
+        return;
+      }
+      this.onSaved(updated, this.tag.name);
+      this.close();
+      new Notice(`Updated tag "${updated.name}"`);
+    } catch (err) {
+      new Notice(`Failed to update tag: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }
+}
 
 /**
  * TagModal - Modal for managing tags
@@ -228,6 +490,51 @@ export class TagModal extends Modal {
     this.dirty = true;
   }
 
+  private rerenderCurrentList(): void {
+    if (!this.listContainer) return;
+    this.renderTagList(this.listContainer, this.searchInput?.value || '');
+  }
+
+  private openEditTagModal(tag: TagDefinition): void {
+    const editModal = new TagEditModal(this.app, this.tagStore, tag, (updatedTag, previousName) => {
+      this.markDirty();
+
+      if (this.filePath && previousName.toLowerCase() !== updatedTag.name.toLowerCase()) {
+        const prevLower = previousName.toLowerCase();
+        const nextLower = updatedTag.name.toLowerCase();
+
+        // Keep post-mode UI stable while metadataCache catches up after bulk rename.
+        const currentTags = this.tagStore.getTagsForPost(this.filePath);
+        if (currentTags.some(t => t.toLowerCase() === prevLower)) {
+          this.toggledOffTags.add(prevLower);
+          this.toggledOnTags.add(nextLower);
+          if (this.onUIModify) this.onUIModify(this.filePath);
+        }
+      }
+
+      this.rerenderCurrentList();
+    });
+    editModal.open();
+  }
+
+  private async convertAutoTagToManaged(tag: TagDefinition): Promise<void> {
+    try {
+      await this.tagStore.createTag(tag.name);
+      this.markDirty();
+      this.rerenderCurrentList();
+      new Notice(`Converted "${tag.name}" to a managed tag`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      if (typeof message === 'string' && /already exists/i.test(message)) {
+        this.markDirty();
+        this.rerenderCurrentList();
+        new Notice(`"${tag.name}" is already a managed tag`);
+        return;
+      }
+      new Notice(`Failed to convert tag: ${message}`);
+    }
+  }
+
   /** Update visual highlight for keyboard-navigated row */
   private updateHighlight(): void {
     if (!this.listContainer) return;
@@ -410,14 +717,71 @@ export class TagModal extends Modal {
       setIcon(checkEl, 'check');
     }
 
-    // Delete button (for ALL tags) — always visible for applied tags, hover-only otherwise
-    const deleteBtn = row.createDiv();
-    deleteBtn.addClass('sa-tag-delete-btn', 'sa-flex-center', 'sa-rounded-4', 'sa-text-muted', 'sa-clickable', 'sa-transition', 'sa-flex-shrink-0', 'tm-delete-btn');
-    deleteBtn.addClass(isApplied || Platform.isMobile ? 'tm-delete-btn-visible' : 'tm-delete-btn-hidden');
-    deleteBtn.setAttribute('title', isUndefined ? 'Remove from all posts' : 'Delete tag and remove from all posts');
-    setIcon(deleteBtn, 'trash-2');
-    deleteBtn.querySelector('svg')?.setAttribute('width', '14');
-    deleteBtn.querySelector('svg')?.setAttribute('height', '14');
+    const actionsEl = row.createDiv();
+    actionsEl.addClass('sa-flex-row', 'sa-gap-4');
+
+    const hoverButtons: HTMLElement[] = [];
+    const alwaysShowActions = Platform.isMobile || isApplied || !this.filePath;
+
+    const applyHoverVisibility = (visible: boolean): void => {
+      for (const btn of hoverButtons) {
+        btn.removeClass(visible ? 'tm-delete-btn-hidden' : 'tm-delete-btn-visible');
+        btn.addClass(visible ? 'tm-delete-btn-visible' : 'tm-delete-btn-hidden');
+      }
+    };
+
+    const createActionButton = (title: string, icon: string): HTMLDivElement => {
+      const btn = actionsEl.createDiv();
+      btn.addClass('sa-flex-center', 'sa-rounded-4', 'sa-text-muted', 'sa-clickable', 'sa-transition', 'sa-flex-shrink-0', 'tm-delete-btn');
+      btn.setAttribute('title', title);
+      setIcon(btn, icon);
+      btn.querySelector('svg')?.setAttribute('width', '14');
+      btn.querySelector('svg')?.setAttribute('height', '14');
+      if (alwaysShowActions) {
+        btn.addClass('tm-delete-btn-visible');
+      } else {
+        btn.addClass('tm-delete-btn-hidden');
+        hoverButtons.push(btn);
+      }
+      return btn;
+    };
+
+    if (isUndefined) {
+      const convertBtn = createActionButton('Convert to managed tag', 'plus');
+      convertBtn.addEventListener('mouseenter', () => {
+        convertBtn.removeClass('sa-text-muted');
+        convertBtn.addClass('sa-text-accent', 'sa-bg-hover');
+      });
+      convertBtn.addEventListener('mouseleave', () => {
+        convertBtn.removeClass('sa-text-accent', 'sa-bg-hover');
+        convertBtn.addClass('sa-text-muted');
+      });
+      convertBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        void this.convertAutoTagToManaged(tag);
+      });
+    } else {
+      const editBtn = createActionButton('Edit tag', 'pencil');
+      editBtn.addEventListener('mouseenter', () => {
+        editBtn.removeClass('sa-text-muted');
+        editBtn.addClass('sa-text-accent', 'sa-bg-hover');
+      });
+      editBtn.addEventListener('mouseleave', () => {
+        editBtn.removeClass('sa-text-accent', 'sa-bg-hover');
+        editBtn.addClass('sa-text-muted');
+      });
+      editBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.openEditTagModal(tag);
+      });
+    }
+
+    // Delete button (for ALL tags)
+    const deleteBtn = createActionButton(
+      isUndefined ? 'Remove from all posts' : 'Delete tag and remove from all posts',
+      'trash-2'
+    );
+    deleteBtn.addClass('sa-tag-delete-btn');
 
     deleteBtn.addEventListener('mouseenter', () => {
       deleteBtn.removeClass('sa-text-muted');
@@ -439,14 +803,12 @@ export class TagModal extends Modal {
           this.updateHighlight();
         }
         row.addClass('sa-bg-hover');
-        deleteBtn.removeClass('tm-delete-btn-hidden');
-        deleteBtn.addClass('tm-delete-btn-visible');
+        applyHoverVisibility(true);
       });
       row.addEventListener('mouseleave', () => {
         row.removeClass('sa-bg-hover');
-        if (!isApplied) {
-          deleteBtn.removeClass('tm-delete-btn-visible');
-          deleteBtn.addClass('tm-delete-btn-hidden');
+        if (!alwaysShowActions) {
+          applyHoverVisibility(false);
         }
       });
     }
@@ -467,8 +829,7 @@ export class TagModal extends Modal {
           // Track deleted name to filter stale metadataCache results
           this.deletedTagNames.add(tag.name.toLowerCase());
           this.markDirty();
-          const query = this.searchInput?.value || '';
-          this.renderTagList(container, query);
+          this.rerenderCurrentList();
         } catch (err) {
           new Notice(`Failed to delete tag: ${err instanceof Error ? err.message : 'Unknown error'}`);
         }
@@ -488,8 +849,7 @@ export class TagModal extends Modal {
           this.toggledOnTags.add(lower);
           this.toggledOffTags.delete(lower);
         }
-        const query = this.searchInput?.value || '';
-        this.renderTagList(container, query);
+        this.rerenderCurrentList();
 
         // Register UI modify to prevent timeline refresh from vault watcher
         if (this.onUIModify && this.filePath) this.onUIModify(this.filePath);
@@ -501,8 +861,7 @@ export class TagModal extends Modal {
           } else {
             this.toggledOnTags.delete(lower);
           }
-          const q = this.searchInput?.value || '';
-          this.renderTagList(container, q);
+          this.rerenderCurrentList();
           new Notice(`Failed to toggle tag`);
         });
       });

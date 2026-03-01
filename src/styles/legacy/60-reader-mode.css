@@ -492,4 +492,149 @@ body.is-tablet .reader-mode-action-btn svg {
   }
 }
 
+/* ============================================================================
+   TTS (Text-to-Speech) Reader Mode Styles
+   ============================================================================ */
+
+/* Sentence highlight mark */
+.reader-tts-highlight {
+  background-color: var(--text-highlight-bg, rgba(255, 208, 0, 0.4));
+  border-radius: 2px;
+  padding: 0 1px;
+  transition: background-color 0.15s ease;
+}
+
+/* Header TTS button */
+.reader-tts-btn {
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.reader-tts-btn-active {
+  color: var(--interactive-accent);
+}
+
+.reader-tts-btn-loading svg {
+  animation: reader-tts-spin 1s linear infinite;
+}
+
+@keyframes reader-tts-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Mini controller bar */
+.reader-tts-mini-controller {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 60px);
+  transform: translateX(-50%);
+  z-index: 1010;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  padding: 8px 14px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+  font-size: 13px;
+}
+
+.reader-tts-ctrl-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.reader-tts-ctrl-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.reader-tts-ctrl-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.reader-tts-play-btn {
+  width: 36px;
+  height: 36px;
+  color: var(--interactive-accent);
+}
+
+.reader-tts-play-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.reader-tts-progress {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  min-width: 52px;
+  text-align: center;
+}
+
+.reader-tts-speed-btn {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  min-width: 40px;
+  border-radius: 4px;
+}
+
+.reader-tts-close-btn {
+  color: var(--text-faint);
+}
+
+@media(hover:hover) {
+  .reader-tts-close-btn:hover {
+    color: var(--text-error, #ff6b6b);
+  }
+}
+
+/* Follow along floating button */
+.reader-tts-follow-btn {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 128px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1011;
+  padding: 8px 16px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+/* Mobile: keep follow button much closer to the bottom edge */
+@media (max-width: 768px) {
+  .reader-tts-mini-controller {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+  }
+
+  .reader-tts-follow-btn {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 78px);
+  }
+}
+
+.reader-tts-follow-btn:hover {
+  opacity: 0.9;
+  transform: translateX(-50%) scale(1.02);
+}
+
 /* Native video caption (TextTrack) styling */

@@ -24,6 +24,7 @@ import {
 } from '../../../services/IconService';
 import { getPlatformName } from '@/shared/platforms';
 import { createCustomSVG } from '@/utils/dom-helpers';
+import type { ReaderTTSController } from './ReaderTTSController';
 
 export interface ReaderContentCallbacks {
   onClose: () => void;
@@ -48,6 +49,8 @@ export interface ReaderContentCallbacks {
   /** Comment/note on the post */
   hasComment: boolean;
   onComment: () => void;
+  /** TTS controller instance (optional, feature-flagged). */
+  ttsController?: ReaderTTSController;
 }
 
 export class ReaderModeContentRenderer extends Component {
@@ -81,6 +84,11 @@ export class ReaderModeContentRenderer extends Component {
     const headerWrapper = container.createDiv({ cls: 'reader-mode-header-wrapper' });
     const headerContent = headerWrapper.createDiv({ cls: 'reader-mode-header-content' });
     this.renderHeader(headerContent, index, total, post, callbacks);
+
+    // TTS mini controller (below header, hidden until TTS starts)
+    if (callbacks.ttsController) {
+      callbacks.ttsController.renderMiniController(container);
+    }
 
     // Scrollable inner wrapper (scrollbar hidden for cleaner reading experience)
     // Webkit: .reader-mode-scroll::-webkit-scrollbar{display:none} in misc-components.css
@@ -127,6 +135,13 @@ export class ReaderModeContentRenderer extends Component {
 
     // 9. Action bar (engagement metrics + action buttons)
     this.renderActionBar(content, post, callbacks);
+
+    // 10. TTS: connect body + scroll containers for highlighting/scroll sync
+    if (callbacks.ttsController) {
+      callbacks.ttsController.setContentBody(content);
+      callbacks.ttsController.setScrollContainer(scrollArea);
+      callbacks.ttsController.onPostChange(post);
+    }
   }
 
   // ---------- Header ----------
@@ -173,6 +188,11 @@ export class ReaderModeContentRenderer extends Component {
       e.stopPropagation();
       callbacks.onFontSizeChange(2);
     });
+
+    // TTS button (before copy, feature-flagged)
+    if (callbacks.ttsController) {
+      callbacks.ttsController.renderHeaderButton(rightGroup);
+    }
 
     // Copy text button
     const copyBtn = rightGroup.createDiv({ cls: 'reader-mode-header-btn' });

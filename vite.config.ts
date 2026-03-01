@@ -35,7 +35,7 @@ export default defineConfig(({ mode }) => ({
       fileName: () => 'main.js'
     },
     rollupOptions: {
-      external: ['obsidian'],
+      external: ['obsidian', '@codemirror/state', '@codemirror/view'],
       output: {
         dir: 'dist-plugin',
         entryFileNames: 'main.js',

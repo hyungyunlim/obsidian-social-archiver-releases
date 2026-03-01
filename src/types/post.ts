@@ -247,6 +247,9 @@ export interface PostData {
   shareId?: string;         // Share ID from the web share service
   shareUrl?: string;        // Public share URL (if published)
   shareMode?: 'full' | 'preview'; // How to display shared post ('preview' for copyright-safe mode)
+  crossPostId?: string;     // Cross-post record ID (from worker)
+  threadsPostId?: string;   // Threads platform post ID
+  threadsPostUrl?: string;  // Threads post URL
   publishedDate?: Date;     // Original post publication date
   archivedDate?: Date;      // Date when post was archived
   mediaSourceUrls?: string[]; // Original media URLs (before proxy download)

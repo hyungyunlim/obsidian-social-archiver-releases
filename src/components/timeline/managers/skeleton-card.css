@@ -1420,6 +1420,16 @@ body:not(.theme-dark) .post-card-skeleton {
 
 /* Mobile-only: Add safe-area padding to timeline view */
 /* Note: is-mobile class is added by Obsidian on mobile devices */
+body.is-mobile .social-archiver-timeline-view.sa-timeline-safe-area {
+  padding-top: calc(
+    max(
+      env(safe-area-inset-top, 0px),
+      var(--safe-area-inset-top, 0px),
+      var(--timeline-safe-area-top-fallback, 0px)
+    ) + var(--timeline-safe-area-top-extra, 0px)
+  ) !important;
+}
+
 body.is-mobile .social-archiver-timeline-view {
   /* Top safe area for status bar / Dynamic Island */
   padding-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px), var(--timeline-safe-area-top-fallback, 0px));
@@ -1428,6 +1438,16 @@ body.is-mobile .social-archiver-timeline-view {
 }
 
 /* Target view-content inside timeline view for Obsidian's DOM structure */
+body.is-mobile .social-archiver-timeline-view.sa-timeline-safe-area .view-content {
+  padding-top: calc(
+    max(
+      env(safe-area-inset-top, 0px),
+      var(--safe-area-inset-top, 0px),
+      var(--timeline-safe-area-top-fallback, 0px)
+    ) + var(--timeline-safe-area-top-extra, 0px)
+  ) !important;
+}
+
 body.is-mobile .social-archiver-timeline-view .view-content {
   padding-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px), var(--timeline-safe-area-top-fallback, 0px));
 }

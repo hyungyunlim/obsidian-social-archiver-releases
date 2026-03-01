@@ -1,0 +1,152 @@
+/*
+ * Editor TTS — highlight decoration and status bar player styles
+ *
+ * Highlight uses Obsidian's native text-highlight-bg variable.
+ * Status bar player uses sa-* utility classes + setIcon pattern.
+ */
+
+/* ============================================================================
+ * CM6 sentence highlight decoration
+ * ============================================================================ */
+
+.editor-tts-highlight {
+  background-color: var(--text-highlight-bg);
+  border-radius: 2px;
+}
+
+/* ============================================================================
+ * Status bar player (desktop)
+ * ============================================================================ */
+
+.sa-tts-statusbar {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+}
+
+.sa-tts-statusbar.is-active {
+  display: flex;
+}
+
+.sa-tts-statusbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.sa-tts-statusbar-btn:hover {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.sa-tts-statusbar-btn .svg-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.sa-tts-statusbar-progress {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  margin: 0 2px;
+  min-width: 28px;
+  text-align: center;
+}
+
+.sa-tts-statusbar-speed {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-s);
+  min-width: 28px;
+  text-align: center;
+}
+
+.sa-tts-statusbar-speed:hover {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-muted);
+}
+
+/* ============================================================================
+ * Mobile Notice player
+ * ============================================================================ */
+
+.sa-tts-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.sa-tts-notice-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sa-tts-notice-header .svg-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--text-accent);
+  flex-shrink: 0;
+}
+
+.sa-tts-notice-title {
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-semibold);
+  color: var(--text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.sa-tts-notice-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: center;
+}
+
+.sa-tts-notice-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.sa-tts-notice-btn:hover {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.sa-tts-notice-btn .svg-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.sa-tts-notice-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-faint);
+}

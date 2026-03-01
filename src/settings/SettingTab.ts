@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, Platform } from 'obsidian';
+import { App, Notice, PluginSettingTab, Setting, Platform } from 'obsidian';
 import nodeRequire from '../utils/nodeRequire';
 import type SocialArchiverPlugin from '../main';
 import { FolderSuggest } from './FolderSuggest';
@@ -24,9 +24,14 @@ import { mount, unmount } from 'svelte';
 import AuthSettingsTab from './AuthSettingsTab.svelte';
 import DangerZone from './DangerZone.svelte';
 import SyncSettingsTab from './SyncSettingsTab.svelte';
+import CrossPostSettingsTab from './CrossPostSettingsTab.svelte';
 import type { AICli, AICliDetectionResult } from '../utils/ai-cli';
 import { AICliDetector, AI_CLI_INFO } from '../utils/ai-cli';
 import { COMMENT_TYPE_DISPLAY_NAMES, OUTPUT_LANGUAGE_NAMES } from '../types/ai-comment';
+import { FEATURE_READER_TTS_ENABLED, FEATURE_CROSSPOST_ENABLED } from '../shared/constants';
+import { DEFAULT_TTS_SETTINGS } from '../types/settings';
+import type { PluginTTSProviderId } from '../services/tts/types';
+import { SupertonicInstaller } from '../services/tts/SupertonicInstaller';
 import type { AICommentType, AIOutputLanguage } from '../types/ai-comment';
 import {
   SOCIAL_MEDIA_PLATFORMS,
@@ -37,12 +42,14 @@ import type { Platform as SocialPlatform } from '../shared/platforms/types';
 import { getPlatformDefinition } from '../shared/platforms/definitions';
 
 const BUY_ME_A_COFFEE_URL = 'https://buymeacoffee.com/junlim';
+const PERSONAL_GITHUB_URL = 'https://github.com/hyungyunlim';
 
 export class SocialArchiverSettingTab extends PluginSettingTab {
   plugin: SocialArchiverPlugin;
   private authComponent: ReturnType<typeof mount> | null = null;
   private dangerZoneComponent: ReturnType<typeof mount> | null = null;
   private syncSettingsComponent: ReturnType<typeof mount> | null = null;
+  private crossPostComponent: ReturnType<typeof mount> | null = null;
   private isDisplaying = false;
   private settingsDirty = false;
 
@@ -174,6 +181,14 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         // Ignore unmount errors
       }
       this.syncSettingsComponent = null;
+    }
+    if (this.crossPostComponent) {
+      try {
+        void unmount(this.crossPostComponent);
+      } catch {
+        // Ignore unmount errors
+      }
+      this.crossPostComponent = null;
     }
   }
 
@@ -700,6 +715,9 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     }
     } // End of else block for desktop-only transcription settings
 
+    // Text-to-Speech Settings Section
+    this.renderTTSSettings(containerEl);
+
     // AI Comment Settings Section (Desktop Only)
     await this.renderAICommentSettings(containerEl);
 
@@ -718,6 +736,11 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     // Update Notifications Section
     this.renderUpdateNotificationsSettings(containerEl);
 
+    // Cross-Posting Section (gated by feature flag — requires Threads API approval)
+    if (FEATURE_CROSSPOST_ENABLED) {
+      this.renderCrossPostSettings(containerEl);
+    }
+
     // Danger Zone Section (at bottom)
     const dangerZoneContainer = containerEl.createDiv({ cls: 'social-archiver-danger-zone' });
     this.dangerZoneComponent = mount(DangerZone, {
@@ -733,13 +756,50 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName('Support').setHeading()
       .settingEl.addClass('sa-settings-section-header');
 
-    new Setting(containerEl)
+    const supportSetting = new Setting(containerEl)
       .setName('Support development')
-      .setDesc('Optional. If Social Archiver is useful to you, you can support ongoing development (opens in browser).')
+      .setDesc('Feel free to buy me a coffee ☕ if you like this product. Optional and opens in browser.');
+
+    supportSetting.controlEl.empty();
+    supportSetting.controlEl.style.alignSelf = 'center';
+
+    const supportCtaLink = supportSetting.controlEl.createEl('a', {
+      href: BUY_ME_A_COFFEE_URL,
+      attr: {
+        target: '_blank',
+        rel: 'noopener noreferrer',
+        'aria-label': 'Buy Me a Coffee (opens in browser)',
+      },
+    });
+    supportCtaLink.style.display = 'inline-flex';
+    supportCtaLink.style.alignItems = 'center';
+    supportCtaLink.style.justifyContent = 'center';
+    supportCtaLink.style.cursor = 'pointer';
+    supportCtaLink.style.textDecoration = 'none';
+    supportCtaLink.style.borderRadius = '10px';
+    supportCtaLink.style.outlineOffset = '2px';
+    supportCtaLink.style.height = 'var(--input-height)';
+
+    const supportCtaImg = supportCtaLink.createEl('img', {
+      attr: {
+        src: 'https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png',
+        alt: 'Buy Me a Coffee',
+      },
+    });
+    supportCtaImg.style.height = '100%';
+    supportCtaImg.style.width = 'auto';
+    supportCtaImg.style.display = 'block';
+    supportCtaImg.style.borderRadius = '10px';
+    supportCtaImg.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.15)';
+
+    new Setting(containerEl)
+      .setName('About the creator')
+      .setDesc('Hey, I’m Hyungyun Jun Lim. I’m a startup founder and builder, and I build Social Archiver as a solo side project. I created it for people like me who want local archives because posts get deleted, platforms change, and content disappears. Feel free to reach out on GitHub for feedback or business inquiries.')
       .addButton((button) => button
-        .setButtonText('☕ Buy Me a Coffee')
+        .setIcon('github')
+        .setButtonText('GitHub profile')
         .onClick(() => {
-          window.open(BUY_ME_A_COFFEE_URL, '_blank');
+          window.open(PERSONAL_GITHUB_URL, '_blank');
         }));
     } finally {
       this.isDisplaying = false;
@@ -1969,6 +2029,22 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   }
 
   /**
+   * Render Cross-Posting settings section (Threads OAuth + future platforms)
+   */
+  private renderCrossPostSettings(containerEl: HTMLElement): void {
+    // Section Header
+    new Setting(containerEl).setName('Cross-posting').setHeading()
+      .settingEl.addClass('sa-settings-section-header');
+
+    // Cross-post settings component (Svelte)
+    const crossPostContainer = containerEl.createDiv({ cls: 'social-archiver-crosspost-section' });
+    this.crossPostComponent = mount(CrossPostSettingsTab, {
+      target: crossPostContainer,
+      props: { plugin: this.plugin }
+    });
+  }
+
+  /**
    * Render AI Comment Settings section
    */
   private async renderAICommentSettings(containerEl: HTMLElement): Promise<void> {
@@ -2377,6 +2453,224 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         this.markDirty();
       }
     });
+  }
+
+  // ---------- TTS Settings ----------
+
+  private renderTTSSettings(containerEl: HTMLElement): void {
+    if (!FEATURE_READER_TTS_ENABLED) return;
+
+    new Setting(containerEl).setName('Text-to-Speech').setHeading()
+      .settingEl.addClass('sa-settings-section-header');
+
+    // Ensure TTS settings exist
+    if (!this.plugin.settings.tts) {
+      this.plugin.settings.tts = { ...DEFAULT_TTS_SETTINGS };
+    }
+
+    // Provider selection (FR-07: re-enabled with Supertonic on-device engine)
+    new Setting(containerEl)
+      .setName('TTS Provider')
+      .setDesc('Choose between cloud (Azure) or on-device (Supertonic) speech synthesis')
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption('azure', 'Azure Cloud')
+          .addOption('supertonic', 'Supertonic (on-device, desktop only)')
+          .setValue(this.plugin.settings.tts.provider)
+          .onChange(async (value: string) => {
+            this.plugin.settings.tts.provider = value as PluginTTSProviderId;
+            // Reset voiceId when switching providers
+            this.plugin.settings.tts.voiceId = '';
+            await this.plugin.saveSettings();
+            this.display();
+          });
+      });
+
+    // Hide Supertonic option on mobile (FR-07 AC: Desktop이 아니면 Supertonic UI 숨김)
+    if (!Platform.isDesktop && this.plugin.settings.tts.provider === 'supertonic') {
+      this.plugin.settings.tts.provider = 'azure';
+      void this.plugin.saveSettings();
+    }
+
+    // Check if Supertonic is selected but not installed — show only install UI
+    const isSupertonic = this.plugin.settings.tts.provider === 'supertonic' && Platform.isDesktop;
+    let supertonicInstalled = false;
+
+    if (isSupertonic) {
+      const installer = new SupertonicInstaller();
+      supertonicInstalled = installer.isInstalled();
+
+      if (!supertonicInstalled) {
+        // Not installed: show install button only, skip all other TTS options
+        const installSetting = new Setting(containerEl)
+          .setName('Supertonic engine')
+          .setDesc('Not installed. Downloads ~270MB of models for on-device TTS (desktop only).')
+          .addButton((button) => {
+            button
+              .setButtonText('Install')
+              .setCta()
+              .onClick(async () => {
+                button.setDisabled(true);
+                button.setButtonText('Installing...');
+                const progressEl = installSetting.descEl;
+
+                const abortController = new AbortController();
+
+                const result = await installer.install((progress) => {
+                  progressEl.textContent = `${progress.message} (${progress.step}/${progress.totalSteps})`;
+                }, abortController.signal);
+
+                if (result.success) {
+                  new Notice(`Supertonic installed (v${result.version}).`);
+                } else {
+                  new Notice(`Install failed: ${result.error}`);
+                }
+                this.display();
+              });
+          });
+
+        // License note
+        const licenseNote = containerEl.createEl('div', { cls: 'setting-item-description' });
+        licenseNote.textContent = 'Supertonic model license: OpenRAIL-M. Code: MIT.';
+        licenseNote.addClass('sa-settings-info');
+
+        return; // Skip remaining settings until installed
+      }
+    }
+
+    // --- From here: Azure provider, or Supertonic installed ---
+
+    // Speed
+    new Setting(containerEl)
+      .setName('Speech speed')
+      .setDesc('Playback speed (0.5x to 2.0x)')
+      .addSlider((slider) => {
+        slider
+          .setLimits(0.5, 2.0, 0.25)
+          .setValue(this.plugin.settings.tts.speed)
+          .setDynamicTooltip()
+          .onChange(async (value: number) => {
+            this.plugin.settings.tts.speed = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    // Highlight toggle
+    new Setting(containerEl)
+      .setName('Highlight current sentence')
+      .setDesc('Highlight the sentence being spoken in Reader Mode')
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.tts.highlightEnabled)
+          .onChange(async (value: boolean) => {
+            this.plugin.settings.tts.highlightEnabled = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    // Scroll sync toggle
+    new Setting(containerEl)
+      .setName('Auto-scroll to sentence')
+      .setDesc('Automatically scroll to keep the current sentence visible')
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.tts.scrollSyncEnabled)
+          .onChange(async (value: boolean) => {
+            this.plugin.settings.tts.scrollSyncEnabled = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    // Azure cloud info note
+    if (this.plugin.settings.tts.provider === 'azure') {
+      const azureNote = containerEl.createEl('div', { cls: 'setting-item-description' });
+      azureNote.textContent = 'Azure Speech uses your Social Archiver account. Login required.';
+      azureNote.addClass('sa-settings-info');
+    }
+
+    // Supertonic-specific settings (installed)
+    if (isSupertonic && supertonicInstalled) {
+      const installer = new SupertonicInstaller();
+      const installedVersion = installer.getInstalledVersion();
+
+      new Setting(containerEl)
+        .setName('Supertonic engine')
+        .setDesc(`Installed (v${installedVersion ?? 'unknown'}). Runs locally on your machine.`)
+        .addButton((button) => {
+          button
+            .setButtonText('Uninstall')
+            .setWarning()
+            .onClick(async () => {
+              button.setDisabled(true);
+              button.setButtonText('Uninstalling...');
+              const result = await installer.uninstall();
+              if (result.success) {
+                new Notice('Supertonic uninstalled.');
+              } else {
+                new Notice(`Uninstall failed: ${result.error}`);
+              }
+              this.display();
+            });
+        });
+
+      // Quality selector (FR-07)
+      new Setting(containerEl)
+        .setName('Synthesis quality')
+        .setDesc('Higher quality = slower synthesis. "Balanced" is recommended.')
+        .addDropdown((dropdown) => {
+          dropdown
+            .addOption('fast', 'Fast (lower quality)')
+            .addOption('balanced', 'Balanced (recommended)')
+            .addOption('high', 'High (slower)')
+            .setValue(this.plugin.settings.tts.supertonicQuality)
+            .onChange(async (value: string) => {
+              this.plugin.settings.tts.supertonicQuality = value as 'fast' | 'balanced' | 'high';
+              await this.plugin.saveSettings();
+            });
+        });
+
+      // License note for Supertonic
+      const licenseNote = containerEl.createEl('div', { cls: 'setting-item-description' });
+      licenseNote.textContent = 'Supertonic model license: OpenRAIL-M. Code: MIT.';
+      licenseNote.addClass('sa-settings-info');
+
+      // Resource info
+      const resourceNote = containerEl.createEl('div', { cls: 'setting-item-description' });
+      resourceNote.textContent = `Install path: ${installer.getInstallPath()}`;
+      resourceNote.addClass('sa-settings-info');
+    }
+
+    // Language override
+    new Setting(containerEl)
+      .setName('Language')
+      .setDesc('Auto-detect or override the speech language')
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption('', 'Auto-detect')
+          .addOption('en-US', 'English (US)')
+          .addOption('ko-KR', 'Korean')
+          .addOption('ja-JP', 'Japanese')
+          .addOption('zh-CN', 'Chinese (Simplified)')
+          .addOption('zh-TW', 'Chinese (Traditional)')
+          .addOption('de-DE', 'German')
+          .addOption('fr-FR', 'French')
+          .addOption('es-ES', 'Spanish (Spain)')
+          .addOption('es-MX', 'Spanish (Mexico)')
+          .addOption('pt-BR', 'Portuguese (Brazil)')
+          .addOption('it-IT', 'Italian')
+          .addOption('ru-RU', 'Russian')
+          .addOption('hi-IN', 'Hindi')
+          .addOption('ar-SA', 'Arabic')
+          .addOption('vi-VN', 'Vietnamese')
+          .addOption('th-TH', 'Thai')
+          .addOption('id-ID', 'Indonesian')
+          .addOption('tr-TR', 'Turkish')
+          .setValue(this.plugin.settings.tts.language)
+          .onChange(async (value: string) => {
+            this.plugin.settings.tts.language = value;
+            await this.plugin.saveSettings();
+          });
+      });
   }
 
   hide(): void {

@@ -240,9 +240,7 @@ class PathGenerator {
    * Uses publish date from post metadata
    */
   private generatePlatformPath(postData: PostData, filename: string): string {
-    const publishDate = typeof postData.metadata.timestamp === 'string'
-      ? new Date(postData.metadata.timestamp)
-      : postData.metadata.timestamp;
+    const publishDate = this.getSafePublishDate(postData);
     const year = publishDate.getFullYear();
     const month = String(publishDate.getMonth() + 1).padStart(2, '0');
     // Use displayName from platform definitions (e.g., 'naver-webtoon' -> 'Naver Webtoon')
@@ -266,9 +264,7 @@ class PathGenerator {
    * Uses publish date from post metadata
    */
   private generateDatePath(postData: PostData, filename: string): string {
-    const publishDate = typeof postData.metadata.timestamp === 'string'
-      ? new Date(postData.metadata.timestamp)
-      : postData.metadata.timestamp;
+    const publishDate = this.getSafePublishDate(postData);
     const year = publishDate.getFullYear();
     const month = String(publishDate.getMonth() + 1).padStart(2, '0');
     const day = String(publishDate.getDate()).padStart(2, '0');
@@ -288,11 +284,24 @@ class PathGenerator {
    * Handles both Date objects and ISO string timestamps
    */
   private formatDate(date: Date | string): string {
-    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    const dateObj = this.toValidDate(date, new Date());
     const year = dateObj.getFullYear();
     const month = String(dateObj.getMonth() + 1).padStart(2, '0');
     const day = String(dateObj.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+  }
+
+  /**
+   * Resolve the publish timestamp used for path organization.
+   * Falls back to current time when upstream data contains an invalid timestamp string.
+   */
+  private getSafePublishDate(postData: PostData): Date {
+    return this.toValidDate(postData.metadata.timestamp, new Date());
+  }
+
+  private toValidDate(input: Date | string, fallback: Date): Date {
+    const date = typeof input === 'string' ? new Date(input) : input;
+    return Number.isNaN(date.getTime()) ? fallback : date;
   }
 
   /**

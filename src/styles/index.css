@@ -32,5 +32,8 @@
 /* PostCardRenderer component styles */
 @import './components/post-card.css';
 
+/* Editor TTS highlight and status bar player */
+@import './components/editor-tts.css';
+
 /* Timeline and reader-mode incremental styles */
 @import '../components/timeline/managers/skeleton-card.css';

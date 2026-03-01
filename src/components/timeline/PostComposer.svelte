@@ -12,7 +12,8 @@
  */
 
 import { onMount, onDestroy } from 'svelte';
-import type { App } from 'obsidian';
+import { Platform as ObsidianPlatform } from 'obsidian';
+import type { App, EventRef } from 'obsidian';
 import { Notice } from 'obsidian';
 import type { PostData, Media, Platform } from '@/types/post';
 import type { SocialArchiverSettings } from '@/types/settings';
@@ -23,6 +24,11 @@ import { loadMediaFiles, cleanupMediaPreviews, type MediaLoadResult } from '@/ut
 import { isSupportedPlatformUrl, validateAndDetectPlatform, isPinterestBoardUrl } from '@/schemas/platforms';
 // ArchiveSuggestionModal import removed - now using inline banners in PostCard
 import type { ArchiveOrchestrator } from '@/services/ArchiveOrchestrator';
+import { CrossPostAPIClient } from '@/services/CrossPostAPIClient';
+import type { CrossPostRequest } from '@/types/crosspost';
+import { ContentTransformerClient } from '@/utils/ContentTransformerClient';
+import type { CrossPostStatusBanner } from '@/components/timeline/CrossPostStatusBanner';
+import { FEATURE_CROSSPOST_ENABLED } from '@/shared/constants';
 
 /**
  * Attached image data
@@ -42,7 +48,10 @@ interface PostComposerProps {
   settings: SocialArchiverSettings;
   archiveOrchestrator?: ArchiveOrchestrator;
   onPostCreated?: (post: PostData) => Promise<string>; // Returns file path
+  onCrossPostComplete?: (filePath: string, crossPostId: string, threadsResult: { postId?: string; postUrl?: string }) => Promise<void>;
+  onCrossPostStart?: () => CrossPostStatusBanner;
   onCancel?: () => void;
+  onSaveSettings?: (partial?: Partial<SocialArchiverSettings>) => Promise<void>; // Persist settings changes (e.g., toggle state)
   // Edit mode props
   editMode?: boolean;
   initialData?: PostData;
@@ -54,7 +63,10 @@ let {
   settings,
   archiveOrchestrator,
   onPostCreated,
+  onCrossPostComplete,
+  onCrossPostStart,
   onCancel,
+  onSaveSettings,
   editMode = false,
   initialData,
   filePath
@@ -82,6 +94,28 @@ let content = $state('');
 let attachedImages = $state<AttachedImage[]>([]);
 let detectedUrls = $state<string[]>([]);
 let shareOnPost = $state(editMode && initialData?.shareUrl ? true : false); // Share to web toggle (enabled if shareUrl exists)
+
+/**
+ * Cross-post state (inline — no separate panel component)
+ */
+let threadsConnected = $state(false);
+let threadsUsername = $state<string | undefined>(undefined);
+let threadsEnabled = $state(settings.crossPostThreadsEnabled ?? false);
+let crossPostClient: CrossPostAPIClient | null = null;
+let threadsConnectionEventRef: EventRef | null = null;
+
+/** Derived: character count for Threads cross-post */
+const crossPostCharCount = $derived(
+  ContentTransformerClient.stripMarkdown(content).length
+);
+const THREADS_MAX_CHARS = 500;
+const THREADS_MAX_THREAD_CHUNKS = 5;
+const crossPostOverLimit = $derived(crossPostCharCount > THREADS_MAX_CHARS);
+const crossPostThreadCount = $derived(
+  crossPostOverLimit
+    ? Math.min(Math.ceil(crossPostCharCount / (THREADS_MAX_CHARS * 0.85)), THREADS_MAX_THREAD_CHUNKS)
+    : 1
+);
 
 /**
  * Social media URLs tracking (separate from regular URLs)
@@ -122,6 +156,9 @@ let linkPreviewRenderer: LinkPreviewRenderer;
  * File input element
  */
 let fileInputElement: HTMLInputElement | undefined = $state();
+let composerRootElement: HTMLElement | undefined = $state();
+let composerSafeAreaListener: (() => void) | null = null;
+let composerVisualViewport: VisualViewport | null = null;
 
 /**
  * Link preview container
@@ -222,11 +259,43 @@ async function expand(): Promise<void> {
   // Start auto-save
   draftService.startAutoSave(DRAFT_ID, () => content);
 
+  // Re-check Threads connection (toggle state preserved via local $state)
+  console.debug('[PostComposer] expand() threadsEnabled =', threadsEnabled);
+  checkThreadsConnection();
+
   // Focus editor after DOM update (Windows compatibility fix)
   // Wait for Svelte to render the expanded editor before focusing
   setTimeout(() => {
     editorRef?.focus();
+    applyComposerTopOverlapSafeArea();
   }, 100);
+}
+
+/**
+ * Ensure composer is not overlapped by status bar/notch on mobile.
+ * Calculates actual overlap against visual viewport top inset and
+ * applies only the additional offset needed.
+ */
+function applyComposerTopOverlapSafeArea(): void {
+  if (!composerRootElement) return;
+
+  const viewport = window.visualViewport;
+  const viewportTop = Math.max(0, Math.round(viewport?.offsetTop ?? 0));
+  const isPortrait = window.innerHeight >= window.innerWidth;
+  const isIPhone = /iPhone/i.test(window.navigator.userAgent);
+  const screenLongestEdge = Math.round(
+    Math.max(window.screen.width || 0, window.screen.height || 0)
+  );
+  const isDynamicIslandIPhone = isIPhone && [852, 874, 932, 956].includes(screenLongestEdge);
+  const iosMinTopInset = ObsidianPlatform.isIosApp && isPortrait
+    ? (isIPhone ? (isDynamicIslandIPhone ? 59 : 44) : 24)
+    : 0;
+  const androidMinTopInset = ObsidianPlatform.isAndroidApp ? 24 : 0;
+  const expectedTopInset = Math.max(viewportTop, iosMinTopInset, androidMinTopInset);
+  const composerTop = Math.round(composerRootElement.getBoundingClientRect().top);
+  const overlap = Math.max(0, expectedTopInset - composerTop);
+
+  composerRootElement.style.setProperty('--post-composer-safe-area-adjust-top', `${overlap}px`);
 }
 
 /**
@@ -265,10 +334,59 @@ function handleContentChange(): void {
 }
 
 /**
+ * Initialize CrossPostAPIClient and check Threads connection status
+ */
+async function checkThreadsConnection(): Promise<void> {
+  if (!settings.workerUrl || !settings.authToken) return;
+
+  try {
+    if (!crossPostClient) {
+      crossPostClient = new CrossPostAPIClient({
+        endpoint: settings.workerUrl,
+        authToken: settings.authToken,
+      });
+      await crossPostClient.initialize();
+    }
+
+    const status = await crossPostClient.getConnectionStatus();
+    threadsConnected = status.connected;
+    threadsUsername = status.username;
+  } catch {
+    // Silently fail — cross-posting is optional
+    threadsConnected = false;
+  }
+}
+
+/**
+ * Handle Threads toggle change (bind:checked updates threadsEnabled first).
+ */
+async function handleThreadsToggle(): Promise<void> {
+  if (!threadsConnected) {
+    // Revert — bind:checked already flipped threadsEnabled
+    threadsEnabled = false;
+    new Notice('Connect your Threads account in Settings → Cross-Post');
+    return;
+  }
+
+  console.debug('[PostComposer] Threads toggle →', threadsEnabled);
+
+  // Persist toggle state — pass partial directly to avoid stale reference issue
+  await onSaveSettings?.({ crossPostThreadsEnabled: threadsEnabled });
+}
+
+/**
  * Handle post submission
  */
 async function handleSubmit(): Promise<void> {
   if (isSubmitting || !content.trim()) return;
+
+  // Inform user about thread splitting when Threads cross-post exceeds 500 chars
+  if (threadsEnabled && threadsConnected && crossPostOverLimit) {
+    const ok = window.confirm(
+      `Your text is ${crossPostCharCount} characters. It will be split into ~${crossPostThreadCount} connected thread posts on Threads. Continue?`
+    );
+    if (!ok) return;
+  }
 
   try {
     isSubmitting = true;
@@ -395,15 +513,111 @@ async function handleSubmit(): Promise<void> {
       createdFilePath = savedPath; // Store file path for archiving updates
     }
 
+    // Capture cross-post refs BEFORE collapse resets component state
+    const shouldCrossPost = threadsEnabled && threadsConnected && !!crossPostClient;
+    const capturedClient = crossPostClient;
+    const capturedContent = content;
+    const capturedFilePath = createdFilePath;
+    const capturedOnCrossPostComplete = onCrossPostComplete;
+    const capturedCrossPostOverLimit = crossPostOverLimit;
+    const capturedThreadCount = crossPostThreadCount;
+    const capturedOnCrossPostStart = onCrossPostStart;
+
+    // Capture media File objects before collapse resets them
+    const ALLOWED_CROSSPOST_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    const capturedMediaFiles: File[] = attachedImages
+      .filter(img => img.file && !img.id.startsWith('existing-'))
+      .map(img => img.file!)
+      .filter(file =>
+        ALLOWED_CROSSPOST_MIMES.includes(file.type) && file.size <= 8 * 1024 * 1024
+      );
+
     // Delete draft after successful post
     draftService.deleteDraft(DRAFT_ID);
 
-    // Collapse composer (this will also clear all state)
+    // Collapse composer IMMEDIATELY — UI unblocks here
     collapse();
+    isSubmitting = false;
+
+    // Fire-and-forget cross-post (runs after UI is already collapsed)
+    if (shouldCrossPost && capturedClient) {
+      const banner = capturedOnCrossPostStart?.();
+
+      void (async () => {
+        try {
+          banner?.show();
+
+          const plainText = ContentTransformerClient.stripMarkdown(capturedContent);
+
+          // Upload media files if present
+          let mediaR2Keys: string[] | undefined;
+          if (capturedMediaFiles.length > 0) {
+            const uploadResults = await Promise.allSettled(
+              capturedMediaFiles.map(file => capturedClient.uploadMedia(file))
+            );
+
+            const successKeys = uploadResults
+              .filter((r): r is PromiseFulfilledResult<{ r2Key: string }> => r.status === 'fulfilled')
+              .map(r => r.value.r2Key);
+
+            const failCount = uploadResults.filter(r => r.status === 'rejected').length;
+
+            if (successKeys.length > 0) {
+              mediaR2Keys = successKeys;
+              if (failCount > 0) {
+                console.warn(`[PostComposer] ${failCount} image(s) failed to upload — posting with ${successKeys.length} image(s)`);
+              }
+            } else if (failCount > 0) {
+              console.warn('[PostComposer] All image uploads failed — posting text only');
+            }
+          }
+
+          const crossPostRequest: CrossPostRequest = {
+            content: {
+              text: capturedContent,
+              plainText,
+              ...(mediaR2Keys && { mediaR2Keys }),
+            },
+            platforms: {
+              threads: { enabled: true },
+            },
+            noteRef: capturedFilePath ? { vaultPath: capturedFilePath } : undefined,
+          };
+
+          const response = await capturedClient.crossPost(crossPostRequest);
+
+          if (response.results.threads?.status === 'posted') {
+            const msg = capturedCrossPostOverLimit
+              ? `Cross-posted to Threads (~${capturedThreadCount} thread posts)`
+              : 'Cross-posted to Threads!';
+            banner?.complete(msg);
+
+            // Save cross-post metadata to frontmatter
+            if (capturedFilePath && capturedOnCrossPostComplete) {
+              try {
+                await capturedOnCrossPostComplete(capturedFilePath, response.crossPostId, {
+                  postId: response.results.threads.postId,
+                  postUrl: response.results.threads.postUrl,
+                });
+              } catch {
+                // Metadata save failure should not affect user experience
+              }
+            }
+          } else if (response.results.threads?.status === 'failed') {
+            const errMsg = response.results.threads.error ?? 'Unknown error';
+            banner?.fail(errMsg);
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Unknown error';
+          banner?.fail(msg);
+        }
+      })();
+    }
+
+    return; // Early return — isSubmitting already set to false above
 
   } catch (err) {
     error = err instanceof Error ? err.message : 'Failed to create post';
-  } finally {
     isSubmitting = false;
   }
 }
@@ -884,9 +1098,41 @@ onMount(async () => {
   // Add global keydown listener
   window.addEventListener('keydown', handleKeydown);
 
+  // Check Threads connection status (non-blocking, gated by feature flag)
+  if (FEATURE_CROSSPOST_ENABLED) {
+    checkThreadsConnection();
+
+    // Listen for connection changes from Settings (connect/disconnect)
+    threadsConnectionEventRef = app.workspace.on(
+      'social-archiver:threads-connection-changed' as any,
+      async () => {
+        await checkThreadsConnection();
+        // Disable toggle when disconnected (don't rely on settings prop which may be stale)
+        if (!threadsConnected) {
+          threadsEnabled = false;
+        }
+      }
+    );
+  }
+
   // Auto-expand in edit mode
   if (editMode) {
     await expand();
+  }
+
+  if (ObsidianPlatform.isMobile) {
+    const apply = () => applyComposerTopOverlapSafeArea();
+    composerSafeAreaListener = apply;
+    composerVisualViewport = window.visualViewport ?? null;
+
+    requestAnimationFrame(() => {
+      apply();
+      setTimeout(apply, 120);
+    });
+
+    composerVisualViewport?.addEventListener('resize', apply);
+    composerVisualViewport?.addEventListener('scroll', apply);
+    window.addEventListener('resize', apply);
   }
 });
 
@@ -907,10 +1153,31 @@ onDestroy(() => {
   if (draftService) {
     draftService.cleanup();
   }
+
+  // Cleanup cross-post client
+  if (crossPostClient) {
+    crossPostClient.dispose();
+    crossPostClient = null;
+  }
+
+  // Cleanup workspace event listener
+  if (threadsConnectionEventRef) {
+    app.workspace.offref(threadsConnectionEventRef);
+    threadsConnectionEventRef = null;
+  }
+
+  if (composerSafeAreaListener) {
+    composerVisualViewport?.removeEventListener('resize', composerSafeAreaListener);
+    composerVisualViewport?.removeEventListener('scroll', composerSafeAreaListener);
+    window.removeEventListener('resize', composerSafeAreaListener);
+    composerSafeAreaListener = null;
+    composerVisualViewport = null;
+  }
 });
 </script>
 
 <div
+  bind:this={composerRootElement}
   class="post-composer"
   class:expanded={isExpanded}
   role="region"
@@ -1151,8 +1418,8 @@ onDestroy(() => {
       </div>
 
       <div class="composer-footer">
-        <!-- Share toggle (left side) -->
-        <div class="share-toggle-container">
+        <!-- Left side: toggles -->
+        <div class="footer-toggles">
           <label class="share-toggle-label">
             <input
               type="checkbox"
@@ -1163,6 +1430,32 @@ onDestroy(() => {
             <span class="share-toggle-switch"></span>
             <span class="share-toggle-text">Share to web</span>
           </label>
+
+          <!-- Threads cross-post toggle (same style, create mode only, gated by feature flag) -->
+          {#if FEATURE_CROSSPOST_ENABLED && !editMode}
+            <label class="share-toggle-label" title={threadsConnected ? `@${threadsUsername ?? 'Threads'}` : 'Connect in Settings → Cross-Post'}>
+              <input
+                type="checkbox"
+                bind:checked={threadsEnabled}
+                onchange={handleThreadsToggle}
+                disabled={isSubmitting}
+                class="share-toggle-checkbox"
+              />
+              <span class="share-toggle-switch"></span>
+              <span class="share-toggle-text">
+                Threads
+                {#if threadsEnabled && content.trim()}
+                  <span class="crosspost-char-badge" class:will-thread={crossPostOverLimit}>
+                    {#if crossPostOverLimit}
+                      {crossPostCharCount} chars · ~{crossPostThreadCount} posts
+                    {:else}
+                      {crossPostCharCount}/{THREADS_MAX_CHARS}
+                    {/if}
+                  </span>
+                {/if}
+              </span>
+            </label>
+          {/if}
         </div>
 
         <!-- Action buttons (right side) -->
@@ -1184,6 +1477,8 @@ onDestroy(() => {
           >
             {#if editMode}
               {isSubmitting ? 'Saving...' : 'Save Changes'}
+            {:else if FEATURE_CROSSPOST_ENABLED && threadsEnabled}
+              {isSubmitting ? 'Posting...' : 'Post & Publish'}
             {:else}
               {isSubmitting ? 'Posting...' : 'Post'}
             {/if}
@@ -1199,6 +1494,7 @@ onDestroy(() => {
   .post-composer {
     width: 100%;
     margin-bottom: 1rem;
+    --post-composer-safe-area-adjust-top: 0px;
   }
 
   /* Collapsed state */
@@ -1502,9 +1798,10 @@ onDestroy(() => {
     border-top: none;
   }
 
-  .share-toggle-container {
+  .footer-toggles {
     display: flex;
     align-items: center;
+    gap: 16px;
   }
 
   .share-toggle-label {
@@ -1584,6 +1881,20 @@ onDestroy(() => {
 
   .share-toggle-text {
     font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .crosspost-char-badge {
+    font-size: 10px;
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .crosspost-char-badge.will-thread {
+    color: var(--text-accent);
+    font-weight: 600;
   }
 
   .action-buttons {
@@ -1630,6 +1941,10 @@ onDestroy(() => {
 
   /* Mobile responsiveness */
   @media (max-width: 640px) {
+    .post-composer {
+      padding-top: var(--post-composer-safe-area-adjust-top, 0px);
+    }
+
     .composer-collapsed {
       min-height: 44px;
       padding: 8px 10px;
@@ -1660,7 +1975,7 @@ onDestroy(() => {
       padding: 12px 16px;
     }
 
-    .share-toggle-container {
+    .footer-toggles {
       order: 2;
     }
 
@@ -1686,7 +2001,7 @@ onDestroy(() => {
       font-size: 15px;
     }
 
-    .share-toggle-container {
+    .footer-toggles {
       padding: 8px 0;
     }
 

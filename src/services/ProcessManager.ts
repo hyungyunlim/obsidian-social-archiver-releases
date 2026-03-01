@@ -14,7 +14,7 @@ interface ChildProcess {
 export interface ManagedProcess {
   id: string;
   process: ChildProcess;
-  type: 'transcription' | 'download' | 'ai-comment' | 'other';
+  type: 'transcription' | 'download' | 'ai-comment' | 'tts' | 'other';
   description?: string;
   startedAt: Date;
 }

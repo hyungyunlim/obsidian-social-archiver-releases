@@ -2,6 +2,7 @@ import { Platform } from 'obsidian';
 import { TIMELINE_PLATFORM_IDS } from '../constants/timelinePlatforms';
 import type { AICommentSettings } from './ai-comment';
 import { DEFAULT_AI_COMMENT_SETTINGS } from './ai-comment';
+import type { PluginTTSProviderId } from '../services/tts/types';
 import type { SeriesCurrentEpisodeState } from './series';
 import type { TagDefinition } from './tag';
 import type { BatchMode } from './batch-transcription';
@@ -367,6 +368,36 @@ export const DEFAULT_FRONTMATTER_CUSTOMIZATION_SETTINGS: FrontmatterCustomizatio
   tagOrganization: 'flat',
 };
 
+/**
+ * Text-to-Speech settings for Reader Mode
+ */
+export interface PluginTTSSettings {
+  /** Active TTS provider. */
+  provider: PluginTTSProviderId;
+  /** Speech rate (0.5 - 2.0). */
+  speed: number;
+  /** Selected voice identifier (provider-specific). */
+  voiceId: string;
+  /** Language override (BCP-47). Empty = auto-detect. */
+  language: string;
+  /** Enable sentence highlighting during playback. */
+  highlightEnabled: boolean;
+  /** Enable auto-scroll to follow highlighted sentence. */
+  scrollSyncEnabled: boolean;
+  /** Supertonic quality preset (FR-07). */
+  supertonicQuality: 'fast' | 'balanced' | 'high';
+}
+
+export const DEFAULT_TTS_SETTINGS: PluginTTSSettings = {
+  provider: 'azure',
+  speed: 1.0,
+  voiceId: '',
+  language: '',
+  highlightEnabled: true,
+  scrollSyncEnabled: true,
+  supertonicQuality: 'balanced',
+};
+
 export interface SocialArchiverSettings {
   // API Configuration
   workerUrl: string; // Cloudflare Worker URL for API
@@ -435,6 +466,9 @@ export interface SocialArchiverSettings {
   // AI Comment Settings
   aiComment: AICommentSettings;
 
+  // Text-to-Speech Settings
+  tts: PluginTTSSettings;
+
   // Multi-Device Sync Settings
   enableServerPendingJobs: boolean; // Enable server-side pending job sync for cross-device recovery (default: true)
   syncClientId: string; // Registered sync client ID for multi-client sync
@@ -458,6 +492,9 @@ export interface SocialArchiverSettings {
   redditUsername: string; // Connected Reddit username (e.g., "spez")
   redditSyncEnabled: boolean; // Whether automatic sync is enabled
   redditSyncFolder: string; // Folder for synced Reddit saved posts
+
+  // Cross-Post Settings
+  crossPostThreadsEnabled: boolean; // Remember Threads toggle state in PostComposer (default: false)
 
   // Legacy fields (deprecated but kept for migration)
   /** @deprecated Use authToken instead */
@@ -543,6 +580,9 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
   // AI Comment Settings
   aiComment: DEFAULT_AI_COMMENT_SETTINGS,
 
+  // Text-to-Speech Settings
+  tts: DEFAULT_TTS_SETTINGS,
+
   // Multi-Device Sync Settings
   enableServerPendingJobs: true, // Enabled by default for cross-device recovery
   syncClientId: '', // Empty until registered
@@ -571,6 +611,9 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
   redditUsername: '', // Empty until connected
   redditSyncEnabled: false, // Sync disabled until user enables
   redditSyncFolder: 'Social Archives/Reddit Saved', // Default folder for Reddit saved posts
+
+  // Cross-Post Settings
+  crossPostThreadsEnabled: false, // Threads toggle off by default
 
   // Legacy fields (for migration compatibility)
   apiKey: '',
@@ -804,6 +847,24 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
         ? migrated.frontmatter.tagOrganization
         : DEFAULT_FRONTMATTER_CUSTOMIZATION_SETTINGS.tagOrganization,
     };
+  }
+
+  // Initialize TTS settings if missing (migration)
+  if (!migrated.tts) {
+    migrated.tts = DEFAULT_TTS_SETTINGS;
+  } else {
+    // Clean up deprecated Azure key/region fields from older settings
+    const ttsRaw = migrated.tts as unknown as Record<string, unknown>;
+    const { azureApiKey: _ak, azureRegion: _ar, azureVoiceByLang: _av, ...cleanTts } = ttsRaw;
+    migrated.tts = {
+      ...DEFAULT_TTS_SETTINGS,
+      ...cleanTts,
+    } as typeof DEFAULT_TTS_SETTINGS;
+
+    // Ensure supertonicQuality exists (FR-07 migration)
+    if (!migrated.tts.supertonicQuality) {
+      migrated.tts.supertonicQuality = 'balanced';
+    }
   }
 
   // Initialize multi-client sync settings if missing (migration)

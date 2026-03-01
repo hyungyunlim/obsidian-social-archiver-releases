@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/constants/index.ts
- * Generated: 2026-02-24T14:43:13.691Z
+ * Generated: 2026-03-01T04:36:51.210Z
  *
  * To modify, edit the source file in shared/constants/ and run:
  *   npm run sync:shared
@@ -30,3 +30,24 @@ export const DEFAULT_ARCHIVE_PATH = 'Social Archives';
  * Legacy path for subscription content - no longer used for new subscriptions
  */
 export const LEGACY_SUBSCRIPTION_PATH = 'Social Archives/Subscriptions';
+
+/**
+ * Feature flag: Reader Mode TTS (Text-to-Speech)
+ * When false, TTS controller is not initialized and UI elements are hidden.
+ */
+export const FEATURE_READER_TTS_ENABLED = true;
+
+/**
+ * Feature flag: Editor TTS (Text-to-Speech for any Markdown document)
+ * When false, editor TTS commands and status bar player are not registered.
+ */
+export const FEATURE_EDITOR_TTS_ENABLED = true;
+
+/**
+ * Feature flag: Cross-posting to external platforms (Threads, X, etc.)
+ * When false, the Cross-posting settings section and PostComposer toggle are hidden.
+ *
+ * Threads API requires Meta app review approval before public release.
+ * Set to true once API approval is granted.
+ */
+export const FEATURE_CROSSPOST_ENABLED = false;

@@ -1,4 +1,4 @@
-import { Plugin, Notice, Platform as ObsidianPlatform, Events, TFile, TFolder, EventRef, requestUrl, normalizePath, Modal, Setting, ButtonComponent } from 'obsidian';
+import { Plugin, Notice, Platform as ObsidianPlatform, Events, TFile, TFolder, EventRef, requestUrl, normalizePath, Modal, Setting, ButtonComponent, MarkdownView } from 'obsidian';
 import { SocialArchiverSettingTab } from './settings/SettingTab';
 import { SocialArchiverSettings, DEFAULT_SETTINGS, API_ENDPOINT, MediaDownloadMode, migrateSettings, getVaultOrganizationStrategy } from './types/settings';
 import { WorkersAPIClient } from './services/WorkersAPIClient';
@@ -46,6 +46,8 @@ import { TranscriptFormatter } from './services/markdown/formatters/TranscriptFo
 import { BatchTranscriptionManager, type BatchTranscriptionManagerDeps } from './services/BatchTranscriptionManager';
 import { BatchTranscriptionNotice } from './ui/BatchTranscriptionNotice';
 import type { BatchMode } from './types/batch-transcription';
+import { EditorTTSController } from './services/tts/EditorTTSController';
+import { FEATURE_EDITOR_TTS_ENABLED } from './shared/constants';
 
 // Import styles for Vite to process
 import './styles/index.css';
@@ -194,6 +196,7 @@ export default class SocialArchiverPlugin extends Plugin {
   public batchTranscriptionManager: BatchTranscriptionManager | null = null;
   private batchTranscriptionNotice: BatchTranscriptionNotice | null = null;
   private readonly transcriptFormatter = new TranscriptFormatter();
+  private editorTTSController?: EditorTTSController;
 
   /**
    * Schedule a tracked setTimeout that will be auto-cleared on plugin unload.
@@ -529,6 +532,82 @@ export default class SocialArchiverPlugin extends Plugin {
     // Initialize BatchTranscriptionManager (Desktop only)
     if (!ObsidianPlatform.isMobile) {
       this.initBatchTranscriptionManager();
+    }
+
+    // Initialize Editor TTS Controller (gated by feature flag)
+    if (FEATURE_EDITOR_TTS_ENABLED) {
+      this.editorTTSController = new EditorTTSController(this.app, this);
+      this.registerEditorExtension(this.editorTTSController.getEditorExtension());
+
+      // Command: Read entire document aloud
+      this.addCommand({
+        id: 'tts-read-document',
+        name: 'Read document aloud (TTS)',
+        editorCheckCallback: (checking, editor, ctx) => {
+          if (!this.editorTTSController) return false;
+          // Available when there's an active editor with content
+          if (checking) return true;
+          void this.editorTTSController.startReading('document');
+          return true;
+        },
+      });
+
+      // Command: Read selected text aloud
+      this.addCommand({
+        id: 'tts-read-selection',
+        name: 'Read selection aloud (TTS)',
+        editorCheckCallback: (checking, editor) => {
+          if (!this.editorTTSController) return false;
+          const hasSelection = !!editor.getSelection().trim();
+          if (!hasSelection) return false;
+          if (checking) return true;
+          void this.editorTTSController.startReading('selection');
+          return true;
+        },
+      });
+
+      // Command: Toggle pause/resume
+      this.addCommand({
+        id: 'tts-toggle-pause',
+        name: 'Pause / Resume reading (TTS)',
+        checkCallback: (checking) => {
+          if (!this.editorTTSController) return false;
+          const active = this.editorTTSController.isPlaying() || this.editorTTSController.isPaused();
+          if (!active) return false;
+          if (checking) return true;
+          this.editorTTSController.togglePauseResume();
+          return true;
+        },
+      });
+
+      // Command: Stop reading
+      this.addCommand({
+        id: 'tts-stop',
+        name: 'Stop reading (TTS)',
+        checkCallback: (checking) => {
+          if (!this.editorTTSController?.isActive()) return false;
+          if (checking) return true;
+          this.editorTTSController.stop();
+          return true;
+        },
+      });
+
+      // Context menu: "Read selection aloud"
+      this.registerEvent(
+        this.app.workspace.on('editor-menu', (menu, editor) => {
+          if (!this.editorTTSController) return;
+          const selection = editor.getSelection().trim();
+          if (!selection) return;
+          menu.addItem((item) => {
+            item
+              .setTitle('Read selection aloud')
+              .setIcon('audio-lines')
+              .onClick(() => {
+                void this.editorTTSController?.startReading('selection');
+              });
+          });
+        }),
+      );
     }
 
     // Register protocol handler for mobile share
@@ -1454,6 +1533,12 @@ export default class SocialArchiverPlugin extends Plugin {
     this.batchTranscriptionManager?.dispose();
     this.batchTranscriptionManager = null;
 
+    // Dispose Editor TTS
+    if (this.editorTTSController) {
+      void this.editorTTSController.destroy();
+      this.editorTTSController = undefined;
+    }
+
     // Clear dedup URL set
     this.recentlyArchivedUrls.clear();
     this.scheduledMobileSyncRetries.clear();
@@ -2310,7 +2395,7 @@ export default class SocialArchiverPlugin extends Plugin {
           const media = postData.media[i];
           if (!media) continue;
 
-          if (downloadMode === 'images-only' && media.type !== 'image') {
+          if (downloadMode === 'images-only' && media.type !== 'photo') {
             continue;
           }
 
@@ -2653,7 +2738,7 @@ export default class SocialArchiverPlugin extends Plugin {
           const media = postData.media[i];
           if (!media) continue;
 
-          if (downloadMode === 'images-only' && media.type !== 'image') {
+          if (downloadMode === 'images-only' && media.type !== 'photo') {
             continue;
           }
 
@@ -2937,7 +3022,7 @@ export default class SocialArchiverPlugin extends Plugin {
           const media = postData.media[i];
           if (!media) continue;
 
-          if (downloadMode === 'images-only' && media.type !== 'image') {
+          if (downloadMode === 'images-only' && media.type !== 'photo') {
             continue;
           }
 
@@ -4349,6 +4434,12 @@ ${contentParts.join('')}
       // Handle authentication completion (token parameter present)
       if (params.token) {
         await this.handleAuthCompletion(params);
+        return;
+      }
+
+      // Handle OAuth connection callbacks (e.g. ?threads=connected)
+      if (params.threads === 'connected') {
+        new Notice('Threads account connected successfully!');
         return;
       }
 
@@ -6047,6 +6138,11 @@ ${contentParts.join('')}
         await vaultManager.savePost(postData, markdown);
       }
 
+      // Ensure archive-time tags become full tag definitions with assigned colors.
+      // Without this, tags created in ArchiveModal exist only in YAML and appear gray
+      // in Timeline until manually created later from TagModal.
+      await this.ensureTagDefinitionsForSelectedTags(pendingJob.metadata?.selectedTags);
+
       // Remove job from pending queue
       await this.pendingJobsManager.removeJob(pendingJob.id);
 
@@ -6069,6 +6165,35 @@ ${contentParts.join('')}
       console.error(`[Social Archiver] Error processing completed job ${pendingJob.id}:`, error);
       // Mark as failed so it can be retried or removed
       await this.processFailedJob(pendingJob, error instanceof Error ? error.message : 'Unknown error');
+    }
+  }
+
+  /**
+   * Promote archive-time selected tags to TagDefinitions (with colors) if missing.
+   * Non-critical: failures here must not fail the archive job itself.
+   */
+  private async ensureTagDefinitionsForSelectedTags(rawTags?: string[]): Promise<void> {
+    if (!rawTags || rawTags.length === 0) return;
+
+    const seen = new Set<string>();
+    const cleaned = sanitizeTagNames(rawTags);
+
+    for (const tagName of cleaned) {
+      const lower = tagName.toLowerCase();
+      if (seen.has(lower)) continue;
+      seen.add(lower);
+
+      if (this.tagStore.getTagByName(tagName)) continue;
+
+      try {
+        await this.tagStore.createTag(tagName);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        // Duplicate creation can happen in race conditions (e.g., another modal/tab).
+        if (!/already exists/i.test(message)) {
+          console.warn('[Social Archiver] Failed to create tag definition for archive-time tag:', tagName, error);
+        }
+      }
     }
   }
 

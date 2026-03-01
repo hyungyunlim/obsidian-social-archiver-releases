@@ -3,7 +3,7 @@
  *
  * Replaces inline styles flagged by the Obsidian automated review.
  * Prefix key: tc- (TimelineContainer), apb- (ArchiveProgressBanner),
- * csb- (CrawlStatusBanner), rmcr- (ReaderModeContent),
+ * csb- (CrawlStatusBanner), xpb- (CrossPostStatusBanner), rmcr- (ReaderModeContent),
  * fp- (FilterPanel), sd- (SortDropdown), tm- (TagModal),
  * st- (SettingTab), btn- (BatchTranscription),
  * bdm- (BackgroundDownload), mgv- (MediaGalleryView)
@@ -172,6 +172,83 @@
 
 @media (prefers-reduced-motion: reduce) {
   .crawl-banner .banner-icon.spin svg {
+    animation: none;
+  }
+}
+
+/* ========================================
+ * CrossPostStatusBanner (xpb-)
+ * ======================================== */
+
+/* Container: hidden until active */
+.crosspost-status-banners {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
+.crosspost-status-banners.xpb-visible {
+  display: flex;
+}
+
+/* Banner row */
+.crosspost-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  font-size: var(--font-ui-small);
+}
+
+/* Banner icon base */
+.crosspost-banner .banner-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  --icon-size: 16px;
+}
+
+/* Status-specific icon colors */
+.crosspost-banner .banner-icon.xpb-icon-posting { color: var(--text-muted); }
+.crosspost-banner .banner-icon.xpb-icon-complete { color: var(--color-green); }
+.crosspost-banner .banner-icon.xpb-icon-failed { color: var(--color-red); }
+
+/* Banner text */
+.crosspost-banner .banner-text {
+  flex: 1;
+  color: var(--text-normal);
+}
+
+/* Dismiss button */
+.xpb-dismiss-btn {
+  padding: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-radius: var(--radius-s);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.xpb-dismiss-btn:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+/* Spin animation for crosspost banner (reuses archive keyframes) */
+.crosspost-banner .banner-icon.spin svg {
+  animation: archive-banner-spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crosspost-banner .banner-icon.spin svg {
     animation: none;
   }
 }
@@ -448,6 +525,217 @@
 /* Create row top padding */
 .tm-create-row {
   padding-top: 12px;
+}
+
+/* Tag edit modal */
+.tm-edit-title {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.2;
+}
+
+.tm-edit-desc {
+  margin: 6px 0 12px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.tm-edit-label {
+  display: block;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.tm-edit-input {
+  min-height: var(--input-height);
+  margin: 0 0 12px 0;
+}
+
+.tm-edit-color-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.tm-edit-color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.tm-edit-color-picker {
+  width: var(--input-height);
+  height: var(--input-height);
+  padding: 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.tm-edit-color-picker::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.tm-edit-color-picker::-webkit-color-swatch {
+  border: none;
+  border-radius: 6px;
+}
+
+.tm-edit-color-picker::-moz-color-swatch {
+  border: none;
+  border-radius: 6px;
+}
+
+.tm-edit-color-input {
+  margin-bottom: 0;
+  font-family: var(--font-monospace);
+  padding-right: 34px;
+  width: 100%;
+  display: block;
+}
+
+.tm-edit-color-input-wrap {
+  position: relative;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.tm-edit-color-clear {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  border: none !important;
+  border-radius: 6px;
+  background: transparent !important;
+  box-shadow: none !important;
+  appearance: none;
+  -webkit-appearance: none;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  line-height: 0;
+}
+
+.tm-edit-color-clear:hover {
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--text-normal);
+}
+
+.tm-edit-color-clear:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 1px;
+}
+
+.tm-edit-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.tm-edit-preview-label {
+  color: var(--text-faint);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.tm-edit-preview-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  max-width: 100%;
+}
+
+.tm-edit-preview-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-modifier-border);
+  flex-shrink: 0;
+}
+
+.tm-edit-preview-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.tm-edit-hint {
+  margin: 0 0 6px 0;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.tm-edit-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.tm-edit-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 2px solid var(--background-modifier-border);
+  cursor: pointer;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.tm-edit-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.tm-edit-btn {
+  min-height: var(--input-height);
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.tm-edit-btn-secondary:hover {
+  background: var(--background-modifier-hover);
+}
+
+.tm-edit-btn-primary {
+  border-color: var(--interactive-accent);
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.tm-edit-btn-primary:hover {
+  background: var(--interactive-accent-hover);
 }
 
 /* ========================================

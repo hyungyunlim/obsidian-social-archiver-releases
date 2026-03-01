@@ -16,6 +16,10 @@ import { MediaGalleryRenderer } from '../renderers/MediaGalleryRenderer';
 import { LinkPreviewRenderer } from '../renderers/LinkPreviewRenderer';
 import { ReaderModeContentRenderer } from './ReaderModeContentRenderer';
 import { ReaderModeGestureHandler } from './ReaderModeGestureHandler';
+import { ReaderTTSController } from './ReaderTTSController';
+import { FEATURE_READER_TTS_ENABLED } from '../../../shared/constants';
+import { resolveTTSProvider } from '../../../services/tts/resolveProvider';
+import type { PluginTTSProvider } from '../../../services/tts/types';
 
 export interface ReaderModeContext {
   posts: PostData[];
@@ -53,6 +57,8 @@ export class ReaderModeOverlay {
 
   // Sub-components
   private gestureHandler: ReaderModeGestureHandler | null = null;
+  private ttsController: ReaderTTSController | null = null;
+  private ttsProvider: PluginTTSProvider | null = null;
 
   // Keyboard handler ref
   private keyHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -114,10 +120,26 @@ export class ReaderModeOverlay {
     // Single panel
     this.panel = this.container.createDiv({ cls: 'reader-mode-panel-wrapper rmo-panel-animated' });
 
+    // Initialize TTS controller (feature-flagged)
+    if (FEATURE_READER_TTS_ENABLED) {
+      this.ttsController = new ReaderTTSController(this.context.plugin.settings, {
+        onRequestNextPostForAutoplay: async () => this.advanceToNextPostForTTSAutoplay(),
+        onResolvePrefetchCandidatePost: (offsetFromCurrent) =>
+          this.resolvePrefetchCandidatePost(offsetFromCurrent),
+      });
+      this.ttsProvider = this.resolveProvider();
+      if (this.ttsProvider) {
+        this.ttsController.setProvider(this.ttsProvider);
+      }
+    }
+
     // Keyboard handler (register early so ESC always works)
     this.keyHandler = (e: KeyboardEvent) => {
       // Skip when a child modal (e.g. TagModal) is open so ESC only closes the modal
       if (this.modalOpen) return;
+
+      // TTS keyboard shortcuts take priority
+      if (this.ttsController?.handleKeyDown(e)) return;
 
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -189,6 +211,16 @@ export class ReaderModeOverlay {
     if (this.gestureHandler) {
       this.gestureHandler.destroy();
       this.gestureHandler = null;
+    }
+
+    // Cleanup TTS
+    if (this.ttsController) {
+      void this.ttsController.destroy();
+      this.ttsController = null;
+    }
+    if (this.ttsProvider) {
+      void this.ttsProvider.destroy();
+      this.ttsProvider = null;
     }
 
     // Cleanup active renderer
@@ -369,6 +401,27 @@ export class ReaderModeOverlay {
         '--rmo-transform': 'translateX(0)',
       });
     }, 150);
+  }
+
+  /**
+   * Auto-advance hook used by reader TTS queue behavior.
+   * Returns the next focused post, or null when advancing is not possible.
+   */
+  private async advanceToNextPostForTTSAutoplay(): Promise<PostData | null> {
+    if (!this._isActive || this.transitioning || this.modalOpen) return null;
+    if (this.currentIndex >= this.context.posts.length - 1) {
+      new Notice('Reached the last post');
+      return null;
+    }
+
+    await this.navigate(1);
+    return this.context.posts[this.currentIndex] ?? null;
+  }
+
+  private resolvePrefetchCandidatePost(offsetFromCurrent: number): PostData | null {
+    if (!this._isActive || this.transitioning) return null;
+    if (offsetFromCurrent < 1) return null;
+    return this.context.posts[this.currentIndex + offsetFromCurrent] ?? null;
   }
 
   // ---------- Swipe Handling ----------
@@ -912,6 +965,7 @@ export class ReaderModeOverlay {
         subscriptionStatus,
         onSubscribe: () => void this.subscribeAuthor(post),
         onUnsubscribe: () => void this.unsubscribeAuthor(post),
+        ttsController: this.ttsController ?? undefined,
       },
     );
   }
@@ -1003,6 +1057,19 @@ export class ReaderModeOverlay {
     } catch (err) {
       console.error('[Social Archiver] Unsubscribe failed:', err);
     }
+  }
+
+  // ---------- TTS ----------
+
+  /**
+   * Create the TTS provider based on settings.
+   * Delegates to shared resolveTTSProvider utility.
+   */
+  private resolveProvider(): PluginTTSProvider | null {
+    const resolved = resolveTTSProvider(this.context.plugin.settings, this.context.plugin.manifest.version);
+    if (!resolved) return null;
+    this.ttsController?.setFallbackProvider(resolved.fallback);
+    return resolved.primary;
   }
 
   // ---------- Utilities ----------

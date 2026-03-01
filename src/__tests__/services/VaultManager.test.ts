@@ -180,6 +180,22 @@ describe('VaultManager', () => {
       expect(filename.length).toBeLessThan(200);
       expect(filename).toContain('...');
     });
+
+    it('should fallback to a valid current date when timestamp is invalid', async () => {
+      const invalidTimestampPost = {
+        ...mockPostData,
+        metadata: {
+          ...mockPostData.metadata,
+          timestamp: 'Invalid Date',
+        },
+      } as unknown as PostData;
+
+      const path = await vaultManager.savePost(invalidTimestampPost, mockMarkdown);
+      const filename = path.split('/').pop() || '';
+
+      expect(path).not.toContain('/NaN/');
+      expect(filename).not.toContain('NaN-NaN-NaN');
+    });
   });
 
   describe('path organization strategies', () => {
@@ -217,6 +233,26 @@ describe('VaultManager', () => {
 
       expect(path).toContain('2024/01/15');
       expect(path).not.toContain('Facebook');
+    });
+
+    it('should avoid NaN date folders when timestamp is invalid', async () => {
+      vaultManager = new VaultManager({
+        vault: mockVault,
+        organizationStrategy: 'date',
+      });
+
+      const invalidTimestampPost = {
+        ...mockPostData,
+        metadata: {
+          ...mockPostData.metadata,
+          timestamp: 'not-a-date',
+        },
+      } as unknown as PostData;
+
+      const path = await vaultManager.savePost(invalidTimestampPost, mockMarkdown);
+
+      expect(path).not.toContain('/NaN/');
+      expect(path).toContain('Social Archives/');
     });
 
     it('should use flat structure when strategy is "flat"', async () => {

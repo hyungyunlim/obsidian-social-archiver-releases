@@ -503,20 +503,32 @@ export class TimelineView extends ItemView {
   }
 
   /**
-   * Android WebView may report env(safe-area-inset-*) as 0.
-   * Use visualViewport offsets as fallback and expose CSS vars for timeline container/composer.
+   * Mobile WebView environments may report env(safe-area-inset-*) as 0.
+   * Use visualViewport offsets + platform minimums and expose CSS vars
+   * for timeline container/composer.
    */
   private setupTimelineSafeAreaFallback(container: HTMLElement): void {
     if (!ObsidianPlatform.isMobile || this.timelineSafeAreaListener) return;
+    const dynamicIslandHeights = new Set([852, 874, 932, 956]);
 
     const applyInsets = () => {
       const viewport = window.visualViewport;
       const viewportTop = Math.max(0, Math.round(viewport?.offsetTop ?? 0));
-      // Some Android WebView builds always report 0 for visualViewport.offsetTop.
-      // Keep a sensible minimum so composer/header do not overlap the status bar.
+      const isPortrait = window.innerHeight >= window.innerWidth;
+      const isIPhone = /iPhone/i.test(window.navigator.userAgent);
+      const screenLongestEdge = Math.round(
+        Math.max(window.screen.width || 0, window.screen.height || 0)
+      );
+      const isDynamicIslandIPhone = isIPhone && dynamicIslandHeights.has(screenLongestEdge);
+      // Some mobile WebView environments report 0 for both env(safe-area-inset-top)
+      // and visualViewport.offsetTop. Keep platform-specific minimum top inset
+      // so composer/header do not overlap the status bar/notch.
       const androidMinTopInset = ObsidianPlatform.isAndroidApp ? 24 : 0;
+      const iosMinTopInset = ObsidianPlatform.isIosApp && isPortrait
+        ? (isIPhone ? (isDynamicIslandIPhone ? 59 : 44) : 24)
+        : 0;
       const androidExtraTopGap = ObsidianPlatform.isAndroidApp ? 8 : 0;
-      const topInset = Math.max(viewportTop, androidMinTopInset);
+      const topInset = Math.max(viewportTop, androidMinTopInset, iosMinTopInset);
 
       let bottomInset = 0;
       if (viewport) {

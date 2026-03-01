@@ -423,6 +423,9 @@ export class PostDataParser {
         like: frontmatter.like, // User's personal like
         archive: frontmatter.archive, // Archive status
         shareUrl: frontmatter.shareUrl, // Public share URL
+        crossPostId: frontmatter['crossPostId'] as string | undefined,
+        threadsPostId: frontmatter['threadsPostId'] as string | undefined,
+        threadsPostUrl: frontmatter['threadsPostUrl'] as string | undefined,
         linkPreviews: frontmatter['linkPreviews'] as string[] | undefined, // Link preview URLs (custom field)
         processedUrls: processedUrls.length > 0 ? processedUrls : undefined,
         downloadedUrls: downloadedUrls.length > 0 ? downloadedUrls : undefined,
