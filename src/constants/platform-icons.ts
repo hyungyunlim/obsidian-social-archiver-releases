@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/icons/platform-icons.ts
- * Generated: 2026-03-01T04:57:39.280Z
+ * Generated: 2026-03-01T06:43:51.962Z
  *
  * To modify, edit the source file in shared/icons/ and run:
  *   npm run sync:shared
