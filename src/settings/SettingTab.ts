@@ -481,6 +481,16 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           updatePreviewLengthVisibility(); // Update visibility when mode changes
         }));
 
+    new Setting(containerEl)
+      .setName('Copy reader mode link by default')
+      .setDesc('When creating a share link, copy the reader-mode URL (#reader). Disable to copy the normal post URL.')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.copyShareLinkAsReaderMode)
+        .onChange((value) => {
+          this.plugin.settings.copyShareLinkAsReaderMode = value;
+          this.markDirty();
+        }));
+
     // Preview Length setting (conditionally shown based on share mode)
     const previewLengthSetting = new Setting(containerEl)
       .setName('Preview length')

@@ -1265,22 +1265,6 @@
   padding-bottom: 16px;
 }
 
-/* Release notes specific content spacing (moved from legacy chunk) */
-.release-notes-modal .modal-content {
-  box-sizing: border-box;
-  padding: 16px 18px 12px;
-}
-
-@media (max-width: 480px) {
-  .release-notes-modal .modal-content {
-    padding: 14px 16px calc(12px + env(safe-area-inset-bottom, 0px));
-  }
-
-  .release-notes-modal .release-notes-content {
-    padding-right: 0;
-  }
-}
-
 .rnm-qr-container {
   display: flex;
   flex-direction: column;

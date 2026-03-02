@@ -35,6 +35,7 @@ import { RELEASE_NOTES } from './release-notes';
 import { completeAuthentication, showAuthError, showAuthSuccess, refreshUserCredits } from './utils/auth';
 import { uniqueStrings } from './utils/array';
 import { normalizeUrlForDedup, encodePathForMarkdownLink } from './utils/url';
+import { getShareUrlForClipboard } from './utils/shareUrl';
 import { mergeTagsCaseInsensitive, sanitizeTagNames } from './utils/tags';
 
 import { ProcessManager } from './services/ProcessManager';
@@ -6524,8 +6525,12 @@ ${contentParts.join('')}
         shareMode: this.settings.shareMode,
       });
 
-      // Copy URL to clipboard
-      await navigator.clipboard.writeText(shareResponse.shareUrl);
+      // Copy URL to clipboard (reader-mode URL by default, configurable in settings)
+      const clipboardShareUrl = getShareUrlForClipboard(
+        shareResponse.shareUrl,
+        this.settings.copyShareLinkAsReaderMode
+      );
+      await navigator.clipboard.writeText(clipboardShareUrl);
       new Notice('Shared! URL copied to clipboard');
 
       // Refresh timeline

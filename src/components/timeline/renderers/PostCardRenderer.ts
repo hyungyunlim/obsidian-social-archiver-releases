@@ -34,6 +34,7 @@ import { insertTranscriptSection, extractTranscriptLanguages } from '../../../se
 import { languageCodeToName } from '../../../constants/languages';
 import { getPlatformCategory } from '../../../shared/platforms/types';
 import { createSVGElement } from '../../../utils/dom-helpers';
+import { getShareUrlForClipboard } from '../../../utils/shareUrl';
 import type { WhisperModel } from '../../../utils/whisper';
 
 /**
@@ -1653,6 +1654,60 @@ export class PostCardRenderer extends Component {
     return content.replace(/^(\s*)(\d+)\.(?=\s|$)/gm, '$1$2\\.');
   }
 
+  /**
+   * Capture an anchor position so we can keep the viewport stable when collapsing long content on mobile.
+   */
+  private captureMobileCollapseScrollAnchor(anchorEl: HTMLElement): { scroller: HTMLElement | Window; anchorTop: number } | null {
+    if (!ObsidianPlatform.isMobile || typeof window === 'undefined') return null;
+    return {
+      scroller: this.findScrollableContainer(anchorEl),
+      anchorTop: anchorEl.getBoundingClientRect().top,
+    };
+  }
+
+  /**
+   * Restore scroll by the anchor delta after collapse so users stay on the same post.
+   */
+  private restoreMobileCollapseScroll(
+    anchor: { scroller: HTMLElement | Window; anchorTop: number } | null,
+    anchorEl: HTMLElement
+  ): void {
+    if (!anchor || typeof window === 'undefined') return;
+
+    window.requestAnimationFrame(() => {
+      const nextTop = anchorEl.getBoundingClientRect().top;
+      const delta = nextTop - anchor.anchorTop;
+      if (Math.abs(delta) < 1) return;
+
+      if (anchor.scroller instanceof HTMLElement) {
+        anchor.scroller.scrollTop += delta;
+        return;
+      }
+
+      anchor.scroller.scrollBy(0, delta);
+    });
+  }
+
+  /**
+   * Find the nearest vertical scroll container for a given element.
+   */
+  private findScrollableContainer(startEl: HTMLElement): HTMLElement | Window {
+    const view = startEl.ownerDocument?.defaultView;
+    if (!view) return startEl;
+
+    let parent: HTMLElement | null = startEl.parentElement;
+    while (parent) {
+      const style = view.getComputedStyle(parent);
+      const overflowY = style.overflowY;
+      const canScrollY = (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay')
+        && parent.scrollHeight > parent.clientHeight;
+      if (canScrollY) return parent;
+      parent = parent.parentElement;
+    }
+
+    return view;
+  }
+
   private async renderContent(contentArea: HTMLElement, post: PostData): Promise<void> {
     // For reblogs (retweets/boosts), skip content rendering in main card
     // Content will be shown in the quotedPost card instead (like Bluesky/Mastodon style)
@@ -1760,6 +1815,8 @@ export class PostCardRenderer extends Component {
       seeMoreBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         expanded = !expanded;
+        const isCollapsing = !expanded;
+        const scrollAnchor = isCollapsing ? this.captureMobileCollapseScrollAnchor(seeMoreBtn) : null;
         void (async () => {
           if (expanded) {
             contentText.empty();
@@ -1785,6 +1842,10 @@ export class PostCardRenderer extends Component {
             this.addHashtagClickHandlers(contentText);
             // Re-normalize tag font sizes after re-rendering
             this.normalizeTagFontSizes(contentText);
+          }
+
+          if (isCollapsing) {
+            this.restoreMobileCollapseScroll(scrollAnchor, seeMoreBtn);
           }
         })();
       });
@@ -1953,6 +2014,8 @@ export class PostCardRenderer extends Component {
       seeMoreBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         expanded = !expanded;
+        const isCollapsing = !expanded;
+        const scrollAnchor = isCollapsing ? this.captureMobileCollapseScrollAnchor(seeMoreBtn) : null;
         contentText.empty();
         void (async () => {
           if (expanded) {
@@ -1970,6 +2033,10 @@ export class PostCardRenderer extends Component {
           this.normalizeTagFontSizes(contentText);
           // Style inline images
           this.styleBlogInlineImages(contentText);
+
+          if (isCollapsing) {
+            this.restoreMobileCollapseScroll(scrollAnchor, seeMoreBtn);
+          }
         })();
       });
     } else {
@@ -2665,26 +2732,20 @@ export class PostCardRenderer extends Component {
     // Re-read tags from frontmatter
     post.tags = tagStore.getTagsForPost(filePath);
 
-    // Remove existing container
-    const parent = tagContainer.parentElement;
-    if (!parent) return;
+    // Always anchor chips within content area (above interaction/actions bar)
+    const contentArea = rootElement.querySelector('.post-content-area') as HTMLElement | null;
+    if (!contentArea) return;
 
-    // Find the element after the tag container (interaction bar) for insertion point
-    const nextSibling = tagContainer.nextElementSibling;
     tagContainer.remove();
+    this.renderTagChips(contentArea, post, rootElement);
 
-    // Re-render (creates new container if tags exist, otherwise nothing)
-    // We need to insert at the right position, so use a temporary wrapper
-    const tempWrapper = document.createElement('div');
-    parent.insertBefore(tempWrapper, nextSibling);
-    this.renderTagChips(tempWrapper, post, rootElement);
+    const newChips = contentArea.querySelector('.post-tag-chips:last-child');
+    if (!newChips) return;
 
-    // Move children out of wrapper and remove it
-    const newChips = tempWrapper.querySelector('.post-tag-chips');
-    if (newChips) {
-      parent.insertBefore(newChips, tempWrapper);
+    const interactionBar = contentArea.querySelector('.pcr-interactions, .pcr-actions-end') as HTMLElement | null;
+    if (interactionBar) {
+      contentArea.insertBefore(newChips, interactionBar);
     }
-    tempWrapper.remove();
   }
 
   /**
@@ -3027,14 +3088,14 @@ export class PostCardRenderer extends Component {
           if (chipContainer) {
             this.refreshTagChips(chipContainer as HTMLElement, post, rootElement);
           } else {
-            // No chip container exists yet — insert one before the interaction bar
-            const interactionBar = parent.closest('[style*="border-top"]') || parent.parentElement;
-            if (interactionBar?.parentElement) {
-              this.renderTagChips(interactionBar.parentElement, post, rootElement);
-              // Move it before the interaction bar
-              const newChips = interactionBar.parentElement.querySelector('.post-tag-chips:last-child');
-              if (newChips && interactionBar) {
-                interactionBar.parentElement.insertBefore(newChips, interactionBar);
+            // No chip container exists yet — insert one above this interaction/actions bar
+            const interactionBar = parent;
+            const contentArea = interactionBar.parentElement;
+            if (contentArea) {
+              this.renderTagChips(contentArea, post, rootElement);
+              const newChips = contentArea.querySelector('.post-tag-chips:last-child');
+              if (newChips) {
+                contentArea.insertBefore(newChips, interactionBar);
               }
             }
           }
@@ -3196,8 +3257,12 @@ export class PostCardRenderer extends Component {
       // Update icon to link icon
       setIcon(shareIcon, 'link');
 
-      // Copy to clipboard
-      await navigator.clipboard.writeText(shareUrl);
+      // Copy to clipboard (reader-mode URL by default, configurable in settings)
+      const clipboardShareUrl = getShareUrlForClipboard(
+        shareUrl,
+        this.plugin.settings.copyShareLinkAsReaderMode
+      );
+      await navigator.clipboard.writeText(clipboardShareUrl);
       const mediaType = isAdmin && hasVideos ? 'media' : 'images';
       const mediaMessage = hasMedia ? ` (uploading ${mediaType}...)` : '';
       new Notice(`✅ Published! Share link copied to clipboard.${mediaMessage}`);

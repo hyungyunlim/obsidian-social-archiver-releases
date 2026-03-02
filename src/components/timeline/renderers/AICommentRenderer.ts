@@ -390,6 +390,8 @@ export class AICommentRenderer {
 
       toggleBtn.addEventListener('click', (e) => {
         e.stopPropagation();
+        const isCollapsing = isExpanded;
+        const scrollAnchor = isCollapsing ? this.captureMobileCollapseScrollAnchor(toggleBtn) : null;
         isExpanded = !isExpanded;
 
         if (isExpanded) {
@@ -402,6 +404,8 @@ export class AICommentRenderer {
           textWrapper.addClass('sa-overflow-hidden');
           fadeOverlay.removeClass('sa-hidden');
           toggleBtn.textContent = 'Show more';
+
+          this.restoreMobileCollapseScroll(scrollAnchor, toggleBtn);
         }
       });
 
@@ -533,6 +537,60 @@ export class AICommentRenderer {
     setTimeout(() => {
       feedback.remove();
     }, 1000);
+  }
+
+  /**
+   * Capture an anchor position so we can keep the viewport stable when collapsing long text on mobile.
+   */
+  private captureMobileCollapseScrollAnchor(anchorEl: HTMLElement): { scroller: HTMLElement | Window; anchorTop: number } | null {
+    if (!Platform.isMobile || typeof window === 'undefined') return null;
+    return {
+      scroller: this.findScrollableContainer(anchorEl),
+      anchorTop: anchorEl.getBoundingClientRect().top,
+    };
+  }
+
+  /**
+   * Restore scroll by anchor delta after collapse.
+   */
+  private restoreMobileCollapseScroll(
+    anchor: { scroller: HTMLElement | Window; anchorTop: number } | null,
+    anchorEl: HTMLElement
+  ): void {
+    if (!anchor || typeof window === 'undefined') return;
+
+    window.requestAnimationFrame(() => {
+      const nextTop = anchorEl.getBoundingClientRect().top;
+      const delta = nextTop - anchor.anchorTop;
+      if (Math.abs(delta) < 1) return;
+
+      if (anchor.scroller instanceof HTMLElement) {
+        anchor.scroller.scrollTop += delta;
+        return;
+      }
+
+      anchor.scroller.scrollBy(0, delta);
+    });
+  }
+
+  /**
+   * Find nearest vertical scroll container for the anchor element.
+   */
+  private findScrollableContainer(startEl: HTMLElement): HTMLElement | Window {
+    const view = startEl.ownerDocument?.defaultView;
+    if (!view) return startEl;
+
+    let parent: HTMLElement | null = startEl.parentElement;
+    while (parent) {
+      const style = view.getComputedStyle(parent);
+      const overflowY = style.overflowY;
+      const canScrollY = (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay')
+        && parent.scrollHeight > parent.clientHeight;
+      if (canScrollY) return parent;
+      parent = parent.parentElement;
+    }
+
+    return view;
   }
 
   /**

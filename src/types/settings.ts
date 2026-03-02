@@ -436,6 +436,7 @@ export interface SocialArchiverSettings {
   // Sharing Settings
   shareMode: ShareMode; // 'full' or 'preview' mode for shared posts
   sharePreviewLength: number; // Character limit for preview mode (default: 280)
+  copyShareLinkAsReaderMode: boolean; // Copy #reader URL to clipboard after sharing (default: true)
 
   // Advanced Settings
   requestTimeout: number;
@@ -543,6 +544,7 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
   // Sharing Settings
   shareMode: 'preview', // Default to preview mode for copyright safety
   sharePreviewLength: 280, // Twitter-like character limit (always includes platform link in preview)
+  copyShareLinkAsReaderMode: true, // Default: copy reader-mode URL (#reader) after creating share
 
   // Advanced Settings
   requestTimeout: 30000,

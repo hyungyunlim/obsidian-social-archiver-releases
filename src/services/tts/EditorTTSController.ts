@@ -59,6 +59,7 @@ export class EditorTTSController {
   private activeEditorView: EditorView | null = null;
   private contentStartOffset = 0;
   private readingMode: ReadingMode = 'document';
+  private lastFallbackRawSearchOffset = 0;
 
   // Workspace event refs (for cleanup)
   private editorChangeRef: EventRef | null = null;
@@ -159,6 +160,7 @@ export class EditorTTSController {
     this.activeView = view;
     this.activeEditorView = getEditorView(editor);
     this.readingMode = mode;
+    this.lastFallbackRawSearchOffset = 0;
 
     // Subscribe to state events for highlighting
     this.subscribeToState();
@@ -292,9 +294,20 @@ export class EditorTTSController {
       editorFrom = rawFrom + this.contentStartOffset;
       editorTo = rawTo + this.contentStartOffset;
     } else {
-      // Fallback: use raw offsets directly (less precise but functional)
-      editorFrom = sentence.startOffset + this.contentStartOffset;
-      editorTo = sentence.endOffset + this.contentStartOffset;
+      // Safe fallback: sentence text search in rawText.
+      // If not found, skip highlighting rather than drawing a wrong range.
+      const rawText = extraction.rawText;
+      const searchFrom = detail.index <= 0 ? 0 : this.lastFallbackRawSearchOffset;
+      let rawFrom = rawText.indexOf(sentence.text, searchFrom);
+      if (rawFrom === -1 && searchFrom > 0) {
+        rawFrom = rawText.indexOf(sentence.text);
+      }
+      if (rawFrom === -1) return;
+
+      const rawTo = rawFrom + sentence.text.length;
+      this.lastFallbackRawSearchOffset = rawTo;
+      editorFrom = rawFrom + this.contentStartOffset;
+      editorTo = rawTo + this.contentStartOffset;
     }
 
     // Apply CM6 highlight decoration
@@ -358,6 +371,7 @@ export class EditorTTSController {
     this.activeView = null;
     this.activeEditorView = null;
     this.contentStartOffset = 0;
+    this.lastFallbackRawSearchOffset = 0;
   }
 
   // ---------- Internal: speed -----------------------------------------------

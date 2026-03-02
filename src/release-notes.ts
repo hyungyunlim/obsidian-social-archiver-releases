@@ -23,6 +23,26 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '2.8.1': {
+    title: 'Reader Mode Polish + TTS Highlight Accuracy',
+    date: '2026-03-02',
+    notes: `## Reader Mode Updates
+
+- Expanded share-web Reader Mode flow:
+  - Full-screen overlay UX improvements
+  - URL hash/permalink behavior while browsing posts
+  - Swipe navigation and better mobile interaction polish
+  - AI comments and multi-image carousel support inside Reader Mode
+- Improved share-link behavior from Reader Mode for faster sharing
+
+## TTS Highlighting Reliability
+
+- Fixed Editor TTS highlight misalignment in Markdown documents with mixed formatting
+- Improved cleaned-text to raw-text offset mapping stability for long-form web articles
+- Added safer fallback sentence matching so highlighting skips bad ranges instead of jumping to the wrong section
+`,
+    isImportant: true,
+  },
   '2.8.0': {
     title: 'Reader + Editor TTS',
     date: '2026-03-01',

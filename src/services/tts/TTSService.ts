@@ -77,8 +77,9 @@ export interface TTSServiceOptions {
 export class TTSService {
   readonly state: TTSState;
 
-  private provider: PluginTTSProvider | null = null;
+  private primaryProvider: PluginTTSProvider | null = null;
   private fallbackProvider: PluginTTSProvider | null = null;
+  private activeProvider: PluginTTSProvider | null = null;
   private player: TTSAudioPlayer;
   private extraction: TextExtractionResult | null = null;
   private sentences: Sentence[] = [];
@@ -108,7 +109,7 @@ export class TTSService {
   // ---------- Provider management -------------------------------------------
 
   setProvider(provider: PluginTTSProvider): void {
-    this.provider = provider;
+    this.primaryProvider = provider;
   }
 
   /**
@@ -120,7 +121,7 @@ export class TTSService {
   }
 
   getProviderId(): PluginTTSProviderId | null {
-    return this.provider?.id ?? null;
+    return this.activeProvider?.id ?? this.primaryProvider?.id ?? null;
   }
 
   // ---------- Rate control ---------------------------------------------------
@@ -152,7 +153,8 @@ export class TTSService {
    * apply rate at synthesis time to avoid pitch distortion from playbackRate.
    */
   private usesSynthesisRate(): boolean {
-    return this.provider?.id === 'supertonic' || this.provider?.id === 'azure';
+    const provider = this.activeProvider ?? this.primaryProvider;
+    return provider?.id === 'supertonic' || provider?.id === 'azure';
   }
 
   /**
@@ -161,7 +163,7 @@ export class TTSService {
    * so we limit to 1 to keep skip latency low while still enabling gapless playback.
    */
   private getPrefetchAhead(): number {
-    return this.provider?.id === 'supertonic' ? PREFETCH_AHEAD_SERIAL : PREFETCH_AHEAD_DEFAULT;
+    return this.activeProvider?.id === 'supertonic' ? PREFETCH_AHEAD_SERIAL : PREFETCH_AHEAD_DEFAULT;
   }
 
   // ---------- Playback control ----------------------------------------------
@@ -173,22 +175,13 @@ export class TTSService {
     // Abort any previous session
     this.abort();
 
-    if (!this.provider) {
+    if (!this.primaryProvider) {
       this.state.emitError('No TTS provider configured', undefined, true);
       return;
     }
 
     this.options = options ?? {};
     this.abortController = new AbortController();
-
-    // Apply initial playback rate:
-    // Supertonic handles rate in synthesis (pitch-preserving); playbackRate stays 1.0.
-    // Azure uses playbackRate for instant speed control.
-    if (this.usesSynthesisRate()) {
-      this.player.setPlaybackRate(1.0);
-    } else {
-      this.player.setPlaybackRate(this.options.rate ?? 1.0);
-    }
 
     // Step 1: Extract and clean text
     this.state.transition('loading');
@@ -209,17 +202,27 @@ export class TTSService {
     // Step 3: Detect language
     this.detectedLang = this.options.lang ?? detectLanguage(this.extraction.cleanedText);
 
-    // Step 3b: Switch to fallback provider if primary doesn't support detected language
-    if (this.detectedLang && this.provider && !this.provider.supportsLanguage(this.detectedLang)) {
+    // Step 3b: Select active provider for this playback session.
+    // Always start from primary for every new post/session.
+    this.activeProvider = this.primaryProvider;
+    if (this.detectedLang && this.activeProvider && !this.activeProvider.supportsLanguage(this.detectedLang)) {
       if (this.fallbackProvider?.supportsLanguage(this.detectedLang)) {
         console.debug(
-          `[TTSService] Language "${this.detectedLang}" not supported by ${this.provider.id}, switching to ${this.fallbackProvider.id}`,
+          `[TTSService] Language "${this.detectedLang}" not supported by ${this.activeProvider.id}, switching to ${this.fallbackProvider.id}`,
         );
         this.state.emitNotice(
-          `Language not supported by ${this.provider.id}. Using ${this.fallbackProvider.id} cloud TTS instead.`,
+          `Language not supported by ${this.activeProvider.id}. Using ${this.fallbackProvider.id} cloud TTS instead.`,
         );
-        this.provider = this.fallbackProvider;
+        this.activeProvider = this.fallbackProvider;
       }
+    }
+
+    // Apply initial playback rate:
+    // Supertonic/Azure handle rate in synthesis (pitch-preserving); playbackRate stays 1.0.
+    if (this.usesSynthesisRate()) {
+      this.player.setPlaybackRate(1.0);
+    } else {
+      this.player.setPlaybackRate(this.options.rate ?? 1.0);
     }
 
     // Step 4: Start sentence-by-sentence playback
@@ -259,12 +262,12 @@ export class TTSService {
    */
   async skipToSentence(index: number): Promise<void> {
     if (index < 0 || index >= this.sentences.length) return;
-    if (!this.provider) return;
+    if (!this.activeProvider) return;
 
     // Cancel current playback but keep session state
     this.player.stop();
     // Cancel in-flight IPC requests so stale synthesis doesn't block the pipe
-    this.provider.cancelPendingSynthesis?.();
+    this.activeProvider.cancelPendingSynthesis?.();
     if (this.abortController) {
       this.abortController.abort();
     }
@@ -320,7 +323,8 @@ export class TTSService {
 
   private async playSentence(index: number): Promise<void> {
     if (this.isAborted()) return;
-    if (!this.provider) return;
+    const provider = this.activeProvider;
+    if (!provider) return;
 
     // Capture generation to detect skip/abort during async gaps
     const gen = this.generation;
@@ -342,7 +346,7 @@ export class TTSService {
       // Supertonic: pass rate for pitch-preserving time stretch.
       // Azure: omit rate (speed via playbackRate, not synthesis).
       const synthRate = this.usesSynthesisRate() ? this.options.rate : undefined;
-      const audioData = await this.provider.synthesize({
+      const audioData = await provider.synthesize({
         text: sentence.text,
         lang: this.detectedLang,
         voiceId: this.options.voiceId,
@@ -364,7 +368,7 @@ export class TTSService {
       if (gen !== this.generation) return;
       const message = error instanceof Error ? error.message : String(error);
       console.error(`[TTSService] tts_error sentence=${index}: ${message}`);
-      this.state.emitError(message, this.provider.id, true);
+      this.state.emitError(message, provider.id, true);
     }
   }
 
@@ -382,7 +386,8 @@ export class TTSService {
   }
 
   private async prefetchSentence(index: number): Promise<void> {
-    if (!this.provider) return;
+    const provider = this.activeProvider;
+    if (!provider) return;
 
     // Capture generation — if a skip/abort occurs during synthesis,
     // this prefetch must NOT enqueue its stale buffer.
@@ -393,7 +398,7 @@ export class TTSService {
 
     try {
       const synthRate = this.usesSynthesisRate() ? this.options.rate : undefined;
-      const audioData = await this.provider.synthesize({
+      const audioData = await provider.synthesize({
         text: sentence.text,
         lang: this.detectedLang,
         voiceId: this.options.voiceId,
@@ -451,14 +456,14 @@ export class TTSService {
 
   private onPlaybackError(error: Error): void {
     console.error('[TTSService] Playback error:', error.message);
-    this.state.emitError(error.message, this.provider?.id, true);
+    this.state.emitError(error.message, this.activeProvider?.id, true);
   }
 
   // ---------- Abort ---------------------------------------------------------
 
   private abort(): void {
     this.generation++;
-    this.provider?.cancelPendingSynthesis?.();
+    this.activeProvider?.cancelPendingSynthesis?.();
     if (this.abortController) {
       this.abortController.abort();
       this.abortController = null;
@@ -469,6 +474,7 @@ export class TTSService {
     this.currentSentenceIndex = -1;
     this.prefetchWatermark = -1;
     this.detectedLang = undefined;
+    this.activeProvider = null;
   }
 
   private isAborted(): boolean {
@@ -481,9 +487,16 @@ export class TTSService {
     this.abort();
     this.state.reset();
     await this.player.destroy();
-    if (this.provider) {
-      await this.provider.destroy();
-      this.provider = null;
+    const primary = this.primaryProvider;
+    const fallback = this.fallbackProvider;
+    this.primaryProvider = null;
+    this.fallbackProvider = null;
+
+    if (primary) {
+      await primary.destroy();
+    }
+    if (fallback && fallback !== primary) {
+      await fallback.destroy();
     }
   }
 }

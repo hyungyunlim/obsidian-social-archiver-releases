@@ -70,6 +70,7 @@ const MARKDOWN_ITALIC_UNDERSCORE_REGEX = /(?<!\w)_(.*?)_(?!\w)/g;
 const MARKDOWN_BLOCKQUOTE_REGEX = /^>\s*/gm;
 const MARKDOWN_LIST_REGEX = /^[-*+]\s+/gm;
 const MARKDOWN_HORIZONTAL_RULE_REGEX = /^(?:[-*_]){3,}\s*$/gm;
+const PLACEHOLDER_BLANK_REGEX = /(?:[＿_﹍﹎﹏‗-]\s*){3,}/g;
 const HASHTAG_REGEX = /#([\w\u00C0-\u024F\u0400-\u04FF\uAC00-\uD7A3]+)/gu;
 const MENTION_REGEX = /@([\w.]+)/g;
 const EXCESSIVE_WHITESPACE_REGEX = /\s{2,}/g;
@@ -144,10 +145,9 @@ export function extractText(post: PostLike): TextExtractionResult {
  * Build an offset map from cleanedText character indices to rawText indices.
  *
  * Algorithm:
- *  1. Tokenise cleanedText into words and single-space separators.
- *  2. For each word token, try `rawText.indexOf(word, fi)` (fast path).
- *     Falls back to per-character alignment when indexOf fails.
- *  3. For each space token, advance past non-whitespace in rawText.
+ *  1. Walk `cleanedText` left-to-right with a forward-only pointer in `rawText`.
+ *  2. For non-space chars, scan rawText until the same char is found.
+ *  3. For spaces, map to the next raw whitespace run (then collapse the run).
  *  4. Append a sentinel at index `cleanedText.length`.
  *  5. Validate monotonic non-decreasing order and per-character correctness.
  *     Return `null` on any failure so callers fall back gracefully.
@@ -163,58 +163,40 @@ export function buildOffsetMap(
   const map: number[] = new Array(cleanedText.length + 1);
   let fi = 0;
 
-  // Tokenise cleanedText into words and single spaces
-  const tokens: Array<{ text: string; startCi: number; isSpace: boolean }> = [];
-  let ci = 0;
-  while (ci < cleanedText.length) {
-    if (cleanedText[ci] === ' ') {
-      tokens.push({ text: ' ', startCi: ci, isSpace: true });
-      ci++;
-    } else {
-      const start = ci;
-      while (ci < cleanedText.length && cleanedText[ci] !== ' ') ci++;
-      tokens.push({ text: cleanedText.slice(start, ci), startCi: start, isSpace: false });
+  // Forward-only character alignment (no global token indexOf jumps).
+  for (let ci = 0; ci < cleanedText.length; ci++) {
+    const cc = cleanedText[ci];
+    if (cc === undefined) {
+      console.debug('[buildOffsetMap] Missing cleaned char at ci', ci);
+      return null;
     }
-  }
 
-  // Map each token to its position in rawText
-  for (const token of tokens) {
-    if (token.isSpace) {
+    if (cc === ' ') {
       while (fi < rawText.length && !/\s/.test(rawText[fi] ?? '')) fi++;
       if (fi >= rawText.length) {
         console.debug('[buildOffsetMap] No whitespace found for space token');
         return null;
       }
-      map[token.startCi] = fi;
+      map[ci] = fi;
       fi++;
       while (fi < rawText.length && /\s/.test(rawText[fi] ?? '')) fi++;
-    } else {
-      const idx = rawText.indexOf(token.text, fi);
-      if (idx !== -1) {
-        for (let i = 0; i < token.text.length; i++) {
-          map[token.startCi + i] = idx + i;
-        }
-        fi = idx + token.text.length;
-      } else {
-        // Slow path: character-by-character alignment
-        for (let i = 0; i < token.text.length; i++) {
-          const target = token.text[i];
-          let found = false;
-          while (fi < rawText.length) {
-            if (rawText[fi] === target) {
-              map[token.startCi + i] = fi;
-              fi++;
-              found = true;
-              break;
-            }
-            fi++;
-          }
-          if (!found) {
-            console.debug('[buildOffsetMap] Char alignment failed at ci', token.startCi + i);
-            return null;
-          }
-        }
+      continue;
+    }
+
+    let found = false;
+    while (fi < rawText.length) {
+      if (rawText[fi] === cc) {
+        map[ci] = fi;
+        fi++;
+        found = true;
+        break;
       }
+      fi++;
+    }
+
+    if (!found) {
+      console.debug('[buildOffsetMap] Char alignment failed at ci', ci);
+      return null;
     }
   }
 
@@ -266,9 +248,10 @@ export function buildOffsetMap(
  * 11.  Remove blockquote markers
  * 12.  Remove list markers
  * 13.  Remove horizontal rules
- * 14.  Normalize hashtags (#tag -> tag)
- * 15.  Normalize newlines to spaces
- * 16.  Collapse whitespace and trim
+ * 14.  Remove repeated placeholder blanks (＿＿＿, ___, ----)
+ * 15.  Normalize hashtags (#tag -> tag)
+ * 16.  Normalize newlines to spaces
+ * 17.  Collapse whitespace and trim
  */
 export function cleanTextForTTS(text: string): string {
   if (!text) return '';
@@ -315,13 +298,16 @@ export function cleanTextForTTS(text: string): string {
   // 13. Horizontal rules
   result = result.replace(MARKDOWN_HORIZONTAL_RULE_REGEX, '');
 
-  // 14. Hashtags: #CamelCase -> "CamelCase"
+  // 14. Repeated placeholder blanks (common in templates/forms)
+  result = result.replace(PLACEHOLDER_BLANK_REGEX, ' ');
+
+  // 15. Hashtags: #CamelCase -> "CamelCase"
   result = result.replace(HASHTAG_REGEX, '$1');
 
-  // 15. Normalise newlines to single space
+  // 16. Normalise newlines to single space
   result = result.replace(/\r\n|\r|\n/g, ' ');
 
-  // 16. Collapse consecutive whitespace and trim
+  // 17. Collapse consecutive whitespace and trim
   result = result.replace(EXCESSIVE_WHITESPACE_REGEX, ' ').trim();
 
   return result;

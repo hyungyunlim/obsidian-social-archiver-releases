@@ -124,6 +124,15 @@ describe('TTSTextProcessor', () => {
 			expect(result).toContain('After');
 		});
 
+		it('should remove repeated blank placeholders', () => {
+			const text = '履歷內容：＿＿＿ 新產業：___ 職缺：---- state-of-the-art';
+			const result = cleanTextForTTS(text);
+			expect(result).not.toContain('＿＿＿');
+			expect(result).not.toContain('___');
+			expect(result).not.toContain('----');
+			expect(result).toContain('state-of-the-art');
+		});
+
 		it('should collapse whitespace and trim', () => {
 			const text = '  Hello    World   ';
 			const result = cleanTextForTTS(text);
@@ -278,6 +287,28 @@ describe('TTSTextProcessor', () => {
 				expect(map[0]).toBe(0);
 				// 'w' in cleaned at 6 -> 'w' in raw at 8 (after **)
 				expect(map[6]).toBe(8);
+			}
+		});
+
+		it('should not jump to later repeated tokens when markdown markers split punctuation', () => {
+			const raw = [
+				'The rule is **never skip the plan**. This sentence must map correctly.',
+				'Later we mention plan.md for docs.',
+			].join(' ');
+			const cleaned = cleanTextForTTS(raw);
+			const map = buildOffsetMap(raw, cleaned);
+
+			expect(map).not.toBeNull();
+			if (map) {
+				const thisCleanIdx = cleaned.indexOf('This sentence');
+				const thisRawIdx = raw.indexOf('This sentence');
+				const laterPlanRawIdx = raw.indexOf('plan.md');
+
+				expect(thisCleanIdx).toBeGreaterThan(-1);
+				expect(thisRawIdx).toBeGreaterThan(-1);
+				expect(laterPlanRawIdx).toBeGreaterThan(-1);
+				expect(map[thisCleanIdx]).toBe(thisRawIdx);
+				expect(map[thisCleanIdx]).toBeLessThan(laterPlanRawIdx);
 			}
 		});
 
