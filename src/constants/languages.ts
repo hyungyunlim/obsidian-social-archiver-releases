@@ -52,7 +52,8 @@ export function languageNameToCode(name: string): string | undefined {
 
 /**
  * Regex to match transcript section headers.
- * - `## Transcript` → original transcript (no capture group)
- * - `## Transcript (Korean)` → translated transcript (captures "Korean")
+ * Supports both:
+ * - `## Transcript` / `## 📄 Transcript` → original transcript (no capture group)
+ * - `## Transcript (Korean)` / `## 📄 Transcript (Korean)` → translated transcript (captures "Korean")
  */
-export const TRANSCRIPT_HEADER_REGEX = /^## Transcript(?:\s*\(([^)]+)\))?\s*$/gm;
+export const TRANSCRIPT_HEADER_REGEX = /^##\s*(?:📄\s*)?Transcript(?:\s*\(([^)]+)\))?\s*$/gm;

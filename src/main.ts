@@ -44,6 +44,7 @@ import { YtDlpDetector } from './utils/yt-dlp';
 import { getPlatformName } from '@/shared/platforms';
 import type { TranscriptionResult } from './types/transcription';
 import { TranscriptFormatter } from './services/markdown/formatters/TranscriptFormatter';
+import { parseTranscriptSections } from './services/markdown/TranscriptSectionManager';
 import { BatchTranscriptionManager, type BatchTranscriptionManagerDeps } from './services/BatchTranscriptionManager';
 import { BatchTranscriptionNotice } from './ui/BatchTranscriptionNotice';
 import type { BatchMode } from './types/batch-transcription';
@@ -158,6 +159,7 @@ interface WsProfileCrawlCompleteMessage {
   isYouTube?: boolean;
   isBlog?: boolean;
   isXcancel?: boolean;
+  isInstagramDirect?: boolean;
 }
 
 export default class SocialArchiverPlugin extends Plugin {
@@ -942,9 +944,9 @@ export default class SocialArchiverPlugin extends Plugin {
     this.eventRefs.push(
       this.events.on('ws:profile_crawl_complete', async (data: unknown) => {
         const message = data as WsProfileCrawlCompleteMessage;
-        const { jobId, handle, platform, posts, stats, isFediverse, isYouTube, isBlog, isXcancel } = message;
-        // Free API platforms: Fediverse (Bluesky, Mastodon), YouTube (RSS), Blog (Generic RSS), X (xcancel RSS)
-        const isFreeApiPlatform = isFediverse || isYouTube || isBlog || isXcancel;
+        const { jobId, handle, platform, posts, stats, isFediverse, isYouTube, isBlog, isXcancel, isInstagramDirect } = message;
+        // Direct API platforms: posts delivered via WebSocket (no BrightData webhook)
+        const isDirectApiPlatform = isFediverse || isYouTube || isBlog || isXcancel || isInstagramDirect;
 
         // Update CrawlJobTracker status
         // For Fediverse/YouTube, WebSocket event may arrive BEFORE API response (sync crawl)
@@ -952,41 +954,44 @@ export default class SocialArchiverPlugin extends Plugin {
         if (jobId) {
           const postCount = stats?.processedCount || posts?.length || 0;
 
-          if (postCount > 0 || stats?.allDuplicates) {
-            // Try to find and complete existing job
-            const directJob = this.crawlJobTracker.getJob(jobId);
-            if (directJob) {
-              this.crawlJobTracker.completeJob(jobId, postCount);
+          // Always try to complete the job (including 0 posts from empty date range)
+          const directJob = this.crawlJobTracker.getJob(jobId);
+          if (directJob) {
+            this.crawlJobTracker.completeJob(jobId, postCount);
+          } else {
+            const internalJobId = this.crawlJobTracker.getInternalJobIdByWorkerJobId(jobId);
+            if (internalJobId) {
+              this.crawlJobTracker.completeJob(internalJobId, postCount);
             } else {
-              const internalJobId = this.crawlJobTracker.getInternalJobIdByWorkerJobId(jobId);
-              if (internalJobId) {
-                this.crawlJobTracker.completeJob(internalJobId, postCount);
+              // Fallback: complete any crawling job for same handle
+              const allJobs = this.crawlJobTracker.getAllJobs();
+              const matchingJob = allJobs.find(j => j.handle === handle && j.status === 'crawling');
+              if (matchingJob) {
+                this.crawlJobTracker.completeJob(matchingJob.jobId, postCount);
               } else {
-                // Fallback: complete any crawling job for same handle
-                const allJobs = this.crawlJobTracker.getAllJobs();
-                const matchingJob = allJobs.find(j => j.handle === handle && j.status === 'crawling');
-                if (matchingJob) {
-                  this.crawlJobTracker.completeJob(matchingJob.jobId, postCount);
-                } else {
-                  // For Fediverse/YouTube: WebSocket arrives before startJob() is called
-                  // Register a completed job immediately so no stale banner appears
-                  if (isFreeApiPlatform && handle) {
-                    this.crawlJobTracker.startJob({
-                      jobId,
-                      handle,
-                      platform: (platform || 'bluesky') as Platform,
-                      estimatedPosts: postCount,
-                    }, jobId);
-                    this.crawlJobTracker.completeJob(jobId, postCount);
-                  }
+                // For Fediverse/YouTube/Instagram Direct: WebSocket arrives before startJob() is called
+                // Register a completed job immediately so no stale banner appears
+                if (isDirectApiPlatform && handle) {
+                  this.crawlJobTracker.startJob({
+                    jobId,
+                    handle,
+                    platform: (platform || 'bluesky') as Platform,
+                    estimatedPosts: postCount,
+                  }, jobId);
+                  this.crawlJobTracker.completeJob(jobId, postCount);
                 }
               }
             }
           }
+
+          // Show "no posts found" notice for direct API platforms with 0 results
+          if (isDirectApiPlatform && postCount === 0 && !stats?.allDuplicates) {
+            new Notice(`ℹ️ No posts found for @${handle} in the specified range`, 5000);
+          }
         }
 
         // Process posts from Fediverse/YouTube crawl (free API platforms)
-        if (isFreeApiPlatform && posts && posts.length > 0) {
+        if (isDirectApiPlatform && posts && posts.length > 0) {
           // Get destination folder from pending job or use default
           const pendingJob = jobId ? await this.pendingJobsManager?.getJob(jobId) : null;
           const destinationFolder = pendingJob?.metadata?.destinationFolder
@@ -3860,7 +3865,7 @@ ${contentParts.join('')}
 
   private appendTranscriptSection(content: string, result: TranscriptionResult): string {
     // Avoid duplicate transcript blocks when rerunning manually.
-    if (/\n## Transcript\n/i.test(content)) {
+    if (parseTranscriptSections(content).length > 0) {
       return content;
     }
 
@@ -6279,8 +6284,8 @@ ${contentParts.join('')}
       // Extract profile data from raw API response using ProfileDataMapper
       const rawResponse = postData.raw;
 
-      // If no raw response, still try to register subreddit for Reddit posts
-      // (Subscription posts may not have raw data but have parsed community info)
+      // If no raw response, still try avatar download and subreddit registration
+      // (Direct API posts like Instagram Direct have no raw data but have parsed author info)
       if (!rawResponse) {
         // For Reddit subscription posts, register subreddit even without raw data
         if (platform === 'reddit' && postData.content.community?.url && this.settings.updateAuthorMetadata) {
@@ -6303,6 +6308,25 @@ ${contentParts.join('')}
             );
           } catch (e) {
             console.warn('[Social Archiver] Failed to register subreddit:', e);
+          }
+        }
+
+        // Still attempt avatar download from existing author.avatar URL
+        // (Direct API posts have avatar URLs but no raw response for ProfileDataMapper)
+        if (this.settings.downloadAuthorAvatars && this.authorAvatarService && postData.author.avatar) {
+          try {
+            const username = this.extractUsernameForAvatar(postData.author, platform);
+            const localAvatarPath = await this.authorAvatarService.downloadAndSaveAvatar(
+              postData.author.avatar,
+              platform,
+              username,
+              this.settings.overwriteAuthorAvatar
+            );
+            if (localAvatarPath) {
+              postData.author.localAvatar = localAvatarPath;
+            }
+          } catch (e) {
+            console.warn('[Social Archiver] Failed to download avatar without raw data:', e);
           }
         }
         return;

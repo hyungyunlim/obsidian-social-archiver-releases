@@ -4,6 +4,40 @@
  * Case-insensitive deduplication when merging user-selected tags
  * with auto-generated archive tags in frontmatter.
  */
+import { TAG_NAME_MAX_LENGTH } from '@/types/tag';
+
+const TAG_WHITESPACE_PATTERN = /\s/;
+
+/**
+ * Validate tag name against app rules.
+ *
+ * Rules:
+ * - 1..TAG_NAME_MAX_LENGTH chars after trimming
+ * - no whitespace characters (Obsidian tag compatibility)
+ *
+ * @param name - Raw tag name
+ * @returns Error message when invalid, otherwise null
+ */
+export function validateTagName(name: string): string | null {
+  const trimmed = name.trim();
+  if (!trimmed || trimmed.length > TAG_NAME_MAX_LENGTH) {
+    return `Tag name must be 1-${TAG_NAME_MAX_LENGTH} characters`;
+  }
+  if (TAG_WHITESPACE_PATTERN.test(trimmed)) {
+    return 'Tag name cannot contain spaces';
+  }
+  return null;
+}
+
+/**
+ * Check whether a tag name is valid.
+ *
+ * @param name - Raw tag name
+ * @returns True when valid
+ */
+export function isValidTagName(name: string): boolean {
+  return validateTagName(name) === null;
+}
 
 /**
  * Merge selected tags into existing frontmatter tags with case-insensitive deduplication.
@@ -55,5 +89,5 @@ export function mergeTagsCaseInsensitive(
 export function sanitizeTagNames(tags: string[]): string[] {
   return tags
     .map(t => t.trim())
-    .filter(t => t.length > 0);
+    .filter(isValidTagName);
 }

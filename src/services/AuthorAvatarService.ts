@@ -312,23 +312,34 @@ export class AuthorAvatarService {
    */
   private async fetchWithTimeout(url: string): Promise<Response> {
     try {
-      // For CORS-blocked domains with proxy available, use proxy
+      // For CORS-blocked domains with proxy available, try proxy first then direct fallback
       if (this.requiresProxy(url) && this.workerApiUrl) {
         const proxyUrl = `${this.workerApiUrl}/api/proxy-media?url=${encodeURIComponent(url)}`;
-        const response = await requestUrl({
+        const proxyResponse = await requestUrl({
           url: proxyUrl,
           method: 'GET',
           throw: false,
         });
 
-        // Convert Obsidian's response to a Response-like object
-        return this.createResponseFromObsidian(response);
+        if (proxyResponse.status >= 200 && proxyResponse.status < 300) {
+          return this.createResponseFromObsidian(proxyResponse);
+        }
+
+        // Proxy failed (e.g., CDN 403) — fall back to Obsidian's direct requestUrl
+        // Obsidian's requestUrl uses Electron's net module which may succeed where
+        // Cloudflare Workers fail (different IP / different TLS fingerprint)
+        console.debug('[AuthorAvatarService] Proxy returned', proxyResponse.status, '- trying direct fetch');
       }
 
-      // Use Obsidian's requestUrl directly (bypasses CORS)
+      // Use Obsidian's requestUrl directly (bypasses CORS, uses Electron's net module)
       const response = await requestUrl({
         url,
         method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+          'Referer': 'https://www.instagram.com/',
+          'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+        },
         throw: false,
       });
 

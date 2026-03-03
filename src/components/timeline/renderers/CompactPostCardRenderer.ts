@@ -5,6 +5,7 @@ import {
 import { App, setIcon, Platform as ObsidianPlatform, Component, TFile } from 'obsidian';
 import type { LinkPreviewRenderer } from './LinkPreviewRenderer';
 import { createSVGElement } from '../../../utils/dom-helpers';
+import { maybeProxyCdnUrl } from '../../../utils/cdnProxy';
 
 /**
  * CompactPostCardRenderer - Renders simplified post cards for additional embedded archives
@@ -534,9 +535,9 @@ export class CompactPostCardRenderer extends Component {
       }
     }
 
-    // Priority 3: External avatar URL
+    // Priority 3: External avatar URL (proxy CORS-blocked CDN domains)
     if (post.author.avatar) {
-      return post.author.avatar;
+      return maybeProxyCdnUrl(post.author.avatar);
     }
     return null;
   }

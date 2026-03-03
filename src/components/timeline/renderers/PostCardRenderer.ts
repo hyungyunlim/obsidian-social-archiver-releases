@@ -30,12 +30,13 @@ import { AICommentRenderer, type AICommentRendererOptions } from './AICommentRen
 import { AICliDetector, type AICli, type AICliDetectionResult } from '../../../utils/ai-cli';
 import { parseAIComments, appendAIComment, removeAIComment, updateFrontmatterAIComments } from '../../../services/ai-comment/markdown-handler';
 import type { AICommentMeta, AICommentType, AICommentProgress, AICommentResult, AIOutputLanguage } from '../../../types/ai-comment';
-import { insertTranscriptSection, extractTranscriptLanguages } from '../../../services/markdown/TranscriptSectionManager';
+import { insertTranscriptSection, extractTranscriptLanguages, parseTranscriptSections } from '../../../services/markdown/TranscriptSectionManager';
 import { languageCodeToName } from '../../../constants/languages';
 import { getPlatformCategory } from '../../../shared/platforms/types';
 import { createSVGElement } from '../../../utils/dom-helpers';
 import { getShareUrlForClipboard } from '../../../utils/shareUrl';
 import type { WhisperModel } from '../../../utils/whisper';
+import { maybeProxyCdnUrl } from '../../../utils/cdnProxy';
 
 /**
  * PostCardRenderer - Renders individual post cards
@@ -961,7 +962,7 @@ export class PostCardRenderer extends Component {
   }
 
   /**
-   * Get avatar image source with priority: localAvatar > avatar > null
+   * Get avatar image source with priority: localAvatar > avatar (proxied if needed) > null
    */
   private getAvatarSrc(post: PostData): string | null {
     // Priority 1: Local avatar (vault file)
@@ -969,9 +970,9 @@ export class PostCardRenderer extends Component {
       // Use vault.adapter.getResourcePath with path string (same as AuthorRow)
       return this.app.vault.adapter.getResourcePath(post.author.localAvatar);
     }
-    // Priority 2: External avatar URL
+    // Priority 2: External avatar URL (proxy CORS-blocked CDN domains)
     if (post.author.avatar) {
-      return post.author.avatar;
+      return maybeProxyCdnUrl(post.author.avatar);
     }
     return null;
   }
@@ -1110,10 +1111,8 @@ export class PostCardRenderer extends Component {
     avatar.addClass('pcr-avatar-bg');
     avatar.setCssProps({'--sa-width': `${avatarSize}px`, '--sa-height': `${avatarSize}px`});
 
-    // Load avatar image
-    const avatarUrl = post.author.localAvatar
-      ? this.app.vault.adapter.getResourcePath(post.author.localAvatar)
-      : post.author.avatar;
+    // Load avatar image (reuse getAvatarSrc for proxy support)
+    const avatarUrl = this.getAvatarSrc(post);
 
     if (avatarUrl) {
       const img = avatar.createEl('img');
@@ -5998,7 +5997,7 @@ export class PostCardRenderer extends Component {
     content = await this.vault.read(file);
 
     // Format transcript for markdown using unified TranscriptFormatter
-    const hasTranscriptSection = /\n## Transcript\n/i.test(content);
+    const hasTranscriptSection = parseTranscriptSections(content).length > 0;
     if (!hasTranscriptSection) {
       const formatter = new TranscriptFormatter();
       const body = formatter.formatWhisperTranscript(result.segments);

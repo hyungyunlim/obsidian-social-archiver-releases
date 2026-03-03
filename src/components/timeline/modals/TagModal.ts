@@ -2,6 +2,7 @@ import { Modal, Notice, Platform, setIcon, type App } from 'obsidian';
 import type { TagStore } from '@/services/TagStore';
 import type { TagDefinition } from '@/types/tag';
 import { TAG_COLORS, TAG_NAME_MAX_LENGTH } from '@/types/tag';
+import { validateTagName } from '@/utils/tags';
 
 const HEX_COLOR_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
@@ -231,13 +232,13 @@ class TagEditModal extends Modal {
 
   private async save(): Promise<void> {
     const rawName = this.nameInput?.value ?? '';
-    const trimmedName = rawName.trim();
-
-    if (!trimmedName || trimmedName.length > TAG_NAME_MAX_LENGTH) {
-      new Notice(`Tag name must be 1-${TAG_NAME_MAX_LENGTH} characters`);
+    const validationError = validateTagName(rawName);
+    if (validationError) {
+      new Notice(validationError);
       this.nameInput?.focus();
       return;
     }
+    const trimmedName = rawName.trim();
 
     const rawHex = this.colorInput?.value ?? '';
     const normalizedColor = rawHex.trim() ? normalizeHexColor(rawHex) : null;
@@ -640,7 +641,9 @@ export class TagModal extends Modal {
     }
 
     // Filter by search query
-    const trimmedQuery = query.trim().toLowerCase();
+    const rawQuery = query.trim();
+    const trimmedQuery = rawQuery.toLowerCase();
+    const queryValidationError = rawQuery ? validateTagName(rawQuery) : null;
     const filteredTags = trimmedQuery
       ? allTags.filter(t => t.name.toLowerCase().includes(trimmedQuery))
       : allTags;
@@ -663,11 +666,19 @@ export class TagModal extends Modal {
     }
 
     // "Create" option if search doesn't match any existing tag
-    const showCreate = !!(trimmedQuery && !allTags.some(t => t.name.toLowerCase() === trimmedQuery));
+    const showCreate = !!(
+      trimmedQuery &&
+      !queryValidationError &&
+      !allTags.some(t => t.name.toLowerCase() === trimmedQuery)
+    );
     this.hasCreateRow = showCreate;
     if (showCreate) {
-      this.renderCreateRow(container, query.trim());
+      this.renderCreateRow(container, rawQuery);
       rowIndex++;
+    } else if (queryValidationError) {
+      const invalidEl = container.createDiv();
+      invalidEl.addClass('sa-p-8', 'sa-text-xs', 'sa-text-error');
+      invalidEl.textContent = queryValidationError;
     }
 
     // Update total row count for keyboard navigation
@@ -894,6 +905,12 @@ export class TagModal extends Modal {
 
     // Create (and optionally apply) on click
     row.addEventListener('click', () => {
+      const validationError = validateTagName(name);
+      if (validationError) {
+        new Notice(validationError);
+        return;
+      }
+
       this.markDirty();
       this.highlightedIndex = -1;
       if (this.searchInput) this.searchInput.value = '';

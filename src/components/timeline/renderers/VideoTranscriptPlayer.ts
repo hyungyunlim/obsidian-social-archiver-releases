@@ -167,14 +167,25 @@ export class VideoTranscriptPlayer {
       return post.whisperTranscript.segments;
     }
 
-    // Priority 2: YouTube formatted transcript (BrightData, timestamps in ms)
+    // Priority 2: YouTube formatted transcript
+    // start_time/end_time can be either seconds (current) or milliseconds (legacy).
     if (post.transcript?.formatted?.length) {
+      const normalizeTime = (value: number): number => {
+        if (!Number.isFinite(value)) return 0;
+        const duration = (post.metadata as unknown as Record<string, unknown>)?.['duration'] as number | undefined;
+        // Heuristic: if value is far larger than duration (or very large in general), treat as ms.
+        const looksLikeMs = typeof duration === 'number' && duration > 0
+          ? value > duration * 2
+          : value > 10_000;
+        return looksLikeMs ? value / 1000 : value;
+      };
+
       return post.transcript.formatted.map((entry, i) => ({
         id: i,
-        start: entry.start_time / 1000, // ms → seconds
+        start: normalizeTime(entry.start_time),
         end: entry.end_time
-          ? entry.end_time / 1000
-          : (entry.start_time / 1000) + 8, // fallback: 8 seconds
+          ? normalizeTime(entry.end_time)
+          : normalizeTime(entry.start_time) + 8, // fallback: 8 seconds
         text: entry.text
       }));
     }

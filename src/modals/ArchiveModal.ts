@@ -5,7 +5,7 @@ import type { MediaDownloadMode } from '../types/settings';
 import { getVaultOrganizationStrategy } from '../types/settings';
 import { isAuthenticated } from '../utils/auth';
 import { TAG_NAME_MAX_LENGTH } from '@/types/tag';
-import { sanitizeTagNames } from '@/utils/tags';
+import { isValidTagName, sanitizeTagNames, validateTagName } from '@/utils/tags';
 import { validateAndDetectPlatform } from '@/schemas/platforms';
 import { resolvePinterestUrl } from '@/utils/pinterest';
 import { analyzeUrl, type UrlAnalysisResult } from '@/utils/urlAnalysis';
@@ -1891,7 +1891,7 @@ export class ArchiveModal extends Modal {
       // Register job with CrawlJobTracker for real-time status banner display
       // Skip for free API platforms (Fediverse, YouTube, X) - they complete synchronously
       // and the WebSocket event will handle job completion before this code runs
-      const isFreeApiPlatform = request.platform === 'bluesky' || request.platform === 'mastodon' || request.platform === 'youtube' || request.platform === 'x';
+      const isFreeApiPlatform = request.platform === 'bluesky' || request.platform === 'mastodon' || request.platform === 'youtube' || request.platform === 'x' || request.platform === 'instagram';
       if (!isFreeApiPlatform) {
         this.plugin.crawlJobTracker.startJob(
           {
@@ -2469,6 +2469,7 @@ export class ArchiveModal extends Modal {
     searchInput.style.width = '100%';
     searchInput.style.padding = '6px 8px';
     searchInput.style.fontSize = '13px';
+    searchInput.maxLength = TAG_NAME_MAX_LENGTH;
 
     // Dropdown list
     const dropdown = container.createDiv({ cls: 'archive-tag-dropdown' });
@@ -2485,7 +2486,9 @@ export class ArchiveModal extends Modal {
     const renderDropdown = (query: string): void => {
       dropdown.empty();
       highlightedIndex = -1;
-      const trimmed = query.trim().toLowerCase();
+      const rawQuery = query.trim();
+      const trimmed = rawQuery.toLowerCase();
+      const queryValidationError = rawQuery ? validateTagName(rawQuery) : null;
 
       // Get all tags (defined + discovered from vault)
       const tagStore = this.plugin.tagStore;
@@ -2498,7 +2501,8 @@ export class ArchiveModal extends Modal {
 
       // Exclude already selected
       const selectedLower = new Set(this.selectedTags.map(t => t.toLowerCase()));
-      const available = filtered.filter(t => !selectedLower.has(t.name.toLowerCase()));
+      const available = filtered.filter(t => !selectedLower.has(t.name.toLowerCase()))
+        .filter(t => isValidTagName(t.name));
 
       if (available.length === 0 && !trimmed) {
         dropdown.addClass('sa-hidden');
@@ -2552,7 +2556,7 @@ export class ArchiveModal extends Modal {
       }
 
       // "Create new tag" option if query doesn't match any existing tag exactly
-      if (trimmed && !allTags.some(t => t.name.toLowerCase() === trimmed)) {
+      if (trimmed && !queryValidationError && !allTags.some(t => t.name.toLowerCase() === trimmed)) {
         const createRow = dropdown.createDiv({ cls: 'archive-tag-dropdown-item' });
         createRow.style.padding = '6px 10px';
         createRow.style.cursor = 'pointer';
@@ -2573,15 +2577,25 @@ export class ArchiveModal extends Modal {
         });
         createRow.addEventListener('click', () => {
           const newTagName = query.trim();
-          if (newTagName.length > 0 && newTagName.length <= TAG_NAME_MAX_LENGTH) {
-            this.selectedTags.push(newTagName);
-            searchInput.value = '';
-            this.renderTagChips(chipsArea);
-            renderDropdown('');
-            dropdown.addClass('sa-hidden');
-            searchInput.focus();
+          const validationError = validateTagName(newTagName);
+          if (validationError) {
+            new Notice(validationError);
+            return;
           }
+          this.selectedTags.push(newTagName);
+          searchInput.value = '';
+          this.renderTagChips(chipsArea);
+          renderDropdown('');
+          dropdown.addClass('sa-hidden');
+          searchInput.focus();
         });
+      } else if (queryValidationError) {
+        const invalidRow = dropdown.createDiv({ cls: 'archive-tag-dropdown-item' });
+        invalidRow.style.padding = '6px 10px';
+        invalidRow.style.fontSize = '12px';
+        invalidRow.style.color = 'var(--text-error)';
+        invalidRow.style.cursor = 'default';
+        invalidRow.setText(`⚠ ${queryValidationError}`);
       }
     };
 
@@ -2625,10 +2639,15 @@ export class ArchiveModal extends Modal {
         } else if (searchInput.value.trim()) {
           // Create or select the typed tag
           const typed = searchInput.value.trim();
+          const validationError = validateTagName(typed);
+          if (validationError) {
+            new Notice(validationError);
+            return;
+          }
           const existing = this.plugin.tagStore.getTagByName(typed);
           const tagName = existing ? existing.name : typed;
           const alreadySelected = this.selectedTags.some(t => t.toLowerCase() === tagName.toLowerCase());
-          if (!alreadySelected && tagName.length <= TAG_NAME_MAX_LENGTH) {
+          if (!alreadySelected) {
             this.selectedTags.push(tagName);
             searchInput.value = '';
             this.renderTagChips(chipsArea);

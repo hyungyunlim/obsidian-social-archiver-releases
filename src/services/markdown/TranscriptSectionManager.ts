@@ -58,17 +58,33 @@ export function parseTranscriptSections(
 
     const headerEnd = match.index + match.fullMatch.length;
 
-    // Body extends to just before the next transcript header, or until next ## / --- / EOF
+    // Body extends to just before the next transcript header, or until
+    // metadata footer / EOF when this is the last transcript section.
     let bodyEnd: number;
     if (nextMatch) {
       bodyEnd = nextMatch.index;
     } else {
-      // Find the next section marker after this header
+      // Find the next markdown H2 section after this header.
       const afterHeader = markdown.substring(headerEnd);
-      const nextSectionMatch = afterHeader.match(/\n(?=## |---\s*$)/m);
-      bodyEnd = nextSectionMatch
-        ? headerEnd + (nextSectionMatch.index ?? 0)
-        : markdown.length;
+      const nextH2Match = afterHeader.match(/\n##\s/m);
+
+      // Also stop before metadata footer if present.
+      // Footer pattern example:
+      // ---
+      //
+      // **Platform:** youtube
+      const metadataFooterMatch = afterHeader.match(
+        /\n---\s*\n+\*\*(?:Platform|Original URL|Author|Published):\*\*/m
+      );
+
+      const candidateEnds: number[] = [markdown.length];
+      if (nextH2Match && nextH2Match.index !== undefined) {
+        candidateEnds.push(headerEnd + nextH2Match.index);
+      }
+      if (metadataFooterMatch && metadataFooterMatch.index !== undefined) {
+        candidateEnds.push(headerEnd + metadataFooterMatch.index);
+      }
+      bodyEnd = Math.min(...candidateEnds);
     }
 
     const body = markdown.substring(headerEnd, bodyEnd).replace(/^\n+/, '').replace(/\n+$/, '');

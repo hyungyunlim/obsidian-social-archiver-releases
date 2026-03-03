@@ -72,6 +72,40 @@ platform: youtube
 
 [0:00] こんにちは`;
 
+const EMOJI_TRANSCRIPT = `---
+platform: youtube
+---
+
+## 📄 Transcript
+
+[0:00] Hello with emoji header
+
+## 📄 Transcript (Korean)
+
+[0:00] 이모지 헤더 한국어
+`;
+
+const TRANSCRIPT_WITH_INTERNAL_DIVIDER = `---
+platform: youtube
+---
+
+## 📄 Transcript
+
+**Full Transcript:**
+
+Long paragraph text.
+
+---
+
+[00:00] Segment one
+
+[00:02] Segment two
+
+---
+
+**Platform:** youtube
+`;
+
 // ─── parseTranscriptSections ───────────────────────────
 
 describe('parseTranscriptSections', () => {
@@ -103,6 +137,22 @@ describe('parseTranscriptSections', () => {
   it('should default to en when no defaultLanguageCode provided', () => {
     const sections = parseTranscriptSections(SINGLE_TRANSCRIPT);
     expect(sections[0]!.languageCode).toBe('en');
+  });
+
+  it('should parse emoji transcript headers', () => {
+    const sections = parseTranscriptSections(EMOJI_TRANSCRIPT, 'en');
+    expect(sections).toHaveLength(2);
+    expect(sections[0]!.languageCode).toBe('en');
+    expect(sections[1]!.languageCode).toBe('ko');
+    expect(sections[1]!.body).toContain('이모지 헤더 한국어');
+  });
+
+  it('should keep transcript body after internal --- divider', () => {
+    const sections = parseTranscriptSections(TRANSCRIPT_WITH_INTERNAL_DIVIDER, 'en');
+    expect(sections).toHaveLength(1);
+    expect(sections[0]!.body).toContain('[00:00] Segment one');
+    expect(sections[0]!.body).toContain('[00:02] Segment two');
+    expect(sections[0]!.body).not.toContain('**Platform:**');
   });
 });
 

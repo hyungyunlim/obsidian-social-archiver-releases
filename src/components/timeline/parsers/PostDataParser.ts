@@ -564,6 +564,17 @@ export class PostDataParser {
     // Remove frontmatter
     let withoutFrontmatter = markdown.replace(/^---\n[\s\S]*?\n---\n/, '');
 
+    // Remove transcript sections (## Transcript / ## 📄 Transcript variants)
+    // so transcript content is shown only in the dedicated transcript player.
+    const transcriptSections = parseTranscriptSections(withoutFrontmatter);
+    if (transcriptSections.length > 0) {
+      for (let i = transcriptSections.length - 1; i >= 0; i--) {
+        const section = transcriptSections[i];
+        if (!section) continue;
+        withoutFrontmatter = withoutFrontmatter.slice(0, section.start) + withoutFrontmatter.slice(section.end);
+      }
+    }
+
     // Remove quotedPost section to avoid including it in content
     withoutFrontmatter = withoutFrontmatter.replace(/## 🔗 Shared Post[\s\S]*?(?=\n---\n|$)/, '');
 
@@ -939,21 +950,24 @@ export class PostDataParser {
 
   /**
    * Parse Whisper transcript from markdown content
-   * Looks for ## Transcript section with [MM:SS] timestamp lines
+   * Looks for transcript sections (## Transcript / ## 📄 Transcript)
+   * with [MM:SS] timestamp lines.
    */
   private parseWhisperTranscript(
     content: string,
     language?: string
   ): PostData['whisperTranscript'] | undefined {
-    // Match ## Transcript section
-    const sectionMatch = content.match(/## Transcript\n\n([\s\S]*?)(?=\n## |\n---|$)/i);
+    // Prefer transcript sections parsed by shared manager (supports emoji headers)
+    const transcriptSections = parseTranscriptSections(content, language);
+    const primarySection = transcriptSections.find((s) => s.languageName === '') || transcriptSections[0];
+    const sectionContent = primarySection?.body;
 
     // Legacy: also support old HTML wrapper format for existing files
-    const legacyMatch = !sectionMatch
+    const legacyMatch = !sectionContent
       ? content.match(/<div class="podcast-transcript"[^>]*>([\s\S]*?)<\/div>/)
       : null;
 
-    const transcriptContent = sectionMatch?.[1] || legacyMatch?.[1];
+    const transcriptContent = sectionContent || legacyMatch?.[1];
     if (!transcriptContent) return undefined;
 
     // Strip callout prefixes (> ) from each line for YouTube formatted transcripts

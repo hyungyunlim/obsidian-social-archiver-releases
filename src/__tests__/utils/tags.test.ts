@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mergeTagsCaseInsensitive, sanitizeTagNames } from '@/utils/tags';
+import { mergeTagsCaseInsensitive, sanitizeTagNames, validateTagName } from '@/utils/tags';
 
 describe('mergeTagsCaseInsensitive', () => {
   it('merges non-overlapping tags', () => {
@@ -66,5 +66,19 @@ describe('sanitizeTagNames', () => {
 
   it('preserves valid tags', () => {
     expect(sanitizeTagNames(['Recipe', 'Tech/AI'])).toEqual(['Recipe', 'Tech/AI']);
+  });
+
+  it('removes tags containing spaces', () => {
+    expect(sanitizeTagNames(['My Tag', 'ValidTag', 'Another Tag'])).toEqual(['ValidTag']);
+  });
+});
+
+describe('validateTagName', () => {
+  it('rejects tags containing spaces', () => {
+    expect(validateTagName('my tag')).toBe('Tag name cannot contain spaces');
+  });
+
+  it('accepts trimmed valid tags', () => {
+    expect(validateTagName('  my-tag  ')).toBeNull();
   });
 });

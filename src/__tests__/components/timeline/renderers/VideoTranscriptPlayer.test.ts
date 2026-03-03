@@ -1,93 +1,89 @@
-import { describe, it, expect } from 'vitest';
+import type { App } from 'obsidian';
+import { VideoTranscriptPlayer } from '@/components/timeline/renderers/VideoTranscriptPlayer';
 
-/**
- * VideoTranscriptPlayer tests
- *
- * Since VideoTranscriptPlayer depends on Obsidian App API (container.createDiv, etc.)
- * which cannot be mocked without a DOM environment, we test the pure logic functions
- * that can be extracted: transcript segment unification.
- */
+describe('VideoTranscriptPlayer timestamp normalization', () => {
+  const player = new VideoTranscriptPlayer({} as App);
 
-// Test the transcript unification logic directly
-// This mirrors VideoTranscriptPlayer.unifyTranscriptSegments()
+  const unify = (post: unknown) => (
+    (player as unknown as {
+      unifyTranscriptSegments: (p: unknown) => Array<{ id: number; start: number; end: number; text: string }>;
+    }).unifyTranscriptSegments(post)
+  );
 
-function unifyTranscriptSegments(post: {
-  whisperTranscript?: { segments: Array<{ id: number; start: number; end: number; text: string }>; language: string };
-  transcript?: { formatted?: Array<{ start_time: number; end_time: number; text: string }> };
-}): Array<{ id: number; start: number; end: number; text: string }> {
-  if (post.whisperTranscript?.segments?.length) {
-    return post.whisperTranscript.segments;
-  }
-  if (post.transcript?.formatted?.length) {
-    return post.transcript.formatted.map((entry, i) => ({
-      id: i,
-      start: entry.start_time / 1000,
-      end: entry.end_time ? entry.end_time / 1000 : (entry.start_time / 1000) + 8,
-      text: entry.text,
-    }));
-  }
-  return [];
-}
-
-describe('unifyTranscriptSegments', () => {
-  it('should return empty array when no transcript data', () => {
-    expect(unifyTranscriptSegments({})).toEqual([]);
+  it('returns empty array when no transcript data exists', () => {
+    const segments = unify({});
+    expect(segments).toEqual([]);
   });
 
-  it('should prefer whisperTranscript over formatted transcript', () => {
-    const post = {
+  it('prefers whisper transcript over formatted transcript', () => {
+    const segments = unify({
       whisperTranscript: {
-        segments: [{ id: 0, start: 1.0, end: 5.0, text: 'whisper text' }],
+        segments: [{ id: 0, start: 1, end: 5, text: 'Whisper segment' }],
         language: 'en',
       },
       transcript: {
-        formatted: [{ start_time: 2000, end_time: 6000, text: 'yt text' }],
+        formatted: [{ start_time: 60, end_time: 64, duration: 4, text: 'Formatted segment' }],
       },
-    };
-    const result = unifyTranscriptSegments(post);
-    expect(result).toHaveLength(1);
-    expect(result[0].text).toBe('whisper text');
-    expect(result[0].start).toBe(1.0);
+    });
+
+    expect(segments).toHaveLength(1);
+    expect(segments[0]).toMatchObject({ id: 0, start: 1, end: 5, text: 'Whisper segment' });
   });
 
-  it('should convert YouTube formatted transcript from ms to seconds', () => {
-    const post = {
+  it('keeps second-based formatted transcript timestamps as-is', () => {
+    const segments = unify({
+      metadata: { duration: 120 },
       transcript: {
         formatted: [
-          { start_time: 1500, end_time: 5200, text: 'Hello world' },
-          { start_time: 5200, end_time: 10000, text: 'Second segment' },
+          { start_time: 60, end_time: 64, duration: 4, text: 'Second-based segment' },
         ],
       },
-    };
-    const result = unifyTranscriptSegments(post);
-    expect(result).toHaveLength(2);
-    expect(result[0].start).toBe(1.5);
-    expect(result[0].end).toBe(5.2);
-    expect(result[1].start).toBe(5.2);
-    expect(result[1].end).toBe(10);
+    });
+
+    expect(segments).toHaveLength(1);
+    expect(segments[0]).toMatchObject({ id: 0, start: 60, end: 64, text: 'Second-based segment' });
   });
 
-  it('should use 8s fallback when end_time is missing', () => {
-    const post = {
-      transcript: {
-        formatted: [{ start_time: 3000, end_time: 0, text: 'No end time' }],
-      },
-    };
-    const result = unifyTranscriptSegments(post);
-    expect(result[0].end).toBe(11); // 3 + 8
-  });
-
-  it('should assign sequential IDs to YouTube formatted segments', () => {
-    const post = {
+  it('converts millisecond-based formatted transcript timestamps to seconds', () => {
+    const segments = unify({
+      metadata: { duration: 120 },
       transcript: {
         formatted: [
-          { start_time: 0, end_time: 1000, text: 'A' },
-          { start_time: 1000, end_time: 2000, text: 'B' },
-          { start_time: 2000, end_time: 3000, text: 'C' },
+          { start_time: 60000, end_time: 64000, duration: 4000, text: 'Millisecond segment' },
         ],
       },
-    };
-    const result = unifyTranscriptSegments(post);
-    expect(result.map((s) => s.id)).toEqual([0, 1, 2]);
+    });
+
+    expect(segments).toHaveLength(1);
+    expect(segments[0]).toMatchObject({ id: 0, start: 60, end: 64, text: 'Millisecond segment' });
+  });
+
+  it('uses 8-second fallback when end_time is missing', () => {
+    const segments = unify({
+      metadata: { duration: 120 },
+      transcript: {
+        formatted: [
+          { start_time: 30, end_time: 0, duration: 0, text: 'No end time' },
+        ],
+      },
+    });
+
+    expect(segments).toHaveLength(1);
+    expect(segments[0]).toMatchObject({ start: 30, end: 38, text: 'No end time' });
+  });
+
+  it('assigns sequential ids for formatted transcript segments', () => {
+    const segments = unify({
+      metadata: { duration: 120 },
+      transcript: {
+        formatted: [
+          { start_time: 0, end_time: 5, duration: 5, text: 'A' },
+          { start_time: 5, end_time: 10, duration: 5, text: 'B' },
+          { start_time: 10, end_time: 15, duration: 5, text: 'C' },
+        ],
+      },
+    });
+
+    expect(segments.map((s) => s.id)).toEqual([0, 1, 2]);
   });
 });

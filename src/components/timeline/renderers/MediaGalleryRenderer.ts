@@ -3,6 +3,7 @@ import type { Media, PostData } from '../../../types/post';
 import { isVideoUrl, isAudioUrl } from '../../../utils/mediaType';
 import { TranscriptRenderer } from './TranscriptRenderer';
 import type { TranscriptionSegment } from '../../../types/transcription';
+import { maybeProxyCdnUrl } from '../../../utils/cdnProxy';
 
 /**
  * MediaGalleryRenderer - Renders media carousel with thumbnails
@@ -152,13 +153,19 @@ export class MediaGalleryRenderer {
       coverArt.addClass('mgr-cover-art-desktop');
     }
 
-    // Try to use author avatar as cover
-    const avatarUrl = post?.author?.avatar || post?.author?.localAvatar;
+    // Try to use author avatar as cover (proxy CDN domains that block direct requests)
+    const rawAvatarUrl = post?.author?.avatar || post?.author?.localAvatar;
     const iconSize = isMobile ? 18 : 22;
-    if (avatarUrl) {
+    if (rawAvatarUrl) {
+      let resolvedSrc: string;
+      if (rawAvatarUrl.startsWith('http')) {
+        resolvedSrc = maybeProxyCdnUrl(rawAvatarUrl);
+      } else {
+        resolvedSrc = this.getResourcePath(rawAvatarUrl);
+      }
       const coverImg = coverArt.createEl('img', {
         attr: {
-          src: avatarUrl.startsWith('http') ? avatarUrl : this.getResourcePath(avatarUrl),
+          src: resolvedSrc,
           alt: 'Cover'
         }
       });

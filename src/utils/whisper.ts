@@ -444,6 +444,7 @@ export class WhisperDetector {
     const { promisify } = nodeRequire('util') as typeof import('util');
     const execAsync = promisify(exec);
     const os = nodeRequire('os') as typeof import('os');
+    const fs = nodeRequire('fs') as typeof import('fs');
 
     const paths = this.DETECTION_PATHS[variant][platform] || [];
     const expandedPaths = paths.map(p => this.expandPath(p, os));
@@ -455,6 +456,12 @@ export class WhisperDetector {
     }
 
     for (const whisperPath of expandedPaths) {
+      // Skip known filesystem paths that don't exist.
+      // PATH lookup entries like "whisper-cli" should still be attempted.
+      if (this.isFilesystemPath(whisperPath) && !fs.existsSync(whisperPath)) {
+        continue;
+      }
+
       try {
         const versionCommand = this.getVersionCommand(variant, whisperPath);
         const { stdout, stderr } = await execAsync(versionCommand, { timeout: 10000 });
@@ -483,12 +490,34 @@ export class WhisperDetector {
 
         // Log at debug level for troubleshooting
         const errorMessage = execError.message || String(error);
-        console.debug(`[WhisperDetector] Path ${whisperPath} check failed: ${errorMessage.slice(0, 100)}`);
+        if (!this.isCommandNotFoundError(error)) {
+          console.debug(`[WhisperDetector] Path ${whisperPath} check failed: ${errorMessage.slice(0, 100)}`);
+        }
         // Continue to next path
       }
     }
 
     return null;
+  }
+
+  /**
+   * Check if a candidate looks like a filesystem path instead of a PATH command name.
+   */
+  private static isFilesystemPath(candidate: string): boolean {
+    return candidate.includes('/') || candidate.includes('\\') || /^[a-zA-Z]:/.test(candidate);
+  }
+
+  /**
+   * Detect common command-not-found errors across shells/platforms.
+   */
+  private static isCommandNotFoundError(error: unknown): boolean {
+    const execError = error as { code?: string | number; message?: string; stdout?: string; stderr?: string };
+    if (execError.code === 'ENOENT' || execError.code === 127) {
+      return true;
+    }
+
+    const text = `${execError.message || ''}\n${execError.stderr || ''}\n${execError.stdout || ''}`.toLowerCase();
+    return text.includes('command not found') || text.includes('is not recognized as an internal or external command');
   }
 
   /**

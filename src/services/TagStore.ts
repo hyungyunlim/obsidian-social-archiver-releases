@@ -1,6 +1,7 @@
 import { TFile, TFolder, type App } from 'obsidian';
 import type { TagDefinition, TagWithCount } from '@/types/tag';
-import { TAG_COLORS, TAG_NAME_MAX_LENGTH } from '@/types/tag';
+import { TAG_COLORS } from '@/types/tag';
+import { validateTagName } from '@/utils/tags';
 import type SocialArchiverPlugin from '@/main';
 
 /**
@@ -43,10 +44,11 @@ export class TagStore {
 
   /** Create a new tag definition */
   async createTag(name: string, color?: string | null): Promise<TagDefinition> {
-    const trimmed = name.trim();
-    if (!trimmed || trimmed.length > TAG_NAME_MAX_LENGTH) {
-      throw new Error(`Tag name must be 1-${TAG_NAME_MAX_LENGTH} characters`);
+    const validationError = validateTagName(name);
+    if (validationError) {
+      throw new Error(validationError);
     }
+    const trimmed = name.trim();
 
     if (this.getTagByName(trimmed)) {
       throw new Error(`Tag "${trimmed}" already exists`);
@@ -78,10 +80,11 @@ export class TagStore {
 
     // Validate name uniqueness if changing
     if (changes.name && changes.name !== existing.name) {
-      const trimmed = changes.name.trim();
-      if (!trimmed || trimmed.length > TAG_NAME_MAX_LENGTH) {
-        throw new Error(`Tag name must be 1-${TAG_NAME_MAX_LENGTH} characters`);
+      const validationError = validateTagName(changes.name);
+      if (validationError) {
+        throw new Error(validationError);
       }
+      const trimmed = changes.name.trim();
       if (this.getTagByName(trimmed)) {
         throw new Error(`Tag "${trimmed}" already exists`);
       }
@@ -139,6 +142,12 @@ export class TagStore {
 
   /** Add a tag to a post's YAML frontmatter */
   async addTagToPost(filePath: string, tagName: string): Promise<void> {
+    const validationError = validateTagName(tagName);
+    if (validationError) {
+      throw new Error(validationError);
+    }
+    const normalizedTagName = tagName.trim();
+
     const file = this.app.vault.getAbstractFileByPath(filePath);
     if (!file || !(file instanceof TFile)) return;
 
@@ -148,9 +157,9 @@ export class TagStore {
       }
       const tagsArr = frontmatter.tags as string[];
       // Avoid duplicates (case-insensitive)
-      const lower = tagName.toLowerCase();
+      const lower = normalizedTagName.toLowerCase();
       if (!tagsArr.some((t: string) => t.toLowerCase() === lower)) {
-        tagsArr.push(tagName);
+        tagsArr.push(normalizedTagName);
       }
     });
   }
