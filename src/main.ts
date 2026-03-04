@@ -4373,16 +4373,29 @@ ${contentParts.join('')}
   }
 
   private isValidUrl(text: string): boolean {
+    const normalized = text.trim();
+    if (!normalized) return false;
+
     try {
-      const url = new URL(text);
+      const url = new URL(normalized);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+        return false;
+      }
+
+      const hostname = url.hostname.toLowerCase();
       const supportedDomains = [
         'facebook.com',
         'fb.com',
+        'fb.watch',
         'linkedin.com',
+        'lnkd.in',
         'instagram.com',
+        'instagr.am',
         'tiktok.com',
         'x.com',
         'twitter.com',
+        't.co',
+        'xcancel.com',
         'threads.net',
         'threads.com',
         'youtube.com',
@@ -4392,10 +4405,25 @@ ${contentParts.join('')}
         'pinterest.com',
         'pin.it',
         'substack.com',
-        'tumblr.com'
+        'tumblr.com',
+        'bsky.app',
+        'medium.com',
+        'velog.io',
+        'blog.naver.com',
+        'cafe.naver.com',
+        'comic.naver.com',
+        'brunch.co.kr',
+        'webtoons.com'
       ];
 
-      return supportedDomains.some(domain => url.hostname.includes(domain));
+      const isKnownDomain = supportedDomains.some(
+        domain => hostname === domain || hostname.endsWith(`.${domain}`)
+      );
+
+      // Mastodon allows custom instance domains: https://<instance>/@<user>/<id>
+      const isMastodonLikePost = /^https?:\/\/[^\s/]+\/@[A-Za-z0-9_@.-]+\/\d+/i.test(normalized);
+
+      return isKnownDomain || isMastodonLikePost;
     } catch {
       return false;
     }
@@ -4450,7 +4478,7 @@ ${contentParts.join('')}
       }
 
       // Handle archive URL (existing behavior)
-      const url = params.url;
+      const url = params.url?.trim();
 
       if (!url) {
         new Notice('No URL provided');
