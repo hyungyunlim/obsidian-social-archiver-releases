@@ -17,6 +17,7 @@
     "build:source": "npm run sync:shared && vite build --mode source",
     "verify:release": "node scripts/verify-release-metadata.mjs",
     "check:css-source": "node scripts/check-css-source.mjs",
+    "archive:social": "node scripts/archive-social.mjs",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",

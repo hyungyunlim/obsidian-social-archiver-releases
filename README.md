@@ -216,6 +216,37 @@ Social Archiver uses server infrastructure to fetch content through web scraping
 - Search by content
 - Create your own posts with the + button
 
+### 4. Optional: One-command launcher (Desktop)
+
+If you want to archive from terminal with one command, use the launcher script:
+
+```bash
+npm run archive:social -- --url "https://x.com/jack/status/20"
+```
+
+What it does:
+- Reads your Obsidian `obsidian.json`
+- Finds vaults with `social-archiver` plugin installed
+- Selects vault automatically when only one is available
+- On macOS, shows a GUI picker when multiple vaults are available
+- Opens `obsidian://social-archive?...` with selected vault and URL
+
+Useful options:
+
+```bash
+# list vaults with Social Archiver installed
+npm run archive:social -- --list
+
+# pick vault by name (works on all OS)
+npm run archive:social -- --vault "MyVault" --url "https://x.com/jack/status/20"
+
+# override obsidian.json location
+npm run archive:social -- --config "/path/to/obsidian.json" --url "https://x.com/jack/status/20"
+
+# print URI without opening Obsidian
+npm run archive:social -- --url "https://x.com/jack/status/20" --dry-run
+```
+
 ## Example Output
 
 Archived posts look like this:
