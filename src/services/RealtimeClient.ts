@@ -14,6 +14,10 @@ export type RealtimeMessageType =
   | 'client_sync' // From mobile app sync (multi-client sync)
   | 'archive_complete' // From archive job completion
   | 'share_created' // From share link creation
+  | 'action_updated' // From web/mobile action (like, bookmark, share)
+  | 'share_deleted' // From share deletion
+  | 'archive_deleted' // From archive deletion
+  | 'media_preserved' // From R2 media preservation
   | 'pong'; // WebSocket pong response
 
 export interface RealtimeMessage {

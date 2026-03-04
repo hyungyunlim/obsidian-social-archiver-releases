@@ -1452,11 +1452,38 @@ body.is-mobile .social-archiver-timeline-view .view-content {
   padding-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px), var(--timeline-safe-area-top-fallback, 0px));
 }
 
+/* Prevent horizontal jitter on narrow iPhone viewports */
+body.is-mobile .social-archiver-timeline-view,
+body.is-mobile .social-archiver-timeline-view .view-content,
+body.is-mobile .social-archiver-timeline-view .sa-timeline-scroll-container {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+body.is-mobile .social-archiver-timeline-view .sa-timeline-scroll-container {
+  overscroll-behavior-x: none;
+}
+
 /* Fallback using media query for devices where is-mobile might not be set */
 @media (max-width: 768px) {
   .social-archiver-timeline-view {
     padding-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px), var(--timeline-safe-area-top-fallback, 0px));
     padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px), var(--timeline-safe-area-bottom-fallback, 0px));
+  }
+
+  .social-archiver-timeline-view,
+  .social-archiver-timeline-view .view-content,
+  .social-archiver-timeline-view .sa-timeline-scroll-container {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+
+  .social-archiver-timeline-view .sa-timeline-scroll-container {
+    overscroll-behavior-x: none;
   }
 }
 

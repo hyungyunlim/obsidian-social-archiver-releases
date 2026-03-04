@@ -83,6 +83,68 @@ export interface ShareCreatedEvent {
 }
 
 // ============================================================================
+// Action Updated Event (private channel)
+// ============================================================================
+
+/**
+ * Sent when a user updates archive actions (like, bookmark, share)
+ */
+export interface ActionUpdatedEventData {
+  archiveId: string;
+  sourceClientId?: string;
+  changes: {
+    isLiked?: boolean;
+    isBookmarked?: boolean;
+    shareUrl?: string | null;
+  };
+  updatedAt: string;
+  timestamp: number;
+}
+
+export interface ActionUpdatedEvent {
+  type: 'action_updated';
+  data: ActionUpdatedEventData;
+}
+
+// ============================================================================
+// Share Deleted Event (private channel)
+// ============================================================================
+
+/**
+ * Sent when a share link is deleted
+ */
+export interface ShareDeletedEventData {
+  shareId: string;
+  shareUrl: string;
+  originalUrl?: string;
+  updatedAt: string;
+  timestamp: number;
+}
+
+export interface ShareDeletedEvent {
+  type: 'share_deleted';
+  data: ShareDeletedEventData;
+}
+
+// ============================================================================
+// Archive Deleted Event (private channel)
+// ============================================================================
+
+/**
+ * Sent when an archive is fully deleted
+ */
+export interface ArchiveDeletedEventData {
+  archiveId: string;
+  updatedAt: string;
+  timestamp: number;
+}
+
+export interface ArchiveDeletedEvent {
+  type: 'archive_deleted';
+  data: ArchiveDeletedEventData;
+}
+
+// ============================================================================
 // Ping/Pong Events
 // ============================================================================
 
@@ -102,6 +164,9 @@ export type WebSocketEvent =
   | ClientSyncEvent
   | ArchiveCompleteEvent
   | ShareCreatedEvent
+  | ActionUpdatedEvent
+  | ShareDeletedEvent
+  | ArchiveDeletedEvent
   | PongEvent;
 
 // ============================================================================

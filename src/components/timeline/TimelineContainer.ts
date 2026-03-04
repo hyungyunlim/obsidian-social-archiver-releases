@@ -1013,7 +1013,7 @@ export class TimelineContainer {
 
   private async render(): Promise<void> {
     // Add Tailwind classes individually
-    this.containerEl.className = 'w-full h-full overflow-y-auto p-4 tc-bg-primary';
+    this.containerEl.className = 'w-full h-full overflow-y-auto p-4 tc-bg-primary sa-overflow-x-hidden sa-box-border sa-timeline-scroll-container';
 
     if (this.viewMode === 'gallery') {
       await this.renderGalleryView();

@@ -22,7 +22,7 @@ import { getAuthorCatalogStore, type AuthorMetadataUpdate } from './services/Aut
 import type { PostData, Platform, Media } from './types/post';
 import type { BrunchComment } from './types/brunch';
 import type { PendingJobArchiveOptions, ServerPendingJob } from './types/pending-job';
-import type { ClientSyncEventData } from './types/websocket';
+import type { ClientSyncEventData, ShareDeletedEventData, ActionUpdatedEventData, ArchiveDeletedEventData } from './types/websocket';
 import type { UserArchive } from './services/WorkersAPIClient';
 import { TimelineView, VIEW_TYPE_TIMELINE } from './views/TimelineView';
 import { MediaGalleryView, VIEW_TYPE_MEDIA_GALLERY } from './views/MediaGalleryView';
@@ -41,7 +41,7 @@ import { mergeTagsCaseInsensitive, sanitizeTagNames } from './utils/tags';
 import { ProcessManager } from './services/ProcessManager';
 import { PostService } from './services/PostService';
 import { YtDlpDetector } from './utils/yt-dlp';
-import { getPlatformName } from '@/shared/platforms';
+import { getPlatformName, detectPlatform } from '@/shared/platforms';
 import type { TranscriptionResult } from './types/transcription';
 import { TranscriptFormatter } from './services/markdown/formatters/TranscriptFormatter';
 import { parseTranscriptSections } from './services/markdown/TranscriptSectionManager';
@@ -1079,6 +1079,61 @@ export default class SocialArchiverPlugin extends Plugin {
         new Notice(`📱 Mobile sync: ${displayTitle}`, 3000);
 
         await this.processSyncQueueItem(queueId, archiveId, clientId);
+      })
+    );
+
+    // Listen for share_deleted events (from web or mobile)
+    // Updates local frontmatter to reflect the share removal
+    this.eventRefs.push(
+      this.events.on('ws:share_deleted', async (message: unknown) => {
+        const msg = message as { type: string; data: ShareDeletedEventData } | undefined;
+        if (!msg?.data?.shareUrl) return;
+
+        const { shareUrl } = msg.data;
+        console.log(`[Social Archiver] Share deleted via WS: ${shareUrl}`);
+
+        // Find the vault file with matching shareUrl in frontmatter
+        const files = this.app.vault.getMarkdownFiles();
+        for (const file of files) {
+          const cache = this.app.metadataCache.getFileCache(file);
+          if (cache?.frontmatter?.shareUrl === shareUrl) {
+            try {
+              await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+                fm.share = false;
+                delete fm.shareUrl;
+                delete fm.shareExpiry;
+              });
+              new Notice('Share link removed from note', 3000);
+            } catch (err) {
+              console.error('[Social Archiver] Failed to update frontmatter for share_deleted:', err);
+            }
+            break;
+          }
+        }
+      })
+    );
+
+    // Listen for action_updated events (like/bookmark changes from other clients)
+    this.eventRefs.push(
+      this.events.on('ws:action_updated', (_message: unknown) => {
+        const msg = _message as { type: string; data: ActionUpdatedEventData } | undefined;
+        if (!msg?.data) return;
+
+        console.debug('[Social Archiver] Action updated via WS:', msg.data.archiveId, msg.data.changes);
+        // Currently no local action to take — the plugin doesn't store like/bookmark state locally.
+        // Future: could update frontmatter if we add isLiked/isBookmarked fields.
+      })
+    );
+
+    // Listen for archive_deleted events (archive fully removed from server)
+    this.eventRefs.push(
+      this.events.on('ws:archive_deleted', (_message: unknown) => {
+        const msg = _message as { type: string; data: ArchiveDeletedEventData } | undefined;
+        if (!msg?.data) return;
+
+        console.log('[Social Archiver] Archive deleted via WS:', msg.data.archiveId);
+        new Notice('An archive was deleted from the server', 3000);
+        // Note: We don't delete local vault files — the user's local copy remains intact.
       })
     );
   }
@@ -4373,29 +4428,12 @@ ${contentParts.join('')}
   }
 
   private isValidUrl(text: string): boolean {
+    const normalized = text.trim();
+    if (!normalized) return false;
     try {
-      const url = new URL(text);
-      const supportedDomains = [
-        'facebook.com',
-        'fb.com',
-        'linkedin.com',
-        'instagram.com',
-        'tiktok.com',
-        'x.com',
-        'twitter.com',
-        'threads.net',
-        'threads.com',
-        'youtube.com',
-        'youtu.be',
-        'reddit.com',
-        'redd.it',
-        'pinterest.com',
-        'pin.it',
-        'substack.com',
-        'tumblr.com'
-      ];
-
-      return supportedDomains.some(domain => url.hostname.includes(domain));
+      const url = new URL(normalized);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+      return detectPlatform(normalized) !== 'post';
     } catch {
       return false;
     }
@@ -4450,7 +4488,7 @@ ${contentParts.join('')}
       }
 
       // Handle archive URL (existing behavior)
-      const url = params.url;
+      const url = params.url?.trim();
 
       if (!url) {
         new Notice('No URL provided');
