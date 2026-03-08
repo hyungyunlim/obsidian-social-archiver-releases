@@ -7,6 +7,7 @@ Save what matters - Archive social media posts directly into your Obsidian vault
 [![downloads](https://img.shields.io/github/downloads/hyungyunlim/obsidian-social-archiver-releases/total)](https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases)
 [![documentation](https://img.shields.io/badge/docs-social--archive.org-7c3aed)](https://docs.social-archive.org)
 [![App Store](https://img.shields.io/badge/App_Store-Download-0D96F6?logo=apple&logoColor=white)](https://apps.apple.com/us/app/social-archiver/id6758323634)
+[![Google Play](https://img.shields.io/badge/Google_Play-Get_it-34A853?logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.socialarchiver.mobile)
 
 > **Currently in Free Beta** - Unlimited archiving, permanent web sharing, all features completely free during beta period. [Future pricing plans →](https://docs.social-archive.org/en/guide/pricing)
 
@@ -131,12 +132,13 @@ Add AI-powered analysis to your archived posts using local CLI tools:
 
 ## Installation
 
-### iOS App (Mobile)
+### Mobile App
 
-Install the Social Archiver iOS app from the App Store:
+Install the Social Archiver mobile app:
 
-- **App Store**: [Social Archiver](https://apps.apple.com/us/app/social-archiver/id6758323634)
-- **Share Extension**: Archive directly from iOS social apps into Obsidian
+- **App Store (iOS)**: [Social Archiver](https://apps.apple.com/us/app/social-archiver/id6758323634)
+- **Google Play (Android)**: [Social Archiver](https://play.google.com/store/apps/details?id=com.socialarchiver.mobile)
+- **Share Extension**: Archive directly from social apps into Obsidian
 - **Same Account**: Use the same email/username as your desktop plugin
 
 ### Community Plugins (Coming Soon)
