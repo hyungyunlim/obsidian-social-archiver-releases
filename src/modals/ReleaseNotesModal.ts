@@ -97,12 +97,21 @@ export class ReleaseNotesModal extends Modal {
       qrImg.setCssProps({'--rnm-qr-size': size});
       qrImg.addClass('rnm-qr-image');
 
-      const qrLink = qrContainer.createEl('a', {
+      const linksContainer = qrContainer.createDiv({ cls: 'rnm-qr-links' });
+
+      const qrLink = linksContainer.createEl('a', {
         text: label,
-        cls: 'external-link',
+        cls: 'external-link rnm-qr-link',
         attr: { href: url, target: '_blank' },
       });
-      qrLink.addClass('rnm-qr-link');
+
+      if (this.releaseNote.qrCode.playStoreUrl) {
+        linksContainer.createEl('a', {
+          text: 'Get it on Google Play',
+          cls: 'external-link rnm-qr-link',
+          attr: { href: this.releaseNote.qrCode.playStoreUrl, target: '_blank' },
+        });
+      }
 
       // Insert before the second h2 (after iOS section, before Performance section)
       const headings = contentContainer.querySelectorAll('h2');

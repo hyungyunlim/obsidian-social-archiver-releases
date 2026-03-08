@@ -14,6 +14,7 @@ export interface ReleaseNote {
     svgBase64: string;
     url: string;
     label: string;
+    playStoreUrl?: string;
   };
 }
 
@@ -23,6 +24,30 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '2.8.4': {
+    title: 'Cross-Device Login + Android Support',
+    date: '2026-03-08',
+    notes: `## Cross-Device Login (QR Code)
+
+- Log into the Obsidian plugin by scanning a QR code or entering a pairing code from the mobile app
+- No more switching between email and browser — approve login directly on your phone
+- Universal Link QR codes work seamlessly on both iOS and Android
+
+## Auto Sync on Mobile Login
+
+- When you log in via the mobile app, sync is automatically enabled — no extra setup needed
+
+## Android App Support
+
+- Google Play Store badge added alongside the App Store badge
+- Android App Links configured for seamless deep linking
+
+## Sign-Out Cleanup
+
+- Centralized sign-out now properly cleans up sync client registration
+`,
+    isImportant: true,
+  },
   '2.8.1': {
     title: 'Reader Mode Polish + TTS Highlight Accuracy',
     date: '2026-03-02',
@@ -225,6 +250,7 @@ The **Social Archiver iOS app** is here! Archive social media posts directly fro
       svgBase64: 'PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz48IURPQ1RZUEUgc3ZnIFBVQkxJQyAiLS8vVzNDLy9EVEQgU1ZHIDEuMS8vRU4iICJodHRwOi8vd3d3LnczLm9yZy9HcmFwaGljcy9TVkcvMS4xL0RURC9zdmcxMS5kdGQiPjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2aWV3Qm94PSIwIDAgNDEgNDEiIHNoYXBlLXJlbmRlcmluZz0iY3Jpc3BFZGdlcyI+PHBhdGggZmlsbD0iI2ZmZmZmZiIgZD0iTTAgMGg0MXY0MUgweiIvPjxwYXRoIHN0cm9rZT0iIzAwMDAwMCIgZD0iTTQgNC41aDdtMiAwaDFtMSAwaDFtMSAwaDFtNCAwaDRtMSAwaDFtMiAwaDdNNCA1LjVoMW01IDBoMW0zIDBoMW0yIDBoM20xIDBoMW0yIDBoMW0zIDBoMW0xIDBoMW01IDBoMU00IDYuNWgxbTEgMGgzbTEgMGgxbTEgMGgzbTEgMGgybTEgMGgxbTEgMGg1bTEgMGgxbTIgMGgxbTEgMGgzbTEgMGgxTTQgNy41aDFtMSAwaDNtMSAwaDFtMSAwaDFtMSAwaDFtMSAwaDFtMSAwaDdtMiAwaDFtMiAwaDFtMSAwaDNtMSAwaDFNNCA4LjVoMW0xIDBoM20xIDBoMW0xIDBoMW0xIDBoMW0yIDBoMW0xIDBoMW0xIDBoMW0zIDBoMW0xIDBoMW0yIDBoMW0xIDBoM20xIDBoMU00IDkuNWgxbTUgMGgxbTEgMGgybTEgMGg2bTQgMGgxbTQgMGgxbTUgMGgxTTQgMTAuNWg3bTEgMGgxbTEgMGgxbTEgMGgxbTEgMGgxbTEgMGgxbTEgMGgxbTEgMGgxbTEgMGgxbTEgMGgxbTEgMGg3TTEyIDExLjVoMW0xIDBoMW0xIDBoMW0xIDBoMm01IDBoMk00IDEyLjVoMW0xIDBoNW0yIDBoMm0xIDBoN20zIDBoMW0xIDBoMW0xIDBoNU00IDEzLjVoMW0yIDBoM20zIDBoMm0xIDBoMW0xIDBoMW0xIDBoMW0xIDBoM20xIDBoM20xIDBoMm0xIDBoMm0xIDBoMU00IDE0LjVoM20xIDBoMW0xIDBoMW0yIDBoMW0yIDBoMW0yIDBoMW00IDBoMW0xIDBoMW01IDBoMW0xIDBoMk01IDE1LjVoM20zIDBoMW0xIDBoMm0zIDBoMm0yIDBoMm0xIDBoNG0xIDBoMW0xIDBoNU03IDE2LjVoMW0yIDBoMW0zIDBoMm0zIDBoMW0yIDBoMW0xIDBoMW0xIDBoMW0xIDBoMm0yIDBoMk00IDE3LjVoM20xIDBoMW0yIDBoMm0zIDBoMW0xIDBoNW0xIDBoMm0xIDBoMW0yIDBoMW00IDBoMk01IDE4LjVoMm0xIDBoM20yIDBoM201IDBoMW0xIDBoM20yIDBoM20yIDBoM005IDE5LjVoMW0xIDBoMW0xIDBoNm0xIDBoMW0yIDBoMW0xIDBoMW0xIDBoMW0xIDBoM20xIDBoMk00IDIwLjVoMW0yIDBoMW0yIDBoM20xIDBoMm00IDBoMm00IDBoMW0yIDBoMW0xIDBoMm0zIDBoMU00IDIxLjVoMW0yIDBoMm0zIDBoM20zIDBoMW0xIDBoMm0xIDBoMm0xIDBoMm0yIDBoMm0xIDBoMm0xIDBoMU00IDIyLjVoMW00IDBoNW0yIDBoMm0xIDBoM20zIDBoMW0yIDBoMW0yIDBoMm0xIDBoMk00IDIzLjVoMW0xIDBoMW00IDBoM20xIDBoMW0xIDBoM20xIDBoNm0xIDBoOU01IDI0LjVoMW0zIDBoNG0xIDBoMW0yIDBoMW0xIDBoMm0yIDBoMW0yIDBoMW0yIDBoMW0xIDBoM20xIDBoMk00IDI1LjVoMW0yIDBoM200IDBoMW0xIDBoMm0xIDBoMW0yIDBoMm0xIDBoMW0xIDBoMW0yIDBoMW0zIDBoMW0xIDBoMU00IDI2LjVoMW01IDBoMm0xIDBoMW0yIDBoMW0yIDBoMm0yIDBoMW0xIDBoMW03IDBoM000IDI3LjVoMW0xIDBoMW00IDBoMW0zIDBoMm0yIDBoMW0zIDBoMW0xIDBoMW0yIDBoMm0yIDBoM000IDI4LjVoMW0zIDBoNG0xIDBoMm0xIDBoMm0xIDBoMW0xIDBoMW0xIDBoMW0yIDBoN00xMiAyOS41aDJtMSAwaDFtNCAwaDFtMiAwaDFtMSAwaDFtMSAwaDJtMyAwaDFtMSAwaDFtMSAwaDFNNCAzMC41aDdtNSAwaDJtMSAwaDJtMSAwaDFtMSAwaDVtMSAwaDFtMSAwaDFtMSAwaDJNNCAzMS41aDFtNSAwaDFtMSAwaDFtMSAwaDFtMSAwaDJtMiAwaDFtMyAwaDJtMSAwaDJtMyAwaDVNNCAzMi41aDFtMSAwaDNtMSAwaDFtMSAwaDJtMyAwaDJtMyAwaDFtMiAwaDFtMiAwaDZNNCAzMy41aDFtMSAwaDNtMSAwaDFtMSAwaDFtMSAwaDJtMSAwaDRtMiAwaDFtMiAwaDFtMSAwaDJtMiAwaDJtMSAwaDJNNCAzNC41aDFtMSAwaDNtMSAwaDFtMSAwaDJtMSAwaDFtNSAwaDJtMiAwaDJtMSAwaDRtMiAwaDFNNCAzNS41aDFtNSAwaDFtNCAwaDNtMiAwaDFtNCAwaDFtNCAwaDFtMSAwaDFtMSAwaDFNNCAzNi41aDdtMSAwaDNtMiAwaDFtMyAwaDJtMyAwaDNtMiAwaDFtMyAwaDEiLz48L3N2Zz4K',
       url: 'https://apps.apple.com/us/app/social-archiver/id6758323634',
       label: 'Download on the App Store',
+      playStoreUrl: 'https://play.google.com/store/apps/details?id=com.socialarchiver.mobile',
     },
   },
   '2.5.0': {

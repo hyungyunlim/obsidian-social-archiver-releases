@@ -1832,6 +1832,13 @@ export default class SocialArchiverPlugin extends Plugin {
       await this.orchestrator.initialize();
 
       // Initialize RealtimeClient for real-time job updates (only if username is configured)
+      // Clean up any existing WebSocket client before creating a new one to prevent leaks
+      if (this.realtimeClient) {
+        this.clearRealtimeListeners();
+        this.realtimeClient.disconnect();
+        this.realtimeClient = undefined;
+      }
+
       if (this.settings.username) {
         this.realtimeClient = new RealtimeClient(
           API_ENDPOINT,
@@ -6855,6 +6862,74 @@ ${contentParts.join('')}
     }
 
     return lines.join('\n');
+  }
+
+  // ============================================================================
+  // Sign Out (Public API for Settings UI)
+  // ============================================================================
+
+  /**
+   * Fully sign out the current user.
+   *
+   * Order of operations (intentional):
+   * 1. Best-effort unregister sync client from server (needs authToken, must be first)
+   * 2. Disconnect WebSocket gracefully
+   * 3. Clear auth settings
+   * 4. Clear sync settings
+   * 5. Clear usage stats
+   * 6. Clear Reddit state
+   * 7. Clear runtime sync state
+   * 8. Save settings
+   * 9. Refresh all timelines
+   */
+  async signOut(): Promise<void> {
+    // 1. Best-effort unregister sync client (needs authToken — must happen before clearing auth)
+    if (this.apiClient && this.settings.syncClientId) {
+      try {
+        await this.apiClient.deleteSyncClient(this.settings.syncClientId);
+        console.debug('[Social Archiver] signOut: unregistered sync client', this.settings.syncClientId);
+      } catch (error) {
+        console.warn('[Social Archiver] signOut: sync client unregistration failed (best-effort)', error);
+      }
+    }
+
+    // 2. Disconnect WebSocket gracefully
+    this.clearRealtimeListeners();
+    this.realtimeClient?.disconnect();
+    this.realtimeClient = undefined;
+
+    // 3. Clear auth settings
+    this.settings.authToken = '';
+    this.settings.username = '';
+    this.settings.email = '';
+    this.settings.isVerified = false;
+
+    // 4. Clear sync settings
+    this.settings.syncClientId = '';
+
+    // 5. Clear usage stats
+    this.settings.tier = 'free';
+    this.settings.creditsUsed = 0;
+    this.settings.byPlatform = {};
+    this.settings.byCountry = {};
+    this.settings.timingByPlatform = {};
+
+    // 6. Clear Reddit state (properties always exist per settings type)
+    this.settings.redditConnected = false;
+    this.settings.redditUsername = '';
+    this.settings.redditSyncEnabled = false;
+
+    // 7. Clear runtime sync state
+    this.isSyncingMobileQueue = false;
+    this.scheduledMobileSyncRetries.clear();
+    this.mobileSyncRetryCount.clear();
+    this.failedSyncQueueIds.clear();
+
+    // 8. Save settings
+    await this.saveSettings();
+
+    // 9. Refresh all open timeline views to reflect signed-out state
+    await this.refreshAllTimelines();
   }
 
   // ============================================================================

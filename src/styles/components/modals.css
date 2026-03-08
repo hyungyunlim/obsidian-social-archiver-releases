@@ -1294,6 +1294,13 @@
   height: var(--rnm-qr-size, 140px);
 }
 
+.rnm-qr-links {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
 .rnm-qr-link {
   font-size: 13px;
 }

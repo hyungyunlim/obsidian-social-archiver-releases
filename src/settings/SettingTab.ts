@@ -223,6 +223,9 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       props: { plugin: this.plugin }
     });
 
+    // Mobile Sync Settings Section (right below Account)
+    this.renderMobileSyncSettings(containerEl);
+
     // Archive Settings Section
     new Setting(containerEl).setName('Archive').setHeading()
       .settingEl.addClass('sa-settings-section-header');
@@ -739,9 +742,6 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Webtoon Streaming Settings Section
     this.renderWebtoonStreamingSettings(containerEl);
-
-    // Mobile Sync Settings Section
-    this.renderMobileSyncSettings(containerEl);
 
     // Update Notifications Section
     this.renderUpdateNotificationsSettings(containerEl);

@@ -66,6 +66,15 @@ export async function completeAuthentication(
 /**
  * Clear authentication data (logout)
  *
+ * @deprecated Use `plugin.signOut()` instead. `signOut()` additionally
+ * unregisters the sync client from the server, disconnects the WebSocket,
+ * clears `syncClientId`, resets Reddit state, and clears runtime sync
+ * tracking sets — ensuring a full, consistent sign-out.
+ *
+ * `clearAuthentication` is kept for call-sites (e.g. handleDeleteAccount)
+ * where the server-side auth cleanup has already been handled separately and
+ * only local settings need to be wiped.
+ *
  * @param plugin - The plugin instance
  */
 export async function clearAuthentication(plugin: SocialArchiverPlugin): Promise<void> {
@@ -73,6 +82,7 @@ export async function clearAuthentication(plugin: SocialArchiverPlugin): Promise
   plugin.settings.username = '';
   plugin.settings.email = '';
   plugin.settings.isVerified = false;
+  plugin.settings.syncClientId = '';
   plugin.settings.tier = 'free';
   plugin.settings.creditsUsed = 0;
   plugin.settings.byPlatform = {};

@@ -1,7 +1,10 @@
 <script lang="ts">
 import { Notice } from 'obsidian';
+import QRCode from 'qrcode';
 import type SocialArchiverPlugin from '../main';
 import type { SocialArchiverSettings, UserTier, PlatformTiming } from '../types/settings';
+import { AuthService } from '../services/AuthService';
+import { completeAuthentication, showAuthSuccess, showAuthError } from '../utils/auth';
 
 interface Props {
   plugin: SocialArchiverPlugin;
@@ -16,6 +19,170 @@ let authMode = $state<'signup' | 'login' | 'waiting'>('signup');
 let email = $state('');
 let username = $state('');
 let isSubmitting = $state(false);
+
+// Cross-device auth state
+type CrossDeviceState = 'idle' | 'loading' | 'code-shown' | 'approved' | 'rejected' | 'expired' | 'error';
+let crossDeviceState = $state<CrossDeviceState>('idle');
+let crossDeviceDisplayCode = $state('');
+let crossDeviceSessionId = $state('');
+let crossDeviceSecondsLeft = $state(0);
+let crossDeviceError = $state('');
+let crossDevicePollIntervalMs = $state(3000);
+let crossDeviceQrSvg = $state('');
+
+// Internal cross-device timer/poll handles (not reactive, managed manually)
+let _crossDeviceCountdownTimer: ReturnType<typeof setInterval> | null = null;
+let _crossDevicePollTimer: ReturnType<typeof setInterval> | null = null;
+let _crossDeviceActive = false;
+
+function stopCrossDeviceTimers(): void {
+  _crossDeviceActive = false;
+  if (_crossDeviceCountdownTimer !== null) {
+    clearInterval(_crossDeviceCountdownTimer);
+    _crossDeviceCountdownTimer = null;
+  }
+  if (_crossDevicePollTimer !== null) {
+    clearInterval(_crossDevicePollTimer);
+    _crossDevicePollTimer = null;
+  }
+}
+
+function startCrossDeviceTimers(sessionId: string, expiresAt: string, pollMs: number): void {
+  stopCrossDeviceTimers();
+  _crossDeviceActive = true;
+
+  // Countdown timer — update every second
+  const updateCountdown = (): void => {
+    const remaining = Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
+    crossDeviceSecondsLeft = remaining;
+    if (remaining === 0) {
+      stopCrossDeviceTimers();
+      if (crossDeviceState === 'code-shown') {
+        crossDeviceState = 'expired';
+      }
+    }
+  };
+  updateCountdown();
+  _crossDeviceCountdownTimer = setInterval(updateCountdown, 1000);
+
+  // Poll timer
+  const authService = new AuthService(plugin.settings.workerUrl, plugin.manifest.version);
+  const poll = async (): Promise<void> => {
+    if (!_crossDeviceActive) return;
+    try {
+      const result = await authService.pollCrossDeviceStatus(sessionId);
+      if (!_crossDeviceActive) return;
+
+      if (!result.success || !result.data) {
+        // Non-fatal network hiccup; keep polling
+        return;
+      }
+
+      const status = result.data.status;
+
+      if (status === 'approved' || status === 'consumed') {
+        stopCrossDeviceTimers();
+        const authToken = result.data.authToken;
+        if (!authToken) {
+          crossDeviceState = 'error';
+          crossDeviceError = '인증 토큰을 받지 못했습니다.';
+          return;
+        }
+        // Complete authentication using existing utility
+        const completion = await completeAuthentication(plugin, authToken);
+        if (completion.success) {
+          crossDeviceState = 'approved';
+          isAuthenticated = true;
+          settings = plugin.settings;
+          showAuthSuccess(completion.username || '');
+
+          // Auto-register sync client when logged in via mobile app.
+          // The user clearly has the mobile app, so enable sync automatically.
+          if (!plugin.settings.syncClientId) {
+            plugin.registerSyncClient().catch(() => {
+              // Best-effort: sync can be enabled manually later
+            });
+          }
+        } else {
+          crossDeviceState = 'error';
+          crossDeviceError = completion.error || '인증 완료에 실패했습니다.';
+          showAuthError(crossDeviceError);
+        }
+      } else if (status === 'rejected') {
+        stopCrossDeviceTimers();
+        crossDeviceState = 'rejected';
+      } else if (status === 'expired') {
+        stopCrossDeviceTimers();
+        crossDeviceState = 'expired';
+      }
+      // 'pending' → keep polling
+    } catch {
+      // Silently ignore poll errors; keep polling
+    }
+  };
+
+  _crossDevicePollTimer = setInterval(poll, pollMs);
+}
+
+/**
+ * Start cross-device auth flow
+ */
+async function handleStartCrossDeviceAuth(): Promise<void> {
+  crossDeviceState = 'loading';
+  crossDeviceError = '';
+
+  const authService = new AuthService(plugin.settings.workerUrl, plugin.manifest.version);
+  const result = await authService.initCrossDeviceAuth();
+
+  if (!result.success || !result.data) {
+    crossDeviceState = 'error';
+    crossDeviceError = result.error?.message || '세션을 시작할 수 없습니다.';
+    return;
+  }
+
+  const { displayCode, sessionId, expiresAt, pollIntervalMs, code } = result.data;
+  crossDeviceDisplayCode = displayCode;
+  crossDeviceSessionId = sessionId;
+  crossDevicePollIntervalMs = pollIntervalMs;
+  crossDeviceState = 'code-shown';
+  startCrossDeviceTimers(sessionId, expiresAt, pollIntervalMs);
+
+  // Generate QR code with deep link for mobile scanning
+  const rawCode = code || displayCode.replace(/-/g, '');
+  // Universal Link — iOS/Android intercept and open the app directly.
+  // When app is NOT installed, browser opens the fallback page at social-archive.org.
+  const deepLink = `https://social-archive.org/auth/approve-device?code=${rawCode}&source=obsidian`;
+  try {
+    crossDeviceQrSvg = await QRCode.toString(deepLink, {
+      type: 'svg',
+      margin: 2,
+      width: 160,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#000000', light: '#ffffff' },
+    });
+  } catch {
+    crossDeviceQrSvg = '';
+  }
+}
+
+/**
+ * Cancel cross-device auth and return to initial login state
+ */
+function handleCancelCrossDevice(): void {
+  stopCrossDeviceTimers();
+  crossDeviceState = 'idle';
+  crossDeviceDisplayCode = '';
+  crossDeviceSessionId = '';
+  crossDeviceError = '';
+  crossDeviceQrSvg = '';
+}
+
+// Cleanup cross-device timers when the component is destroyed
+$effect(() => {
+  return () => {
+    stopCrossDeviceTimers();
+  };
+});
 
 // Local reactive state
 let isAuthenticated = $state(plugin.settings.isVerified && plugin.settings.authToken !== '');
@@ -210,6 +377,8 @@ async function handleResend() {
  * Cancel waiting and return to auth form
  */
 function handleCancelWaiting() {
+  stopCrossDeviceTimers();
+  crossDeviceState = 'idle';
   authMode = 'signup';
   email = '';
   username = '';
@@ -219,20 +388,10 @@ function handleCancelWaiting() {
  * Handle sign out
  */
 async function handleSignOut() {
-  plugin.settings.authToken = '';
-  plugin.settings.username = '';
-  plugin.settings.email = '';
-  plugin.settings.isVerified = false;
-  await plugin.saveSettings();
-
-  // Update local state immediately
+  await plugin.signOut();
   isAuthenticated = false;
   settings = plugin.settings;
-
-  // Refresh all open timeline views to update auth state
-  await plugin.refreshAllTimelines();
-
-  new Notice('👋 Signed out successfully');
+  new Notice('Signed out successfully');
 }
 
 /**
@@ -373,6 +532,80 @@ function getPlatformDisplayName(platform: string): string {
             </div>
           </div>
         </div>
+
+        <!-- Cross-Device Auth Divider -->
+        <div class="xdev-divider">
+          <span class="xdev-divider-text">또는</span>
+        </div>
+
+        <!-- Cross-Device Auth Section -->
+        {#if crossDeviceState === 'idle'}
+          <div class="setting-item">
+            <div class="setting-item-control" style="width: 100%;">
+              <button
+                class="xdev-start-button"
+                onclick={handleStartCrossDeviceAuth}
+                disabled={isSubmitting}
+              >
+                모바일 앱으로 로그인
+              </button>
+            </div>
+          </div>
+        {:else if crossDeviceState === 'loading'}
+          <div class="xdev-section">
+            <p class="xdev-hint">세션을 시작하는 중...</p>
+          </div>
+        {:else if crossDeviceState === 'code-shown'}
+          <div class="xdev-section">
+            {#if crossDeviceQrSvg}
+              <div class="xdev-qr-container">
+                {@html crossDeviceQrSvg}
+              </div>
+              <p class="xdev-instruction">모바일 앱에서 QR을 스캔하거나 코드를 입력하세요</p>
+            {:else}
+              <p class="xdev-instruction">모바일 앱에서 이 코드를 입력하세요</p>
+            {/if}
+            <div class="xdev-code-display">{crossDeviceDisplayCode}</div>
+            <p class="xdev-timer">
+              {#if crossDeviceSecondsLeft > 0}
+                {Math.floor(crossDeviceSecondsLeft / 60)}:{String(crossDeviceSecondsLeft % 60).padStart(2, '0')} 후 만료
+              {:else}
+                만료됨
+              {/if}
+            </p>
+            <div class="xdev-actions">
+              <button onclick={handleCancelCrossDevice}>취소</button>
+            </div>
+          </div>
+        {:else if crossDeviceState === 'approved'}
+          <div class="xdev-section xdev-success">
+            <p>모바일 앱으로 로그인 완료!</p>
+          </div>
+        {:else if crossDeviceState === 'rejected'}
+          <div class="xdev-section xdev-error">
+            <p>모바일에서 거부됨</p>
+            <div class="xdev-actions">
+              <button onclick={handleStartCrossDeviceAuth}>다시 시도</button>
+              <button onclick={handleCancelCrossDevice}>취소</button>
+            </div>
+          </div>
+        {:else if crossDeviceState === 'expired'}
+          <div class="xdev-section xdev-error">
+            <p>코드가 만료되었습니다</p>
+            <div class="xdev-actions">
+              <button onclick={handleStartCrossDeviceAuth}>새 코드 생성</button>
+              <button onclick={handleCancelCrossDevice}>취소</button>
+            </div>
+          </div>
+        {:else if crossDeviceState === 'error'}
+          <div class="xdev-section xdev-error">
+            <p>{crossDeviceError || '오류가 발생했습니다.'}</p>
+            <div class="xdev-actions">
+              <button onclick={handleStartCrossDeviceAuth}>다시 시도</button>
+              <button onclick={handleCancelCrossDevice}>취소</button>
+            </div>
+          </div>
+        {/if}
       </div>
     {/if}
   {:else}
@@ -670,5 +903,140 @@ function getPlatformDisplayName(platform: string): string {
   background: var(--background-secondary);
   color: var(--text-normal);
   border-color: var(--text-faint);
+}
+
+/* Cross-Device Auth Styles */
+.xdev-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 8px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.xdev-divider::before,
+.xdev-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--background-modifier-border);
+}
+
+.xdev-divider-text {
+  flex-shrink: 0;
+}
+
+.xdev-start-button {
+  width: 100%;
+  padding: 10px;
+  background: transparent;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.xdev-start-button:hover:not(:disabled) {
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  border-color: var(--interactive-accent);
+}
+
+.xdev-start-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.xdev-section {
+  padding: 12px 0 4px;
+  text-align: center;
+}
+
+.xdev-qr-container {
+  display: flex;
+  justify-content: center;
+  margin: 0 auto 12px;
+  padding: 12px;
+  background: #ffffff;
+  border-radius: 12px;
+  width: fit-content;
+}
+
+.xdev-qr-container :global(svg) {
+  width: 160px;
+  height: 160px;
+  display: block;
+}
+
+.xdev-instruction {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+}
+
+.xdev-code-display {
+  font-family: var(--font-monospace);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: var(--text-normal);
+  background: var(--background-secondary);
+  padding: 12px 20px;
+  border-radius: 8px;
+  border: 2px solid var(--interactive-accent);
+  display: inline-block;
+  margin: 0 auto 10px;
+  user-select: all;
+}
+
+.xdev-timer {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin: 0 0 12px;
+}
+
+.xdev-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.xdev-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.xdev-actions button {
+  padding: 6px 16px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.xdev-actions button:hover {
+  background: var(--background-secondary);
+  color: var(--text-normal);
+}
+
+.xdev-error p {
+  color: var(--text-error);
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+
+.xdev-success p {
+  color: var(--color-green);
+  font-size: 13px;
+  margin: 0;
 }
 </style>
