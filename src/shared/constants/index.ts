@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/constants/index.ts
- * Generated: 2026-03-08T12:29:18.737Z
+ * Generated: 2026-03-12T14:11:53.956Z
  *
  * To modify, edit the source file in shared/constants/ and run:
  *   npm run sync:shared
@@ -46,8 +46,5 @@ export const FEATURE_EDITOR_TTS_ENABLED = true;
 /**
  * Feature flag: Cross-posting to external platforms (Threads, X, etc.)
  * When false, the Cross-posting settings section and PostComposer toggle are hidden.
- *
- * Threads API requires Meta app review approval before public release.
- * Set to true once API approval is granted.
  */
-export const FEATURE_CROSSPOST_ENABLED = false;
+export const FEATURE_CROSSPOST_ENABLED = true;

@@ -1282,6 +1282,7 @@ export class PostCardRenderer extends Component {
     const header = contentArea.createDiv({ cls: 'mb-2' });
     header.addClass('sa-flex-row');
     header.addClass('sa-gap-10');
+    header.addClass('pcr-header');
 
     // Left: Avatar (social media style - avatar on left)
     this.renderAvatarInline(header, post);
@@ -1420,6 +1421,11 @@ export class PostCardRenderer extends Component {
     if (post.platform !== 'post') {
       this.renderOriginalPostLink(header, post);
     }
+
+    // Cross-post indicator: show Threads logo if cross-posted
+    if (post.threadsPostUrl) {
+      this.renderCrossPostIndicator(header, post.threadsPostUrl);
+    }
   }
 
   /**
@@ -1468,6 +1474,46 @@ export class PostCardRenderer extends Component {
         window.open(finalUrl, '_blank');
       });
     }
+  }
+
+  /**
+   * Render Threads cross-post indicator badge
+   * Shows a small Threads logo that links to the cross-posted Threads URL
+   */
+  private renderCrossPostIndicator(header: HTMLElement, threadsUrl: string): void {
+    // Prevent duplicate badges
+    if (header.querySelector('.pcr-crosspost-badge')) return;
+
+    const badge = header.createDiv({ cls: 'pcr-crosspost-badge' });
+    badge.setAttribute('title', 'Cross-posted to Threads');
+    badge.setAttribute('aria-label', 'Cross-posted to Threads');
+
+    const iconWrapper = badge.createDiv({ cls: 'pcr-crosspost-icon-wrapper' });
+
+    const threadsIcon = getPlatformSimpleIcon('threads');
+    if (threadsIcon) {
+      const svg = createSVGElement(threadsIcon, {
+        fill: 'currentColor',
+        width: '100%',
+        height: '100%'
+      });
+      iconWrapper.appendChild(svg);
+    }
+
+    badge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.open(threadsUrl, '_blank');
+    });
+  }
+
+  /**
+   * Inject cross-post badge into an already-rendered card.
+   * Called from TimelineContainer when cross-post completes after the card is already visible.
+   */
+  public injectCrossPostBadge(cardEl: HTMLElement, threadsPostUrl: string): void {
+    const header = cardEl.querySelector('.pcr-header') as HTMLElement | null;
+    if (!header) return;
+    this.renderCrossPostIndicator(header, threadsPostUrl);
   }
 
   /**

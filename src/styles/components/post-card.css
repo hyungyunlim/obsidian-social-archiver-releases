@@ -213,6 +213,36 @@
 }
 
 /* ========================================
+ * Cross-post indicator badge
+ * ======================================== */
+
+.pcr-crosspost-badge {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 0.2s;
+  margin-left: 2px;
+}
+
+.pcr-crosspost-badge:hover {
+  opacity: 0.8;
+}
+
+.pcr-crosspost-icon-wrapper {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+/* ========================================
  * Subscription badge
  * ======================================== */
 

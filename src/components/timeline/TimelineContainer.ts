@@ -1584,6 +1584,16 @@ export class TimelineContainer {
               threadsResult.postUrl
             );
             await this.vault.modify(file, updatedContent);
+
+            // Inject Threads badge into the already-rendered card
+            if (threadsResult.postUrl) {
+              const cardEl = this.containerEl.querySelector(
+                `[data-file-path="${CSS.escape(filePath)}"]`
+              ) as HTMLElement | null;
+              if (cardEl) {
+                this.postCardRenderer.injectCrossPostBadge(cardEl, threadsResult.postUrl);
+              }
+            }
           } catch {
             // Cross-post metadata save is best-effort
           }

@@ -3,6 +3,7 @@ import { Notice } from 'obsidian';
 import { onMount, onDestroy } from 'svelte';
 import type SocialArchiverPlugin from '../main';
 import { CrossPostAPIClient } from '../services/CrossPostAPIClient';
+import { AuthenticationError } from '@/types/errors/http-errors';
 import type { ThreadsConnectionStatus, ThreadsReplyControl } from '../types/crosspost';
 
 interface Props {
@@ -116,6 +117,15 @@ async function checkConnectionStatus(): Promise<ThreadsConnectionStatus> {
 async function handleConnect(): Promise<void> {
   if (isConnecting || isPolling) return;
   error = '';
+
+  // Pre-check: user must be logged in (have an auth token)
+  if (!plugin.settings.authToken) {
+    const msg = 'Please log in to Social Archiver first. Go to the Authentication section above to sign in.';
+    error = msg;
+    new Notice(msg);
+    return;
+  }
+
   isConnecting = true;
 
   try {
@@ -135,9 +145,15 @@ async function handleConnect(): Promise<void> {
     // Start polling for connection confirmation
     startPolling();
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    error = `Failed to start authentication: ${message}`;
-    new Notice(`Threads connection failed: ${message}`);
+    if (err instanceof AuthenticationError) {
+      const msg = 'Please log in to Social Archiver first. Go to the Authentication section above to sign in.';
+      error = msg;
+      new Notice(msg);
+    } else {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      error = `Failed to start authentication: ${message}`;
+      new Notice(`Threads connection failed: ${message}`);
+    }
   } finally {
     isConnecting = false;
   }

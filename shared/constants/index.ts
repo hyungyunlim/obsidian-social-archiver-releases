@@ -36,8 +36,5 @@ export const FEATURE_EDITOR_TTS_ENABLED = true;
 /**
  * Feature flag: Cross-posting to external platforms (Threads, X, etc.)
  * When false, the Cross-posting settings section and PostComposer toggle are hidden.
- *
- * Threads API requires Meta app review approval before public release.
- * Set to true once API approval is granted.
  */
-export const FEATURE_CROSSPOST_ENABLED = false;
+export const FEATURE_CROSSPOST_ENABLED = true;
