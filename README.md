@@ -6,6 +6,7 @@ Save what matters - Archive social media posts directly into your Obsidian vault
 [![license](https://img.shields.io/github/license/hyungyunlim/obsidian-social-archiver-releases)](LICENSE)
 [![downloads](https://img.shields.io/github/downloads/hyungyunlim/obsidian-social-archiver-releases/total)](https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases)
 [![documentation](https://img.shields.io/badge/docs-social--archive.org-7c3aed)](https://docs.social-archive.org)
+[![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-Add_to_Chrome-4285F4?logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/social-archiver/gifddgdekeffpnadpdcgjaehmlblomaf)
 [![App Store](https://img.shields.io/badge/App_Store-Download-0D96F6?logo=apple&logoColor=white)](https://apps.apple.com/us/app/social-archiver/id6758323634)
 [![Google Play](https://img.shields.io/badge/Google_Play-Get_it-34A853?logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.socialarchiver.mobile)
 
@@ -17,7 +18,7 @@ Social media platforms are ephemeral. Posts disappear, accounts get deleted, pla
 
 **Why Social Archiver?**
 - 🏠 **Data Ownership**: Archived content stays in your vault - you own it forever
-- 📱 **Cross-Platform**: Works on desktop and mobile (iOS app available, Android coming soon)
+- 📱 **Cross-Platform**: Works on desktop, Chrome browser, and mobile (iOS & Android)
 - ⚡ **Real-Time Processing**: Background job processing with live progress updates
 - 🎨 **Timeline View**: Browse and search all your archives in a beautiful feed
 - 🌐 **Web Sharing**: Share archived posts to the web with public timelines
@@ -131,6 +132,16 @@ Add AI-powered analysis to your archived posts using local CLI tools:
 - **Statistics**: Usage tracking and performance metrics
 
 ## Installation
+
+### Chrome Extension
+
+Install the Social Archiver Chrome extension:
+
+- **Chrome Web Store**: [Social Archiver](https://chromewebstore.google.com/detail/social-archiver/gifddgdekeffpnadpdcgjaehmlblomaf)
+- **Keyboard Shortcut**: `Ctrl+Shift+S` (`Cmd+Shift+S` on Mac) to archive the current page
+- **Right-Click Menu**: Archive any page from the context menu
+- **Web Clipping**: Select and save any web page content with the built-in editor
+- **Same Account**: Use the same email/username as your Obsidian plugin or mobile app
 
 ### Mobile App
 
