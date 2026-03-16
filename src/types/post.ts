@@ -115,6 +115,7 @@ export interface Comment {
   content: string;
   timestamp?: string; // Optional - some platforms don't provide comment timestamps
   likes?: number;
+  media?: Media[]; // Optional - comment/reply media (images, videos, carousels)
   replies?: Comment[];
 }
 
@@ -518,6 +519,19 @@ export const PostDataSchema: z.ZodType<PostData> = z.lazy(() => z.object({
     content: z.string(),
     timestamp: z.string().nullish(),
     likes: z.number().nullish(),
+    media: z.array(z.object({
+      type: z.enum(['image', 'video', 'audio', 'document']),
+      url: z.string(),
+      thumbnail: z.string().nullish(),
+      thumbnailUrl: z.string().nullish(),
+      width: z.number().nullish(),
+      height: z.number().nullish(),
+      duration: z.number().nullish(),
+      size: z.number().nullish(),
+      mimeType: z.string().nullish(),
+      altText: z.string().nullish(),
+      alt: z.string().nullish()
+    })).nullish(),
     replies: z.array(z.any()).nullish()
   })).nullish(),
   transcript: z.object({

@@ -77,6 +77,7 @@ function initializeEditor(): void {
       Markdown.configure({
         // Configure Markdown extension
         html: false,
+        linkify: true,
         transformCopiedText: true,
         transformPastedText: true,
       }),
@@ -173,6 +174,7 @@ function updateCharacterCount(editorInstance: Editor): void {
  */
 function cleanMarkdownEscaping(markdown: string): string {
   return markdown
+    .replace(/<(https?:\/\/[^>]+)>/g, '$1')  // Convert auto-links <url> to plain URLs
     .replace(/\\-/g, '-')    // Remove escaped hyphens
     .replace(/\\\*/g, '*')   // Remove escaped asterisks
     .replace(/\\_/g, '_')    // Remove escaped underscores
@@ -254,7 +256,7 @@ onDestroy(() => {
  */
 $effect(() => {
   if (editor && !editor.isDestroyed && content !== undefined) {
-    const currentMarkdown = editor.storage.markdown?.getMarkdown() || '';
+    const currentMarkdown = cleanMarkdownEscaping(editor.storage.markdown?.getMarkdown() || '');
     if (currentMarkdown !== content) {
       editor.commands.setContent(content);
     }

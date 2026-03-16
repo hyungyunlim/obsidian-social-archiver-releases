@@ -1,6 +1,7 @@
-import type { PostData, Platform, Comment } from '@/types/post';
+import type { PostData, Platform, Comment, Media } from '@/types/post';
 import { DateNumberFormatter } from './DateNumberFormatter';
 import { TextFormatter } from './TextFormatter';
+import { encodePathForMarkdownLink } from '@/utils/url';
 
 /**
  * CommentFormatter - Format comments for markdown
@@ -106,7 +107,10 @@ export class CommentFormatter {
 
           // Format header: author [· timestamp] [· likes]
           const timestampPart = timestamp ? ` · ${timestamp}` : '';
-          let result = `**${authorDisplay}**${timestampPart}${likes}\n${commentContent}`;
+          // Render inline media after comment text
+          const commentMediaBlock = this.formatCommentMedia(comment.media);
+          const mediaSection = commentMediaBlock ? `\n${commentMediaBlock}` : '';
+          let result = `**${authorDisplay}**${timestampPart}${likes}\n${commentContent}${mediaSection}`;
 
           // Nested replies with indentation
           if (comment.replies && comment.replies.length > 0) {
@@ -151,9 +155,13 @@ export class CommentFormatter {
                   ? this.textFormatter.linkifyXMentions(reply.content)
                   : reply.content;
 
+                // Render inline media after reply text
+                const replyMediaBlock = this.formatCommentMedia(reply.media, '  ');
+                const replyMediaSection = replyMediaBlock ? `\n${replyMediaBlock}` : '';
+
                 // Format reply header: author [· timestamp] [· likes]
                 const replyTimePart = replyTime ? ` · ${replyTime}` : '';
-                return `  ↳ **${replyAuthorDisplay}**${replyTimePart}${replyLikes}\n  ${replyContent}`;
+                return `  ↳ **${replyAuthorDisplay}**${replyTimePart}${replyLikes}\n  ${replyContent}${replyMediaSection}`;
               })
               .filter((r: string) => r.length > 0)
               .join('\n\n');
@@ -170,5 +178,31 @@ export class CommentFormatter {
     } catch {
       return '';
     }
+  }
+
+  /**
+   * Format media items inline for a comment or reply
+   * @param media - Media items from comment
+   * @param indent - Indentation prefix (e.g., '  ' for replies)
+   */
+  private formatCommentMedia(media?: Media[], indent = ''): string {
+    if (!media || media.length === 0) return '';
+
+    return media
+      .map((item, index) => {
+        const alt = item.altText || item.alt || `${item.type} ${index + 1}`;
+        if (item.type === 'image') {
+          return `${indent}![${this.escapeMarkdown(alt)}](${encodePathForMarkdownLink(item.url)})`;
+        } else if (item.type === 'video') {
+          return `${indent}![🎥 Video](${encodePathForMarkdownLink(item.thumbnail || item.url)})`;
+        }
+        return '';
+      })
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  private escapeMarkdown(text: string): string {
+    return text.replace(/([\\`*_{}[\]()#+\-.!])/g, '\\$1');
   }
 }

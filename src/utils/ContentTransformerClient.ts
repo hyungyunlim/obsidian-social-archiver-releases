@@ -55,11 +55,11 @@ export class ContentTransformerClient {
     text = text.replace(/_(.+?)_/g, '$1');
     text = text.replace(/~~(.+?)~~/g, '$1');
 
-    // Remove unordered list markers
-    text = text.replace(/^[\s]*[-*+]\s+/gm, '');
+    // Convert unordered list markers to bullet character
+    text = text.replace(/^([\s]*)[-*+]\s+/gm, '$1• ');
 
-    // Remove ordered list markers
-    text = text.replace(/^[\s]*\d+\.\s+/gm, '');
+    // Preserve ordered list markers (1. 2. 3.) — only strip leading whitespace
+    text = text.replace(/^[\s]+(\d+\.\s)/gm, '$1');
 
     // Remove HTML tags
     text = text.replace(/<[^>]+>/g, '');
