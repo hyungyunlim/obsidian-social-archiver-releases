@@ -18,6 +18,7 @@ import type {
   DeletePendingJobResponse,
   CancelPendingJobResponse,
 } from '@/types/pending-job';
+import type { TextHighlight, UserNote } from '@/types/annotations';
 
 // ============================================================================
 // Multi-Client Sync Types
@@ -181,6 +182,13 @@ export interface UserArchive {
   isLiked: boolean;
   isArchived: boolean;
   isShared: boolean;
+  // Share URL (set when archive has an active share link)
+  shareUrl?: string | null;
+  // Mobile annotation fields (populated by GET /api/user/archives/:archiveId)
+  userNotes?: UserNote[];
+  userNoteCount?: number;
+  userHighlights?: TextHighlight[];
+  userHighlightCount?: number;
 }
 
 export interface GetUserArchiveResponse {
@@ -998,6 +1006,18 @@ export class WorkersAPIClient implements IService {
 
     return await this.request<GetUserArchiveResponse>(`/api/user/archives/${archiveId}`, {
       method: 'GET',
+    });
+  }
+
+  /**
+   * Get a one-time WebSocket ticket for private channel authentication.
+   * The ticket is valid for 60 seconds and consumed on first WS connection.
+   */
+  async getWsTicket(): Promise<{ ticket: string; expiresAt: string }> {
+    this.ensureInitialized();
+
+    return await this.request<{ ticket: string; expiresAt: string }>('/api/user/ws-ticket', {
+      method: 'POST',
     });
   }
 

@@ -135,6 +135,29 @@ async function handleDisconnect() {
     </div>
   {/if}
 
+  <!-- Mobile Annotation Sync Toggle -->
+  <div class="sync-annotation-toggle">
+    <div class="annotation-toggle-info">
+      <div class="annotation-toggle-title">Mobile Annotation Sync</div>
+      <div class="annotation-toggle-description">
+        Sync highlights and notes from the mobile app to vault notes.
+        When enabled, a managed annotation block is appended to matching notes automatically.
+      </div>
+    </div>
+    <label class="annotation-toggle-switch">
+      <input
+        type="checkbox"
+        checked={settings.enableMobileAnnotationSync}
+        onchange={async (e) => {
+          plugin.settings.enableMobileAnnotationSync = (e.target as HTMLInputElement).checked;
+          await plugin.saveSettings();
+          settings = plugin.settings;
+        }}
+      />
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
+
   <!-- Info Callout -->
   <div class="sync-info-callout">
     <strong>How Mobile Sync Works</strong>
@@ -256,6 +279,79 @@ async function handleDisconnect() {
 .store-badge-svg {
   height: 30px;
   width: auto;
+}
+
+/* Annotation Sync Toggle */
+.sync-annotation-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--background-secondary);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.annotation-toggle-info {
+  flex: 1;
+}
+
+.annotation-toggle-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-normal);
+  margin-bottom: 4px;
+}
+
+.annotation-toggle-description {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.annotation-toggle-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+  cursor: pointer;
+}
+
+.annotation-toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.toggle-slider {
+  width: 36px;
+  height: 20px;
+  background: var(--background-modifier-border);
+  border-radius: 10px;
+  transition: background 0.2s ease;
+  position: relative;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+}
+
+.annotation-toggle-switch input:checked + .toggle-slider {
+  background: var(--interactive-accent);
+}
+
+.annotation-toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(16px);
 }
 
 /* Info Callout */

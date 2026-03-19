@@ -17,6 +17,7 @@ export type RealtimeMessageType =
   | 'action_updated' // From web/mobile action (like, bookmark, share)
   | 'share_deleted' // From share deletion
   | 'archive_deleted' // From archive deletion
+  | 'archive_tags_updated' // From tag changes (mobile/web)
   | 'media_preserved' // From R2 media preservation
   | 'pong'; // WebSocket pong response
 
@@ -30,8 +31,17 @@ export interface RealtimeMessage {
 }
 
 /**
+ * Function that fetches a one-time WS ticket for private channel auth.
+ * Returns the ticket string, or null if auth is not available.
+ */
+export type TicketFetcher = () => Promise<string | null>;
+
+/**
  * RealtimeClient - WebSocket connection to Workers API
  * Handles real-time job completion notifications
+ *
+ * Connects to the PRIVATE channel when a ticketFetcher is provided,
+ * falling back to the public channel if ticket fetch fails.
  */
 export class RealtimeClient {
   private ws: WebSocket | null = null;
@@ -42,28 +52,51 @@ export class RealtimeClient {
   private maxReconnectDelay = 30000; // Max 30 seconds
   private isIntentionallyClosed = false;
   private pingInterval: number | null = null;
+  private ticketFetcher: TicketFetcher | null = null;
 
   constructor(
     private apiUrl: string,
     private username: string,
-    public events: Events
-  ) {}
+    public events: Events,
+    ticketFetcher?: TicketFetcher
+  ) {
+    this.ticketFetcher = ticketFetcher ?? null;
+  }
 
   /**
-   * Connect to WebSocket server
+   * Connect to WebSocket server.
+   * Attempts private channel first (if ticketFetcher provided), falls back to public.
    */
-  connect(): void {
+  async connect(): Promise<void> {
     if (this.ws?.readyState === WebSocket.OPEN) {
       return;
     }
 
     this.isIntentionallyClosed = false;
 
-    // Convert HTTP URL to WebSocket URL
-    const wsUrl = this.apiUrl
+    const baseWsUrl = this.apiUrl
       .replace('https://', 'wss://')
-      .replace('http://', 'ws://')
-      + `/api/ws/${this.username}`;
+      .replace('http://', 'ws://');
+
+    // Try private channel first
+    let wsUrl: string;
+    if (this.ticketFetcher) {
+      try {
+        const ticket = await this.ticketFetcher();
+        if (ticket) {
+          wsUrl = `${baseWsUrl}/api/ws/private/${this.username}?ticket=${ticket}`;
+          console.debug('[RealtimeClient] Connecting to private channel');
+        } else {
+          wsUrl = `${baseWsUrl}/api/ws/${this.username}`;
+          console.debug('[RealtimeClient] No ticket available, falling back to public channel');
+        }
+      } catch (err) {
+        wsUrl = `${baseWsUrl}/api/ws/${this.username}`;
+        console.warn('[RealtimeClient] Ticket fetch failed, falling back to public channel:', err instanceof Error ? err.message : String(err));
+      }
+    } else {
+      wsUrl = `${baseWsUrl}/api/ws/${this.username}`;
+    }
 
     try {
       this.ws = new WebSocket(wsUrl);
@@ -154,7 +187,7 @@ export class RealtimeClient {
 
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectAttempts++;
-      this.connect();
+      void this.connect();
     }, delay);
   }
 

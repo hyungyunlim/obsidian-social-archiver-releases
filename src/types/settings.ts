@@ -474,6 +474,10 @@ export interface SocialArchiverSettings {
   enableServerPendingJobs: boolean; // Enable server-side pending job sync for cross-device recovery (default: true)
   syncClientId: string; // Registered sync client ID for multi-client sync
 
+  // Mobile Annotation Sync Settings
+  /** Sync highlights and notes from mobile app to vault (opt-in beta, default: false) */
+  enableMobileAnnotationSync: boolean;
+
   // Release Notes Settings
   lastSeenVersion: string; // Last version user has seen release notes for
   showReleaseNotes: boolean; // Show release notes modal after updates (default: true)
@@ -588,6 +592,9 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
   // Multi-Device Sync Settings
   enableServerPendingJobs: true, // Enabled by default for cross-device recovery
   syncClientId: '', // Empty until registered
+
+  // Mobile Annotation Sync Settings
+  enableMobileAnnotationSync: false, // Opt-in beta; default off until feature is stable
 
   // Release Notes Settings
   lastSeenVersion: '', // Empty for first-time users (will be set on first load)
@@ -872,6 +879,11 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
   // Initialize multi-client sync settings if missing (migration)
   if (migrated.syncClientId === undefined) {
     migrated.syncClientId = '';
+  }
+
+  // Initialize mobile annotation sync setting if missing (migration)
+  if (migrated.enableMobileAnnotationSync === undefined) {
+    migrated.enableMobileAnnotationSync = false;
   }
 
   return migrated;

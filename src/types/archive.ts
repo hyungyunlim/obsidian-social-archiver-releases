@@ -91,6 +91,15 @@ export interface YamlFrontmatter {
   transcriptionLanguage?: string;    // Original transcript language ISO code
   transcriptLanguages?: string[];    // All available transcript language ISO codes (e.g., ['en', 'ko', 'ja'])
   isArticle?: boolean;               // X article (long-form) post marker
+  // Mobile Annotation Sync fields
+  /** Stable server archive ID used as primary lookup key for annotation sync */
+  sourceArchiveId?: string;
+  /** Number of user notes attached to this archive in the mobile app */
+  userNoteCount?: number;
+  /** Number of text highlights attached to this archive in the mobile app */
+  userHighlightCount?: number;
+  /** True when at least one note or highlight exists for this archive */
+  hasAnnotations?: boolean;
   [key: string]: unknown; // Allow custom fields
 }
 

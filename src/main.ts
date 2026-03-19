@@ -22,7 +22,7 @@ import { getAuthorCatalogStore, type AuthorMetadataUpdate } from './services/Aut
 import type { PostData, Platform, Media } from './types/post';
 import type { BrunchComment } from './types/brunch';
 import type { PendingJobArchiveOptions, ServerPendingJob } from './types/pending-job';
-import type { ClientSyncEventData, ShareDeletedEventData, ActionUpdatedEventData, ArchiveDeletedEventData } from './types/websocket';
+import type { ClientSyncEventData, ShareDeletedEventData, ActionUpdatedEventData, ArchiveDeletedEventData, ArchiveTagsUpdatedEventData } from './types/websocket';
 import type { UserArchive } from './services/WorkersAPIClient';
 import { TimelineView, VIEW_TYPE_TIMELINE } from './views/TimelineView';
 import { MediaGalleryView, VIEW_TYPE_MEDIA_GALLERY } from './views/MediaGalleryView';
@@ -50,6 +50,8 @@ import { BatchTranscriptionNotice } from './ui/BatchTranscriptionNotice';
 import type { BatchMode } from './types/batch-transcription';
 import { EditorTTSController } from './services/tts/EditorTTSController';
 import { FEATURE_EDITOR_TTS_ENABLED } from './shared/constants';
+import { ArchiveLookupService } from './services/ArchiveLookupService';
+import { AnnotationSyncService } from './services/AnnotationSyncService';
 
 // Import styles for Vite to process
 import './styles/index.css';
@@ -200,6 +202,8 @@ export default class SocialArchiverPlugin extends Plugin {
   private batchTranscriptionNotice: BatchTranscriptionNotice | null = null;
   private readonly transcriptFormatter = new TranscriptFormatter();
   private editorTTSController?: EditorTTSController;
+  private archiveLookupService?: ArchiveLookupService; // File lookup by sourceArchiveId / originalUrl
+  private annotationSyncService?: AnnotationSyncService; // Mobile annotation sync orchestrator
 
   /**
    * Schedule a tracked setTimeout that will be auto-cleared on plugin unload.
@@ -1090,7 +1094,7 @@ export default class SocialArchiverPlugin extends Plugin {
         if (!msg?.data?.shareUrl) return;
 
         const { shareUrl } = msg.data;
-        console.log(`[Social Archiver] Share deleted via WS: ${shareUrl}`);
+        console.debug(`[Social Archiver] Share deleted via WS: ${shareUrl}`);
 
         // Find the vault file with matching shareUrl in frontmatter
         const files = this.app.vault.getMarkdownFiles();
@@ -1113,27 +1117,90 @@ export default class SocialArchiverPlugin extends Plugin {
       })
     );
 
-    // Listen for action_updated events (like/bookmark changes from other clients)
+    // Listen for action_updated events (like/bookmark/annotation changes from other clients)
     this.eventRefs.push(
       this.events.on('ws:action_updated', (_message: unknown) => {
         const msg = _message as { type: string; data: ActionUpdatedEventData } | undefined;
         if (!msg?.data) return;
 
         console.debug('[Social Archiver] Action updated via WS:', msg.data.archiveId, msg.data.changes);
-        // Currently no local action to take — the plugin doesn't store like/bookmark state locally.
-        // Future: could update frontmatter if we add isLiked/isBookmarked fields.
+
+        // Annotation sync: patch managed block and frontmatter in the local vault note
+        if (msg.data.changes.hasAnnotationUpdate && this.settings.enableMobileAnnotationSync) {
+          void this.annotationSyncService?.handleActionUpdated(msg.data);
+        }
+      })
+    );
+
+    // Listen for archive_tags_updated events (tag changes from mobile/web)
+    this.eventRefs.push(
+      this.events.on('ws:archive_tags_updated', async (_message: unknown) => {
+        const msg = _message as { type: string; data: ArchiveTagsUpdatedEventData } | undefined;
+        if (!msg?.data) return;
+        if (!this.settings.enableMobileAnnotationSync) return;
+
+        const { archiveId, tags: serverTags } = msg.data;
+
+        console.debug('[Social Archiver] Archive tags updated via WS:', archiveId, serverTags);
+
+        // Find vault file by sourceArchiveId (only stable lookup — no originalUrl in event)
+        const file = this.archiveLookupService?.findBySourceArchiveId(archiveId) ?? null;
+        if (!file) {
+          console.debug('[Social Archiver] No matching vault file for archive_tags_updated:', archiveId);
+          return;
+        }
+
+        // Merge server tags into existing frontmatter tags (additive, case-sensitive dedup)
+        try {
+          await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+            const existingTags: string[] = Array.isArray(fm.tags) ? (fm.tags as string[]) : [];
+            const merged = [...new Set([...existingTags, ...serverTags])];
+            fm.tags = merged;
+
+            // Backfill sourceArchiveId if missing
+            if (!fm.sourceArchiveId) {
+              fm.sourceArchiveId = archiveId;
+            }
+          });
+
+          console.debug('[Social Archiver] Tags merged for:', file.path, { serverTags });
+        } catch (err) {
+          console.error(
+            '[Social Archiver] Failed to update tags frontmatter:',
+            file.path,
+            err instanceof Error ? err.message : String(err)
+          );
+        }
       })
     );
 
     // Listen for archive_deleted events (archive fully removed from server)
     this.eventRefs.push(
-      this.events.on('ws:archive_deleted', (_message: unknown) => {
+      this.events.on('ws:archive_deleted', async (_message: unknown) => {
         const msg = _message as { type: string; data: ArchiveDeletedEventData } | undefined;
         if (!msg?.data) return;
+        if (!this.settings.enableMobileAnnotationSync) return;
 
-        console.log('[Social Archiver] Archive deleted via WS:', msg.data.archiveId);
-        new Notice('An archive was deleted from the server', 3000);
-        // Note: We don't delete local vault files — the user's local copy remains intact.
+        const { archiveId, originalUrl } = msg.data;
+        console.debug('[Social Archiver] Archive deleted via WS:', archiveId);
+
+        // Find vault file: sourceArchiveId first, then originalUrl fallback
+        let file = this.archiveLookupService?.findBySourceArchiveId(archiveId) ?? null;
+        if (!file && originalUrl) {
+          const byUrl = this.archiveLookupService?.findByOriginalUrl(originalUrl) ?? [];
+          if (byUrl.length === 1) {
+            file = byUrl[0];
+          }
+        }
+        if (!file) return;
+
+        try {
+          await this.app.vault.trash(file, true); // true = use system trash
+          new Notice(`Archive deleted: ${file.basename}`, 3000);
+          console.debug('[Social Archiver] Vault file trashed:', file.path);
+        } catch (err) {
+          console.error('[Social Archiver] Failed to trash vault file:', file.path, err instanceof Error ? err.message : String(err));
+        }
       })
     );
   }
@@ -1606,6 +1673,11 @@ export default class SocialArchiverPlugin extends Plugin {
     this.mobileSyncRetryCount.clear();
     this.failedSyncQueueIds.clear();
 
+    // Cleanup annotation sync services
+    this.archiveLookupService?.destroy();
+    this.archiveLookupService = undefined;
+    this.annotationSyncService = undefined;
+
     // Cleanup services (fire-and-forget; onunload must be synchronous per Obsidian Plugin API)
     void this.subscriptionManager?.dispose();
     this.pendingJobsManager?.dispose();
@@ -1761,6 +1833,20 @@ export default class SocialArchiverPlugin extends Plugin {
       // Initialize TagStore for user-defined tag management
       this.tagStore = new TagStore(this.app, this);
 
+      // Initialize ArchiveLookupService for mobile annotation sync file resolution
+      // Destroy any previously created instance to prevent duplicate MetadataCache listeners
+      this.archiveLookupService?.destroy();
+      this.archiveLookupService = new ArchiveLookupService(this.app);
+      this.archiveLookupService.initialize();
+
+      // Initialize AnnotationSyncService (syncs mobile notes → comment frontmatter)
+      this.annotationSyncService = new AnnotationSyncService(
+        this.app,
+        this.apiClient,
+        this.archiveLookupService,
+        () => this.settings
+      );
+
       // Restore active jobs from previous session
       const allPendingJobs = await this.pendingJobsManager.getJobs();
       const activeProfileCrawls = allPendingJobs.filter(
@@ -1840,17 +1926,30 @@ export default class SocialArchiverPlugin extends Plugin {
       }
 
       if (this.settings.username) {
+        // Create ticket fetcher for private WS channel (requires auth)
+        const ticketFetcher = this.settings.authToken
+          ? async () => {
+              try {
+                const result = await this.apiClient.getWsTicket();
+                return result.ticket;
+              } catch {
+                return null;
+              }
+            }
+          : undefined;
+
         this.realtimeClient = new RealtimeClient(
           API_ENDPOINT,
           this.settings.username,
-          this.events
+          this.events,
+          ticketFetcher
         );
 
         // Set up event listeners for real-time updates
         this.setupRealtimeListeners();
 
-        // Connect to WebSocket
-        this.realtimeClient.connect();
+        // Connect to WebSocket (async — private channel needs ticket fetch)
+        void this.realtimeClient.connect();
       }
 
       // Initialize SubscriptionManager for pending posts sync

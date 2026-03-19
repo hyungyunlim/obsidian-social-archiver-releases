@@ -1,4 +1,5 @@
 export { ArchiveService } from './ArchiveService';
+export { ArchiveLookupService } from './ArchiveLookupService';
 export { MarkdownConverter } from './MarkdownConverter';
 export { MediaHandler } from './MediaHandler';
 export { ImageOptimizer } from './ImageOptimizer';

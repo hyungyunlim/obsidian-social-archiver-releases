@@ -87,7 +87,7 @@ export interface ShareCreatedEvent {
 // ============================================================================
 
 /**
- * Sent when a user updates archive actions (like, bookmark, share)
+ * Sent when a user updates archive actions (like, bookmark, share, annotations)
  */
 export interface ActionUpdatedEventData {
   archiveId: string;
@@ -96,6 +96,8 @@ export interface ActionUpdatedEventData {
     isLiked?: boolean;
     isBookmarked?: boolean;
     shareUrl?: string | null;
+    /** True when userNotes or userHighlights were modified on the archive */
+    hasAnnotationUpdate?: boolean;
   };
   updatedAt: string;
   timestamp: number;
@@ -135,6 +137,7 @@ export interface ShareDeletedEvent {
  */
 export interface ArchiveDeletedEventData {
   archiveId: string;
+  originalUrl?: string;
   updatedAt: string;
   timestamp: number;
 }
@@ -142,6 +145,27 @@ export interface ArchiveDeletedEventData {
 export interface ArchiveDeletedEvent {
   type: 'archive_deleted';
   data: ArchiveDeletedEventData;
+}
+
+// ============================================================================
+// Archive Tags Updated Event (private channel)
+// ============================================================================
+
+/**
+ * Sent when archive-tag mappings are upserted or deleted via the tag API.
+ * Allows the plugin to update frontmatter tags in real-time without a full sync.
+ */
+export interface ArchiveTagsUpdatedEventData {
+  archiveId: string;
+  /** Current tag NAMES (not IDs) after the change, ordered by sort_order then name */
+  tags: string[];
+  updatedAt: string;
+  timestamp: number;
+}
+
+export interface ArchiveTagsUpdatedEvent {
+  type: 'archive_tags_updated';
+  data: ArchiveTagsUpdatedEventData;
 }
 
 // ============================================================================
@@ -167,6 +191,7 @@ export type WebSocketEvent =
   | ActionUpdatedEvent
   | ShareDeletedEvent
   | ArchiveDeletedEvent
+  | ArchiveTagsUpdatedEvent
   | PongEvent;
 
 // ============================================================================

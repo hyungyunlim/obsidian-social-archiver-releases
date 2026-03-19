@@ -4586,6 +4586,35 @@ export class TimelineContainer {
     }
   }
 
+  /**
+   * Re-render a single card in-place when its PostData changes (e.g., comment update).
+   * Finds the existing DOM card by data-file-path and replaces it with a fresh render.
+   * No-op if the card is not currently in the DOM (off-screen / recycled).
+   */
+  private async rerenderCardInPlace(filePath: string, post: PostData): Promise<void> {
+    try {
+      const feed = this.containerEl.querySelector('.timeline-feed');
+      if (!feed) return;
+
+      const existingCard = feed.querySelector(`[data-file-path="${CSS.escape(filePath)}"]`) as HTMLElement | null;
+      if (!existingCard || !existingCard.parentElement) return;
+
+      const tempContainer = document.createElement('div');
+      await this.postCardRenderer.render(tempContainer, post);
+      const newCard = tempContainer.firstElementChild as HTMLElement;
+      if (!newCard) return;
+
+      newCard.setAttribute('data-post-id', post.id);
+      newCard.setAttribute('data-platform', post.platform);
+      newCard.setAttribute('data-file-path', filePath);
+
+      existingCard.parentElement.replaceChild(newCard, existingCard);
+      this.observerManager.trackRenderedCard(newCard, post);
+    } catch (error) {
+      console.error('[TimelineContainer] Failed to re-render card in place:', filePath, error);
+    }
+  }
+
   private async loadPosts(): Promise<void> {
     try {
       // Performance optimization: Skip full reload if cached data exists and not forced
@@ -5400,6 +5429,12 @@ export class TimelineContainer {
               this.posts.push(postData);
             }
             this.posts = this.dedupePostsByFilePath(this.posts);
+
+            // Re-render the specific card DOM if it's visible (handles metadata-only changes
+            // like comment/like that don't affect filter/sort and would be skipped by incremental diff)
+            if (type === 'modify') {
+              await this.rerenderCardInPlace(filePath, postData);
+            }
           }
         }
         break;
