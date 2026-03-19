@@ -755,7 +755,7 @@ export class NaverSubscriptionPoller {
           });
 
           // Rate limit between posts
-          await new Promise((r) => setTimeout(r, 1000));
+          await new Promise((r) => window.setTimeout(r, 1000));
         } catch (error) {
           console.error('[NaverPoller] Failed to process notification:', {
             notificationId: notification.id,

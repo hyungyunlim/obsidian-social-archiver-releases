@@ -394,7 +394,7 @@ export class SubscriptionManager implements IService {
   private events: Events = new Events();
 
   // Polling state
-  private pollingIntervalId?: ReturnType<typeof setInterval>;
+  private pollingIntervalId?: number;
   private isPolling = false;
 
   // Network state
@@ -1263,7 +1263,7 @@ export class SubscriptionManager implements IService {
     this.logger?.debug('Starting subscription polling');
     this.isPolling = true;
 
-    this.pollingIntervalId = setInterval(() => {
+    this.pollingIntervalId = window.setInterval(() => {
       void this.pollForUpdates();
     }, this.config.pollingInterval);
   }
@@ -1277,7 +1277,7 @@ export class SubscriptionManager implements IService {
     this.isPolling = false;
 
     if (this.pollingIntervalId) {
-      clearInterval(this.pollingIntervalId);
+      window.clearInterval(this.pollingIntervalId);
       this.pollingIntervalId = undefined;
     }
   }

@@ -57,7 +57,7 @@ export class CrawlStatusBanner {
   private cleanupFunctions: Array<() => void> = [];
 
   constructor(parentEl: HTMLElement) {
-    this.containerEl = parentEl.createDiv({ cls: 'crawl-status-banners' });
+    this.containerEl = parentEl.createDiv({ cls: 'sa-crawl-status-banners' });
   }
 
   /**

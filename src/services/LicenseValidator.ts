@@ -52,7 +52,7 @@ export class LicenseValidator implements IService {
   private currentDeviceInfo?: DeviceInfo;
 
   // Auto-refresh timer
-  private refreshTimer?: NodeJS.Timeout;
+  private refreshTimer?: number;
 
   constructor(
     config: LicenseValidatorConfig,
@@ -354,7 +354,7 @@ export class LicenseValidator implements IService {
   private startAutoRefresh(): void {
     this.stopAutoRefresh();
 
-    this.refreshTimer = setInterval(() => {
+    this.refreshTimer = window.setInterval(() => {
       void this.refreshLicense().then(() => {
         this.logger?.debug('Auto-refreshing license');
       }).catch((error: unknown) => {
@@ -372,7 +372,7 @@ export class LicenseValidator implements IService {
    */
   private stopAutoRefresh(): void {
     if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
+      window.clearInterval(this.refreshTimer);
       this.refreshTimer = undefined;
       this.logger?.debug('Auto-refresh timer stopped');
     }

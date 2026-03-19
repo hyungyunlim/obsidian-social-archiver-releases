@@ -927,12 +927,12 @@
  * Banner icon buttons (yes/no/cancel)
  * ======================================== */
 
-.pcr-icon-btn {
-  padding: 0 !important;
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
-  background: transparent !important;
+.pcr-icon-btn.pcr-icon-btn {
+  padding: 0;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   display: flex;
@@ -943,17 +943,17 @@
   transition: opacity 0.2s;
 }
 
-.pcr-icon-btn:hover {
-  background: var(--background-modifier-hover) !important;
+.pcr-icon-btn.pcr-icon-btn:hover {
+  background: var(--background-modifier-hover);
   border-radius: 4px;
 }
 
-.pcr-icon-btn-cancel {
-  padding: 0 !important;
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
-  background: transparent !important;
+.pcr-icon-btn-cancel.pcr-icon-btn-cancel {
+  padding: 0;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   display: flex;
@@ -964,8 +964,8 @@
   transition: all 0.2s;
 }
 
-.pcr-icon-btn-cancel:hover {
-  background: var(--background-modifier-hover) !important;
+.pcr-icon-btn-cancel.pcr-icon-btn-cancel:hover {
+  background: var(--background-modifier-hover);
   color: var(--text-error);
 }
 
@@ -1059,12 +1059,12 @@
   flex-shrink: 0;
 }
 
-.pcr-retry-btn {
-  padding: 0 !important;
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
-  background: transparent !important;
+.pcr-retry-btn.pcr-retry-btn {
+  padding: 0;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   display: flex;
@@ -1074,8 +1074,8 @@
   transition: opacity 0.2s;
 }
 
-.pcr-retry-btn:hover {
-  background: var(--background-modifier-hover) !important;
+.pcr-retry-btn.pcr-retry-btn:hover {
+  background: var(--background-modifier-hover);
 }
 
 .pcr-retry-icon {

@@ -10,7 +10,7 @@
  * Single Responsibility: Batch download management for WEBTOON Global (webtoons.com)
  */
 
-import { type App, TFile, requestUrl } from 'obsidian';
+import { type App, TFile, requestUrl, stringifyYaml } from 'obsidian';
 import {
   WebtoonsLocalService,
   type WebtoonsUrlInfo,
@@ -478,50 +478,25 @@ export class WebtoonsDownloadQueue extends EventTarget {
       const file = this.app.vault.getAbstractFileByPath(filePath);
       if (!file || !(file instanceof TFile)) return;
 
-      const content = await this.app.vault.read(file);
-
-      // Check if comments section already exists
-      if (content.includes('## Best Comments')) return;
-
       // Generate comments section
       const commentsSection = this.formatBestComments(bestComments, totalCount);
 
-      // Append comments to the file
-      const updatedContent = content + commentsSection;
-      await this.app.vault.modify(file, updatedContent);
-
-      // Update frontmatter with comment count
-      if (totalCount > 0) {
-        const updatedWithMeta = this.updateFrontmatterCommentCount(updatedContent, totalCount);
-        if (updatedWithMeta !== updatedContent) {
-          await this.app.vault.modify(file, updatedWithMeta);
+      // Append comments section
+      const currentContent = await this.app.vault.read(file);
+      if (!currentContent.includes('## Best Comments')) {
+        await this.app.vault.append(file, commentsSection);
+        // Update frontmatter with comment count using atomic API
+        if (totalCount > 0) {
+          await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+            if (fm['commentCount'] === undefined) {
+              fm['commentCount'] = totalCount;
+            }
+          });
         }
       }
     } catch (error) {
       console.warn('[WebtoonsDownloadQueue] Failed to update comments:', error);
     }
-  }
-
-  /**
-   * Update commentCount in frontmatter
-   */
-  private updateFrontmatterCommentCount(content: string, count: number): string {
-    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
-    if (!frontmatterMatch || !frontmatterMatch[1]) return content;
-
-    const frontmatter = frontmatterMatch[1];
-    if (frontmatter.includes('commentCount:')) return content; // Already has it
-
-    // Add commentCount before tags or at the end of frontmatter
-    const insertPoint = frontmatter.includes('tags:')
-      ? frontmatter.indexOf('tags:')
-      : frontmatter.length;
-
-    const before = frontmatter.slice(0, insertPoint);
-    const after = frontmatter.slice(insertPoint);
-    const newFrontmatter = `${before}commentCount: ${count}\n${after}`;
-
-    return content.replace(frontmatterMatch[0], `---\n${newFrontmatter}\n---`);
   }
 
   /**
@@ -672,10 +647,7 @@ export class WebtoonsDownloadQueue extends EventTarget {
     // Get language label
     const languageLabel = this.getLanguageLabel(urlInfo.language);
 
-    const content = [
-      '---',
-      this.toYaml(frontmatter),
-      '---',
+    const bodyLines = [
       '',
       `# ${seriesInfo.title}`,
       `## Episode ${job.episodeNo}${detail.subtitle ? ` - ${detail.subtitle}` : ''}`,
@@ -690,11 +662,12 @@ export class WebtoonsDownloadQueue extends EventTarget {
       imageEmbeds,
       bestCommentsSection,
     ].filter(Boolean).join('\n');
+    const content = `---\n${stringifyYaml(frontmatter)}---\n${bodyLines}`;
 
     // Check if file exists
     const existingFile = this.app.vault.getAbstractFileByPath(filePath);
     if (existingFile && existingFile instanceof TFile) {
-      await this.app.vault.modify(existingFile, content);
+      await this.app.vault.process(existingFile, () => content);
     } else {
       await this.app.vault.create(filePath, content);
     }
@@ -728,7 +701,7 @@ export class WebtoonsDownloadQueue extends EventTarget {
   }
 
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise(resolve => window.setTimeout(resolve, ms));
   }
 
   private sanitizeFilename(name: string): string {
@@ -739,23 +712,7 @@ export class WebtoonsDownloadQueue extends EventTarget {
       .slice(0, 100); // Limit length
   }
 
-  private toYaml(obj: Record<string, unknown>): string {
-    const lines: string[] = [];
-    for (const [key, value] of Object.entries(obj)) {
-      if (value === undefined || value === null) continue;
-      if (Array.isArray(value)) {
-        lines.push(`${key}:`);
-        for (const item of value) {
-          lines.push(`  - ${JSON.stringify(item)}`);
-        }
-      } else if (typeof value === 'string' && (value.includes(':') || value.includes('#'))) {
-        lines.push(`${key}: "${value}"`);
-      } else {
-        lines.push(`${key}: ${String(value as string | number | boolean | bigint)}`);
-      }
-    }
-    return lines.join('\n');
-  }
+
 
   private getLanguageLabel(code: string): string {
     const labels: Record<string, string> = {

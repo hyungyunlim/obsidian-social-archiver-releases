@@ -546,7 +546,8 @@ export class SupertonicInstaller {
       const allModelFiles = [...MODEL_FILES];
       for (let i = 0; i < allModelFiles.length; i++) {
         this.checkAbort(signal);
-        const entry = allModelFiles[i]!;
+        const entry = allModelFiles[i];
+        if (!entry) continue;
         const destPath = path.join(stagingDir, entry.local);
         emit('downloading_models', 3, `Downloading ${path.basename(entry.local)}...`, i / allModelFiles.length);
         await this.downloadFile(entry.remote, destPath);
@@ -559,7 +560,8 @@ export class SupertonicInstaller {
 
       for (let i = 0; i < VOICE_FILES.length; i++) {
         this.checkAbort(signal);
-        const entry = VOICE_FILES[i]!;
+        const entry = VOICE_FILES[i];
+        if (!entry) continue;
         const destPath = path.join(stagingDir, entry.local);
         emit('downloading_voices', 4, `Downloading ${path.basename(entry.local)}...`, i / VOICE_FILES.length);
         await this.downloadFile(entry.remote, destPath);
@@ -773,7 +775,7 @@ export class SupertonicInstaller {
         if (attempt === MAX_DOWNLOAD_RETRIES - 1) throw error;
         const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
         console.debug(`[SupertonicInstaller] Retry ${attempt + 1}/${MAX_DOWNLOAD_RETRIES} for ${url} in ${delay}ms`);
-        await new Promise((r) => setTimeout(r, delay));
+        await new Promise((r) => window.setTimeout(r, delay));
       }
     }
   }

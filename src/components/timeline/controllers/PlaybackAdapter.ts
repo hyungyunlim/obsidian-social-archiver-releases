@@ -89,7 +89,7 @@ export class HtmlMediaPlaybackAdapter implements PlaybackAdapter {
  */
 export class YouTubeIframePlaybackAdapter implements PlaybackAdapter {
   readonly type = 'youtube-iframe' as const;
-  private pollingInterval: ReturnType<typeof setInterval> | null = null;
+  private pollingInterval: number | null = null;
   private estimatedTime = 0;
   private playing = false;
   private unsubscribeTimeUpdate: (() => void) | null = null;
@@ -159,7 +159,7 @@ export class YouTubeIframePlaybackAdapter implements PlaybackAdapter {
 
     // Fallback: polling-based time estimation
     this.usePollingFallback = true;
-    this.pollingInterval = setInterval(() => {
+    this.pollingInterval = window.setInterval(() => {
       if (this.playing) {
         this.estimatedTime += 0.25;
         if (this.duration > 0 && this.estimatedTime > this.duration) {
@@ -172,7 +172,7 @@ export class YouTubeIframePlaybackAdapter implements PlaybackAdapter {
 
     return () => {
       if (this.pollingInterval) {
-        clearInterval(this.pollingInterval);
+        window.clearInterval(this.pollingInterval);
         this.pollingInterval = null;
       }
     };
@@ -182,7 +182,7 @@ export class YouTubeIframePlaybackAdapter implements PlaybackAdapter {
     this.unsubscribeTimeUpdate?.();
     this.unsubscribeTimeUpdate = null;
     if (this.pollingInterval) {
-      clearInterval(this.pollingInterval);
+      window.clearInterval(this.pollingInterval);
       this.pollingInterval = null;
     }
   }

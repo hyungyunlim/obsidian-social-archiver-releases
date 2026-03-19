@@ -1511,7 +1511,7 @@ export class PostCardRenderer extends Component {
    * Called from TimelineContainer when cross-post completes after the card is already visible.
    */
   public injectCrossPostBadge(cardEl: HTMLElement, threadsPostUrl: string): void {
-    const header = cardEl.querySelector('.pcr-header') as HTMLElement | null;
+    const header = cardEl.querySelector<HTMLElement>('.pcr-header');
     if (!header) return;
     this.renderCrossPostIndicator(header, threadsPostUrl);
   }
@@ -2016,7 +2016,7 @@ export class PostCardRenderer extends Component {
     const isLongContent = rawMarkdown.length > previewLength;
 
     const contentText = contentContainer.createDiv({
-      cls: 'text-sm leading-relaxed text-[var(--text-normal)] blog-content-inline post-body-text pcr-content-text'
+      cls: 'text-sm leading-relaxed text-[var(--text-normal)] sa-blog-content-inline post-body-text pcr-content-text'
     });
 
     // Use file path for Obsidian to resolve internal links and images
@@ -2778,7 +2778,7 @@ export class PostCardRenderer extends Component {
     post.tags = tagStore.getTagsForPost(filePath);
 
     // Always anchor chips within content area (above interaction/actions bar)
-    const contentArea = rootElement.querySelector('.post-content-area') as HTMLElement | null;
+    const contentArea = rootElement.querySelector<HTMLElement>('.post-content-area');
     if (!contentArea) return;
 
     tagContainer.remove();
@@ -2787,7 +2787,7 @@ export class PostCardRenderer extends Component {
     const newChips = contentArea.querySelector('.post-tag-chips:last-child');
     if (!newChips) return;
 
-    const interactionBar = contentArea.querySelector('.pcr-interactions, .pcr-actions-end') as HTMLElement | null;
+    const interactionBar = contentArea.querySelector<HTMLElement>('.pcr-interactions, .pcr-actions-end');
     if (interactionBar) {
       contentArea.insertBefore(newChips, interactionBar);
     }
@@ -2941,12 +2941,12 @@ export class PostCardRenderer extends Component {
   private attachLongPress(el: HTMLElement, post: PostData): void {
     const HOLD_MS = 400;
     const MOVE_THRESHOLD = 10;
-    let timer: ReturnType<typeof setTimeout> | null = null;
+    let timer: number | null = null;
     let startX = 0;
     let startY = 0;
 
     const cancel = () => {
-      if (timer) { clearTimeout(timer); timer = null; }
+      if (timer) { window.clearTimeout(timer); timer = null; }
     };
 
     el.addEventListener('pointerdown', (e: PointerEvent) => {
@@ -2957,7 +2957,7 @@ export class PostCardRenderer extends Component {
       startX = e.clientX;
       startY = e.clientY;
       el.setPointerCapture(e.pointerId);
-      timer = setTimeout(() => {
+      timer = window.setTimeout(() => {
         timer = null;
         el.releasePointerCapture(e.pointerId);
         this.onReaderModeCallback?.(post);
@@ -3270,26 +3270,20 @@ export class PostCardRenderer extends Component {
       const shareId = shareData.shareId as string;
       const shareUrl = shareData.shareUrl as string;
 
-      // Update YAML frontmatter in ORIGINAL content (preserves all existing fields)
-      const yamlUpdates: Record<string, unknown> = {
-        share: true,
-        shareUrl: shareUrl,
-        shareMode: this.plugin.settings.shareMode, // Add current share mode from settings
-      };
-
-      // Add linkPreviews if any were found
-      if (linkPreviewUrls.length > 0) {
-        yamlUpdates.linkPreviews = linkPreviewUrls;
-      } // no link previews
-
-      const updatedContent = this.updateYamlFrontmatter(originalContent, yamlUpdates);
-
       // Register UI modify to prevent double refresh
       if (this.onUIModifyCallback) {
         this.onUIModifyCallback(filePath);
       }
 
-      await this.vault.modify(file, updatedContent);
+      // Update YAML frontmatter atomically via processFrontMatter
+      await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+        fm['share'] = true;
+        fm['shareUrl'] = shareUrl;
+        fm['shareMode'] = this.plugin.settings.shareMode;
+        if (linkPreviewUrls.length > 0) {
+          fm['linkPreviews'] = linkPreviewUrls;
+        }
+      });
 
       // Update post object
       post.shareUrl = shareUrl;
@@ -3453,18 +3447,17 @@ export class PostCardRenderer extends Component {
 
       await shareClient.deleteShare(shareId);
 
-      // Read file content
-      const content = await this.vault.read(file);
-
-      // Remove share-related fields from YAML frontmatter
-      const updatedContent = this.removeShareFromYaml(content);
-
       // Register UI modify to prevent double refresh
       if (this.onUIModifyCallback) {
         this.onUIModifyCallback(filePath);
       }
 
-      await this.vault.modify(file, updatedContent);
+      // Remove share-related fields from YAML frontmatter atomically
+      await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+        delete fm['share'];
+        delete fm['shareUrl'];
+        delete fm['shareExpiry'];
+      });
 
       // Update post object - remove all share-related properties
       delete post.shareUrl;
@@ -3598,7 +3591,7 @@ export class PostCardRenderer extends Component {
       });
 
       // Focus on cancel button by default (safer)
-      setTimeout(() => cancelBtn.focus(), 50);
+      window.setTimeout(() => cancelBtn.focus(), 50);
 
       // Handle escape key
       modal.scope.register([], 'Escape', () => {
@@ -3630,7 +3623,7 @@ export class PostCardRenderer extends Component {
       }
 
       const file = this.vault.getAbstractFileByPath(filePath);
-      if (!file || !('extension' in file)) {
+      if (!(file instanceof TFile)) {
         new Notice('Cannot delete post: file not found');
         return;
       }
@@ -3719,8 +3712,7 @@ export class PostCardRenderer extends Component {
       // Delete cross-posted Threads post if metadata exists (fire-and-forget)
       // Read fresh frontmatter from metadata cache — the cached PostData may be
       // stale because cross-post metadata is written AFTER the card is rendered.
-      const tFile = file as TFile;
-      const cache = this.app.metadataCache.getFileCache(tFile);
+      const cache = this.app.metadataCache.getFileCache(file);
       const crossPostId = cache?.frontmatter?.['crossPostId'] as string | undefined;
       const threadsPostId = cache?.frontmatter?.['threadsPostId'] as string | undefined;
 
@@ -3746,7 +3738,7 @@ export class PostCardRenderer extends Component {
       rootElement.addClass('pcr-delete-animation');
 
       // Wait for animation to complete
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => window.setTimeout(resolve, 300));
 
       // Delete media files first (all relative paths, not http(s) URLs)
       // Include both post media and embedded archives media
@@ -3886,22 +3878,16 @@ export class PostCardRenderer extends Component {
         return;
       }
 
-      // Read current file content
-      const content = await this.vault.read(file);
-
       // Toggle like status
       const newLikeStatus = !post.like;
-
-      // Update YAML frontmatter
-      const updatedContent = this.updateYamlFrontmatter(content, { like: newLikeStatus });
 
       // Register UI modify to prevent double refresh
       if (this.onUIModifyCallback) {
         this.onUIModifyCallback(filePath);
       }
 
-      // Write back to file
-      await this.vault.modify(file, updatedContent);
+      // Update YAML frontmatter atomically
+      await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => { fm['like'] = newLikeStatus; });
 
       // Update local state
       post.like = newLikeStatus;
@@ -4010,7 +3996,7 @@ export class PostCardRenderer extends Component {
       textarea.value = post.comment || '';
 
       // Focus and select
-      setTimeout(() => {
+      window.setTimeout(() => {
         textarea.focus();
         textarea.setSelectionRange(textarea.value.length, textarea.value.length);
       }, 10);
@@ -4032,17 +4018,19 @@ export class PostCardRenderer extends Component {
         const newComment = textarea.value.trim();
 
         try {
-          const content = await this.vault.read(file);
-          const updatedContent = this.updateYamlFrontmatter(content, {
-            comment: newComment || null
-          });
-
           // Register UI modify to prevent double refresh
           if (this.onUIModifyCallback) {
             this.onUIModifyCallback(filePath);
           }
 
-          await this.vault.modify(file, updatedContent);
+          // Update YAML frontmatter atomically
+          await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+            if (newComment) {
+              fm['comment'] = newComment;
+            } else {
+              delete fm['comment'];
+            }
+          });
 
           post.comment = newComment || undefined;
 
@@ -4111,22 +4099,16 @@ export class PostCardRenderer extends Component {
         return;
       }
 
-      // Read current file content
-      const content = await this.vault.read(file);
-
       // Toggle archive status
       const newArchiveStatus = !post.archive;
-
-      // Update YAML frontmatter
-      const updatedContent = this.updateYamlFrontmatter(content, { archive: newArchiveStatus });
 
       // Register UI modify to prevent double refresh
       if (this.onUIModifyCallback) {
         this.onUIModifyCallback(filePath);
       }
 
-      // Write back to file
-      await this.vault.modify(file, updatedContent);
+      // Update YAML frontmatter atomically
+      await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => { fm['archive'] = newArchiveStatus; });
 
       // Update post object
       post.archive = newArchiveStatus;
@@ -4151,168 +4133,7 @@ export class PostCardRenderer extends Component {
     }
   }
 
-  /**
-   * Update YAML frontmatter with new values
-   */
-  private updateYamlFrontmatter(content: string, updates: Record<string, unknown>): string {
-    const frontmatterRegex = /^---\n([\s\S]*?)\n---\n/;
-    const match = content.match(frontmatterRegex);
 
-    // Helper function to format YAML value
-    const formatYamlValue = (value: unknown): string => {
-      if (value === null || value === undefined) {
-        return '';
-      }
-      if (typeof value === 'string') {
-        // Use JSON.stringify for strings to handle newlines and quotes properly
-        return JSON.stringify(value);
-      }
-      if (typeof value === 'object' && value !== null && 'url' in value) {
-        // Format object with url property (for linkPreviews items)
-        return `url: ${(value as { url: string }).url}`;
-      }
-      if (typeof value === 'object' && value !== null) {
-        // Serialize remaining objects to JSON to avoid '[object Object]' output
-        return JSON.stringify(value);
-      }
-      // At this point value is number | boolean | bigint | symbol
-      return String(value as number | boolean | bigint | symbol);
-    };
-
-    // Helper function to format YAML key-value pair (handles arrays)
-    const formatYamlEntry = (key: string, value: unknown): string | null => {
-      if (value === null || value === undefined) {
-        return null;
-      }
-
-      // Handle arrays
-      if (Array.isArray(value)) {
-        if (value.length === 0) return null;
-        const arrayItems = value.map(v => `  - ${formatYamlValue(v)}`).join('\n');
-        return `${key}:\n${arrayItems}`;
-      }
-
-      // Handle simple values
-      return `${key}: ${formatYamlValue(value)}`;
-    };
-
-    if (!match || !match[1]) {
-      // No frontmatter found, add it
-      const yamlLines = Object.entries(updates)
-        .map(([key, value]) => formatYamlEntry(key, value))
-        .filter(Boolean)
-        .join('\n');
-      return `---\n${yamlLines}\n---\n\n${content}`;
-    }
-
-    const frontmatterContent = match[1];
-    const restContent = content.slice(match[0].length);
-
-    // Parse existing frontmatter
-    const lines = frontmatterContent.split('\n');
-    const updatedLines: string[] = [];
-    const processedKeys = new Set<string>();
-
-    // Track if we're inside an array (lines starting with "  -")
-    let currentArrayKey: string | null = null;
-
-    // Update existing keys
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (!line) continue; // Skip undefined lines
-
-      const keyMatch = line.match(/^(\w+):/);
-
-      if (keyMatch && keyMatch[1]) {
-        // This line defines a key
-        const key = keyMatch[1];
-        currentArrayKey = null; // Reset array tracking
-
-        if (Object.hasOwn(updates, key)) {
-          const value = updates[key];
-          if (value === null || value === undefined) {
-            // Skip this line to remove the field
-            processedKeys.add(key);
-
-            // Skip array items if this was an array key
-            while (i + 1 < lines.length && lines[i + 1]?.match(/^\s+-\s/)) {
-              i++;
-            }
-            continue;
-          }
-
-          // Add formatted entry (handles arrays automatically)
-          const formatted = formatYamlEntry(key, value);
-          if (formatted) {
-            updatedLines.push(formatted);
-          }
-          processedKeys.add(key);
-
-          // Skip old array items if this is now an array
-          if (Array.isArray(value)) {
-            while (i + 1 < lines.length && lines[i + 1]?.match(/^\s+-\s/)) {
-              i++;
-            }
-          }
-        } else {
-          // Keep existing line
-          updatedLines.push(line);
-          // Track if this starts an array
-          if (i + 1 < lines.length && lines[i + 1]?.match(/^\s+-\s/)) {
-            currentArrayKey = key;
-          }
-        }
-      } else if (line.match(/^\s+-\s/) && currentArrayKey && !Object.hasOwn(updates, currentArrayKey)) {
-        // This is an array item line, keep it if we're not updating this key
-        updatedLines.push(line);
-      } else if (!line.match(/^\s+-\s/)) {
-        // Other lines (empty, comments, etc.)
-        updatedLines.push(line);
-        currentArrayKey = null;
-      }
-    }
-
-    // Add new keys
-    for (const [key, value] of Object.entries(updates)) {
-      if (!processedKeys.has(key) && value !== null && value !== undefined) {
-        const formatted = formatYamlEntry(key, value);
-        if (formatted) {
-          updatedLines.push(formatted);
-        }
-      }
-    }
-
-    return `---\n${updatedLines.join('\n')}\n---\n${restContent}`;
-  }
-
-  /**
-   * Remove share-related fields from YAML frontmatter
-   */
-  private removeShareFromYaml(content: string): string {
-    const frontmatterRegex = /^---\n([\s\S]*?)\n---\n/;
-    const match = content.match(frontmatterRegex);
-
-    if (!match || !match[1]) {
-      // No frontmatter, nothing to remove
-      return content;
-    }
-
-    const frontmatterContent = match[1];
-    const restContent = content.slice(match[0].length);
-
-    // Parse existing frontmatter and remove share-related keys
-    const lines = frontmatterContent.split('\n');
-    const shareKeys = ['share', 'shareUrl', 'shareExpiry'];
-    const filteredLines = lines.filter(line => {
-      const keyMatch = line.match(/^(\w+):/);
-      if (keyMatch && keyMatch[1]) {
-        return !shareKeys.includes(keyMatch[1]);
-      }
-      return true;
-    });
-
-    return `---\n${filteredLines.join('\n')}\n---\n${restContent}`;
-  }
 
   /**
    * Resolve the external/original URL for a post
@@ -4802,80 +4623,27 @@ export class PostCardRenderer extends Component {
     try {
       // Get file
       const file = this.vault.getAbstractFileByPath(post.filePath);
-      if (!file || !(file instanceof TFile)) {
+      if (!(file instanceof TFile)) {
         new Notice('Cannot delete preview: file not found');
         return;
       }
-
-      // Read file content
-      const content = await this.vault.read(file);
-
-      // Parse frontmatter and body
-      const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-      if (!frontmatterMatch) {
-        new Notice('Cannot delete preview: invalid file format');
-        return;
-      }
-
-      const [, frontmatterText, body] = frontmatterMatch;
-
-      if (!frontmatterText) {
-        new Notice('Cannot delete preview: empty frontmatter');
-        return;
-      }
-
-      // Parse YAML frontmatter
-      const frontmatterLines = frontmatterText.split('\n');
-      const newFrontmatterLines: string[] = [];
-      let inLinkPreviews = false;
-      let skipNext = false;
-
-      for (let i = 0; i < frontmatterLines.length; i++) {
-        const line = frontmatterLines[i];
-
-        if (!line) continue;
-
-        if (skipNext) {
-          skipNext = false;
-          continue;
-        }
-
-        if (line.startsWith('linkPreviews:')) {
-          inLinkPreviews = true;
-          newFrontmatterLines.push(line);
-          continue;
-        }
-
-        if (inLinkPreviews) {
-          // Check if this is a link preview item
-          if (line.match(/^\s+-\s+/)) {
-            // Extract URL from this line
-            const urlMatch = line.match(/^\s+-\s+["']?(.+?)["']?$/);
-            if (urlMatch && urlMatch[1] === urlToDelete) {
-              // Skip this line (delete the URL)
-              continue;
-            }
-            newFrontmatterLines.push(line);
-          } else {
-            // End of linkPreviews array
-            inLinkPreviews = false;
-            newFrontmatterLines.push(line);
-          }
-        } else {
-          newFrontmatterLines.push(line);
-        }
-      }
-
-      // Reconstruct file content
-      const newContent = `---\n${newFrontmatterLines.join('\n')}\n---\n${body}`;
 
       // Register UI modify to prevent double refresh
       if (this.onUIModifyCallback && post.filePath) {
         this.onUIModifyCallback(post.filePath);
       }
 
-      // Write back to file
-      await this.vault.modify(file, newContent);
+      // Atomically update frontmatter to remove the link preview URL
+      await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
+        if (Array.isArray(frontmatter['linkPreviews'])) {
+          frontmatter['linkPreviews'] = (frontmatter['linkPreviews'] as string[]).filter(
+            (url: string) => url !== urlToDelete
+          );
+          if ((frontmatter['linkPreviews'] as string[]).length === 0) {
+            delete frontmatter['linkPreviews'];
+          }
+        }
+      });
 
       new Notice('Link preview removed');
 
@@ -5263,9 +5031,9 @@ export class PostCardRenderer extends Component {
     banner.createSpan({ cls: 'pcr-banner-message', text: messageText });
 
     // Auto-hide banner after 2 seconds
-    setTimeout(() => {
+    window.setTimeout(() => {
       banner.addClass('pcr-fade-out');
-      setTimeout(() => banner.remove(), 300);
+      window.setTimeout(() => banner.remove(), 300);
     }, 2000);
   }
 
@@ -5305,7 +5073,7 @@ export class PostCardRenderer extends Component {
           banner.remove();
 
           // Refresh to show "Download declined" status
-          setTimeout(() => {
+          window.setTimeout(() => {
             rootElement.empty();
             void this.render(rootElement, post);
           }, 500);
@@ -5345,9 +5113,9 @@ export class PostCardRenderer extends Component {
         message.addClass('pcr-text-muted');
 
         // Remove banner after 2 seconds
-        setTimeout(() => {
+        window.setTimeout(() => {
           banner.addClass('pcr-fade-out');
-          setTimeout(() => banner.remove(), 300);
+          window.setTimeout(() => banner.remove(), 300);
         }, 2000);
       });
 
@@ -5362,9 +5130,9 @@ export class PostCardRenderer extends Component {
         buttonSection.hide();
 
         // Show success message for 2 seconds, then fade out
-        setTimeout(() => {
+        window.setTimeout(() => {
           banner.addClass('pcr-fade-out');
-          setTimeout(() => banner.remove(), 300);
+          window.setTimeout(() => banner.remove(), 300);
         }, 2000);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -5383,9 +5151,9 @@ export class PostCardRenderer extends Component {
         buttonSection.hide();
 
         // Remove banner after showing message
-        setTimeout(() => {
+        window.setTimeout(() => {
           banner.addClass('pcr-fade-out');
-          setTimeout(() => banner.remove(), 300);
+          window.setTimeout(() => banner.remove(), 300);
         }, 3000);
       }
     })(); });
@@ -5463,9 +5231,9 @@ export class PostCardRenderer extends Component {
         message.addClass('pcr-text-muted');
 
         // Remove banner after 2 seconds
-        setTimeout(() => {
+        window.setTimeout(() => {
           banner.addClass('pcr-fade-out');
-          setTimeout(() => banner.remove(), 300);
+          window.setTimeout(() => banner.remove(), 300);
         }, 2000);
       });
 
@@ -5475,25 +5243,25 @@ export class PostCardRenderer extends Component {
 
       // Add loading animation
       let dots = 0;
-      const loadingInterval = setInterval(() => {
+      const loadingInterval = window.setInterval(() => {
         dots = (dots + 1) % 4;
         message.textContent = `Downloading audio${sizeInfo}${'.'.repeat(dots)}`;
       }, 400);
 
       try {
         await this.downloadPodcastAudio(audioUrl, post, rootElement, message, banner, abortController.signal);
-        clearInterval(loadingInterval);
+        window.clearInterval(loadingInterval);
 
         // Hide cancel button on success
         buttonSection.hide();
 
         // Show success message for 2 seconds, then fade out
-        setTimeout(() => {
+        window.setTimeout(() => {
           banner.addClass('pcr-fade-out');
-          setTimeout(() => banner.remove(), 300);
+          window.setTimeout(() => banner.remove(), 300);
         }, 2000);
       } catch (error) {
-        clearInterval(loadingInterval);
+        window.clearInterval(loadingInterval);
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
         // Don't show error if it was cancelled
@@ -5510,9 +5278,9 @@ export class PostCardRenderer extends Component {
         buttonSection.hide();
 
         // Remove banner after showing message
-        setTimeout(() => {
+        window.setTimeout(() => {
           banner.addClass('pcr-fade-out');
-          setTimeout(() => banner.remove(), 300);
+          window.setTimeout(() => banner.remove(), 300);
         }, 3000);
       }
     })(); });
@@ -5615,7 +5383,7 @@ export class PostCardRenderer extends Component {
           resolve(null);
         });
         // Timeout after 5 seconds
-        setTimeout(() => resolve(null), 5000);
+        window.setTimeout(() => resolve(null), 5000);
       });
     } catch {
       return null;
@@ -5777,10 +5545,10 @@ export class PostCardRenderer extends Component {
         abortController.abort();
         message.textContent = 'Cancelling...';
         // Fallback: remove banner after 5 seconds if still visible
-        setTimeout(() => {
+        window.setTimeout(() => {
           if (banner.isConnected) {
             message.textContent = 'Transcription cancelled';
-            setTimeout(() => banner.remove(), 1500);
+            window.setTimeout(() => banner.remove(), 1500);
           }
         }, 5000);
       });
@@ -5859,7 +5627,7 @@ export class PostCardRenderer extends Component {
 
       if (signal.aborted) {
         messageEl.textContent = 'Transcription cancelled';
-        setTimeout(() => banner.remove(), 2000);
+        window.setTimeout(() => banner.remove(), 2000);
         return;
       }
 
@@ -5872,7 +5640,7 @@ export class PostCardRenderer extends Component {
       messageEl.addClass('pcr-text-success');
 
       // Refresh the post after a short delay
-      setTimeout(() => {
+      window.setTimeout(() => {
         rootElement.empty();
         void this.render(rootElement, post);
       }, 2000);
@@ -5880,7 +5648,7 @@ export class PostCardRenderer extends Component {
     } catch (error) {
       if (signal.aborted) {
         messageEl.textContent = 'Transcription cancelled';
-        setTimeout(() => banner.remove(), 2000);
+        window.setTimeout(() => banner.remove(), 2000);
         return;
       }
 
@@ -6011,8 +5779,6 @@ export class PostCardRenderer extends Component {
       throw new Error('Post file not found');
     }
 
-    // Read current content
-    let content = await this.vault.read(file);
     const completedAt = new Date().toISOString();
 
     // Update frontmatter
@@ -6039,19 +5805,16 @@ export class PostCardRenderer extends Component {
       frontmatter.transcriptionProcessingTime = result.processingTime;
     });
 
-    // Re-read content after frontmatter update
-    content = await this.vault.read(file);
-
-    // Format transcript for markdown using unified TranscriptFormatter
-    const hasTranscriptSection = parseTranscriptSections(content).length > 0;
-    if (!hasTranscriptSection) {
-      const formatter = new TranscriptFormatter();
-      const body = formatter.formatWhisperTranscript(result.segments);
-      if (body) {
-        const normalizedContent = content.replace(/\s+$/, '');
-        const newContent = `${normalizedContent}\n\n---\n\n## Transcript\n\n${body}\n`;
-        await this.vault.modify(file, newContent);
-      }
+    // Append transcript section to note body if not already present
+    const formatter = new TranscriptFormatter();
+    const transcriptBody = formatter.formatWhisperTranscript(result.segments);
+    if (transcriptBody) {
+      await this.vault.process(file, (currentContent) => {
+        const hasTranscriptSection = parseTranscriptSections(currentContent).length > 0;
+        if (hasTranscriptSection) return currentContent;
+        const normalizedContent = currentContent.replace(/\s+$/, '');
+        return `${normalizedContent}\n\n---\n\n## Transcript\n\n${transcriptBody}\n`;
+      });
     }
 
     // Update local post data cache so re-render picks up transcript
@@ -6231,7 +5994,7 @@ export class PostCardRenderer extends Component {
     messageEl.addClass('sa-text-success');
 
     // Refresh the card
-    setTimeout(() => {
+    window.setTimeout(() => {
       rootElement.empty();
       void this.render(rootElement, post);
     }, 500);
@@ -6320,7 +6083,7 @@ export class PostCardRenderer extends Component {
         buttonSection.show();
 
         // Remove banner after showing error
-        setTimeout(() => {
+        window.setTimeout(() => {
           banner.remove();
         }, 5000);
       }
@@ -6390,34 +6153,35 @@ export class PostCardRenderer extends Component {
       if (post.filePath) {
         const file = this.vault.getFileByPath(post.filePath);
         if (file) {
-          const content = await this.vault.read(file);
           // Extract filename from path (handle both Windows \ and Unix / separators)
           const videoFilename = videoPath.split(/[/\\]/).pop() || '';
           // Include platform folder in the link path (e.g., attachments/tiktok/video.mp4)
           const videoLink = `![[${platformFolder}/${videoFilename}]]`;
-
-          // Mark as downloaded in frontmatter BEFORE vault.modify() to prevent banner from re-appearing
-          let updatedContent = this.addDownloadedUrlToContent(content, url);
-
-          // Replace existing video thumbnail with actual video embed
-          // Pattern matches: ![🎥 Video (duration)](path/to/thumbnail.jpg) or ![🎥 Video](path)
-          const videoThumbnailRegex = /!\[🎥 Video[^\]]*\]\([^)]+\)/;
-
-          if (videoThumbnailRegex.test(updatedContent)) {
-            // Replace the first video thumbnail with video embed
-            updatedContent = updatedContent.replace(videoThumbnailRegex, videoLink);
-          } else if (!updatedContent.includes(videoLink)) {
-            // No thumbnail found, add video link at the end
-            updatedContent = updatedContent + `\n\n${videoLink}`;
-          }
 
           // Register UI modify to prevent double refresh
           if (this.onUIModifyCallback) {
             this.onUIModifyCallback(post.filePath);
           }
 
-          // Modify file with both video link and updated frontmatter
-          await this.vault.modify(file, updatedContent);
+          // Atomically mark as downloaded and embed video link (prevents race conditions)
+          await this.vault.process(file, (content) => {
+            // Mark as downloaded in frontmatter to prevent banner from re-appearing
+            let updatedContent = this.addDownloadedUrlToContent(content, url);
+
+            // Replace existing video thumbnail with actual video embed
+            // Pattern matches: ![🎥 Video (duration)](path/to/thumbnail.jpg) or ![🎥 Video](path)
+            const videoThumbnailRegex = /!\[🎥 Video[^\]]*\]\([^)]+\)/;
+
+            if (videoThumbnailRegex.test(updatedContent)) {
+              // Replace the first video thumbnail with video embed
+              updatedContent = updatedContent.replace(videoThumbnailRegex, videoLink);
+            } else if (!updatedContent.includes(videoLink)) {
+              // No thumbnail found, add video link at the end
+              updatedContent = updatedContent + `\n\n${videoLink}`;
+            }
+
+            return updatedContent;
+          });
 
           // Update UI: Replace TikTok/YouTube iframe with local video player.
           // If inline replacement misses, force re-render this card because
@@ -6495,7 +6259,7 @@ export class PostCardRenderer extends Component {
 
           // Ensure follow-up banners (e.g., Whisper transcription prompt) are recalculated.
           if (rootElement.isConnected) {
-            setTimeout(() => {
+            window.setTimeout(() => {
               void (async () => {
                 if (!rootElement.isConnected) return;
                 rootElement.empty();
@@ -6549,7 +6313,7 @@ export class PostCardRenderer extends Component {
 
   /**
    * Add downloaded URL to frontmatter in file content (returns updated content)
-   * Used when we need to update frontmatter before vault.modify()
+   * Used inside vault.process() callbacks to mark media as downloaded atomically
    */
   private addDownloadedUrlToContent(content: string, url: string): string {
     const downloadedUrl = `downloaded:${url}`;
@@ -6775,60 +6539,27 @@ export class PostCardRenderer extends Component {
     const parentFile = this.vault.getFileByPath(post.filePath);
     if (parentFile) {
       try {
-        const content = await this.vault.read(parentFile);
-        const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+        const variants = Array.from(new Set([...(urlVariants ?? []), targetUrl, originalUrl].filter(Boolean)));
 
-        if (frontmatterMatch && frontmatterMatch[1]) {
-          // Parse existing processedUrls
-          const processedUrlsMatch = frontmatterMatch[1].match(/processedUrls:\s*\[(.*?)\]/);
-          let processedUrls: string[] = [];
+        // Register UI modify to prevent double refresh
+        if (this.onUIModifyCallback && post.filePath) {
+          this.onUIModifyCallback(post.filePath);
+        }
 
-          if (processedUrlsMatch && processedUrlsMatch[1]) {
-            processedUrls = processedUrlsMatch[1]
-              .split(',')
-              .map(u => u.trim().replace(/^["']|["']$/g, ''))
-              .filter(u => u);
-          }
-
-          const variants = Array.from(new Set([...(urlVariants ?? []), targetUrl, originalUrl].filter(Boolean)));
-
-          // Add "archiving:" prefix to show progress banner
+        await this.app.fileManager.processFrontMatter(parentFile, (fm: Record<string, unknown>) => {
+          const existing: string[] = Array.isArray(fm['processedUrls']) ? (fm['processedUrls'] as string[]) : [];
           let updated = false;
           variants.forEach(u => {
             const archivingUrl = `archiving:${u}`;
-            if (!processedUrls.some(v => v === u || v === archivingUrl || v === `declined:${u}`)) {
-              processedUrls.push(archivingUrl);
+            if (!existing.some(v => v === u || v === archivingUrl || v === `declined:${u}`)) {
+              existing.push(archivingUrl);
               updated = true;
             }
           });
-
           if (updated) {
-            // Update frontmatter
-            const newProcessedUrlsLine = `processedUrls: [${processedUrls.map(u => `"${u}"`).join(', ')}]`;
-
-            let newContent: string;
-            if (processedUrlsMatch) {
-              // Replace existing processedUrls line
-              newContent = content.replace(
-                /processedUrls:\s*\[.*?\]/,
-                newProcessedUrlsLine
-              );
-            } else {
-              // Add processedUrls to frontmatter
-              newContent = content.replace(
-                /^(---\n[\s\S]*?)(---)/,
-                `$1${newProcessedUrlsLine}\n$2`
-              );
-            }
-
-            // Register UI modify to prevent double refresh
-            if (this.onUIModifyCallback && post.filePath) {
-              this.onUIModifyCallback(post.filePath);
-            }
-
-            await this.vault.modify(parentFile, newContent);
+            fm['processedUrls'] = existing;
           }
-        }
+        });
       } catch (error) {
         console.error('[PostCardRenderer] Failed to update processedUrls:', error);
         // Continue anyway - processCompletedJob will update it later
@@ -6919,13 +6650,13 @@ export class PostCardRenderer extends Component {
     video.src = resourcePath;
 
     // Prevent duplicate iframe rendering when both error + timeout fire.
-    let loadTimeout: ReturnType<typeof setTimeout> | null = null;
+    let loadTimeout: number | null = null;
     let hasLoaded = false;
     let fallbackTriggered = false;
 
     const clearLoadTimeout = () => {
       if (loadTimeout !== null) {
-        clearTimeout(loadTimeout);
+        window.clearTimeout(loadTimeout);
         loadTimeout = null;
       }
     };
@@ -6967,7 +6698,7 @@ export class PostCardRenderer extends Component {
 
     // Add timeout fallback (5 seconds) in case video doesn't load or error doesn't fire.
     // This is especially important for mobile where files might not be synced.
-    loadTimeout = setTimeout(() => {
+    loadTimeout = window.setTimeout(() => {
       if (!hasLoaded && !fallbackTriggered && post && post.platform === 'youtube') {
         fallbackToYouTubeIframe();
       }
@@ -7855,7 +7586,7 @@ export class PostCardRenderer extends Component {
         L.marker([lat, lng], { icon: markerIcon }).addTo(map);
 
         // Fix tile loading issue - invalidate size after container is rendered
-        setTimeout(() => {
+        window.setTimeout(() => {
           map.invalidateSize();
         }, 100);
       } catch (err) {
@@ -8253,36 +7984,39 @@ export class PostCardRenderer extends Component {
       // Save to markdown file
       const file = this.vault.getAbstractFileByPath(filePath);
       if (file instanceof TFile) {
-        const existingContent = await this.vault.read(file);
-
         if (type === 'translate-transcript' && targetLang) {
           // Save as transcript section instead of AI comment
           const defaultLangCode = post.whisperTranscript?.language
             || post.transcriptionLanguage
             || 'en';
-          const updatedContent = insertTranscriptSection(
-            existingContent,
-            targetLang,
-            result.content,
-            defaultLangCode
-          );
 
-          if (updatedContent === null) {
+          // Check if translation already exists before committing
+          const existingContent = await this.vault.read(file);
+          if (insertTranscriptSection(existingContent, targetLang, result.content, defaultLangCode) === null) {
             new Notice(`Transcript (${languageCodeToName(targetLang)}) already exists. Delete the existing translation first.`);
             return;
           }
 
-          await this.vault.modify(file, updatedContent);
+          let finalContent = existingContent;
+          await this.vault.process(file, (content) => {
+            const updated = insertTranscriptSection(content, targetLang, result.content, defaultLangCode);
+            if (updated === null) return content;
+            finalContent = updated;
+            return updated;
+          });
 
           // Update transcriptLanguages frontmatter
-          const languages = extractTranscriptLanguages(updatedContent, defaultLangCode);
+          const languages = extractTranscriptLanguages(finalContent, defaultLangCode);
           await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
             fm.transcriptLanguages = languages;
           });
         } else {
           // Standard AI comment save
-          const newContent = appendAIComment(existingContent, result.meta, result.content);
-          await this.vault.modify(file, newContent);
+          let newContent = '';
+          await this.vault.process(file, (existingContent) => {
+            newContent = appendAIComment(existingContent, result.meta, result.content);
+            return newContent;
+          });
 
           // Update frontmatter
           const { comments, commentTexts } = parseAIComments(newContent);
@@ -8309,7 +8043,7 @@ export class PostCardRenderer extends Component {
       new Notice(`${displayName} generated successfully!`);
 
       // Refresh the post card to show the new comment/transcript
-      setTimeout(() => {
+      window.setTimeout(() => {
         if (type === 'translate-transcript') {
           // Full re-render needed to pick up new multilang transcript tabs
           void this.refreshPostCardFull(post, rootElement);
@@ -8451,17 +8185,20 @@ export class PostCardRenderer extends Component {
       // Save all successful results to markdown file
       const file = this.vault.getAbstractFileByPath(filePath);
       if (file instanceof TFile) {
-        let existingContent = await this.vault.read(file);
+        let finalContent = '';
 
-        // Append each result
-        for (const result of successfulResults) {
-          existingContent = appendAIComment(existingContent, result.meta, result.content);
-        }
-
-        await this.vault.modify(file, existingContent);
+        // Append each result atomically
+        await this.vault.process(file, (existingContent) => {
+          let updatedContent = existingContent;
+          for (const result of successfulResults) {
+            updatedContent = appendAIComment(updatedContent, result.meta, result.content);
+          }
+          finalContent = updatedContent;
+          return updatedContent;
+        });
 
         // Update frontmatter
-        const { comments, commentTexts } = parseAIComments(existingContent);
+        const { comments, commentTexts } = parseAIComments(finalContent);
         await updateFrontmatterAIComments(this.app, file, comments);
 
         // Update shared post if already shared
@@ -8488,7 +8225,7 @@ export class PostCardRenderer extends Component {
       }
 
       // Refresh the post card to show the new comments
-      setTimeout(() => {
+      window.setTimeout(() => {
         void this.refreshPostCard(post, rootElement);
       }, 500);
 
@@ -8565,56 +8302,54 @@ export class PostCardRenderer extends Component {
         return;
       }
 
-      const content = await this.vault.read(file);
+      // Save file with reformatted content atomically
+      await this.vault.process(file, (content) => {
+        // Parse file structure:
+        // 1. YAML frontmatter (--- to ---)
+        // 2. Body content (reformat target)
+        // 3. Media embeds and separators
+        // 4. Comments section (## 💬 Comments)
+        // 5. Footer metadata
 
-      // Parse file structure:
-      // 1. YAML frontmatter (--- to ---)
-      // 2. Body content (reformat target)
-      // 3. Media embeds and separators
-      // 4. Comments section (## 💬 Comments)
-      // 5. Footer metadata
-
-      // Extract frontmatter
-      let frontmatter = '';
-      let bodyStart = 0;
-      if (content.startsWith('---')) {
-        const endIdx = content.indexOf('---', 3);
-        if (endIdx !== -1) {
-          frontmatter = content.substring(0, endIdx + 3);
-          bodyStart = endIdx + 3;
+        // Extract frontmatter
+        let frontmatter = '';
+        let bodyStart = 0;
+        if (content.startsWith('---')) {
+          const endIdx = content.indexOf('---', 3);
+          if (endIdx !== -1) {
+            frontmatter = content.substring(0, endIdx + 3);
+            bodyStart = endIdx + 3;
+          }
         }
-      }
 
-      // Find the end of body content
-      // Look for Comments section or media separator or footer
-      const afterFrontmatter = content.substring(bodyStart);
+        // Find the end of body content
+        // Look for Comments section or media separator or footer
+        const afterFrontmatter = content.substring(bodyStart);
 
-      // Possible body end markers (in order of preference)
-      const bodyEndMarkers = [
-        '\n---\n\n![',           // Media section start
-        '\n\n---\n\n![',         // Media section with extra newline
-        '\n## 💬 Comments',       // Comments section
-        '\n---\n\n## 💬 Comments', // Comments with separator
-        '\n\n---\n\n**Platform:**', // Footer metadata
-        '\n---\n\n**Platform:**',   // Footer without extra newline
-      ];
+        // Possible body end markers (in order of preference)
+        const bodyEndMarkers = [
+          '\n---\n\n![',           // Media section start
+          '\n\n---\n\n![',         // Media section with extra newline
+          '\n## 💬 Comments',       // Comments section
+          '\n---\n\n## 💬 Comments', // Comments with separator
+          '\n\n---\n\n**Platform:**', // Footer metadata
+          '\n---\n\n**Platform:**',   // Footer without extra newline
+        ];
 
-      let bodyEndIdx = afterFrontmatter.length;
-      let preservedContent = '';
+        let bodyEndIdx = afterFrontmatter.length;
+        let preservedContent = '';
 
-      for (const marker of bodyEndMarkers) {
-        const idx = afterFrontmatter.indexOf(marker);
-        if (idx !== -1 && idx < bodyEndIdx) {
-          bodyEndIdx = idx;
-          preservedContent = afterFrontmatter.substring(idx);
+        for (const marker of bodyEndMarkers) {
+          const idx = afterFrontmatter.indexOf(marker);
+          if (idx !== -1 && idx < bodyEndIdx) {
+            bodyEndIdx = idx;
+            preservedContent = afterFrontmatter.substring(idx);
+          }
         }
-      }
 
-      // Build new content
-      const newFileContent = frontmatter + '\n\n' + newContent.trim() + preservedContent;
-
-      // Save file
-      await this.vault.modify(file, newFileContent);
+        // Build new content
+        return frontmatter + '\n\n' + newContent.trim() + preservedContent;
+      });
 
       // Update post object with new content so UI reflects the change
       post.content.text = newContent.trim();
@@ -8643,7 +8378,7 @@ export class PostCardRenderer extends Component {
       new Notice('Content reformatted successfully');
 
       // Refresh AI comments section
-      setTimeout(() => {
+      window.setTimeout(() => {
         void this.refreshPostCard(post, rootElement);
       }, 500);
 
@@ -8667,10 +8402,12 @@ export class PostCardRenderer extends Component {
       const file = this.vault.getAbstractFileByPath(filePath);
       if (!(file instanceof TFile)) return;
 
-      // Remove from markdown
-      const content = await this.vault.read(file);
-      const newContent = removeAIComment(content, commentId);
-      await this.vault.modify(file, newContent);
+      // Remove from markdown atomically
+      let newContent = '';
+      await this.vault.process(file, (content) => {
+        newContent = removeAIComment(content, commentId);
+        return newContent;
+      });
 
       // Update frontmatter
       const { comments, commentTexts } = parseAIComments(newContent);
@@ -8688,7 +8425,7 @@ export class PostCardRenderer extends Component {
       if (shareUrl) {
         // Delay aiComments update to ensure it executes AFTER other concurrent share updates
         // This prevents server-side race conditions where other updates overwrite aiComments
-        setTimeout(() => {
+        window.setTimeout(() => {
           void this.updateSharedPostAIComments(post, shareUrl, comments, commentTexts)
             .catch(err => {
               console.error('[PostCardRenderer] Failed to update shared post after AI comment deletion:', err);

@@ -73,7 +73,7 @@ const SAVE_DEBOUNCE_MS = 5_000;
 export class PostIndexService {
   private index: PostIndex = { version: INDEX_VERSION, entries: {}, lastUpdated: 0 };
   private dirty = false;
-  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  private saveTimer: number | null = null;
   private indexPath: string;
 
   constructor(
@@ -108,7 +108,7 @@ export class PostIndexService {
   scheduleSave(): void {
     this.dirty = true;
     if (this.saveTimer !== null) return;
-    this.saveTimer = setTimeout(() => {
+    this.saveTimer = window.setTimeout(() => {
       this.saveTimer = null;
       void this.saveNow();
     }, SAVE_DEBOUNCE_MS);
@@ -117,7 +117,7 @@ export class PostIndexService {
   /** Flush any pending save immediately (call on plugin unload). */
   async flush(): Promise<void> {
     if (this.saveTimer !== null) {
-      clearTimeout(this.saveTimer);
+      window.clearTimeout(this.saveTimer);
       this.saveTimer = null;
     }
     if (this.dirty) {

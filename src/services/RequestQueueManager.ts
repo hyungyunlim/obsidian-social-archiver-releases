@@ -162,7 +162,7 @@ export class RequestQueueManager<T = unknown> implements IService {
 			this.emit('active', { request: queuedRequest });
 
 			const timeoutPromise = new Promise<never>((_, reject) => {
-				setTimeout(() => {
+				window.setTimeout(() => {
 					reject(new QueueTimeoutError(timeout));
 				}, timeout);
 			});

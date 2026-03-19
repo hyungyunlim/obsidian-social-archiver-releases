@@ -79,7 +79,7 @@ export class CreditManager implements IService {
 
   // Reservations
   private reservations: Map<string, CreditReservation> = new Map();
-  private reservationCleanupInterval?: NodeJS.Timeout;
+  private reservationCleanupInterval?: number;
 
   // Alert tracking
   private alertedThresholds: Set<CreditThreshold> = new Set();
@@ -149,7 +149,7 @@ export class CreditManager implements IService {
 
     // Stop reservation cleanup
     if (this.reservationCleanupInterval) {
-      clearInterval(this.reservationCleanupInterval);
+      window.clearInterval(this.reservationCleanupInterval);
       this.reservationCleanupInterval = undefined;
     }
 
@@ -965,7 +965,7 @@ export class CreditManager implements IService {
   }
 
   private startReservationCleanup(): void {
-    this.reservationCleanupInterval = setInterval(() => {
+    this.reservationCleanupInterval = window.setInterval(() => {
       this.cleanupExpiredReservations();
     }, 60000); // Clean up every minute
   }

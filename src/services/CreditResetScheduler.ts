@@ -64,7 +64,7 @@ export class CreditResetScheduler implements IService {
 
   // Scheduler state
   private schedulerData?: SchedulerData;
-  private checkInterval?: NodeJS.Timeout;
+  private checkInterval?: number;
 
   constructor(config: CreditResetSchedulerConfig, logger?: Logger) {
     this.config = {
@@ -314,7 +314,7 @@ export class CreditResetScheduler implements IService {
   private startPeriodicCheck(): void {
     this.stopPeriodicCheck();
 
-    this.checkInterval = setInterval(() => {
+    this.checkInterval = window.setInterval(() => {
       void this.checkAndResetCredits().catch(error => {
         this.logger?.error('Periodic reset check failed', error instanceof Error ? error : undefined);
       });
@@ -330,7 +330,7 @@ export class CreditResetScheduler implements IService {
    */
   private stopPeriodicCheck(): void {
     if (this.checkInterval) {
-      clearInterval(this.checkInterval);
+      window.clearInterval(this.checkInterval);
       this.checkInterval = undefined;
       this.logger?.debug('Periodic reset check stopped');
     }

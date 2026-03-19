@@ -20,14 +20,12 @@
 
 import { setIcon } from 'obsidian';
 
-type CrossPostBannerStatus = 'posting' | 'complete' | 'failed';
-
 export class CrossPostStatusBanner {
   private containerEl: HTMLElement;
   private bannerEl: HTMLElement | null = null;
   private iconEl: HTMLElement | null = null;
   private textEl: HTMLElement | null = null;
-  private autoDismissTimer: ReturnType<typeof setTimeout> | null = null;
+  private autoDismissTimer: number | null = null;
   private cleanupFunctions: Array<() => void> = [];
 
   constructor(parentEl: HTMLElement) {
@@ -83,7 +81,7 @@ export class CrossPostStatusBanner {
     }
 
     // Auto-dismiss after 3 seconds
-    this.autoDismissTimer = setTimeout(() => {
+    this.autoDismissTimer = window.setTimeout(() => {
       this.dismiss();
     }, 3000);
   }
@@ -157,7 +155,7 @@ export class CrossPostStatusBanner {
 
   private clearBanner(): void {
     if (this.autoDismissTimer) {
-      clearTimeout(this.autoDismissTimer);
+      window.clearTimeout(this.autoDismissTimer);
       this.autoDismissTimer = null;
     }
     if (this.bannerEl) {

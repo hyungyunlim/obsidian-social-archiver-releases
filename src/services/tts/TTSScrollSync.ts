@@ -32,7 +32,7 @@ export class TTSScrollSync {
   private scrollContainer: HTMLElement | null = null;
   private state: ScrollSyncState = 'idle';
   private isAutoScrolling = false;
-  private autoScrollTimer: ReturnType<typeof setTimeout> | null = null;
+  private autoScrollTimer: number | null = null;
   private scrollHandler: (() => void) | null = null;
   private callbacks: ScrollSyncCallbacks;
 
@@ -95,8 +95,8 @@ export class TTSScrollSync {
     });
 
     // Clear the auto-scrolling flag after animation completes
-    if (this.autoScrollTimer) clearTimeout(this.autoScrollTimer);
-    this.autoScrollTimer = setTimeout(() => {
+    if (this.autoScrollTimer) window.clearTimeout(this.autoScrollTimer);
+    this.autoScrollTimer = window.setTimeout(() => {
       this.isAutoScrolling = false;
     }, 500); // Smooth scroll typically completes within 500ms
   }
@@ -130,7 +130,7 @@ export class TTSScrollSync {
       this.scrollHandler = null;
     }
     if (this.autoScrollTimer) {
-      clearTimeout(this.autoScrollTimer);
+      window.clearTimeout(this.autoScrollTimer);
       this.autoScrollTimer = null;
     }
     this.isAutoScrolling = false;

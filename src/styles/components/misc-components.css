@@ -415,12 +415,12 @@
  * ======================================== */
 
 /* Mobile modal overrides (tm-mobile applied to modalEl) */
-.modal.tm-mobile {
-  width: 92vw !important;
-  max-width: 92vw !important;
-  height: auto !important;
-  max-height: 90vh !important;
-  overflow-y: auto !important;
+.modal.tm-mobile.tm-mobile {
+  width: 92vw;
+  max-width: 92vw;
+  height: auto;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 .tm-mobile-content {
@@ -429,12 +429,12 @@
 }
 
 /* Mobile close button shrink */
-.tm-mobile-close {
-  width: 28px !important;
-  height: 28px !important;
-  font-size: 14px !important;
-  top: 10px !important;
-  right: 10px !important;
+.tm-mobile-close.tm-mobile-close {
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+  top: 10px;
+  right: 10px;
 }
 
 /* Count badge */
@@ -607,17 +607,17 @@
   flex: 1 1 auto;
 }
 
-.tm-edit-color-clear {
+.tm-edit-color-clear.tm-edit-color-clear {
   position: absolute;
   top: 50%;
   right: 6px;
   transform: translateY(-50%);
   width: 22px;
   height: 22px;
-  border: none !important;
+  border: none;
   border-radius: 6px;
-  background: transparent !important;
-  box-shadow: none !important;
+  background: transparent;
+  box-shadow: none;
   appearance: none;
   -webkit-appearance: none;
   color: var(--text-muted);
@@ -629,9 +629,9 @@
   line-height: 0;
 }
 
-.tm-edit-color-clear:hover {
-  background: transparent !important;
-  box-shadow: none !important;
+.tm-edit-color-clear.tm-edit-color-clear:hover {
+  background: transparent;
+  box-shadow: none;
   color: var(--text-normal);
 }
 
@@ -1066,15 +1066,15 @@
 }
 
 /* Search input reset (override obsidian defaults) */
-.tc-search-input {
-  padding: 2px 8px !important;
-  margin: 0 !important;
-  border: none !important;
-  line-height: normal !important;
-  outline: none !important;
-  box-shadow: none !important;
-  -webkit-appearance: none !important;
-  appearance: none !important;
+.tc-search-input.tc-search-input {
+  padding: 2px 8px;
+  margin: 0;
+  border: none;
+  line-height: normal;
+  outline: none;
+  box-shadow: none;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 /* Header button line-height */
@@ -1201,16 +1201,16 @@
 }
 
 /* Gallery dropdown button */
-.gallery-group-controls > button {
+.gallery-group-controls > button:not(#x) {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
   font-size: 12px;
   border-radius: 4px;
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
+  border: none;
+  outline: none;
+  box-shadow: none;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
@@ -1262,14 +1262,14 @@
 }
 
 /* Gallery dropdown option */
-.gallery-group-dropdown-menu > button {
+.gallery-group-dropdown-menu > button:not(#x) {
   width: 100%;
   text-align: left;
   padding: 6px 10px;
   border-radius: 4px;
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
+  border: none;
+  outline: none;
+  box-shadow: none;
   background: transparent;
   cursor: pointer;
   transition: background 0.1s ease;
@@ -1454,15 +1454,15 @@
  * ======================================== */
 
 /* Mobile sizing */
-.cm-mobile {
-  width: 90vw !important;
-  max-width: 90vw !important;
+.cm-mobile.cm-mobile {
+  width: 90vw;
+  max-width: 90vw;
 }
 
 /* Desktop sizing */
-.cm-desktop {
-  width: 400px !important;
-  max-width: 400px !important;
+.cm-desktop.cm-desktop {
+  width: 400px;
+  max-width: 400px;
 }
 
 /* Mobile keyboard position */
@@ -1555,4 +1555,104 @@
 
 .wam-preview-next {
   color: var(--text-normal);
+}
+
+/* ========================================
+ * SettingTab filename format block (st-fn-)
+ * and Support section (st-sup-)
+ * ======================================== */
+
+/* Filename format: setting row wraps so block can appear below header row */
+.st-fn-header-setting {
+  flex-wrap: wrap;
+}
+
+/* Filename format: full-width block below header row */
+.st-fn-block {
+  flex-basis: 100%;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+/* Filename format: input + reset button row */
+.st-fn-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Filename format: text input */
+.st-fn-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 0.9em;
+  font-family: var(--font-monospace);
+}
+
+/* Filename format: token chips container */
+.st-fn-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+/* Filename format: individual token chip button */
+.st-fn-chip {
+  font-size: 0.78em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+/* Filename format: preview line */
+.st-fn-preview {
+  margin-top: 6px;
+  font-size: 0.83em;
+  color: var(--text-muted);
+}
+
+/* Filename format: "Preview: " label inside preview line */
+.st-fn-preview-label {
+  color: var(--text-faint);
+}
+
+/* Support section: divider line above support heading */
+.st-sup-divider {
+  margin: 12px 0 0 0;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+/* Support section: control area vertical centering */
+.st-sup-control {
+  align-self: center;
+}
+
+/* Support section: Buy Me a Coffee CTA link */
+.st-sup-cta-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  text-decoration: none;
+  border-radius: 10px;
+  outline-offset: 2px;
+  height: var(--input-height);
+}
+
+/* Support section: Buy Me a Coffee image inside CTA link */
+.st-sup-cta-img {
+  height: 100%;
+  width: auto;
+  display: block;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }

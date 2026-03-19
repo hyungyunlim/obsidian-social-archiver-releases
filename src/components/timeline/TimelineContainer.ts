@@ -341,8 +341,8 @@ export class TimelineContainer {
         // Try to resolve it to full vault path
         let resolvedPath = path;
         if (!path.includes('/')) {
-          // Search for file in vault
-          const file = this.app.vault.getFiles().find(f => f.name === path);
+          // Resolve filename to full vault path via metadata cache (avoids iterating all files)
+          const file = this.app.metadataCache.getFirstLinkpathDest(path, '');
           if (file) {
             resolvedPath = file.path;
           }
@@ -950,7 +950,7 @@ export class TimelineContainer {
       this.searchInput.dispatchEvent(inputEvent);
 
       // Focus the search input after a brief delay (to ensure expansion animation completes)
-      setTimeout(() => {
+      window.setTimeout(() => {
         this.searchInput?.focus();
       }, 100);
 
@@ -994,7 +994,7 @@ export class TimelineContainer {
       cardElement.addClass('tc-card-removing');
 
       // Remove from DOM after animation
-      setTimeout(() => {
+      window.setTimeout(() => {
         cardElement.remove();
 
         // Update filteredPosts array
@@ -1532,14 +1532,12 @@ export class TimelineContainer {
                     );
                   }
 
-                  // STEP 3: Update YAML frontmatter with share data
-                  const fileContent = await this.vault.read(file);
-                  const updatedContent = this.updateFrontmatterWithShare(
+                  // STEP 3: Update YAML frontmatter with share data atomically
+                  await this.vault.process(file, (fileContent) => this.updateFrontmatterWithShare(
                     fileContent,
                     initialShareResult.shareId,
                     initialShareResult.shareUrl
-                  );
-                  await this.vault.modify(file, updatedContent);
+                  ));
 
                   new Notice('Post shared to web!');
                 }
@@ -1576,20 +1574,18 @@ export class TimelineContainer {
             const file = this.vault.getFileByPath(filePath);
             if (!file) return;
 
-            const fileContent = await this.vault.read(file);
-            const updatedContent = this.updateFrontmatterWithCrossPost(
+            await this.vault.process(file, (fileContent) => this.updateFrontmatterWithCrossPost(
               fileContent,
               crossPostId,
               threadsResult.postId,
               threadsResult.postUrl
-            );
-            await this.vault.modify(file, updatedContent);
+            ));
 
             // Inject Threads badge into the already-rendered card
             if (threadsResult.postUrl) {
-              const cardEl = this.containerEl.querySelector(
+              const cardEl = this.containerEl.querySelector<HTMLElement>(
                 `[data-file-path="${CSS.escape(filePath)}"]`
-              ) as HTMLElement | null;
+              );
               if (cardEl) {
                 this.postCardRenderer.injectCrossPostBadge(cardEl, threadsResult.postUrl);
               }
@@ -1603,7 +1599,10 @@ export class TimelineContainer {
           if (!this.crossPostBanner) {
             this.renderCrossPostStatusBanner();
           }
-          return this.crossPostBanner!;
+          if (!this.crossPostBanner) {
+            throw new Error('CrossPostStatusBanner failed to initialize');
+          }
+          return this.crossPostBanner;
         }
       }
     });
@@ -2037,7 +2036,7 @@ export class TimelineContainer {
       this.searchContainer?.removeClass('tc-search-collapsed');
 
       // Focus input after animation (reduced delay for faster feel)
-      setTimeout(() => {
+      window.setTimeout(() => {
         this.searchInput?.focus();
       }, 50);
     } else {
@@ -2396,7 +2395,7 @@ export class TimelineContainer {
     };
 
     // Delay to avoid immediate close
-    setTimeout(() => {
+    window.setTimeout(() => {
       document.addEventListener('click', closeDropdown);
     }, 100);
   }
@@ -2675,7 +2674,7 @@ export class TimelineContainer {
     };
 
     // Delay to avoid immediate close
-    setTimeout(() => {
+    window.setTimeout(() => {
       document.addEventListener('click', closePanel);
     }, 100);
   }
@@ -3577,7 +3576,7 @@ export class TimelineContainer {
       // This sets lastRunAt to prevent duplicate polling on plugin reload
       if (author.platform === 'naver' && subscriptionId && this.plugin.naverPoller) {
         // Run in background to not block the UI
-        setTimeout(() => void (async () => {
+        window.setTimeout(() => void (async () => {
           try {
             console.debug('[TimelineContainer] Running initial poll for new Naver subscription:', subscriptionId);
             await this.plugin.naverPoller?.runSingleSubscription(subscriptionId);
@@ -3909,7 +3908,7 @@ export class TimelineContainer {
               // This sets lastRunAt to prevent duplicate polling on plugin reload
               if (author.platform === 'naver' && subscriptionId2 && this.plugin.naverPoller) {
                 // Run in background to not block the UI
-                setTimeout(() => void (async () => {
+                window.setTimeout(() => void (async () => {
                   try {
                     console.debug('[TimelineContainer] Running initial poll for new Naver subscription:', subscriptionId2);
                     await this.plugin.naverPoller?.runSingleSubscription(subscriptionId2);
@@ -4596,7 +4595,7 @@ export class TimelineContainer {
       const feed = this.containerEl.querySelector('.timeline-feed');
       if (!feed) return;
 
-      const existingCard = feed.querySelector(`[data-file-path="${CSS.escape(filePath)}"]`) as HTMLElement | null;
+      const existingCard = feed.querySelector<HTMLElement>(`[data-file-path="${CSS.escape(filePath)}"]`);
       if (!existingCard || !existingCard.parentElement) return;
 
       const tempContainer = document.createElement('div');
@@ -4627,7 +4626,7 @@ export class TimelineContainer {
         if (this.viewMode !== 'gallery' && !this.isSubscriptionViewActive) {
           this.renderLoading();
           // Give browser a chance to paint loading UI before heavy work
-          await new Promise(resolve => setTimeout(resolve, 0));
+          await new Promise(resolve => window.setTimeout(resolve, 0));
         }
 
         // Fetch subscriptions in parallel with loading posts for badge status
@@ -5166,7 +5165,7 @@ export class TimelineContainer {
                 this.app.metadataCache.on('changed', handler);
 
                 // Fallback timeout in case the event doesn't fire
-                setTimeout(() => {
+                window.setTimeout(() => {
                   this.app.metadataCache.off('changed', handler);
                   resolve();
                 }, 1000);
@@ -5269,14 +5268,12 @@ export class TimelineContainer {
                     );
                   }
 
-                  // STEP 3: Update YAML frontmatter with share data
-                  const fileContent = await this.vault.read(file);
-                  const updatedContent = this.updateFrontmatterWithShare(
+                  // STEP 3: Update YAML frontmatter with share data atomically
+                  await this.vault.process(file, (fileContent) => this.updateFrontmatterWithShare(
                     fileContent,
                     initialShareResult.shareId,
                     initialShareResult.shareUrl
-                  );
-                  await this.vault.modify(file, updatedContent);
+                  ));
 
                   new Notice('Post updated and shared to web!');
                 } catch {
@@ -5660,7 +5657,7 @@ export class TimelineContainer {
       if (this.softRefreshPending) {
         this.softRefreshPending = false;
         // Use setTimeout with delay to ensure files are fully registered
-        setTimeout(() => void this.softRefresh(), 300);
+        window.setTimeout(() => void this.softRefresh(), 300);
       }
     }
   }
@@ -6079,10 +6076,10 @@ export class TimelineContainer {
       return;
     }
     // Find existing gallery
-    const existingGallery = this.containerEl.querySelector('.media-gallery-container');
+    const existingGallery = this.containerEl.querySelector('.sa-media-gallery-container');
 
     // Create new gallery container
-    const galleryContainer = this.containerEl.createDiv('media-gallery-container');
+    const galleryContainer = this.containerEl.createDiv('sa-media-gallery-container');
     galleryContainer.addClass('tc-gallery-fadein');
 
     // If existing gallery exists, insert new one and fade transition
@@ -6092,13 +6089,13 @@ export class TimelineContainer {
 
     // Minimal loading indicator (small spinner)
     const loadingEl = galleryContainer.createDiv({
-      cls: 'media-gallery-loading'
+      cls: 'sa-media-gallery-loading'
     });
     // Loading styles handled by .media-gallery-loading CSS class
 
-    loadingEl.createDiv('media-gallery-spinner');
+    loadingEl.createDiv('sa-media-gallery-spinner');
     loadingEl.createDiv({
-      cls: 'media-gallery-loading-text',
+      cls: 'sa-media-gallery-loading-text',
       text: 'Loading media...'
     });
 
@@ -6140,7 +6137,7 @@ export class TimelineContainer {
           galleryContainer.addClass('tc-gallery-visible');
           // Remove old gallery after fade
           if (existingGallery) {
-            setTimeout(() => existingGallery.remove(), 200);
+            window.setTimeout(() => existingGallery.remove(), 200);
           }
         });
         return;
@@ -6156,7 +6153,7 @@ export class TimelineContainer {
         // Remove old gallery after fade completes
         if (existingGallery) {
           (existingGallery as HTMLElement).addClass('tc-gallery-fadeout');
-          setTimeout(() => existingGallery.remove(), 200);
+          window.setTimeout(() => existingGallery.remove(), 200);
         }
       });
 
@@ -6171,7 +6168,7 @@ export class TimelineContainer {
       requestAnimationFrame(() => {
         galleryContainer.addClass('tc-gallery-visible');
         if (existingGallery) {
-          setTimeout(() => existingGallery.remove(), 200);
+          window.setTimeout(() => existingGallery.remove(), 200);
         }
       });
 

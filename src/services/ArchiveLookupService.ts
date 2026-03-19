@@ -178,7 +178,7 @@ export class ArchiveLookupService implements IService {
    * and avoids clobbering other frontmatter fields.
    */
   async backfillFileIdentity(file: TFile, archiveId: string): Promise<void> {
-    await this.app.fileManager.processFrontMatter(file, (fm) => {
+    await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
       fm.sourceArchiveId = archiveId;
     });
     // Optimistically update the in-memory index (MetadataCache `changed` will
@@ -235,13 +235,13 @@ export class ArchiveLookupService implements IService {
     this.index.indexedPaths.add(file.path);
 
     // Index by sourceArchiveId (stable 1:1 mapping)
-    const archiveId = fm.sourceArchiveId;
+    const archiveId: unknown = fm.sourceArchiveId;
     if (typeof archiveId === 'string' && archiveId.length > 0) {
       this.index.bySourceArchiveId.set(archiveId, file);
     }
 
     // Index by normalised originalUrl (may be many-to-one)
-    const originalUrl = fm.originalUrl;
+    const originalUrl: unknown = fm.originalUrl;
     if (typeof originalUrl === 'string' && originalUrl.length > 0) {
       const normalized = normalizeUrl(originalUrl);
       const existing = this.index.byOriginalUrl.get(normalized);

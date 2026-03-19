@@ -55,7 +55,7 @@ function handleSwipeLeft(): void {
   swipeDirection = 'left';
   isSwipeRevealed = true;
   // Auto-hide after 3 seconds
-  setTimeout(() => {
+  window.setTimeout(() => {
     if (swipeDirection === 'left') {
       resetSwipe();
     }
@@ -69,7 +69,7 @@ function handleSwipeRight(): void {
   swipeDirection = 'right';
   onTogglePause?.(subscription);
   // Brief visual feedback
-  setTimeout(() => {
+  window.setTimeout(() => {
     resetSwipe();
   }, 500);
 }

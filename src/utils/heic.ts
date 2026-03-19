@@ -204,7 +204,7 @@ async function tryNativeHEICConversion(
     };
 
     // Set a timeout in case the image never loads
-    setTimeout(() => {
+    window.setTimeout(() => {
       cleanup();
       resolve(null);
     }, 10000);

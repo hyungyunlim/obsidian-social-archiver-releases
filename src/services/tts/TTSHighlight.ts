@@ -8,7 +8,7 @@
  *  - offsetMap: maps cleanedText indices -> rawText indices
  *  - Sentence offsets are in cleanedText space
  *  - Convert to rawText space via offsetMap, then find in DOM text nodes
- *  - Wrap matched range with <mark class="reader-tts-highlight">
+ *  - Wrap matched range with <mark class="sa-reader-tts-highlight">
  *
  * Matching strategy:
  *  1. Collect text nodes, insert synthetic spaces at block-element boundaries
@@ -23,7 +23,7 @@ import type { Sentence } from './TTSSentenceParser';
 // Constants
 // ============================================================================
 
-const HIGHLIGHT_CLASS = 'reader-tts-highlight';
+const HIGHLIGHT_CLASS = 'sa-reader-tts-highlight';
 const HIGHLIGHT_TAG = 'MARK';
 
 /**
@@ -143,7 +143,7 @@ export class TTSHighlight {
 
       // Scroll the first highlight into view
       if (this.activeMarks.length > 0) {
-        this.activeMarks[0]!.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        this.activeMarks[0]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     } catch (error) {
       console.debug('[TTSHighlight] Failed to create highlight:', error);
@@ -233,12 +233,13 @@ export class TTSHighlight {
     const nodeRanges: DomNodeRange[] = [];
 
     for (let i = 0; i < textNodes.length; i++) {
-      const node = textNodes[i]!;
+      const node = textNodes[i];
+      if (!node) continue;
       const content = node.textContent ?? '';
 
       // Insert separator between text nodes from different block ancestors
       if (i > 0 && domText.length > 0) {
-        const prevBlock = getBlockAncestor(textNodes[i - 1]!, this.container);
+        const prevBlock = getBlockAncestor(textNodes[i - 1] ?? node, this.container);
         const currBlock = getBlockAncestor(node, this.container);
 
         if (prevBlock !== currBlock) {
@@ -364,7 +365,8 @@ export function normaliseForMatch(text: string): NormalisedText {
   const posMap: number[] = [];
 
   for (let i = 0; i < text.length; i++) {
-    const ch = text[i]!;
+    const ch = text[i] ?? '';
+    if (!ch) continue;
     const code = ch.charCodeAt(0);
 
     // Skip whitespace
@@ -407,7 +409,8 @@ export function resolveNodeOffset(
   direction: 'start' | 'end',
 ): { node: Text; offset: number } | null {
   for (let i = 0; i < nodeRanges.length; i++) {
-    const nr = nodeRanges[i]!;
+    const nr = nodeRanges[i];
+    if (!nr) continue;
 
     // domIdx is within this node's character range
     if (domIdx >= nr.start && domIdx <= nr.end) {
@@ -421,16 +424,16 @@ export function resolveNodeOffset(
       }
       // direction === 'end' → snap to end of previous node
       if (i > 0) {
-        const prev = nodeRanges[i - 1]!;
-        return { node: prev.node, offset: prev.end - prev.start };
+        const prev = nodeRanges[i - 1];
+        if (prev) return { node: prev.node, offset: prev.end - prev.start };
       }
       return { node: nr.node, offset: 0 };
     }
   }
 
   // Past all nodes: return end of last node
-  if (nodeRanges.length > 0) {
-    const last = nodeRanges[nodeRanges.length - 1]!;
+  const last = nodeRanges[nodeRanges.length - 1];
+  if (last) {
     return { node: last.node, offset: last.end - last.start };
   }
 

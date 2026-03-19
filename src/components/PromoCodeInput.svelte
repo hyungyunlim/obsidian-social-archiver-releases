@@ -84,7 +84,7 @@
       successMessage = `✓ ${appliedCode.benefit.description}`;
 
       // Clear input after success
-      setTimeout(() => {
+      window.setTimeout(() => {
         code = '';
         validationResult = null;
         successMessage = null;
@@ -105,11 +105,11 @@
     code = target.value.toUpperCase();
 
     // Clear previous timer
-    clearTimeout(debounceTimer);
+    window.clearTimeout(debounceTimer);
 
     // Debounce validation
     if (code.length > 0) {
-      debounceTimer = setTimeout(() => {
+      debounceTimer = window.setTimeout(() => {
         validateCode();
       }, 500);
     } else {

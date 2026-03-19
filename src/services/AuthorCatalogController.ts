@@ -354,7 +354,7 @@ export class AuthorCatalogController {
       const fetchWithTimeout = this.config.fetchSubscriptions
         ? Promise.race([
             this.config.fetchSubscriptions(),
-            new Promise<Subscription[]>((resolve) => setTimeout(() => resolve([]), 15000)),
+            new Promise<Subscription[]>((resolve) => window.setTimeout(() => resolve([]), 15000)),
           ])
         : Promise.resolve([]);
 

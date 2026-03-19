@@ -62,7 +62,7 @@ let editingImage = $derived(
 // Clean up pending delete timeout on component destroy
 onDestroy(() => {
   if (deleteTimeout) {
-    clearTimeout(deleteTimeout);
+    window.clearTimeout(deleteTimeout);
     deleteTimeout = null;
   }
 });
@@ -141,17 +141,17 @@ function handleDelete(imageId: string): void {
 
   // Set timeout for permanent deletion
   if (deleteTimeout) {
-    clearTimeout(deleteTimeout);
+    window.clearTimeout(deleteTimeout);
   }
 
-  deleteTimeout = setTimeout(() => {
+  deleteTimeout = window.setTimeout(() => {
     commitDelete(imageId);
   }, 5000);
 }
 
 function handleUndoDelete(): void {
   if (deleteTimeout) {
-    clearTimeout(deleteTimeout);
+    window.clearTimeout(deleteTimeout);
     deleteTimeout = null;
   }
   pendingDeleteId = null;

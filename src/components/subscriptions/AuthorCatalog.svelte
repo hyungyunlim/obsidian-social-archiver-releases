@@ -218,11 +218,11 @@ function yieldToUiFrame(): Promise<void> {
       resolve();
     };
 
-    const timeoutId = setTimeout(finish, 50);
+    const timeoutId = window.setTimeout(finish, 50);
 
     if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
       window.requestAnimationFrame(() => {
-        clearTimeout(timeoutId);
+        window.clearTimeout(timeoutId);
         finish();
       });
       return;
@@ -329,7 +329,7 @@ $effect(() => {
     if (becameReady && $state.authors.length > 0) {
       renderLimit = 0;
       isIncrementalRendering = true;
-      setTimeout(() => {
+      window.setTimeout(() => {
         // Guard: do nothing if a newer load started meanwhile.
         if (isAuthorLoadInProgress()) return;
         startIncrementalRender(getAuthorLoadGeneration());
@@ -505,7 +505,7 @@ $effect(() => {
     contentEl.scrollTop = 0;
   }
 
-  setTimeout(() => {
+  window.setTimeout(() => {
     // Guard: if a new load started, don't fight it.
     if (isAuthorLoadInProgress()) return;
     startIncrementalRender(getAuthorLoadGeneration());
@@ -940,7 +940,7 @@ async function loadAuthors(forceRefresh = false): Promise<void> {
   });
 
   if (AUTHOR_CATALOG_DEBUG) {
-    watchdogIntervalId = setInterval(() => {
+    watchdogIntervalId = window.setInterval(() => {
       debugLog('watchdog', {
         stage,
         elapsedMs: Math.round(nowMs() - loadStart),
@@ -948,7 +948,7 @@ async function loadAuthors(forceRefresh = false): Promise<void> {
         inProgress: isAuthorLoadInProgress(),
       });
     }, 5000);
-    watchdogTimeoutId = setTimeout(() => {
+    watchdogTimeoutId = window.setTimeout(() => {
       debugWarn('watchdog timeout (still running)', {
         stage,
         elapsedMs: Math.round(nowMs() - loadStart),
@@ -978,7 +978,7 @@ async function loadAuthors(forceRefresh = false): Promise<void> {
     const fetchWithTimeout = fetchSubscriptions
       ? Promise.race([
           fetchSubscriptions(),
-          new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 15000))
+          new Promise<any[]>((resolve) => window.setTimeout(() => resolve([]), 15000))
         ])
       : Promise.resolve([]);
 
@@ -1089,7 +1089,7 @@ async function loadAuthors(forceRefresh = false): Promise<void> {
           displayed: displayedAuthors.length
         });
       });
-      setTimeout(() => {
+      window.setTimeout(() => {
         debugLog('post-load timeout(0)', {
           isLoading,
           authors: authors.length,
@@ -1097,7 +1097,7 @@ async function loadAuthors(forceRefresh = false): Promise<void> {
           displayed: displayedAuthors.length
         });
       }, 0);
-      setTimeout(() => {
+      window.setTimeout(() => {
         debugLog('post-load timeout(200ms)', {
           isLoading,
           authors: authors.length,
@@ -1110,7 +1110,7 @@ async function loadAuthors(forceRefresh = false): Promise<void> {
     // Optional: subscription-only orphan avatar recovery (can be expensive in large subscription lists).
     // Run in background with a hard cap and time budget so the UI never gets stuck on the spinner.
     // Schedule on a later tick so the DOM can paint the author list first.
-    setTimeout(() => void (async () => {
+    window.setTimeout(() => void (async () => {
       const AVATAR_BATCH_SIZE = 10;
       const MAX_CANDIDATES = 200;
       const TIME_BUDGET_MS = 1500;
@@ -1158,11 +1158,11 @@ async function loadAuthors(forceRefresh = false): Promise<void> {
             resolve();
           };
 
-          const timeoutId = setTimeout(finish, 50);
+          const timeoutId = window.setTimeout(finish, 50);
 
           if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
             window.requestAnimationFrame(() => {
-              clearTimeout(timeoutId);
+              window.clearTimeout(timeoutId);
               finish();
             });
             return;
@@ -1183,8 +1183,8 @@ async function loadAuthors(forceRefresh = false): Promise<void> {
     store.setError(error);
     console.error('[AuthorCatalog] Error loading authors:', err);
   } finally {
-    if (watchdogIntervalId) clearInterval(watchdogIntervalId);
-    if (watchdogTimeoutId) clearTimeout(watchdogTimeoutId);
+    if (watchdogIntervalId) window.clearInterval(watchdogIntervalId);
+    if (watchdogTimeoutId) window.clearTimeout(watchdogTimeoutId);
     finishAuthorLoad(myGeneration);
   }
 }

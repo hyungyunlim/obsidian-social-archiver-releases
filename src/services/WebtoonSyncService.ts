@@ -113,7 +113,7 @@ export class WebtoonSyncService {
     }
 
     // Initial sync after short delay (10 seconds)
-    setTimeout(() => { void this.sync(); }, 10000);
+    window.setTimeout(() => { void this.sync(); }, 10000);
 
     // Set up interval for periodic polling
     this.intervalId = window.setInterval(

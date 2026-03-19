@@ -9,7 +9,7 @@
 import { Platform as ObsidianPlatform } from 'obsidian';
 
 export class ReaderModeLongPress {
-  private timer: ReturnType<typeof setTimeout> | null = null;
+  private timer: number | null = null;
   private startX = 0;
   private startY = 0;
   private active = false;
@@ -58,7 +58,7 @@ export class ReaderModeLongPress {
     document.addEventListener('pointerup', this.onPointerUp);
     document.addEventListener('pointercancel', this.onPointerUp);
 
-    this.timer = setTimeout(() => {
+    this.timer = window.setTimeout(() => {
       if (this.active) {
         this.active = false;
         this.cleanup();
@@ -79,7 +79,7 @@ export class ReaderModeLongPress {
   private cancel(): void {
     this.active = false;
     if (this.timer) {
-      clearTimeout(this.timer);
+      window.clearTimeout(this.timer);
       this.timer = null;
     }
     this.cleanup();

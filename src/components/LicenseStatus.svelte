@@ -137,7 +137,7 @@
    */
   onMount(() => {
     updateTimeUntilReset();
-    updateInterval = setInterval(updateTimeUntilReset, 60000); // Update every minute
+    updateInterval = window.setInterval(updateTimeUntilReset, 60000); // Update every minute
   });
 
   /**
@@ -145,7 +145,7 @@
    */
   onDestroy(() => {
     if (updateInterval) {
-      clearInterval(updateInterval);
+      window.clearInterval(updateInterval);
     }
   });
 </script>

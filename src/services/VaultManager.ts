@@ -127,7 +127,7 @@ class PathGenerator {
    * Returns null if the template produces an empty/whitespace-only filename.
    */
   private generateFilenameFromTemplate(postData: PostData): string | null {
-    const template = this.fileNameFormat!;
+    const template = this.fileNameFormat ?? '';
 
     // Build token values
     const publishedDate = this.formatDate(postData.metadata.timestamp);
@@ -429,7 +429,7 @@ export class VaultManager implements IService {
    */
   async updateNote(file: TFile, content: string): Promise<void> {
     try {
-      await this.vault.modify(file, content);
+      await this.vault.process(file, () => content);
     } catch (error) {
       throw new Error(
         `Failed to update file ${file.path}: ${error instanceof Error ? error.message : 'Unknown error'}`

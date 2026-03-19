@@ -121,7 +121,7 @@ function initializeEditor(): void {
 
         if (onPaste) {
           // Use setTimeout to ensure content is updated before callback
-          setTimeout(() => {
+          window.setTimeout(() => {
             onPaste();
           }, 100);
         }

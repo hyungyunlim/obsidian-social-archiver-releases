@@ -35,12 +35,12 @@ export class ReleaseNotesModal extends Modal {
     this.component.load();
 
     // Add modal class for styling (same pattern as ArchiveModal)
-    modalEl.addClass('social-archiver-modal', 'release-notes-modal');
+    modalEl.addClass('social-archiver-modal', 'sa-release-notes-modal');
 
     // ARIA attributes for accessibility
     modalEl.setAttribute('role', 'dialog');
     modalEl.setAttribute('aria-modal', 'true');
-    modalEl.setAttribute('aria-labelledby', 'release-notes-title');
+    modalEl.setAttribute('aria-labelledby', 'sa-release-notes-title');
 
     // Mobile modal size adjustments (same as ArchiveModal)
     if (Platform.isMobile) {
@@ -51,24 +51,24 @@ export class ReleaseNotesModal extends Modal {
     // Title with ARIA id
     const titleEl = contentEl.createEl('h2', {
       text: `Social Archiver — What's New in v${this.version}`,
-      cls: 'release-notes-title',
+      cls: 'sa-release-notes-title',
     });
-    titleEl.id = 'release-notes-title';
+    titleEl.id = 'sa-release-notes-title';
 
     // Important badge (inline with title)
     if (this.releaseNote.isImportant) {
-      const badgeEl = titleEl.createSpan({ cls: 'release-notes-badge mod-cta' });
+      const badgeEl = titleEl.createSpan({ cls: 'sa-release-notes-badge mod-cta' });
       badgeEl.textContent = 'Important';
     }
 
     // Date subtitle
     contentEl.createEl('p', {
       text: this.releaseNote.date,
-      cls: 'release-notes-date setting-item-description',
+      cls: 'sa-release-notes-date setting-item-description',
     });
 
     // Content container with markdown
-    const contentContainer = contentEl.createDiv({ cls: 'release-notes-content' });
+    const contentContainer = contentEl.createDiv({ cls: 'sa-release-notes-content' });
 
     // Render markdown content
     void MarkdownRenderer.render(
@@ -88,7 +88,7 @@ export class ReleaseNotesModal extends Modal {
     if (this.releaseNote.qrCode) {
       const { svgBase64, url, label } = this.releaseNote.qrCode;
       const qrContainer = document.createElement('div');
-      qrContainer.className = 'release-notes-qr rnm-qr-container';
+      qrContainer.className = 'sa-release-notes-qr rnm-qr-container';
 
       const qrImg = qrContainer.createEl('img', {
         attr: { src: `data:image/svg+xml;base64,${svgBase64}`, alt: 'QR Code' },
@@ -99,7 +99,7 @@ export class ReleaseNotesModal extends Modal {
 
       const linksContainer = qrContainer.createDiv({ cls: 'rnm-qr-links' });
 
-      const qrLink = linksContainer.createEl('a', {
+      linksContainer.createEl('a', {
         text: label,
         cls: 'external-link rnm-qr-link',
         attr: { href: url, target: '_blank' },
@@ -124,7 +124,7 @@ export class ReleaseNotesModal extends Modal {
     }
 
     // Footer with button
-    const footerEl = contentEl.createDiv({ cls: 'release-notes-footer' });
+    const footerEl = contentEl.createDiv({ cls: 'sa-release-notes-footer' });
 
     // Got it button - uses Obsidian's mod-cta class
     const buttonEl = footerEl.createEl('button', {

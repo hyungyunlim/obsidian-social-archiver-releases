@@ -231,7 +231,7 @@ function confirmDisconnect(): Promise<boolean> {
 function startPolling(): void {
   isPolling = true;
 
-  pollingInterval = setInterval(async () => {
+  pollingInterval = window.setInterval(async () => {
     const status = await checkConnectionStatus();
     if (status.connected) {
       stopPolling();
@@ -240,7 +240,7 @@ function startPolling(): void {
     }
   }, 3000); // poll every 3 seconds
 
-  pollingTimeout = setTimeout(() => {
+  pollingTimeout = window.setTimeout(() => {
     if (isPolling) {
       stopPolling();
       error = 'Connection timed out. Please try again.';
@@ -251,11 +251,11 @@ function startPolling(): void {
 
 function stopPolling(): void {
   if (pollingInterval !== null) {
-    clearInterval(pollingInterval);
+    window.clearInterval(pollingInterval);
     pollingInterval = null;
   }
   if (pollingTimeout !== null) {
-    clearTimeout(pollingTimeout);
+    window.clearTimeout(pollingTimeout);
     pollingTimeout = null;
   }
   isPolling = false;

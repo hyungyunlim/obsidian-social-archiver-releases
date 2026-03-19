@@ -1830,7 +1830,7 @@ export class PostDataParser {
         yield valid;
       }
       // Yield to main thread for UI responsiveness
-      await new Promise<void>(resolve => setTimeout(resolve, yieldMs));
+      await new Promise<void>(resolve => window.setTimeout(resolve, yieldMs));
     }
   }
 

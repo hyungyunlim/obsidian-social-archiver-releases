@@ -129,7 +129,7 @@ export class CacheManager implements IService, ICacheService {
   private eventListeners: Map<CacheEventType, Set<(event: CacheEvent) => void>> = new Map();
 
   // Cache warming interval
-  private warmingInterval?: NodeJS.Timeout;
+  private warmingInterval?: number;
 
   constructor(kvStore: IKVStore, config?: Partial<CacheConfig>, logger?: Logger) {
     this.kvStore = kvStore;
@@ -177,7 +177,7 @@ export class CacheManager implements IService, ICacheService {
 
     // Stop cache warming
     if (this.warmingInterval) {
-      clearInterval(this.warmingInterval);
+      window.clearInterval(this.warmingInterval);
       this.warmingInterval = undefined;
     }
 
@@ -675,7 +675,7 @@ export class CacheManager implements IService, ICacheService {
     this.warm(this.config.warming.urls);
 
     // Set up interval for continuous warming
-    this.warmingInterval = setInterval(() => {
+    this.warmingInterval = window.setInterval(() => {
       this.warm(this.config.warming?.urls ?? []);
     }, this.config.warming.interval);
   }

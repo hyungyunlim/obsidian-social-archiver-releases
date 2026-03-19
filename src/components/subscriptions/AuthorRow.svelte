@@ -218,7 +218,7 @@ $effect(() => {
     };
 
     // Add with slight delay to avoid immediate close
-    setTimeout(() => {
+    window.setTimeout(() => {
       document.addEventListener('click', handleOutsideClick);
     }, 100);
 

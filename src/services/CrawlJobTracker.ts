@@ -87,7 +87,7 @@ export class CrawlJobTracker {
   private listeners: Set<CrawlJobUpdateCallback> = new Set();
 
   /** Timers for auto-cleanup of completed jobs */
-  private completionTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private completionTimers: Map<string, number> = new Map();
 
   /** Map workerJobId -> internal jobId for WebSocket event matching after restart */
   private workerJobIdMap: Map<string, string> = new Map();
@@ -202,7 +202,7 @@ export class CrawlJobTracker {
       this.notifyListeners();
 
       // Auto-hide after 5 seconds
-      const timer = setTimeout(() => {
+      const timer = window.setTimeout(() => {
         this.removeJobInternal(jobId);
       }, 5000);
 
@@ -234,7 +234,7 @@ export class CrawlJobTracker {
     // Clear any pending completion timer
     const timer = this.completionTimers.get(jobId);
     if (timer) {
-      clearTimeout(timer);
+      window.clearTimeout(timer);
       this.completionTimers.delete(jobId);
     }
 
@@ -337,7 +337,7 @@ export class CrawlJobTracker {
    */
   dispose(): void {
     // Clear all completion timers
-    this.completionTimers.forEach((timer) => clearTimeout(timer));
+    this.completionTimers.forEach((timer) => window.clearTimeout(timer));
     this.completionTimers.clear();
 
     // Clear all state

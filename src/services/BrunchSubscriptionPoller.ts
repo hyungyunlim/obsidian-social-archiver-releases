@@ -238,7 +238,7 @@ export class BrunchSubscriptionPoller {
         }
 
         // Rate limit: 2 seconds between subscriptions
-        await new Promise((r) => setTimeout(r, 2000));
+        await new Promise((r) => window.setTimeout(r, 2000));
       }
 
       return results;
@@ -493,7 +493,7 @@ export class BrunchSubscriptionPoller {
           });
 
           // Rate limit between posts
-          await new Promise((r) => setTimeout(r, 1000));
+          await new Promise((r) => window.setTimeout(r, 1000));
         } catch (error) {
           console.error('[BrunchSubscriptionPoller] Failed to process notification:', {
             notificationId: notification.id,

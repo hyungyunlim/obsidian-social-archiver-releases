@@ -1,4 +1,4 @@
-import { App, Notice, PluginSettingTab, Setting, Platform } from 'obsidian';
+import { App, Notice, PluginSettingTab, Setting, Platform, setIcon } from 'obsidian';
 import nodeRequire from '../utils/nodeRequire';
 import type SocialArchiverPlugin from '../main';
 import { FolderSuggest } from './FolderSuggest';
@@ -285,31 +285,19 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         .setDesc('Template for archived note filenames. Click tokens to insert at cursor.');
 
       // Force the block to wrap below the header row
-      headerSetting.settingEl.style.flexWrap = 'wrap';
+      headerSetting.settingEl.addClass('st-fn-header-setting');
       const blockEl = headerSetting.settingEl.createDiv();
-      blockEl.style.flexBasis = '100%';
-      blockEl.style.paddingTop = '4px';
-      blockEl.style.paddingBottom = '4px';
+      blockEl.addClass('st-fn-block');
 
       // Input row: full-width input + reset button
       let filenameInputEl: HTMLInputElement | null = null;
       const inputRowEl = blockEl.createDiv();
-      inputRowEl.style.display = 'flex';
-      inputRowEl.style.alignItems = 'center';
-      inputRowEl.style.gap = '6px';
+      inputRowEl.addClass('st-fn-input-row');
 
       const inputEl = inputRowEl.createEl('input', { type: 'text' });
       inputEl.value = this.plugin.settings.fileNameFormat;
       inputEl.placeholder = DEFAULT_SETTINGS.fileNameFormat;
-      inputEl.style.flex = '1';
-      inputEl.style.minWidth = '0';
-      inputEl.style.padding = '6px 10px';
-      inputEl.style.borderRadius = '4px';
-      inputEl.style.border = '1px solid var(--background-modifier-border)';
-      inputEl.style.background = 'var(--background-primary)';
-      inputEl.style.color = 'var(--text-normal)';
-      inputEl.style.fontSize = '0.9em';
-      inputEl.style.fontFamily = 'var(--font-monospace)';
+      inputEl.addClass('st-fn-input');
       inputEl.addEventListener('input', () => {
         this.plugin.settings.fileNameFormat = inputEl.value || DEFAULT_SETTINGS.fileNameFormat;
         this.markDirty();
@@ -320,7 +308,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       // Reset button next to input
       const resetBtn = inputRowEl.createDiv({ cls: 'clickable-icon', attr: { 'aria-label': 'Reset to default' } });
       resetBtn.title = 'Reset to default';
-      resetBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>';
+      setIcon(resetBtn, 'rotate-ccw');
       resetBtn.addEventListener('click', (e) => {
         e.preventDefault();
         this.plugin.settings.fileNameFormat = DEFAULT_SETTINGS.fileNameFormat;
@@ -331,10 +319,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
       // Token chips row
       const chipsEl = blockEl.createDiv();
-      chipsEl.style.display = 'flex';
-      chipsEl.style.flexWrap = 'wrap';
-      chipsEl.style.gap = '4px';
-      chipsEl.style.marginTop = '6px';
+      chipsEl.addClass('st-fn-chips');
 
       const tokenDefs: { token: string; label: string }[] = [
         { token: 'published_date', label: 'Date' },
@@ -349,17 +334,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
       for (const { token, label } of tokenDefs) {
         const chip = chipsEl.createEl('button', { text: label });
-        chip.style.fontSize = '0.78em';
-        chip.style.padding = '2px 8px';
-        chip.style.borderRadius = '10px';
-        chip.style.border = '1px solid var(--background-modifier-border)';
-        chip.style.background = 'var(--background-secondary)';
-        chip.style.color = 'var(--text-muted)';
-        chip.style.cursor = 'pointer';
+        chip.addClass('st-fn-chip');
         chip.title = `Insert {${token}}`;
         chip.addEventListener('click', (e) => {
           e.preventDefault();
-          const input = filenameInputEl!;
+          if (!filenameInputEl) return;
+          const input = filenameInputEl;
           const start = input.selectionStart ?? input.value.length;
           const end = input.selectionEnd ?? start;
           const tokenStr = `{${token}}`;
@@ -377,9 +357,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
       // Preview line
       const previewEl = blockEl.createDiv();
-      previewEl.style.marginTop = '6px';
-      previewEl.style.fontSize = '0.83em';
-      previewEl.style.color = 'var(--text-muted)';
+      previewEl.addClass('st-fn-preview');
 
       const sampleTokens: Record<string, string> = {
         published_date: '2024-01-15',
@@ -400,7 +378,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         }
         previewEl.empty();
         const label = previewEl.createSpan({ text: 'Preview: ' });
-        label.style.color = 'var(--text-faint)';
+        label.addClass('st-fn-preview-label');
         previewEl.createEl('code', { text: `${preview}.md` });
       };
 
@@ -760,8 +738,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Support Section (very bottom, below danger zone)
     const supportDivider = containerEl.createDiv({ cls: 'social-archiver-support-divider' });
-    supportDivider.style.margin = '12px 0 0 0';
-    supportDivider.style.borderTop = '1px solid var(--background-modifier-border)';
+    supportDivider.addClass('st-sup-divider');
 
     new Setting(containerEl).setName('Support').setHeading()
       .settingEl.addClass('sa-settings-section-header');
@@ -771,7 +748,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setDesc('Feel free to buy me a coffee ☕ if you like this product. Optional and opens in browser.');
 
     supportSetting.controlEl.empty();
-    supportSetting.controlEl.style.alignSelf = 'center';
+    supportSetting.controlEl.addClass('st-sup-control');
 
     const supportCtaLink = supportSetting.controlEl.createEl('a', {
       href: BUY_ME_A_COFFEE_URL,
@@ -781,14 +758,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         'aria-label': 'Buy Me a Coffee (opens in browser)',
       },
     });
-    supportCtaLink.style.display = 'inline-flex';
-    supportCtaLink.style.alignItems = 'center';
-    supportCtaLink.style.justifyContent = 'center';
-    supportCtaLink.style.cursor = 'pointer';
-    supportCtaLink.style.textDecoration = 'none';
-    supportCtaLink.style.borderRadius = '10px';
-    supportCtaLink.style.outlineOffset = '2px';
-    supportCtaLink.style.height = 'var(--input-height)';
+    supportCtaLink.addClass('st-sup-cta-link');
 
     const supportCtaImg = supportCtaLink.createEl('img', {
       attr: {
@@ -796,11 +766,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         alt: 'Buy Me a Coffee',
       },
     });
-    supportCtaImg.style.height = '100%';
-    supportCtaImg.style.width = 'auto';
-    supportCtaImg.style.display = 'block';
-    supportCtaImg.style.borderRadius = '10px';
-    supportCtaImg.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.15)';
+    supportCtaImg.addClass('st-sup-cta-img');
 
     new Setting(containerEl)
       .setName('About the creator')

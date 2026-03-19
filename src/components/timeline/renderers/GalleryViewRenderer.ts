@@ -435,7 +435,7 @@ export class GalleryViewRenderer {
     }
 
     // Create Pinterest-style masonry grid with better alignment
-    const gridEl = container.createDiv('media-gallery-masonry sa-p-16 gvr-masonry-grid');
+    const gridEl = container.createDiv('sa-media-gallery-masonry sa-p-16 gvr-masonry-grid');
 
     // Responsive column count with proper cleanup
     const updateColumns = () => {
@@ -522,14 +522,14 @@ export class GalleryViewRenderer {
    * Much faster than full re-render
    */
   applyFilters(container: HTMLElement, platformFilter?: Set<string>, searchQuery?: string): void {
-    const gridEl = container.querySelector('.media-gallery-masonry') as HTMLElement;
+    const gridEl = container.querySelector('.sa-media-gallery-masonry') as HTMLElement;
     if (!gridEl) return;
 
     const allMediaItems = (gridEl as unknown as Record<string, unknown>)['__allMediaItems'] as MediaItemData[];
     if (!allMediaItems) return;
 
     const lazyLoadObserver = (gridEl as unknown as Record<string, unknown>)['__lazyLoadObserver'] as IntersectionObserver;
-    const cards = Array.from(gridEl.querySelectorAll('.media-card'));
+    const cards = Array.from(gridEl.querySelectorAll('.sa-media-card'));
 
     cards.forEach((card, index) => {
       const item = allMediaItems[index];
@@ -579,10 +579,10 @@ export class GalleryViewRenderer {
    * Render a single media card
    */
   private renderMediaCard(parent: HTMLElement, item: MediaItemData, allMediaItems: MediaItemData[]): HTMLElement {
-    const cardEl = parent.createDiv('media-card sa-relative sa-rounded-8 sa-overflow-hidden sa-clickable sa-bg-primary sa-mb-16 sa-inline-block sa-w-full gvr-media-card');
+    const cardEl = parent.createDiv('sa-media-card sa-relative sa-rounded-8 sa-overflow-hidden sa-clickable sa-bg-primary sa-mb-16 sa-inline-block sa-w-full gvr-media-card');
 
     // Media container
-    const mediaContainer = cardEl.createDiv('media-container sa-relative sa-w-full sa-overflow-hidden sa-bg-secondary');
+    const mediaContainer = cardEl.createDiv('sa-media-container sa-relative sa-w-full sa-overflow-hidden sa-bg-secondary');
 
     // Get media file
     const mediaFile = this.app.vault.getAbstractFileByPath(item.mediaPath);
@@ -597,7 +597,7 @@ export class GalleryViewRenderer {
 
     // Platform badge (hover only)
     if (item.platform) {
-      const platformBadge = mediaContainer.createDiv('platform-badge gvr-platform-badge sa-absolute sa-rounded-4 sa-opacity-0 sa-transition-opacity sa-z-1 sa-text-xs sa-font-medium');
+      const platformBadge = mediaContainer.createDiv('sa-platform-badge gvr-platform-badge sa-absolute sa-rounded-4 sa-opacity-0 sa-transition-opacity sa-z-1 sa-text-xs sa-font-medium');
       platformBadge.textContent = item.platform;
     }
 
@@ -642,7 +642,7 @@ export class GalleryViewRenderer {
     });
 
     // Observe for lazy loading
-    const card = container.closest('.media-card') as HTMLElement;
+    const card = container.closest('.sa-media-card') as HTMLElement;
     if (card) {
       const gridEl = card.parentElement;
       const observer = (gridEl as unknown as Record<string, unknown>)['__lazyLoadObserver'] as IntersectionObserver;
@@ -720,7 +720,7 @@ export class GalleryViewRenderer {
     });
 
     // Observe for lazy loading
-    const card = container.closest('.media-card') as HTMLElement;
+    const card = container.closest('.sa-media-card') as HTMLElement;
     if (card) {
       const gridEl = card.parentElement;
       const observer = (gridEl as unknown as Record<string, unknown>)['__lazyLoadObserver'] as IntersectionObserver;
@@ -748,15 +748,15 @@ export class GalleryViewRenderer {
    * Render metadata footer with author and title (hover-only visibility)
    */
   private renderMetadata(card: HTMLElement, item: MediaItemData): void {
-    const metadataEl = card.createDiv('media-metadata gvr-metadata sa-absolute sa-bottom-0 sa-left-0 sa-right-0 sa-p-12 sa-clickable');
+    const metadataEl = card.createDiv('sa-media-metadata gvr-metadata sa-absolute sa-bottom-0 sa-left-0 sa-right-0 sa-p-12 sa-clickable');
 
     if (item.author) {
-      const authorEl = metadataEl.createDiv('media-author');
+      const authorEl = metadataEl.createDiv('sa-media-author');
       authorEl.textContent = item.author;
     }
 
     if (item.title) {
-      const titleEl = metadataEl.createDiv('media-date');
+      const titleEl = metadataEl.createDiv('sa-media-date');
       titleEl.textContent = item.title;
     }
 
@@ -783,7 +783,7 @@ export class GalleryViewRenderer {
     });
 
     // Content container
-    const content = modal.createDiv('lightbox-content sa-relative sa-flex-center gvr-lightbox-content');
+    const content = modal.createDiv('sa-lightbox-content sa-relative sa-flex-center gvr-lightbox-content');
     content.addEventListener('click', (e) => e.stopPropagation());
 
     // Render current media
@@ -812,7 +812,7 @@ export class GalleryViewRenderer {
       if (mediaItems.length > 1) {
         // Previous button
         if (currentIndex > 0) {
-          const prevBtn = content.createDiv('lightbox-nav lightbox-prev');
+          const prevBtn = content.createDiv('sa-lightbox-nav sa-lightbox-prev');
           setIcon(prevBtn, 'chevron-left');
           prevBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -823,7 +823,7 @@ export class GalleryViewRenderer {
 
         // Next button
         if (currentIndex < mediaItems.length - 1) {
-          const nextBtn = content.createDiv('lightbox-nav lightbox-next');
+          const nextBtn = content.createDiv('sa-lightbox-nav sa-lightbox-next');
           setIcon(nextBtn, 'chevron-right');
           nextBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -833,7 +833,7 @@ export class GalleryViewRenderer {
         }
 
         // Counter
-        const counter = content.createDiv('lightbox-counter');
+        const counter = content.createDiv('sa-lightbox-counter');
         counter.setText(`${currentIndex + 1} / ${mediaItems.length}`);
       }
     };

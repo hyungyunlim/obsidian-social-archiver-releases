@@ -34,7 +34,7 @@ export class CircuitBreaker {
 	private state: CircuitBreakerState;
 	private metrics: CircuitBreakerMetrics;
 	private nextAttemptAt?: Date;
-	private resetTimeout?: NodeJS.Timeout;
+	private resetTimeout?: number;
 	private readonly listeners: Map<CircuitBreakerEvent, Set<CircuitBreakerEventListener>> = new Map();
 
 	constructor(config: Partial<CircuitBreakerConfig> & { name: string }) {
@@ -183,7 +183,7 @@ export class CircuitBreaker {
 
 		// Clear any existing timeout
 		if (this.resetTimeout) {
-			clearTimeout(this.resetTimeout);
+			window.clearTimeout(this.resetTimeout);
 			this.resetTimeout = undefined;
 		}
 
@@ -209,7 +209,7 @@ export class CircuitBreaker {
 
 		// Clear any existing timeout
 		if (this.resetTimeout) {
-			clearTimeout(this.resetTimeout);
+			window.clearTimeout(this.resetTimeout);
 			this.resetTimeout = undefined;
 		}
 
@@ -222,10 +222,10 @@ export class CircuitBreaker {
 	private scheduleHalfOpen(): void {
 		// Clear any existing timeout
 		if (this.resetTimeout) {
-			clearTimeout(this.resetTimeout);
+			window.clearTimeout(this.resetTimeout);
 		}
 
-		this.resetTimeout = setTimeout(() => {
+		this.resetTimeout = window.setTimeout(() => {
 			if (this.state === State.OPEN) {
 				this.transitionToHalfOpen();
 			}
@@ -361,7 +361,7 @@ export class CircuitBreaker {
 		this.nextAttemptAt = undefined;
 
 		if (this.resetTimeout) {
-			clearTimeout(this.resetTimeout);
+			window.clearTimeout(this.resetTimeout);
 			this.resetTimeout = undefined;
 		}
 
@@ -406,7 +406,7 @@ export class CircuitBreaker {
 	 */
 	public destroy(): void {
 		if (this.resetTimeout) {
-			clearTimeout(this.resetTimeout);
+			window.clearTimeout(this.resetTimeout);
 			this.resetTimeout = undefined;
 		}
 		this.listeners.clear();

@@ -308,7 +308,7 @@ export class AzureSpeechProvider implements PluginTTSProvider {
     const url = `${this.apiEndpoint}/api/tts/synthesize`;
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
       const response = await fetch(url, {
@@ -337,7 +337,7 @@ export class AzureSpeechProvider implements PluginTTSProvider {
 
       return await response.arrayBuffer();
     } finally {
-      clearTimeout(timer);
+      window.clearTimeout(timer);
     }
   }
 
@@ -352,7 +352,7 @@ export class AzureSpeechProvider implements PluginTTSProvider {
       const match = Object.entries(DEFAULT_VOICE_BY_LANG).find(([k]) => k.startsWith(prefix));
       if (match) return match[1];
     }
-    return DEFAULT_VOICE_BY_LANG['en-US']!;
+    return DEFAULT_VOICE_BY_LANG['en-US'] ?? 'en-US-JennyNeural';
   }
 
   private buildCacheKey(options: TTSSynthesizeOptions): string {

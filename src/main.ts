@@ -1,4 +1,4 @@
-import { Plugin, Notice, Platform as ObsidianPlatform, Events, TFile, TFolder, EventRef, requestUrl, normalizePath, Modal, Setting, ButtonComponent, MarkdownView } from 'obsidian';
+import { Plugin, Notice, Platform as ObsidianPlatform, Events, TFile, TFolder, EventRef, requestUrl, normalizePath, Modal, Setting, ButtonComponent, stringifyYaml } from 'obsidian';
 import { SocialArchiverSettingTab } from './settings/SettingTab';
 import { SocialArchiverSettings, DEFAULT_SETTINGS, API_ENDPOINT, MediaDownloadMode, migrateSettings, getVaultOrganizationStrategy } from './types/settings';
 import { WorkersAPIClient } from './services/WorkersAPIClient';
@@ -550,7 +550,7 @@ export default class SocialArchiverPlugin extends Plugin {
       this.addCommand({
         id: 'tts-read-document',
         name: 'Read document aloud (TTS)',
-        editorCheckCallback: (checking, editor, ctx) => {
+        editorCheckCallback: (checking, _editor, _ctx) => {
           if (!this.editorTTSController) return false;
           // Available when there's an active editor with content
           if (checking) return true;
@@ -917,12 +917,12 @@ export default class SocialArchiverPlugin extends Plugin {
           } catch (error) {
             console.error('[Social Archiver] Failed to save WebSocket post:', error);
             // Fall back to KV sync after delay
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => window.setTimeout(resolve, 2000));
             await this.syncSubscriptionPosts();
           }
         } else {
           // Fallback: fetch from KV (for older message format)
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => window.setTimeout(resolve, 1000));
           await this.syncSubscriptionPosts();
         }
       })
@@ -1189,13 +1189,13 @@ export default class SocialArchiverPlugin extends Plugin {
         if (!file && originalUrl) {
           const byUrl = this.archiveLookupService?.findByOriginalUrl(originalUrl) ?? [];
           if (byUrl.length === 1) {
-            file = byUrl[0];
+            file = byUrl[0] ?? null;
           }
         }
         if (!file) return;
 
         try {
-          await this.app.vault.trash(file, true); // true = use system trash
+          await this.app.fileManager.trashFile(file);
           new Notice(`Archive deleted: ${file.basename}`, 3000);
           console.debug('[Social Archiver] Vault file trashed:', file.path);
         } catch (err) {
@@ -1930,6 +1930,7 @@ export default class SocialArchiverPlugin extends Plugin {
         const ticketFetcher = this.settings.authToken
           ? async () => {
               try {
+                if (!this.apiClient) return null;
                 const result = await this.apiClient.getWsTicket();
                 return result.ticket;
               } catch {
@@ -2117,32 +2118,26 @@ export default class SocialArchiverPlugin extends Plugin {
     const displayName = metadata.displayName || handle;
 
     // Build frontmatter
-    const frontmatter = [
-      '---',
-      'type: profile',
-      `platform: ${platform}`,
-      `handle: "${handle}"`,
-      `displayName: "${displayName}"`,
-      `profileUrl: "${profileUrl}"`,
-      metadata.bio ? `bio: "${metadata.bio.replace(/"/g, '\\"').replace(/\n/g, ' ')}"` : null,
-      metadata.followers !== undefined ? `followers: ${metadata.followers}` : null,
-      metadata.following !== undefined ? `following: ${metadata.following}` : null,
-      metadata.postsCount !== undefined ? `postsCount: ${metadata.postsCount}` : null,
-      metadata.verified !== undefined ? `verified: ${metadata.verified}` : null,
-      metadata.location ? `location: "${metadata.location}"` : null,
-      localAvatarPath ? `avatar: "${localAvatarPath}"` : null,
-      metadata.avatarUrl ? `avatarUrl: "${metadata.avatarUrl}"` : null,
-      `crawledAt: "${now.toISOString()}"`,
-      'tags:',
-      `  - social/${platform}`,
-      '  - profile',
-      '---',
-    ].filter(Boolean).join('\n');
+    const frontmatterObj: Record<string, unknown> = {
+      type: 'profile',
+      platform,
+      handle,
+      displayName,
+      profileUrl,
+      crawledAt: now.toISOString(),
+      tags: [`social/${platform}`, 'profile'],
+    };
+    if (metadata.bio) frontmatterObj.bio = metadata.bio.replace(/\n/g, ' ');
+    if (metadata.followers !== undefined) frontmatterObj.followers = metadata.followers;
+    if (metadata.following !== undefined) frontmatterObj.following = metadata.following;
+    if (metadata.postsCount !== undefined) frontmatterObj.postsCount = metadata.postsCount;
+    if (metadata.verified !== undefined) frontmatterObj.verified = metadata.verified;
+    if (metadata.location) frontmatterObj.location = metadata.location;
+    if (localAvatarPath) frontmatterObj.avatar = localAvatarPath;
+    if (metadata.avatarUrl) frontmatterObj.avatarUrl = metadata.avatarUrl;
 
     // Build minimal content (all data is in frontmatter, body is just for human readability)
-    const content = `${frontmatter}
-
-[Open Profile](${profileUrl})
+    const content = `---\n${stringifyYaml(frontmatterObj)}---\n\n[Open Profile](${profileUrl})
 `;
 
     // Save to vault
@@ -2160,7 +2155,7 @@ export default class SocialArchiverPlugin extends Plugin {
     const existingFile = this.app.vault.getAbstractFileByPath(filePath);
     if (existingFile && existingFile instanceof TFile) {
       // Update existing file
-      await this.app.vault.modify(existingFile, content);
+      await this.app.vault.process(existingFile, () => content);
     } else {
       // Create new file
       await this.app.vault.create(filePath, content);
@@ -2550,8 +2545,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
       // Format timestamp (use local timezone)
       const timestamp = postData.timestamp;
-      const now = new Date();
-      const archivedDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const archivedDate = window.moment().format('YYYY-MM-DD HH:mm');
 
       // Download media if enabled
       const downloadedMedia: Array<{ originalUrl: string; localPath: string }> = [];
@@ -2704,43 +2698,42 @@ export default class SocialArchiverPlugin extends Plugin {
         hour12: false,
       }).replace('T', ' ');
 
-      const frontmatter = [
-        '---',
-        `share: false`,
-        `platform: naver`,
-        `title: "${postData.title.replace(/"/g, '\\"')}"`,
-        `author: "${postData.author.name}"`,
-        `authorUrl: "${postData.author.url}"`,
-        localAvatarPath ? `authorAvatar: "[[${localAvatarPath}]]"` : null,
-        postData.author.avatar ? `avatarUrl: "${postData.author.avatar}"` : null,
-        postData.author.grade ? `authorBio: "${postData.author.grade}"` : null,
-        `published: "${cafePublishedDate}"`,
-        `archived: "${archivedDate}"`,
-        `lastModified: "${archivedDate}"`,
-        `archive: false`,
-        // Author stats (flat format for Obsidian compatibility)
-        postData.author.stats?.visitCount ? `authorProfileVisits: ${postData.author.stats.visitCount}` : null,
-        postData.author.stats?.articleCount ? `authorProfilePosts: ${postData.author.stats.articleCount}` : null,
-        postData.author.stats?.commentCount ? `authorProfileComments: ${postData.author.stats.commentCount}` : null,
-        postData.author.stats?.subscriberCount ? `authorFollowers: ${postData.author.stats.subscriberCount}` : null,
-        // Author trade review (for marketplace cafes, flat format)
-        postData.author.tradeReview?.bestCount ? `authorTradeReviewBest: ${postData.author.tradeReview.bestCount}` : null,
-        postData.author.tradeReview?.goodCount ? `authorTradeReviewGood: ${postData.author.tradeReview.goodCount}` : null,
-        postData.author.tradeReview?.sorryCount ? `authorTradeReviewSorry: ${postData.author.tradeReview.sorryCount}` : null,
-        `articleId: "${postData.id}"`,
-        `cafeId: "${postData.cafeId}"`,
-        `cafeName: "${postData.cafeName.replace(/"/g, '\\"')}"`,
-        `cafeUrl: "${postData.cafeUrl}"`,
-        postData.menuName ? `menuName: "${postData.menuName}"` : null,
-        `originalUrl: "${postData.url}"`,
-        `source: naver-cafe`,
-        postData.viewCount > 0 ? `views: ${postData.viewCount}` : null,
-        postData.likes > 0 ? `likes: ${postData.likes}` : null,
-        postData.commentCount > 0 ? `comments: ${postData.commentCount}` : null,
-        linkPreviews.length > 0 ? `linkPreviews:\n${linkPreviews.map(url => `  - "${url}"`).join('\n')}` : null,
-        options?.comment ? `comment: "${options.comment.replace(/"/g, '\\"')}"` : null,
-        '---',
-      ].filter(Boolean).join('\n');
+      const frontmatterObj: Record<string, unknown> = {
+        share: false,
+        platform: 'naver',
+        title: postData.title,
+        author: postData.author.name,
+        authorUrl: postData.author.url,
+        published: cafePublishedDate,
+        archived: archivedDate,
+        lastModified: archivedDate,
+        archive: false,
+        articleId: postData.id,
+        cafeId: postData.cafeId,
+        cafeName: postData.cafeName,
+        cafeUrl: postData.cafeUrl,
+        originalUrl: postData.url,
+        source: 'naver-cafe',
+      };
+      if (localAvatarPath) frontmatterObj.authorAvatar = `[[${localAvatarPath}]]`;
+      if (postData.author.avatar) frontmatterObj.avatarUrl = postData.author.avatar;
+      if (postData.author.grade) frontmatterObj.authorBio = postData.author.grade;
+      // Author stats (flat format for Obsidian compatibility)
+      if (postData.author.stats?.visitCount) frontmatterObj.authorProfileVisits = postData.author.stats.visitCount;
+      if (postData.author.stats?.articleCount) frontmatterObj.authorProfilePosts = postData.author.stats.articleCount;
+      if (postData.author.stats?.commentCount) frontmatterObj.authorProfileComments = postData.author.stats.commentCount;
+      if (postData.author.stats?.subscriberCount) frontmatterObj.authorFollowers = postData.author.stats.subscriberCount;
+      // Author trade review (for marketplace cafes, flat format)
+      if (postData.author.tradeReview?.bestCount) frontmatterObj.authorTradeReviewBest = postData.author.tradeReview.bestCount;
+      if (postData.author.tradeReview?.goodCount) frontmatterObj.authorTradeReviewGood = postData.author.tradeReview.goodCount;
+      if (postData.author.tradeReview?.sorryCount) frontmatterObj.authorTradeReviewSorry = postData.author.tradeReview.sorryCount;
+      if (postData.menuName) frontmatterObj.menuName = postData.menuName;
+      if (postData.viewCount > 0) frontmatterObj.views = postData.viewCount;
+      if (postData.likes > 0) frontmatterObj.likes = postData.likes;
+      if (postData.commentCount > 0) frontmatterObj.comments = postData.commentCount;
+      if (linkPreviews.length > 0) frontmatterObj.linkPreviews = linkPreviews;
+      if (options?.comment) frontmatterObj.comment = options.comment;
+      const frontmatter = `---\n${stringifyYaml(frontmatterObj)}---`;
 
       // Build comments section if there are comments (matching other platforms format)
       let commentsSection = '';
@@ -2834,7 +2827,7 @@ export default class SocialArchiverPlugin extends Plugin {
       const existingFile = this.app.vault.getAbstractFileByPath(newFilePath);
       if (existingFile && existingFile instanceof TFile) {
         // File already exists (re-archiving same post), update it instead
-        await this.app.vault.modify(existingFile, fullDocument);
+        await this.app.vault.process(existingFile, () => fullDocument);
         console.debug(`[Social Archiver] Updated existing Naver cafe archive: ${newFilePath}`);
       } else {
         // Create new file
@@ -2855,15 +2848,13 @@ export default class SocialArchiverPlugin extends Plugin {
         const file = this.app.vault.getAbstractFileByPath(filePath);
         if (file instanceof TFile) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          const content = await this.app.vault.read(file);
-          const updatedContent = content.replace(
+          await this.app.vault.process(file, (content) => content.replace(
             /archiveStatus: pending/,
             'archiveStatus: failed'
           ).replace(
             /^(---[\s\S]*?---)$/m,
             `$1\n\n> [!error] Archive Failed\n> ${errorMessage}`
-          );
-          await this.app.vault.modify(file, updatedContent);
+          ));
         }
       }
 
@@ -2893,8 +2884,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
       // Format timestamp
       const timestamp = postData.timestamp;
-      const now = new Date();
-      const archivedDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const archivedDate = window.moment().format('YYYY-MM-DD HH:mm');
 
       // Download media if enabled
       const downloadedMedia: Array<{ originalUrl: string; localPath: string }> = [];
@@ -3034,31 +3024,30 @@ export default class SocialArchiverPlugin extends Plugin {
         hour12: false,
       }).replace('T', ' ');
 
-      const frontmatter = [
-        '---',
-        `share: false`,
-        `platform: naver`,
-        `title: "${postData.title.replace(/"/g, '\\"')}"`,
-        `author: "${postData.author.name}"`,
-        `authorUrl: "${postData.author.url}"`,
-        `published: "${blogPublishedDate}"`,
-        `archived: "${archivedDate}"`,
-        `lastModified: "${archivedDate}"`,
-        `archive: false`,
-        `logNo: "${postData.id}"`,
-        `blogId: "${postData.blogId}"`,
-        postData.blogName ? `blogName: "${postData.blogName.replace(/"/g, '\\"')}"` : null,
-        postData.categoryName ? `categoryName: "${postData.categoryName}"` : null,
-        `originalUrl: "${postData.url}"`,
-        `source: naver-blog`,
-        postData.viewCount > 0 ? `views: ${postData.viewCount}` : null,
-        postData.likes > 0 ? `likes: ${postData.likes}` : null,
-        postData.commentCount > 0 ? `comments: ${postData.commentCount}` : null,
-        postData.tags && postData.tags.length > 0 ? `tags:\n${postData.tags.map(t => `  - "${t}"`).join('\n')}` : null,
-        linkPreviews.length > 0 ? `linkPreviews:\n${linkPreviews.map(url => `  - "${url}"`).join('\n')}` : null,
-        options?.comment ? `comment: "${options.comment.replace(/"/g, '\\"')}"` : null,
-        '---',
-      ].filter(Boolean).join('\n');
+      const frontmatterObj: Record<string, unknown> = {
+        share: false,
+        platform: 'naver',
+        title: postData.title,
+        author: postData.author.name,
+        authorUrl: postData.author.url,
+        published: blogPublishedDate,
+        archived: archivedDate,
+        lastModified: archivedDate,
+        archive: false,
+        logNo: postData.id,
+        blogId: postData.blogId,
+        originalUrl: postData.url,
+        source: 'naver-blog',
+      };
+      if (postData.blogName) frontmatterObj.blogName = postData.blogName;
+      if (postData.categoryName) frontmatterObj.categoryName = postData.categoryName;
+      if (postData.viewCount > 0) frontmatterObj.views = postData.viewCount;
+      if (postData.likes > 0) frontmatterObj.likes = postData.likes;
+      if (postData.commentCount > 0) frontmatterObj.comments = postData.commentCount;
+      if (postData.tags && postData.tags.length > 0) frontmatterObj.tags = postData.tags;
+      if (linkPreviews.length > 0) frontmatterObj.linkPreviews = linkPreviews;
+      if (options?.comment) frontmatterObj.comment = options.comment;
+      const frontmatter = `---\n${stringifyYaml(frontmatterObj)}---`;
 
       // Build full document
       const fullDocument = [
@@ -3119,7 +3108,7 @@ export default class SocialArchiverPlugin extends Plugin {
       // Create or update the file with correct filename
       const existingFile = this.app.vault.getAbstractFileByPath(newFilePath);
       if (existingFile && existingFile instanceof TFile) {
-        await this.app.vault.modify(existingFile, fullDocument);
+        await this.app.vault.process(existingFile, () => fullDocument);
         console.debug(`[Social Archiver] Updated existing Naver blog archive: ${newFilePath}`);
       } else {
         await this.app.vault.create(newFilePath, fullDocument);
@@ -3139,15 +3128,10 @@ export default class SocialArchiverPlugin extends Plugin {
         const file = this.app.vault.getAbstractFileByPath(filePath);
         if (file instanceof TFile) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          const content = await this.app.vault.read(file);
-          const updatedContent = content.replace(
-            /archiveStatus: pending/,
-            'archiveStatus: failed'
-          ).replace(
-            /^(---[\s\S]*?---)$/m,
-            `$1\n\n> [!error] Archive Failed\n> ${errorMessage}`
-          );
-          await this.app.vault.modify(file, updatedContent);
+          await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+            fm['archiveStatus'] = 'failed';
+            fm['archiveError'] = errorMessage;
+          });
         }
       }
 
@@ -3177,8 +3161,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
       // Format timestamp
       const timestamp = postData.timestamp;
-      const now = new Date();
-      const archivedDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const archivedDate = window.moment().format('YYYY-MM-DD HH:mm');
 
       // Download media if enabled
       const downloadedMedia: Array<{ originalUrl: string; localPath: string }> = [];
@@ -3374,36 +3357,36 @@ export default class SocialArchiverPlugin extends Plugin {
         hour12: false,
       }).replace('T', ' ');
 
-      const frontmatter = [
-        '---',
-        `share: false`,
-        `platform: brunch`,
-        `title: "${postData.title.replace(/"/g, '\\"')}"`,
-        postData.subtitle ? `subtitle: "${postData.subtitle.replace(/"/g, '\\"')}"` : null,
-        `author: "${postData.author.name}"`,
-        `authorId: "${postData.author.id}"`,
-        `authorUrl: "${postData.author.url}"`,
-        localAvatarPath ? `authorAvatar: "${localAvatarPath}"` : (postData.author.avatar ? `authorAvatar: "${postData.author.avatar}"` : null),
-        postData.author.bio ? `authorBio: "${postData.author.bio.replace(/"/g, '\\"').replace(/\n/g, ' ')}"` : null,
-        postData.author.job ? `authorJob: "${postData.author.job.replace(/"/g, '\\"')}"` : null,
-        postData.author.subscriberCount ? `subscriberCount: ${postData.author.subscriberCount}` : null,
-        `published: "${publishedDate}"`,
-        `archived: "${archivedDate}"`,
-        `lastModified: "${archivedDate}"`,
-        `archive: false`,
-        `postId: "${postData.id}"`,
-        postData.series ? `seriesId: "${postData.series.id}"` : null,
-        postData.series ? `seriesTitle: "${postData.series.title.replace(/"/g, '\\"')}"` : null,
-        postData.series?.episode ? `seriesEpisode: ${postData.series.episode}` : null,
-        `originalUrl: "${postData.url}"`,
-        postData.viewCount !== undefined ? `views: ${postData.viewCount}` : null,
-        postData.likes !== undefined ? `likes: ${postData.likes}` : null,
-        postData.commentCount !== undefined ? `comments: ${postData.commentCount}` : null,
-        postData.tags && postData.tags.length > 0 ? `tags:\n${postData.tags.map(t => `  - "${t}"`).join('\n')}` : null,
-        linkPreviews.length > 0 ? `linkPreviews:\n${linkPreviews.map(u => `  - "${u}"`).join('\n')}` : null,
-        options?.comment ? `comment: "${options.comment.replace(/"/g, '\\"')}"` : null,
-        '---',
-      ].filter(Boolean).join('\n');
+      const frontmatterObj: Record<string, unknown> = {
+        share: false,
+        platform: 'brunch',
+        title: postData.title,
+        author: postData.author.name,
+        authorId: postData.author.id,
+        authorUrl: postData.author.url,
+        published: publishedDate,
+        archived: archivedDate,
+        lastModified: archivedDate,
+        archive: false,
+        postId: postData.id,
+        originalUrl: postData.url,
+      };
+      if (postData.subtitle) frontmatterObj.subtitle = postData.subtitle;
+      if (localAvatarPath) frontmatterObj.authorAvatar = localAvatarPath;
+      else if (postData.author.avatar) frontmatterObj.authorAvatar = postData.author.avatar;
+      if (postData.author.bio) frontmatterObj.authorBio = postData.author.bio.replace(/\n/g, ' ');
+      if (postData.author.job) frontmatterObj.authorJob = postData.author.job;
+      if (postData.author.subscriberCount) frontmatterObj.subscriberCount = postData.author.subscriberCount;
+      if (postData.series) frontmatterObj.seriesId = postData.series.id;
+      if (postData.series) frontmatterObj.seriesTitle = postData.series.title;
+      if (postData.series?.episode) frontmatterObj.seriesEpisode = postData.series.episode;
+      if (postData.viewCount !== undefined) frontmatterObj.views = postData.viewCount;
+      if (postData.likes !== undefined) frontmatterObj.likes = postData.likes;
+      if (postData.commentCount !== undefined) frontmatterObj.comments = postData.commentCount;
+      if (postData.tags && postData.tags.length > 0) frontmatterObj.tags = postData.tags;
+      if (linkPreviews.length > 0) frontmatterObj.linkPreviews = linkPreviews;
+      if (options?.comment) frontmatterObj.comment = options.comment;
+      const frontmatter = `---\n${stringifyYaml(frontmatterObj)}---`;
 
       // Build full document
       const fullDocument = [
@@ -3464,7 +3447,7 @@ export default class SocialArchiverPlugin extends Plugin {
       // Create or update the file with correct filename
       const existingFile = this.app.vault.getAbstractFileByPath(newFilePath);
       if (existingFile && existingFile instanceof TFile) {
-        await this.app.vault.modify(existingFile, fullDocument);
+        await this.app.vault.process(existingFile, () => fullDocument);
         console.debug(`[Social Archiver] Updated existing Brunch archive: ${newFilePath}`);
       } else {
         await this.app.vault.create(newFilePath, fullDocument);
@@ -3484,15 +3467,13 @@ export default class SocialArchiverPlugin extends Plugin {
         const file = this.app.vault.getAbstractFileByPath(filePath);
         if (file instanceof TFile) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          const content = await this.app.vault.read(file);
-          const updatedContent = content.replace(
+          await this.app.vault.process(file, (content) => content.replace(
             /archiveStatus: pending/,
             'archiveStatus: failed'
           ).replace(
             /^(---[\s\S]*?---)$/m,
             `$1\n\n> [!error] Archive Failed\n> ${errorMessage}`
-          );
-          await this.app.vault.modify(file, updatedContent);
+          ));
         }
       }
 
@@ -3530,9 +3511,8 @@ export default class SocialArchiverPlugin extends Plugin {
 
       // Format timestamps
       const timestamp = postData.timestamp;
-      const publishedDate = `${timestamp.getFullYear()}-${String(timestamp.getMonth() + 1).padStart(2, '0')}-${String(timestamp.getDate()).padStart(2, '0')} ${String(timestamp.getHours()).padStart(2, '0')}:${String(timestamp.getMinutes()).padStart(2, '0')}`;
-      const now = new Date();
-      const archivedDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const publishedDate = window.moment(timestamp).format('YYYY-MM-DD HH:mm');
+      const archivedDate = window.moment().format('YYYY-MM-DD HH:mm');
 
       // Download images if enabled
       const downloadedMedia: Array<{ originalUrl: string; localPath: string }> = [];
@@ -3621,18 +3601,7 @@ export default class SocialArchiverPlugin extends Plugin {
         processedUrls: [url, options?.originalUrl].filter(Boolean),
       };
 
-      const frontmatterYaml = Object.entries(frontmatterData)
-        .filter(([_, v]) => v !== undefined)
-        .map(([key, value]) => {
-          if (Array.isArray(value)) {
-            return `${key}:\n${value.map(v => `  - "${v}"`).join('\n')}`;
-          } else if (typeof value === 'string') {
-            return `${key}: "${value}"`;
-          } else {
-            return `${key}: ${String(value)}`;
-          }
-        })
-        .join('\n');
+      const frontmatterYaml = stringifyYaml(frontmatterData);
 
       // Build content
       const contentParts: string[] = [];
@@ -3646,12 +3615,7 @@ export default class SocialArchiverPlugin extends Plugin {
       contentParts.push(`\n\n---\n\n`);
       contentParts.push(imageGallery);
 
-      const fullDocument = `---
-${frontmatterYaml}
----
-
-${contentParts.join('')}
-`;
+      const fullDocument = `---\n${frontmatterYaml}---\n\n${contentParts.join('')}\n`;
 
       // Generate correct file path using VaultManager
       const vaultManager = new VaultManager({
@@ -3703,7 +3667,7 @@ ${contentParts.join('')}
       // Create the file
       const existingFile = this.app.vault.getAbstractFileByPath(newFilePath);
       if (existingFile && existingFile instanceof TFile) {
-        await this.app.vault.modify(existingFile, fullDocument);
+        await this.app.vault.process(existingFile, () => fullDocument);
       } else {
         await this.app.vault.create(newFilePath, fullDocument);
       }
@@ -3722,15 +3686,13 @@ ${contentParts.join('')}
         const file = this.app.vault.getAbstractFileByPath(filePath);
         if (file instanceof TFile) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          const content = await this.app.vault.read(file);
-          const updatedContent = content.replace(
+          await this.app.vault.process(file, (content) => content.replace(
             /archiveStatus: pending/,
             'archiveStatus: failed'
           ).replace(
             /^(---[\s\S]*?---)$/m,
             `$1\n\n> [!error] Archive Failed\n> ${errorMessage}`
-          );
-          await this.app.vault.modify(file, updatedContent);
+          ));
         }
       }
 
@@ -4662,7 +4624,7 @@ ${contentParts.join('')}
 
       const noticeDuration = ObsidianPlatform.isMobile ? 10000 : 8000;
 
-      setTimeout(() => {
+      window.setTimeout(() => {
         new Notice(settingsMessage, noticeDuration);
       }, 2000);
 
@@ -6003,8 +5965,7 @@ ${contentParts.join('')}
         const sanitizedAuthor = authorUsername.replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, '_').trim();
 
         // Get current date for filename (archive date, not publish date)
-        const now = new Date();
-        const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+        const dateStr = window.moment().format('YYYYMMDD');
 
         for (let i = 0; i < postData.media.length; i++) {
           const media = postData.media[i];
@@ -6214,7 +6175,7 @@ ${contentParts.join('')}
         const cleanedTags = sanitizeTagNames(pendingJob.metadata.selectedTags);
         if (cleanedTags.length > 0) {
           const existingTags = Array.isArray(markdown.frontmatter.tags)
-            ? (markdown.frontmatter.tags as string[])
+            ? markdown.frontmatter.tags
             : [];
           markdown.frontmatter.tags = mergeTagsCaseInsensitive(existingTags, cleanedTags);
         }
@@ -6263,20 +6224,20 @@ ${contentParts.join('')}
             const existingFile = this.app.vault.getAbstractFileByPath(correctFilePath);
             if (existingFile instanceof TFile) {
               // Update existing file content
-              await this.app.vault.modify(existingFile, markdown.fullDocument);
+              await this.app.vault.process(existingFile, () => markdown.fullDocument);
               // Delete preliminary file
               await this.app.fileManager.trashFile(file);
             } else {
               // Rename file and update content
-              await this.app.vault.rename(file, correctFilePath);
+              await this.app.fileManager.renameFile(file, correctFilePath);
               const renamedFile = this.app.vault.getAbstractFileByPath(correctFilePath);
               if (renamedFile instanceof TFile) {
-                await this.app.vault.modify(renamedFile, markdown.fullDocument);
+                await this.app.vault.process(renamedFile, () => markdown.fullDocument);
               }
             }
           } else {
             // Same path, just update content
-            await this.app.vault.modify(file, markdown.fullDocument);
+            await this.app.vault.process(file, () => markdown.fullDocument);
           }
 
         } else {
@@ -6751,49 +6712,14 @@ ${contentParts.join('')}
    */
   private async updatePostFrontmatter(
     file: TFile,
-    content: string,
+    _content: string,
     updates: Record<string, unknown>
   ): Promise<void> {
-    const frontmatterRegex = /^---\n([\s\S]*?)\n---\n?/;
-    const match = content.match(frontmatterRegex);
-
-    if (!match) {
-      // No frontmatter, add it
-      const frontmatterLines = Object.entries(updates)
-        .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
-        .join('\n');
-      const newContent = `---\n${frontmatterLines}\n---\n\n${content}`;
-      await this.app.vault.modify(file, newContent);
-      return;
-    }
-
-    // Parse existing frontmatter and add updates
-    const existingFm = match[1] ?? '';
-    const bodyContent = content.slice(match[0].length);
-
-    // Simple update: append new fields to existing frontmatter
-    const updateLines = Object.entries(updates)
-      .map(([key, value]) => {
-        if (typeof value === 'string') {
-          return `${key}: ${value}`;
-        }
-        return `${key}: ${JSON.stringify(value)}`;
-      })
-      .join('\n');
-
-    // Remove existing keys that are being updated
-    const updatedFm = existingFm
-      .split('\n')
-      .filter(line => {
-        const key = line.split(':')[0]?.trim() ?? '';
-        return !Object.keys(updates).includes(key);
-      })
-      .join('\n');
-
-    const newFrontmatter = updatedFm.trim() + '\n' + updateLines;
-    const newContent = `---\n${newFrontmatter}\n---\n\n${bodyContent}`;
-
-    await this.app.vault.modify(file, newContent);
+    await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
+      for (const [key, value] of Object.entries(updates)) {
+        frontmatter[key] = value;
+      }
+    });
   }
 
   /**

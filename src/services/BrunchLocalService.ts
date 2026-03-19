@@ -1772,7 +1772,7 @@ export class BrunchLocalService {
 
         // Rate limit: 500ms delay between fetches
         if (posts.length < limit) {
-          await new Promise(r => setTimeout(r, 500));
+          await new Promise(r => window.setTimeout(r, 500));
         }
       } catch (error) {
         console.warn(`[BrunchLocalService] Failed to fetch post ${item.id}:`, error);
@@ -1978,7 +1978,7 @@ export class BrunchLocalService {
 
           // Rate limit: 500ms delay between fetches
           if (i < Math.min(articleList.length, limit) - 1) {
-            await new Promise(r => setTimeout(r, 500));
+            await new Promise(r => window.setTimeout(r, 500));
           }
         } catch (error) {
           console.warn(`[BrunchLocalService] Failed to fetch brunchbook post ${article.no as string | number}:`, error);
@@ -2507,7 +2507,7 @@ export class BrunchLocalService {
       if (response.status === 429 && retryCount < MAX_RETRIES) {
         // Rate limited - wait and retry
         console.warn(`[BrunchLocalService] Rate limited for ${internalId}, retrying in ${RETRY_DELAY_MS}ms...`);
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * (retryCount + 1)));
+        await new Promise(resolve => window.setTimeout(resolve, RETRY_DELAY_MS * (retryCount + 1)));
         return this.resolveInternalId(internalId, retryCount + 1);
       }
 
@@ -2542,7 +2542,7 @@ export class BrunchLocalService {
       // Handle 429 from exception (Obsidian requestUrl throws on non-2xx)
       if (error instanceof Error && error.message?.includes('429') && retryCount < MAX_RETRIES) {
         console.warn(`[BrunchLocalService] Rate limited for ${internalId}, retrying in ${RETRY_DELAY_MS}ms...`);
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * (retryCount + 1)));
+        await new Promise(resolve => window.setTimeout(resolve, RETRY_DELAY_MS * (retryCount + 1)));
         return this.resolveInternalId(internalId, retryCount + 1);
       }
       console.warn(`[BrunchLocalService] Error resolving internal ID ${internalId}:`, error);
@@ -2577,7 +2577,7 @@ export class BrunchLocalService {
 
       // Add delay between requests (not before the first one)
       if (i > 0) {
-        await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+        await new Promise(resolve => window.setTimeout(resolve, DELAY_MS));
       }
 
       const author = await this.resolveInternalId(id);

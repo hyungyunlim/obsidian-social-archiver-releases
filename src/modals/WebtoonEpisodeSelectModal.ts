@@ -100,7 +100,7 @@ export class WebtoonEpisodeSelectModal extends Modal {
     this.errorContainer.addClass('sa-hidden');
 
     // Episode list (scrollable)
-    this.episodeListContainer = contentEl.createDiv({ cls: 'webtoon-episode-list' });
+    this.episodeListContainer = contentEl.createDiv({ cls: 'sa-webtoon-episode-list' });
     this.episodeListContainer.addClass('sa-flex-1', 'sa-overflow-y-auto', 'sa-py-8', 'sa-px-16');
     this.renderEpisodeList();
 
@@ -190,7 +190,7 @@ export class WebtoonEpisodeSelectModal extends Modal {
 
     // Episode items
     pageEpisodes.forEach(episode => {
-      const item = this.episodeListContainer.createDiv({ cls: 'webtoon-episode-item' });
+      const item = this.episodeListContainer.createDiv({ cls: 'sa-webtoon-episode-item' });
       const isPaid = episode.charge;
       const isSelected = this.selectedEpisodes.has(episode.no);
 

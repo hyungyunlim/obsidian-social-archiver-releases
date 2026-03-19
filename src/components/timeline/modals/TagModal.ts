@@ -482,7 +482,7 @@ export class TagModal extends Modal {
     // Delay slightly to let metadataCache update from background YAML writes
     if (this.dirty) {
       this.onTagsChanged();
-      setTimeout(() => this.onTagsChanged(), 500);
+      window.setTimeout(() => this.onTagsChanged(), 500);
     }
   }
 

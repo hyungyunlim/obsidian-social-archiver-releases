@@ -68,13 +68,13 @@ export class MediaGalleryView extends BasesView implements HoverParent {
 
     // Create gallery container with layout class
     this.galleryEl = this.containerEl.createDiv({
-      cls: `media-gallery media-gallery-${layout} media-gallery-cols-${columns}`
+      cls: `sa-media-gallery sa-media-gallery-${layout} media-gallery-cols-${columns}`
     });
 
     // Show loading state with spinner
-    const loadingEl = this.galleryEl.createDiv('media-gallery-loading');
-    loadingEl.createDiv('media-gallery-spinner');
-    const loadingText = loadingEl.createDiv('media-gallery-loading-text');
+    const loadingEl = this.galleryEl.createDiv('sa-media-gallery-loading');
+    loadingEl.createDiv('sa-media-gallery-spinner');
+    const loadingText = loadingEl.createDiv('sa-media-gallery-loading-text');
     loadingText.setText('Loading media...');
 
     // Load media asynchronously
@@ -129,7 +129,7 @@ export class MediaGalleryView extends BasesView implements HoverParent {
 
         // Update loading text with progress
         const processed = Math.min(i + BATCH_SIZE, allEntries.length);
-        const loadingText = loadingEl.querySelector('.media-gallery-loading-text') as HTMLElement;
+        const loadingText = loadingEl.querySelector('.sa-media-gallery-loading-text') as HTMLElement;
         if (loadingText) {
           loadingText.setText(`Loading media... ${processed}/${allEntries.length}`);
         }
@@ -325,16 +325,16 @@ export class MediaGalleryView extends BasesView implements HoverParent {
   private renderMediaCard(mediaItem: MediaItem, entry: Record<string, unknown>, app: App): void {
     if (!this.galleryEl) return;
 
-    const card = this.galleryEl.createDiv('media-card');
+    const card = this.galleryEl.createDiv('sa-media-card');
 
     // Add platform badge
     const badge = card.createDiv({
-      cls: `platform-badge platform-${mediaItem.platform.toLowerCase()}`
+      cls: `sa-platform-badge sa-platform-${mediaItem.platform.toLowerCase()}`
     });
     badge.setText(mediaItem.platform);
 
     // Create media container
-    const mediaContainer = card.createDiv('media-container');
+    const mediaContainer = card.createDiv('sa-media-container');
 
     // Get media source (either vault resource or direct URL)
     let mediaSrc: string;
@@ -362,7 +362,7 @@ export class MediaGalleryView extends BasesView implements HoverParent {
 
     if (mediaItem.type === 'image') {
       const img = mediaContainer.createEl('img', {
-        cls: 'media-image',
+        cls: 'sa-media-image',
         attr: {
           src: mediaSrc,
           alt: mediaItem.file?.basename || 'Image'
@@ -375,11 +375,11 @@ export class MediaGalleryView extends BasesView implements HoverParent {
 
         // Portrait orientation (taller than wide)
         if (aspectRatio < 0.8) {
-          card.addClass('media-card-portrait');
+          card.addClass('sa-media-card-portrait');
         }
         // Wide (includes 4:3, 3:2, 16:10, 16:9, 21:9, etc - aspect ratio > 1.3)
         else if (aspectRatio > 1.3) {
-          card.addClass('media-card-wide');
+          card.addClass('sa-media-card-wide');
         }
       });
 
@@ -389,7 +389,7 @@ export class MediaGalleryView extends BasesView implements HoverParent {
       });
     } else {
       const video = mediaContainer.createEl('video', {
-        cls: 'media-video',
+        cls: 'sa-media-video',
         attr: {
           src: mediaSrc,
           loop: 'true',
@@ -406,11 +406,11 @@ export class MediaGalleryView extends BasesView implements HoverParent {
 
         // Portrait orientation (9:16 etc)
         if (aspectRatio < 0.8) {
-          card.addClass('media-card-portrait');
+          card.addClass('sa-media-card-portrait');
         }
         // Wide (includes 4:3, 3:2, 16:10, 16:9, 21:9, etc - aspect ratio > 1.3)
         else if (aspectRatio > 1.3) {
-          card.addClass('media-card-wide');
+          card.addClass('sa-media-card-wide');
         }
       });
 
@@ -434,19 +434,19 @@ export class MediaGalleryView extends BasesView implements HoverParent {
     }
 
     // Add metadata overlay
-    const metadata = card.createDiv('media-metadata');
+    const metadata = card.createDiv('sa-media-metadata');
 
-    const authorEl = metadata.createDiv('media-author');
+    const authorEl = metadata.createDiv('sa-media-author');
     authorEl.setText(mediaItem.author);
 
     if (mediaItem.publishDate) {
-      const dateEl = metadata.createDiv('media-date');
+      const dateEl = metadata.createDiv('sa-media-date');
       dateEl.setText(this.formatDate(mediaItem.publishDate));
     }
 
     // Add click handler to open source file
     card.addEventListener('click', (evt) => {
-      if (!(evt.target as HTMLElement).closest('.media-container')) {
+      if (!(evt.target as HTMLElement).closest('.sa-media-container')) {
         // Click on metadata area - open source file
         const modEvent = Keymap.isModEvent(evt);
         void app.workspace.openLinkText(mediaItem.sourceFile.path, '', modEvent);
@@ -477,16 +477,16 @@ export class MediaGalleryView extends BasesView implements HoverParent {
     if (currentIndex === -1) currentIndex = 0;
 
     const modal = document.createElement('div');
-    modal.addClass('media-lightbox');
+    modal.addClass('sa-media-lightbox');
 
     // Create backdrop
-    const backdrop = modal.createDiv('lightbox-backdrop');
+    const backdrop = modal.createDiv('sa-lightbox-backdrop');
     backdrop.addEventListener('click', () => {
       cleanup();
     });
 
     // Create content container
-    const content = modal.createDiv('lightbox-content');
+    const content = modal.createDiv('sa-lightbox-content');
 
     // Function to render media
     const renderMedia = (index: number) => {
@@ -533,7 +533,7 @@ export class MediaGalleryView extends BasesView implements HoverParent {
       if (this.allMediaItems.length > 1) {
         // Previous button
         if (index > 0) {
-          const prevBtn = content.createDiv('lightbox-nav lightbox-prev');
+          const prevBtn = content.createDiv('sa-lightbox-nav sa-lightbox-prev');
           setIcon(prevBtn, 'chevron-left');
           prevBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -544,7 +544,7 @@ export class MediaGalleryView extends BasesView implements HoverParent {
 
         // Next button
         if (index < this.allMediaItems.length - 1) {
-          const nextBtn = content.createDiv('lightbox-nav lightbox-next');
+          const nextBtn = content.createDiv('sa-lightbox-nav sa-lightbox-next');
           setIcon(nextBtn, 'chevron-right');
           nextBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -554,12 +554,12 @@ export class MediaGalleryView extends BasesView implements HoverParent {
         }
 
         // Counter
-        const counter = content.createDiv('lightbox-counter');
+        const counter = content.createDiv('sa-lightbox-counter');
         counter.setText(`${index + 1} / ${this.allMediaItems.length}`);
       }
 
       // Close button
-      const closeBtn = content.createDiv('lightbox-close');
+      const closeBtn = content.createDiv('sa-lightbox-close');
       closeBtn.setText('×');
       closeBtn.addEventListener('click', () => {
         cleanup();
@@ -600,16 +600,16 @@ export class MediaGalleryView extends BasesView implements HoverParent {
    * Render empty state
    */
   private renderEmptyState(mediaType: string): void {
-    const empty = this.containerEl.createDiv('media-gallery-empty');
+    const empty = this.containerEl.createDiv('sa-media-gallery-empty');
 
-    const icon = empty.createDiv('empty-icon');
+    const icon = empty.createDiv('sa-empty-icon');
     icon.setText('🖼️');
 
-    const message = empty.createDiv('empty-message');
+    const message = empty.createDiv('sa-empty-message');
     const typeText = mediaType === 'all' ? 'media' : mediaType;
     message.setText(`No ${typeText} found in your archived posts`);
 
-    const hint = empty.createDiv('empty-hint');
+    const hint = empty.createDiv('sa-empty-hint');
     hint.setText('Try archiving posts with images or videos, or adjust your filters');
   }
 

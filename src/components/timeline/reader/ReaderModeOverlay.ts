@@ -104,13 +104,13 @@ export class ReaderModeOverlay {
 
     // Create backdrop
     this.backdrop = document.createElement('div');
-    this.backdrop.className = 'reader-mode-backdrop';
+    this.backdrop.className = 'sa-reader-mode-backdrop';
     this.backdrop.addEventListener('click', () => this.close());
     document.body.appendChild(this.backdrop);
 
     // Create container
     this.container = document.createElement('div');
-    this.container.className = 'reader-mode-container';
+    this.container.className = 'sa-reader-mode-container';
     document.body.appendChild(this.container);
     this.setupSafeAreaFallback();
 
@@ -118,7 +118,7 @@ export class ReaderModeOverlay {
     this.applyFontSize();
 
     // Single panel
-    this.panel = this.container.createDiv({ cls: 'reader-mode-panel-wrapper rmo-panel-animated' });
+    this.panel = this.container.createDiv({ cls: 'sa-reader-mode-panel-wrapper rmo-panel-animated' });
 
     // Initialize TTS controller (feature-flagged)
     if (FEATURE_READER_TTS_ENABLED) {
@@ -171,8 +171,8 @@ export class ReaderModeOverlay {
 
     // Show overlay immediately
     requestAnimationFrame(() => {
-      this.backdrop?.addClass('reader-mode-backdrop-visible');
-      this.container?.addClass('reader-mode-container-visible');
+      this.backdrop?.addClass('sa-reader-mode-backdrop-visible');
+      this.container?.addClass('sa-reader-mode-container-visible');
     });
 
     // Render content (errors won't prevent overlay from showing)
@@ -230,8 +230,8 @@ export class ReaderModeOverlay {
     this.teardownSafeAreaFallback();
 
     // Animate out then remove
-    this.backdrop?.removeClass('reader-mode-backdrop-visible');
-    this.container?.removeClass('reader-mode-container-visible');
+    this.backdrop?.removeClass('sa-reader-mode-backdrop-visible');
+    this.container?.removeClass('sa-reader-mode-container-visible');
 
     let transitionHandled = false;
     const onTransitionEnd = () => {
@@ -250,7 +250,7 @@ export class ReaderModeOverlay {
 
     if (this.container) {
       this.container.addEventListener('transitionend', onTransitionEnd, { once: true });
-      setTimeout(onTransitionEnd, 400); // Fallback if transitionend doesn't fire
+      window.setTimeout(onTransitionEnd, 400); // Fallback if transitionend doesn't fire
     } else {
       onTransitionEnd();
     }
@@ -394,7 +394,7 @@ export class ReaderModeOverlay {
       '--rmo-transform': `translateX(${direction * 20}px)`,
     });
 
-    setTimeout(() => {
+    window.setTimeout(() => {
       if (!this.panel) return;
       this.panel.setCssProps({
         '--rmo-transition': 'transform 0.2s ease-in',
@@ -485,16 +485,15 @@ export class ReaderModeOverlay {
       const file = vault.getAbstractFileByPath(filePath);
       if (!file || !(file instanceof TFile)) return null;
 
-      const content = await vault.read(file);
       const newArchiveStatus = !post.archive;
-
-      // Update YAML frontmatter
-      const updatedContent = this.updateFrontmatterArchive(content, newArchiveStatus);
 
       // Notify UI-modify to prevent timeline refresh
       this.context.onUIModify?.(filePath);
 
-      await vault.modify(file, updatedContent);
+      // Update YAML frontmatter atomically via processFrontMatter
+      await this.context.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+        fm['archive'] = newArchiveStatus;
+      });
       post.archive = newArchiveStatus;
       this.dirty = true;
 
@@ -503,28 +502,6 @@ export class ReaderModeOverlay {
       console.error('[Social Archiver] Failed to toggle archive');
       return null;
     }
-  }
-
-  private updateFrontmatterArchive(content: string, archive: boolean): string {
-    return this.updateFrontmatterField(content, 'archive', archive);
-  }
-
-  private updateFrontmatterField(content: string, field: string, value: boolean): string {
-    const frontmatterRegex = /^---\n([\s\S]*?)\n---\n/;
-    const match = content.match(frontmatterRegex);
-    if (!match || !match[1]) return content;
-
-    const fm = match[1];
-    const fieldRegex = new RegExp(`^${field}:\\s*.*`, 'm');
-
-    let updatedFm: string;
-    if (fieldRegex.test(fm)) {
-      updatedFm = fm.replace(fieldRegex, `${field}: ${value}`);
-    } else {
-      updatedFm = fm + `\n${field}: ${value}`;
-    }
-
-    return content.replace(frontmatterRegex, `---\n${updatedFm}\n---\n`);
   }
 
   // ---------- Toggle Like ----------
@@ -538,13 +515,12 @@ export class ReaderModeOverlay {
       const file = vault.getAbstractFileByPath(filePath);
       if (!file || !(file instanceof TFile)) return;
 
-      const content = await vault.read(file);
       const newLikeStatus = !post.like;
 
-      const updatedContent = this.updateFrontmatterField(content, 'like', newLikeStatus);
-
       this.context.onUIModify?.(filePath);
-      await vault.modify(file, updatedContent);
+      await this.context.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+        fm['like'] = newLikeStatus;
+      });
       post.like = newLikeStatus;
       this.dirty = true;
 
@@ -578,7 +554,7 @@ export class ReaderModeOverlay {
       const origOnClose = modal.onClose.bind(modal);
       modal.onClose = () => {
         origOnClose();
-        setTimeout(() => { this.modalOpen = false; }, 0);
+        window.setTimeout(() => { this.modalOpen = false; }, 0);
       };
 
       modal.open();
@@ -634,7 +610,7 @@ export class ReaderModeOverlay {
       try {
         await this.context.onDelete(post);
       } finally {
-        setTimeout(() => { this.modalOpen = false; }, 0);
+        window.setTimeout(() => { this.modalOpen = false; }, 0);
       }
       // Post was deleted — remove from list and navigate or close
       const idx = this.context.posts.findIndex(p => p.filePath === post.filePath);
@@ -809,7 +785,7 @@ export class ReaderModeOverlay {
 
     const closeModal = () => {
       overlay.remove();
-      setTimeout(() => { this.modalOpen = false; }, 0);
+      window.setTimeout(() => { this.modalOpen = false; }, 0);
     };
 
     const handleSave = async (overrideValue?: string) => {
@@ -823,11 +799,14 @@ export class ReaderModeOverlay {
       }
 
       try {
-        const content = await vault.read(tfile);
-        const updatedContent = this.updateYamlComment(content, newComment || null);
-
         this.context.onUIModify?.(filePath);
-        await vault.modify(tfile, updatedContent);
+        await this.context.app.fileManager.processFrontMatter(tfile, (fm: Record<string, unknown>) => {
+          if (newComment) {
+            fm['comment'] = newComment;
+          } else {
+            delete fm['comment'];
+          }
+        });
         post.comment = newComment || undefined;
         this.dirty = true;
 
@@ -861,41 +840,6 @@ export class ReaderModeOverlay {
       }
     };
     document.addEventListener('keydown', modalKeyHandler, true);
-  }
-
-  /**
-   * Update the `comment` field in YAML frontmatter.
-   * Null removes the field; a string sets/adds it.
-   */
-  private updateYamlComment(content: string, comment: string | null): string {
-    const frontmatterRegex = /^---\n([\s\S]*?)\n---\n/;
-    const match = content.match(frontmatterRegex);
-    if (!match || !match[1]) return content;
-
-    const lines = match[1].split('\n');
-    const restContent = content.slice(match[0].length);
-    const updatedLines: string[] = [];
-    let found = false;
-
-    for (const line of lines) {
-      const keyMatch = line.match(/^comment:/);
-      if (keyMatch) {
-        found = true;
-        if (comment) {
-          updatedLines.push(`comment: ${JSON.stringify(comment)}`);
-        }
-        // else: skip line to remove
-      } else {
-        updatedLines.push(line);
-      }
-    }
-
-    // Add if not found and value is non-null
-    if (!found && comment) {
-      updatedLines.push(`comment: ${JSON.stringify(comment)}`);
-    }
-
-    return `---\n${updatedLines.join('\n')}\n---\n${restContent}`;
   }
 
   // ---------- Font Size ----------
@@ -984,7 +928,7 @@ export class ReaderModeOverlay {
    */
   private async reRenderPreservingScroll(): Promise<void> {
     // Capture current scroll position before destroying DOM
-    const scrollEl = this.panel?.querySelector('.reader-mode-scroll');
+    const scrollEl = this.panel?.querySelector('.sa-reader-mode-scroll');
     const savedScroll = scrollEl ? scrollEl.scrollTop : 0;
 
     this.cleanupRenderer();
@@ -992,7 +936,7 @@ export class ReaderModeOverlay {
 
     // Restore scroll position after DOM is rebuilt
     if (savedScroll > 0) {
-      const newScrollEl = this.panel?.querySelector('.reader-mode-scroll');
+      const newScrollEl = this.panel?.querySelector('.sa-reader-mode-scroll');
       if (newScrollEl) {
         newScrollEl.scrollTop = savedScroll;
       }
@@ -1075,6 +1019,6 @@ export class ReaderModeOverlay {
   // ---------- Utilities ----------
 
   private wait(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
   }
 }

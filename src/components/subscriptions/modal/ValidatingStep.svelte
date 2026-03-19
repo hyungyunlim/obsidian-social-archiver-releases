@@ -108,7 +108,7 @@ async function startValidation(): Promise<void> {
     progress = 100;
     statusMessage = 'Complete!';
 
-    setTimeout(() => {
+    window.setTimeout(() => {
       onComplete(result);
     }, 300);
   } catch (error) {

@@ -39,7 +39,7 @@ export class TimelineView extends ItemView {
   private suppressRefresh = false; // Suppress refresh during batch operations
   private uiDeletedPaths: Set<string> = new Set(); // Track files deleted via UI to skip refresh
   private uiModifiedPaths: Set<string> = new Set(); // Track files modified via UI to skip refresh
-  private pendingCleanupTimers: Set<ReturnType<typeof setTimeout>> = new Set(); // Track cleanup timers
+  private pendingCleanupTimers: Set<number> = new Set(); // Track cleanup timers
   private timelineSafeAreaListener: (() => void) | null = null;
   private timelineVisualViewport: VisualViewport | null = null;
 
@@ -391,7 +391,7 @@ export class TimelineView extends ItemView {
 
     // Clear all pending cleanup timers
     for (const timer of this.pendingCleanupTimers) {
-      clearTimeout(timer);
+      window.clearTimeout(timer);
     }
     this.pendingCleanupTimers.clear();
 
@@ -453,7 +453,7 @@ export class TimelineView extends ItemView {
   public registerUIDelete(filePath: string): void {
     this.uiDeletedPaths.add(filePath);
     // Auto-cleanup after 5 seconds in case the deletion fails
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       this.pendingCleanupTimers.delete(timer);
       this.uiDeletedPaths.delete(filePath);
     }, 5000);
@@ -468,7 +468,7 @@ export class TimelineView extends ItemView {
   public registerUIModify(filePath: string): void {
     this.uiModifiedPaths.add(filePath);
     // Auto-cleanup after 5 seconds in case the modification fails
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       this.pendingCleanupTimers.delete(timer);
       this.uiModifiedPaths.delete(filePath);
     }, 5000);
@@ -515,7 +515,7 @@ export class TimelineView extends ItemView {
       const viewport = window.visualViewport;
       const viewportTop = Math.max(0, Math.round(viewport?.offsetTop ?? 0));
       const isPortrait = window.innerHeight >= window.innerWidth;
-      const isIPhone = /iPhone/i.test(window.navigator.userAgent);
+      const isIPhone = ObsidianPlatform.isIosApp && ObsidianPlatform.isPhone;
       const screenLongestEdge = Math.round(
         Math.max(window.screen.width || 0, window.screen.height || 0)
       );

@@ -182,7 +182,7 @@ export class ArchiveModal extends Modal {
     // ARIA attributes for modal accessibility
     modalEl.setAttribute('role', 'dialog');
     modalEl.setAttribute('aria-modal', 'true');
-    modalEl.setAttribute('aria-labelledby', 'archive-modal-title');
+    modalEl.setAttribute('aria-labelledby', 'sa-archive-modal-title');
 
     // Mobile modal size adjustments
     contentEl.addClass('am-content--archive');
@@ -198,16 +198,16 @@ export class ArchiveModal extends Modal {
     }
 
     // Title with id for ARIA labelledby
-    const title = contentEl.createEl('h2', { text: 'Archive social post', cls: 'archive-modal-title' });
-    title.id = 'archive-modal-title';
+    const title = contentEl.createEl('h2', { text: 'Archive social post', cls: 'sa-archive-modal-title' });
+    title.id = 'sa-archive-modal-title';
 
     // URL Input (full width, separate line)
-    const inputContainer = contentEl.createDiv({ cls: 'archive-url-container' });
+    const inputContainer = contentEl.createDiv({ cls: 'sa-archive-url-container' });
 
     this.urlInput = inputContainer.createEl('input', {
       type: 'text',
       placeholder: 'Paste URL from Facebook, LinkedIn, Instagram, TikTok, X, Threads, YouTube, Reddit, Pinterest, Substack, Tumblr, Mastodon, or Bluesky',
-      cls: 'archive-url-input',
+      cls: 'sa-archive-url-input',
       value: this.url
     });
 
@@ -233,7 +233,7 @@ export class ArchiveModal extends Modal {
     });
 
     // Platform Badge (shown when detected)
-    this.platformBadge = contentEl.createDiv({ cls: 'archive-platform-badge' });
+    this.platformBadge = contentEl.createDiv({ cls: 'sa-archive-platform-badge' });
     this.platformBadge.id = 'platform-badge';
     this.platformBadge.setAttribute('aria-live', 'polite');
 
@@ -283,7 +283,7 @@ export class ArchiveModal extends Modal {
       );
 
     // YouTube-specific options (hidden by default)
-    this.youtubeOptions = contentEl.createDiv({ cls: 'archive-youtube-options' });
+    this.youtubeOptions = contentEl.createDiv({ cls: 'sa-archive-youtube-options' });
     this.youtubeOptions.addClass('sa-hidden');
 
     new Setting(this.youtubeOptions)
@@ -309,15 +309,15 @@ export class ArchiveModal extends Modal {
       );
 
     // Comment section (shown when URL is detected)
-    this.commentContainer = contentEl.createDiv({ cls: 'archive-comment-container' });
+    this.commentContainer = contentEl.createDiv({ cls: 'sa-archive-comment-container' });
     this.commentContainer.addClass('sa-hidden');
     this.commentContainer.addClass('sa-mt-12');
 
-    const commentLabel = this.commentContainer.createDiv({ cls: 'archive-comment-label' });
+    const commentLabel = this.commentContainer.createDiv({ cls: 'sa-archive-comment-label' });
     commentLabel.setText('💭 my notes (optional)');
 
     this.commentTextarea = this.commentContainer.createEl('textarea', {
-      cls: 'archive-comment-textarea',
+      cls: 'sa-archive-comment-textarea',
       placeholder: 'Add your thoughts, tags, or reminders about this post...'
     });
     this.commentTextarea.addEventListener('input', (e) => {
@@ -362,7 +362,7 @@ export class ArchiveModal extends Modal {
     this.profileActionButtons.addClass('sa-hidden');
 
     // Disclaimer (minimal, with Lucide icon)
-    this.disclaimerEl = contentEl.createDiv({ cls: 'archive-disclaimer' });
+    this.disclaimerEl = contentEl.createDiv({ cls: 'sa-archive-disclaimer' });
     this.disclaimerEl.addClass('sa-flex-row');
     this.disclaimerEl.addClass('sa-text-faint');
     this.disclaimerEl.addClass('am-disclaimer');
@@ -425,7 +425,7 @@ export class ArchiveModal extends Modal {
     }
 
     // Focus input
-    setTimeout(() => this.urlInput.focus(), 100);
+    window.setTimeout(() => this.urlInput.focus(), 100);
 
     // Initial validation if URL provided
     if (this.url) {
@@ -2465,21 +2465,12 @@ export class ArchiveModal extends Modal {
       placeholder: 'Search or create tag...',
       cls: 'archive-tag-search-input',
     });
-    searchInput.addClass('sa-box-border');
-    searchInput.style.width = '100%';
-    searchInput.style.padding = '6px 8px';
-    searchInput.style.fontSize = '13px';
+    searchInput.addClass('sa-box-border', 'am-tag-search-input');
     searchInput.maxLength = TAG_NAME_MAX_LENGTH;
 
     // Dropdown list
     const dropdown = container.createDiv({ cls: 'archive-tag-dropdown' });
-    dropdown.addClass('sa-hidden');
-    dropdown.style.maxHeight = '150px';
-    dropdown.style.overflowY = 'auto';
-    dropdown.style.border = '1px solid var(--background-modifier-border)';
-    dropdown.style.borderRadius = '6px';
-    dropdown.style.marginTop = '4px';
-    dropdown.style.backgroundColor = 'var(--background-primary)';
+    dropdown.addClass('sa-hidden', 'am-tag-dropdown');
 
     let highlightedIndex = -1;
 
@@ -2514,37 +2505,21 @@ export class ArchiveModal extends Modal {
       // Render available tags
       for (const tag of available.slice(0, 10)) {
         const row = dropdown.createDiv({ cls: 'archive-tag-dropdown-item' });
-        row.style.padding = '6px 10px';
-        row.style.cursor = 'pointer';
-        row.style.display = 'flex';
-        row.style.alignItems = 'center';
-        row.style.gap = '8px';
-        row.style.fontSize = '13px';
+        row.addClass('am-tag-dropdown-row');
 
         if (tag.color) {
           const dot = row.createSpan();
-          dot.style.width = '8px';
-          dot.style.height = '8px';
-          dot.style.borderRadius = '50%';
+          dot.addClass('am-tag-color-dot');
           dot.style.backgroundColor = tag.color;
-          dot.style.flexShrink = '0';
         }
 
         row.createSpan({ text: tag.name });
 
         if (tag.archiveCount > 0) {
           const count = row.createSpan({ text: String(tag.archiveCount) });
-          count.style.marginLeft = 'auto';
-          count.style.opacity = '0.5';
-          count.style.fontSize = '11px';
+          count.addClass('am-tag-count');
         }
 
-        row.addEventListener('mouseenter', () => {
-          row.style.backgroundColor = 'var(--background-modifier-hover)';
-        });
-        row.addEventListener('mouseleave', () => {
-          row.style.backgroundColor = '';
-        });
         row.addEventListener('click', () => {
           this.selectedTags.push(tag.name);
           searchInput.value = '';
@@ -2558,23 +2533,10 @@ export class ArchiveModal extends Modal {
       // "Create new tag" option if query doesn't match any existing tag exactly
       if (trimmed && !queryValidationError && !allTags.some(t => t.name.toLowerCase() === trimmed)) {
         const createRow = dropdown.createDiv({ cls: 'archive-tag-dropdown-item' });
-        createRow.style.padding = '6px 10px';
-        createRow.style.cursor = 'pointer';
-        createRow.style.display = 'flex';
-        createRow.style.alignItems = 'center';
-        createRow.style.gap = '6px';
-        createRow.style.fontSize = '13px';
-        createRow.style.fontStyle = 'italic';
-        createRow.style.color = 'var(--text-accent)';
+        createRow.addClass('am-tag-create-row');
 
         createRow.createSpan({ text: `+ Create "${query.trim()}"` });
 
-        createRow.addEventListener('mouseenter', () => {
-          createRow.style.backgroundColor = 'var(--background-modifier-hover)';
-        });
-        createRow.addEventListener('mouseleave', () => {
-          createRow.style.backgroundColor = '';
-        });
         createRow.addEventListener('click', () => {
           const newTagName = query.trim();
           const validationError = validateTagName(newTagName);
@@ -2591,10 +2553,7 @@ export class ArchiveModal extends Modal {
         });
       } else if (queryValidationError) {
         const invalidRow = dropdown.createDiv({ cls: 'archive-tag-dropdown-item' });
-        invalidRow.style.padding = '6px 10px';
-        invalidRow.style.fontSize = '12px';
-        invalidRow.style.color = 'var(--text-error)';
-        invalidRow.style.cursor = 'default';
+        invalidRow.addClass('am-tag-invalid-row');
         invalidRow.setText(`⚠ ${queryValidationError}`);
       }
     };
@@ -2610,7 +2569,7 @@ export class ArchiveModal extends Modal {
     // Close dropdown on outside click
     searchInput.addEventListener('blur', () => {
       // Delay to allow dropdown click to register
-      setTimeout(() => {
+      window.setTimeout(() => {
         dropdown.addClass('sa-hidden');
       }, 200);
     });
@@ -2622,13 +2581,13 @@ export class ArchiveModal extends Modal {
         e.preventDefault();
         highlightedIndex = Math.min(highlightedIndex + 1, items.length - 1);
         items.forEach((item, idx) => {
-          (item as HTMLElement).style.backgroundColor = idx === highlightedIndex ? 'var(--background-modifier-hover)' : '';
+          (item as HTMLElement).toggleClass('am-tag-dropdown-row-highlighted', idx === highlightedIndex);
         });
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         highlightedIndex = Math.max(highlightedIndex - 1, 0);
         items.forEach((item, idx) => {
-          (item as HTMLElement).style.backgroundColor = idx === highlightedIndex ? 'var(--background-modifier-hover)' : '';
+          (item as HTMLElement).toggleClass('am-tag-dropdown-row-highlighted', idx === highlightedIndex);
         });
       } else if (e.key === 'Enter') {
         e.preventDefault();
@@ -2671,23 +2630,13 @@ export class ArchiveModal extends Modal {
 
     for (const tagName of this.selectedTags) {
       const chip = chipsArea.createDiv({ cls: 'archive-tag-chip' });
-      chip.style.display = 'inline-flex';
-      chip.style.alignItems = 'center';
-      chip.style.gap = '4px';
-      chip.style.padding = '2px 8px';
-      chip.style.borderRadius = '12px';
-      chip.style.fontSize = '12px';
-      chip.style.cursor = 'pointer';
-      chip.style.backgroundColor = 'var(--background-modifier-hover)';
-      chip.style.border = '1px solid var(--background-modifier-border)';
+      chip.addClass('am-tag-chip');
 
       // Color dot from tag definition
       const tagDef = this.plugin.tagStore.getTagByName(tagName);
       if (tagDef?.color) {
         const dot = chip.createSpan();
-        dot.style.width = '6px';
-        dot.style.height = '6px';
-        dot.style.borderRadius = '50%';
+        dot.addClass('am-tag-chip-dot');
         dot.style.backgroundColor = tagDef.color;
       }
 
@@ -2695,9 +2644,7 @@ export class ArchiveModal extends Modal {
 
       // Remove button
       const removeBtn = chip.createSpan({ text: '×' });
-      removeBtn.style.marginLeft = '2px';
-      removeBtn.style.fontWeight = 'bold';
-      removeBtn.style.opacity = '0.6';
+      removeBtn.addClass('am-tag-chip-remove');
 
       chip.addEventListener('click', () => {
         this.selectedTags = this.selectedTags.filter(t => t !== tagName);

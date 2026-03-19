@@ -78,11 +78,11 @@ export class ReaderModeContentRenderer extends Component {
     callbacks: ReaderContentCallbacks
   ): Promise<void> {
     container.empty();
-    container.addClass('reader-mode-panel');
+    container.addClass('sa-reader-mode-panel');
 
     // 1. Header bar (fixed, outside scroll area)
-    const headerWrapper = container.createDiv({ cls: 'reader-mode-header-wrapper' });
-    const headerContent = headerWrapper.createDiv({ cls: 'reader-mode-header-content' });
+    const headerWrapper = container.createDiv({ cls: 'sa-reader-mode-header-wrapper' });
+    const headerContent = headerWrapper.createDiv({ cls: 'sa-reader-mode-header-content' });
     this.renderHeader(headerContent, index, total, post, callbacks);
 
     // TTS mini controller (below header, hidden until TTS starts)
@@ -91,11 +91,11 @@ export class ReaderModeContentRenderer extends Component {
     }
 
     // Scrollable inner wrapper (scrollbar hidden for cleaner reading experience)
-    // Webkit: .reader-mode-scroll::-webkit-scrollbar{display:none} in misc-components.css
-    const scrollArea = container.createDiv({ cls: 'reader-mode-scroll rmcr-scroll-hide' });
+    // Webkit: .sa-reader-mode-scroll::-webkit-scrollbar{display:none} in misc-components.css
+    const scrollArea = container.createDiv({ cls: 'sa-reader-mode-scroll rmcr-scroll-hide' });
 
     // Centered content wrapper (max-width 680px)
-    const content = scrollArea.createDiv({ cls: 'reader-mode-content' });
+    const content = scrollArea.createDiv({ cls: 'sa-reader-mode-content' });
 
     // 2. Author section
     this.renderAuthor(content, post, callbacks);
@@ -115,7 +115,7 @@ export class ReaderModeContentRenderer extends Component {
 
     // 5.5 External link preview
     if (post.metadata?.externalLink) {
-      const linkContainer = content.createDiv({ cls: 'reader-mode-external-link' });
+      const linkContainer = content.createDiv({ cls: 'sa-reader-mode-external-link' });
       linkContainer.addClass('sa-my-16');
       void this.linkPreviewRenderer.renderCompact(linkContainer, post.metadata.externalLink);
     }
@@ -153,10 +153,10 @@ export class ReaderModeContentRenderer extends Component {
     post: PostData,
     callbacks: ReaderContentCallbacks,
   ): void {
-    const header = parent.createDiv({ cls: 'reader-mode-header' });
+    const header = parent.createDiv({ cls: 'sa-reader-mode-header' });
 
     // Left group: close button
-    const closeBtn = header.createDiv({ cls: 'reader-mode-header-btn' });
+    const closeBtn = header.createDiv({ cls: 'sa-reader-mode-header-btn' });
     closeBtn.setAttribute('title', 'Close reader (esc)');
     setIcon(closeBtn, 'x');
     closeBtn.addEventListener('click', (e) => {
@@ -165,14 +165,14 @@ export class ReaderModeContentRenderer extends Component {
     });
 
     // Position label (center)
-    const posLabel = header.createDiv({ cls: 'reader-mode-position' });
+    const posLabel = header.createDiv({ cls: 'sa-reader-mode-position' });
     posLabel.textContent = `${index + 1} / ${total}`;
 
     // Right group: font controls | copy
-    const rightGroup = header.createDiv({ cls: 'reader-mode-header-right' });
+    const rightGroup = header.createDiv({ cls: 'sa-reader-mode-header-right' });
 
     // Font size decrease
-    const fontDecBtn = rightGroup.createDiv({ cls: 'reader-mode-header-btn' });
+    const fontDecBtn = rightGroup.createDiv({ cls: 'sa-reader-mode-header-btn' });
     fontDecBtn.setAttribute('title', 'Decrease font size');
     setIcon(fontDecBtn, 'minus');
     fontDecBtn.addEventListener('click', (e) => {
@@ -181,7 +181,7 @@ export class ReaderModeContentRenderer extends Component {
     });
 
     // Font size increase
-    const fontIncBtn = rightGroup.createDiv({ cls: 'reader-mode-header-btn' });
+    const fontIncBtn = rightGroup.createDiv({ cls: 'sa-reader-mode-header-btn' });
     fontIncBtn.setAttribute('title', 'Increase font size');
     setIcon(fontIncBtn, 'plus');
     fontIncBtn.addEventListener('click', (e) => {
@@ -195,7 +195,7 @@ export class ReaderModeContentRenderer extends Component {
     }
 
     // Copy text button
-    const copyBtn = rightGroup.createDiv({ cls: 'reader-mode-header-btn' });
+    const copyBtn = rightGroup.createDiv({ cls: 'sa-reader-mode-header-btn' });
     copyBtn.setAttribute('title', 'Copy text');
     setIcon(copyBtn, 'copy');
     copyBtn.addEventListener('click', (e) => {
@@ -209,10 +209,10 @@ export class ReaderModeContentRenderer extends Component {
   // ---------- Author ----------
 
   private renderAuthor(parent: HTMLElement, post: PostData, callbacks: ReaderContentCallbacks): void {
-    const authorSection = parent.createDiv({ cls: 'reader-mode-author' });
+    const authorSection = parent.createDiv({ cls: 'sa-reader-mode-author' });
 
     // Avatar (clickable if author URL exists)
-    const avatarEl = authorSection.createDiv({ cls: 'reader-mode-avatar' });
+    const avatarEl = authorSection.createDiv({ cls: 'sa-reader-mode-avatar' });
     if (post.author.url) {
       avatarEl.addClass('sa-clickable');
       avatarEl.setAttribute('title', `Visit ${post.author.name}'s profile`);
@@ -238,13 +238,13 @@ export class ReaderModeContentRenderer extends Component {
     }
 
     // Info column
-    const info = authorSection.createDiv({ cls: 'reader-mode-author-info' });
+    const info = authorSection.createDiv({ cls: 'sa-reader-mode-author-info' });
 
     // Name row (name + platform icon + subscribe badge)
-    const nameRow = info.createDiv({ cls: 'reader-mode-author-name-row' });
+    const nameRow = info.createDiv({ cls: 'sa-reader-mode-author-name-row' });
 
     // Author name (clickable if author URL exists)
-    const authorNameEl = nameRow.createSpan({ text: post.author.name, cls: 'reader-mode-author-name' });
+    const authorNameEl = nameRow.createSpan({ text: post.author.name, cls: 'sa-reader-mode-author-name' });
     if (post.author.url) {
       authorNameEl.addClass('sa-clickable');
       authorNameEl.addClass('sa-transition-color');
@@ -266,7 +266,7 @@ export class ReaderModeContentRenderer extends Component {
     const originalUrl = this.getPostOriginalUrl(post);
     const platformIcon = getPlatformSimpleIcon(post.platform);
     if (platformIcon) {
-      const iconEl = nameRow.createDiv({ cls: 'reader-mode-platform-icon' });
+      const iconEl = nameRow.createDiv({ cls: 'sa-reader-mode-platform-icon' });
       const svg = createCustomSVG('0 0 24 24', platformIcon.path);
       svg.addClass('rmcr-platform-svg');
       iconEl.appendChild(svg);
@@ -289,7 +289,7 @@ export class ReaderModeContentRenderer extends Component {
     } else {
       const lucideIcon = getPlatformLucideIcon(post.platform);
       if (lucideIcon) {
-        const iconEl = nameRow.createDiv({ cls: 'reader-mode-platform-icon' });
+        const iconEl = nameRow.createDiv({ cls: 'sa-reader-mode-platform-icon' });
         setIcon(iconEl, lucideIcon);
         if (originalUrl) {
           iconEl.addClass('sa-clickable');
@@ -316,7 +316,7 @@ export class ReaderModeContentRenderer extends Component {
     }
 
     // Handle + timestamp row
-    const metaRow = info.createDiv({ cls: 'reader-mode-author-meta' });
+    const metaRow = info.createDiv({ cls: 'sa-reader-mode-author-meta' });
     const handle = post.author.handle || post.author.username;
     if (handle) {
       metaRow.createSpan({ text: handle.startsWith('@') ? handle : `@${handle}` });
@@ -405,17 +405,17 @@ export class ReaderModeContentRenderer extends Component {
   // ---------- Tags ----------
 
   private renderTags(parent: HTMLElement, tags: string[]): void {
-    const tagContainer = parent.createDiv({ cls: 'reader-mode-tags' });
+    const tagContainer = parent.createDiv({ cls: 'sa-reader-mode-tags' });
 
     const tagStore = this.plugin.tagStore;
     const definitions = tagStore ? tagStore.getTagDefinitions() : [];
 
     for (const tag of tags) {
-      const chip = tagContainer.createDiv({ cls: 'reader-mode-tag' });
+      const chip = tagContainer.createDiv({ cls: 'sa-reader-mode-tag' });
 
       // Color dot
       const def = definitions.find(d => d.name.toLowerCase() === tag.toLowerCase());
-      const dot = chip.createDiv({ cls: 'reader-mode-tag-dot' });
+      const dot = chip.createDiv({ cls: 'sa-reader-mode-tag-dot' });
       if (def?.color) {
         dot.setCssProps({ '--sa-bg': def.color });
         dot.addClass('sa-dynamic-bg');
@@ -428,14 +428,14 @@ export class ReaderModeContentRenderer extends Component {
   // ---------- Title ----------
 
   private renderTitle(parent: HTMLElement, title: string): void {
-    const titleEl = parent.createEl('h2', { cls: 'reader-mode-title' });
+    const titleEl = parent.createEl('h2', { cls: 'sa-reader-mode-title' });
     titleEl.textContent = title;
   }
 
   // ---------- Body ----------
 
   private async renderBody(parent: HTMLElement, post: PostData): Promise<void> {
-    const bodyEl = parent.createDiv({ cls: 'reader-mode-body' });
+    const bodyEl = parent.createDiv({ cls: 'sa-reader-mode-body' });
 
     // Use rawMarkdown first (for blog posts with inline images), then markdown, then text
     let source = post.content.rawMarkdown || post.content.markdown || post.content.text || '';
@@ -467,11 +467,11 @@ export class ReaderModeContentRenderer extends Component {
     quoted: Omit<PostData, 'quotedPost' | 'embeddedArchives'>,
     sourcePath: string
   ): Promise<void> {
-    const wrapper = parent.createDiv({ cls: 'reader-mode-quoted-post' });
+    const wrapper = parent.createDiv({ cls: 'sa-reader-mode-quoted-post' });
     wrapper.addClass('sa-p-16');
     wrapper.addClass('sa-rounded-4');
     wrapper.addClass('sa-bg-secondary');
-    wrapper.addClass('reader-mode-quoted-post');
+    wrapper.addClass('sa-reader-mode-quoted-post');
 
     // Header: platform icon + author
     const header = wrapper.createDiv();
@@ -499,7 +499,7 @@ export class ReaderModeContentRenderer extends Component {
     // Body text — inherit reader font size via CSS variable (slightly smaller)
     const bodyText = quoted.content?.text || quoted.content?.markdown || '';
     if (bodyText.trim()) {
-      const bodyEl = wrapper.createDiv({ cls: 'reader-mode-body rmcr-quoted-body' });
+      const bodyEl = wrapper.createDiv({ cls: 'sa-reader-mode-body rmcr-quoted-body' });
       const escaped = bodyText.replace(/</g, '&lt;').replace(/>/g, '&gt;');
       await MarkdownRenderer.render(this.app, escaped, bodyEl, sourcePath, this);
     }
@@ -529,15 +529,15 @@ export class ReaderModeContentRenderer extends Component {
   // ---------- Media ----------
 
   private renderMedia(parent: HTMLElement, post: PostData): void {
-    const mediaContainer = parent.createDiv({ cls: 'reader-mode-media' });
+    const mediaContainer = parent.createDiv({ cls: 'sa-reader-mode-media' });
     this.mediaGalleryRenderer.render(mediaContainer, post.media, post);
   }
 
   // ---------- Engagement Metric Helper ----------
 
   private renderMetric(parent: HTMLElement, icon: string, value: string): void {
-    const item = parent.createDiv({ cls: 'reader-mode-metric' });
-    const iconEl = item.createDiv({ cls: 'reader-mode-metric-icon' });
+    const item = parent.createDiv({ cls: 'sa-reader-mode-metric' });
+    const iconEl = item.createDiv({ cls: 'sa-reader-mode-metric-icon' });
     setIcon(iconEl, icon);
     item.createSpan({ text: value });
   }
@@ -548,7 +548,7 @@ export class ReaderModeContentRenderer extends Component {
     const url = post.url;
     if (!url || url.startsWith('/') || url.startsWith('Social Archives')) return;
 
-    const linkContainer = parent.createDiv({ cls: 'reader-mode-source' });
+    const linkContainer = parent.createDiv({ cls: 'sa-reader-mode-source' });
     const link = linkContainer.createEl('a', {
       text: 'View original',
       href: url,
@@ -570,10 +570,10 @@ export class ReaderModeContentRenderer extends Component {
     post: PostData,
     callbacks: ReaderContentCallbacks,
   ): void {
-    const bar = parent.createDiv({ cls: 'reader-mode-action-bar' });
+    const bar = parent.createDiv({ cls: 'sa-reader-mode-action-bar' });
 
     // Left: engagement metrics (display-only)
-    const metricsGroup = bar.createDiv({ cls: 'reader-mode-action-bar-metrics' });
+    const metricsGroup = bar.createDiv({ cls: 'sa-reader-mode-action-bar-metrics' });
     const m = post.metadata;
     if (m.likes) this.renderMetric(metricsGroup, 'heart', this.formatNumber(m.likes));
     if (m.comments) this.renderMetric(metricsGroup, 'message-circle', this.formatNumber(m.comments));
@@ -581,10 +581,10 @@ export class ReaderModeContentRenderer extends Component {
     if (m.views) this.renderMetric(metricsGroup, 'eye', this.formatNumber(m.views));
 
     // Spacer
-    bar.createDiv({ cls: 'reader-mode-action-bar-spacer' });
+    bar.createDiv({ cls: 'sa-reader-mode-action-bar-spacer' });
 
     // Right: action buttons
-    const actionsGroup = bar.createDiv({ cls: 'reader-mode-action-bar-actions' });
+    const actionsGroup = bar.createDiv({ cls: 'sa-reader-mode-action-bar-actions' });
 
     // 1. Star (personal like)
     this.renderActionBtn(actionsGroup, {
@@ -666,7 +666,7 @@ export class ReaderModeContentRenderer extends Component {
       onClick: () => void;
     },
   ): void {
-    const btn = parent.createDiv({ cls: 'reader-mode-action-btn' });
+    const btn = parent.createDiv({ cls: 'sa-reader-mode-action-btn' });
     btn.setAttribute('title', opts.title);
 
     if (opts.active) {

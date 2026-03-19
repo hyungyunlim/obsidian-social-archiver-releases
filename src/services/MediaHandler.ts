@@ -160,8 +160,7 @@ class MediaPathGenerator {
   generateFilename(url: string, index: number, postId: string, authorUsername: string, outputExtension?: string | null): string {
     try {
       // Get current date for archiving timestamp
-      const now = new Date();
-      const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+      const date = window.moment().format('YYYYMMDD');
 
       // Get extension (use outputExtension if provided, otherwise extract from URL)
       let extension = outputExtension || this.getExtensionFromUrl(url) || 'bin';

@@ -1,16 +1,16 @@
 /* Legacy split chunk: 10-archive.css (preserves original rule order) */
 
-.archive-modal-title {
+.sa-archive-modal-title {
   margin-bottom: 20px;
   font-size: 18px;
   font-weight: 600
 }
 
-.archive-url-container {
+.sa-archive-url-container {
   margin-bottom: 16px
 }
 
-.archive-url-input {
+.sa-archive-url-input {
   width: 100%;
   padding: 8px 12px;
   font-family: var(--font-monospace);
@@ -22,22 +22,22 @@
   transition: border-color .1s ease
 }
 
-.archive-url-input:focus {
+.sa-archive-url-input:focus {
   outline: none;
   border-color: var(--interactive-accent)
 }
 
-.archive-url-input::-moz-placeholder {
+.sa-archive-url-input::-moz-placeholder {
   color: var(--text-muted);
   font-size: 12px
 }
 
-.archive-url-input::placeholder {
+.sa-archive-url-input::placeholder {
   color: var(--text-muted);
   font-size: 12px
 }
 
-.archive-platform-badge {
+.sa-archive-platform-badge {
   margin-bottom: 12px;
   padding: 4px 0;
   font-size: 11px;
@@ -45,43 +45,43 @@
   font-weight: 500
 }
 
-.archive-youtube-options {
+.sa-archive-youtube-options {
   margin-bottom: 16px;
   padding: 0;
   border: none
 }
 
-.archive-youtube-options .setting-item {
+.sa-archive-youtube-options .setting-item {
   border-top: none;
   padding: 6px 0
 }
 
-.archive-youtube-options .setting-item:first-child {
+.sa-archive-youtube-options .setting-item:first-child {
   padding-top: 0
 }
 
-.archive-youtube-options .setting-item:last-child {
+.sa-archive-youtube-options .setting-item:last-child {
   padding-bottom: 0
 }
 
-.archive-youtube-options .setting-item-name {
+.sa-archive-youtube-options .setting-item-name {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-normal)
 }
 
-.archive-youtube-options .setting-item-description {
+.sa-archive-youtube-options .setting-item-description {
   font-size: 11px;
   color: var(--text-muted);
   line-height: 1.3;
   margin-top: 2px
 }
 
-.archive-youtube-options .setting-item-control {
+.sa-archive-youtube-options .setting-item-control {
   flex-shrink: 0
 }
 
-.archive-disclaimer {
+.sa-archive-disclaimer {
   margin-bottom: 20px;
   padding: 8px 0 8px 12px;
   font-size: 11px;
@@ -101,9 +101,9 @@
   border-top: 1px solid var(--background-modifier-border)
 }
 
-.tiktok-embed-container,
-.tiktok-embed-container iframe {
-  background: var(--background-secondary) !important
+.tiktok-embed-container.tiktok-embed-container,
+.tiktok-embed-container.tiktok-embed-container iframe {
+  background: var(--background-secondary)
 }
 
 .tiktok-embed iframe:before {
@@ -114,18 +114,18 @@
   z-index: -1
 }
 
-.archive-comment-container {
+.sa-archive-comment-container {
   margin-bottom: 16px
 }
 
-.archive-comment-label {
+.sa-archive-comment-label {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-normal);
   margin-bottom: 8px
 }
 
-.archive-comment-textarea {
+.sa-archive-comment-textarea {
   width: 100%;
   min-height: 80px;
   padding: 8px 12px;
@@ -140,22 +140,22 @@
   transition: border-color .1s ease
 }
 
-.archive-comment-textarea:focus {
+.sa-archive-comment-textarea:focus {
   outline: none;
   border-color: var(--interactive-accent)
 }
 
-.archive-comment-textarea::-moz-placeholder {
+.sa-archive-comment-textarea::-moz-placeholder {
   color: var(--text-muted);
   font-size: 12px
 }
 
-.archive-comment-textarea::placeholder {
+.sa-archive-comment-textarea::placeholder {
   color: var(--text-muted);
   font-size: 12px
 }
 
-.link-preview-image-container {
+.sa-link-preview-image-container {
   width: 120px;
   min-width: 120px;
   background: var(--background-secondary);
@@ -163,7 +163,7 @@
   overflow: hidden
 }
 
-.link-preview-image {
+.sa-link-preview-image {
   width: 100%;
   height: 100%;
   -o-object-fit: cover;
@@ -171,12 +171,12 @@
   display: block
 }
 
-.archive-suggestion-modal {
+.sa-archive-suggestion-modal {
   padding: 20px;
   max-width: 500px
 }
 
-.archive-suggestion-header {
+.sa-archive-suggestion-header {
   margin-top: 0;
   margin-bottom: 16px;
   font-size: 1.5em;
@@ -184,7 +184,7 @@
   color: var(--text-normal)
 }
 
-.archive-suggestion-platform-badge {
+.sa-archive-suggestion-platform-badge {
   margin: 10px 0;
   padding: 8px 12px;
   background: var(--background-modifier-border);
@@ -193,19 +193,19 @@
   color: var(--text-normal)
 }
 
-.archive-suggestion-platform-badge .platform-icon {
+.sa-archive-suggestion-platform-badge .platform-icon {
   font-size: 1.2em;
   margin-right: 6px
 }
 
-.archive-suggestion-description {
+.sa-archive-suggestion-description {
   margin: 15px 0;
   font-size: 1em;
   color: var(--text-normal);
   line-height: 1.5
 }
 
-.archive-suggestion-url-preview {
+.sa-archive-suggestion-url-preview {
   margin: 15px 0;
   padding: 10px;
   background: var(--background-secondary);
@@ -213,13 +213,13 @@
   overflow-x: auto
 }
 
-.archive-suggestion-url-preview code {
+.sa-archive-suggestion-url-preview code {
   font-size: .9em;
   color: var(--text-muted);
   font-family: var(--font-monospace)
 }
 
-.archive-suggestion-credit-info {
+.sa-archive-suggestion-credit-info {
   margin: 10px 0;
   padding: 8px 12px;
   background: var(--background-modifier-message);
@@ -229,7 +229,7 @@
   color: var(--text-muted)
 }
 
-.archive-suggestion-buttons {
+.sa-archive-suggestion-buttons {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
@@ -238,7 +238,7 @@
   border-top: 1px solid var(--background-modifier-border)
 }
 
-.archive-suggestion-buttons button {
+.sa-archive-suggestion-buttons button {
   padding: 8px 16px;
   font-size: 14px;
   cursor: pointer;
@@ -246,7 +246,7 @@
   transition: all .2s ease
 }
 
-.archive-suggestion-buttons button:disabled {
+.sa-archive-suggestion-buttons button:disabled {
   opacity: .6;
   cursor: not-allowed
 }

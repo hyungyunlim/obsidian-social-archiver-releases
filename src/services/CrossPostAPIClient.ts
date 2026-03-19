@@ -342,7 +342,7 @@ export class CrossPostAPIClient implements IService {
     const bytes = new Uint8Array(arrayBuffer);
     let binary = '';
     for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]!);
+      binary += String.fromCharCode(bytes[i] ?? 0);
     }
     const base64Data = btoa(binary);
 
@@ -487,7 +487,7 @@ export class CrossPostAPIClient implements IService {
    * Sleep helper for retry delays
    */
   private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
   }
 
   /**

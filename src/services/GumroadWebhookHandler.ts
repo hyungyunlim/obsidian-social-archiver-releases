@@ -66,7 +66,7 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
   private handlerData?: WebhookHandlerData;
 
   // Processing queue
-  private processingInterval?: NodeJS.Timeout;
+  private processingInterval?: number;
 
   constructor(config: GumroadWebhookHandlerConfig, logger?: Logger) {
     this.config = {
@@ -588,7 +588,7 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
   private startQueueProcessing(): void {
     this.stopQueueProcessing();
 
-    this.processingInterval = setInterval(() => {
+    this.processingInterval = window.setInterval(() => {
       void this.processQueuedEvents();
     }, 60000); // Check every minute
 
@@ -600,7 +600,7 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
    */
   private stopQueueProcessing(): void {
     if (this.processingInterval) {
-      clearInterval(this.processingInterval);
+      window.clearInterval(this.processingInterval);
       this.processingInterval = undefined;
       this.logger?.debug('Queue processing stopped');
     }

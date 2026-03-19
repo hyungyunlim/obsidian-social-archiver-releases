@@ -627,7 +627,7 @@ export class NaverCafeLocalService {
         }
 
         // Small delay between requests
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => window.setTimeout(resolve, 300));
       } catch {
         break;
       }
@@ -1480,7 +1480,7 @@ export class NaverCafeLocalService {
           if (posts.length >= limit) break;
 
           // Rate limit: small delay between fetches (300ms)
-          await new Promise(r => setTimeout(r, 300));
+          await new Promise(r => window.setTimeout(r, 300));
         } catch {
           // Continue with next article instead of failing completely
         }
@@ -1501,7 +1501,7 @@ export class NaverCafeLocalService {
 
       // Small delay between page fetches
       if (hasMore && posts.length < limit) {
-        await new Promise(r => setTimeout(r, 200));
+        await new Promise(r => window.setTimeout(r, 200));
       }
     }
 

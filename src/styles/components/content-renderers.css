@@ -567,114 +567,114 @@
  * Replaces createElement('style') block.
  * Provides compact markdown overrides inside AI comments.
  */
-.ai-comment-plain,
-.ai-comment-plain * {
-  font-size: 13px !important;
-  font-weight: normal !important;
-  line-height: 1.5 !important;
+.ai-comment-plain.ai-comment-plain,
+.ai-comment-plain.ai-comment-plain * {
+  font-size: 13px;
+  font-weight: normal;
+  line-height: 1.5;
 }
 
-.ai-comment-plain h1,
-.ai-comment-plain h2,
-.ai-comment-plain h3,
-.ai-comment-plain h4,
-.ai-comment-plain h5,
-.ai-comment-plain h6 {
-  font-size: 13px !important;
-  font-weight: 600 !important;
-  margin-top: 1em !important;
-  margin-bottom: 0.3em !important;
-  padding: 0 !important;
-  display: block !important;
+.ai-comment-plain.ai-comment-plain h1,
+.ai-comment-plain.ai-comment-plain h2,
+.ai-comment-plain.ai-comment-plain h3,
+.ai-comment-plain.ai-comment-plain h4,
+.ai-comment-plain.ai-comment-plain h5,
+.ai-comment-plain.ai-comment-plain h6 {
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 1em;
+  margin-bottom: 0.3em;
+  padding: 0;
+  display: block;
 }
 
-.ai-comment-plain h1 {
-  margin-top: 1.5em !important;
+.ai-comment-plain.ai-comment-plain h1 {
+  margin-top: 1.5em;
 }
 
-.ai-comment-plain h2 {
-  margin-top: 1.2em !important;
+.ai-comment-plain.ai-comment-plain h2 {
+  margin-top: 1.2em;
 }
 
-.ai-comment-plain > h1:first-child,
-.ai-comment-plain > h2:first-child,
-.ai-comment-plain > h3:first-child,
-.ai-comment-plain > p:first-child + h1,
-.ai-comment-plain > p:first-child + h2,
-.ai-comment-plain > p:first-child + h3 {
-  margin-top: 0.5em !important;
+.ai-comment-plain.ai-comment-plain > h1:first-child,
+.ai-comment-plain.ai-comment-plain > h2:first-child,
+.ai-comment-plain.ai-comment-plain > h3:first-child,
+.ai-comment-plain.ai-comment-plain > p:first-child + h1,
+.ai-comment-plain.ai-comment-plain > p:first-child + h2,
+.ai-comment-plain.ai-comment-plain > p:first-child + h3 {
+  margin-top: 0.5em;
 }
 
-.ai-comment-plain > *:first-child {
-  margin-top: 0 !important;
+.ai-comment-plain.ai-comment-plain > *:first-child {
+  margin-top: 0;
 }
 
-.ai-comment-plain p {
-  margin: 0.5em 0 !important;
+.ai-comment-plain.ai-comment-plain p {
+  margin: 0.5em 0;
 }
 
-.ai-comment-plain p:first-child {
-  margin-top: 0 !important;
+.ai-comment-plain.ai-comment-plain p:first-child {
+  margin-top: 0;
 }
 
-.ai-comment-plain ul,
-.ai-comment-plain ol {
-  margin: 0.3em 0 !important;
-  padding-left: 1.2em !important;
+.ai-comment-plain.ai-comment-plain ul,
+.ai-comment-plain.ai-comment-plain ol {
+  margin: 0.3em 0;
+  padding-left: 1.2em;
 }
 
-.ai-comment-plain li {
-  margin: 0 !important;
-  padding: 0 !important;
+.ai-comment-plain.ai-comment-plain li {
+  margin: 0;
+  padding: 0;
 }
 
-.ai-comment-plain li::marker {
-  color: var(--text-muted) !important;
+.ai-comment-plain.ai-comment-plain li::marker {
+  color: var(--text-muted);
 }
 
-.ai-comment-plain table {
-  font-size: 12px !important;
-  margin: 0.5em 0 !important;
-  border-collapse: collapse !important;
+.ai-comment-plain.ai-comment-plain table {
+  font-size: 12px;
+  margin: 0.5em 0;
+  border-collapse: collapse;
 }
 
-.ai-comment-plain th,
-.ai-comment-plain td {
-  padding: 2px 6px !important;
-  border: 1px solid var(--background-modifier-border) !important;
+.ai-comment-plain.ai-comment-plain th,
+.ai-comment-plain.ai-comment-plain td {
+  padding: 2px 6px;
+  border: 1px solid var(--background-modifier-border);
 }
 
-.ai-comment-plain th {
-  font-weight: 600 !important;
-  background: var(--background-secondary) !important;
+.ai-comment-plain.ai-comment-plain th {
+  font-weight: 600;
+  background: var(--background-secondary);
 }
 
-.ai-comment-plain code {
-  font-size: 12px !important;
-  background: var(--background-secondary) !important;
-  padding: 1px 4px !important;
-  border-radius: 3px !important;
+.ai-comment-plain.ai-comment-plain code {
+  font-size: 12px;
+  background: var(--background-secondary);
+  padding: 1px 4px;
+  border-radius: 3px;
 }
 
-.ai-comment-plain blockquote {
-  margin: 0.3em 0 !important;
-  padding-left: 8px !important;
-  border-left: 2px solid var(--text-faint) !important;
-  color: var(--text-muted) !important;
+.ai-comment-plain.ai-comment-plain blockquote {
+  margin: 0.3em 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--text-faint);
+  color: var(--text-muted);
 }
 
-.ai-comment-plain hr {
-  margin: 0.5em 0 !important;
-  border: none !important;
-  border-top: 1px solid var(--background-modifier-border) !important;
+.ai-comment-plain.ai-comment-plain hr {
+  margin: 0.5em 0;
+  border: none;
+  border-top: 1px solid var(--background-modifier-border);
 }
 
-.ai-comment-plain strong {
-  font-weight: 600 !important;
+.ai-comment-plain.ai-comment-plain strong {
+  font-weight: 600;
 }
 
-.ai-comment-plain a {
-  color: var(--text-accent) !important;
+.ai-comment-plain.ai-comment-plain a {
+  color: var(--text-accent);
 }
 
 /* Show more/less toggle */
@@ -769,12 +769,12 @@
 }
 
 /* Icon button (24x24, no browser chrome) */
-.acb-icon-btn {
-  padding: 0 !important;
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
-  background: transparent !important;
+.acb-icon-btn.acb-icon-btn {
+  padding: 0;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
   width: 24px;
   height: 24px;
 }

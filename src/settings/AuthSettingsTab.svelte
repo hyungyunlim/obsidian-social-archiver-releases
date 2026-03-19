@@ -38,11 +38,11 @@ let _crossDeviceActive = false;
 function stopCrossDeviceTimers(): void {
   _crossDeviceActive = false;
   if (_crossDeviceCountdownTimer !== null) {
-    clearInterval(_crossDeviceCountdownTimer);
+    window.clearInterval(_crossDeviceCountdownTimer);
     _crossDeviceCountdownTimer = null;
   }
   if (_crossDevicePollTimer !== null) {
-    clearInterval(_crossDevicePollTimer);
+    window.clearInterval(_crossDevicePollTimer);
     _crossDevicePollTimer = null;
   }
 }
@@ -63,7 +63,7 @@ function startCrossDeviceTimers(sessionId: string, expiresAt: string, pollMs: nu
     }
   };
   updateCountdown();
-  _crossDeviceCountdownTimer = setInterval(updateCountdown, 1000);
+  _crossDeviceCountdownTimer = window.setInterval(updateCountdown, 1000);
 
   // Poll timer
   const authService = new AuthService(plugin.settings.workerUrl, plugin.manifest.version);
@@ -121,7 +121,7 @@ function startCrossDeviceTimers(sessionId: string, expiresAt: string, pollMs: nu
     }
   };
 
-  _crossDevicePollTimer = setInterval(poll, pollMs);
+  _crossDevicePollTimer = window.setInterval(poll, pollMs);
 }
 
 /**

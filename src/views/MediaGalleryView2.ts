@@ -51,7 +51,7 @@ export class MediaGalleryView2 extends ItemView {
     container.addClass('mgv2-scroll-container');
 
     // Create content container
-    this.contentContainer = container.createDiv('media-gallery-content');
+    this.contentContainer = container.createDiv('sa-media-gallery-content');
 
     await this.loadMediaGallery();
   }
@@ -75,7 +75,7 @@ export class MediaGalleryView2 extends ItemView {
 
     // Loading state
     const loadingEl = this.contentContainer.createDiv({
-      cls: 'media-gallery-loading',
+      cls: 'sa-media-gallery-loading',
       text: 'Loading media...'
     });
 
@@ -123,17 +123,17 @@ export class MediaGalleryView2 extends ItemView {
 
       if (mediaItems.length === 0) {
         this.contentContainer.createDiv({
-          cls: 'media-gallery-empty',
+          cls: 'sa-media-gallery-empty',
           text: 'No media found in archived posts'
         });
         return;
       }
 
       // Create grid
-      const gridEl = this.contentContainer.createDiv({ cls: 'media-gallery-grid mgv2-grid' });
+      const gridEl = this.contentContainer.createDiv({ cls: 'sa-media-gallery-grid mgv2-grid' });
 
       for (const item of mediaItems) {
-        const cardEl = gridEl.createDiv({ cls: 'media-card mgv2-card' });
+        const cardEl = gridEl.createDiv({ cls: 'sa-media-card mgv2-card' });
 
         // Get absolute path for media file
         const mediaFile = this.app.vault.getAbstractFileByPath(item.media);
@@ -189,7 +189,7 @@ export class MediaGalleryView2 extends ItemView {
       loadingEl.remove();
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.contentContainer.createDiv({
-        cls: 'media-gallery-error',
+        cls: 'sa-media-gallery-error',
         text: 'Error loading media: ' + errorMessage
       });
       console.error('[Media Gallery] Error:', error);

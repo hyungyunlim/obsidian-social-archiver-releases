@@ -215,7 +215,7 @@ export class LinkPreviewRenderer {
       wrapper.addClass('sa-dynamic-opacity');
 
       // Wait for animation
-      setTimeout(() => {
+      window.setTimeout(() => {
         void onDelete(url).then(() => { wrapper.remove(); });
       }, 200);
     });
@@ -388,7 +388,7 @@ export class LinkPreviewRenderer {
 
     // Image section (responsive - hidden on mobile, visible on desktop)
     if (preview.image && !Platform.isMobile) {
-      const imageContainer = card.createDiv({ cls: 'link-preview-image-container' });
+      const imageContainer = card.createDiv({ cls: 'sa-link-preview-image-container' });
 
       const img = imageContainer.createEl('img', {
         attr: {
@@ -396,7 +396,7 @@ export class LinkPreviewRenderer {
           alt: preview.title,
           loading: 'lazy'
         },
-        cls: 'link-preview-image'
+        cls: 'sa-link-preview-image'
       });
 
       // Handle image load error - remove the entire container

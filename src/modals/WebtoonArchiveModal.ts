@@ -410,7 +410,7 @@ export class WebtoonArchiveModal extends Modal {
   }
 
   private renderUrlInput(container: HTMLElement): void {
-    const inputContainer = container.createDiv({ cls: 'archive-url-container' });
+    const inputContainer = container.createDiv({ cls: 'sa-archive-url-container' });
     inputContainer.addClass('wam-url-container');
 
     // URL input row with optional language selector
@@ -420,7 +420,7 @@ export class WebtoonArchiveModal extends Modal {
     const input = inputRow.createEl('input', {
       type: 'text',
       placeholder: 'Search webtoon or paste URL (Naver/WEBTOON)',
-      cls: 'archive-url-input',
+      cls: 'sa-archive-url-input',
       value: this.url,
     });
 
@@ -456,7 +456,7 @@ export class WebtoonArchiveModal extends Modal {
 
     // Only focus on desktop and only on initial render (no URL yet)
     if (!Platform.isMobile && !this.url) {
-      setTimeout(() => input.focus(), 100);
+      window.setTimeout(() => input.focus(), 100);
     }
   }
 
@@ -534,7 +534,7 @@ export class WebtoonArchiveModal extends Modal {
   }
 
   private renderStatusBadge(container: HTMLElement): void {
-    const badge = container.createDiv({ cls: 'archive-platform-badge' });
+    const badge = container.createDiv({ cls: 'sa-archive-platform-badge' });
     badge.addClass('sa-flex-row', 'sa-gap-4', 'sa-mt-4', 'sa-text-xs');
 
     switch (this.state) {
@@ -860,7 +860,7 @@ export class WebtoonArchiveModal extends Modal {
     }
 
     // Episode list (flexible height)
-    const list = wrapper.createDiv({ cls: 'webtoon-episode-list' });
+    const list = wrapper.createDiv({ cls: 'sa-webtoon-episode-list' });
     list.addClass(Platform.isMobile ? 'wam-episode-list--mobile' : 'wam-episode-list--desktop');
 
     // Handle both platforms
@@ -1033,7 +1033,7 @@ export class WebtoonArchiveModal extends Modal {
   }
 
   private renderListHeader(wrapper: HTMLElement): void {
-    const header = wrapper.createDiv({ cls: 'webtoon-episode-header' });
+    const header = wrapper.createDiv({ cls: 'sa-webtoon-episode-header' });
     header.addClass('wam-list-header');
 
     // Left: Select all - handle both platforms
@@ -1909,7 +1909,7 @@ export class WebtoonArchiveModal extends Modal {
     this.isLoadingMore = true;
 
     // Save scroll position before render
-    const listEl = this.contentContainer.querySelector('.webtoon-episode-list');
+    const listEl = this.contentContainer.querySelector('.sa-webtoon-episode-list');
     const scrollTop = listEl?.scrollTop ?? 0;
 
     this.render();
@@ -1943,7 +1943,7 @@ export class WebtoonArchiveModal extends Modal {
 
       // Restore scroll position after render
       requestAnimationFrame(() => {
-        const newListEl = this.contentContainer.querySelector('.webtoon-episode-list');
+        const newListEl = this.contentContainer.querySelector('.sa-webtoon-episode-list');
         if (newListEl) {
           newListEl.scrollTop = scrollTop;
         }
@@ -2468,7 +2468,7 @@ export class WebtoonArchiveModal extends Modal {
       await timelineView.refresh();
 
       // Small delay to ensure the refresh completes and card renders
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => window.setTimeout(resolve, 300));
 
       // Open fullscreen with streaming URLs
       await timelineView.openStreamingFullscreen(
@@ -2509,7 +2509,7 @@ export class WebtoonArchiveModal extends Modal {
 
       // Delay to ensure file is fully written and vault has registered it
       // 500ms gives Obsidian's MetadataCache time to process the new file
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => window.setTimeout(resolve, 500));
 
       // Use soft refresh that updates data without disrupting fullscreen
       await timelineView.softRefresh();
@@ -2608,7 +2608,7 @@ export class WebtoonArchiveModal extends Modal {
       invalidateAuthorCatalogCache();
 
       // Auto-close after brief delay to show success
-      setTimeout(() => this.close(), 1200);
+      window.setTimeout(() => this.close(), 1200);
     }) as EventListener);
 
     this.trackEventListener(this.downloadQueue, 'queue-cancelled', (() => {
@@ -2665,7 +2665,7 @@ export class WebtoonArchiveModal extends Modal {
       invalidateAuthorCatalogCache();
 
       // Auto-close after brief delay to show success
-      setTimeout(() => this.close(), 1200);
+      window.setTimeout(() => this.close(), 1200);
     }) as EventListener);
 
     this.trackEventListener(this.webtoonsDownloadQueue, 'queue-cancelled', (() => {

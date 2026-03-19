@@ -534,7 +534,7 @@ export class AICommentRenderer {
     element.classList.add('sa-relative');
     element.appendChild(feedback);
 
-    setTimeout(() => {
+    window.setTimeout(() => {
       feedback.remove();
     }, 1000);
   }

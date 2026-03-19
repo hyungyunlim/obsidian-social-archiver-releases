@@ -83,7 +83,7 @@ function handleSubmit(event: Event): void {
  */
 function handlePaste(): void {
   // Mark as touched after paste
-  setTimeout(() => {
+  window.setTimeout(() => {
     isTouched = true;
   }, 0);
 }

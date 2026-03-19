@@ -265,7 +265,7 @@ async function expand(): Promise<void> {
 
   // Focus editor after DOM update (Windows compatibility fix)
   // Wait for Svelte to render the expanded editor before focusing
-  setTimeout(() => {
+  window.setTimeout(() => {
     editorRef?.focus();
     applyComposerTopOverlapSafeArea();
   }, 100);
@@ -282,7 +282,7 @@ function applyComposerTopOverlapSafeArea(): void {
   const viewport = window.visualViewport;
   const viewportTop = Math.max(0, Math.round(viewport?.offsetTop ?? 0));
   const isPortrait = window.innerHeight >= window.innerWidth;
-  const isIPhone = /iPhone/i.test(window.navigator.userAgent);
+  const isIPhone = ObsidianPlatform.isIosApp && ObsidianPlatform.isPhone;
   const screenLongestEdge = Math.round(
     Math.max(window.screen.width || 0, window.screen.height || 0)
   );
@@ -1016,12 +1016,12 @@ $effect(() => {
 
     // Clear existing timer
     if (urlDetectionTimer) {
-      clearTimeout(urlDetectionTimer);
+      window.clearTimeout(urlDetectionTimer);
     }
 
     // Debounce URL detection (wait 2 seconds after user stops typing)
     // This prevents API calls while actively typing
-    urlDetectionTimer = setTimeout(() => {
+    urlDetectionTimer = window.setTimeout(() => {
       urlDetectionTimer = null;
       // detectUrls now modifies detectedUrls internally
       detectUrls(content);
@@ -1032,7 +1032,7 @@ $effect(() => {
   // Cleanup timer when effect re-runs or component destroys
   return () => {
     if (urlDetectionTimer) {
-      clearTimeout(urlDetectionTimer);
+      window.clearTimeout(urlDetectionTimer);
       urlDetectionTimer = null;
     }
   };
@@ -1051,7 +1051,7 @@ async function renderLinkPreviews(urls: string[]): Promise<void> {
   const maxAttempts = 10;
 
   while (!linkPreviewContainer && attempts < maxAttempts) {
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise(resolve => window.setTimeout(resolve, 50));
     attempts++;
   }
 
@@ -1076,7 +1076,7 @@ function triggerUrlDetection(): void {
 
   // Clear any pending timer
   if (urlDetectionTimer) {
-    clearTimeout(urlDetectionTimer);
+    window.clearTimeout(urlDetectionTimer);
     urlDetectionTimer = null;
   }
 
@@ -1127,7 +1127,7 @@ onMount(async () => {
 
     requestAnimationFrame(() => {
       apply();
-      setTimeout(apply, 120);
+      window.setTimeout(apply, 120);
     });
 
     composerVisualViewport?.addEventListener('resize', apply);
@@ -1142,7 +1142,7 @@ onDestroy(() => {
 
   // Clear URL detection timer
   if (urlDetectionTimer) {
-    clearTimeout(urlDetectionTimer);
+    window.clearTimeout(urlDetectionTimer);
   }
 
   // Cleanup media preview URLs to prevent memory leaks

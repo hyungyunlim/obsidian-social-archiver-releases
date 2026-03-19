@@ -244,7 +244,7 @@ export class ApiClient implements IService {
         ...(options.headers as Record<string, string>),
       };
 
-      const timeoutId = setTimeout(() => {
+      const timeoutId = window.setTimeout(() => {
         this.abortController?.abort();
       }, this.config.timeout);
 
@@ -257,7 +257,7 @@ export class ApiClient implements IService {
           throw: false
         });
 
-        clearTimeout(timeoutId);
+        window.clearTimeout(timeoutId);
 
         // Parse response
         const data = response.json as Record<string, unknown>;
@@ -274,7 +274,7 @@ export class ApiClient implements IService {
           data: data as T,
         };
       } catch (error) {
-        clearTimeout(timeoutId);
+        window.clearTimeout(timeoutId);
 
         if (error instanceof Error) {
           if (error.name === 'AbortError') {
@@ -410,6 +410,6 @@ export class ApiClient implements IService {
    * Sleep utility
    */
   private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
   }
 }

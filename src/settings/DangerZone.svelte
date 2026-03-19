@@ -131,10 +131,16 @@ async function clearShareMetadataFromVault(): Promise<number> {
       }
     }
 
-    const content = await vault.read(file);
-    const { updated, output } = removeShareMetadata(content);
-    if (updated) {
-      await vault.modify(file, output);
+    let wasUpdated = false;
+    await vault.process(file, (content) => {
+      const { updated, output } = removeShareMetadata(content);
+      if (updated) {
+        wasUpdated = true;
+        return output;
+      }
+      return content;
+    });
+    if (wasUpdated) {
       updatedFiles++;
     }
   }

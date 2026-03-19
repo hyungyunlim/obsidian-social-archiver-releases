@@ -1165,12 +1165,12 @@ async function yieldBetweenChunks(): Promise<void> {
       resolve();
     };
 
-    const timeoutId = setTimeout(finish, 50);
+    const timeoutId = window.setTimeout(finish, 50);
 
     // Prefer rAF in Obsidian to yield to the next frame.
     if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
       window.requestAnimationFrame(() => {
-        clearTimeout(timeoutId);
+        window.clearTimeout(timeoutId);
         finish();
       });
       return;
@@ -1179,7 +1179,7 @@ async function yieldBetweenChunks(): Promise<void> {
     // Node / non-browser
     if (typeof setImmediate === 'function') {
       setImmediate(() => {
-        clearTimeout(timeoutId);
+        window.clearTimeout(timeoutId);
         finish();
       });
       return;

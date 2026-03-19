@@ -1746,7 +1746,7 @@ export class NaverBlogLocalService {
 
         // Rate limit: 300ms delay between fetches
         if (posts.length < limit) {
-          await new Promise(r => setTimeout(r, 300));
+          await new Promise(r => window.setTimeout(r, 300));
         }
       } catch (error) {
         console.warn(`[NaverBlogLocalService] Failed to fetch post ${item.logNo}:`, error);

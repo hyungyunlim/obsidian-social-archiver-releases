@@ -121,13 +121,14 @@ export function clearEditorTTSHighlight(view: EditorView): void {
  */
 export function getEditorView(editor: unknown): EditorView | null {
   // Obsidian exposes .cm on the editor object (not typed)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const cm = (editor as any)?.cm;
+  const editorObj = editor as Record<string, unknown> | null | undefined;
+  const cm: unknown = editorObj?.cm;
   if (!cm) return null;
 
   // With @codemirror/view externalized, instanceof works.
   // Duck-type fallback: check for dispatch + state (EditorView shape).
-  if (cm instanceof EditorView || (typeof cm.dispatch === 'function' && cm.state?.doc)) {
+  const cmObj = cm as Record<string, unknown>;
+  if (cm instanceof EditorView || (typeof cmObj.dispatch === 'function' && cmObj.state !== undefined)) {
     return cm as EditorView;
   }
   return null;

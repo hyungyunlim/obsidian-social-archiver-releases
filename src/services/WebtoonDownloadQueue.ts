@@ -810,7 +810,7 @@ export class WebtoonDownloadQueue extends EventTarget {
     // Check if file exists
     const existingFile = this.app.vault.getAbstractFileByPath(filePath);
     if (existingFile && existingFile instanceof TFile) {
-      await this.app.vault.modify(existingFile, content);
+      await this.app.vault.process(existingFile, () => content);
     } else {
       await this.app.vault.create(filePath, content);
     }
@@ -872,7 +872,7 @@ export class WebtoonDownloadQueue extends EventTarget {
   }
 
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise(resolve => window.setTimeout(resolve, ms));
   }
 
   private sanitizeFilename(name: string): string {
@@ -1015,28 +1015,24 @@ export class WebtoonDownloadQueue extends EventTarget {
         const tFile = this.app.vault.getAbstractFileByPath(filePath);
         if (!tFile || !(tFile instanceof TFile)) return;
 
-        const content = await this.app.vault.read(tFile);
-
         // Generate comments section
         const commentsSection = this.generateCommentsMarkdown(comments, commentCount);
 
-        // Insert before closing --- or at end
-        let updatedContent = content;
-        if (content.includes('## Best Comments')) {
+        await this.app.vault.process(tFile, (content) => {
           // Already has comments section, skip
-          return;
-        }
+          if (content.includes('## Best Comments')) {
+            return content;
+          }
 
-        // Add comments section before the images
-        const contentIndex = content.indexOf('\n## Episode Content');
-        if (contentIndex !== -1) {
-          updatedContent = content.slice(0, contentIndex) + commentsSection + content.slice(contentIndex);
-        } else {
-          // Append at end
-          updatedContent = content + '\n' + commentsSection;
-        }
-
-        await this.app.vault.modify(tFile, updatedContent);
+          // Add comments section before the images
+          const contentIndex = content.indexOf('\n## Episode Content');
+          if (contentIndex !== -1) {
+            return content.slice(0, contentIndex) + commentsSection + content.slice(contentIndex);
+          } else {
+            // Append at end
+            return content + '\n' + commentsSection;
+          }
+        });
       }
     } catch (error) {
       console.warn(`[WebtoonDownloadQueue] Failed to update comments:`, error);

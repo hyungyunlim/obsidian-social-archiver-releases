@@ -66,7 +66,7 @@ export class TTSAudioPlayer {
     }
     // Resume if suspended (e.g. after browser autoplay block)
     if (this.context.state === 'suspended') {
-      this.context.resume();
+      void this.context.resume();
     }
     return this.context;
   }

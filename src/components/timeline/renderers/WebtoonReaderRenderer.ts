@@ -167,11 +167,11 @@ export class WebtoonReaderRenderer {
    * Render episode header with metadata
    */
   private renderHeader(container: HTMLElement, post: PostData): void {
-    const header = container.createDiv({ cls: 'webtoon-episode-header' });
+    const header = container.createDiv({ cls: 'sa-webtoon-episode-header' });
     header.addClass('sa-p-12', 'sa-px-16', 'sa-bg-secondary', 'sa-border-b');
 
     // Title
-    const title = header.createDiv({ cls: 'webtoon-episode-title' });
+    const title = header.createDiv({ cls: 'sa-webtoon-episode-title' });
     title.addClass('sa-text-md', 'sa-font-semibold', 'sa-text-normal', 'sa-mb-4', 'sa-leading-tight');
     title.textContent = post.title || '';
 

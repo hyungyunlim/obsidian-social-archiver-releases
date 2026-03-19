@@ -1,6 +1,6 @@
 /* Legacy split chunk: 60-reader-mode.css (preserves original rule order) */
 
-.reader-mode-backdrop {
+.sa-reader-mode-backdrop {
   position: fixed;
   inset: 0;
   z-index: 999;
@@ -10,11 +10,11 @@
   contain: strict
 }
 
-.reader-mode-backdrop-visible {
+.sa-reader-mode-backdrop-visible {
   opacity: 1
 }
 
-.reader-mode-container {
+.sa-reader-mode-container {
   position: fixed;
   top: 0;
   left: 0;
@@ -33,25 +33,25 @@
   touch-action: pan-y
 }
 
-.reader-mode-container-visible {
+.sa-reader-mode-container-visible {
   opacity: 1
 }
 
-.reader-mode-panel-wrapper {
+.sa-reader-mode-panel-wrapper {
   width: 100%;
   height: 100%;
   will-change: transform, opacity;
   touch-action: pan-y
 }
 
-.reader-mode-panel {
+.sa-reader-mode-panel {
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column
 }
 
-.reader-mode-scroll {
+.sa-reader-mode-scroll {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
@@ -60,7 +60,7 @@
   touch-action: pan-y
 }
 
-.reader-mode-content {
+.sa-reader-mode-content {
   max-width: 680px;
   margin: 0 auto;
   width: 100%;
@@ -70,25 +70,25 @@
   -webkit-user-select: text
 }
 
-.reader-mode-header-wrapper {
+.sa-reader-mode-header-wrapper {
   flex-shrink: 0;
   padding: 6px 24px;
   background: var(--background-primary);
   border: none
 }
 
-.reader-mode-header-content {
+.sa-reader-mode-header-content {
   max-width: 680px;
   margin: 0 auto
 }
 
-.reader-mode-header {
+.sa-reader-mode-header {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center
 }
 
-.reader-mode-header-btn {
+.sa-reader-mode-header-btn {
   width: 36px;
   height: 36px;
   display: flex;
@@ -105,43 +105,43 @@
 }
 
 @media(hover:hover) {
-  .reader-mode-header-btn:hover {
+  .sa-reader-mode-header-btn:hover {
     background: var(--background-modifier-hover);
     color: var(--text-normal)
   }
 }
 
-.reader-mode-header-btn:active {
+.sa-reader-mode-header-btn:active {
   background: var(--background-modifier-hover);
   transition: none
 }
 
-.reader-mode-header-btn svg {
+.sa-reader-mode-header-btn svg {
   width: 20px;
   height: 20px
 }
 
-.reader-mode-position {
+.sa-reader-mode-position {
   font-size: 14px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums
 }
 
-.reader-mode-header-right {
+.sa-reader-mode-header-right {
   display: flex;
   align-items: center;
   gap: 4px;
   justify-self: end
 }
 
-.reader-mode-author {
+.sa-reader-mode-author {
   display: flex;
   align-items: center;
   gap: 10px;
   margin-bottom: 18px
 }
 
-.reader-mode-avatar {
+.sa-reader-mode-avatar {
   width: 36px;
   height: 36px;
   flex-shrink: 0;
@@ -149,18 +149,18 @@
   overflow: hidden
 }
 
-.reader-mode-author-info {
+.sa-reader-mode-author-info {
   flex: 1;
   min-width: 0
 }
 
-.reader-mode-author-name-row {
+.sa-reader-mode-author-name-row {
   display: flex;
   align-items: center;
   gap: 8px
 }
 
-.reader-mode-author-name {
+.sa-reader-mode-author-name {
   font-weight: 600;
   font-size: 15px;
   color: var(--text-normal);
@@ -169,7 +169,7 @@
   text-overflow: ellipsis
 }
 
-.reader-mode-platform-icon {
+.sa-reader-mode-platform-icon {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
@@ -179,12 +179,12 @@
   color: var(--text-muted)
 }
 
-.reader-mode-platform-icon svg {
+.sa-reader-mode-platform-icon svg {
   width: 16px;
   height: 16px
 }
 
-.reader-mode-author-meta {
+.sa-reader-mode-author-meta {
   font-size: 13px;
   color: var(--text-muted);
   margin-top: 2px;
@@ -193,14 +193,14 @@
   text-overflow: ellipsis
 }
 
-.reader-mode-tags {
+.sa-reader-mode-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 16px
 }
 
-.reader-mode-tag {
+.sa-reader-mode-tag {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -214,7 +214,7 @@
   white-space: nowrap
 }
 
-.reader-mode-tag-dot {
+.sa-reader-mode-tag-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -222,7 +222,7 @@
   flex-shrink: 0
 }
 
-.reader-mode-title {
+.sa-reader-mode-title {
   font-size: 24px;
   font-weight: 700;
   color: var(--text-normal);
@@ -231,7 +231,7 @@
   padding: 0
 }
 
-.reader-mode-body {
+.sa-reader-mode-body {
   font-size: var(--reader-font-size, 19px);
   line-height: 1.75;
   color: var(--text-normal);
@@ -240,58 +240,58 @@
   overflow-wrap: break-word
 }
 
-.reader-mode-body p {
+.sa-reader-mode-body p {
   margin-bottom: 1em
 }
 
-.reader-mode-body img {
+.sa-reader-mode-body img {
   max-width: 100%;
   height: auto;
   border-radius: 8px
 }
 
-.reader-mode-body a {
+.sa-reader-mode-body a {
   color: var(--interactive-accent);
   text-decoration: underline
 }
 
-.reader-mode-body blockquote {
+.sa-reader-mode-body blockquote {
   border-left: 3px solid var(--interactive-accent);
   padding-left: 14px;
   margin-left: 0;
   color: var(--text-muted)
 }
 
-.reader-mode-body code {
+.sa-reader-mode-body code {
   font-size: .9em;
   background: var(--code-background);
   padding: 1px 4px;
   border-radius: 3px
 }
 
-.reader-mode-body pre {
+.sa-reader-mode-body pre {
   background: var(--code-background);
   padding: 14px;
   border-radius: 6px;
   overflow-x: auto
 }
 
-.reader-mode-media {
+.sa-reader-mode-media {
   margin-bottom: 24px
 }
 
-.reader-mode-media img {
+.sa-reader-mode-media img {
   max-width: 100%;
   border-radius: 8px
 }
 
-.reader-mode-metric {
+.sa-reader-mode-metric {
   display: flex;
   align-items: center;
   gap: 5px
 }
 
-.reader-mode-metric-icon {
+.sa-reader-mode-metric-icon {
   width: 16px;
   height: 16px;
   display: flex;
@@ -299,12 +299,12 @@
   justify-content: center
 }
 
-.reader-mode-metric-icon svg {
+.sa-reader-mode-metric-icon svg {
   width: 15px;
   height: 15px
 }
 
-.reader-mode-action-bar {
+.sa-reader-mode-action-bar {
   display: flex;
   align-items: center;
   gap: 16px;
@@ -315,23 +315,23 @@
   font-size: 14px
 }
 
-.reader-mode-action-bar-metrics {
+.sa-reader-mode-action-bar-metrics {
   display: flex;
   align-items: center;
   gap: 16px
 }
 
-.reader-mode-action-bar-spacer {
+.sa-reader-mode-action-bar-spacer {
   flex: 1
 }
 
-.reader-mode-action-bar-actions {
+.sa-reader-mode-action-bar-actions {
   display: flex;
   align-items: center;
   gap: 4px
 }
 
-.reader-mode-action-btn {
+.sa-reader-mode-action-btn {
   width: 36px;
   height: 36px;
   display: flex;
@@ -348,28 +348,28 @@
 }
 
 @media(hover:hover) {
-  .reader-mode-action-btn:hover {
+  .sa-reader-mode-action-btn:hover {
     background: var(--background-modifier-hover);
     color: var(--text-normal)
   }
 }
 
-.reader-mode-action-btn:active {
+.sa-reader-mode-action-btn:active {
   background: var(--background-modifier-hover);
   transition: none
 }
 
-.reader-mode-action-btn svg {
+.sa-reader-mode-action-btn svg {
   width: 18px;
   height: 18px
 }
 
-.reader-mode-source {
+.sa-reader-mode-source {
   margin-top: 16px;
   padding-bottom: 20px
 }
 
-.reader-mode-source a {
+.sa-reader-mode-source a {
   font-size: 14px
 }
 
@@ -378,69 +378,69 @@
   z-index: 1001
 }
 
-body:has(.reader-mode-container-visible) .modal-container {
+body:has(.sa-reader-mode-container-visible) .modal-container {
   z-index: 1001
 }
 
 @media(max-width:768px) {
-  .reader-mode-scroll {
+  .sa-reader-mode-scroll {
     padding: 0 16px
   }
 
-  .reader-mode-body {
+  .sa-reader-mode-body {
     line-height: 1.7
   }
 
-  .reader-mode-title {
+  .sa-reader-mode-title {
     font-size: 22px
   }
 
-  .reader-mode-avatar {
+  .sa-reader-mode-avatar {
     width: 32px;
     height: 32px
   }
 
-  .reader-mode-author-name {
+  .sa-reader-mode-author-name {
     font-size: 14px
   }
 
-  .reader-mode-author-meta {
+  .sa-reader-mode-author-meta {
     font-size: 12px
   }
 
-  .reader-mode-header-wrapper {
+  .sa-reader-mode-header-wrapper {
     padding: 6px 16px
   }
 
-  .reader-mode-header-right .reader-mode-header-btn {
+  .sa-reader-mode-header-right .sa-reader-mode-header-btn {
     width: 30px;
     height: 30px
   }
 
-  .reader-mode-header-right .reader-mode-header-btn svg {
+  .sa-reader-mode-header-right .sa-reader-mode-header-btn svg {
     width: 16px;
     height: 16px
   }
 }
 
-body.is-mobile .reader-mode-action-bar {
+body.is-mobile .sa-reader-mode-action-bar {
   gap: 12px;
   font-size: 13px;
   flex-wrap: nowrap;
   justify-content: space-between
 }
 
-body.is-mobile .reader-mode-action-bar-metrics,
-body.is-mobile .reader-mode-action-bar-spacer {
+body.is-mobile .sa-reader-mode-action-bar-metrics,
+body.is-mobile .sa-reader-mode-action-bar-spacer {
   display: none
 }
 
-body.is-mobile .reader-mode-action-bar-actions {
+body.is-mobile .sa-reader-mode-action-bar-actions {
   gap: 1px;
   margin-left: auto
 }
 
-body.is-mobile .reader-mode-action-btn {
+body.is-mobile .sa-reader-mode-action-btn {
   width: auto;
   height: auto;
   padding: 0;
@@ -448,31 +448,31 @@ body.is-mobile .reader-mode-action-btn {
   background: none
 }
 
-body.is-mobile .reader-mode-action-btn svg {
+body.is-mobile .sa-reader-mode-action-btn svg {
   width: 18px;
   height: 18px
 }
 
-body.is-tablet .reader-mode-action-bar {
+body.is-tablet .sa-reader-mode-action-bar {
   gap: 16px;
   justify-content: flex-start
 }
 
-body.is-tablet .reader-mode-action-bar-metrics {
+body.is-tablet .sa-reader-mode-action-bar-metrics {
   display: flex
 }
 
-body.is-tablet .reader-mode-action-bar-spacer {
+body.is-tablet .sa-reader-mode-action-bar-spacer {
   display: block;
   flex: 1
 }
 
-body.is-tablet .reader-mode-action-bar-actions {
+body.is-tablet .sa-reader-mode-action-bar-actions {
   gap: 4px;
   margin-left: 0
 }
 
-body.is-tablet .reader-mode-action-btn {
+body.is-tablet .sa-reader-mode-action-btn {
   width: 36px;
   height: 36px;
   padding: 0;
@@ -480,13 +480,13 @@ body.is-tablet .reader-mode-action-btn {
   background: none
 }
 
-body.is-tablet .reader-mode-action-btn svg {
+body.is-tablet .sa-reader-mode-action-btn svg {
   width: 18px;
   height: 18px
 }
 
 @media(hover:hover) {
-  body.is-tablet .reader-mode-action-btn:hover {
+  body.is-tablet .sa-reader-mode-action-btn:hover {
     background: var(--background-modifier-hover);
     color: var(--text-normal)
   }
@@ -497,7 +497,7 @@ body.is-tablet .reader-mode-action-btn svg {
    ============================================================================ */
 
 /* Sentence highlight mark */
-.reader-tts-highlight {
+.sa-reader-tts-highlight {
   background-color: var(--text-highlight-bg, rgba(255, 208, 0, 0.4));
   border-radius: 2px;
   padding: 0 1px;
@@ -505,16 +505,16 @@ body.is-tablet .reader-mode-action-btn svg {
 }
 
 /* Header TTS button */
-.reader-tts-btn {
+.sa-reader-tts-btn {
   cursor: pointer;
   transition: color 0.15s ease;
 }
 
-.reader-tts-btn-active {
+.sa-reader-tts-btn-active {
   color: var(--interactive-accent);
 }
 
-.reader-tts-btn-loading svg {
+.sa-reader-tts-btn-loading svg {
   animation: reader-tts-spin 1s linear infinite;
 }
 
@@ -524,7 +524,7 @@ body.is-tablet .reader-mode-action-btn svg {
 }
 
 /* Mini controller bar */
-.reader-tts-mini-controller {
+.sa-reader-tts-mini-controller {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -544,7 +544,7 @@ body.is-tablet .reader-mode-action-btn svg {
   font-size: 13px;
 }
 
-.reader-tts-ctrl-btn {
+.sa-reader-tts-ctrl-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -556,28 +556,28 @@ body.is-tablet .reader-mode-action-btn svg {
   transition: background 0.12s ease, color 0.12s ease;
 }
 
-.reader-tts-ctrl-btn:hover {
+.sa-reader-tts-ctrl-btn:hover {
   background: var(--background-modifier-hover);
   color: var(--text-normal);
 }
 
-.reader-tts-ctrl-btn svg {
+.sa-reader-tts-ctrl-btn svg {
   width: 16px;
   height: 16px;
 }
 
-.reader-tts-play-btn {
+.sa-reader-tts-play-btn {
   width: 36px;
   height: 36px;
   color: var(--interactive-accent);
 }
 
-.reader-tts-play-btn svg {
+.sa-reader-tts-play-btn svg {
   width: 20px;
   height: 20px;
 }
 
-.reader-tts-progress {
+.sa-reader-tts-progress {
   color: var(--text-muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
@@ -585,7 +585,7 @@ body.is-tablet .reader-mode-action-btn svg {
   text-align: center;
 }
 
-.reader-tts-speed-btn {
+.sa-reader-tts-speed-btn {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
@@ -593,18 +593,18 @@ body.is-tablet .reader-mode-action-btn svg {
   border-radius: 4px;
 }
 
-.reader-tts-close-btn {
+.sa-reader-tts-close-btn {
   color: var(--text-faint);
 }
 
 @media(hover:hover) {
-  .reader-tts-close-btn:hover {
+  .sa-reader-tts-close-btn:hover {
     color: var(--text-error, #ff6b6b);
   }
 }
 
 /* Follow along floating button */
-.reader-tts-follow-btn {
+.sa-reader-tts-follow-btn {
   position: fixed;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 128px);
   left: 50%;
@@ -623,16 +623,16 @@ body.is-tablet .reader-mode-action-btn svg {
 
 /* Mobile: keep follow button much closer to the bottom edge */
 @media (max-width: 768px) {
-  .reader-tts-mini-controller {
+  .sa-reader-tts-mini-controller {
     bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
   }
 
-  .reader-tts-follow-btn {
+  .sa-reader-tts-follow-btn {
     bottom: calc(env(safe-area-inset-bottom, 0px) + 78px);
   }
 }
 
-.reader-tts-follow-btn:hover {
+.sa-reader-tts-follow-btn:hover {
   opacity: 0.9;
   transform: translateX(-50%) scale(1.02);
 }

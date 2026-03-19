@@ -193,7 +193,7 @@ export class ExponentialBackoff {
 
 			let abortHandler: (() => void) | undefined;
 
-			const timeout = setTimeout(() => {
+			const timeout = window.setTimeout(() => {
 				// Clean up abort listener when timeout resolves naturally
 				if (abortSignal && abortHandler) {
 					abortSignal.removeEventListener('abort', abortHandler);
@@ -204,7 +204,7 @@ export class ExponentialBackoff {
 			// Handle abort during sleep
 			if (abortSignal) {
 				abortHandler = () => {
-					clearTimeout(timeout);
+					window.clearTimeout(timeout);
 					reject(new Error('Operation aborted'));
 				};
 

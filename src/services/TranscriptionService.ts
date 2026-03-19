@@ -616,9 +616,9 @@ export class TranscriptionService {
       ProcessManager.register(childProcess, 'transcription', `Whisper ${options.model}`);
 
       // Setup timeout handler
-      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      let timeoutId: number | null = null;
       if (timeout > 0) {
-        timeoutId = setTimeout(() => {
+        timeoutId = window.setTimeout(() => {
           this.isCancelled = true;
           childProcess.kill('SIGTERM');
           reject(new TranscriptionError(
@@ -663,7 +663,7 @@ export class TranscriptionService {
 
         // Clear timeout handler
         if (timeoutId) {
-          clearTimeout(timeoutId);
+          window.clearTimeout(timeoutId);
           timeoutId = null;
         }
 

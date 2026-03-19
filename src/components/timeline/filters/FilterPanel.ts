@@ -503,7 +503,7 @@ export class FilterPanel {
         this.close();
       }
     };
-    setTimeout(() => {
+    window.setTimeout(() => {
       // Guard: panel may have been closed during the timeout delay
       if (this.closeHandler && this.isOpen) {
         document.addEventListener('click', this.closeHandler);

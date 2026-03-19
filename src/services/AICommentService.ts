@@ -922,9 +922,9 @@ Content:
       );
 
       // Setup timeout
-      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      let timeoutId: number | null = null;
       if (timeout > 0) {
-        timeoutId = setTimeout(() => {
+        timeoutId = window.setTimeout(() => {
           this.isCancelled = true;
           childProcess.kill('SIGTERM');
           reject(new AICommentError(
@@ -961,14 +961,14 @@ Content:
 
       // Gemini CLI doesn't emit events during thinking phase (can be 30-60+ seconds)
       // Use a timer to show "Thinking..." progress after init event
-      let geminiThinkingTimer: ReturnType<typeof setTimeout> | null = null;
-      let geminiThinkingInterval: ReturnType<typeof setInterval> | null = null;
+      let geminiThinkingTimer: number | null = null;
+      let geminiThinkingInterval: number | null = null;
 
       const startGeminiThinkingProgress = () => {
         if (!isGeminiStreamJson || !options.onProgress) return;
 
         // Start showing "Thinking..." after 3 seconds of silence
-        geminiThinkingTimer = setTimeout(() => {
+        geminiThinkingTimer = window.setTimeout(() => {
           if (this.lastReportedPercentage < 20) {
             this.lastReportedPercentage = 20;
             options.onProgress?.({
@@ -981,7 +981,7 @@ Content:
 
           // Gradually increase progress every 5 seconds to show activity
           let thinkingProgress = 20;
-          geminiThinkingInterval = setInterval(() => {
+          geminiThinkingInterval = window.setInterval(() => {
             if (this.lastReportedPercentage < 30 && thinkingProgress < 30) {
               thinkingProgress += 2;
               this.lastReportedPercentage = thinkingProgress;
@@ -998,11 +998,11 @@ Content:
 
       const stopGeminiThinkingProgress = () => {
         if (geminiThinkingTimer) {
-          clearTimeout(geminiThinkingTimer);
+          window.clearTimeout(geminiThinkingTimer);
           geminiThinkingTimer = null;
         }
         if (geminiThinkingInterval) {
-          clearInterval(geminiThinkingInterval);
+          window.clearInterval(geminiThinkingInterval);
           geminiThinkingInterval = null;
         }
       };
@@ -1095,7 +1095,7 @@ Content:
 
         // Clear timeout
         if (timeoutId) {
-          clearTimeout(timeoutId);
+          window.clearTimeout(timeoutId);
           timeoutId = null;
         }
 

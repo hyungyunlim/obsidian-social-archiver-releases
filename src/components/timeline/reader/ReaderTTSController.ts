@@ -137,7 +137,7 @@ export class ReaderTTSController {
    * Called by ReaderModeContentRenderer.renderHeader().
    */
   renderHeaderButton(parent: HTMLElement): void {
-    this.headerButton = parent.createDiv({ cls: 'reader-mode-header-btn reader-tts-btn' });
+    this.headerButton = parent.createDiv({ cls: 'sa-reader-mode-header-btn sa-reader-tts-btn' });
     this.headerButton.setAttribute('title', 'Read aloud (P)');
     setIcon(this.headerButton, 'volume-2');
 
@@ -155,11 +155,11 @@ export class ReaderTTSController {
    * Hidden by default, shown when TTS is active.
    */
   renderMiniController(parent: HTMLElement): void {
-    this.miniController = parent.createDiv({ cls: 'reader-tts-mini-controller' });
+    this.miniController = parent.createDiv({ cls: 'sa-reader-tts-mini-controller' });
     this.miniController.style.display = 'none';
 
     // Previous sentence
-    this.prevBtn = this.miniController.createDiv({ cls: 'reader-tts-ctrl-btn' });
+    this.prevBtn = this.miniController.createDiv({ cls: 'sa-reader-tts-ctrl-btn' });
     this.prevBtn.setAttribute('title', 'Previous sentence (Shift+Left)');
     setIcon(this.prevBtn, 'skip-back');
     this.prevBtn.addEventListener('click', (e) => {
@@ -168,7 +168,7 @@ export class ReaderTTSController {
     });
 
     // Play/Pause
-    this.playPauseBtn = this.miniController.createDiv({ cls: 'reader-tts-ctrl-btn reader-tts-play-btn' });
+    this.playPauseBtn = this.miniController.createDiv({ cls: 'sa-reader-tts-ctrl-btn sa-reader-tts-play-btn' });
     setIcon(this.playPauseBtn, 'play');
     this.playPauseBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -176,7 +176,7 @@ export class ReaderTTSController {
     });
 
     // Next sentence
-    this.nextBtn = this.miniController.createDiv({ cls: 'reader-tts-ctrl-btn' });
+    this.nextBtn = this.miniController.createDiv({ cls: 'sa-reader-tts-ctrl-btn' });
     this.nextBtn.setAttribute('title', 'Next sentence (Shift+Right)');
     setIcon(this.nextBtn, 'skip-forward');
     this.nextBtn.addEventListener('click', (e) => {
@@ -185,11 +185,11 @@ export class ReaderTTSController {
     });
 
     // Progress label
-    this.progressLabel = this.miniController.createDiv({ cls: 'reader-tts-progress' });
+    this.progressLabel = this.miniController.createDiv({ cls: 'sa-reader-tts-progress' });
     this.progressLabel.textContent = '';
 
     // Speed button
-    this.speedBtn = this.miniController.createDiv({ cls: 'reader-tts-ctrl-btn reader-tts-speed-btn' });
+    this.speedBtn = this.miniController.createDiv({ cls: 'sa-reader-tts-ctrl-btn sa-reader-tts-speed-btn' });
     this.speedBtn.textContent = `${SPEED_OPTIONS[this.speedIndex]}x`;
     this.speedBtn.setAttribute('title', 'Change speed ([/])');
     this.speedBtn.addEventListener('click', (e) => {
@@ -198,7 +198,7 @@ export class ReaderTTSController {
     });
 
     // Stop button (explicit close action in the mini player)
-    this.stopBtn = this.miniController.createDiv({ cls: 'reader-tts-ctrl-btn reader-tts-close-btn' });
+    this.stopBtn = this.miniController.createDiv({ cls: 'sa-reader-tts-ctrl-btn sa-reader-tts-close-btn' });
     this.stopBtn.setAttribute('title', 'Stop reading (Esc)');
     setIcon(this.stopBtn, 'x');
     this.stopBtn.addEventListener('click', (e) => {
@@ -207,7 +207,7 @@ export class ReaderTTSController {
     });
 
     // Follow along button (hidden by default)
-    this.followBtn = parent.createDiv({ cls: 'reader-tts-follow-btn' });
+    this.followBtn = parent.createDiv({ cls: 'sa-reader-tts-follow-btn' });
     this.followBtn.style.display = 'none';
     this.followBtn.textContent = 'Follow along';
     this.followBtn.addEventListener('click', (e) => {
@@ -430,7 +430,7 @@ export class ReaderTTSController {
     const next = this.speedIndex + direction;
     // Wrap around: past the end → back to start, before start → go to end
     this.speedIndex = ((next % SPEED_OPTIONS.length) + SPEED_OPTIONS.length) % SPEED_OPTIONS.length;
-    const newSpeed = SPEED_OPTIONS[this.speedIndex]!;
+    const newSpeed = SPEED_OPTIONS[this.speedIndex] ?? 1;
 
     if (this.speedBtn) {
       this.speedBtn.textContent = `${newSpeed}x`;
@@ -541,8 +541,8 @@ export class ReaderTTSController {
     if (!this.headerButton) return;
 
     const status = this.ttsService.state.status;
-    this.headerButton.classList.toggle('reader-tts-btn-active', status === 'playing' || status === 'paused');
-    this.headerButton.classList.toggle('reader-tts-btn-loading', status === 'loading' || status === 'synthesizing');
+    this.headerButton.classList.toggle('sa-reader-tts-btn-active', status === 'playing' || status === 'paused');
+    this.headerButton.classList.toggle('sa-reader-tts-btn-loading', status === 'loading' || status === 'synthesizing');
 
     if (status === 'playing' || status === 'paused') {
       setIcon(this.headerButton, 'volume-2');
@@ -562,7 +562,7 @@ export class ReaderTTSController {
     const status = this.ttsService.state.status;
     const isLoading = status === 'loading' || status === 'synthesizing';
 
-    this.playPauseBtn.classList.toggle('reader-tts-btn-loading', isLoading);
+    this.playPauseBtn.classList.toggle('sa-reader-tts-btn-loading', isLoading);
 
     if (isLoading) {
       setIcon(this.playPauseBtn, 'loader');

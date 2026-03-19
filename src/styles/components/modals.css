@@ -662,18 +662,18 @@
  * ======================================== */
 
 /* Mobile modal sizing */
-.wesm-modal--mobile {
-  width: 95vw !important;
-  max-width: 95vw !important;
-  height: 85vh !important;
-  max-height: 85vh !important;
+.wesm-modal--mobile.wesm-modal--mobile {
+  width: 95vw;
+  max-width: 95vw;
+  height: 85vh;
+  max-height: 85vh;
 }
 
-.wesm-modal--desktop {
-  width: 500px !important;
-  max-width: 500px !important;
-  height: 80vh !important;
-  max-height: 80vh !important;
+.wesm-modal--desktop.wesm-modal--desktop {
+  width: 500px;
+  max-width: 500px;
+  height: 80vh;
+  max-height: 80vh;
 }
 
 .social-archiver-modal .wesm-content--mobile {
@@ -923,12 +923,12 @@
 }
 
 /* Mobile modal sizing (shared) */
-.am-modal--mobile {
-  width: 92vw !important;
-  max-width: 92vw !important;
-  height: auto !important;
-  max-height: 90vh !important;
-  overflow-y: auto !important;
+.am-modal--mobile.am-modal--mobile {
+  width: 92vw;
+  max-width: 92vw;
+  height: auto;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 .social-archiver-modal .am-content--archive {
@@ -1303,4 +1303,111 @@
 
 .rnm-qr-link {
   font-size: 13px;
+}
+
+/* ========================================
+ * ArchiveModal tag search/chip (am-tag-)
+ * ======================================== */
+
+/* Search input */
+.am-tag-search-input {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+/* Dropdown container */
+.am-tag-dropdown {
+  max-height: 150px;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  margin-top: 4px;
+  background-color: var(--background-primary);
+}
+
+/* Dropdown row (existing tags) */
+.am-tag-dropdown-row {
+  padding: 6px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.am-tag-dropdown-row:hover {
+  background-color: var(--background-modifier-hover);
+}
+
+/* Color dot inside dropdown row */
+.am-tag-color-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  /* background-color set dynamically via inline style */
+}
+
+/* Archive count label inside dropdown row */
+.am-tag-count {
+  margin-left: auto;
+  opacity: 0.5;
+  font-size: 11px;
+}
+
+/* Keyboard-navigation highlighted row */
+.am-tag-dropdown-row-highlighted {
+  background-color: var(--background-modifier-hover);
+}
+
+/* "Create new tag" row */
+.am-tag-create-row {
+  padding: 6px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-accent);
+}
+
+.am-tag-create-row:hover {
+  background-color: var(--background-modifier-hover);
+}
+
+/* Invalid/error row */
+.am-tag-invalid-row {
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-error);
+  cursor: default;
+}
+
+/* Tag chip */
+.am-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  cursor: pointer;
+  background-color: var(--background-modifier-hover);
+  border: 1px solid var(--background-modifier-border);
+}
+
+/* Color dot inside chip (background-color set dynamically) */
+.am-tag-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+/* Remove button inside chip */
+.am-tag-chip-remove {
+  margin-left: 2px;
+  font-weight: bold;
+  opacity: 0.6;
 }

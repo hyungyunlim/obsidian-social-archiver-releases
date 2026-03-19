@@ -436,11 +436,10 @@ export class BatchTranscriptionManager {
           fm.transcriptionProcessingTime = result.processingTime;
         });
 
-        const currentContent = await this.deps.app.vault.read(rawFile);
-        const updatedContent = this.deps.appendTranscriptSection(currentContent, result);
-        if (updatedContent !== currentContent) {
-          await this.deps.app.vault.modify(rawFile, updatedContent);
-        }
+        await this.deps.app.vault.process(rawFile, (currentContent) => {
+          const updatedContent = this.deps.appendTranscriptSection(currentContent, result);
+          return updatedContent;
+        });
 
         item.status = 'completed';
         console.debug(`[BatchTranscription] ${itemNum} DONE: ${itemName} (model: ${result.model}, lang: ${result.language})`);
@@ -579,32 +578,27 @@ export class BatchTranscriptionManager {
       const rawFile = this.deps.app.vault.getAbstractFileByPath(filePath);
       if (!rawFile || !(rawFile instanceof TFile)) return;
 
-      const content = await this.deps.app.vault.read(rawFile);
       const videoLink = `![[${videoVaultPath}]]`;
 
-      // Already embedded — skip
-      if (content.includes(videoLink)) return;
+      await this.deps.app.vault.process(rawFile, (content) => {
+        // Already embedded — skip
+        if (content.includes(videoLink)) return content;
 
-      let updatedContent = content;
-
-      // Replace existing video thumbnail: ![🎥 Video (duration)](path/to/thumbnail.jpg)
-      const videoThumbnailRegex = /!\[🎥 Video[^\]]*\]\([^)]+\)/;
-      if (videoThumbnailRegex.test(updatedContent)) {
-        updatedContent = updatedContent.replace(videoThumbnailRegex, videoLink);
-      } else {
-        // No thumbnail found — append before the footer separator or at end
-        const footerSeparator = updatedContent.lastIndexOf('\n---\n');
-        if (footerSeparator > 0) {
-          updatedContent = updatedContent.slice(0, footerSeparator) + `\n\n${videoLink}\n` + updatedContent.slice(footerSeparator);
+        // Replace existing video thumbnail: ![🎥 Video (duration)](path/to/thumbnail.jpg)
+        const videoThumbnailRegex = /!\[🎥 Video[^\]]*\]\([^)]+\)/;
+        if (videoThumbnailRegex.test(content)) {
+          return content.replace(videoThumbnailRegex, videoLink);
         } else {
-          updatedContent = updatedContent + `\n\n${videoLink}`;
+          // No thumbnail found — append before the footer separator or at end
+          const footerSeparator = content.lastIndexOf('\n---\n');
+          if (footerSeparator > 0) {
+            return content.slice(0, footerSeparator) + `\n\n${videoLink}\n` + content.slice(footerSeparator);
+          } else {
+            return content + `\n\n${videoLink}`;
+          }
         }
-      }
-
-      if (updatedContent !== content) {
-        await this.deps.app.vault.modify(rawFile, updatedContent);
-        console.debug(`[BatchTranscription] Embedded video in note: ${videoLink}`);
-      }
+      });
+      console.debug(`[BatchTranscription] Embedded video in note: ${videoLink}`);
     } catch (error) {
       console.warn('[BatchTranscription] Failed to embed video in note:', error);
       // Non-critical — download succeeded, embed is cosmetic

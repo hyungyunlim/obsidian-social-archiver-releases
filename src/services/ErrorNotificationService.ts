@@ -76,7 +76,7 @@ export class ErrorNotificationService implements IService {
   public readonly name = 'ErrorNotificationService';
   private isInitialized = false;
   private activeNotices: Map<string, Notice> = new Map();
-  private pendingTimers: Set<ReturnType<typeof setTimeout>> = new Set();
+  private pendingTimers: Set<number> = new Set();
 
   /**
    * Error message mapping from technical errors to user-friendly messages
@@ -242,7 +242,7 @@ export class ErrorNotificationService implements IService {
   cleanup(): void {
     // Clear all pending notice timers
     for (const timer of this.pendingTimers) {
-      clearTimeout(timer);
+      window.clearTimeout(timer);
     }
     this.pendingTimers.clear();
 
@@ -368,7 +368,7 @@ export class ErrorNotificationService implements IService {
 
   /** Schedule notice cleanup with tracked timer */
   private scheduleNoticeCleanup(noticeId: string, duration: number): void {
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       this.pendingTimers.delete(timer);
       this.activeNotices.delete(noticeId);
     }, duration);

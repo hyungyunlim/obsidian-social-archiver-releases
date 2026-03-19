@@ -445,12 +445,12 @@ export class TTSService {
       this.state.setSentence(nextIndex, this.sentences.length, sentence.text);
       this.state.transition('playing');
       console.debug(`[TTSService] tts_sentence_advanced index=${nextIndex}/${this.sentences.length}`);
-      this.player.play(prefetched);
+      void this.player.play(prefetched);
       // Continue prefetching further ahead
       this.prefetchAhead(nextIndex);
     } else {
       // No prefetched buffer, synthesize on demand
-      this.playSentence(nextIndex);
+      void this.playSentence(nextIndex);
     }
   }
 

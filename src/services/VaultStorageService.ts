@@ -15,7 +15,7 @@ import { getVaultOrganizationStrategy, type SocialArchiverSettings } from '../ty
 import type { MediaResult } from './MediaHandler';
 import { VaultManager } from './VaultManager';
 import { MarkdownConverter } from './MarkdownConverter';
-import { App, Vault, TFile, normalizePath } from 'obsidian';
+import { App, Vault, TFile, normalizePath, stringifyYaml } from 'obsidian';
 
 /**
  * Media file save result
@@ -358,7 +358,7 @@ export class VaultStorageService {
 
     if (existingFile) {
       // Update existing file
-      await this.vault.modify(existingFile, content);
+      await this.vault.process(existingFile, () => content);
       return existingFile;
     }
 
@@ -579,22 +579,9 @@ export class VaultStorageService {
       newInteractionBar;
 
     // Generate new frontmatter YAML
-    const frontmatterYaml = Object.entries(mergedFrontmatter)
-      .map(([key, value]) => {
-        if (typeof value === 'string') {
-          // Escape quotes and wrap in quotes if contains special chars
-          const needsQuotes = value.includes(':') || value.includes('#') || value.includes('\n');
-          return `${key}: ${needsQuotes ? `"${value.replace(/"/g, '\\"')}"` : value}`;
-        } else if (Array.isArray(value)) {
-          return `${key}:\n${value.map(v => `  - ${v}`).join('\n')}`;
-        } else if (typeof value === 'object' && value !== null) {
-          return `${key}: ${JSON.stringify(value)}`;
-        }
-        return `${key}: ${String(value)}`;
-      })
-      .join('\n');
+    const frontmatterYaml = stringifyYaml(mergedFrontmatter);
 
-    const fullDocument = `---\n${frontmatterYaml}\n---\n${finalContent}`;
+    const fullDocument = `---\n${frontmatterYaml}---\n${finalContent}`;
 
     return { fullDocument };
   }
@@ -707,7 +694,7 @@ export class VaultStorageService {
       const markdown = await this.updateMarkdownContent(postData, changes.toKeep, mediaSaved, existingFile);
 
       // Step 6: Save updated content to file
-      await this.vault.modify(existingFile, markdown.fullDocument);
+      await this.vault.process(existingFile, () => markdown.fullDocument);
 
       // Step 7: Update frontmatter with lastModified timestamp
       await this.updateFrontmatter(existingFile, {
@@ -771,19 +758,14 @@ export class VaultStorageService {
       }
     }
 
-    const year = timestamp.getFullYear().toString();
-    const month = String(timestamp.getMonth() + 1).padStart(2, '0');
-    const day = String(timestamp.getDate()).padStart(2, '0');
-    const hours = String(timestamp.getHours()).padStart(2, '0');
-    const minutes = String(timestamp.getMinutes()).padStart(2, '0');
-    const seconds = String(timestamp.getSeconds()).padStart(2, '0');
+    const m = window.moment(timestamp);
 
     return {
-      year,
-      month,
-      day,
-      dateSegment: `${year}-${month}-${day}`,
-      timeSegment: `${hours}${minutes}${seconds}`,
+      year: m.format('YYYY'),
+      month: m.format('MM'),
+      day: m.format('DD'),
+      dateSegment: m.format('YYYY-MM-DD'),
+      timeSegment: m.format('HHmmss'),
     };
   }
 }

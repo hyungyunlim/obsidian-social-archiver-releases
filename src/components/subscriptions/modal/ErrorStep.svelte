@@ -54,7 +54,7 @@ function getErrorIcon(code: string): string {
 function startCountdown(): void {
   if (error.retryDelay && error.retryDelay > 0) {
     retryCountdown = error.retryDelay;
-    countdownInterval = setInterval(() => {
+    countdownInterval = window.setInterval(() => {
       retryCountdown--;
       if (retryCountdown <= 0) {
         stopCountdown();
@@ -68,7 +68,7 @@ function startCountdown(): void {
  */
 function stopCountdown(): void {
   if (countdownInterval) {
-    clearInterval(countdownInterval);
+    window.clearInterval(countdownInterval);
     countdownInterval = null;
   }
 }

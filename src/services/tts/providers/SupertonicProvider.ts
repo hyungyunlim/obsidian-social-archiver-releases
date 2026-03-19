@@ -116,7 +116,7 @@ type IPCResponse = IPCReadyResponse | IPCAudioResponse | IPCVoicesResponse | IPC
 interface PendingRequest {
   resolve: (value: IPCResponse) => void;
   reject: (reason: Error) => void;
-  timer: ReturnType<typeof setTimeout>;
+  timer: number;
 }
 
 // ============================================================================
@@ -128,7 +128,7 @@ export class SupertonicProvider implements PluginTTSProvider {
 
   private process: ReturnType<typeof import('child_process').spawn> | null = null;
   private processId: string | null = null;
-  private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private idleTimer: number | null = null;
   private crashCount = 0;
   private pendingRequests: Map<number, PendingRequest> = new Map();
   private requestCounter = 0;
@@ -154,7 +154,7 @@ export class SupertonicProvider implements PluginTTSProvider {
   // ---------- PluginTTSProvider interface -----------------------------------
 
   supportsLanguage(lang: string): boolean {
-    const short = lang.split('-')[0]!;
+    const short = lang.split('-')[0] ?? lang;
     return SUPPORTED_LANGUAGES.has(short);
   }
 
@@ -168,7 +168,7 @@ export class SupertonicProvider implements PluginTTSProvider {
 
     // Supertonic expects short language codes: en, ko, es, pt, fr
     // Strip region suffix from BCP-47 codes (e.g., ko-KR → ko, en-US → en)
-    const lang = options.lang ? options.lang.split('-')[0]! : undefined;
+    const lang = options.lang ? (options.lang.split('-')[0] ?? options.lang) : undefined;
 
     // Pass rate to Supertonic for pitch-preserving time stretch.
     // Supertonic server.js applies: rate * 1.05, clamped [0.5, 2.5].
@@ -184,7 +184,7 @@ export class SupertonicProvider implements PluginTTSProvider {
     }, SYNTH_TIMEOUT_MS);
 
     if (response.type === 'error') {
-      const code = (response as IPCErrorResponse).code ?? 'INTERNAL_ERROR';
+      const code = response.code ?? 'INTERNAL_ERROR';
       throw new Error(`Supertonic synthesis error [${code}]: ${response.message}`);
     }
 
@@ -193,7 +193,7 @@ export class SupertonicProvider implements PluginTTSProvider {
     }
 
     // Decode base64 WAV to ArrayBuffer
-    const binary = atob((response as IPCAudioResponse).data);
+    const binary = atob(response.data);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) {
       bytes[i] = binary.charCodeAt(i);
@@ -217,7 +217,7 @@ export class SupertonicProvider implements PluginTTSProvider {
 
     if (response.type !== 'voices') return [];
 
-    return (response as IPCVoicesResponse).voices.map((v) => ({
+    return response.voices.map((v) => ({
       id: v.id,
       name: v.name,
       lang: v.lang,
@@ -271,7 +271,7 @@ export class SupertonicProvider implements PluginTTSProvider {
    */
   cancelPendingSynthesis(): void {
     for (const [id, pending] of this.pendingRequests) {
-      clearTimeout(pending.timer);
+      window.clearTimeout(pending.timer);
       pending.reject(new Error('Synthesis cancelled'));
       this.pendingRequests.delete(id);
     }
@@ -283,7 +283,7 @@ export class SupertonicProvider implements PluginTTSProvider {
 
     // Reject all pending requests
     for (const [, pending] of this.pendingRequests) {
-      clearTimeout(pending.timer);
+      window.clearTimeout(pending.timer);
       pending.reject(new Error('Provider destroyed'));
     }
     this.pendingRequests.clear();
@@ -362,7 +362,7 @@ export class SupertonicProvider implements PluginTTSProvider {
 
         // Reject all pending requests
         for (const [id, pending] of this.pendingRequests) {
-          clearTimeout(pending.timer);
+          window.clearTimeout(pending.timer);
           pending.reject(new Error(`Supertonic process crashed (code ${code})`));
           this.pendingRequests.delete(id);
         }
@@ -382,7 +382,7 @@ export class SupertonicProvider implements PluginTTSProvider {
         this.isReady = false;
 
         for (const [, pending] of this.pendingRequests) {
-          clearTimeout(pending.timer);
+          window.clearTimeout(pending.timer);
           pending.reject(err);
         }
         this.pendingRequests.clear();
@@ -394,7 +394,7 @@ export class SupertonicProvider implements PluginTTSProvider {
       });
 
       // Set up ready timeout (FR-04 §1: max 10s wait)
-      const readyTimer = setTimeout(() => {
+      const readyTimer = window.setTimeout(() => {
         if (!this.isReady) {
           console.error('[SupertonicProvider] Ready timeout after 10s');
           this.killProcess();
@@ -403,10 +403,10 @@ export class SupertonicProvider implements PluginTTSProvider {
 
       // Store readyTimer cleanup (cleared when ready is received)
       const originalIsReady = this.isReady;
-      const checkReady = setInterval(() => {
+      const checkReady = window.setInterval(() => {
         if (this.isReady !== originalIsReady || !this.process) {
-          clearInterval(checkReady);
-          clearTimeout(readyTimer);
+          window.clearInterval(checkReady);
+          window.clearTimeout(readyTimer);
         }
       }, 100);
 
@@ -459,18 +459,18 @@ export class SupertonicProvider implements PluginTTSProvider {
       const id = request.id;
       const payload = JSON.stringify(request) + '\n';
 
-      const timer = setTimeout(() => {
+      const timer = window.setTimeout(() => {
         this.pendingRequests.delete(id);
         reject(new Error(`Supertonic request timeout after ${timeoutMs}ms`));
       }, timeoutMs);
 
       this.pendingRequests.set(id, {
         resolve: (response) => {
-          clearTimeout(timer);
+          window.clearTimeout(timer);
           resolve(response);
         },
         reject: (error) => {
-          clearTimeout(timer);
+          window.clearTimeout(timer);
           reject(error);
         },
         timer,
@@ -500,9 +500,9 @@ export class SupertonicProvider implements PluginTTSProvider {
 
         const id = response.id;
         if (id !== undefined && this.pendingRequests.has(id)) {
-          const pending = this.pendingRequests.get(id)!;
+          const pending = this.pendingRequests.get(id);
           this.pendingRequests.delete(id);
-          pending.resolve(response);
+          pending?.resolve(response);
         }
       } catch {
         console.debug('[SupertonicProvider] Non-JSON output:', trimmed);
@@ -547,7 +547,7 @@ export class SupertonicProvider implements PluginTTSProvider {
 
   private resetIdleTimer(): void {
     this.clearIdleTimer();
-    this.idleTimer = setTimeout(() => {
+    this.idleTimer = window.setTimeout(() => {
       console.debug('[SupertonicProvider] Idle timeout, killing process');
       this.killProcess();
     }, IDLE_TIMEOUT_MS);
@@ -555,7 +555,7 @@ export class SupertonicProvider implements PluginTTSProvider {
 
   private clearIdleTimer(): void {
     if (this.idleTimer) {
-      clearTimeout(this.idleTimer);
+      window.clearTimeout(this.idleTimer);
       this.idleTimer = null;
     }
   }

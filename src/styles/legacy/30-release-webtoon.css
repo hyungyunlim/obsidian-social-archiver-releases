@@ -1,10 +1,10 @@
 /* Legacy split chunk: 30-release-webtoon.css (preserves original rule order) */
 
-.release-notes-modal {
+.sa-release-notes-modal {
   max-width: 500px
 }
 
-.release-notes-modal .release-notes-title {
+.sa-release-notes-modal .sa-release-notes-title {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -14,7 +14,7 @@
   color: var(--text-normal)
 }
 
-.release-notes-modal .release-notes-badge {
+.sa-release-notes-modal .sa-release-notes-badge {
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 10px;
@@ -23,81 +23,81 @@
   flex-shrink: 0
 }
 
-.release-notes-modal .release-notes-date {
+.sa-release-notes-modal .sa-release-notes-date {
   margin: 0 0 16px;
   font-size: 12px
 }
 
-.release-notes-modal .release-notes-content {
+.sa-release-notes-modal .sa-release-notes-content {
   max-height: 50vh;
   overflow-y: auto;
   padding-right: 8px;
   margin-bottom: 20px
 }
 
-.release-notes-modal .release-notes-content h2 {
+.sa-release-notes-modal .sa-release-notes-content h2 {
   font-size: 15px;
   font-weight: 600;
   margin: 16px 0 8px;
   color: var(--text-normal)
 }
 
-.release-notes-modal .release-notes-content h2:first-child {
+.sa-release-notes-modal .sa-release-notes-content h2:first-child {
   margin-top: 0
 }
 
-.release-notes-modal .release-notes-content ul {
+.sa-release-notes-modal .sa-release-notes-content ul {
   margin: 8px 0;
   padding-left: 20px
 }
 
-.release-notes-modal .release-notes-content li {
+.sa-release-notes-modal .sa-release-notes-content li {
   margin: 4px 0;
   font-size: 13px;
   line-height: 1.5;
   color: var(--text-normal)
 }
 
-.release-notes-modal .release-notes-content p {
+.sa-release-notes-modal .sa-release-notes-content p {
   margin: 8px 0;
   font-size: 13px;
   line-height: 1.5;
   color: var(--text-normal)
 }
 
-.release-notes-modal .release-notes-content strong {
+.sa-release-notes-modal .sa-release-notes-content strong {
   font-weight: 600;
   color: var(--text-normal)
 }
 
-.release-notes-modal .release-notes-content ol {
+.sa-release-notes-modal .sa-release-notes-content ol {
   margin: 8px 0;
   padding-left: 20px
 }
 
-.release-notes-modal .release-notes-footer {
+.sa-release-notes-modal .sa-release-notes-footer {
   display: flex;
   justify-content: flex-end;
   padding-top: 12px;
   border-top: 1px solid var(--background-modifier-border)
 }
 
-.release-notes-modal .release-notes-footer button {
+.sa-release-notes-modal .sa-release-notes-footer button {
   min-width: 80px;
   min-height: 36px
 }
 
 @media(max-width:480px) {
-  .release-notes-modal .release-notes-content {
+  .sa-release-notes-modal .sa-release-notes-content {
     max-height: 60vh
   }
 
-  .release-notes-modal .release-notes-footer button {
+  .sa-release-notes-modal .sa-release-notes-footer button {
     min-height: 44px
   }
 }
 
-.release-notes-modal .release-notes-content iframe {
+.sa-release-notes-modal .sa-release-notes-content iframe {
   width: 100%;
   max-width: 100%;
   aspect-ratio: 16/9;
@@ -105,13 +105,13 @@
   margin: 12px 0
 }
 
-.release-notes-modal .release-notes-content .external-embed {
+.sa-release-notes-modal .sa-release-notes-content .external-embed {
   width: 100%;
   max-width: 100%;
   margin: 12px 0
 }
 
-.release-notes-modal .release-notes-content .external-link {
+.sa-release-notes-modal .sa-release-notes-content .external-link {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -124,11 +124,11 @@
   margin: 8px 0
 }
 
-.release-notes-modal .release-notes-content .external-link:hover {
+.sa-release-notes-modal .sa-release-notes-content .external-link:hover {
   background: var(--background-modifier-hover)
 }
 
-.episode-item {
+.sa-episode-item {
   display: flex;
   align-items: flex-start;
   gap: 12px;
@@ -138,7 +138,7 @@
   transition: background .15s ease
 }
 
-.episode-status {
+.sa-episode-status {
   width: 18px;
   height: 18px;
   flex-shrink: 0;
@@ -169,8 +169,8 @@
     padding: 12px
   }
 
-  .episode-list-toggle,
-  .episode-item {
+  .sa-episode-list-toggle,
+  .sa-episode-item {
     padding: 10px 12px
   }
 
@@ -220,19 +220,19 @@
   border-bottom: none
 }
 
-.webtoon-series-card .webtoon-episode-header {
+.webtoon-series-card .sa-webtoon-episode-header {
   padding: 12px 16px;
   border-bottom: 1px solid var(--background-modifier-border);
   background: var(--background-secondary)
 }
 
-.webtoon-series-card .webtoon-episode-title-row {
+.webtoon-series-card .sa-webtoon-episode-title-row {
   display: flex;
   align-items: center;
   gap: 8px
 }
 
-.webtoon-series-card .webtoon-episode-num {
+.webtoon-series-card .sa-webtoon-episode-num {
   padding: 2px 8px;
   background: var(--interactive-accent);
   color: var(--text-on-accent);
@@ -242,7 +242,7 @@
   flex-shrink: 0
 }
 
-.webtoon-series-card .webtoon-episode-title {
+.webtoon-series-card .sa-webtoon-episode-title {
   font-size: 14px;
   font-weight: 500;
   color: var(--text-normal);
@@ -317,11 +317,11 @@
   transition: width .1s ease
 }
 
-.webtoon-episode-list .episode-list-toggle {
+.sa-webtoon-episode-list .sa-episode-list-toggle {
   border-top: 1px solid var(--background-modifier-border)
 }
 
-.webtoon-episode-item {
+.sa-webtoon-episode-item {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -331,12 +331,12 @@
   transition: background .15s ease
 }
 
-.webtoon-episode-item:hover,
-.webtoon-episode-item.current {
+.sa-webtoon-episode-item:hover,
+.sa-webtoon-episode-item.current {
   background: var(--background-modifier-hover)
 }
 
-.webtoon-episode-cover {
+.sa-webtoon-episode-cover {
   width: 48px;
   height: 48px;
   flex-shrink: 0;
@@ -348,14 +348,14 @@
   justify-content: center
 }
 
-.webtoon-episode-cover img {
+.sa-webtoon-episode-cover img {
   width: 100%;
   height: 100%;
   -o-object-fit: cover;
   object-fit: cover
 }
 
-.webtoon-episode-info {
+.sa-webtoon-episode-info {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -363,7 +363,7 @@
   gap: 2px
 }
 
-.webtoon-episode-item .episode-num-badge {
+.sa-webtoon-episode-item .sa-episode-num-badge {
   padding: 1px 6px;
   border-radius: 3px;
   font-size: 11px;
@@ -371,7 +371,7 @@
   flex-shrink: 0
 }
 
-.webtoon-episode-item .webtoon-episode-item-title {
+.sa-webtoon-episode-item .sa-webtoon-episode-item-title {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-normal);
@@ -382,7 +382,7 @@
   min-width: 0
 }
 
-.webtoon-episode-item .read-badge {
+.sa-webtoon-episode-item .read-badge {
   padding: 1px 4px;
   background: var(--background-modifier-success);
   color: var(--text-success);
@@ -401,11 +401,11 @@
     padding: 1px 3px
   }
 
-  .webtoon-episode-item {
+  .sa-webtoon-episode-item {
     padding: 8px 12px
   }
 
-  .webtoon-episode-cover {
+  .sa-webtoon-episode-cover {
     width: 40px;
     height: 40px
   }
@@ -415,7 +415,7 @@
   }
 }
 
-.series-fullscreen-backdrop {
+.sa-series-fullscreen-backdrop {
   position: fixed;
   inset: 0;
   background: #000000b3;

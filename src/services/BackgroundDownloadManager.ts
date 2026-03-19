@@ -373,12 +373,12 @@ export class BackgroundDownloadManager extends EventTarget {
 
     // Wait for markdown creation event
     const result = await new Promise<{ filePath: string; imageUrls: string[] } | null>((resolve) => {
-      const timeoutId = setTimeout(() => {
+      const timeoutId = window.setTimeout(() => {
         resolve(null);
       }, timeout);
 
       tempQueue.addEventListener('markdown-created', ((e: CustomEvent) => {
-        clearTimeout(timeoutId);
+        window.clearTimeout(timeoutId);
         const detail = e.detail as Record<string, unknown>;
         resolve({
           filePath: typeof detail['filePath'] === 'string' ? detail['filePath'] : '',
@@ -387,7 +387,7 @@ export class BackgroundDownloadManager extends EventTarget {
       }) as EventListener);
 
       tempQueue.addEventListener('episode-failed', (() => {
-        clearTimeout(timeoutId);
+        window.clearTimeout(timeoutId);
         resolve(null);
       }) as EventListener);
 
@@ -460,7 +460,7 @@ export class BackgroundDownloadManager extends EventTarget {
    * Delay helper
    */
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise(resolve => window.setTimeout(resolve, ms));
   }
 
   // ==========================================================================

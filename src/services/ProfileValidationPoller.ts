@@ -123,8 +123,8 @@ export class ProfileValidationPoller {
   private readonly onProgress?: ProgressCallback;
 
   private abortController: AbortController | null = null;
-  private intervalId: ReturnType<typeof setInterval> | null = null;
-  private timeoutId: ReturnType<typeof setTimeout> | null = null;
+  private intervalId: number | null = null;
+  private timeoutId: number | null = null;
 
   constructor(config: PollerConfig) {
     this.apiBaseUrl = config.apiBaseUrl;
@@ -151,7 +151,7 @@ export class ProfileValidationPoller {
       const startTime = Date.now();
 
       // Set up timeout (tracked for cleanup)
-      this.timeoutId = setTimeout(() => {
+      this.timeoutId = window.setTimeout(() => {
         this.timeoutId = null;
         this.cleanup();
         reject(new ProfileValidationError(
@@ -161,7 +161,7 @@ export class ProfileValidationPoller {
       }, this.timeout);
 
       // Start polling
-      this.intervalId = setInterval(() => {
+      this.intervalId = window.setInterval(() => {
         void (async () => {
         try {
           const elapsed = Date.now() - startTime;
@@ -278,7 +278,7 @@ export class ProfileValidationPoller {
 
         // Wait before retry
         if (attempt < this.maxRetries - 1) {
-          await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+          await new Promise(r => window.setTimeout(r, 500 * (attempt + 1)));
         }
       }
     }
@@ -291,11 +291,11 @@ export class ProfileValidationPoller {
    */
   private cleanup(): void {
     if (this.intervalId) {
-      clearInterval(this.intervalId);
+      window.clearInterval(this.intervalId);
       this.intervalId = null;
     }
     if (this.timeoutId) {
-      clearTimeout(this.timeoutId);
+      window.clearTimeout(this.timeoutId);
       this.timeoutId = null;
     }
     this.abortController = null;

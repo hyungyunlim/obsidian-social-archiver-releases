@@ -160,7 +160,7 @@ export function buildOffsetMap(
 ): number[] | null {
   if (!cleanedText || !rawText) return null;
 
-  const map: number[] = new Array(cleanedText.length + 1);
+  const map: number[] = new Array<number>(cleanedText.length + 1);
   let fi = 0;
 
   // Forward-only character alignment (no global token indexOf jumps).

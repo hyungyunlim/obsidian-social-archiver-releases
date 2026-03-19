@@ -12,7 +12,7 @@ import type { BatchProgress, BatchOperationStatus } from '../types/batch-transcr
 export class BatchTranscriptionNotice {
   private notice: Notice | null = null;
   private unsubscribe: (() => void) | null = null;
-  private autoDismissTimer: ReturnType<typeof setTimeout> | null = null;
+  private autoDismissTimer: number | null = null;
 
   private titleEl!: HTMLElement;
   private progressBarEl!: HTMLElement;
@@ -74,7 +74,7 @@ export class BatchTranscriptionNotice {
 
   dismiss(): void {
     if (this.autoDismissTimer) {
-      clearTimeout(this.autoDismissTimer);
+      window.clearTimeout(this.autoDismissTimer);
       this.autoDismissTimer = null;
     }
     this.unsubscribe?.();
@@ -137,7 +137,7 @@ export class BatchTranscriptionNotice {
     // Auto-dismiss on terminal states
     if (progress.status === 'completed' || progress.status === 'cancelled') {
       if (!this.autoDismissTimer) {
-        this.autoDismissTimer = setTimeout(() => this.dismiss(), 5000);
+        this.autoDismissTimer = window.setTimeout(() => this.dismiss(), 5000);
       }
     }
   }

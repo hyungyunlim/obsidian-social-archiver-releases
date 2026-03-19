@@ -109,7 +109,7 @@ export class SeriesCardRenderer extends Component {
   // Pending read status updates (to skip re-render on metadata change)
   // Map structure: filePath -> isRead
   private pendingReadUpdates: Map<string, boolean> = new Map();
-  private readUpdateDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private readUpdateDebounceTimer: number | null = null;
 
   // Preview episode info cache (for subscribed webtoons)
   // Map structure: titleId -> { count: number, nextFree: { no: number, schedule: string } | null }
@@ -1420,13 +1420,13 @@ export class SeriesCardRenderer extends Component {
 
     // Wait for markdown creation event
     const result = await new Promise<{ filePath: string; imageUrls: string[] } | null>((resolve) => {
-      const timeoutId = setTimeout(() => {
+      const timeoutId = window.setTimeout(() => {
         console.warn('[SeriesCardRenderer] WEBTOON Global download timed out');
         resolve(null);
       }, timeout);
 
       tempQueue.addEventListener('markdown-created', ((e: CustomEvent) => {
-        clearTimeout(timeoutId);
+        window.clearTimeout(timeoutId);
         const detail = e.detail as Record<string, unknown>;
         resolve({
           filePath: typeof detail.filePath === 'string' ? detail.filePath : '',
@@ -1435,7 +1435,7 @@ export class SeriesCardRenderer extends Component {
       }) as EventListener);
 
       tempQueue.addEventListener('episode-failed', ((e: CustomEvent) => {
-        clearTimeout(timeoutId);
+        window.clearTimeout(timeoutId);
         const detail = e.detail as Record<string, unknown>;
         console.error('[SeriesCardRenderer] WEBTOON Global episode download failed:', detail.error);
         resolve(null);
@@ -1752,7 +1752,7 @@ export class SeriesCardRenderer extends Component {
     if (this.fullscreenSeriesId) {
       const prevCard = this.cardElements.get(this.fullscreenSeriesId);
       if (prevCard) {
-        prevCard.classList.remove('series-fullscreen');
+        prevCard.classList.remove('sa-series-fullscreen');
       }
     }
 
@@ -1779,13 +1779,13 @@ export class SeriesCardRenderer extends Component {
 
     // Create backdrop first (lower z-index)
     const backdrop = document.createElement('div');
-    backdrop.className = 'series-fullscreen-backdrop';
+    backdrop.className = 'sa-series-fullscreen-backdrop';
     backdrop.addEventListener('click', () => this.exitFullscreen(series));
     document.body.appendChild(backdrop);
 
     // Move card to document.body to escape stacking context
     document.body.appendChild(card);
-    card.classList.add('series-fullscreen');
+    card.classList.add('sa-series-fullscreen');
 
     // Apply safe-area padding to header for notch/dynamic island
     const header = card.querySelector('.series-header') as HTMLElement;
@@ -1893,7 +1893,7 @@ export class SeriesCardRenderer extends Component {
 
       // Show brief tap hint animation (first time only)
       scrollContainer.classList.add('show-tap-hint');
-      setTimeout(() => {
+      window.setTimeout(() => {
         scrollContainer.classList.remove('show-tap-hint');
       }, 2500);
     }
@@ -1924,7 +1924,7 @@ export class SeriesCardRenderer extends Component {
     card.classList.add('series-immersive');
 
     // Hide backdrop in immersive mode for true full-screen feel
-    const backdrop = document.querySelector('.series-fullscreen-backdrop') as HTMLElement;
+    const backdrop = document.querySelector('.sa-series-fullscreen-backdrop') as HTMLElement;
     if (backdrop) {
       backdrop.addClass('sa-opacity-0');
     }
@@ -1938,7 +1938,7 @@ export class SeriesCardRenderer extends Component {
     card.classList.remove('series-immersive');
 
     // Restore backdrop
-    const backdrop = document.querySelector('.series-fullscreen-backdrop') as HTMLElement;
+    const backdrop = document.querySelector('.sa-series-fullscreen-backdrop') as HTMLElement;
     if (backdrop) {
       backdrop.removeClass('sa-opacity-0');
     }
@@ -1960,7 +1960,7 @@ export class SeriesCardRenderer extends Component {
     }
 
     // Remove backdrop
-    const backdrop = document.querySelector('.series-fullscreen-backdrop');
+    const backdrop = document.querySelector('.sa-series-fullscreen-backdrop');
     if (backdrop) {
       backdrop.remove();
     }
@@ -1987,7 +1987,7 @@ export class SeriesCardRenderer extends Component {
       scrollPercent = maxScroll > 0 ? scrollContainer.scrollTop / maxScroll : 0;
     }
 
-    card.classList.remove('series-fullscreen');
+    card.classList.remove('sa-series-fullscreen');
     card.classList.remove('series-immersive');
 
     // Restore CSS smooth scroll behavior
@@ -2209,7 +2209,7 @@ export class SeriesCardRenderer extends Component {
       await this.callbacks.renderEpisodeContent(contentWrapper, postData);
     } else {
       // Fallback to excerpt (styles from skeleton-card.css)
-      const excerptEl = container.createEl('p', { cls: 'episode-excerpt' });
+      const excerptEl = container.createEl('p', { cls: 'sa-episode-excerpt' });
       excerptEl.textContent = episode.excerpt;
     }
   }
@@ -2247,24 +2247,24 @@ export class SeriesCardRenderer extends Component {
     // Only fallback to excerpt if BOTH postData is empty AND no streaming URLs
     if ((!postData || postData.media.length === 0) && !hasStreamingUrls) {
       // Fallback to excerpt
-      const excerptEl = container.createEl('p', { cls: 'episode-excerpt' });
+      const excerptEl = container.createEl('p', { cls: 'sa-episode-excerpt' });
       excerptEl.textContent = episode.excerpt;
       return;
     }
 
     // Episode title header (minimal)
-    const episodeHeader = container.createDiv({ cls: 'webtoon-episode-header' });
+    const episodeHeader = container.createDiv({ cls: 'sa-webtoon-episode-header' });
     episodeHeader.addClass('sa-px-16', 'sa-py-12', 'sa-border-b', 'sa-bg-secondary');
 
     // Episode number + title
-    const titleRow = episodeHeader.createDiv({ cls: 'webtoon-episode-title-row' });
+    const titleRow = episodeHeader.createDiv({ cls: 'sa-webtoon-episode-title-row' });
     titleRow.addClass('sa-flex-row', 'sa-gap-8');
 
-    const episodeNum = titleRow.createSpan({ cls: 'webtoon-episode-num' });
+    const episodeNum = titleRow.createSpan({ cls: 'sa-webtoon-episode-num' });
     episodeNum.addClass('sa-px-8', 'sa-bg-accent', 'sa-rounded-4', 'sa-text-sm', 'sa-font-bold', 'scr-episode-num');
     episodeNum.textContent = `Ep. ${episode.episode}`;
 
-    const episodeTitle = titleRow.createSpan({ cls: 'webtoon-episode-title' });
+    const episodeTitle = titleRow.createSpan({ cls: 'sa-webtoon-episode-title' });
     episodeTitle.addClass('sa-text-md', 'sa-font-medium', 'sa-text-normal', 'sa-truncate', 'sa-flex-1', 'sa-min-w-0', 'sa-clickable');
     // Extract just the episode title (remove series name prefix and episode number prefix)
     let titleText = episode.title.includes(' - ')
@@ -2857,7 +2857,7 @@ export class SeriesCardRenderer extends Component {
     }
 
     // Update cover (opacity + grayscale filter)
-    const coverContainer = item.querySelector('.webtoon-episode-cover') as HTMLElement;
+    const coverContainer = item.querySelector('.sa-webtoon-episode-cover') as HTMLElement;
     if (coverContainer) {
       coverContainer.classList.toggle('sa-opacity-50', isRead);
       coverContainer.toggleClass('scr-episode-cover--read', isRead);
@@ -2865,7 +2865,7 @@ export class SeriesCardRenderer extends Component {
     }
 
     // Update read indicator icon (add/remove)
-    const titleRow = item.querySelector('.webtoon-episode-title-row') as HTMLElement;
+    const titleRow = item.querySelector('.sa-webtoon-episode-title-row') as HTMLElement;
     if (titleRow) {
       let readIndicator = titleRow.querySelector('.read-indicator') as HTMLElement;
 
@@ -2889,7 +2889,7 @@ export class SeriesCardRenderer extends Component {
     }
 
     // Update episode number badge styling
-    const numBadge = item.querySelector('.episode-num-badge') as HTMLElement;
+    const numBadge = item.querySelector('.sa-episode-num-badge') as HTMLElement;
     if (numBadge && !isCurrent) {
       numBadge.setCssProps({
         '--sa-bg': isRead ? 'var(--background-secondary)' : 'var(--background-modifier-hover)',
@@ -2901,7 +2901,7 @@ export class SeriesCardRenderer extends Component {
     }
 
     // Update title (color + font weight)
-    const titleEl = item.querySelector('.webtoon-episode-item-title') as HTMLElement;
+    const titleEl = item.querySelector('.sa-webtoon-episode-item-title') as HTMLElement;
     if (titleEl) {
       titleEl.setCssProps({ '--sa-color': isRead ? 'var(--text-faint)' : 'var(--text-normal)' });
       titleEl.addClass('sa-dynamic-color');
@@ -2934,11 +2934,11 @@ export class SeriesCardRenderer extends Component {
   private scheduleReadStatusSave(): void {
     // Clear existing timer
     if (this.readUpdateDebounceTimer) {
-      clearTimeout(this.readUpdateDebounceTimer);
+      window.clearTimeout(this.readUpdateDebounceTimer);
     }
 
     // Debounce save for 500ms to batch multiple updates
-    this.readUpdateDebounceTimer = setTimeout(() => { void (async () => {
+    this.readUpdateDebounceTimer = window.setTimeout(() => { void (async () => {
       // Save all pending updates
       for (const [pendingPath, pendingIsRead] of this.pendingReadUpdates) {
         const file = this.app.vault.getAbstractFileByPath(pendingPath);
@@ -3020,7 +3020,7 @@ export class SeriesCardRenderer extends Component {
     if (!counts) return;
 
     // Find all episode items and update comment badges
-    const episodeItems = listWrapper.querySelectorAll('.webtoon-episode-item');
+    const episodeItems = listWrapper.querySelectorAll('.sa-webtoon-episode-item');
     episodeItems.forEach((item) => {
       const episodeNo = parseInt((item as HTMLElement).dataset.episode || '0', 10);
       const commentCount = counts.get(episodeNo);
@@ -3145,12 +3145,12 @@ export class SeriesCardRenderer extends Component {
     });
 
     // Toggle header (styles from skeleton-card.css)
-    const toggleHeader = listWrapper.createDiv({ cls: 'episode-list-toggle' });
+    const toggleHeader = listWrapper.createDiv({ cls: 'sa-episode-list-toggle' });
     toggleHeader.addClass('sa-flex-row', 'sa-gap-8', 'sa-px-12', 'sa-py-8');
 
     // Chevron icon
     const chevron = toggleHeader.createDiv({
-      cls: `episode-list-chevron ${state.expandedTOC ? 'expanded' : ''}`
+      cls: `sa-episode-list-chevron ${state.expandedTOC ? 'expanded' : ''}`
     });
     setIcon(chevron, 'chevron-right');
 
@@ -3244,7 +3244,7 @@ export class SeriesCardRenderer extends Component {
     }
 
     // Episode list container (styles from skeleton-card.css)
-    const listContainer = listWrapper.createDiv({ cls: 'episode-list-container' });
+    const listContainer = listWrapper.createDiv({ cls: 'sa-episode-list-container' });
     listContainer.addClass(state.expandedTOC ? 'scr-episode-list--expanded' : 'scr-episode-list--collapsed');
 
     // Preview banner placeholder (for all webtoons - shows preview episode info)
@@ -3324,7 +3324,7 @@ export class SeriesCardRenderer extends Component {
     const isCurrent = episode.episode === state.currentEpisode;
 
     // Build class list (styles from skeleton-card.css)
-    const itemClasses = ['episode-item'];
+    const itemClasses = ['sa-episode-item'];
     if (isCurrent) itemClasses.push('current');
     if (episode.isRead) itemClasses.push('read');
 
@@ -3332,7 +3332,7 @@ export class SeriesCardRenderer extends Component {
     item.dataset.episode = String(episode.episode);
 
     // Status indicator
-    const statusClasses = ['episode-status'];
+    const statusClasses = ['sa-episode-status'];
     if (isCurrent) statusClasses.push('current');
     else if (episode.isRead) statusClasses.push('read');
     else statusClasses.push('unread');
@@ -3348,19 +3348,19 @@ export class SeriesCardRenderer extends Component {
     }
 
     // Episode content
-    const content = item.createDiv({ cls: 'episode-item-content' });
+    const content = item.createDiv({ cls: 'sa-episode-item-content' });
 
     // Episode number and title
-    const titleRow = content.createDiv({ cls: 'episode-item-title-row' });
+    const titleRow = content.createDiv({ cls: 'sa-episode-item-title-row' });
 
-    const numEl = titleRow.createEl('span', { cls: 'episode-num' });
+    const numEl = titleRow.createEl('span', { cls: 'sa-episode-num' });
     numEl.textContent = `${episode.episode}`;
 
-    const titleEl = titleRow.createEl('span', { cls: 'episode-item-title' });
+    const titleEl = titleRow.createEl('span', { cls: 'sa-episode-item-title' });
     titleEl.textContent = episode.title;
 
     // Excerpt
-    const excerptEl = content.createEl('p', { cls: 'episode-item-excerpt' });
+    const excerptEl = content.createEl('p', { cls: 'sa-episode-item-excerpt' });
     excerptEl.textContent = episode.excerpt;
 
     // Click to switch episode
@@ -3383,7 +3383,7 @@ export class SeriesCardRenderer extends Component {
     const isCurrent = episode.episode === state.currentEpisode;
 
     // Build class list
-    const itemClasses = ['episode-item', 'webtoon-episode-item'];
+    const itemClasses = ['sa-episode-item', 'sa-webtoon-episode-item'];
     if (isCurrent) itemClasses.push('current');
     if (episode.isRead) itemClasses.push('read');
 
@@ -3393,7 +3393,7 @@ export class SeriesCardRenderer extends Component {
 
     // Cover thumbnail placeholder (will be loaded async)
     // Read episodes have grayscale + reduced opacity for clear visual distinction
-    const coverContainer = item.createDiv({ cls: 'webtoon-episode-cover' });
+    const coverContainer = item.createDiv({ cls: 'sa-webtoon-episode-cover' });
     coverContainer.addClass('sa-flex-shrink-0', 'sa-rounded-6', 'sa-bg-secondary', 'sa-overflow-hidden', 'sa-flex-center', 'scr-episode-cover');
     coverContainer.classList.toggle('sa-opacity-50', episode.isRead);
     coverContainer.toggleClass('scr-episode-cover--read', episode.isRead);
@@ -3403,11 +3403,11 @@ export class SeriesCardRenderer extends Component {
     void this.loadEpisodeCover(coverContainer, episode);
 
     // Episode info section
-    const infoSection = item.createDiv({ cls: 'webtoon-episode-info' });
+    const infoSection = item.createDiv({ cls: 'sa-webtoon-episode-info' });
     infoSection.addClass('sa-flex-1', 'sa-min-w-0', 'sa-flex-col', 'sa-gap-2');
 
     // Episode number badge + title row
-    const titleRow = infoSection.createDiv({ cls: 'webtoon-episode-title-row' });
+    const titleRow = infoSection.createDiv({ cls: 'sa-webtoon-episode-title-row' });
     titleRow.addClass('sa-flex-row', 'sa-gap-6');
 
     // Read indicator icon (shows before episode number for read items)
@@ -3423,7 +3423,7 @@ export class SeriesCardRenderer extends Component {
     }
 
     // Episode number badge - more faded when read (unless current)
-    const numBadge = titleRow.createSpan({ cls: 'episode-num-badge' });
+    const numBadge = titleRow.createSpan({ cls: 'sa-episode-num-badge' });
     const numBadgeBg = isCurrent
       ? 'var(--interactive-accent)'
       : episode.isRead
@@ -3442,7 +3442,7 @@ export class SeriesCardRenderer extends Component {
     numBadge.textContent = `Ep. ${episode.episode}`;
 
     // Title - more muted when read (--text-faint instead of --text-muted)
-    const titleEl = titleRow.createSpan({ cls: 'webtoon-episode-item-title' });
+    const titleEl = titleRow.createSpan({ cls: 'sa-webtoon-episode-item-title' });
     titleEl.addClass('sa-text-base', 'sa-truncate', 'sa-flex-1', 'sa-min-w-0', 'sa-transition');
     titleEl.toggleClass('scr-ep-title--read', episode.isRead);
     titleEl.toggleClass('scr-ep-title--unread', !episode.isRead);
@@ -3616,9 +3616,9 @@ export class SeriesCardRenderer extends Component {
           }
         };
         // Store cleanup so we can remove on component destroy even if menu is never clicked outside
-        const addListenerTimeout = setTimeout(() => document.addEventListener('click', closeHandler), 0);
+        const addListenerTimeout = window.setTimeout(() => document.addEventListener('click', closeHandler), 0);
         this.cleanupFunctions.push(() => {
-          clearTimeout(addListenerTimeout);
+          window.clearTimeout(addListenerTimeout);
           document.removeEventListener('click', closeHandler);
           if (menuEl) {
             menuEl.remove();
@@ -4057,7 +4057,7 @@ export class SeriesCardRenderer extends Component {
     const listWrapper = this.episodeLists.get(series.seriesId);
     if (!listWrapper) return;
 
-    const items = listWrapper.querySelectorAll('.episode-item');
+    const items = listWrapper.querySelectorAll('.sa-episode-item');
     items.forEach((item) => {
       const episodeNum = parseInt((item as HTMLElement).dataset.episode || '0', 10);
       const isCurrent = episodeNum === currentEpisode;
@@ -4067,7 +4067,7 @@ export class SeriesCardRenderer extends Component {
       item.classList.toggle('current', isCurrent);
 
       // Update status icon
-      const statusIcon = item.querySelector('.episode-status');
+      const statusIcon = item.querySelector('.sa-episode-status');
       if (statusIcon) {
         (statusIcon as HTMLElement).empty();
         statusIcon.classList.remove('current', 'read', 'unread');
@@ -4215,7 +4215,7 @@ export class SeriesCardRenderer extends Component {
     if (this.fullscreenSeriesId) {
       const card = this.cardElements.get(this.fullscreenSeriesId);
       if (card) {
-        card.classList.remove('series-fullscreen');
+        card.classList.remove('sa-series-fullscreen');
 
         // Restore card to original position if moved to body
         if (this.fullscreenOriginalParent) {
@@ -4238,7 +4238,7 @@ export class SeriesCardRenderer extends Component {
       }
 
       // Remove backdrop
-      const backdrop = document.querySelector('.series-fullscreen-backdrop');
+      const backdrop = document.querySelector('.sa-series-fullscreen-backdrop');
       if (backdrop) {
         backdrop.remove();
       }
@@ -4276,7 +4276,7 @@ export class SeriesCardRenderer extends Component {
     this.previewInfoLoading.clear();
     this.pendingReadUpdates.clear();
     if (this.readUpdateDebounceTimer) {
-      clearTimeout(this.readUpdateDebounceTimer);
+      window.clearTimeout(this.readUpdateDebounceTimer);
       this.readUpdateDebounceTimer = null;
     }
   }
@@ -4378,7 +4378,7 @@ export class SeriesCardRenderer extends Component {
     }
 
     // Remove backdrop
-    const backdrop = document.querySelector('.series-fullscreen-backdrop');
+    const backdrop = document.querySelector('.sa-series-fullscreen-backdrop');
     if (backdrop) {
       backdrop.remove();
     }

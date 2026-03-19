@@ -249,7 +249,7 @@ export class SortDropdown {
         this.close();
       }
     };
-    setTimeout(() => {
+    window.setTimeout(() => {
       // Guard: dropdown may have been closed during the timeout delay
       if (this.closeHandler && this.isOpen) {
         document.addEventListener('click', this.closeHandler);

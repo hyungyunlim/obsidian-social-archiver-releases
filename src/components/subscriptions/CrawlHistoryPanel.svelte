@@ -256,7 +256,7 @@ async function handleRunNow(): Promise<void> {
     try {
       await onRunNow();
       // Wait a moment then refresh history
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => window.setTimeout(resolve, 1000));
       await loadHistory();
     } finally {
       isRunning = false;

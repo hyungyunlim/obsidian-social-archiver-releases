@@ -584,36 +584,36 @@
   }
 }
 
-.timeline-avatar[data-platform=facebook] {
-  background: #1877f2 !important;
+.timeline-avatar[data-platform=facebook].timeline-avatar[data-platform=facebook] {
+  background: #1877f2;
   color: #fff
 }
 
-.timeline-avatar[data-platform=linkedin] {
-  background: #0077b5 !important;
+.timeline-avatar[data-platform=linkedin].timeline-avatar[data-platform=linkedin] {
+  background: #0077b5;
   color: #fff
 }
 
-.timeline-avatar[data-platform=instagram] {
-  background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888) !important;
+.timeline-avatar[data-platform=instagram].timeline-avatar[data-platform=instagram] {
+  background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
   color: #fff
 }
 
-.timeline-avatar[data-platform=tiktok],
-.timeline-avatar[data-platform=x],
-.timeline-avatar[data-platform=twitter],
-.timeline-avatar[data-platform=threads] {
-  background: #000 !important;
+.timeline-avatar[data-platform=tiktok].timeline-avatar[data-platform=tiktok],
+.timeline-avatar[data-platform=x].timeline-avatar[data-platform=x],
+.timeline-avatar[data-platform=twitter].timeline-avatar[data-platform=twitter],
+.timeline-avatar[data-platform=threads].timeline-avatar[data-platform=threads] {
+  background: #000;
   color: #fff
 }
 
-.timeline-avatar[data-platform=youtube] {
-  background: red !important;
+.timeline-avatar[data-platform=youtube].timeline-avatar[data-platform=youtube] {
+  background: red;
   color: #fff
 }
 
-.timeline-avatar svg {
-  color: #fff !important;
+.timeline-avatar.timeline-avatar svg {
+  color: #fff;
   stroke: currentColor;
   fill: currentColor
 }

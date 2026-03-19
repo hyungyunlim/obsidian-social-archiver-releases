@@ -95,7 +95,7 @@ export class AICommentBanner {
   private customPromptInput: HTMLInputElement | null = null;
   private options: AICommentBannerOptions | null = null;
   private generatingStartTime: number = 0;
-  private elapsedTimerInterval: ReturnType<typeof setInterval> | null = null;
+  private elapsedTimerInterval: number | null = null;
   private abortController: AbortController | null = null;
 
   render(container: HTMLElement, options: AICommentBannerOptions): void {
@@ -442,11 +442,11 @@ export class AICommentBanner {
 
     // Clear any existing interval
     if (this.elapsedTimerInterval) {
-      clearInterval(this.elapsedTimerInterval);
+      window.clearInterval(this.elapsedTimerInterval);
     }
 
     // Update every second
-    this.elapsedTimerInterval = setInterval(updateDisplay, 1000);
+    this.elapsedTimerInterval = window.setInterval(updateDisplay, 1000);
 
     // Cancel button
     const cancelBtn = this.createIconButton(parent, 'x', 'Cancel');
@@ -469,7 +469,7 @@ export class AICommentBanner {
    */
   private stopElapsedTimer(): void {
     if (this.elapsedTimerInterval) {
-      clearInterval(this.elapsedTimerInterval);
+      window.clearInterval(this.elapsedTimerInterval);
       this.elapsedTimerInterval = null;
     }
     this.generatingStartTime = 0;
@@ -495,7 +495,7 @@ export class AICommentBanner {
     successMsg.createSpan({ text: 'AI comment added' });
 
     // Auto-dismiss after 2 seconds (shorter since no action needed)
-    setTimeout(() => {
+    window.setTimeout(() => {
       if (this.state === 'complete') {
         this.contentEl?.remove();
       }

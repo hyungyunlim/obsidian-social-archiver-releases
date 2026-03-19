@@ -1,4 +1,4 @@
-import { App, TFile, Vault, normalizePath } from 'obsidian';
+import { App, TFile, Vault, normalizePath, stringifyYaml, parseYaml } from 'obsidian';
 import type { SocialArchiverSettings } from '@/types/settings';
 import { TextFormatter } from './markdown/formatters/TextFormatter';
 import { LinkPreviewExtractor } from './LinkPreviewExtractor';
@@ -198,7 +198,7 @@ export class PostService {
     const finalContent = `---\n${frontmatter}---\n\n${updatedContent}`;
 
     // Update the file
-    await this.vault.modify(existingPost, finalContent);
+    await this.vault.process(existingPost, () => finalContent);
 
     return {
       success: true,
@@ -367,8 +367,9 @@ export class PostService {
    * Format: {archivePath}/Post/{year}/{month}/{original-filename}.md
    */
   private generatePostPath(file: TFile, timestamp: Date): string {
-    const year = timestamp.getFullYear();
-    const month = String(timestamp.getMonth() + 1).padStart(2, '0');
+    const m = window.moment(timestamp);
+    const year = m.format('YYYY');
+    const month = m.format('MM');
 
     return normalizePath(
       `${this.settings.archivePath}/Post/${year}/${month}/${file.name}`
@@ -411,72 +412,30 @@ export class PostService {
    * Format date as YYYY-MM-DD
    */
   private formatDate(date: Date): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return window.moment(date).format('YYYY-MM-DD');
   }
 
   /**
    * Format postedAt timestamp as YYYY-MM-DD HH:mm
    */
   private formatPostedAt(date: Date): string {
-    const dateStr = this.formatDate(date);
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${dateStr} ${hours}:${minutes}`;
+    return window.moment(date).format('YYYY-MM-DD HH:mm');
   }
 
 
   /**
-   * Generate YAML frontmatter string
+   * Generate YAML frontmatter string using Obsidian's stringifyYaml
    */
   private generateFrontmatter(data: Record<string, unknown>): string {
-    const lines: string[] = [];
-
-    for (const [key, value] of Object.entries(data)) {
-      if (value === undefined || value === null) continue;
-
-      if (Array.isArray(value)) {
-        if (value.length === 0) continue;
-        lines.push(`${key}:`);
-        for (const item of value) {
-          lines.push(`  - ${this.formatYamlValue(item)}`);
-        }
-      } else if (typeof value === 'object') {
-        // Skip nested objects for simplicity
-        continue;
-      } else {
-        lines.push(`${key}: ${this.formatYamlValue(value)}`);
-      }
-    }
-
-    return lines.join('\n') + '\n';
+    // Filter out null/undefined values
+    const filtered = Object.fromEntries(
+      Object.entries(data).filter(([, v]) => v !== undefined && v !== null)
+    );
+    return stringifyYaml(filtered);
   }
 
   /**
-   * Format a value for YAML
-   */
-  private formatYamlValue(value: unknown): string {
-    if (typeof value === 'string') {
-      // Quote strings that contain special characters
-      if (value.includes(':') || value.includes('#') || value.includes('"') ||
-          value.includes("'") || value.includes('\n') || value.startsWith(' ')) {
-        return `"${value.replace(/"/g, '\\"')}"`;
-      }
-      return value;
-    }
-    if (typeof value === 'boolean') {
-      return value ? 'true' : 'false';
-    }
-    if (typeof value === 'number') {
-      return String(value);
-    }
-    return String(value);
-  }
-
-  /**
-   * Extract frontmatter and body from content
+   * Extract frontmatter and body from content using Obsidian's parseYaml
    */
   private extractFrontmatter(content: string): {
     body: string;
@@ -492,67 +451,12 @@ export class PostService {
     const frontmatterStr = match[1] ?? '';
     const body = content.slice(match[0].length);
 
-    // Parse simple YAML frontmatter
-    const existingFrontmatter: Record<string, unknown> = {};
-    const lines = frontmatterStr.split('\n');
-    let currentKey: string | null = null;
-    let currentArray: string[] = [];
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-
-      if (trimmed.startsWith('- ') && currentKey) {
-        // Array item
-        currentArray.push(trimmed.slice(2));
-      } else if (line.includes(':')) {
-        // Save previous array if exists
-        if (currentKey && currentArray.length > 0) {
-          existingFrontmatter[currentKey] = currentArray;
-          currentArray = [];
-        }
-
-        const colonIndex = line.indexOf(':');
-        const key = line.slice(0, colonIndex).trim();
-        const value = line.slice(colonIndex + 1).trim();
-
-        if (value === '') {
-          // Might be start of array
-          currentKey = key;
-        } else {
-          // Simple value
-          existingFrontmatter[key] = this.parseYamlValue(value);
-          currentKey = null;
-        }
-      }
+    try {
+      const existingFrontmatter = (parseYaml(frontmatterStr) as Record<string, unknown>) ?? {};
+      return { body, existingFrontmatter };
+    } catch {
+      return { body, existingFrontmatter: {} };
     }
-
-    // Save last array if exists
-    if (currentKey && currentArray.length > 0) {
-      existingFrontmatter[currentKey] = currentArray;
-    }
-
-    return { body, existingFrontmatter };
-  }
-
-  /**
-   * Parse a YAML value
-   */
-  private parseYamlValue(value: string): unknown {
-    // Remove quotes
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) {
-      return value.slice(1, -1);
-    }
-
-    // Boolean
-    if (value === 'true') return true;
-    if (value === 'false') return false;
-
-    // Number
-    const num = Number(value);
-    if (!isNaN(num) && value !== '') return num;
-
-    return value;
   }
 
   /**

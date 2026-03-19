@@ -65,7 +65,7 @@ export class LicenseExpirationNotifier implements IService {
   private initialized = false;
 
   // Check timer
-  private checkTimer?: NodeJS.Timeout;
+  private checkTimer?: number;
 
   // Notification history (to prevent duplicate notifications)
   private notificationHistory: Map<string, NotificationRecord> = new Map();
@@ -206,7 +206,7 @@ export class LicenseExpirationNotifier implements IService {
   private startChecking(): void {
     this.stopChecking();
 
-    this.checkTimer = setInterval(() => {
+    this.checkTimer = window.setInterval(() => {
       this.checkExpiration();
     }, this.config.checkInterval);
 
@@ -220,7 +220,7 @@ export class LicenseExpirationNotifier implements IService {
    */
   private stopChecking(): void {
     if (this.checkTimer) {
-      clearInterval(this.checkTimer);
+      window.clearInterval(this.checkTimer);
       this.checkTimer = undefined;
       this.logger?.debug('Expiration checking stopped');
     }
