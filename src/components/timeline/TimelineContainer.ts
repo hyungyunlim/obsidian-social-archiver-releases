@@ -2864,6 +2864,22 @@ export class TimelineContainer {
 
       this.isViewSwitching = false;
       this.containerEl.removeClass('tc-view-switching');
+
+      // The render pass above may have rebuilt the header (and thus the view
+      // switcher button) while isViewSwitching was still true, leaving the
+      // *new* button stuck in its loading/spinner state.  Reset it now.
+      const staleBtn = this.containerEl.querySelector('.tc-view-switch-btn-loading') as HTMLElement | null;
+      if (staleBtn) {
+        staleBtn.removeClass('tc-view-switch-btn-loading');
+        staleBtn.removeAttribute('aria-busy');
+        const isGallery = this.viewMode === 'gallery';
+        staleBtn.setAttribute('title', isGallery ? 'Switch to Timeline' : 'Switch to Media Gallery');
+        const icon = staleBtn.querySelector('.tc-view-switch-icon-spinning') as HTMLElement | null;
+        if (icon) {
+          icon.removeClass('tc-view-switch-icon-spinning');
+          setIcon(icon, isGallery ? 'list' : 'layout-grid');
+        }
+      }
     }
   }
 
