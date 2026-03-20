@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/definitions.ts
- * Generated: 2026-03-20T04:15:23.759Z
+ * Generated: 2026-03-20T04:17:15.230Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
