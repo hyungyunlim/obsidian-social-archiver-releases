@@ -99,8 +99,13 @@ export class MediaFormatter {
           // Display image inline
           return `![${this.escapeMarkdown(alt)}](${encodePathForMarkdownLink(resolvedUrl)})`;
         } else if (item.type === 'video') {
-          // Store video as markdown link (PostCardRenderer will handle iframe rendering in timeline)
           const duration = item.duration ? ` (${this.dateNumberFormatter.formatDuration(item.duration)})` : '';
+          const isRemoteUrl = resolvedUrl.startsWith('http://') || resolvedUrl.startsWith('https://');
+          if (isRemoteUrl) {
+            // Remote video URLs: use clickable link (Obsidian can't render remote .mp4 via ![]() embed)
+            return `[🎥 Video${duration}](${resolvedUrl})`;
+          }
+          // Local vault path: use embed syntax (PostCardRenderer handles iframe rendering in timeline)
           return `![🎥 Video${duration}](${encodePathForMarkdownLink(resolvedUrl)})`;
         } else if (item.type === 'audio') {
           // For podcast audio, use Obsidian's native audio embed format

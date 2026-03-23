@@ -649,7 +649,7 @@ function getPlatformDisplayName(platform: string): string {
       {#if Object.keys(settings.byPlatform).length > 0}
         <div class="platform-minimal-header">Platform Activity</div>
         <div class="platform-minimal-grid">
-          {#each Object.entries(settings.byPlatform) as [platform, count]}
+          {#each Object.entries(settings.byPlatform).filter(([, count]) => count > 0) as [platform, count]}
             <div class="platform-minimal-item">
               <div class="platform-minimal-name">{getPlatformDisplayName(platform)}</div>
               <div class="platform-minimal-count">{count}</div>

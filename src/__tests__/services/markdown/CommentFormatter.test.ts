@@ -66,7 +66,7 @@ describe('CommentFormatter', () => {
 
       const result = formatter.formatComments(comments, 'threads');
 
-      expect(result).toContain('![🎥 Video](https://example.com/thumb.jpg)');
+      expect(result).toContain('[🎥 Video](https://example.com/thumb.jpg)');
     });
 
     it('should render media in nested replies with indentation', () => {

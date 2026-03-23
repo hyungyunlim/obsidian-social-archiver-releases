@@ -35,6 +35,11 @@ interface CacheEntry {
  * Known URL shortener domains
  */
 const SHORTENER_DOMAINS = new Set([
+  // Naver shorteners
+  'naver.me',
+  'me2.do',
+  'han.gl',
+  // Generic shorteners
   't.co',
   'bit.ly',
   'bitly.com',
@@ -47,6 +52,7 @@ const SHORTENER_DOMAINS = new Set([
   'v.gd',
   'goo.gl',
   'x.co',
+  // Platform-specific shorteners
   'vm.tiktok.com',
   'vt.tiktok.com',
   'lnkd.in',

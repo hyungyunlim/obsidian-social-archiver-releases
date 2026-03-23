@@ -447,7 +447,7 @@ export interface SocialArchiverSettings {
   tier: UserTier; // User's subscription tier
   creditsUsed: number; // Credits consumed this month
   creditResetDate: string; // ISO date when credits will reset (first day of next month)
-  byPlatform: Record<string, number>; // Credits by platform
+  byPlatform: Record<string, number>; // Archive count per platform (sourced from D1 user_archives)
   byCountry: Record<string, number>; // Credits by country
   timingByPlatform: Record<string, PlatformTiming>; // Performance metrics by platform
   lastUsed: string; // Last archive timestamp

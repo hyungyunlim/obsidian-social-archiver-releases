@@ -194,7 +194,12 @@ export class CommentFormatter {
         if (item.type === 'image') {
           return `${indent}![${this.escapeMarkdown(alt)}](${encodePathForMarkdownLink(item.url)})`;
         } else if (item.type === 'video') {
-          return `${indent}![🎥 Video](${encodePathForMarkdownLink(item.thumbnail || item.url)})`;
+          const commentVideoUrl = item.thumbnail || item.url;
+          const isRemote = commentVideoUrl.startsWith('http://') || commentVideoUrl.startsWith('https://');
+          if (isRemote) {
+            return `${indent}[🎥 Video](${commentVideoUrl})`;
+          }
+          return `${indent}![🎥 Video](${encodePathForMarkdownLink(commentVideoUrl)})`;
         }
         return '';
       })
