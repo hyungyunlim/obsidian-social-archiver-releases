@@ -41,7 +41,7 @@ describe('PostCreationService', () => {
       const postData = service.generatePostData(input);
 
       expect(postData.platform).toBe('post');
-      expect(postData.id).toMatch(/^post_\d+$/);
+      expect(postData.id).toMatch(/^post_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
       expect(postData.author.name).toBe('Test User');
       expect(postData.author.avatar).toBe('https://example.com/avatar.png');
       expect(postData.content.text).toBe('Hello, world!');

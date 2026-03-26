@@ -161,6 +161,8 @@ export interface ArchiveTagsUpdatedEventData {
   tags: string[];
   updatedAt: string;
   timestamp: number;
+  /** The clientId that originated the tag change (for echo suppression) */
+  sourceClientId?: string;
 }
 
 export interface ArchiveTagsUpdatedEvent {

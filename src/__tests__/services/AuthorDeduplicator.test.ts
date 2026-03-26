@@ -11,6 +11,7 @@ import {
   normalizeAuthorName,
   normalizeAuthorUrl,
 } from '../../services/AuthorDeduplicator';
+import type { SubscriptionMap } from '../../services/AuthorDeduplicator';
 import type { RawAuthorData } from '../../types/author-catalog';
 import type { Platform } from '../../types/post';
 
@@ -534,6 +535,163 @@ describe('AuthorDeduplicator', () => {
       // Both should normalize to same key
       expect(key1).toBe(key2);
       expect(key1).toContain('hyungyunlim.github.io');
+    });
+  });
+
+  describe('fallback subscription matching', () => {
+    it('should match vault author to subscription by handle when URL keys differ', () => {
+      // Vault has posts from facebook.com/ihn.namkoong
+      const rawData: RawAuthorData[] = [
+        {
+          filePath: 'archives/post1.md',
+          authorName: '남궁인',
+          authorUrl: 'https://www.facebook.com/ihn.namkoong',
+          platform: 'facebook',
+          avatar: null,
+          handle: 'ihn.namkoong',
+          archivedAt: new Date('2024-03-15'),
+          sourceType: 'direct',
+        },
+      ];
+
+      // Subscription uses a different URL but same handle
+      const subscriptionMap: SubscriptionMap = new Map();
+      const subKey = generateAuthorKey(
+        'https://www.facebook.com/namkoong.ihn',
+        '남궁인',
+        'facebook'
+      );
+      subscriptionMap.set(subKey, {
+        subscriptionId: 'sub-123',
+        status: 'subscribed',
+        lastRunAt: new Date(),
+        schedule: 'Daily at 12:00',
+        handle: 'ihn.namkoong',
+        authorName: '남궁인',
+        authorUrl: 'https://www.facebook.com/namkoong.ihn',
+        platform: 'facebook',
+      });
+
+      const result = deduplicator.deduplicate(rawData, subscriptionMap);
+
+      // Should have exactly 1 entry (not 2 duplicates)
+      expect(result.authors).toHaveLength(1);
+      expect(result.authors[0].subscriptionId).toBe('sub-123');
+      expect(result.authors[0].status).toBe('subscribed');
+    });
+
+    it('should match vault author to subscription by name when URL and handle differ', () => {
+      const rawData: RawAuthorData[] = [
+        {
+          filePath: 'archives/post1.md',
+          authorName: '남궁인',
+          authorUrl: 'https://www.facebook.com/ihn.namkoong',
+          platform: 'facebook',
+          avatar: null,
+          handle: null, // No handle in vault data
+          archivedAt: new Date('2024-03-15'),
+          sourceType: 'direct',
+        },
+      ];
+
+      // Subscription uses different URL and has no handle
+      const subscriptionMap: SubscriptionMap = new Map();
+      const subKey = generateAuthorKey(
+        'https://www.facebook.com/namkoong.page',
+        '남궁인',
+        'facebook'
+      );
+      subscriptionMap.set(subKey, {
+        subscriptionId: 'sub-456',
+        status: 'subscribed',
+        lastRunAt: new Date(),
+        schedule: 'Daily at 12:00',
+        handle: undefined,
+        authorName: '남궁인',
+        authorUrl: 'https://www.facebook.com/namkoong.page',
+        platform: 'facebook',
+      });
+
+      const result = deduplicator.deduplicate(rawData, subscriptionMap);
+
+      expect(result.authors).toHaveLength(1);
+      expect(result.authors[0].subscriptionId).toBe('sub-456');
+      expect(result.authors[0].status).toBe('subscribed');
+    });
+
+    it('should not match authors on different platforms by name', () => {
+      const rawData: RawAuthorData[] = [
+        {
+          filePath: 'archives/post1.md',
+          authorName: 'TestUser',
+          authorUrl: 'https://www.facebook.com/testuser',
+          platform: 'facebook',
+          avatar: null,
+          handle: 'testuser',
+          archivedAt: new Date('2024-03-15'),
+          sourceType: 'direct',
+        },
+      ];
+
+      // Subscription on different platform (x)
+      const subscriptionMap: SubscriptionMap = new Map();
+      const subKey = generateAuthorKey(
+        'https://x.com/testuser',
+        'TestUser',
+        'x'
+      );
+      subscriptionMap.set(subKey, {
+        subscriptionId: 'sub-789',
+        status: 'subscribed',
+        handle: 'testuser',
+        authorName: 'TestUser',
+        authorUrl: 'https://x.com/testuser',
+        platform: 'x',
+      });
+
+      const result = deduplicator.deduplicate(rawData, subscriptionMap);
+
+      // Should have 2 entries (vault facebook + subscription-only x)
+      expect(result.authors).toHaveLength(2);
+      const fbAuthor = result.authors.find(a => a.platform === 'facebook');
+      expect(fbAuthor?.subscriptionId).toBeNull();
+      expect(fbAuthor?.status).toBe('not_subscribed');
+    });
+
+    it('should work in deduplicateAsync too', async () => {
+      const rawData: RawAuthorData[] = [
+        {
+          filePath: 'archives/post1.md',
+          authorName: '남궁인',
+          authorUrl: 'https://www.facebook.com/ihn.namkoong',
+          platform: 'facebook',
+          avatar: null,
+          handle: 'ihn.namkoong',
+          archivedAt: new Date('2024-03-15'),
+          sourceType: 'direct',
+        },
+      ];
+
+      const subscriptionMap: SubscriptionMap = new Map();
+      const subKey = generateAuthorKey(
+        'https://www.facebook.com/namkoong.ihn',
+        '남궁인',
+        'facebook'
+      );
+      subscriptionMap.set(subKey, {
+        subscriptionId: 'sub-async',
+        status: 'subscribed',
+        handle: 'ihn.namkoong',
+        authorName: '남궁인',
+        authorUrl: 'https://www.facebook.com/namkoong.ihn',
+        platform: 'facebook',
+      });
+
+      const result = await deduplicator.deduplicateAsync(rawData, subscriptionMap);
+
+      expect(result.authors).toHaveLength(1);
+      expect(result.authors[0].subscriptionId).toBe('sub-async');
+      expect(result.authors[0].status).toBe('subscribed');
     });
   });
 });

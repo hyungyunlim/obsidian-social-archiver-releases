@@ -368,6 +368,47 @@ export const DEFAULT_FRONTMATTER_CUSTOMIZATION_SETTINGS: FrontmatterCustomizatio
   tagOrganization: 'flat',
 };
 
+export interface DeleteSyncSettings {
+  outboundEnabled: boolean;
+  inboundEnabled: boolean;
+  confirmBeforeServerDelete: boolean;
+}
+
+export interface PendingArchiveDeleteEntry {
+  archiveId: string;
+  username: string;
+  queuedAt: string;
+  retryCount: number;
+  lastAttemptAt?: string;
+  lastError?: string;
+  originalPath?: string;
+}
+
+/**
+ * Queue entry for outbound composed-post sync (create or update).
+ * Persisted in settings so it survives plugin restart.
+ */
+export interface PendingComposedPostSyncEntry {
+  op: 'create' | 'update';
+  filePath: string;
+  clientPostId: string;
+  /** Set after first successful create; required for update operations. */
+  sourceArchiveId?: string;
+  queuedAt: string;
+  retryCount: number;
+  lastAttemptAt?: string;
+  lastError?: string;
+}
+
+export interface ArchiveLibrarySyncSettings {
+  completedAt: string;
+  resumeOffset: number;
+  runAnchorTime: string;
+  lastServerTime: string;
+  lastStatus: 'idle' | 'running' | 'error' | 'completed';
+  lastError: string;
+}
+
 /**
  * Text-to-Speech settings for Reader Mode
  */
@@ -477,6 +518,16 @@ export interface SocialArchiverSettings {
   // Mobile Annotation Sync Settings
   /** Sync highlights and notes from mobile app to vault (opt-in beta, default: false) */
   enableMobileAnnotationSync: boolean;
+
+  // Delete Sync Settings
+  deleteSync: DeleteSyncSettings;
+  pendingArchiveDeletes: PendingArchiveDeleteEntry[];
+
+  // Composed Post Sync Queue
+  pendingComposedPostSyncs: PendingComposedPostSyncEntry[];
+
+  // Archive Library Sync Settings
+  archiveLibrarySync: ArchiveLibrarySyncSettings;
 
   // Release Notes Settings
   lastSeenVersion: string; // Last version user has seen release notes for
@@ -595,6 +646,27 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
 
   // Mobile Annotation Sync Settings
   enableMobileAnnotationSync: false, // Opt-in beta; default off until feature is stable
+
+  // Delete Sync Settings
+  deleteSync: {
+    outboundEnabled: true,
+    inboundEnabled: true,
+    confirmBeforeServerDelete: true,
+  },
+  pendingArchiveDeletes: [],
+
+  // Composed Post Sync Queue
+  pendingComposedPostSyncs: [],
+
+  // Archive Library Sync Settings
+  archiveLibrarySync: {
+    completedAt: '',
+    resumeOffset: 0,
+    runAnchorTime: '',
+    lastServerTime: '',
+    lastStatus: 'idle',
+    lastError: '',
+  },
 
   // Release Notes Settings
   lastSeenVersion: '', // Empty for first-time users (will be set on first load)
@@ -884,6 +956,16 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
   // Initialize mobile annotation sync setting if missing (migration)
   if (migrated.enableMobileAnnotationSync === undefined) {
     migrated.enableMobileAnnotationSync = false;
+  }
+
+  // Initialize archive library sync settings if missing (migration)
+  if (migrated.archiveLibrarySync === undefined) {
+    migrated.archiveLibrarySync = DEFAULT_SETTINGS.archiveLibrarySync;
+  }
+
+  // Initialize composed post sync queue if missing (migration)
+  if (!Array.isArray(migrated.pendingComposedPostSyncs)) {
+    migrated.pendingComposedPostSyncs = [];
   }
 
   return migrated;

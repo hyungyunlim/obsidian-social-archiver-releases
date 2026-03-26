@@ -51,6 +51,11 @@ export interface ReaderContentCallbacks {
   onComment: () => void;
   /** TTS controller instance (optional, feature-flagged). */
   ttsController?: ReaderTTSController;
+  /** Highlight state */
+  hasHighlights: boolean;
+  highlightCount: number;
+  /** Called after body is rendered so highlight manager can attach */
+  onBodyRendered?: (bodyEl: HTMLElement, plainText: string) => void;
 }
 
 export class ReaderModeContentRenderer extends Component {
@@ -111,7 +116,13 @@ export class ReaderModeContentRenderer extends Component {
     }
 
     // 5. Body text
-    await this.renderBody(content, post);
+    const bodyEl = await this.renderBody(content, post);
+
+    // 5.1 Notify highlight manager so it can attach to the body element
+    if (bodyEl && callbacks.onBodyRendered) {
+      const plainText = post.content.rawMarkdown || post.content.markdown || post.content.text || '';
+      callbacks.onBodyRendered(bodyEl, plainText);
+    }
 
     // 5.5 External link preview
     if (post.metadata?.externalLink) {
@@ -434,12 +445,12 @@ export class ReaderModeContentRenderer extends Component {
 
   // ---------- Body ----------
 
-  private async renderBody(parent: HTMLElement, post: PostData): Promise<void> {
+  private async renderBody(parent: HTMLElement, post: PostData): Promise<HTMLElement | null> {
     const bodyEl = parent.createDiv({ cls: 'sa-reader-mode-body' });
 
     // Use rawMarkdown first (for blog posts with inline images), then markdown, then text
     let source = post.content.rawMarkdown || post.content.markdown || post.content.text || '';
-    if (!source.trim()) return;
+    if (!source.trim()) return null;
 
     // Strip the "🔗 **Link:** ..." line when we have an external link preview card
     if (post.metadata?.externalLink) {
@@ -458,6 +469,7 @@ export class ReaderModeContentRenderer extends Component {
 
     const sourcePath = post.filePath || '';
     await MarkdownRenderer.render(this.app, source, bodyEl, sourcePath, this);
+    return bodyEl;
   }
 
   // ---------- Quoted / Shared Post ----------
@@ -618,6 +630,14 @@ export class ReaderModeContentRenderer extends Component {
       active: callbacks.hasComment,
       onClick: callbacks.onComment,
     });
+
+    // 4.5. Highlight indicator
+    if (callbacks.hasHighlights) {
+      const hlBtn = actionsGroup.createDiv({ cls: 'sa-reader-mode-action-btn sa-text-accent' });
+      hlBtn.setAttribute('title', `${callbacks.highlightCount} highlight${callbacks.highlightCount !== 1 ? 's' : ''}`);
+      const hlIcon = hlBtn.createDiv();
+      setIcon(hlIcon, 'highlighter');
+    }
 
     // 5. Archive
     this.renderActionBtn(actionsGroup, {

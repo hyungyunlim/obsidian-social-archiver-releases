@@ -522,6 +522,243 @@ describe('AnnotationSyncService', () => {
     });
   });
 
+  // ── Synthetic primary note / comment frontmatter ──
+
+  describe('synthetic primary note and comment frontmatter', () => {
+    function makeSettingsWithClientId(clientId: string, enableSync = true) {
+      return () => ({ enableMobileAnnotationSync: enableSync, syncClientId: clientId } as any);
+    }
+
+    it('sets comment to synthetic primary note content when present', async () => {
+      const file = makeFile('Social Archives/test.md');
+      const capturedFm: Record<string, unknown> = {};
+      const clientId = 'test-client-abc';
+      const syntheticNoteId = `obsidian:${clientId}:primary`;
+
+      const app = {
+        vault: { read: vi.fn().mockResolvedValue('body'), modify: vi.fn() },
+        fileManager: {
+          processFrontMatter: vi.fn().mockImplementation(async (_file: TFile, updater: (fm: Record<string, unknown>) => void) => {
+            updater(capturedFm);
+          }),
+        },
+      };
+
+      const apiClient = makeWorkersApiClient({
+        userNotes: [
+          { id: syntheticNoteId, content: 'My Obsidian comment', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+          { id: 'mobile-note-1', content: 'Mobile note', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+        ],
+        userHighlights: [],
+      });
+
+      const service = new AnnotationSyncService(
+        app as any,
+        apiClient as any,
+        makeArchiveLookup({ byId: file }) as any,
+        makeAnnotationRenderer('block') as any,
+        makeSectionManager('patched') as any,
+        makeSettingsWithClientId(clientId)
+      );
+
+      await service.handleActionUpdated(makeActionUpdatedData());
+
+      expect(capturedFm.comment).toBe('My Obsidian comment');
+    });
+
+    it('does NOT overwrite comment when only mobile notes exist (no synthetic primary)', async () => {
+      const file = makeFile('Social Archives/test.md');
+      const capturedFm: Record<string, unknown> = { comment: 'existing-comment' };
+      const clientId = 'test-client-xyz';
+      // No synthetic primary note — only mobile notes
+      const apiClient = makeWorkersApiClient({
+        userNotes: [
+          { id: 'mobile-note-1', content: 'Mobile note', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+        ],
+        userHighlights: [],
+      });
+
+      const app = {
+        vault: { read: vi.fn().mockResolvedValue('body'), modify: vi.fn() },
+        fileManager: {
+          processFrontMatter: vi.fn().mockImplementation(async (_file: TFile, updater: (fm: Record<string, unknown>) => void) => {
+            updater(capturedFm);
+          }),
+        },
+      };
+
+      const service = new AnnotationSyncService(
+        app as any,
+        apiClient as any,
+        makeArchiveLookup({ byId: file }) as any,
+        makeAnnotationRenderer('block') as any,
+        makeSectionManager('patched') as any,
+        makeSettingsWithClientId(clientId)
+      );
+
+      await service.handleActionUpdated(makeActionUpdatedData());
+
+      // comment must be left as-is since there is no synthetic primary note
+      expect(capturedFm.comment).toBe('existing-comment');
+    });
+
+    it('deletes comment when server returns zero notes', async () => {
+      const file = makeFile('Social Archives/test.md');
+      const capturedFm: Record<string, unknown> = { comment: 'was-here' };
+
+      const app = {
+        vault: { read: vi.fn().mockResolvedValue('body'), modify: vi.fn() },
+        fileManager: {
+          processFrontMatter: vi.fn().mockImplementation(async (_file: TFile, updater: (fm: Record<string, unknown>) => void) => {
+            updater(capturedFm);
+          }),
+        },
+      };
+
+      const apiClient = makeWorkersApiClient({ userNotes: [], userHighlights: [] });
+
+      const service = new AnnotationSyncService(
+        app as any,
+        apiClient as any,
+        makeArchiveLookup({ byId: file }) as any,
+        makeAnnotationRenderer('') as any,
+        makeSectionManager('body') as any,
+        makeSettingsWithClientId('client-1')
+      );
+
+      await service.handleActionUpdated(makeActionUpdatedData());
+
+      // comment must be deleted when notes array is empty
+      expect(capturedFm.comment).toBeUndefined();
+      expect('comment' in capturedFm).toBe(false);
+    });
+
+    it('sets userNoteCount and userHighlightCount from server data', async () => {
+      const file = makeFile('Social Archives/test.md');
+      const capturedFm: Record<string, unknown> = {};
+
+      const app = {
+        vault: { read: vi.fn().mockResolvedValue('body'), modify: vi.fn() },
+        fileManager: {
+          processFrontMatter: vi.fn().mockImplementation(async (_file: TFile, updater: (fm: Record<string, unknown>) => void) => {
+            updater(capturedFm);
+          }),
+        },
+      };
+
+      const apiClient = makeWorkersApiClient({
+        userNotes: [
+          { id: 'n1', content: 'A', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+          { id: 'n2', content: 'B', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+        ],
+        userHighlights: [
+          { id: 'h1', text: 'HL', startOffset: 0, endOffset: 2, color: 'yellow', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+          { id: 'h2', text: 'HL2', startOffset: 5, endOffset: 10, color: 'blue', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+          { id: 'h3', text: 'HL3', startOffset: 15, endOffset: 20, color: 'red', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+        ],
+      });
+
+      const service = new AnnotationSyncService(
+        app as any,
+        apiClient as any,
+        makeArchiveLookup({ byId: file }) as any,
+        makeAnnotationRenderer('block') as any,
+        makeSectionManager('patched') as any,
+        makeSettingsWithClientId('client-1')
+      );
+
+      await service.handleActionUpdated(makeActionUpdatedData());
+
+      expect(capturedFm.userNoteCount).toBe(2);
+      expect(capturedFm.userHighlightCount).toBe(3);
+    });
+
+    it('passes ALL notes and highlights to renderer (not just synthetic primary)', async () => {
+      const file = makeFile('Social Archives/test.md');
+      const clientId = 'client-abc';
+      const syntheticNoteId = `obsidian:${clientId}:primary`;
+
+      const allNotes = [
+        { id: syntheticNoteId, content: 'Obsidian note', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+        { id: 'mobile-1', content: 'Mobile note A', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+        { id: 'mobile-2', content: 'Mobile note B', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+      ];
+      const allHighlights = [
+        { id: 'h1', text: 'highlight', startOffset: 0, endOffset: 5, color: 'yellow', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+      ];
+
+      const app = makeApp();
+      const renderer = makeAnnotationRenderer('block');
+
+      const apiClient = makeWorkersApiClient({
+        userNotes: allNotes,
+        userHighlights: allHighlights,
+      });
+
+      const service = new AnnotationSyncService(
+        app as any,
+        apiClient as any,
+        makeArchiveLookup({ byId: file }) as any,
+        renderer as any,
+        makeSectionManager('patched') as any,
+        makeSettingsWithClientId(clientId)
+      );
+
+      await service.handleActionUpdated(makeActionUpdatedData());
+
+      // Renderer must receive ALL notes (including synthetic + mobile) and ALL highlights
+      expect(renderer.render).toHaveBeenCalledWith({
+        notes: expect.arrayContaining([
+          expect.objectContaining({ id: syntheticNoteId }),
+          expect.objectContaining({ id: 'mobile-1' }),
+          expect.objectContaining({ id: 'mobile-2' }),
+        ]),
+        highlights: expect.arrayContaining([
+          expect.objectContaining({ id: 'h1' }),
+        ]),
+      });
+      const renderArg = (renderer.render as ReturnType<typeof vi.fn>).mock.calls[0]![0] as any;
+      expect(renderArg.notes).toHaveLength(3);
+      expect(renderArg.highlights).toHaveLength(1);
+    });
+
+    it('calls onBeforeInboundWrite callback before frontmatter write', async () => {
+      const file = makeFile('Social Archives/test.md');
+      const callOrder: string[] = [];
+
+      const app = {
+        vault: { read: vi.fn().mockResolvedValue('body'), modify: vi.fn() },
+        fileManager: {
+          processFrontMatter: vi.fn().mockImplementation(async (_file: TFile, updater: (fm: Record<string, unknown>) => void) => {
+            callOrder.push('processFrontMatter');
+            updater({});
+          }),
+        },
+      };
+
+      const service = new AnnotationSyncService(
+        app as any,
+        makeWorkersApiClient() as any,
+        makeArchiveLookup({ byId: file }) as any,
+        makeAnnotationRenderer('block') as any,
+        makeSectionManager('patched') as any,
+        makeSettings()
+      );
+
+      service.onBeforeInboundWrite = (archiveId: string) => {
+        callOrder.push(`onBeforeInboundWrite:${archiveId}`);
+      };
+
+      await service.handleActionUpdated(makeActionUpdatedData({ archiveId: 'archive-123' }));
+
+      // onBeforeInboundWrite must be called before processFrontMatter
+      const onBeforeIdx = callOrder.indexOf('onBeforeInboundWrite:archive-123');
+      const fmIdx = callOrder.indexOf('processFrontMatter');
+      expect(onBeforeIdx).toBeGreaterThanOrEqual(0);
+      expect(fmIdx).toBeGreaterThan(onBeforeIdx);
+    });
+  });
+
   // ── Coalescing ──
 
   describe('coalescing', () => {

@@ -1,0 +1,629 @@
+/**
+ * ArchiveDeleteSyncService
+ *
+ * Handles bidirectional archive delete sync between the local Obsidian vault
+ * and the Social Archiver server.
+ *
+ * Responsibilities:
+ *
+ * A. Outbound delete (vault → server):
+ *    - Triggered when ArchiveLookupService emits a deleted ArchiveFileIdentity.
+ *    - Enqueues a PendingArchiveDeleteEntry into settings.
+ *    - Optionally shows a DeleteConfirmModal before enqueuing.
+ *    - flushPendingDeletes() drains the queue via the server API.
+ *
+ * B. Inbound delete (server → vault):
+ *    - Called by RealtimeEventBridge and ArchiveLibrarySyncService.
+ *    - Finds the corresponding vault file and sends it to trash.
+ *    - Adds the archiveId to a suppression map so the resulting vault delete
+ *      event does NOT trigger an outbound delete back to the server (loop guard).
+ *
+ * Single Responsibility: archive delete sync orchestration
+ */
+
+import type { App, TFile } from 'obsidian';
+import type { WorkersAPIClient } from '../../services/WorkersAPIClient';
+import type {
+  SocialArchiverSettings,
+  DeleteSyncSettings,
+  PendingArchiveDeleteEntry,
+} from '../../types/settings';
+// DeleteConfirmModal reserved for future use (v2: "Keep on Server" option)
+
+// ============================================================================
+// Interfaces (provided by other agents / parallel modules)
+// ============================================================================
+
+/**
+ * Identifies a vault file that was deleted and its corresponding server record.
+ * Emitted by ArchiveLookupService.onArchivedFileDeleted().
+ */
+export interface ArchiveFileIdentity {
+  path: string;
+  archiveId: string;
+  originalUrl?: string;
+}
+
+// Re-export for consumers that imported from this module
+export type { DeleteSyncSettings, PendingArchiveDeleteEntry };
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+/** Suppression TTL: ignore outbound delete events triggered by inbound deletes. */
+const SUPPRESSION_TTL_MS = 30_000;
+
+/** Log prefix for all messages from this service. */
+const LOG_PREFIX = '[Social Archiver] [DeleteSync]';
+
+// ============================================================================
+// Dependency injection
+// ============================================================================
+
+export interface ArchiveDeleteSyncDeps {
+  /** Returns the current WorkersAPIClient instance, or undefined if not initialised. */
+  apiClient: () => WorkersAPIClient | undefined;
+
+  /** Returns current plugin settings (live reference). */
+  settings: () => SocialArchiverSettings;
+
+  /** Persist settings to disk. Caller wires this to saveSettingsPartial({}, { reinitialize: false }). */
+  saveSettings: () => Promise<void>;
+
+  /** Obsidian App instance (for fileManager.trashFile and modal). */
+  app: App;
+
+  /** Tier-1 lookup: find vault file by stable server-assigned archive ID. */
+  findBySourceArchiveId: (id: string) => TFile | null;
+
+  /** Tier-2 lookup: find vault files by original URL (may return multiple). */
+  findByOriginalUrl: (url: string) => TFile[];
+
+  /**
+   * Returns true if a library sync run is currently in progress.
+   * Outbound deletes during library sync are suppressed to avoid race conditions.
+   */
+  isLibrarySyncRunning: () => boolean;
+
+  /** Show a user-visible notification. */
+  notify: (message: string, timeout?: number) => void;
+}
+
+// ============================================================================
+// Service
+// ============================================================================
+
+export class ArchiveDeleteSyncService {
+  // -- Single-flight guard ---------------------------------------------------
+  private isFlushing = false;
+
+  // -- Inbound-delete loop prevention ---------------------------------------
+  /**
+   * Maps archiveId → expiry timestamp (ms since epoch).
+   *
+   * When the service moves a file to trash in response to a server delete
+   * event (inbound), the archiveId is suppressed here so the resulting vault
+   * `delete` event does NOT trigger an outbound delete back to the server.
+   */
+  private suppressedInboundDeleteIds = new Map<string, number>();
+
+  // -- Subscription cleanup -------------------------------------------------
+  private unsubscribeFileDeleted: (() => void) | null = null;
+
+  constructor(private readonly deps: ArchiveDeleteSyncDeps) {}
+
+  // --------------------------------------------------------------------------
+  // Lifecycle
+  // --------------------------------------------------------------------------
+
+  /**
+   * Subscribe to ArchiveLookupService file-deleted events.
+   * Must be called after ArchiveLookupService is initialised.
+   *
+   * @param onArchivedFileDeleted - The subscription method from ArchiveLookupService.
+   *   Pass `archiveLookupService.onArchivedFileDeleted.bind(archiveLookupService)`.
+   */
+  initialize(
+    onArchivedFileDeleted: (handler: (identity: ArchiveFileIdentity) => void) => () => void
+  ): void {
+    this.unsubscribeFileDeleted = onArchivedFileDeleted(
+      (identity) => { void this.handleOutboundDelete(identity); }
+    );
+  }
+
+  /**
+   * Unsubscribe from file-deleted events and cancel any pending flush.
+   * Call from plugin onunload() or on sign-out.
+   */
+  dispose(): void {
+    if (this.unsubscribeFileDeleted) {
+      this.unsubscribeFileDeleted();
+      this.unsubscribeFileDeleted = null;
+    }
+    this.suppressedInboundDeleteIds.clear();
+  }
+
+  // --------------------------------------------------------------------------
+  // Public API
+  // --------------------------------------------------------------------------
+
+  /**
+   * Returns true if the given archiveId has a pending outbound delete queued.
+   *
+   * Used by ArchiveLibrarySyncService (Tier 0) to skip re-saving an archive
+   * that the user has already queued for deletion.
+   */
+  isArchiveQueuedForDeletion(archiveId: string): boolean {
+    const settings = this.deps.settings();
+    const queue = this.getQueue(settings);
+    return queue.some((entry) => entry.archiveId === archiveId);
+  }
+
+  /**
+   * Returns the number of pending outbound delete requests in the queue.
+   */
+  getPendingCount(): number {
+    const settings = this.deps.settings();
+    return this.getQueue(settings).length;
+  }
+
+  /**
+   * Clear the pending delete queue and drop all suppression state.
+   * Called on sign-out to avoid processing stale queue entries for a different user.
+   */
+  cancelAndClear(): void {
+    const settings = this.deps.settings();
+    this.setQueue(settings, []);
+    this.suppressedInboundDeleteIds.clear();
+    // Save asynchronously — best effort on sign-out
+    this.deps.saveSettings().catch((err: unknown) => {
+      console.warn(`${LOG_PREFIX} cancelAndClear: saveSettings failed`, err);
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // Outbound delete (vault → server)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Called by ArchiveLookupService when a tracked archive file is deleted.
+   *
+   * Does nothing if:
+   * - The archiveId is suppressed (was deleted by an inbound delete event)
+   * - outboundEnabled is false
+   * - Library sync is running
+   * - Auth credentials are missing
+   */
+  private async handleOutboundDelete(identity: ArchiveFileIdentity): Promise<void> {
+    // Clean up any expired suppression entries first
+    this.purgeExpiredSuppressions();
+
+    // Loop guard: was this delete triggered by our own inbound delete?
+    if (this.consumeSuppression(identity.archiveId)) {
+      console.debug(`${LOG_PREFIX} Outbound delete suppressed (inbound loop guard)`, {
+        archiveId: identity.archiveId,
+      });
+      return;
+    }
+
+    const settings = this.deps.settings();
+
+    // Feature flag
+    if (!settings.deleteSync?.outboundEnabled) {
+      console.debug(`${LOG_PREFIX} Outbound delete disabled — skipping`, {
+        archiveId: identity.archiveId,
+      });
+      return;
+    }
+
+    // Do not interfere while library sync is running
+    if (this.deps.isLibrarySyncRunning()) {
+      console.debug(`${LOG_PREFIX} Library sync running — skipping outbound delete`, {
+        archiveId: identity.archiveId,
+      });
+      return;
+    }
+
+    // Auth guard
+    if (!this.isAuthenticated(settings)) {
+      console.debug(`${LOG_PREFIX} Not authenticated — skipping outbound delete`, {
+        archiveId: identity.archiveId,
+      });
+      return;
+    }
+
+    // Enqueue and flush — always propagate to server (no confirmation modal)
+    await this.enqueue(identity, settings);
+    await this.flushPendingDeletes();
+  }
+
+  /**
+   * Add an entry to the pending delete queue and persist settings.
+   */
+  private async enqueue(
+    identity: ArchiveFileIdentity,
+    settings: SocialArchiverSettings
+  ): Promise<void> {
+    const queue = this.getQueue(settings);
+
+    // Avoid duplicate entries for the same archiveId
+    if (queue.some((entry) => entry.archiveId === identity.archiveId)) {
+      console.debug(`${LOG_PREFIX} Already queued — skipping duplicate enqueue`, {
+        archiveId: identity.archiveId,
+      });
+      return;
+    }
+
+    const entry: PendingArchiveDeleteEntry = {
+      archiveId: identity.archiveId,
+      username: settings.username,
+      queuedAt: new Date().toISOString(),
+      retryCount: 0,
+      originalPath: identity.path,
+    };
+
+    queue.push(entry);
+    this.setQueue(settings, queue);
+
+    await this.deps.saveSettings();
+
+    console.debug(`${LOG_PREFIX} Enqueued outbound delete`, {
+      archiveId: identity.archiveId,
+      path: identity.path,
+      queueDepth: queue.length,
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // Queue flush
+  // --------------------------------------------------------------------------
+
+  /**
+   * Process the pending delete queue sequentially.
+   *
+   * - Single-flight: concurrent calls are no-ops.
+   * - Processes items in queuedAt ascending order (FIFO).
+   * - Only processes items matching the current settings.username.
+   * - Stops on 401 (auth error) or transient errors (429/5xx/network).
+   * - Removes items on success (2xx) or permanent failure (403, 404).
+   */
+  async flushPendingDeletes(): Promise<void> {
+    if (this.isFlushing) {
+      console.debug(`${LOG_PREFIX} flushPendingDeletes called while already flushing — ignored`);
+      return;
+    }
+
+    const apiClient = this.deps.apiClient();
+    if (!apiClient) {
+      console.debug(`${LOG_PREFIX} No API client — cannot flush`);
+      return;
+    }
+
+    const settings = this.deps.settings();
+    if (!this.isAuthenticated(settings)) {
+      console.debug(`${LOG_PREFIX} Not authenticated — cannot flush`);
+      return;
+    }
+
+    const currentUsername = settings.username;
+    const queue = this.getQueue(settings);
+
+    // Filter to entries for the current user and sort by queuedAt ascending (FIFO)
+    const eligible = queue
+      .filter((entry) => entry.username === currentUsername)
+      .sort((a, b) => a.queuedAt.localeCompare(b.queuedAt));
+
+    if (eligible.length === 0) {
+      return;
+    }
+
+    this.isFlushing = true;
+
+    try {
+      for (const entry of eligible) {
+        const shouldStop = await this.processQueueEntry(entry, apiClient);
+        if (shouldStop) {
+          console.debug(`${LOG_PREFIX} Flush stopped early`, {
+            archiveId: entry.archiveId,
+          });
+          break;
+        }
+      }
+    } finally {
+      this.isFlushing = false;
+    }
+  }
+
+  /**
+   * Attempt to delete a single queued archive on the server.
+   *
+   * @returns true if the flush loop should stop, false to continue.
+   */
+  private async processQueueEntry(
+    entry: PendingArchiveDeleteEntry,
+    apiClient: WorkersAPIClient
+  ): Promise<boolean> {
+    try {
+      await apiClient.deleteArchive(entry.archiveId);
+
+      // Success — remove from queue
+      await this.removeFromQueue(entry.archiveId);
+
+      console.debug(`${LOG_PREFIX} Outbound delete succeeded`, {
+        archiveId: entry.archiveId,
+      });
+
+      return false; // continue
+    } catch (error: unknown) {
+      const status = this.extractStatus(error);
+
+      if (status === 404) {
+        // Archive doesn't exist on server — treat as success (remove from queue)
+        console.debug(`${LOG_PREFIX} Archive not found on server (404) — removing from queue`, {
+          archiveId: entry.archiveId,
+        });
+        await this.removeFromQueue(entry.archiveId);
+        return false; // continue
+      }
+
+      if (status === 401) {
+        // Auth failure — stop flush, keep entry in queue
+        console.warn(`${LOG_PREFIX} Auth failure (401) — stopping flush`, {
+          archiveId: entry.archiveId,
+        });
+        await this.updateQueueEntry(entry, error);
+        return true; // stop
+      }
+
+      if (status === 403) {
+        // Forbidden — terminal, remove from queue
+        console.warn(`${LOG_PREFIX} Forbidden (403) — removing from queue (terminal)`, {
+          archiveId: entry.archiveId,
+        });
+        await this.removeFromQueue(entry.archiveId);
+        return false; // continue with next item
+      }
+
+      // Transient error (429, 5xx, network) — increment retry and stop flush
+      console.warn(`${LOG_PREFIX} Transient error during flush`, {
+        archiveId: entry.archiveId,
+        status,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      await this.updateQueueEntry(entry, error);
+      return true; // stop
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Inbound delete (server → vault)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Called by RealtimeEventBridge (WebSocket) or ArchiveLibrarySyncService
+   * when the server reports that an archive has been deleted.
+   *
+   * @param archiveId - Stable server archive ID.
+   * @param originalUrl - Optional original URL for fallback lookup.
+   * @param source - 'ws' (WebSocket realtime) or 'delta' (library sync delta sweep).
+   */
+  async handleInboundDelete(
+    archiveId: string,
+    originalUrl?: string,
+    source?: 'ws' | 'delta'
+  ): Promise<void> {
+    const settings = this.deps.settings();
+
+    if (!settings.deleteSync?.inboundEnabled) {
+      console.debug(`${LOG_PREFIX} Inbound delete disabled — skipping`, {
+        archiveId,
+        source,
+      });
+      return;
+    }
+
+    // Find the vault file
+    const file = this.findVaultFile(archiveId, originalUrl);
+    if (!file) {
+      console.debug(`${LOG_PREFIX} Inbound delete: file not found in vault — already deleted or not archived`, {
+        archiveId,
+        originalUrl,
+        source,
+      });
+      return;
+    }
+
+    // Suppress the resulting vault delete event so it does NOT trigger an
+    // outbound delete back to the server (loop guard).
+    this.suppressInboundDelete(archiveId);
+
+    try {
+      await this.deps.app.fileManager.trashFile(file);
+      console.debug(`${LOG_PREFIX} Inbound delete: moved to trash`, {
+        archiveId,
+        path: file.path,
+        source,
+      });
+
+      this.deps.notify(
+        `Deleted from vault: "${file.basename}" (deleted on server)`,
+        4000
+      );
+    } catch (error: unknown) {
+      // If trash fails, clear the suppression so the user can retry manually
+      this.suppressedInboundDeleteIds.delete(archiveId);
+      console.error(`${LOG_PREFIX} Inbound delete: trashFile failed`, {
+        archiveId,
+        path: file.path,
+        error,
+      });
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Suppression helpers
+  // --------------------------------------------------------------------------
+
+  /**
+   * Register an archiveId as "inbound-deleted" so the next vault delete event
+   * for it is ignored and does NOT trigger an outbound delete.
+   *
+   * TTL: 30 seconds (SUPPRESSION_TTL_MS).
+   */
+  private suppressInboundDelete(archiveId: string): void {
+    this.suppressedInboundDeleteIds.set(archiveId, Date.now() + SUPPRESSION_TTL_MS);
+  }
+
+  /**
+   * Check whether the archiveId is currently suppressed and consume the entry.
+   *
+   * @returns true if the archiveId was suppressed (and is now consumed), false otherwise.
+   */
+  private consumeSuppression(archiveId: string): boolean {
+    const expiresAt = this.suppressedInboundDeleteIds.get(archiveId);
+    if (expiresAt === undefined) return false;
+
+    if (Date.now() >= expiresAt) {
+      // Expired — clean up and treat as NOT suppressed
+      this.suppressedInboundDeleteIds.delete(archiveId);
+      return false;
+    }
+
+    // Valid suppression — consume and return true
+    this.suppressedInboundDeleteIds.delete(archiveId);
+    return true;
+  }
+
+  /**
+   * Remove expired entries from the suppression map.
+   * Called on each outbound delete attempt.
+   */
+  private purgeExpiredSuppressions(): void {
+    const now = Date.now();
+    for (const [archiveId, expiresAt] of this.suppressedInboundDeleteIds) {
+      if (now >= expiresAt) {
+        this.suppressedInboundDeleteIds.delete(archiveId);
+      }
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Queue helpers (settings-based persistence)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Read the pending delete queue from settings.
+   * Returns an empty array if the field is absent or malformed.
+   */
+  private getQueue(settings: SocialArchiverSettings): PendingArchiveDeleteEntry[] {
+    const raw = (settings as unknown as Record<string, unknown>)['pendingArchiveDeletes'];
+    if (!Array.isArray(raw)) return [];
+    return raw as PendingArchiveDeleteEntry[];
+  }
+
+  /**
+   * Write the pending delete queue back into settings (in-memory only).
+   * Caller must call saveSettings() to persist.
+   */
+  private setQueue(settings: SocialArchiverSettings, queue: PendingArchiveDeleteEntry[]): void {
+    (settings as unknown as Record<string, unknown>)['pendingArchiveDeletes'] = queue;
+  }
+
+  /** Remove a queued entry by archiveId and persist settings. */
+  private async removeFromQueue(archiveId: string): Promise<void> {
+    const settings = this.deps.settings();
+    const queue = this.getQueue(settings);
+    const filtered = queue.filter((entry) => entry.archiveId !== archiveId);
+    this.setQueue(settings, filtered);
+    await this.deps.saveSettings();
+  }
+
+  /**
+   * Increment retryCount and set lastError/lastAttemptAt on a queued entry,
+   * then persist settings.
+   */
+  private async updateQueueEntry(
+    entry: PendingArchiveDeleteEntry,
+    error: unknown
+  ): Promise<void> {
+    const settings = this.deps.settings();
+    const queue = this.getQueue(settings);
+    const idx = queue.findIndex((e) => e.archiveId === entry.archiveId);
+    if (idx === -1) return;
+
+    const updated: PendingArchiveDeleteEntry = {
+      // Non-null assertion safe: idx !== -1 guarantees element exists
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      ...queue[idx]!,
+      retryCount: entry.retryCount + 1,
+      lastAttemptAt: new Date().toISOString(),
+      lastError: error instanceof Error ? error.message : String(error),
+    };
+    queue[idx] = updated;
+    this.setQueue(settings, queue);
+    await this.deps.saveSettings();
+  }
+
+  // --------------------------------------------------------------------------
+  // Lookup helpers
+  // --------------------------------------------------------------------------
+
+  /**
+   * Find the vault file for an inbound delete event.
+   * Tier-1: by archiveId. Tier-2: by originalUrl (single match only).
+   * Returns null if not found or if the URL lookup is ambiguous.
+   */
+  private findVaultFile(archiveId: string, originalUrl?: string): TFile | null {
+    // Tier-1: stable ID lookup
+    const byId = this.deps.findBySourceArchiveId(archiveId);
+    if (byId) return byId;
+
+    // Tier-2: URL fallback (single match only — ambiguous = skip)
+    if (originalUrl) {
+      const byUrl = this.deps.findByOriginalUrl(originalUrl);
+      if (byUrl.length === 1) {
+        // byUrl[0] is defined when length === 1
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        return byUrl[0]!;
+      }
+      if (byUrl.length > 1) {
+        console.warn(`${LOG_PREFIX} Inbound delete: ambiguous URL match — skipping`, {
+          archiveId,
+          originalUrl,
+          matchCount: byUrl.length,
+        });
+      }
+    }
+
+    return null;
+  }
+
+  // --------------------------------------------------------------------------
+  // Auth helpers
+  // --------------------------------------------------------------------------
+
+  private isAuthenticated(settings: SocialArchiverSettings): boolean {
+    return (
+      !!this.deps.apiClient() &&
+      typeof settings.authToken === 'string' && settings.authToken.length > 0 &&
+      typeof settings.username === 'string' && settings.username.length > 0
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // Error helpers
+  // --------------------------------------------------------------------------
+
+  /**
+   * Extract an HTTP status code from an unknown thrown value, if present.
+   * Returns undefined for non-HTTP errors (e.g. network failures).
+   */
+  private extractStatus(error: unknown): number | undefined {
+    if (error instanceof Error) {
+      const enriched = error as Error & { status?: number };
+      return enriched.status;
+    }
+    return undefined;
+  }
+}

@@ -46,6 +46,7 @@ export interface ShareAPIRequest {
     username?: string;
     shareId?: string; // For updates
     tier?: UserTier; // User tier for video upload permissions
+    archiveId?: string; // Server archive ID for composed posts (associates share with archive record)
   };
 }
 

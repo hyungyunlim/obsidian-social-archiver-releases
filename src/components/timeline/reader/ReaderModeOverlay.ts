@@ -16,10 +16,12 @@ import { MediaGalleryRenderer } from '../renderers/MediaGalleryRenderer';
 import { LinkPreviewRenderer } from '../renderers/LinkPreviewRenderer';
 import { ReaderModeContentRenderer } from './ReaderModeContentRenderer';
 import { ReaderModeGestureHandler } from './ReaderModeGestureHandler';
+import { ReaderHighlightManager } from './ReaderHighlightManager';
 import { ReaderTTSController } from './ReaderTTSController';
 import { FEATURE_READER_TTS_ENABLED } from '../../../shared/constants';
 import { resolveTTSProvider } from '../../../services/tts/resolveProvider';
 import type { PluginTTSProvider } from '../../../services/tts/types';
+import type { TextHighlight } from '../../../types/annotations';
 
 export interface ReaderModeContext {
   posts: PostData[];
@@ -30,10 +32,10 @@ export interface ReaderModeContext {
   linkPreviewRenderer: LinkPreviewRenderer;
   onUIModify?: (filePath: string) => void;
   onUIDelete?: (filePath: string) => void;
-  onClose?: (dirty: boolean) => void;
+  onClose?: (dirty: boolean, dirtyPaths?: string[]) => void;
   onShare?: (post: PostData) => Promise<void>;
   onEdit?: (post: PostData) => void;
-  onDelete?: (post: PostData) => Promise<void>;
+  onDelete?: (post: PostData) => Promise<boolean>;
   onTagsChanged?: () => void;
   /** Check if an author is subscribed (delegates to PostCardRenderer) */
   isAuthorSubscribed?: (authorUrl: string, platform: string) => boolean;
@@ -57,8 +59,12 @@ export class ReaderModeOverlay {
 
   // Sub-components
   private gestureHandler: ReaderModeGestureHandler | null = null;
+  private highlightManager: ReaderHighlightManager | null = null;
   private ttsController: ReaderTTSController | null = null;
   private ttsProvider: PluginTTSProvider | null = null;
+
+  /** Per-post highlights cache (keyed by filePath) */
+  private highlightsCache: Map<string, TextHighlight[]> = new Map();
 
   // Keyboard handler ref
   private keyHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -69,6 +75,8 @@ export class ReaderModeOverlay {
 
   // Track whether any archive state was changed during the session
   private dirty = false;
+  /** File paths modified during this reader session (for targeted re-parse on close) */
+  private dirtyPaths: Set<string> = new Set();
 
   // Track whether a child modal (e.g. TagModal) is open — suppress keys while true
   private modalOpen = false;
@@ -119,6 +127,12 @@ export class ReaderModeOverlay {
 
     // Single panel
     this.panel = this.container.createDiv({ cls: 'sa-reader-mode-panel-wrapper rmo-panel-animated' });
+
+    // Initialize highlight manager
+    this.highlightManager = new ReaderHighlightManager({
+      onHighlightCreate: (highlight) => this.handleHighlightCreate(highlight),
+      onHighlightRemove: (highlightId) => this.handleHighlightRemove(highlightId),
+    });
 
     // Initialize TTS controller (feature-flagged)
     if (FEATURE_READER_TTS_ENABLED) {
@@ -200,6 +214,7 @@ export class ReaderModeOverlay {
     this._isActive = false;
 
     const wasDirty = this.dirty;
+    const dirtyPathsSnapshot = [...this.dirtyPaths];
 
     // Cleanup keyboard
     if (this.keyHandler) {
@@ -211,6 +226,12 @@ export class ReaderModeOverlay {
     if (this.gestureHandler) {
       this.gestureHandler.destroy();
       this.gestureHandler = null;
+    }
+
+    // Cleanup highlight manager
+    if (this.highlightManager) {
+      this.highlightManager.detach();
+      this.highlightManager = null;
     }
 
     // Cleanup TTS
@@ -245,7 +266,7 @@ export class ReaderModeOverlay {
       this.panel = null;
 
       // Notify parent after DOM cleanup so timeline can re-render
-      this.context.onClose?.(wasDirty);
+      this.context.onClose?.(wasDirty, dirtyPathsSnapshot);
     };
 
     if (this.container) {
@@ -607,11 +628,13 @@ export class ReaderModeOverlay {
   private async deletePost(post: PostData): Promise<void> {
     if (this.context.onDelete) {
       this.modalOpen = true;
+      let deleted: boolean;
       try {
-        await this.context.onDelete(post);
+        deleted = await this.context.onDelete(post);
       } finally {
         window.setTimeout(() => { this.modalOpen = false; }, 0);
       }
+      if (!deleted) return;
       // Post was deleted — remove from list and navigate or close
       const idx = this.context.posts.findIndex(p => p.filePath === post.filePath);
       if (idx !== -1) {
@@ -842,6 +865,257 @@ export class ReaderModeOverlay {
     document.addEventListener('keydown', modalKeyHandler, true);
   }
 
+  // ---------- Highlight Handlers ----------
+
+  /**
+   * Handle highlight creation: apply ==text== to vault file, sync to API.
+   */
+  private async handleHighlightCreate(highlight: TextHighlight): Promise<void> {
+    const post = this.context.posts[this.currentIndex];
+    if (!post?.filePath) return;
+
+    const postKey = post.filePath || post.id;
+
+    // 1. Update local cache
+    const cached = this.highlightsCache.get(postKey) || [];
+    cached.push(highlight);
+    this.highlightsCache.set(postKey, cached);
+
+    // 2. Apply ==highlight== to vault markdown file
+    await this.applyHighlightToVaultFile(post, highlight);
+
+    // 3. Update in-memory PostData so timeline reflects the change on close
+    post.highlightCount = cached.length;
+
+    // 4. Sync to server API (fire-and-forget in background)
+    this.syncHighlightsToServer(post, cached);
+
+    this.dirty = true;
+    if (post.filePath) this.dirtyPaths.add(post.filePath);
+    new Notice('Highlight saved');
+  }
+
+  /**
+   * Handle highlight removal: remove ==text== from vault file, sync to API.
+   */
+  private async handleHighlightRemove(highlightId: string): Promise<void> {
+    const post = this.context.posts[this.currentIndex];
+    if (!post?.filePath) return;
+
+    const postKey = post.filePath || post.id;
+    const cached = this.highlightsCache.get(postKey) || [];
+    const removed = cached.find(h => h.id === highlightId);
+    const updated = cached.filter(h => h.id !== highlightId);
+    this.highlightsCache.set(postKey, updated);
+
+    // Remove ==text== from vault file
+    if (removed) {
+      await this.removeHighlightFromVaultFile(post, removed);
+    }
+
+    // Update in-memory PostData so timeline reflects the change on close
+    post.highlightCount = updated.length > 0 ? updated.length : undefined;
+
+    // Sync to server
+    this.syncHighlightsToServer(post, updated);
+
+    this.dirty = true;
+    if (post.filePath) this.dirtyPaths.add(post.filePath);
+    new Notice('Highlight removed');
+  }
+
+  /**
+   * Apply Obsidian ==highlight== markdown format to the vault note file.
+   * Finds the highlight text in the file body and wraps with ==...==.
+   */
+  private async applyHighlightToVaultFile(post: PostData, highlight: TextHighlight): Promise<void> {
+    try {
+      const filePath = post.filePath;
+      if (!filePath) return;
+
+      const vault = this.context.app.vault;
+      const file = vault.getAbstractFileByPath(filePath);
+      if (!file || !(file instanceof TFile)) return;
+
+      this.context.onUIModify?.(filePath);
+
+      const content = await vault.read(file);
+
+      // Find the text in the file body (after frontmatter)
+      const fmEnd = this.findFrontmatterEnd(content);
+      const body = content.substring(fmEnd);
+
+      // Search for the highlight text, using context to disambiguate
+      const idx = this.findTextInBody(body, highlight.text, highlight.contextBefore, highlight.contextAfter);
+      if (idx < 0) {
+        console.warn('[Social Archiver] Could not find highlight text in vault file');
+        return;
+      }
+
+      // Check if already wrapped with ==
+      const absoluteIdx = fmEnd + idx;
+      const before2 = content.substring(Math.max(0, absoluteIdx - 2), absoluteIdx);
+      const after2 = content.substring(absoluteIdx + highlight.text.length, absoluteIdx + highlight.text.length + 2);
+      if (before2 === '==' && after2 === '==') return; // Already highlighted
+
+      // Wrap with ==...==
+      const newContent =
+        content.substring(0, absoluteIdx) +
+        '==' + highlight.text + '==' +
+        content.substring(absoluteIdx + highlight.text.length);
+
+      await vault.modify(file, newContent);
+    } catch (err) {
+      console.error('[Social Archiver] Failed to apply highlight to vault file:', err);
+    }
+  }
+
+  /**
+   * Remove ==highlight== markup from the vault note file.
+   */
+  private async removeHighlightFromVaultFile(post: PostData, highlight: TextHighlight): Promise<void> {
+    try {
+      const filePath = post.filePath;
+      if (!filePath) return;
+
+      const vault = this.context.app.vault;
+      const file = vault.getAbstractFileByPath(filePath);
+      if (!file || !(file instanceof TFile)) return;
+
+      this.context.onUIModify?.(filePath);
+
+      const content = await vault.read(file);
+      const wrapped = '==' + highlight.text + '==';
+      const idx = content.indexOf(wrapped);
+      if (idx < 0) return;
+
+      const newContent =
+        content.substring(0, idx) +
+        highlight.text +
+        content.substring(idx + wrapped.length);
+
+      await vault.modify(file, newContent);
+    } catch (err) {
+      console.error('[Social Archiver] Failed to remove highlight from vault file:', err);
+    }
+  }
+
+  /**
+   * Sync highlights to the server API (background, non-blocking).
+   * Server broadcasts hasAnnotationUpdate via WebSocket to mobile app.
+   */
+  private syncHighlightsToServer(post: PostData, highlights: TextHighlight[]): void {
+    // Read sourceArchiveId from frontmatter
+    const filePath = post.filePath;
+    if (!filePath) return;
+
+    const file = this.context.app.vault.getAbstractFileByPath(filePath);
+    if (!file || !(file instanceof TFile)) return;
+
+    const cache = this.context.app.metadataCache.getFileCache(file);
+    const sourceArchiveId = cache?.frontmatter?.sourceArchiveId as string | undefined;
+    if (!sourceArchiveId) {
+      // No server archive ID — cannot sync. This is expected for local-only posts.
+      return;
+    }
+
+    try {
+      const apiClient = this.context.plugin.workersApiClient;
+      // Fire and forget — don't block UI on network
+      void apiClient.updateArchiveActions(sourceArchiveId, {
+        userHighlights: highlights,
+      }).catch(err => {
+        console.error('[Social Archiver] Failed to sync highlights to server:', err);
+      });
+    } catch {
+      // API client not initialized — skip sync silently
+    }
+  }
+
+  // ---------- Highlight Text Search Helpers ----------
+
+  /**
+   * Find the end of YAML frontmatter (position after closing ---\n).
+   */
+  private findFrontmatterEnd(content: string): number {
+    if (!content.startsWith('---')) return 0;
+    const secondDash = content.indexOf('\n---', 3);
+    if (secondDash < 0) return 0;
+    // Move past the closing --- and newline
+    const afterDash = secondDash + 4;
+    return afterDash < content.length ? afterDash : content.length;
+  }
+
+  /**
+   * Find text in the body portion of the file, using context for disambiguation.
+   */
+  private findTextInBody(body: string, text: string, contextBefore?: string, contextAfter?: string): number {
+    let searchFrom = 0;
+    let bestMatch = -1;
+
+    while (true) {
+      const idx = body.indexOf(text, searchFrom);
+      if (idx < 0) break;
+
+      // First match is the default fallback
+      if (bestMatch < 0) bestMatch = idx;
+
+      // Check context match for disambiguation
+      if (contextBefore) {
+        const before = body.substring(Math.max(0, idx - 30), idx);
+        if (before.includes(contextBefore.slice(-10))) {
+          return idx;
+        }
+      } else {
+        return idx; // No context to match, use first occurrence
+      }
+
+      searchFrom = idx + 1;
+    }
+
+    return bestMatch;
+  }
+
+  /**
+   * Parse ==text== highlights from a vault file to rebuild the highlights cache.
+   * This handles highlights created in previous sessions (not yet in memory cache).
+   */
+  private async parseHighlightsFromVault(filePath: string): Promise<TextHighlight[]> {
+    try {
+      const vault = this.context.app.vault;
+      const file = vault.getAbstractFileByPath(filePath);
+      if (!file || !(file instanceof TFile)) return [];
+
+      const content = await vault.read(file);
+      const fmEnd = this.findFrontmatterEnd(content);
+      const body = content.substring(fmEnd);
+
+      const highlights: TextHighlight[] = [];
+      // Match ==text== (including multi-line) but not === or ==- (horizontal rules, etc.)
+      const regex = /==(?![-=])([\s\S]+?)==/g;
+      let match: RegExpExecArray | null;
+      while ((match = regex.exec(body)) !== null) {
+        const text = match[1]!;
+        const startOffset = match.index;
+        const now = new Date().toISOString();
+        highlights.push({
+          id: `hl_vault_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`,
+          text,
+          startOffset,
+          endOffset: startOffset + text.length,
+          color: 'yellow', // Default color for vault-parsed highlights
+          contextBefore: body.substring(Math.max(0, startOffset - 30), startOffset),
+          contextAfter: body.substring(startOffset + text.length, startOffset + text.length + 30),
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+      return highlights;
+    } catch {
+      return [];
+    }
+  }
+
   // ---------- Font Size ----------
 
   private applyFontSize(): void {
@@ -883,6 +1157,16 @@ export class ReaderModeOverlay {
     // Determine subscription status for badge
     const subscriptionStatus = this.getSubscriptionStatus(post);
 
+    // Get cached highlights for this post; if empty, parse from vault file ==text==
+    const postKey = post.filePath || post.id;
+    let highlights = this.highlightsCache.get(postKey) || [];
+    if (highlights.length === 0 && post.filePath) {
+      highlights = await this.parseHighlightsFromVault(post.filePath);
+      if (highlights.length > 0) {
+        this.highlightsCache.set(postKey, highlights);
+      }
+    }
+
     await this.activeRenderer.render(
       this.panel,
       post,
@@ -910,6 +1194,13 @@ export class ReaderModeOverlay {
         onSubscribe: () => void this.subscribeAuthor(post),
         onUnsubscribe: () => void this.unsubscribeAuthor(post),
         ttsController: this.ttsController ?? undefined,
+        hasHighlights: highlights.length > 0,
+        highlightCount: highlights.length,
+        onBodyRendered: (bodyEl, plainText) => {
+          // Detach previous and attach highlight manager to new body element
+          this.highlightManager?.detach();
+          this.highlightManager?.attach(bodyEl, plainText, highlights);
+        },
       },
     );
   }

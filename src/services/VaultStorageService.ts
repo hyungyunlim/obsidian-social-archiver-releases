@@ -343,6 +343,19 @@ export class VaultStorageService {
     // Save markdown file
     const file = await this.createOrUpdateFile(filePath, markdown.fullDocument);
 
+    // Inject composed-post sync contract fields for user-created posts
+    if (postData.platform === 'post' && postData.id) {
+      try {
+        await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+          fm['postOrigin'] = 'composer';
+          fm['clientPostId'] = postData.id;
+          fm['syncState'] = 'pending';
+        });
+      } catch {
+        // Non-fatal: sync fields missing means ComposedPostSyncService will skip this file
+      }
+    }
+
     return {
       file,
       path: file.path,

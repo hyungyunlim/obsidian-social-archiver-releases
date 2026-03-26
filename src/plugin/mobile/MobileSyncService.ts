@@ -45,6 +45,12 @@ export interface MobileSyncServiceDeps {
   /** Refresh the timeline view after a successful sync. */
   refreshTimelineView: () => void;
 
+  /** Suppress timeline auto-refresh during batch operations. */
+  suppressTimelineRefresh: () => void;
+
+  /** Resume timeline auto-refresh after batch operations. */
+  resumeTimelineRefresh: (triggerRefresh?: boolean) => void;
+
   /** Schedule a callback after `delay` ms. Returns the timer id. */
   schedule: (callback: () => void, delay: number) => number;
 
@@ -107,7 +113,6 @@ export class MobileSyncService {
         destinationFolder: this.deps.settings().archivePath,
         archivedAt: new Date().toISOString(),
       };
-
       const saved = await this.deps.saveSubscriptionPost(pendingPost);
 
       if (saved) {
@@ -120,6 +125,8 @@ export class MobileSyncService {
         this.mobileSyncRetryCount.delete(queueId);
         const displayTitle = archive.title || archive.authorName || archive.platform || 'Archive';
         new Notice(`\u2705 Saved to vault: ${displayTitle}`, 3000);
+        // Explicitly refresh timeline after single-item sync
+        this.deps.refreshTimelineView();
         return true;
       } else {
         throw new Error('Failed to save to vault');
@@ -192,6 +199,9 @@ export class MobileSyncService {
       console.debug(`[Social Archiver] Catch-up: ${pendingItems.length} pending sync item(s) found`);
       new Notice(`\uD83D\uDCF1 Syncing ${pendingItems.length} missed archive(s) from mobile...`, 4000);
 
+      // Suppress timeline refresh during batch processing
+      this.deps.suppressTimelineRefresh();
+
       let successCount = 0;
       for (const item of pendingItems) {
         const success = await this.processSyncQueueItem(item.queueId, item.archiveId, clientId);
@@ -200,11 +210,16 @@ export class MobileSyncService {
         }
       }
 
+      // Resume timeline refresh — trigger reload only if something was saved
+      this.deps.resumeTimelineRefresh(successCount > 0);
+
       if (successCount > 0) {
         console.debug(`[Social Archiver] Catch-up complete: ${successCount}/${pendingItems.length} synced`);
       }
     } catch (error) {
       console.error('[Social Archiver] Failed to process pending sync queue:', error);
+      // Ensure timeline refresh is resumed even on error
+      this.deps.resumeTimelineRefresh(false);
     } finally {
       this.isSyncingMobileQueue = false;
     }

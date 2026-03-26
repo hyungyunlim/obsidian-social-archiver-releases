@@ -333,6 +333,9 @@ export interface PostData {
    */
   multilangTranscript?: MultiLangTranscript;
 
+  /** Server-side archive ID for stable identity tracking */
+  sourceArchiveId?: string;
+
   /**
    * Expired media items detected during download (CDN expired, download failed)
    * Set at runtime during subscription post processing; not persisted to frontmatter.
@@ -425,6 +428,9 @@ export interface PostData {
    * - Each embed consumes 1 archive credit
    */
   embeddedArchives?: PostData[];
+
+  /** Number of text highlights/annotations in the post content */
+  highlightCount?: number;
 }
 
 // Zod schema for validation with version

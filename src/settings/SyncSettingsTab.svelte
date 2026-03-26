@@ -1,6 +1,7 @@
 <script lang="ts">
 import { Notice } from 'obsidian';
 import type SocialArchiverPlugin from '../main';
+import type { ArchiveLibrarySyncRuntimeState } from '../plugin/sync/ArchiveLibrarySyncService';
 
 interface Props {
   plugin: SocialArchiverPlugin;
@@ -14,11 +15,80 @@ let registering = $state(false);
 let unregistering = $state(false);
 let syncError = $state<string | null>(null);
 
+// Archive Library Sync state
+let librarySyncRunning = $state(false);
+let librarySyncState = $state<ArchiveLibrarySyncRuntimeState | null>(null);
+let librarySyncUnsubscribe: (() => void) | null = null;
+
+$effect(() => {
+  // Subscribe to library sync progress when the component is mounted
+  const service = plugin.archiveLibrarySyncService;
+  if (service) {
+    librarySyncRunning = service.isRunning;
+    librarySyncUnsubscribe = service.onProgress((state) => {
+      librarySyncState = state;
+      librarySyncRunning = state.phase !== 'idle' && state.phase !== 'completed' && state.phase !== 'error';
+    });
+  }
+
+  return () => {
+    librarySyncUnsubscribe?.();
+    librarySyncUnsubscribe = null;
+  };
+});
+
 // Computed states
 let isConnected = $derived(!!settings.syncClientId);
 let clientIdDisplay = $derived(
   settings.syncClientId ? settings.syncClientId.substring(0, 8) + '...' : ''
 );
+
+// Library sync computed states
+let librarySyncProgress = $derived.by(() => {
+  if (!librarySyncState) return '';
+  const { scannedCount, totalServerArchives, phase } = librarySyncState;
+  if (phase === 'delta-sweep') return 'Delta sweep…';
+  if (totalServerArchives !== null && totalServerArchives > 0) {
+    return `Scanning ${scannedCount.toLocaleString()} / ${totalServerArchives.toLocaleString()}`;
+  }
+  return `Scanning… (${scannedCount.toLocaleString()} so far)`;
+});
+
+let librarySyncProgressPercent = $derived.by(() => {
+  if (!librarySyncState) return 0;
+  const { scannedCount, totalServerArchives } = librarySyncState;
+  if (!totalServerArchives || totalServerArchives <= 0) return 0;
+  return Math.min(100, Math.round((scannedCount / totalServerArchives) * 100));
+});
+
+let librarySyncPersistedStatus = $derived(
+  plugin.settings.archiveLibrarySync?.lastStatus ?? 'idle'
+);
+
+let librarySyncCompletedAt = $derived(
+  plugin.settings.archiveLibrarySync?.completedAt ?? ''
+);
+
+/**
+ * Start (or resume) the archive library sync
+ */
+async function handleLibrarySync() {
+  const service = plugin.archiveLibrarySyncService;
+  if (!service) {
+    new Notice('Archive Library Sync service is not available. Please reconnect.');
+    return;
+  }
+  if (librarySyncRunning) return;
+
+  librarySyncRunning = true;
+  try {
+    await service.startSync();
+    // Refresh settings to show updated completedAt
+    settings = plugin.settings;
+  } finally {
+    librarySyncRunning = service.isRunning;
+  }
+}
 
 /**
  * Handle connecting (registering) this vault as a sync client
@@ -61,6 +131,34 @@ async function handleDisconnect() {
     new Notice(`Error: ${syncError}`);
   } finally {
     unregistering = false;
+  }
+}
+
+// Delete Sync state
+let pendingDeleteCount = $derived(settings.pendingArchiveDeletes?.length ?? 0);
+let flushingDeletes = $state(false);
+
+/**
+ * Retry flushing pending server deletes via ArchiveDeleteSyncService
+ */
+async function handleRetryPendingDeletes() {
+  const service = plugin.archiveDeleteSyncService;
+  if (!service) {
+    new Notice('Delete Sync service is not available. Please reconnect.');
+    return;
+  }
+  if (flushingDeletes) return;
+
+  flushingDeletes = true;
+  try {
+    await service.flushPendingDeletes();
+    settings = plugin.settings;
+    new Notice('Pending deletes processed.');
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Retry failed';
+    new Notice(`Error: ${msg}`);
+  } finally {
+    flushingDeletes = false;
   }
 }
 
@@ -168,6 +266,152 @@ async function handleDisconnect() {
       <li>Each vault can be registered as a separate sync client</li>
     </ul>
   </div>
+
+  <!-- Archive Library Sync section -->
+  {#if isConnected}
+    <div class="library-sync-section">
+      <div class="library-sync-header">
+        <div class="library-sync-title">Archive Library Sync</div>
+        <div class="library-sync-description">
+          서버 계정에 이미 있는 archive를 vault와 맞춥니다. 기존 note는 건너뜁니다.
+        </div>
+      </div>
+
+      <!-- Status row -->
+      <div class="library-sync-status-row">
+        {#if librarySyncRunning && librarySyncState}
+          <div class="library-sync-status running">
+            <span class="library-sync-phase-indicator running"></span>
+            <span class="library-sync-status-text">{librarySyncProgress}</span>
+          </div>
+          <!-- Progress bar -->
+          {#if librarySyncProgressPercent() > 0}
+            <div class="library-sync-progress-bar-track">
+              <div
+                class="library-sync-progress-bar-fill"
+                style="width: {librarySyncProgressPercent}%"
+              ></div>
+            </div>
+          {/if}
+          <!-- Live stats -->
+          <div class="library-sync-stats">
+            <span class="stat-item saved">Saved: {librarySyncState.savedCount}</span>
+            <span class="stat-item skipped">Skipped: {librarySyncState.skippedCount}</span>
+            {#if librarySyncState.ambiguousCount > 0}
+              <span class="stat-item ambiguous">Ambiguous: {librarySyncState.ambiguousCount}</span>
+            {/if}
+            {#if librarySyncState.failedCount > 0}
+              <span class="stat-item failed">Failed: {librarySyncState.failedCount}</span>
+            {/if}
+          </div>
+        {:else if librarySyncPersistedStatus === 'completed' && librarySyncCompletedAt}
+          <div class="library-sync-status completed">
+            <span class="library-sync-phase-indicator completed"></span>
+            <span class="library-sync-status-text">
+              Last synced: {new Date(librarySyncCompletedAt).toLocaleString()}
+            </span>
+          </div>
+        {:else if librarySyncPersistedStatus === 'error'}
+          <div class="library-sync-status error">
+            <span class="library-sync-phase-indicator error"></span>
+            <span class="library-sync-status-text">
+              Error: {plugin.settings.archiveLibrarySync?.lastError || 'Unknown error'}
+            </span>
+          </div>
+        {:else if librarySyncPersistedStatus === 'running'}
+          <div class="library-sync-status running">
+            <span class="library-sync-phase-indicator running"></span>
+            <span class="library-sync-status-text">Interrupted — click Sync to resume</span>
+          </div>
+        {:else}
+          <div class="library-sync-status idle">
+            <span class="library-sync-phase-indicator idle"></span>
+            <span class="library-sync-status-text">Not yet synced</span>
+          </div>
+        {/if}
+      </div>
+
+      <!-- Action button -->
+      <div class="library-sync-action-row">
+        <button
+          class="library-sync-button {librarySyncRunning ? '' : 'mod-cta'}"
+          onclick={handleLibrarySync}
+          disabled={librarySyncRunning || !isConnected}
+        >
+          {librarySyncRunning ? 'Syncing…' : (librarySyncPersistedStatus === 'completed' ? 'Re-sync Archives' : 'Sync Existing Archives')}
+        </button>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Delete Sync section -->
+  {#if isConnected}
+    <div class="delete-sync-section">
+      <div class="delete-sync-header">
+        <div class="delete-sync-title">Delete Sync</div>
+      </div>
+
+      <!-- Outbound: vault → server -->
+      <div class="delete-sync-toggle">
+        <div class="delete-sync-toggle-info">
+          <div class="delete-sync-toggle-title">Delete from server when archive notes are deleted</div>
+          <div class="delete-sync-toggle-description">
+            When you delete an archive note from this vault, also delete it from the server
+          </div>
+        </div>
+        <label class="annotation-toggle-switch">
+          <input
+            type="checkbox"
+            checked={settings.deleteSync.outboundEnabled}
+            onchange={async (e) => {
+              plugin.settings.deleteSync.outboundEnabled = (e.target as HTMLInputElement).checked;
+              await plugin.saveSettings();
+              settings = plugin.settings;
+            }}
+          />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <!-- Inbound: server → vault -->
+      <div class="delete-sync-toggle">
+        <div class="delete-sync-toggle-info">
+          <div class="delete-sync-toggle-title">Remove local notes deleted on other devices</div>
+          <div class="delete-sync-toggle-description">
+            When an archive is deleted on another device or the server, remove the note from this vault
+          </div>
+        </div>
+        <label class="annotation-toggle-switch">
+          <input
+            type="checkbox"
+            checked={settings.deleteSync.inboundEnabled}
+            onchange={async (e) => {
+              plugin.settings.deleteSync.inboundEnabled = (e.target as HTMLInputElement).checked;
+              await plugin.saveSettings();
+              settings = plugin.settings;
+            }}
+          />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <!-- Pending deletes info + retry button -->
+      {#if pendingDeleteCount > 0}
+        <div class="delete-sync-pending-row">
+          <span class="delete-sync-pending-text">
+            Pending server deletes: {pendingDeleteCount}
+          </span>
+          <button
+            class="delete-sync-retry-button"
+            onclick={handleRetryPendingDeletes}
+            disabled={flushingDeletes}
+          >
+            {flushingDeletes ? 'Retrying…' : 'Retry Pending Deletes'}
+          </button>
+        </div>
+      {/if}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -377,5 +621,216 @@ async function handleDisconnect() {
 
 .sync-info-callout li {
   margin: 4px 0;
+}
+
+/* Archive Library Sync */
+.library-sync-section {
+  margin-top: 24px;
+  padding: 16px;
+  background: var(--background-secondary);
+  border-radius: 8px;
+}
+
+.library-sync-header {
+  margin-bottom: 12px;
+}
+
+.library-sync-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-normal);
+  margin-bottom: 4px;
+}
+
+.library-sync-description {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.library-sync-status-row {
+  margin-bottom: 12px;
+}
+
+.library-sync-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.library-sync-phase-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.library-sync-phase-indicator.running {
+  background: var(--interactive-accent);
+  animation: library-sync-pulse 1.5s infinite;
+}
+
+.library-sync-phase-indicator.completed {
+  background: var(--text-success);
+}
+
+.library-sync-phase-indicator.error {
+  background: var(--text-error);
+}
+
+.library-sync-phase-indicator.idle {
+  background: var(--text-muted);
+}
+
+@keyframes library-sync-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.library-sync-status-text {
+  color: var(--text-normal);
+}
+
+.library-sync-status.error .library-sync-status-text {
+  color: var(--text-error);
+}
+
+.library-sync-progress-bar-track {
+  height: 4px;
+  background: var(--background-modifier-border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.library-sync-progress-bar-fill {
+  height: 100%;
+  background: var(--interactive-accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.library-sync-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.stat-item {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.stat-item.saved {
+  background: color-mix(in srgb, var(--text-success) 15%, transparent);
+  color: var(--text-success);
+}
+
+.stat-item.skipped {
+  background: var(--background-modifier-border);
+  color: var(--text-muted);
+}
+
+.stat-item.ambiguous {
+  background: color-mix(in srgb, var(--text-warning) 15%, transparent);
+  color: var(--text-warning);
+}
+
+.stat-item.failed {
+  background: color-mix(in srgb, var(--text-error) 15%, transparent);
+  color: var(--text-error);
+}
+
+.library-sync-action-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.library-sync-button {
+  font-size: 13px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.library-sync-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Delete Sync */
+.delete-sync-section {
+  margin-top: 24px;
+  padding: 16px;
+  background: var(--background-secondary);
+  border-radius: 8px;
+}
+
+.delete-sync-header {
+  margin-bottom: 12px;
+}
+
+.delete-sync-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+.delete-sync-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.delete-sync-toggle + .delete-sync-toggle {
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.delete-sync-toggle-info {
+  flex: 1;
+}
+
+.delete-sync-toggle-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-normal);
+  margin-bottom: 2px;
+}
+
+.delete-sync-toggle-description {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.delete-sync-pending-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.delete-sync-pending-text {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.delete-sync-retry-button {
+  font-size: 13px;
+  padding: 4px 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.delete-sync-retry-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

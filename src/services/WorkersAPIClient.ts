@@ -175,6 +175,8 @@ export interface UserArchive {
     }>;
   }>;
   isReblog?: boolean;
+  // Archive source (single, profile_crawl, subscription, composed)
+  archiveSource?: string | null;
   // X article (long-form post) derived fields
   isArticle?: boolean;
   articleMarkdown?: string | null;
@@ -195,12 +197,33 @@ export interface GetUserArchiveResponse {
   archive: UserArchive;
 }
 
+export interface GetUserArchivesParams {
+  limit?: number;
+  offset?: number;
+  updatedAfter?: string;
+  includeDeleted?: boolean;
+  archivedBefore?: string;
+  originalUrl?: string;
+}
+
+export interface GetUserArchivesResponse {
+  archives: UserArchive[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+  serverTime: string;
+  deletedIds?: string[];
+}
+
 export interface WorkersAPIConfig {
   endpoint: string;
   licenseKey?: string;
   authToken?: string;
   timeout?: number;
   pluginVersion?: string;
+  /** Registered sync client ID, sent as X-Client-Id header for echo suppression */
+  clientId?: string;
 }
 
 export interface ArchiveRequest {
@@ -355,6 +378,80 @@ export interface FeedDetectionData {
   feedImage?: string;
   author?: string;
   episodeCount?: number;
+}
+
+// ============================================================================
+// User Tags Types (matches server workers/src/types/user-tags.ts)
+// ============================================================================
+
+/** Single tag upsert input for POST /api/user/tags */
+export interface TagUpsertInput {
+  id: string;
+  name: string;
+  color?: string | null;
+  sortOrder?: number;
+}
+
+/** Single archive-tag mapping for POST/DELETE /api/user/archive-tags */
+export interface ArchiveTagMappingInput {
+  archiveId: string;
+  tagId: string;
+}
+
+/** A user-defined tag returned from GET /api/user/tags */
+export interface UserTag {
+  id: string;
+  name: string;
+  color: string | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Response from GET /api/user/tags */
+export interface UserTagsResponse {
+  tags: UserTag[];
+  deletedIds: string[];
+  serverTime: string;
+}
+
+/** Response from POST /api/user/tags */
+export interface UpsertTagsResult {
+  upserted: number;
+  serverTime: string;
+}
+
+/** Response from POST /api/user/archive-tags */
+export interface UpsertArchiveTagsResult {
+  upserted: number;
+  serverTime: string;
+}
+
+// ============================================================================
+// Composed Post Types
+// ============================================================================
+
+export interface ComposedMediaUploadResult {
+  mediaId: string;
+  url: string;
+}
+
+export interface CreateComposedPostRequest {
+  clientPostId: string;
+  content: string;
+  platform: 'post';
+  publishedAt?: string;
+  authorName?: string;
+  authorUrl?: string;
+}
+
+export interface UpdateComposedPostRequest {
+  clientPostId: string;
+  content: string;
+  platform: 'post';
+  publishedAt?: string;
+  authorName?: string;
+  authorUrl?: string;
 }
 
 /**
@@ -631,6 +728,14 @@ export class WorkersAPIClient implements IService {
    */
   setAuthToken(authToken: string): void {
     this.config.authToken = authToken;
+  }
+
+  /**
+   * Set the sync client ID sent as X-Client-Id for echo suppression.
+   * Call this after syncClientId is registered in settings.
+   */
+  setClientId(clientId: string): void {
+    this.config.clientId = clientId;
   }
 
   /**
@@ -1010,6 +1115,82 @@ export class WorkersAPIClient implements IService {
   }
 
   /**
+   * Get all archives for the current user with optional pagination and filtering
+   *
+   * @param params - Optional query parameters for filtering/pagination
+   * @returns Paginated list of user archives with server metadata
+   */
+  async getUserArchives(params: GetUserArchivesParams = {}): Promise<GetUserArchivesResponse> {
+    this.ensureInitialized();
+
+    // Build query string from params
+    const queryParams = new URLSearchParams();
+    if (params.limit !== undefined) queryParams.set('limit', String(params.limit));
+    if (params.offset !== undefined) queryParams.set('offset', String(params.offset));
+    if (params.updatedAfter !== undefined) queryParams.set('updatedAfter', params.updatedAfter);
+    if (params.includeDeleted !== undefined) queryParams.set('includeDeleted', String(params.includeDeleted));
+    if (params.archivedBefore !== undefined) queryParams.set('archivedBefore', params.archivedBefore);
+    if (params.originalUrl !== undefined) queryParams.set('originalUrl', params.originalUrl);
+
+    const query = queryParams.toString();
+    const path = query ? `/api/user/archives?${query}` : '/api/user/archives';
+
+    return await this.request<GetUserArchivesResponse>(path, {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Update archive actions (highlights, notes, like, bookmark, etc.)
+   *
+   * PATCH /api/user/archives/:archiveId
+   * Server broadcasts `action_updated` WebSocket event with `hasAnnotationUpdate: true`
+   * when userHighlights or userNotes are modified, enabling mobile app sync.
+   */
+  async updateArchiveActions(
+    archiveId: string,
+    updates: {
+      isLiked?: boolean;
+      isBookmarked?: boolean;
+      shareUrl?: string | null;
+      userNotes?: UserNote[];
+      userHighlights?: TextHighlight[];
+    },
+  ): Promise<{ success: boolean }> {
+    this.ensureInitialized();
+
+    // Extra headers for annotation updates (echo suppression on server side)
+    const extraHeaders: Record<string, string> = {};
+    if (this.config.clientId) {
+      extraHeaders['X-Client-Id'] = this.config.clientId;
+    }
+
+    await this.request<{ success: boolean }>(`/api/user/archives/${encodeURIComponent(archiveId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+      headers: extraHeaders,
+    });
+
+    return { success: true };
+  }
+
+  /**
+   * Delete an archive by ID
+   *
+   * DELETE /api/user/archives/:archiveId
+   *
+   * @param archiveId - The archive ID to delete
+   * @returns Success status
+   */
+  async deleteArchive(archiveId: string): Promise<{ success: boolean }> {
+    this.ensureInitialized();
+
+    return this.request<{ success: boolean }>(`/api/user/archives/${archiveId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
    * Get a one-time WebSocket ticket for private channel authentication.
    * The ticket is valid for 60 seconds and consumed on first WS connection.
    */
@@ -1019,6 +1200,197 @@ export class WorkersAPIClient implements IService {
     return await this.request<{ ticket: string; expiresAt: string }>('/api/user/ws-ticket', {
       method: 'POST',
     });
+  }
+
+  // ============================================================================
+  // User Tags API
+  // ============================================================================
+
+  /**
+   * Get all user tags (with delta sync support)
+   *
+   * GET /api/user/tags
+   *
+   * @returns Tags list, deleted IDs, and server time
+   */
+  async getUserTags(): Promise<UserTagsResponse> {
+    this.ensureInitialized();
+
+    return await this.request<UserTagsResponse>('/api/user/tags', {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Upsert tag entities on the server (create or update)
+   *
+   * POST /api/user/tags
+   *
+   * @param tags - Tag upsert inputs (id, name, color, sortOrder)
+   * @param clientId - Source client ID for echo suppression (sent as X-Client-Id header)
+   * @returns Upserted count and server time
+   */
+  async upsertTags(
+    tags: TagUpsertInput[],
+    clientId: string,
+  ): Promise<UpsertTagsResult> {
+    this.ensureInitialized();
+
+    const extraHeaders: Record<string, string> = {};
+    if (clientId) {
+      extraHeaders['X-Client-Id'] = clientId;
+    }
+
+    return await this.request<UpsertTagsResult>('/api/user/tags', {
+      method: 'POST',
+      headers: extraHeaders,
+      body: JSON.stringify({ tags }),
+    });
+  }
+
+  /**
+   * Upsert archive-tag mappings on the server
+   *
+   * POST /api/user/archive-tags
+   *
+   * @param mappings - Archive-tag mapping inputs (archiveId, tagId)
+   * @param clientId - Source client ID for echo suppression (sent as X-Client-Id header)
+   * @returns Upserted count and server time
+   */
+  async upsertArchiveTags(
+    mappings: ArchiveTagMappingInput[],
+    clientId: string,
+  ): Promise<UpsertArchiveTagsResult> {
+    this.ensureInitialized();
+
+    const extraHeaders: Record<string, string> = {};
+    if (clientId) {
+      extraHeaders['X-Client-Id'] = clientId;
+    }
+
+    return await this.request<UpsertArchiveTagsResult>('/api/user/archive-tags', {
+      method: 'POST',
+      headers: extraHeaders,
+      body: JSON.stringify({ mappings }),
+    });
+  }
+
+  /**
+   * Delete archive-tag mappings in bulk (soft delete)
+   *
+   * DELETE /api/user/archive-tags
+   *
+   * @param pairs - Archive-tag pairs to delete (archiveId, tagId)
+   * @param clientId - Source client ID for echo suppression (sent as X-Client-Id header)
+   * @returns Deleted count
+   */
+  async deleteArchiveTags(
+    pairs: ArchiveTagMappingInput[],
+    clientId: string,
+  ): Promise<{ deleted: number }> {
+    this.ensureInitialized();
+
+    const extraHeaders: Record<string, string> = {};
+    if (clientId) {
+      extraHeaders['X-Client-Id'] = clientId;
+    }
+
+    return await this.request<{ deleted: number }>('/api/user/archive-tags', {
+      method: 'DELETE',
+      headers: extraHeaders,
+      body: JSON.stringify({ pairs }),
+    });
+  }
+
+  // ============================================================================
+  // Composed Post API
+  // ============================================================================
+
+  /**
+   * Upload a media file for a composed post.
+   *
+   * POST /api/user/posts/media
+   */
+  async uploadComposedMedia(
+    clientPostId: string,
+    file: ArrayBuffer,
+    filename: string,
+    contentType: string,
+    index: number
+  ): Promise<ComposedMediaUploadResult> {
+    this.ensureInitialized();
+
+    const base64 = this.arrayBufferToBase64(file);
+    const extraHeaders: Record<string, string> = {};
+    if (this.config.clientId) {
+      extraHeaders['X-Client-Id'] = this.config.clientId;
+    }
+
+    return await this.request<ComposedMediaUploadResult>('/api/user/posts/media', {
+      method: 'POST',
+      headers: extraHeaders,
+      body: JSON.stringify({ clientPostId, filename, contentType, index, data: base64 }),
+    });
+  }
+
+  /**
+   * Create a composed post on the server.
+   *
+   * POST /api/user/posts
+   */
+  async createComposedPost(
+    request: CreateComposedPostRequest
+  ): Promise<{ archiveId: string; createdAt: string }> {
+    this.ensureInitialized();
+
+    const extraHeaders: Record<string, string> = {};
+    if (this.config.clientId) {
+      extraHeaders['X-Client-Id'] = this.config.clientId;
+    }
+
+    return await this.request<{ archiveId: string; createdAt: string }>('/api/user/posts', {
+      method: 'POST',
+      headers: extraHeaders,
+      body: JSON.stringify(request),
+    });
+  }
+
+  /**
+   * Update a composed post on the server.
+   *
+   * PUT /api/user/posts/:archiveId
+   */
+  async updateComposedPost(
+    archiveId: string,
+    request: UpdateComposedPostRequest
+  ): Promise<{ success: boolean; updatedAt: string }> {
+    this.ensureInitialized();
+
+    const extraHeaders: Record<string, string> = {};
+    if (this.config.clientId) {
+      extraHeaders['X-Client-Id'] = this.config.clientId;
+    }
+
+    return await this.request<{ success: boolean; updatedAt: string }>(
+      `/api/user/posts/${encodeURIComponent(archiveId)}`,
+      {
+        method: 'PUT',
+        headers: extraHeaders,
+        body: JSON.stringify(request),
+      }
+    );
+  }
+
+  /**
+   * Convert ArrayBuffer to base64 string
+   */
+  private arrayBufferToBase64(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]!);
+    }
+    return btoa(binary);
   }
 
   /**

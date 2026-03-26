@@ -3,7 +3,7 @@
  *
  * Replaces inline styles flagged by the Obsidian automated review.
  * Prefix key: tc- (TimelineContainer), apb- (ArchiveProgressBanner),
- * csb- (CrawlStatusBanner), xpb- (CrossPostStatusBanner), rmcr- (ReaderModeContent),
+ * csb- (CrawlStatusBanner), lsb- (LibrarySyncBanner), xpb- (CrossPostStatusBanner), rmcr- (ReaderModeContent),
  * fp- (FilterPanel), sd- (SortDropdown), tm- (TagModal),
  * st- (SettingTab), btn- (BatchTranscription),
  * bdm- (BackgroundDownload), mgv- (MediaGalleryView)
@@ -1655,4 +1655,92 @@
   display: block;
   border-radius: 10px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+/* ========================================
+ * LibrarySyncBanner (lsb-)
+ * ======================================== */
+
+/* Container: hidden by default, shown via lsb-visible */
+.library-sync-banner {
+  display: none;
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
+.library-sync-banner.lsb-visible {
+  display: block;
+}
+
+/* Banner row */
+.library-sync-banner-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  font-size: var(--font-ui-small);
+}
+
+/* Banner icon base */
+.library-sync-banner-row .banner-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  --icon-size: 16px;
+}
+
+/* Status-specific icon colors */
+.library-sync-banner-row .banner-icon.lsb-icon-syncing { color: var(--text-muted); }
+.library-sync-banner-row .banner-icon.lsb-icon-completed { color: var(--color-green); }
+.library-sync-banner-row .banner-icon.lsb-icon-failed { color: var(--color-red); }
+
+/* Banner text */
+.library-sync-banner-row .banner-text {
+  flex: 1;
+  color: var(--text-normal);
+}
+
+/* Banner actions container */
+.library-sync-banner-row .banner-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+/* Action buttons (cancel, retry, dismiss) */
+.lsb-action-btn {
+  padding: 4px 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-radius: var(--radius-s);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-ui-small);
+}
+
+.lsb-action-btn:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+/* Dismiss button uses icon-only sizing */
+.library-sync-banner-row .banner-dismiss.lsb-action-btn {
+  padding: 4px;
+}
+
+/* Spin animation for syncing icon (reuses archive keyframes) */
+.library-sync-banner-row .banner-icon.spin svg {
+  animation: archive-banner-spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .library-sync-banner-row .banner-icon.spin svg {
+    animation: none;
+  }
 }

@@ -482,6 +482,11 @@ export class AuthorDeduplicator {
       }
     });
 
+    // Fallback: match unmatched vault authors by handle/name
+    if (subscriptionMap) {
+      this.applyFallbackSubscriptionMatching(authors, subscriptionMap, matchedSubscriptionIds);
+    }
+
     // Add subscription-only authors (subscriptions without any posts in vault)
     if (subscriptionMap) {
       const addedSubscriptionIds = new Set<string>(); // Track added subscription IDs to prevent duplicates
@@ -582,6 +587,11 @@ export class AuthorDeduplicator {
       }
     }
 
+    // Fallback: match unmatched vault authors by handle/name
+    if (subscriptionMap) {
+      this.applyFallbackSubscriptionMatching(authors, subscriptionMap, matchedSubscriptionIds);
+    }
+
     // Add subscription-only authors (subscriptions without any posts in vault)
     if (subscriptionMap) {
       options?.onStage?.('subscriptions');
@@ -669,11 +679,20 @@ export class AuthorDeduplicator {
     }
 
     // Convert back to entries
+    const matchedSubscriptionIds = new Set<string>();
     const authors: AuthorCatalogEntry[] = [];
     authorMap.forEach((acc, key) => {
       const entry = this.accumulatorToEntry(acc, key, subscriptionMap);
       authors.push(entry);
+      if (entry.subscriptionId) {
+        matchedSubscriptionIds.add(entry.subscriptionId);
+      }
     });
+
+    // Fallback: match unmatched vault authors by handle/name
+    if (subscriptionMap) {
+      this.applyFallbackSubscriptionMatching(authors, subscriptionMap, matchedSubscriptionIds);
+    }
 
     // Merge name-based entries with URL-based entries for same author
     const mergedAuthors = this.mergeNameBasedWithUrlBased(authors);
@@ -691,6 +710,75 @@ export class AuthorDeduplicator {
   // --------------------------------------------------------------------------
   // Private Methods
   // --------------------------------------------------------------------------
+
+  /**
+   * Fallback subscription matching for vault authors whose exact key didn't
+   * match any subscription map key.
+   *
+   * Builds reverse indices (handle → sub, name → sub) from the subscription map,
+   * then iterates unmatched vault authors trying handle-based and name-based
+   * lookups. Matched authors are mutated in place and their subscriptionId is
+   * added to matchedSubscriptionIds so the subscription-only loop skips them.
+   */
+  private applyFallbackSubscriptionMatching(
+    authors: AuthorCatalogEntry[],
+    subscriptionMap: SubscriptionMap,
+    matchedSubscriptionIds: Set<string>
+  ): void {
+    // Build reverse indices: handle → subInfo, name → subInfo
+    type SubValue = SubscriptionMap extends Map<string, infer V> ? V : never;
+    const handleIndex = new Map<string, SubValue>();
+    const nameIndex = new Map<string, SubValue>();
+
+    subscriptionMap.forEach((subInfo) => {
+      if (!subInfo.platform) return;
+
+      if (subInfo.handle) {
+        const h = subInfo.handle.replace(/^@/, '').toLowerCase().trim();
+        if (h) handleIndex.set(`${subInfo.platform}:${h}`, subInfo);
+      }
+      if (subInfo.authorName) {
+        const n = normalizeAuthorName(subInfo.authorName);
+        if (n && !nameIndex.has(`${subInfo.platform}:${n}`)) {
+          nameIndex.set(`${subInfo.platform}:${n}`, subInfo);
+        }
+      }
+    });
+
+    for (const author of authors) {
+      if (author.subscriptionId) continue; // Already matched
+
+      let matched: SubValue | undefined;
+
+      // 1. Try handle-based match
+      if (author.handle) {
+        const h = author.handle.replace(/^@/, '').toLowerCase().trim();
+        if (h) matched = handleIndex.get(`${author.platform}:${h}`);
+      }
+
+      // 2. Try name-based match (same platform + same normalized name)
+      if (!matched) {
+        const n = normalizeAuthorName(author.authorName);
+        if (n) matched = nameIndex.get(`${author.platform}:${n}`);
+      }
+
+      if (matched && !matchedSubscriptionIds.has(matched.subscriptionId)) {
+        author.subscriptionId = matched.subscriptionId;
+        author.status = matched.status;
+        author.lastRunAt = matched.lastRunAt || null;
+        author.schedule = matched.schedule || null;
+        author.maxPostsPerRun = matched.maxPostsPerRun;
+        author.redditOptions = matched.redditOptions;
+        author.naverCafeOptions = matched.naverCafeOptions;
+        author.fetchMode = matched.fetchMode;
+        author.configWarning = matched.configWarning;
+        if (!author.avatar && matched.authorAvatar) {
+          author.avatar = matched.authorAvatar;
+        }
+        matchedSubscriptionIds.add(matched.subscriptionId);
+      }
+    }
+  }
 
   /**
    * Create a new accumulator from raw data

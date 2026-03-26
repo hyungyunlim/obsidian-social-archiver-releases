@@ -2,6 +2,7 @@ import { ItemView, WorkspaceLeaf, TFile, debounce, Platform as ObsidianPlatform,
 import type SocialArchiverPlugin from '../main';
 // Use original TypeScript version of TimelineContainer (fully functional)
 import { TimelineContainer } from '../components/timeline/TimelineContainer';
+import type { ArchiveLibrarySyncRuntimeState, ArchiveLibrarySyncPhase } from '../plugin/sync/ArchiveLibrarySyncService';
 
 /**
  * Unique identifier for the Timeline View
@@ -39,6 +40,9 @@ export class TimelineView extends ItemView {
   private suppressRefresh = false; // Suppress refresh during batch operations
   private uiDeletedPaths: Set<string> = new Set(); // Track files deleted via UI to skip refresh
   private uiModifiedPaths: Set<string> = new Set(); // Track files modified via UI to skip refresh
+  private librarySyncActive = false; // True while library sync is in a running phase
+  private suppressedArchiveEvents = false; // True if at least one archive-path event was suppressed during library sync
+  private librarySyncUnsubscribe: (() => void) | null = null; // Unsubscribe fn for library sync progress subscription
   private pendingCleanupTimers: Set<number> = new Set(); // Track cleanup timers
   private timelineSafeAreaListener: (() => void) | null = null;
   private timelineVisualViewport: VisualViewport | null = null;
@@ -59,6 +63,11 @@ export class TimelineView extends ItemView {
    */
   private debouncedRefresh: Debouncer<[], void> = debounce(() => {
     if (this.suppressRefresh) return;
+    // Don't refresh while library sync is running — final single reload on completion
+    if (this.librarySyncActive) {
+      this.markSuppressedArchiveEvent();
+      return;
+    }
     // Don't refresh while fullscreen or reader mode is active - would destroy overlay state
     if (this.component?.isFullscreenActive?.()) return;
     void this.refresh();
@@ -70,6 +79,11 @@ export class TimelineView extends ItemView {
    */
   private debouncedIncrementalUpdate: Debouncer<[], void> = debounce(() => {
     if (this.suppressRefresh) return;
+    // Don't process incremental changes while library sync is running
+    if (this.librarySyncActive) {
+      this.markSuppressedArchiveEvent();
+      return;
+    }
     if (this.component?.isFullscreenActive?.()) return;
     void this.processIncrementalChanges();
   }, 1000, true);
@@ -149,6 +163,55 @@ export class TimelineView extends ItemView {
       this.pendingVaultChanges.push({ type, filePath, oldPath });
     }
     this.debouncedIncrementalUpdate();
+  }
+
+  /**
+   * Returns true when the given library sync phase is an active running phase
+   * that should suppress timeline refresh work.
+   */
+  private isLibrarySyncRunningPhase(phase: ArchiveLibrarySyncPhase): boolean {
+    return phase === 'scanning' || phase === 'delta-sweep';
+  }
+
+  /**
+   * Record that at least one archive-path vault event was suppressed during
+   * library sync. Used to decide whether a final reload is needed on sync end.
+   */
+  private markSuppressedArchiveEvent(): void {
+    this.suppressedArchiveEvents = true;
+  }
+
+  /**
+   * Called on every library sync progress update.
+   * Handles the running → terminal transition to trigger a single final reload
+   * when archive-path events were suppressed.
+   */
+  private handleLibrarySyncTransition(state: ArchiveLibrarySyncRuntimeState): void {
+    const wasActive = this.librarySyncActive;
+    this.librarySyncActive = this.isLibrarySyncRunningPhase(state.phase);
+
+    // Sync just transitioned from running to a terminal phase (completed / error / idle)
+    if (wasActive && !this.librarySyncActive && this.suppressedArchiveEvents) {
+      // Clear accumulated incremental work so processIncrementalChanges won't run stale items
+      this.pendingVaultChanges = [];
+      // Cancel any in-flight debounced timers
+      this.debouncedIncrementalUpdate.cancel();
+      this.debouncedRefresh.cancel();
+
+      this.suppressedArchiveEvents = false;
+
+      // Schedule a single final refresh now that all sync writes are complete
+      this.scheduleFinalLibrarySyncRefresh();
+    }
+  }
+
+  /**
+   * Schedule the single post-library-sync Timeline refresh.
+   * Respects fullscreen/reader safety — if fullscreen is active the debounced
+   * refresh will naturally skip itself via the existing isFullscreenActive guard.
+   */
+  private scheduleFinalLibrarySyncRefresh(): void {
+    this.debouncedRefresh();
   }
 
   /**
@@ -236,6 +299,11 @@ export class TimelineView extends ItemView {
             return;
           }
           if (file.path.startsWith(archivePath)) {
+            // Suppress timeline refresh queueing during library sync
+            if (this.librarySyncActive) {
+              this.markSuppressedArchiveEvent();
+              return;
+            }
             // Use incremental index update instead of full reload
             this.queueIncrementalChange('create', file.path);
           }
@@ -249,6 +317,11 @@ export class TimelineView extends ItemView {
             // Skip refresh if this file was deleted via UI (card already removed)
             if (this.uiDeletedPaths.has(file.path)) {
               this.uiDeletedPaths.delete(file.path);
+              return;
+            }
+            // Suppress timeline refresh queueing during library sync
+            if (this.librarySyncActive) {
+              this.markSuppressedArchiveEvent();
               return;
             }
             // Use incremental index update instead of full reload
@@ -328,6 +401,12 @@ export class TimelineView extends ItemView {
 
           // Skip refresh if this was a UI modification (card already updated)
           if (!isUIModified) {
+            // Suppress timeline refresh queueing during library sync
+            // Note: share update side effects above have already run — only queueing is skipped
+            if (this.librarySyncActive) {
+              this.markSuppressedArchiveEvent();
+              return;
+            }
             // Use incremental index update instead of full reload
             this.queueIncrementalChange('modify', file.path);
           }
@@ -339,6 +418,11 @@ export class TimelineView extends ItemView {
       this.registerEvent(
         this.app.vault.on('rename', (file, oldPath) => {
           if (file.path.startsWith(archivePath) || oldPath.startsWith(archivePath)) {
+            // Suppress timeline refresh queueing during library sync
+            if (this.librarySyncActive) {
+              this.markSuppressedArchiveEvent();
+              return;
+            }
             // Use incremental index update instead of full reload
             this.queueIncrementalChange('rename', file.path, oldPath);
           }
@@ -359,11 +443,30 @@ export class TimelineView extends ItemView {
             if (this.uiModifiedPaths.has(file.path)) {
               return;
             }
+            // Suppress timeline refresh queueing during library sync
+            if (this.librarySyncActive) {
+              this.markSuppressedArchiveEvent();
+              return;
+            }
             // Use incremental index update instead of full reload
             this.queueIncrementalChange('modify', file.path);
           }
         })
       );
+
+      // Subscribe to library sync progress to suppress archive-path refresh storms
+      // and trigger a single final reload when the sync run ends.
+      const syncService = this.plugin.archiveLibrarySyncService;
+      if (syncService) {
+        // Hydrate initial state: if sync is already running when this view opens,
+        // start suppressing immediately so we don't miss in-flight events.
+        const initialState = syncService.getState();
+        this.librarySyncActive = this.isLibrarySyncRunningPhase(initialState.phase);
+
+        this.librarySyncUnsubscribe = syncService.onProgress((state) => {
+          this.handleLibrarySyncTransition(state);
+        });
+      }
     }); // End of workspace.onLayoutReady()
 
     // Listen for settings change (archive path changed)
@@ -383,6 +486,12 @@ export class TimelineView extends ItemView {
    */
   onClose(): Promise<void> {
     this.teardownTimelineSafeAreaFallback();
+
+    // Unsubscribe from library sync progress notifications
+    if (this.librarySyncUnsubscribe) {
+      this.librarySyncUnsubscribe();
+      this.librarySyncUnsubscribe = null;
+    }
 
     // Cancel any pending debounced refresh
     this.debouncedRefresh.cancel();

@@ -192,6 +192,11 @@ export class FrontmatterGenerator {
       frontmatter.originalUrl = postData.url;
     }
 
+    // Stable server-side identifier for dedup and annotation sync
+    if (postData.sourceArchiveId) {
+      frontmatter.sourceArchiveId = postData.sourceArchiveId;
+    }
+
     // Only add optional fields if they have values
     if (postData.title) frontmatter.title = postData.title;
     if (postData.transcript?.raw) frontmatter.hasTranscript = true;

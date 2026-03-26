@@ -638,3 +638,188 @@ body.is-tablet .sa-reader-mode-action-btn svg {
 }
 
 /* Native video caption (TextTrack) styling */
+
+/* ============================================================================
+ * Highlight Toolbar & Marks
+ * ============================================================================ */
+
+/* Floating toolbar shown near text selection */
+.sa-highlight-toolbar {
+  position: fixed;
+  top: var(--sa-toolbar-top, 0);
+  left: var(--sa-toolbar-left, 0);
+  transform: translateX(-50%);
+  z-index: 1010;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  transform: translateX(-50%) translateY(4px);
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none
+}
+
+.sa-highlight-toolbar-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0)
+}
+
+.sa-highlight-toolbar-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  flex-shrink: 0
+}
+
+.sa-highlight-toolbar-icon svg {
+  width: 16px;
+  height: 16px
+}
+
+/* Color picker buttons — stronger opacity so colors are clearly distinguishable */
+.sa-highlight-color-btn {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  background: var(--sa-highlight-bg);
+  opacity: 1;
+  border: 2px solid transparent;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+  flex-shrink: 0
+}
+
+.sa-highlight-color-btn-dynamic {
+  --sa-highlight-bg-override: 1;
+}
+
+.sa-highlight-color-btn:hover {
+  transform: scale(1.2);
+  border-color: var(--text-muted)
+}
+
+.sa-highlight-color-btn:active {
+  transform: scale(0.95)
+}
+
+/* Remove highlight button */
+.sa-highlight-remove-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 13px;
+  transition: background 0.12s ease, color 0.12s ease;
+  white-space: nowrap
+}
+
+.sa-highlight-remove-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-error, #ff6b6b)
+}
+
+/* All <mark> in reader body — override Obsidian's --text-highlight-bg for consistency */
+.sa-reader-mode-body mark {
+  background: rgba(250, 204, 21, 0.18);
+  color: inherit;
+  padding: 1px 2px;
+  border-radius: 2px
+}
+
+.theme-dark .sa-reader-mode-body mark {
+  background: rgba(250, 204, 21, 0.15)
+}
+
+/* Highlight <mark> created by ReaderHighlightManager (supports per-highlight color) */
+.sa-reader-highlight {
+  background: var(--sa-highlight-bg, rgba(250, 204, 21, 0.18));
+  cursor: pointer;
+  transition: background 0.12s ease
+}
+
+.theme-dark .sa-reader-highlight {
+  background: var(--sa-highlight-bg, rgba(250, 204, 21, 0.15))
+}
+
+.sa-reader-highlight:hover {
+  filter: brightness(1.1)
+}
+
+/* Mobile: fixed bottom bar to avoid native selection menu overlap (iOS/Android) */
+.sa-highlight-toolbar-mobile {
+  /* Override floating position — anchor to bottom of screen */
+  top: auto;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  transform: translateY(100%);
+  width: 100%;
+  border-radius: 16px 16px 0 0;
+  justify-content: center;
+  padding: 14px 20px;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  /* Android WebView fallback: env() may resolve to 0 */
+  padding-bottom: calc(14px + max(env(safe-area-inset-bottom, 0px), var(--reader-safe-area-bottom-fallback, 0px)));
+  gap: 12px;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+  border: none;
+  border-top: 1px solid var(--background-modifier-border)
+}
+
+.sa-highlight-toolbar-mobile.sa-highlight-toolbar-visible {
+  transform: translateY(0)
+}
+
+.sa-highlight-toolbar-mobile .sa-highlight-color-btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px
+}
+
+.sa-highlight-toolbar-mobile .sa-highlight-remove-btn {
+  padding: 10px 16px 10px 10px;
+  font-size: 15px
+}
+
+.sa-highlight-toolbar-mobile .sa-highlight-toolbar-icon {
+  width: 24px;
+  height: 24px
+}
+
+.sa-highlight-toolbar-mobile .sa-highlight-toolbar-icon svg {
+  width: 20px;
+  height: 20px
+}
+
+/* Desktop: touch targets for smaller screens (non-mobile) */
+@media (max-width: 768px) {
+  .sa-highlight-toolbar:not(.sa-highlight-toolbar-mobile) .sa-highlight-color-btn {
+    width: 36px;
+    height: 36px;
+    min-width: 36px
+  }
+
+  .sa-highlight-toolbar:not(.sa-highlight-toolbar-mobile) {
+    padding: 8px 12px;
+    gap: 6px
+  }
+
+  .sa-highlight-toolbar:not(.sa-highlight-toolbar-mobile) .sa-highlight-remove-btn {
+    padding: 8px 12px 8px 8px;
+    font-size: 14px
+  }
+}

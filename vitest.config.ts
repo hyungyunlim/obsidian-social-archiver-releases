@@ -20,6 +20,7 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./test/setup.ts'],
+    exclude: ['**/node_modules/**', '.claude/worktrees/**'],
     coverage: {
       reporter: ['text', 'json', 'html'],
       exclude: [

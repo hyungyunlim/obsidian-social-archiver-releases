@@ -8,8 +8,10 @@
  *   ws:action_updated (hasAnnotationUpdate)
  *     → fetch latest archive from server
  *     → find local file via ArchiveLookupService
- *     → sync userNotes → comment frontmatter property
+ *     → extract synthetic primary note (obsidian:{clientId}:primary) → comment frontmatter
+ *     → render full annotation block (all notes + highlights)
  *     → update frontmatter (sourceArchiveId, counts, hasAnnotations)
+ *     → apply managed annotation block to note body
  *
  * This service owns the coalescing logic: if a sync is already in-flight
  * for a given archiveId, the new event is queued as "pending".  When the
@@ -23,6 +25,8 @@ import type { ActionUpdatedEventData } from '@/types/websocket';
 import type { SocialArchiverSettings } from '@/types/settings';
 import type { WorkersAPIClient } from './WorkersAPIClient';
 import type { ArchiveLookupService } from './ArchiveLookupService';
+import type { AnnotationRenderer } from './AnnotationRenderer';
+import type { AnnotationSectionManager } from './AnnotationSectionManager';
 
 // ============================================================================
 // Coalescing state per archiveId
@@ -43,20 +47,33 @@ export class AnnotationSyncService {
   private readonly app: App;
   private readonly workersApiClient: WorkersAPIClient;
   private readonly archiveLookup: ArchiveLookupService;
+  private readonly annotationRenderer: AnnotationRenderer;
+  private readonly annotationSectionManager: AnnotationSectionManager;
   private readonly getSettings: () => SocialArchiverSettings;
 
   /** Per-archiveId coalescing state */
   private readonly coalesceMap = new Map<string, CoalesceEntry>();
 
+  /**
+   * Callback invoked right before this service writes outbound-triggering
+   * frontmatter changes. The outbound service uses this to suppress the echo.
+   * Set by wiring in main.ts.
+   */
+  onBeforeInboundWrite?: (archiveId: string) => void;
+
   constructor(
     app: App,
     workersApiClient: WorkersAPIClient,
     archiveLookup: ArchiveLookupService,
+    annotationRenderer: AnnotationRenderer,
+    annotationSectionManager: AnnotationSectionManager,
     getSettings: () => SocialArchiverSettings
   ) {
     this.app = app;
     this.workersApiClient = workersApiClient;
     this.archiveLookup = archiveLookup;
+    this.annotationRenderer = annotationRenderer;
+    this.annotationSectionManager = annotationSectionManager;
     this.getSettings = getSettings;
   }
 
@@ -158,20 +175,26 @@ export class AnnotationSyncService {
     }
     console.debug('[AnnotationSyncService] Found vault file:', file.path);
 
-    // 3. Build comment from userNotes (join multiple notes with double newline)
+    // 3. Extract notes and highlights from server response
     const notes = archive.userNotes ?? [];
     const highlights = archive.userHighlights ?? [];
     const noteCount = notes.length;
     const highlightCount = highlights.length;
     const hasAnnotations = noteCount > 0 || highlightCount > 0;
 
-    // Sort notes by createdAt ASC and join contents
-    const sortedNotes = [...notes].sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-    );
-    const comment = sortedNotes.map((n) => n.content).join('\n\n') || undefined;
+    // 4. Determine comment from synthetic primary note only
+    //    The synthetic primary note has id = "obsidian:{clientId}:primary"
+    //    Only update the `comment` field if a synthetic primary note exists.
+    //    If no primary note exists but other (mobile) notes do, leave comment as-is.
+    //    If all notes are cleared, remove the comment field.
+    const clientId = this.getSettings().syncClientId || '';
+    const syntheticNoteId = `obsidian:${clientId}:primary`;
+    const primaryNote = notes.find((n) => n.id === syntheticNoteId);
 
-    // 4. Update frontmatter only (no body modification)
+    // 5. Notify outbound service to suppress echo before we write
+    this.onBeforeInboundWrite?.(archiveId);
+
+    // 6. Update frontmatter (comment + counts + flags)
     try {
       await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
         // Backfill sourceArchiveId if not already set
@@ -179,13 +202,15 @@ export class AnnotationSyncService {
           fm.sourceArchiveId = archiveId;
         }
 
-        // Sync notes → comment property
-        if (comment) {
-          fm.comment = comment;
-        } else {
-          // Notes cleared on mobile → remove comment
+        // Sync comment from synthetic primary note only
+        if (primaryNote) {
+          // Primary note present — reflect its content in comment
+          fm.comment = primaryNote.content;
+        } else if (noteCount === 0) {
+          // All notes cleared on mobile — remove comment
           delete fm.comment;
         }
+        // If no primary note but other (mobile) notes exist, leave comment as-is
 
         fm.userNoteCount = noteCount;
         fm.userHighlightCount = highlightCount;
@@ -194,6 +219,25 @@ export class AnnotationSyncService {
     } catch (err) {
       console.error(
         '[AnnotationSyncService] Failed to update frontmatter:',
+        file.path,
+        err instanceof Error ? err.message : String(err)
+      );
+      // Non-fatal: continue to update body
+    }
+
+    // 7. Render the managed annotation block with ALL notes and highlights
+    const annotationBlock = this.annotationRenderer.render({ notes, highlights });
+
+    // 8. Apply annotation block to note body
+    try {
+      const content = await this.app.vault.read(file);
+      const updatedContent = this.annotationSectionManager.upsert(content, annotationBlock);
+      if (updatedContent !== content) {
+        await this.app.vault.modify(file, updatedContent);
+      }
+    } catch (err) {
+      console.error(
+        '[AnnotationSyncService] Failed to update note body:',
         file.path,
         err instanceof Error ? err.message : String(err)
       );

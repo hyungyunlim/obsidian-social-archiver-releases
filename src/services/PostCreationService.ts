@@ -58,9 +58,9 @@ export class PostCreationService {
       throw new Error(`Invalid post content: ${validation.errors.join(', ')}`);
     }
 
-    // Generate unique ID (timestamp-based)
+    // Generate unique ID (UUID-based for stable client-side identity)
     const timestamp = new Date();
-    const id = `post_${timestamp.getTime()}`;
+    const id = `post_${crypto.randomUUID()}`;
 
     // Generate vault file path (consistent with other platforms)
     const year = timestamp.getFullYear();

@@ -31,7 +31,8 @@
   width: 100%;
 }
 
-.pcr-edit-icon-inline {
+.pcr-edit-icon-inline,
+.pcr-delete-icon-inline {
   display: inline-flex;
   align-items: center;
   margin-left: 4px;
@@ -41,6 +42,10 @@
   transition: opacity 0.2s;
   color: var(--text-muted);
   vertical-align: middle;
+}
+
+.pcr-delete-icon-inline:hover {
+  color: var(--text-error);
 }
 
 /* ========================================
@@ -640,6 +645,18 @@
   margin-bottom: 4px;
 }
 
+/* Softer highlight color for ==text== in post cards */
+.post-body-text mark {
+  background: rgba(250, 204, 21, 0.18);
+  color: inherit;
+  padding: 1px 2px;
+  border-radius: 2px
+}
+
+.theme-dark .post-body-text mark {
+  background: rgba(250, 204, 21, 0.15)
+}
+
 /* ========================================
  * Tag chips
  * ======================================== */
@@ -1114,7 +1131,8 @@
   position: relative;
 }
 
-.pcr-comment-section:hover .pcr-edit-icon-inline {
+.pcr-comment-section:hover .pcr-edit-icon-inline,
+.pcr-comment-section:hover .pcr-delete-icon-inline {
   opacity: 0.6;
 }
 
@@ -1147,6 +1165,38 @@
   font-size: 13px;
   color: var(--text-muted);
   display: inline;
+}
+
+/* Highlight count badge (inline in comment/saved header) */
+.pcr-highlight-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 2px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.pcr-highlight-badge::before {
+  content: ' · ';
+  white-space: pre;
+}
+
+.pcr-highlight-badge-icon {
+  display: inline-flex;
+  align-items: center;
+  width: 13px;
+  height: 13px;
+  color: rgba(250, 204, 21, 0.55);
+}
+
+.theme-dark .pcr-highlight-badge-icon {
+  color: rgba(250, 204, 21, 0.45);
+}
+
+.pcr-highlight-badge-icon svg {
+  width: 13px;
+  height: 13px;
 }
 
 .pcr-comment-textarea {

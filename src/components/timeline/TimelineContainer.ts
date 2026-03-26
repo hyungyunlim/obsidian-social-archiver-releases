@@ -23,6 +23,7 @@ import { SeriesCardRenderer } from './renderers/SeriesCardRenderer';
 import { YouTubePlayerController } from './controllers/YouTubePlayerController';
 import { IntersectionObserverManager } from './managers/IntersectionObserverManager';
 import { SkeletonCardRenderer } from './managers/SkeletonCardRenderer';
+import { LibrarySyncBanner } from './LibrarySyncBanner';
 import { CrawlStatusBanner } from './CrawlStatusBanner';
 import { ArchiveProgressBanner } from './ArchiveProgressBanner';
 import { CrossPostStatusBanner } from './CrossPostStatusBanner';
@@ -273,6 +274,10 @@ export class TimelineContainer {
   // Prevents stale concurrent renders from appending duplicate timeline feeds.
   private feedRenderGeneration = 0;
 
+  // Library sync banner component
+  private librarySyncBanner: LibrarySyncBanner | null = null;
+  private librarySyncBannerUnsubscribe: (() => void) | null = null;
+
   // Crawl status banner component
   private crawlStatusBanner: CrawlStatusBanner | null = null;
   private crawlStatusBannerUnsubscribe: (() => void) | null = null;
@@ -491,7 +496,10 @@ export class TimelineContainer {
     this.setupCallbacks();
 
     void this.render();
-    void this.loadPosts();
+    void this.loadPosts().catch((err) => {
+      console.error('[TimelineContainer] loadPosts() failed:', err);
+      this.renderError(err instanceof Error ? err.message : 'Failed to load posts');
+    });
   }
 
   /**
@@ -1478,6 +1486,23 @@ export class TimelineContainer {
             // Save post to vault
             const saveResult = await storageService.savePost(post, mediaFiles);
 
+            // Enqueue composed post for outbound sync (fire-and-forget from UI perspective)
+            try {
+              const apiClient = this.plugin.workersApiClient;
+              const { ComposedPostSyncService } = await import('../../plugin/sync/ComposedPostSyncService');
+              const composedPostSyncService = new ComposedPostSyncService(
+                this.app,
+                this.vault,
+                this.plugin.settings,
+                apiClient,
+                () => this.plugin.saveSettings()
+              );
+              await composedPostSyncService.enqueueCreate(saveResult.path, post.id);
+              void composedPostSyncService.flush();
+            } catch {
+              // Non-fatal: local save succeeded, sync will retry on next load
+            }
+
             // Check if user wants to share on post
             if ((post as { shareOnPost?: boolean }).shareOnPost) {
               try {
@@ -1511,7 +1536,8 @@ export class TimelineContainer {
                       media: [] // Empty media initially
                     },
                     options: {
-                      username: this.plugin.settings.username
+                      username: this.plugin.settings.username,
+                      archiveId: finalPostData.sourceArchiveId,
                     }
                   });
 
@@ -1606,6 +1632,58 @@ export class TimelineContainer {
         }
       }
     });
+  }
+
+  /**
+   * Render LibrarySyncBanner component above other status banners.
+   * Shows real-time progress for an ongoing library sync run.
+   */
+  private renderLibrarySyncBanner(): void {
+    this.destroyLibrarySyncBanner();
+
+    const bannerContainer = this.containerEl.createDiv({
+      cls: 'max-w-2xl mx-auto'
+    });
+
+    this.librarySyncBanner = new LibrarySyncBanner(bannerContainer);
+
+    // Wire up callbacks
+    this.librarySyncBanner.onCancel(() => {
+      this.plugin.archiveLibrarySyncService?.cancel();
+    });
+
+    this.librarySyncBanner.onRetry(() => {
+      void this.plugin.archiveLibrarySyncService?.startSync();
+    });
+
+    this.librarySyncBanner.onDismiss(() => {
+      // Local UI hide only — no service state change
+    });
+
+    // Hydrate with current state
+    const syncService = this.plugin.archiveLibrarySyncService;
+    if (syncService) {
+      this.librarySyncBanner.hydrateInitial(syncService.getState());
+
+      // Subscribe to updates
+      this.librarySyncBannerUnsubscribe = syncService.onProgress((state) => {
+        this.librarySyncBanner?.update(state);
+      });
+    }
+  }
+
+  /**
+   * Clean up LibrarySyncBanner resources
+   */
+  private destroyLibrarySyncBanner(): void {
+    if (this.librarySyncBannerUnsubscribe) {
+      this.librarySyncBannerUnsubscribe();
+      this.librarySyncBannerUnsubscribe = null;
+    }
+    if (this.librarySyncBanner) {
+      this.librarySyncBanner.destroy();
+      this.librarySyncBanner = null;
+    }
   }
 
   /**
@@ -2864,22 +2942,6 @@ export class TimelineContainer {
 
       this.isViewSwitching = false;
       this.containerEl.removeClass('tc-view-switching');
-
-      // The render pass above may have rebuilt the header (and thus the view
-      // switcher button) while isViewSwitching was still true, leaving the
-      // *new* button stuck in its loading/spinner state.  Reset it now.
-      const staleBtn = this.containerEl.querySelector('.tc-view-switch-btn-loading') as HTMLElement | null;
-      if (staleBtn) {
-        staleBtn.removeClass('tc-view-switch-btn-loading');
-        staleBtn.removeAttribute('aria-busy');
-        const isGallery = this.viewMode === 'gallery';
-        staleBtn.setAttribute('title', isGallery ? 'Switch to Timeline' : 'Switch to Media Gallery');
-        const icon = staleBtn.querySelector('.tc-view-switch-icon-spinning') as HTMLElement | null;
-        if (icon) {
-          icon.removeClass('tc-view-switch-icon-spinning');
-          setIcon(icon, isGallery ? 'list' : 'layout-grid');
-        }
-      }
     }
   }
 
@@ -4159,6 +4221,7 @@ export class TimelineContainer {
             this.renderPostComposer();
             this.renderHeader();
             this.renderTagChipBar();
+            this.renderLibrarySyncBanner();
             this.renderCrawlStatusBanner();
             this.renderArchiveProgressBanner();
             this.renderCrossPostStatusBanner();
@@ -4219,7 +4282,8 @@ export class TimelineContainer {
     // Render header with filter/sort controls
     this.renderHeader();
 
-    // Render CrawlStatusBanner below header (search/filter/archive buttons)
+    // Render banners below header (search/filter/archive buttons)
+    this.renderLibrarySyncBanner();
     this.renderCrawlStatusBanner();
     this.renderArchiveProgressBanner();
     this.renderCrossPostStatusBanner();
@@ -4285,7 +4349,8 @@ export class TimelineContainer {
     // Render tag chip bar below header (if tags exist)
     this.renderTagChipBar();
 
-    // Render CrawlStatusBanner below header (search/filter/archive buttons)
+    // Render banners below header (search/filter/archive buttons)
+    this.renderLibrarySyncBanner();
     this.renderCrawlStatusBanner();
     this.renderArchiveProgressBanner();
     this.renderCrossPostStatusBanner();
@@ -4645,8 +4710,13 @@ export class TimelineContainer {
           await new Promise(resolve => window.setTimeout(resolve, 0));
         }
 
-        // Fetch subscriptions in parallel with loading posts for badge status
-        const subscriptionsPromise = this.fetchSubscriptionsForCache();
+        // Fetch subscriptions in parallel with loading posts for badge status (10s timeout)
+        const subscriptionsPromise = Promise.race([
+          this.fetchSubscriptionsForCache(),
+          new Promise<never>((_, reject) =>
+            window.setTimeout(() => reject(new Error('Subscriptions fetch timed out')), 10_000)
+          ),
+        ]).catch(() => [] as Array<{ id: string; platform: string; target: { handle: string; profileUrl?: string } }>);
 
         // ── Phase 1: Index-based loading with chunked parsing ──
         // Load cached index first (fast: ~50ms for 1000 posts)
@@ -4664,11 +4734,15 @@ export class TimelineContainer {
 
         // Chunked async parsing for new/modified files (yields to main thread)
         if (toParse.length > 0) {
-          for await (const batch of this.postDataParser.parseFilesChunked(toParse)) {
-            for (const entry of batch) {
-              this.postIndexService.setEntry(entry);
-              this.searchIndexService.addEntry(entry);
+          try {
+            for await (const batch of this.postDataParser.parseFilesChunked(toParse)) {
+              for (const entry of batch) {
+                this.postIndexService.setEntry(entry);
+                this.searchIndexService.addEntry(entry);
+              }
             }
+          } catch (parseErr) {
+            console.error('[TimelineContainer] Chunked parsing failed, continuing with available data:', parseErr);
           }
         }
 
@@ -4711,6 +4785,8 @@ export class TimelineContainer {
       // timeline loading/empty states. Data stays up to date for when the user
       // switches back to the timeline or gallery view.
       if (this.isSubscriptionViewActive) {
+        // Still remove the loading bar so the UI isn't stuck in "loading" state
+        this.removeLoadingBar();
         return;
       }
 
@@ -5163,6 +5239,30 @@ export class TimelineContainer {
               existingMedia: post.media || []
             });
 
+            // Enqueue composed post update for outbound sync if already synced
+            try {
+              const fileForFm = this.vault.getFileByPath(filePath);
+              if (fileForFm) {
+                const fileCache = this.app.metadataCache.getFileCache(fileForFm);
+                const fm = fileCache?.frontmatter as Record<string, unknown> | undefined;
+                const clientPostId = fm?.['clientPostId'] as string | undefined;
+                const sourceArchiveId = fm?.['sourceArchiveId'] as string | undefined;
+                if (clientPostId && sourceArchiveId) {
+                  const { ComposedPostSyncService } = await import('../../plugin/sync/ComposedPostSyncService');
+                  const syncService = new ComposedPostSyncService(
+                    this.app,
+                    this.vault,
+                    this.plugin.settings,
+                    this.plugin.workersApiClient,
+                    () => this.plugin.saveSettings()
+                  );
+                  syncService.enqueueUpdateDebounced(filePath, clientPostId, sourceArchiveId);
+                }
+              }
+            } catch {
+              // Non-fatal: local update succeeded, server sync will retry on next load
+            }
+
             // Check if user wants to share (either new share or update existing)
             // @ts-expect-error — shareOnPost is a temporary property passed from PostComposer, not in PostData type
             const shouldShare = (updatedPost.shareOnPost as boolean | undefined) || post.share;
@@ -5263,7 +5363,8 @@ export class TimelineContainer {
                       media: [] // Empty media initially
                     },
                     options: {
-                      username: this.plugin.settings.username
+                      username: this.plugin.settings.username,
+                      archiveId: finalPostData.sourceArchiveId,
                     }
                   });
 
@@ -5351,6 +5452,9 @@ export class TimelineContainer {
       void unmount(this.composerComponent);
       this.composerComponent = null;
     }
+
+    // Clean up LibrarySyncBanner
+    this.destroyLibrarySyncBanner();
 
     // Clean up CrawlStatusBanner
     this.destroyCrawlStatusBanner();
@@ -5577,10 +5681,19 @@ export class TimelineContainer {
       linkPreviewRenderer: this.linkPreviewRenderer,
       onUIModify: this.onUIModify,
       onUIDelete: this.onUIDelete,
-      onClose: (dirty) => {
+      onClose: (dirty, dirtyPaths) => {
         if (dirty) {
-          this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
-          void this.renderPostsFeed();
+          const refresh = async () => {
+            // Re-parse only files that had highlights modified (vault content changed)
+            if (dirtyPaths && dirtyPaths.length > 0) {
+              for (const path of dirtyPaths) {
+                await this.handleVaultFileChange('modify', path);
+              }
+            }
+            this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
+            await this.renderPostsFeed();
+          };
+          void refresh();
         }
       },
       onShare: async (post) => {
@@ -5592,7 +5705,7 @@ export class TimelineContainer {
         }
       },
       onDelete: async (post) => {
-        await this.postCardRenderer.deletePostForReader(post);
+        return this.postCardRenderer.deletePostForReader(post);
       },
       onTagsChanged: () => {
         this.refreshTagChipBar();
@@ -5900,7 +6013,8 @@ export class TimelineContainer {
     // Render tag chip bar below header (if tags exist)
     this.renderTagChipBar();
 
-    // Render CrawlStatusBanner below header (search/filter/archive buttons)
+    // Render banners below header (search/filter/archive buttons)
+    this.renderLibrarySyncBanner();
     this.renderCrawlStatusBanner();
     this.renderArchiveProgressBanner();
     this.renderCrossPostStatusBanner();

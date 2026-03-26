@@ -42,6 +42,8 @@ import { EditorTTSController } from './services/tts/EditorTTSController';
 import { FEATURE_EDITOR_TTS_ENABLED } from './shared/constants';
 import { ArchiveLookupService } from './services/ArchiveLookupService';
 import { AnnotationSyncService } from './services/AnnotationSyncService';
+import { AnnotationRenderer } from './services/AnnotationRenderer';
+import { AnnotationSectionManager } from './services/AnnotationSectionManager';
 
 // Extracted modules
 import { registerCommands, registerEditorTTSMenu } from './plugin/commands/CommandRegistry';
@@ -56,6 +58,10 @@ import { SubscriptionSyncService } from './plugin/subscriptions/SubscriptionSync
 import { convertUserArchiveToPostData } from './plugin/mobile/UserArchiveConverter';
 import { BatchGoogleMapsArchiver } from './plugin/jobs/BatchGoogleMapsArchiver';
 import { PostShareService } from './plugin/session/PostShareService';
+import { ArchiveLibrarySyncService } from './plugin/sync/ArchiveLibrarySyncService';
+import { ArchiveDeleteSyncService } from './plugin/sync/ArchiveDeleteSyncService';
+import { AnnotationOutboundService } from './plugin/sync/AnnotationOutboundService';
+import { ArchiveTagOutboundService } from './plugin/sync/ArchiveTagOutboundService';
 
 // Import styles for Vite to process
 import './styles/index.css';
@@ -93,17 +99,21 @@ export default class SocialArchiverPlugin extends Plugin {
   private editorTTSController?: EditorTTSController;
   private archiveLookupService?: ArchiveLookupService; // File lookup by sourceArchiveId / originalUrl
   private annotationSyncService?: AnnotationSyncService; // Mobile annotation sync orchestrator
+  public annotationOutboundService?: AnnotationOutboundService; // Outbound comment → server sync
+  private archiveTagOutboundService?: ArchiveTagOutboundService; // Outbound archiveTags → server sync
 
   // Extracted module instances
   private realtimeEventBridge?: RealtimeEventBridge;
   private mobileSyncService?: MobileSyncService;
   private localArchiveCoordinator?: LocalArchiveCoordinator;
+  public archiveLibrarySyncService?: ArchiveLibrarySyncService;
   private mediaPathResolver!: MediaPathResolver;
   private pendingJobOrchestrator?: PendingJobOrchestrator;
   private archiveCompletionService?: ArchiveCompletionService;
   private subscriptionSyncService?: SubscriptionSyncService;
   private batchGoogleMapsArchiver?: BatchGoogleMapsArchiver;
   private postShareService?: PostShareService;
+  public archiveDeleteSyncService: ArchiveDeleteSyncService | null = null;
 
   /**
    * Schedule a tracked setTimeout that will be auto-cleared on plugin unload.
@@ -410,7 +420,18 @@ export default class SocialArchiverPlugin extends Plugin {
     // Clear mobile sync state
     this.mobileSyncService?.clearState();
 
+    // Cancel archive library sync (preserve checkpoint for next startup)
+    this.archiveLibrarySyncService?.cancel();
+
+    // Dispose archive delete sync service
+    this.archiveDeleteSyncService?.dispose();
+    this.archiveDeleteSyncService = null;
+
     // Cleanup annotation sync services
+    this.annotationOutboundService?.stop();
+    this.annotationOutboundService = undefined;
+    this.archiveTagOutboundService?.stop();
+    this.archiveTagOutboundService = undefined;
     this.archiveLookupService?.destroy();
     this.archiveLookupService = undefined;
     this.annotationSyncService = undefined;
@@ -544,6 +565,7 @@ export default class SocialArchiverPlugin extends Plugin {
         endpoint: API_ENDPOINT,
         authToken: this.settings.authToken,
         pluginVersion: this.manifest.version,
+        clientId: this.settings.syncClientId || undefined,
       });
       this.apiClient.initialize();
 
@@ -565,13 +587,44 @@ export default class SocialArchiverPlugin extends Plugin {
       this.archiveLookupService = new ArchiveLookupService(this.app);
       this.archiveLookupService.initialize();
 
-      // Initialize AnnotationSyncService (syncs mobile notes -> comment frontmatter)
+      // Initialize AnnotationSyncService (syncs mobile notes -> comment frontmatter + annotation block)
+      const annotationRenderer = new AnnotationRenderer();
+      const annotationSectionManager = new AnnotationSectionManager();
       this.annotationSyncService = new AnnotationSyncService(
+        this.app,
+        this.apiClient,
+        this.archiveLookupService,
+        annotationRenderer,
+        annotationSectionManager,
+        () => this.settings
+      );
+
+      // Initialize AnnotationOutboundService (syncs comment edits -> server primary note)
+      this.annotationOutboundService?.stop();
+      this.annotationOutboundService = new AnnotationOutboundService(
         this.app,
         this.apiClient,
         this.archiveLookupService,
         () => this.settings
       );
+
+      // Wire suppression: inbound sync notifies outbound service before writing
+      this.annotationSyncService.onBeforeInboundWrite = (archiveId: string) => {
+        this.annotationOutboundService?.addSuppression(archiveId);
+      };
+
+      // Start listening for comment changes to sync outbound
+      this.annotationOutboundService.start();
+
+      // Initialize ArchiveTagOutboundService (syncs archiveTags frontmatter edits → server)
+      this.archiveTagOutboundService?.stop();
+      this.archiveTagOutboundService = new ArchiveTagOutboundService(
+        this.app,
+        this.apiClient,
+        this.archiveLookupService,
+        () => this.settings
+      );
+      this.archiveTagOutboundService.start();
 
       // Restore active jobs from previous session
       const allPendingJobs = await this.pendingJobsManager.getJobs();
@@ -677,6 +730,22 @@ export default class SocialArchiverPlugin extends Plugin {
         convertUserArchiveToPostData: (archive) => this.convertUserArchiveToPostData(archive),
         hasRecentlyArchivedUrl: (url) => this.hasRecentlyArchivedUrl(url),
         refreshTimelineView: () => this.refreshTimelineView(),
+        suppressTimelineRefresh: () => {
+          for (const leaf of this.app.workspace.getLeavesOfType('social-archiver-timeline')) {
+            const view = leaf.view;
+            if (view && 'suppressAutoRefresh' in view && typeof view.suppressAutoRefresh === 'function') {
+              (view as { suppressAutoRefresh: () => void }).suppressAutoRefresh();
+            }
+          }
+        },
+        resumeTimelineRefresh: (triggerRefresh = true) => {
+          for (const leaf of this.app.workspace.getLeavesOfType('social-archiver-timeline')) {
+            const view = leaf.view;
+            if (view && 'resumeAutoRefresh' in view && typeof view.resumeAutoRefresh === 'function') {
+              (view as { resumeAutoRefresh: (trigger?: boolean) => void }).resumeAutoRefresh(triggerRefresh);
+            }
+          }
+        },
         schedule: (cb, delay) => this.scheduleTrackedTimeout(cb, delay),
         notify: (msg, timeout) => new Notice(msg, timeout),
       });
@@ -713,6 +782,49 @@ export default class SocialArchiverPlugin extends Plugin {
         manifest: this.manifest,
         refreshTimelineView: () => this.refreshTimelineView(),
       });
+
+      // Create ArchiveLibrarySyncService
+      this.archiveLibrarySyncService = new ArchiveLibrarySyncService({
+        apiClient: () => this.apiClient,
+        settings: () => this.settings,
+        saveSettings: () => this.saveSettingsPartial({}, { reinitialize: false, notify: false }),
+        findBySourceArchiveId: (id) => this.archiveLookupService?.findBySourceArchiveId(id) ?? null,
+        findByOriginalUrl: (url) => this.archiveLookupService?.findByOriginalUrl(url) ?? [],
+        findByClientPostId: (clientPostId) => this.archiveLookupService?.findByClientPostId(clientPostId) ?? null,
+        indexSavedFile: (file, data) => this.archiveLookupService?.indexSavedFile(file, data),
+        backfillFileIdentity: (file, archiveId) =>
+          this.archiveLookupService?.backfillFileIdentity(file, archiveId) ?? Promise.resolve(),
+        saveSubscriptionPostDetailed: (post) =>
+          this.subscriptionSyncService?.saveSubscriptionPostDetailed(post) ??
+          Promise.resolve({ status: 'failed' as const, reason: 'service-not-ready' }),
+        convertUserArchiveToPostData: (archive) => convertUserArchiveToPostData(archive),
+        notify: (msg, timeout) => new Notice(msg, timeout),
+        isArchiveQueuedForDeletion: (id) => this.archiveDeleteSyncService?.isArchiveQueuedForDeletion(id) ?? false,
+        applyInboundDeletedIds: async (deletedIds, source) => {
+          for (const id of deletedIds) {
+            await this.archiveDeleteSyncService?.handleInboundDelete(id, undefined, source);
+          }
+        },
+      });
+
+      // Create ArchiveDeleteSyncService
+      this.archiveDeleteSyncService = new ArchiveDeleteSyncService({
+        apiClient: () => this.apiClient,
+        settings: () => this.settings,
+        saveSettings: () => this.saveSettingsPartial({}, { reinitialize: false }),
+        app: this.app,
+        findBySourceArchiveId: (id) => this.archiveLookupService?.findBySourceArchiveId(id) ?? null,
+        findByOriginalUrl: (url) => this.archiveLookupService?.findByOriginalUrl(url) ?? [],
+        isLibrarySyncRunning: () => this.archiveLibrarySyncService?.isRunning ?? false,
+        notify: (msg, timeout) => new Notice(msg, timeout),
+      });
+
+      // Initialize ArchiveDeleteSyncService (must happen after archiveLookupService is initialized)
+      if (this.archiveLookupService) {
+        this.archiveDeleteSyncService.initialize(
+          this.archiveLookupService.onArchivedFileDeleted.bind(this.archiveLookupService)
+        );
+      }
 
       // Create PendingJobOrchestrator
       // Services below are guaranteed initialized above in this method.
@@ -787,6 +899,8 @@ export default class SocialArchiverPlugin extends Plugin {
           subscriptionManager: this.subscriptionManager,
           archiveLookupService: this.archiveLookupService,
           annotationSyncService: this.annotationSyncService,
+          archiveDeleteSyncService: this.archiveDeleteSyncService ?? undefined,
+          archiveTagOutboundService: this.archiveTagOutboundService,
           app: this.app,
           settings: () => this.settings,
           apiClient: () => this.apiClient,
@@ -837,6 +951,25 @@ export default class SocialArchiverPlugin extends Plugin {
         // Catch up on pending mobile sync queue items missed while offline
         if (this.settings.syncClientId) {
           this.scheduleTrackedTimeout(() => { void this.mobileSyncService?.processPendingSyncQueue(); }, 5000);
+        }
+
+        // Auto-start Archive Library Sync on startup if applicable
+        if (this.settings.syncClientId) {
+          const libSync = this.settings.archiveLibrarySync;
+          const shouldAutoStart =
+            // Never completed — covers fresh bootstrap AND interrupted runs
+            // (lastStatus may be 'idle', 'running', or 'error' — all need sync)
+            !libSync || !libSync.completedAt;
+
+          if (shouldAutoStart) {
+            // Delay to let services fully initialise before starting sync
+            this.scheduleTrackedTimeout(() => {
+              void (async () => {
+                await this.archiveDeleteSyncService?.flushPendingDeletes();
+                await this.archiveLibrarySyncService?.startSync();
+              })();
+            }, 8000);
+          }
         }
 
         // Start Naver local subscription poller (blog + cafe)
@@ -1384,6 +1517,12 @@ export default class SocialArchiverPlugin extends Plugin {
     // 7. Clear runtime sync state
     this.mobileSyncService?.clearState();
 
+    // Cancel and clear archive library sync state (auth cleared, can't resume)
+    await this.archiveLibrarySyncService?.cancelAndClear();
+
+    // Clear pending delete queue (stale after sign-out)
+    this.archiveDeleteSyncService?.cancelAndClear();
+
     // 8. Save settings
     await this.saveSettings();
 
@@ -1421,6 +1560,18 @@ export default class SocialArchiverPlugin extends Plugin {
         this.settings.syncClientId = response.clientId;
         await this.saveSettings();
         console.debug('[Social Archiver] Registered sync client:', response.clientId);
+
+        // Auto-start library sync on first registration if not yet completed
+        const libSync = this.settings.archiveLibrarySync;
+        if (!libSync?.completedAt) {
+          this.scheduleTrackedTimeout(() => {
+            void (async () => {
+              await this.archiveDeleteSyncService?.flushPendingDeletes();
+              await this.archiveLibrarySyncService?.startSync('bootstrap');
+            })();
+          }, 2000);
+        }
+
         return { success: true, clientId: response.clientId };
       }
 
@@ -1450,12 +1601,15 @@ export default class SocialArchiverPlugin extends Plugin {
     try {
       await this.apiClient.deleteSyncClient(clientId);
       this.settings.syncClientId = '';
+      // Cancel library sync and clear checkpoint (sync client removed)
+      await this.archiveLibrarySyncService?.cancelAndClear();
       await this.saveSettings();
       console.debug('[Social Archiver] Unregistered sync client:', clientId);
       return { success: true };
     } catch (error) {
       console.error('[Social Archiver] Sync client unregistration failed:', error);
       this.settings.syncClientId = '';
+      void this.archiveLibrarySyncService?.cancelAndClear();
       await this.saveSettings();
       return { success: true };
     }

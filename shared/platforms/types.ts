@@ -249,6 +249,7 @@ export const MOBILE_PLATFORMS = [
   'bluesky',
   'mastodon',
   'web',
+  'post',
 ] as const;
 
 export type MobilePlatform = typeof MOBILE_PLATFORMS[number];
@@ -267,6 +268,7 @@ export const MOBILE_PLATFORM_INFO: Record<MobilePlatform, { name: string; placeh
   bluesky: { name: 'Bluesky', placeholder: 'Bluesky post' },
   mastodon: { name: 'Mastodon', placeholder: 'Mastodon post' },
   web: { name: 'Web Article', placeholder: 'Web page or article URL' },
+  post: { name: 'My Post', placeholder: 'Your composed post' },
 };
 
 // ============================================================================

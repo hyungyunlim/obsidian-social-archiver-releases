@@ -102,19 +102,32 @@ let threadsConnected = $state(false);
 let threadsUsername = $state<string | undefined>(undefined);
 let threadsEnabled = $state(settings.crossPostThreadsEnabled ?? false);
 let crossPostClient: CrossPostAPIClient | null = null;
+
+// Post mode dropdown (mirrors share-web pattern)
+type PostMode = 'post' | 'post+share' | 'post+share+threads';
+let postMode = $state<PostMode>(
+  threadsEnabled && threadsConnected ? 'post+share+threads' :
+  (editMode && initialData?.shareUrl) ? 'post+share' : 'post'
+);
+let postModeMenuOpen = $state(false);
+
+// Sync postMode → legacy flags
+$effect(() => {
+  shareOnPost = postMode === 'post+share' || postMode === 'post+share+threads';
+  threadsEnabled = postMode === 'post+share+threads';
+});
 let threadsConnectionEventRef: EventRef | null = null;
 
-/** Derived: character count for Threads cross-post */
-const crossPostCharCount = $derived(
-  ContentTransformerClient.stripMarkdown(content).length
-);
+/** Derived: thread chunk estimation using delimiter-aware splitting */
 const THREADS_MAX_CHARS = 500;
 const THREADS_MAX_THREAD_CHUNKS = 5;
-const crossPostOverLimit = $derived(crossPostCharCount > THREADS_MAX_CHARS);
-const crossPostThreadCount = $derived(
-  crossPostOverLimit
-    ? Math.min(Math.ceil(crossPostCharCount / (THREADS_MAX_CHARS * 0.85)), THREADS_MAX_THREAD_CHUNKS)
-    : 1
+const crossPostChunks = $derived(
+  ContentTransformerClient.splitForThread(content, THREADS_MAX_CHARS, THREADS_MAX_THREAD_CHUNKS)
+);
+const crossPostThreadCount = $derived(crossPostChunks.length);
+const crossPostOverLimit = $derived(crossPostThreadCount > 1);
+const crossPostCharCount = $derived(
+  ContentTransformerClient.stripMarkdown(content).length
 );
 
 /**
@@ -383,7 +396,7 @@ async function handleSubmit(): Promise<void> {
   // Inform user about thread splitting when Threads cross-post exceeds 500 chars
   if (threadsEnabled && threadsConnected && crossPostOverLimit) {
     const ok = window.confirm(
-      `Your text is ${crossPostCharCount} characters. It will be split into ~${crossPostThreadCount} connected thread posts on Threads. Continue?`
+      `Your text will be split into ${crossPostThreadCount} connected thread posts on Threads. Continue?`
     );
     if (!ok) return;
   }
@@ -588,7 +601,7 @@ async function handleSubmit(): Promise<void> {
 
           if (response.results.threads?.status === 'posted') {
             const msg = capturedCrossPostOverLimit
-              ? `Cross-posted to Threads (~${capturedThreadCount} thread posts)`
+              ? `Cross-posted to Threads (${capturedThreadCount} thread posts)`
               : 'Cross-posted to Threads!';
             banner?.complete(msg);
 
@@ -970,6 +983,100 @@ function formatFileSize(bytes: number): string {
 }
 
 /**
+ * Close post mode dropdown on outside click
+ */
+function handleDocumentClick(e: MouseEvent): void {
+  if (postModeMenuOpen && !(e.target as HTMLElement)?.closest('.post-mode-group') && !(e.target as HTMLElement)?.closest('.pm-portal')) {
+    postModeMenuOpen = false;
+  }
+}
+
+/** Caret button ref for positioning the portal dropdown */
+let caretBtnEl: HTMLButtonElement | undefined;
+let portalMenuEl: HTMLDivElement | null = null;
+
+function openPostModeMenu(e: MouseEvent): void {
+  e.stopPropagation();
+  if (postModeMenuOpen) { closePostModeMenu(); return; }
+  postModeMenuOpen = true;
+  requestAnimationFrame(() => {
+    if (!caretBtnEl || portalMenuEl) return;
+    const rect = caretBtnEl.getBoundingClientRect();
+    const menu = document.createElement('div');
+    menu.className = 'pm-portal';
+    menu.style.cssText = `
+      position:fixed; top:${rect.bottom + 4}px; right:${window.innerWidth - rect.right}px;
+      width:220px; background:#1e1e1e; border:1px solid #444; border-radius:8px;
+      box-shadow:0 8px 28px rgba(0,0,0,0.6); z-index:99999; overflow:hidden;
+      font-family:var(--font-interface,-apple-system,BlinkMacSystemFont,sans-serif);
+    `;
+    menu.addEventListener('click', (ev) => ev.stopPropagation());
+
+    const modes: Array<{ id: PostMode; label: string; desc: string }> = [
+      { id: 'post', label: 'Post', desc: 'Save to vault only' },
+      { id: 'post+share', label: 'Post & Share', desc: 'Save + public share link' },
+    ];
+    if (FEATURE_CROSSPOST_ENABLED) {
+      modes.push({ id: 'post+share+threads', label: 'Post & Threads',
+        desc: threadsConnected ? 'Save + share + crosspost' : 'Connect in Settings' });
+    }
+
+    for (let i = 0; i < modes.length; i++) {
+      const m = modes[i]!;
+      const isActive = postMode === m.id;
+      const bgDefault = isActive ? '#252535' : '#1e1e1e';
+      const btn = document.createElement('button');
+      btn.style.cssText = `
+        display:flex; align-items:center; width:100%; padding:11px 12px;
+        border:none; background:${bgDefault}; cursor:pointer;
+        text-align:left; font-family:inherit;
+        ${i > 0 ? 'border-top:1px solid #333;' : ''}
+      `;
+      btn.addEventListener('mouseenter', () => { btn.style.background = '#2a2a2a'; });
+      btn.addEventListener('mouseleave', () => { btn.style.background = bgDefault; });
+
+      const textDiv = document.createElement('div');
+      textDiv.style.cssText = 'flex:1; min-width:0;';
+
+      const labelSpan = document.createElement('span');
+      labelSpan.style.cssText = `display:block; font-size:13px; font-weight:500; color:${isActive ? '#7c85f5' : '#e0e0e0'}; line-height:1.2;`;
+      labelSpan.textContent = m.label;
+
+      const descSpan = document.createElement('span');
+      descSpan.style.cssText = 'display:block; font-size:10px; color:#666; line-height:1.2; margin-top:1px;';
+      descSpan.textContent = m.desc;
+
+      textDiv.appendChild(labelSpan);
+      textDiv.appendChild(descSpan);
+      btn.appendChild(textDiv);
+
+      const checkSpan = document.createElement('span');
+      checkSpan.style.cssText = 'flex-shrink:0; width:16px; text-align:center; font-size:13px; font-weight:700; color:#7c85f5; margin-left:6px;';
+      checkSpan.textContent = isActive ? '✓' : '';
+      btn.appendChild(checkSpan);
+
+      btn.addEventListener('click', () => {
+        if (m.id === 'post+share+threads' && !threadsConnected) {
+          new (Notice as any)('Connect Threads in Settings → Cross-Post');
+        } else { postMode = m.id; }
+        closePostModeMenu();
+      });
+      menu.appendChild(btn);
+    }
+    document.body.appendChild(menu);
+    portalMenuEl = menu;
+  });
+}
+
+function closePostModeMenu(): void {
+  postModeMenuOpen = false;
+  if (portalMenuEl) {
+    portalMenuEl.remove();
+    portalMenuEl = null;
+  }
+}
+
+/**
  * Handle cancel action
  */
 function handleCancel(): void {
@@ -1088,6 +1195,9 @@ function triggerUrlDetection(): void {
 }
 
 onMount(async () => {
+  // Close post mode dropdown on outside click
+  document.addEventListener('click', handleDocumentClick);
+
   // Initialize draft service
   draftService = new DraftService(app);
   await draftService.initialize();
@@ -1138,6 +1248,8 @@ onMount(async () => {
 
 onDestroy(() => {
   // Cleanup
+  closePostModeMenu();
+  document.removeEventListener('click', handleDocumentClick);
   window.removeEventListener('keydown', handleKeydown);
 
   // Clear URL detection timer
@@ -1418,47 +1530,20 @@ onDestroy(() => {
       </div>
 
       <div class="composer-footer">
-        <!-- Left side: toggles -->
-        <div class="footer-toggles">
-          <label class="share-toggle-label">
-            <input
-              type="checkbox"
-              bind:checked={shareOnPost}
-              disabled={isSubmitting}
-              class="share-toggle-checkbox"
-            />
-            <span class="share-toggle-switch"></span>
-            <span class="share-toggle-text">Share to web</span>
-          </label>
-
-          <!-- Threads cross-post toggle (same style, create mode only, gated by feature flag) -->
-          {#if FEATURE_CROSSPOST_ENABLED && !editMode}
-            <label class="share-toggle-label" title={threadsConnected ? `@${threadsUsername ?? 'Threads'}` : 'Connect in Settings → Cross-Post'}>
-              <input
-                type="checkbox"
-                bind:checked={threadsEnabled}
-                onchange={handleThreadsToggle}
-                disabled={isSubmitting}
-                class="share-toggle-checkbox"
-              />
-              <span class="share-toggle-switch"></span>
-              <span class="share-toggle-text">
-                Threads
-                {#if threadsEnabled && content.trim()}
-                  <span class="crosspost-char-badge" class:will-thread={crossPostOverLimit}>
-                    {#if crossPostOverLimit}
-                      {crossPostCharCount} chars · ~{crossPostThreadCount} posts
-                    {:else}
-                      {crossPostCharCount}/{THREADS_MAX_CHARS}
-                    {/if}
-                  </span>
-                {/if}
-              </span>
-            </label>
+        <!-- Left side: Threads char badge (when applicable) -->
+        <div class="footer-left-info">
+          {#if !editMode && postMode === 'post+share+threads' && threadsConnected && content.trim()}
+            <span class="crosspost-char-badge" class:will-thread={crossPostOverLimit}>
+              {#if crossPostOverLimit}
+                {crossPostCharCount} chars · {crossPostThreadCount} posts
+              {:else}
+                {crossPostCharCount}/{THREADS_MAX_CHARS}
+              {/if}
+            </span>
           {/if}
         </div>
 
-        <!-- Action buttons (right side) -->
+        <!-- Right side: Cancel + split post button -->
         <div class="action-buttons">
           <button
             type="button"
@@ -1469,20 +1554,42 @@ onDestroy(() => {
             Cancel
           </button>
 
-          <button
-            type="button"
-            class="btn-primary"
-            onclick={handleSubmit}
-            disabled={isSubmitting}
-          >
-            {#if editMode}
+          {#if editMode}
+            <button type="button" class="btn-primary" onclick={handleSubmit} disabled={isSubmitting}>
               {isSubmitting ? 'Saving...' : 'Save Changes'}
-            {:else if FEATURE_CROSSPOST_ENABLED && threadsEnabled}
-              {isSubmitting ? 'Posting...' : 'Post & Publish'}
-            {:else}
-              {isSubmitting ? 'Posting...' : 'Post'}
-            {/if}
-          </button>
+            </button>
+          {:else}
+            <!-- Split post button with mode dropdown -->
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <div class="post-mode-group" role="group">
+              <button
+                type="button"
+                class="btn-post-main"
+                onclick={handleSubmit}
+                disabled={isSubmitting}
+              >
+                {#if isSubmitting}
+                  Posting...
+                {:else if postMode === 'post+share+threads'}
+                  Post & Threads
+                {:else if postMode === 'post+share'}
+                  Post & Share
+                {:else}
+                  Post
+                {/if}
+              </button>
+              <button
+                type="button"
+                class="btn-post-caret"
+                bind:this={caretBtnEl}
+                onclick={openPostModeMenu}
+                disabled={isSubmitting}
+                aria-label="Post options"
+              >
+                <svg viewBox="0 0 10 6" width="8" height="5"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+          {/if}
         </div>
       </div>
     </div>
@@ -1798,96 +1905,14 @@ onDestroy(() => {
     border-top: none;
   }
 
-  .footer-toggles {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-
-  .share-toggle-label {
+  .footer-left-info {
     display: flex;
     align-items: center;
     gap: 8px;
-    cursor: pointer;
-    user-select: none;
-    font-size: 13px;
-    color: var(--text-muted);
-    transition: color 0.2s ease;
-  }
-
-  .share-toggle-label:hover {
-    color: var(--text-normal);
-  }
-
-  .share-toggle-checkbox {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  /* Minimal line-style toggle */
-  .share-toggle-switch {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    width: 24px;
-    height: 12px;
-  }
-
-  /* Background line */
-  .share-toggle-switch::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    height: 1.5px;
-    background: var(--background-modifier-border);
-    transition: background-color 0.2s ease;
-  }
-
-  /* Sliding indicator (circle) */
-  .share-toggle-switch::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    width: 12px;
-    height: 12px;
-    background: var(--background-modifier-border);
-    border: 1.5px solid var(--background-primary);
-    border-radius: 50%;
-    transition: all 0.2s ease;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-  }
-
-  .share-toggle-checkbox:checked + .share-toggle-switch::before {
-    background: var(--interactive-accent);
-  }
-
-  .share-toggle-checkbox:checked + .share-toggle-switch::after {
-    left: 12px;
-    background: var(--interactive-accent);
-  }
-
-  .share-toggle-checkbox:disabled + .share-toggle-switch {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .share-toggle-label:hover .share-toggle-switch::after {
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
-  }
-
-  .share-toggle-text {
-    font-size: 13px;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
   }
 
   .crosspost-char-badge {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-faint);
     font-variant-numeric: tabular-nums;
   }
@@ -1895,6 +1920,135 @@ onDestroy(() => {
   .crosspost-char-badge.will-thread {
     color: var(--text-accent);
     font-weight: 600;
+  }
+
+  /* Split post button group */
+  .post-mode-group {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .btn-post-main {
+    padding: 8px 14px;
+    border: none;
+    border-radius: var(--radius-s) 0 0 var(--radius-s);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    min-height: 32px;
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    transition: opacity 0.15s;
+    white-space: nowrap;
+  }
+
+  .btn-post-main:hover:not(:disabled) {
+    opacity: 0.88;
+  }
+
+  .btn-post-main:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-post-caret {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    padding: 0;
+    border: none;
+    border-left: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 0 var(--radius-s) var(--radius-s) 0;
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    cursor: pointer;
+    min-height: 32px;
+    transition: opacity 0.15s;
+  }
+
+  .btn-post-caret:hover:not(:disabled) {
+    opacity: 0.88;
+  }
+
+  .btn-post-caret:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Post mode dropdown menu — NO css variables, NO pseudo-elements */
+  .post-mode-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    width: 220px;
+    background-color: #1e1e1e !important;
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
+    z-index: 9999;
+    overflow: hidden;
+    opacity: 1 !important;
+  }
+
+  .pm-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    background-color: #1e1e1e !important;
+    cursor: pointer;
+    text-align: left;
+    opacity: 1 !important;
+  }
+
+  .pm-item:hover {
+    background-color: #2a2a2a !important;
+  }
+
+  .pm-item.active {
+    background-color: #252535 !important;
+  }
+
+  .pm-item + .pm-item {
+    border-top: 1px solid #333;
+  }
+
+  .pm-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .pm-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #e0e0e0;
+    line-height: 1.3;
+  }
+
+  .pm-item.active .pm-label {
+    color: var(--interactive-accent, #7c85f5);
+  }
+
+  .pm-desc {
+    font-size: 11px;
+    color: #777;
+    line-height: 1.3;
+    margin-top: 2px;
+  }
+
+  .pm-check {
+    flex-shrink: 0;
+    width: 20px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--interactive-accent, #7c85f5);
+    margin-left: 8px;
   }
 
   .action-buttons {

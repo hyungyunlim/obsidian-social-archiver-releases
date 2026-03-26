@@ -24,6 +24,24 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '3.0.0': {
+    title: 'Full Cross-Device Sync',
+    date: '2026-03-26',
+    notes: `## Full Cross-Device Sync
+
+Archives, deletes, and composed posts now sync in realtime across Obsidian, mobile, and web via WebSocket.
+
+- **Mobile app v1.3.3 required** for realtime sync — please update to the latest version
+- Previously plugin-only deleted archives may reappear once from the server; simply delete again and it will sync properly
+- Delete sync can be toggled independently (outbound/inbound) in Settings > Sync
+
+## Crosspost & Threads
+
+- Post mode dropdown: Share Link, Crosspost to Threads, or both
+- Thread breaks with \`--\` / \`---\` delimiters
+`,
+    isImportant: true,
+  },
   '2.8.4': {
     title: 'Cross-Device Login + Android Support',
     date: '2026-03-08',

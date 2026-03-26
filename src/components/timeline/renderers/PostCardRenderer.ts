@@ -17,7 +17,6 @@ import { ShareAPIClient } from '../../../services/ShareAPIClient';
 import { TextFormatter } from '../../../services/markdown/formatters/TextFormatter';
 import { TranscriptFormatter } from '../../../services/markdown/formatters/TranscriptFormatter';
 import { getAuthorCatalogStore } from '../../../services/AuthorCatalogStore';
-import { normalizeAuthorUrl } from '../../../services/AuthorDeduplicator';
 import { isValidPreviewUrl, encodePathForMarkdownLink } from '../../../utils/url';
 import { get } from 'svelte/store';
 import type { AuthorCatalogEntry } from '../../../types/author-catalog';
@@ -35,6 +34,14 @@ import { languageCodeToName } from '../../../constants/languages';
 import { getPlatformCategory } from '../../../shared/platforms/types';
 import { createSVGElement } from '../../../utils/dom-helpers';
 import { getShareUrlForClipboard } from '../../../utils/shareUrl';
+import {
+  type SubscriptionLookupMap,
+  type SubscriptionCacheEntry,
+  buildSubscriptionLookup,
+  addSubscriptionToLookup,
+  removeSubscriptionFromLookup,
+  findSubscriptionMatch,
+} from '../../../utils/subscription-matcher';
 import type { WhisperModel } from '../../../utils/whisper';
 import { maybeProxyCdnUrl } from '../../../utils/cdnProxy';
 
@@ -93,7 +100,8 @@ export class PostCardRenderer extends Component {
   private onReaderModeCallback?: (post: PostData) => void;
 
   // Cached subscriptions for quick lookup (set by TimelineContainer)
-  private subscriptionsCache: Map<string, { subscriptionId: string; handle: string }> = new Map();
+  // Shape is SubscriptionLookupMap — see src/utils/subscription-matcher.ts
+  private subscriptionsCache: SubscriptionLookupMap = new Map();
 
   // Track badge elements by author key for real-time updates
   private badgeUpdateCallbacks: Map<string, Set<(isSubscribed: boolean) => void>> = new Map();
@@ -205,66 +213,27 @@ export class PostCardRenderer extends Component {
   /**
    * Set subscriptions cache for quick subscription status lookup
    * Called by TimelineContainer after fetching subscriptions from API
+   * Also propagates the lookup to CompactPostCardRenderer for passive indicators
    */
   public setSubscriptionsCache(subscriptions: Array<{ id: string; platform: string; target: { handle: string; profileUrl?: string } }>): void {
-    this.subscriptionsCache.clear();
-    for (const sub of subscriptions) {
-      // Key by normalized profile URL or handle
-      const profileUrl = sub.target.profileUrl;
-      if (profileUrl) {
-        const normalizedUrl = this.normalizeUrlForComparison(profileUrl);
-        this.subscriptionsCache.set(`${sub.platform}:${normalizedUrl}`, {
-          subscriptionId: sub.id,
-          handle: sub.target.handle
-        });
-      }
-      // Also key by handle for fallback matching
-      if (sub.target.handle) {
-        const normalizedHandle = sub.target.handle.toLowerCase().replace(/^@/, '');
-        this.subscriptionsCache.set(`${sub.platform}:handle:${normalizedHandle}`, {
-          subscriptionId: sub.id,
-          handle: sub.target.handle
-        });
-      }
-    }
+    this.subscriptionsCache = buildSubscriptionLookup(subscriptions);
+    // Share the same lookup with the compact renderer so embedded/quoted cards
+    // also show the passive subscription indicator
+    this.compactPostCardRenderer.setSubscriptionLookup(this.subscriptionsCache);
   }
 
   /**
    * Add a single subscription to cache (called after successful subscribe)
    */
   public addSubscriptionToCache(subscription: { id: string; platform: string; target: { handle: string; profileUrl?: string } }): void {
-    const profileUrl = subscription.target.profileUrl;
-    if (profileUrl) {
-      // Use full URL normalization to match getSubscriptionFromCache behavior
-      // This handles post URLs -> base URLs (e.g., blog post URL -> origin)
-      const normalized = normalizeAuthorUrl(profileUrl, subscription.platform as Platform);
-      const normalizedUrl = normalized.url || this.normalizeUrlForComparison(profileUrl);
-      this.subscriptionsCache.set(`${subscription.platform}:${normalizedUrl}`, {
-        subscriptionId: subscription.id,
-        handle: subscription.target.handle
-      });
-    }
-    if (subscription.target.handle) {
-      const normalizedHandle = subscription.target.handle.toLowerCase().replace(/^@/, '');
-      this.subscriptionsCache.set(`${subscription.platform}:handle:${normalizedHandle}`, {
-        subscriptionId: subscription.id,
-        handle: subscription.target.handle
-      });
-    }
+    addSubscriptionToLookup(this.subscriptionsCache, subscription);
   }
 
   /**
    * Remove a subscription from cache by subscription ID (called after successful unsubscribe)
    */
   public removeSubscriptionFromCache(subscriptionId: string): void {
-    // Find and remove all cache entries with this subscription ID
-    const keysToRemove: string[] = [];
-    this.subscriptionsCache.forEach((value, key) => {
-      if (value.subscriptionId === subscriptionId) {
-        keysToRemove.push(key);
-      }
-    });
-    keysToRemove.forEach(key => this.subscriptionsCache.delete(key));
+    removeSubscriptionFromLookup(this.subscriptionsCache, subscriptionId);
   }
 
   /**
@@ -321,36 +290,8 @@ export class PostCardRenderer extends Component {
   /**
    * Get subscription info from cache
    */
-  public getSubscriptionFromCache(authorUrl: string, platform: Platform): { subscriptionId: string; handle: string } | null {
-    if (!authorUrl || platform === 'post') return null;
-
-    // Use full URL normalization (handles Medium, Substack, Tumblr post URLs -> base URLs)
-    const normalized = normalizeAuthorUrl(authorUrl, platform);
-    const normalizedUrl = normalized.url || this.normalizeUrlForComparison(authorUrl);
-    const cacheKey = `${platform}:${normalizedUrl}`;
-    if (this.subscriptionsCache.has(cacheKey)) {
-      return this.subscriptionsCache.get(cacheKey) ?? null;
-    }
-
-    // Check by handle extracted from normalization or URL
-    const handle = normalized.handle || (() => {
-      try {
-        const url = new URL(authorUrl);
-        const parts = url.pathname.split('/').filter(Boolean);
-        return parts[parts.length - 1]?.toLowerCase().replace(/^@/, '');
-      } catch {
-        return null;
-      }
-    })();
-
-    if (handle) {
-      const handleKey = `${platform}:handle:${handle}`;
-      if (this.subscriptionsCache.has(handleKey)) {
-        return this.subscriptionsCache.get(handleKey) ?? null;
-      }
-    }
-
-    return null;
+  public getSubscriptionFromCache(authorUrl: string, platform: Platform): SubscriptionCacheEntry | null {
+    return findSubscriptionMatch(this.subscriptionsCache, { platform, authorUrl });
   }
 
   /**
@@ -429,6 +370,11 @@ export class PostCardRenderer extends Component {
         commentHeader.createSpan({ text: ` · ${archivedTime}` });
       }
 
+      // Highlight count indicator
+      if (post.highlightCount && post.highlightCount > 0) {
+        this.renderHighlightBadge(commentHeader, post.highlightCount);
+      }
+
       // Comment text with inline edit icon
       const commentTextContainer = commentSection.createDiv();
       commentTextContainer.addClass('sa-inline-block');
@@ -450,14 +396,35 @@ export class PostCardRenderer extends Component {
       editIcon.addClass('pcr-edit-icon-inline');
       setIcon(editIcon, 'pencil');
 
+      // Delete icon (appears on hover, next to edit icon)
+      const deleteIcon = commentTextContainer.createSpan();
+      deleteIcon.addClass('sa-inline-flex');
+      deleteIcon.addClass('sa-ml-4');
+      deleteIcon.addClass('sa-icon-14');
+      deleteIcon.addClass('sa-opacity-0');
+      deleteIcon.addClass('sa-transition-opacity');
+      deleteIcon.addClass('sa-text-muted');
+      deleteIcon.addClass('pcr-delete-icon-inline');
+      setIcon(deleteIcon, 'trash-2');
+
       // Hover effects
       commentSection.addEventListener('mouseenter', () => {
         editIcon.removeClass('sa-opacity-0');
         editIcon.addClass('sa-opacity-60');
+        deleteIcon.removeClass('sa-opacity-0');
+        deleteIcon.addClass('sa-opacity-60');
       });
       commentSection.addEventListener('mouseleave', () => {
         editIcon.removeClass('sa-opacity-60');
         editIcon.addClass('sa-opacity-0');
+        deleteIcon.removeClass('sa-opacity-60');
+        deleteIcon.addClass('sa-opacity-0');
+      });
+
+      // Delete icon click handler
+      deleteIcon.addEventListener('click', (e) => {
+        e.stopPropagation();
+        void this.deleteComment(post, commentSection);
       });
 
       // Click to edit inline
@@ -496,6 +463,11 @@ export class PostCardRenderer extends Component {
       // Add archived time
       if (archivedTime) {
         savedHeader.createSpan({ text: ` · ${archivedTime}` });
+      }
+
+      // Highlight count indicator
+      if (post.highlightCount && post.highlightCount > 0) {
+        this.renderHighlightBadge(savedHeader, post.highlightCount);
       }
 
       // Edit icon (appears on hover, inline at the end)
@@ -1607,10 +1579,8 @@ export class PostCardRenderer extends Component {
 
           try {
             await this.onUnsubscribeAuthorCallback(subscription.subscriptionId, post.author.name, post.author.url, post.platform);
-            // Remove from cache
-            const normalizedUrl = this.normalizeUrlForComparison(post.author.url);
-            this.subscriptionsCache.delete(`${post.platform}:${normalizedUrl}`);
-            this.subscriptionsCache.delete(`${post.platform}:handle:${subscription.handle.toLowerCase()}`);
+            // Remove from cache via shared utility
+            removeSubscriptionFromLookup(this.subscriptionsCache, subscription.subscriptionId);
             // Success - keep unsubscribed state
             isLoading = false;
             updateBadgeStyle(false, false);
@@ -3614,18 +3584,18 @@ export class PostCardRenderer extends Component {
   /**
    * Delete post and remove card from timeline
    */
-  private async deletePost(post: PostData, rootElement: HTMLElement): Promise<void> {
+  private async deletePost(post: PostData, rootElement: HTMLElement): Promise<boolean> {
     try {
       const filePath = post.filePath;
       if (!filePath) {
         new Notice('Cannot delete post: file path not found');
-        return;
+        return false;
       }
 
       const file = this.vault.getAbstractFileByPath(filePath);
       if (!(file instanceof TFile)) {
         new Notice('Cannot delete post: file not found');
-        return;
+        return false;
       }
 
       // Count media files that will be deleted (all relative paths, not http(s) URLs)
@@ -3651,7 +3621,7 @@ export class PostCardRenderer extends Component {
       const confirmed = await this.showConfirmDialog('Delete Post?', message);
 
       if (!confirmed) {
-        return;
+        return false;
       }
 
       // Check if post is in archiving state - cancel the pending job
@@ -3858,8 +3828,11 @@ export class PostCardRenderer extends Component {
         // Failed media deletions are non-critical; main post was deleted
       }
 
+      return true;
+
     } catch {
       new Notice('Failed to delete post. Check console for details.');
+      return false;
     }
   }
 
@@ -3908,6 +3881,92 @@ export class PostCardRenderer extends Component {
   }
 
   /**
+   * Delete comment from frontmatter (triggers outbound sync automatically)
+   */
+  private async deleteComment(post: PostData, commentSection: HTMLElement): Promise<void> {
+    const filePath = post.filePath;
+    if (!filePath) return;
+
+    const file = this.vault.getAbstractFileByPath(filePath);
+    if (!file || !(file instanceof TFile)) return;
+
+    try {
+      // Pre-register the current comment in the outbound service so that
+      // the deletion is detected as a real diff (not a first-observation no-op).
+      this.plugin.annotationOutboundService?.recordCommentBaseline(filePath, post.comment);
+
+      if (this.onUIModifyCallback) {
+        this.onUIModifyCallback(filePath);
+      }
+
+      await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+        delete fm['comment'];
+      });
+
+      post.comment = undefined;
+
+      // Replace the comment section with the "saved this post" section.
+      // Re-create the element to clear all old event listeners and classes.
+      const parent = commentSection.parentElement;
+      if (!parent) return;
+
+      const savedSection = parent.createDiv({ cls: 'mb-3' });
+      savedSection.addClass('sa-relative');
+      savedSection.addClass('sa-clickable');
+      commentSection.replaceWith(savedSection);
+
+      const userName = this.plugin.settings.username || 'You';
+      const archivedTime = this.getRelativeTime(post.archivedDate);
+
+      const savedHeader = savedSection.createDiv();
+      savedHeader.addClass('sa-text-base');
+      savedHeader.addClass('sa-text-muted');
+      savedHeader.addClass('sa-inline-block');
+
+      savedHeader.createSpan({ text: userName, cls: 'pcr-comment-username' });
+
+      let savedText = ' saved this post';
+      if (post.type === 'profile') {
+        savedText = ' saved this user';
+      } else if (post.platform === 'googlemaps') {
+        savedText = ' saved this place';
+      }
+      savedHeader.createSpan({ text: savedText });
+
+      if (archivedTime) {
+        savedHeader.createSpan({ text: ` · ${archivedTime}` });
+      }
+
+      // Edit icon to re-add a comment
+      const editIcon = savedSection.createSpan();
+      editIcon.addClass('sa-inline-flex');
+      editIcon.addClass('sa-ml-4');
+      editIcon.addClass('sa-icon-14');
+      editIcon.addClass('sa-opacity-0');
+      editIcon.addClass('sa-transition-opacity');
+      editIcon.addClass('sa-text-muted');
+      editIcon.addClass('pcr-edit-icon-inline');
+      setIcon(editIcon, 'pencil');
+
+      savedSection.addEventListener('mouseenter', () => {
+        editIcon.removeClass('sa-opacity-0');
+        editIcon.addClass('sa-opacity-60');
+      });
+      savedSection.addEventListener('mouseleave', () => {
+        editIcon.removeClass('sa-opacity-60');
+        editIcon.addClass('sa-opacity-0');
+      });
+
+      savedSection.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.editCommentInline(post, savedSection);
+      });
+    } catch {
+      new Notice('Failed to delete note');
+    }
+  }
+
+  /**
    * Edit comment inline (replace with textarea)
    */
   private editCommentInline(post: PostData, commentSection: HTMLElement): void {
@@ -3948,6 +4007,11 @@ export class PostCardRenderer extends Component {
             commentHeader.createSpan({ text: ` · ${archivedTime}` });
           }
 
+          // Highlight count indicator
+          if (post.highlightCount && post.highlightCount > 0) {
+            this.renderHighlightBadge(commentHeader, post.highlightCount);
+          }
+
           // Comment text with inline edit icon
           const commentTextContainer = commentSection.createDiv({ cls: 'pcr-comment-text-container' });
 
@@ -3957,6 +4021,14 @@ export class PostCardRenderer extends Component {
           // Edit icon (hover handled by parent .pcr-comment-section:hover via pcr-edit-icon-inline)
           const editIcon = commentTextContainer.createSpan({ cls: 'pcr-edit-icon-inline' });
           setIcon(editIcon, 'pencil');
+
+          // Delete icon (hover handled by parent .pcr-comment-section:hover via pcr-delete-icon-inline)
+          const deleteIcon = commentTextContainer.createSpan({ cls: 'pcr-delete-icon-inline' });
+          setIcon(deleteIcon, 'trash-2');
+          deleteIcon.addEventListener('click', (e) => {
+            e.stopPropagation();
+            void this.deleteComment(post, commentSection);
+          });
         } else {
           // Restore saved UI: "Jun saved this post · 2h ago"
           const savedHeader = commentSection.createDiv({ cls: 'pcr-saved-header' });
@@ -3969,6 +4041,11 @@ export class PostCardRenderer extends Component {
 
           if (archivedTime) {
             savedHeader.createSpan({ text: ` · ${archivedTime}` });
+          }
+
+          // Highlight count indicator
+          if (post.highlightCount && post.highlightCount > 0) {
+            this.renderHighlightBadge(savedHeader, post.highlightCount);
           }
 
           // Edit icon (hover handled by parent .pcr-comment-section:hover via pcr-edit-icon-inline)
@@ -4211,9 +4288,19 @@ export class PostCardRenderer extends Component {
    * Delete post from external callers (e.g., reader mode).
    * Shows confirm dialog and deletes files, but skips card animation.
    */
-  public async deletePostForReader(post: PostData): Promise<void> {
+  public async deletePostForReader(post: PostData): Promise<boolean> {
     const tmpEl = document.createElement('div');
-    await this.deletePost(post, tmpEl);
+    return this.deletePost(post, tmpEl);
+  }
+
+  /**
+   * Render a small inline highlight badge: " · 🖍 3"
+   */
+  private renderHighlightBadge(container: HTMLElement, count: number): void {
+    const badge = container.createSpan({ cls: 'pcr-highlight-badge' });
+    const icon = badge.createSpan({ cls: 'pcr-highlight-badge-icon' });
+    setIcon(icon, 'highlighter');
+    badge.createSpan({ text: ` ${count}` });
   }
 
   /**

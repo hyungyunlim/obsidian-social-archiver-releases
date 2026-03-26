@@ -407,6 +407,11 @@ export class PostDataParser {
         }
       }
 
+      // Count ==highlight== markers in the body for highlight indicator on timeline cards
+      const bodyForHighlights = content.replace(/^---\n[\s\S]*?\n---\n?/, '');
+      const highlightMatches = bodyForHighlights.match(/==(?![-=])([\s\S]+?)==/g);
+      const highlightCount = highlightMatches ? highlightMatches.length : 0;
+
       const authorAvatarRaw = frontmatter['authorAvatar'] as string | undefined;
       const authorAvatarIsExternal = typeof authorAvatarRaw === 'string' && authorAvatarRaw.startsWith('http');
 
@@ -422,6 +427,7 @@ export class PostDataParser {
         comment: frontmatter.comment, // User's personal note
         like: frontmatter.like, // User's personal like
         archive: frontmatter.archive, // Archive status
+        highlightCount: highlightCount > 0 ? highlightCount : undefined,
         shareUrl: frontmatter.shareUrl, // Public share URL
         crossPostId: frontmatter['crossPostId'] as string | undefined,
         threadsPostId: frontmatter['threadsPostId'] as string | undefined,

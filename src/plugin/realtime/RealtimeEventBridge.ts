@@ -8,7 +8,7 @@
  * Single Responsibility: translate incoming WS events into plugin side-effects.
  */
 
-import { Events, EventRef, Notice, TFile } from 'obsidian';
+import { Events, EventRef, Notice } from 'obsidian';
 import type { App } from 'obsidian';
 import type { PendingJob } from '../../services/PendingJobsManager';
 import type { PendingPost } from '../../services/SubscriptionManager';
@@ -16,6 +16,8 @@ import type { CrawlJobTracker } from '../../services/CrawlJobTracker';
 import type { ArchiveJobTracker } from '../../services/ArchiveJobTracker';
 import type { ArchiveLookupService } from '../../services/ArchiveLookupService';
 import type { AnnotationSyncService } from '../../services/AnnotationSyncService';
+import type { ArchiveDeleteSyncService } from '../sync/ArchiveDeleteSyncService';
+import type { ArchiveTagOutboundService } from '../sync/ArchiveTagOutboundService';
 import type { SocialArchiverSettings } from '../../types/settings';
 import type { PostData, Platform } from '../../types/post';
 import type {
@@ -72,6 +74,7 @@ export interface WsSubscriptionPostMessage {
   subscriptionId?: string;
   subscriptionName?: string;
   isProfileCrawl?: boolean;
+  archiveId?: string;
 }
 
 /** Profile metadata sent with ws:profile_metadata events. */
@@ -154,6 +157,8 @@ export interface RealtimeEventBridgeDeps {
   subscriptionManager: { acknowledgePendingPosts: (ids: string[]) => Promise<void> } | undefined;
   archiveLookupService: ArchiveLookupService | undefined;
   annotationSyncService: AnnotationSyncService | undefined;
+  archiveDeleteSyncService?: ArchiveDeleteSyncService | undefined;
+  archiveTagOutboundService?: ArchiveTagOutboundService | undefined;
   app: App;
   settings: () => SocialArchiverSettings;
   apiClient: () => RealtimeApiClient | undefined;
@@ -389,6 +394,9 @@ export class RealtimeEventBridge {
   private setupConnectionStatusListeners(): void {
     this.eventRefs.push(
       this.deps.events.on('ws:connected', () => {
+        // Flush any pending outbound deletes queued while offline
+        void this.deps.archiveDeleteSyncService?.flushPendingDeletes();
+
         // Process any pending sync queue items missed while offline
         const settings = this.deps.settings();
         if (settings.syncClientId) {
@@ -443,6 +451,12 @@ export class RealtimeEventBridge {
             // Track profile crawl progress via workerJobId
             if (message.isProfileCrawl && message.subscriptionId) {
               this.deps.crawlJobTracker.incrementProgressByWorkerJobId(message.subscriptionId);
+            }
+
+            // Inject archiveId into post so plugin can set sourceArchiveId in frontmatter
+            // This mirrors what ArchiveLibrarySyncService.saveArchive() does
+            if (message.archiveId) {
+              message.post.sourceArchiveId = message.archiveId;
             }
 
             const pendingPost: PendingPost = {
@@ -758,7 +772,19 @@ export class RealtimeEventBridge {
         const settings = this.deps.settings();
         if (!settings.enableMobileAnnotationSync) return;
 
-        const { archiveId, tags: serverTags } = msg.data;
+        const { archiveId, tags: serverTags, sourceClientId } = msg.data;
+
+        // Echo suppression: skip if this event was triggered by our own outbound sync
+        if (sourceClientId && sourceClientId === settings.syncClientId) {
+          console.debug('[Social Archiver] Skipping own archive_tags_updated echo for:', archiveId);
+          return;
+        }
+
+        // Also skip if ArchiveTagOutboundService has a live suppression for this archive
+        if (this.deps.archiveTagOutboundService?.isSuppressed(archiveId)) {
+          console.debug('[Social Archiver] Skipping suppressed archive_tags_updated for:', archiveId);
+          return;
+        }
 
         console.debug('[Social Archiver] Archive tags updated via WS:', archiveId, serverTags);
 
@@ -769,12 +795,14 @@ export class RealtimeEventBridge {
           return;
         }
 
-        // Merge server tags into existing frontmatter tags (additive, case-sensitive dedup)
+        // Suppress outbound re-sync for this inbound write (prevents loop)
+        this.deps.archiveTagOutboundService?.addSuppression(archiveId);
+
+        // REPLACEMENT semantics: set archiveTags to the server's canonical tag list.
+        // Do NOT modify fm.tags — that field is local-only (Obsidian tag index).
         try {
           await this.deps.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-            const existingTags: string[] = Array.isArray(fm.tags) ? (fm.tags as string[]) : [];
-            const merged = [...new Set([...existingTags, ...serverTags])];
-            fm.tags = merged;
+            fm.archiveTags = serverTags;
 
             // Backfill sourceArchiveId if missing
             if (!fm.sourceArchiveId) {
@@ -782,10 +810,10 @@ export class RealtimeEventBridge {
             }
           });
 
-          console.debug('[Social Archiver] Tags merged for:', file.path, { serverTags });
+          console.debug('[Social Archiver] archiveTags replaced for:', file.path, { serverTags });
         } catch (err) {
           console.error(
-            '[Social Archiver] Failed to update tags frontmatter:',
+            '[Social Archiver] Failed to update archiveTags frontmatter:',
             file.path,
             err instanceof Error ? err.message : String(err),
           );
@@ -804,33 +832,12 @@ export class RealtimeEventBridge {
         const msg = _message as { type: string; data: ArchiveDeletedEventData } | undefined;
         if (!msg?.data) return;
 
-        const settings = this.deps.settings();
-        if (!settings.enableMobileAnnotationSync) return;
-
         const { archiveId, originalUrl } = msg.data;
         console.debug('[Social Archiver] Archive deleted via WS:', archiveId);
 
-        // Find vault file: sourceArchiveId first, then originalUrl fallback
-        let file: TFile | null =
-          this.deps.archiveLookupService?.findBySourceArchiveId(archiveId) ?? null;
-        if (!file && originalUrl) {
-          const byUrl = this.deps.archiveLookupService?.findByOriginalUrl(originalUrl) ?? [];
-          if (byUrl.length === 1) {
-            file = byUrl[0] ?? null;
-          }
-        }
-        if (!file) return;
-
-        try {
-          await this.deps.app.fileManager.trashFile(file);
-          new Notice(`Archive deleted: ${file.basename}`, 3000);
-          console.debug('[Social Archiver] Vault file trashed:', file.path);
-        } catch (err) {
-          console.error(
-            '[Social Archiver] Failed to trash vault file:',
-            file.path,
-            err instanceof Error ? err.message : String(err),
-          );
+        // Delegate to ArchiveDeleteSyncService for proper loop-guard and feature-flag handling
+        if (this.deps.archiveDeleteSyncService) {
+          void this.deps.archiveDeleteSyncService.handleInboundDelete(archiveId, originalUrl, 'ws');
         }
       }),
     );

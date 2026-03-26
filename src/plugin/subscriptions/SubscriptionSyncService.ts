@@ -29,6 +29,19 @@ import type { WsProfileMetadataMessage } from '../realtime/RealtimeEventBridge';
 // ============================================================================
 
 /**
+ * Detailed result from saving a single subscription post to vault.
+ * Allows callers to distinguish between newly created files, already-existing
+ * files, skipped posts, and failures — enabling precise dedup and lookup index
+ * updates within the same sync run.
+ */
+export interface SavePendingPostResult {
+  status: 'created' | 'existing' | 'skipped' | 'failed';
+  file?: TFile;
+  path?: string;
+  reason?: string;
+}
+
+/**
  * Dependencies injected into SubscriptionSyncService.
  * Each dependency represents a capability the service needs from the plugin.
  */
@@ -146,6 +159,19 @@ export class SubscriptionSyncService {
   /**
    * Save a single subscription post to vault.
    *
+   * Thin wrapper around `saveSubscriptionPostDetailed` that returns a boolean
+   * for compatibility with the existing `syncPendingPosts` callback signature.
+   *
+   * @returns true if the post was saved or already exists, false on failure
+   */
+  async saveSubscriptionPost(pendingPost: PendingPost): Promise<boolean> {
+    const result = await this.saveSubscriptionPostDetailed(pendingPost);
+    return result.status !== 'failed';
+  }
+
+  /**
+   * Save a single subscription post to vault with detailed result.
+   *
    * Handles:
    * - VaultStorageService and MediaHandler dynamic imports
    * - Webtoon series path generation
@@ -155,9 +181,9 @@ export class SubscriptionSyncService {
    * - External link preview image downloads
    * - Quoted post media downloads
    *
-   * @returns true if the post was saved (or already exists), false on failure
+   * @returns SavePendingPostResult describing the outcome in detail
    */
-  async saveSubscriptionPost(pendingPost: PendingPost): Promise<boolean> {
+  async saveSubscriptionPostDetailed(pendingPost: PendingPost): Promise<SavePendingPostResult> {
     try {
       const { VaultStorageService } = await import('../../services/VaultStorageService');
       const { MediaHandler } = await import('../../services/MediaHandler');
@@ -165,8 +191,9 @@ export class SubscriptionSyncService {
       const post = pendingPost.post;
 
       const rawAuthorName = post.author?.name || post.author?.handle || '';
-      if (!rawAuthorName || rawAuthorName.toLowerCase() === 'unknown') {
-        return true;
+      // Skip unknown author — but allow composed posts (platform: 'post') which are self-authored
+      if ((!rawAuthorName || rawAuthorName.toLowerCase() === 'unknown') && post.platform !== 'post') {
+        return { status: 'skipped', reason: 'unknown author' };
       }
 
       let title = '';
@@ -212,7 +239,7 @@ export class SubscriptionSyncService {
 
       const existingFile = this.app.vault.getAbstractFileByPath(targetFilePath);
       if (existingFile) {
-        return true;
+        return { status: 'existing', path: targetFilePath };
       }
 
       let mediaResults: import('../../services/MediaHandler').MediaResult[] | undefined;
@@ -452,13 +479,13 @@ export class SubscriptionSyncService {
 
       if (saveResult.path) {
         this.deps.refreshTimelineView();
-        return true;
+        return { status: 'created', file: saveResult.file, path: saveResult.path };
       }
 
-      return false;
+      return { status: 'failed', reason: 'save returned no path' };
     } catch (error) {
-      console.error('[Social Archiver] saveSubscriptionPost error:', error);
-      return false;
+      console.error('[Social Archiver] saveSubscriptionPostDetailed error:', error);
+      return { status: 'failed', reason: error instanceof Error ? error.message : String(error) };
     }
   }
 

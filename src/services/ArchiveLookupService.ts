@@ -8,7 +8,8 @@
  * Single Responsibility: Archive file lookup by stable identifiers
  */
 
-import { type App, type CachedMetadata, type EventRef, TFile } from 'obsidian';
+import { type App, type CachedMetadata, type EventRef, type MetadataCache, TFile } from 'obsidian';
+import type { ArchiveFileIdentity } from '../plugin/sync/ArchiveDeleteSyncService';
 import type { IService } from './base/IService';
 
 // ============================================================================
@@ -60,6 +61,8 @@ interface ArchiveIndex {
   bySourceArchiveId: Map<string, TFile>;
   /** normalized originalUrl -> TFile[] (may have multiple if re-archived) */
   byOriginalUrl: Map<string, TFile[]>;
+  /** file path -> ArchiveFileIdentity (for delete sync) */
+  byPath: Map<string, ArchiveFileIdentity>;
   /** Set of file paths already in index (for tracking deletions/renames) */
   indexedPaths: Set<string>;
   built: boolean;
@@ -85,10 +88,15 @@ export class ArchiveLookupService implements IService {
   private readonly index: ArchiveIndex = {
     bySourceArchiveId: new Map(),
     byOriginalUrl: new Map(),
+    byPath: new Map(),
     indexedPaths: new Set(),
     built: false,
   };
   private changedEventRef: EventRef | null = null;
+  private renameEventRef: EventRef | null = null;
+  private deleteEventRef: EventRef | null = null;
+  private resolvedEventRef: EventRef | null = null;
+  private deleteHandlers: Set<(identity: ArchiveFileIdentity) => void> = new Set();
 
   constructor(app: App) {
     this.app = app;
@@ -99,8 +107,24 @@ export class ArchiveLookupService implements IService {
   // --------------------------------------------------------------------------
 
   initialize(): void {
+    // Build the index after MetadataCache has finished parsing all files.
+    // At plugin load time, getFileCache() may return null because the cache
+    // isn't populated yet. The `resolved` event fires once all pending
+    // metadata parsing is complete — file deletions by the user can only
+    // happen after the workspace is ready, which is well after `resolved`.
+    if ((this.app.metadataCache as MetadataCache & { resolved?: boolean }).resolved) {
+      this.ensureIndexBuilt();
+    } else {
+      this.resolvedEventRef = this.app.metadataCache.on('resolved', () => {
+        this.ensureIndexBuilt();
+        if (this.resolvedEventRef) {
+          this.app.metadataCache.offref(this.resolvedEventRef);
+          this.resolvedEventRef = null;
+        }
+      });
+    }
+
     // Register MetadataCache `changed` listener for incremental index updates.
-    // The index itself is built lazily on first lookup to avoid blocking plugin load.
     this.changedEventRef = this.app.metadataCache.on(
       'changed',
       (file: TFile, _data: string, cache: CachedMetadata) => {
@@ -109,6 +133,43 @@ export class ArchiveLookupService implements IService {
         this.updateIndexForFile(file, cache);
       }
     );
+
+    // Track renames so byPath stays consistent (key = file.path)
+    this.renameEventRef = this.app.vault.on('rename', (file, oldPath) => {
+      if (!this.index.built) return;
+      if (!(file instanceof TFile)) return;
+
+      const identity = this.index.byPath.get(oldPath);
+      if (identity) {
+        this.index.byPath.delete(oldPath);
+        identity.path = file.path;
+        this.index.byPath.set(file.path, identity);
+
+        // Update indexedPaths
+        this.index.indexedPaths.delete(oldPath);
+        this.index.indexedPaths.add(file.path);
+      }
+    });
+
+    // Emit identity to subscribers BEFORE pruning the index on vault delete
+    this.deleteEventRef = this.app.vault.on('delete', (file) => {
+      if (!this.index.built) return;
+      if (!(file instanceof TFile)) return;
+
+      const identity = this.index.byPath.get(file.path);
+      if (identity) {
+        // Emit to subscribers BEFORE pruning the index
+        for (const handler of this.deleteHandlers) {
+          try {
+            handler(identity);
+          } catch (e) {
+            console.error('[Social Archiver] [ArchiveLookup] Delete handler error', e);
+          }
+        }
+        // Now prune the index
+        this.removeFileFromIndex(file.path);
+      }
+    });
   }
 
   dispose(): void {
@@ -128,11 +189,25 @@ export class ArchiveLookupService implements IService {
       this.app.metadataCache.offref(this.changedEventRef);
       this.changedEventRef = null;
     }
+    if (this.renameEventRef !== null) {
+      this.app.vault.offref(this.renameEventRef);
+      this.renameEventRef = null;
+    }
+    if (this.deleteEventRef !== null) {
+      this.app.vault.offref(this.deleteEventRef);
+      this.deleteEventRef = null;
+    }
+    if (this.resolvedEventRef !== null) {
+      this.app.metadataCache.offref(this.resolvedEventRef);
+      this.resolvedEventRef = null;
+    }
     // Clear index memory
     this.index.bySourceArchiveId.clear();
     this.index.byOriginalUrl.clear();
+    this.index.byPath.clear();
     this.index.indexedPaths.clear();
     this.index.built = false;
+    this.deleteHandlers.clear();
   }
 
   // --------------------------------------------------------------------------
@@ -169,6 +244,28 @@ export class ArchiveLookupService implements IService {
   }
 
   /**
+   * Find vault file by `clientPostId` frontmatter field.
+   *
+   * This is a fallback lookup for composed posts during the race window where
+   * sourceArchiveId hasn't been written yet. Uses a linear scan of MetadataCache
+   * since clientPostId is not indexed — acceptable because this is only called
+   * for archive_source='composed' posts (rare).
+   *
+   * Complexity: O(N) where N is vault file count — use sparingly.
+   */
+  findByClientPostId(clientPostId: string): TFile | null {
+    if (!clientPostId) return null;
+    const files = this.app.vault.getMarkdownFiles();
+    for (const file of files) {
+      const cache = this.app.metadataCache.getFileCache(file);
+      if (cache?.frontmatter?.clientPostId === clientPostId) {
+        return file;
+      }
+    }
+    return null;
+  }
+
+  /**
    * Write `sourceArchiveId` into a file's frontmatter.
    *
    * Used to backfill the stable identifier on first successful annotation sync,
@@ -187,6 +284,77 @@ export class ArchiveLookupService implements IService {
     if (this.index.built) {
       this.index.bySourceArchiveId.set(archiveId, file);
     }
+  }
+
+  /**
+   * Immediately register a newly-saved file in the lookup index.
+   *
+   * Called after vault write so the same sync run can detect it as existing
+   * on subsequent pages without waiting for MetadataCache to fire `changed`.
+   * This is critical when processing 500 archives in one run: items saved on
+   * page 1 must be discoverable by dedup checks on page 2.
+   *
+   * Works regardless of whether the index has been built yet — if the index
+   * has not been built, the registration still ensures the file is available
+   * immediately once the index is initialized via the regular lazy build.
+   */
+  indexSavedFile(file: TFile, data: { sourceArchiveId?: string; originalUrl?: string }): void {
+    // Ensure the index is in a state where we can write into it.
+    // If the index hasn't been built yet, build it first so that the maps are
+    // populated and our new entry is consistent with the rest of the vault.
+    this.ensureIndexBuilt();
+
+    // Always track the file path
+    this.index.indexedPaths.add(file.path);
+
+    // Register by sourceArchiveId (stable 1:1 mapping)
+    if (data.sourceArchiveId && data.sourceArchiveId.length > 0) {
+      this.index.bySourceArchiveId.set(data.sourceArchiveId, file);
+      this.index.byPath.set(file.path, {
+        path: file.path,
+        archiveId: data.sourceArchiveId,
+        originalUrl: data.originalUrl,
+      });
+    }
+
+    // Register by normalized originalUrl (many-to-one mapping)
+    if (data.originalUrl && data.originalUrl.length > 0) {
+      const normalized = normalizeUrl(data.originalUrl);
+      const existing = this.index.byOriginalUrl.get(normalized);
+      if (existing) {
+        // Avoid duplicate TFile references for the same path
+        if (!existing.some((f) => f.path === file.path)) {
+          existing.push(file);
+        }
+      } else {
+        this.index.byOriginalUrl.set(normalized, [file]);
+      }
+    }
+  }
+
+  /**
+   * Return the ArchiveFileIdentity for a vault file by its path.
+   *
+   * Only files whose frontmatter contains a `sourceArchiveId` are tracked in
+   * the `byPath` index.  Returns `null` when the path is not indexed.
+   *
+   * Complexity: O(1) after index is built.
+   */
+  getIdentityByPath(filePath: string): ArchiveFileIdentity | null {
+    this.ensureIndexBuilt();
+    return this.index.byPath.get(filePath) ?? null;
+  }
+
+  /**
+   * Subscribe to archive file deletion events.
+   * The handler receives the ArchiveFileIdentity of the deleted file
+   * BEFORE the index is pruned, so the archiveId is still available.
+   *
+   * @returns An unsubscribe function.
+   */
+  onArchivedFileDeleted(handler: (identity: ArchiveFileIdentity) => void): () => void {
+    this.deleteHandlers.add(handler);
+    return () => { this.deleteHandlers.delete(handler); };
   }
 
   // --------------------------------------------------------------------------
@@ -236,12 +404,17 @@ export class ArchiveLookupService implements IService {
 
     // Index by sourceArchiveId (stable 1:1 mapping)
     const archiveId: unknown = fm.sourceArchiveId;
+    const originalUrl: unknown = fm.originalUrl;
     if (typeof archiveId === 'string' && archiveId.length > 0) {
       this.index.bySourceArchiveId.set(archiveId, file);
+      this.index.byPath.set(file.path, {
+        path: file.path,
+        archiveId,
+        originalUrl: typeof originalUrl === 'string' ? originalUrl : undefined,
+      });
     }
 
     // Index by normalised originalUrl (may be many-to-one)
-    const originalUrl: unknown = fm.originalUrl;
     if (typeof originalUrl === 'string' && originalUrl.length > 0) {
       const normalized = normalizeUrl(originalUrl);
       const existing = this.index.byOriginalUrl.get(normalized);
@@ -263,6 +436,7 @@ export class ArchiveLookupService implements IService {
   private removeFileFromIndex(filePath: string): void {
     if (!this.index.indexedPaths.has(filePath)) return;
     this.index.indexedPaths.delete(filePath);
+    this.index.byPath.delete(filePath);
 
     // Remove from sourceArchiveId index
     for (const [archiveId, file] of this.index.bySourceArchiveId) {

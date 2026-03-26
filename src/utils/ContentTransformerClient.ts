@@ -158,6 +158,158 @@ export class ContentTransformerClient {
     return matches.map((m) => m.trim().substring(1));
   }
 
+  // ─── Thread delimiter detection ──────────────────────────────────────────
+
+  /** Matches a line containing only dashes (2+), underscores (3+), or asterisks (3+). */
+  private static readonly THREAD_DELIMITER_RE = /^(-{2,}|_{3,}|\*{3,})\s*$/;
+
+  /**
+   * Split raw markdown by user-defined thread delimiter lines (-- / --- / ___ / ***).
+   * Returns null if no delimiters are found or fewer than 2 non-empty segments result.
+   */
+  static splitByUserDelimiters(rawMarkdown: string): string[] | null {
+    // No 'm' flag — only match frontmatter at document start
+    const text = rawMarkdown.replace(/^---[\s\S]*?---\n?/, '');
+
+    const lines = text.split('\n');
+    let hasDelimiter = false;
+    const segments: string[] = [];
+    let currentLines: string[] = [];
+
+    for (const line of lines) {
+      if (this.THREAD_DELIMITER_RE.test(line)) {
+        hasDelimiter = true;
+        const segText = currentLines.join('\n').trim();
+        if (segText) segments.push(segText);
+        currentLines = [];
+      } else {
+        currentLines.push(line);
+      }
+    }
+
+    const lastSeg = currentLines.join('\n').trim();
+    if (lastSeg) segments.push(lastSeg);
+
+    if (!hasDelimiter || segments.length < 2) {
+      return null;
+    }
+
+    return segments;
+  }
+
+  /**
+   * Split text for thread posting, honoring user-defined delimiters.
+   *
+   * Delimiter lines (-- / ---) are treated as explicit thread break points.
+   * Each segment is stripped of markdown and, if still over maxChars,
+   * sub-split using paragraph/sentence boundaries.
+   *
+   * Falls back to paragraph-based splitting when no delimiters are found.
+   */
+  static splitForThread(
+    rawMarkdown: string,
+    maxChars: number,
+    maxChunks: number
+  ): string[] {
+    const delimiterSegments = this.splitByUserDelimiters(rawMarkdown);
+
+    if (delimiterSegments) {
+      const allChunks: string[] = [];
+
+      for (const rawSegment of delimiterSegments) {
+        if (allChunks.length >= maxChunks) break;
+
+        const stripped = this.stripMarkdown(rawSegment);
+        if (!stripped) continue;
+
+        if (stripped.length <= maxChars) {
+          allChunks.push(stripped);
+        } else {
+          // Sub-split oversized segment at sentence/word boundaries
+          const remaining = maxChunks - allChunks.length;
+          const subChunks = this.splitIntoChunks(stripped, maxChars, remaining);
+          allChunks.push(...subChunks);
+        }
+      }
+
+      return allChunks.length > 0 ? allChunks : [this.stripMarkdown(rawMarkdown)];
+    }
+
+    const stripped = this.stripMarkdown(rawMarkdown);
+    if (stripped.length <= maxChars) {
+      return [stripped];
+    }
+
+    return this.splitIntoChunks(stripped, maxChars, maxChunks);
+  }
+
+  /**
+   * Split text into chunks that fit within maxChars, preserving paragraph
+   * and line-break structure. Returns at most maxChunks pieces.
+   */
+  static splitIntoChunks(
+    text: string,
+    maxChars: number,
+    maxChunks: number
+  ): string[] {
+    if (text.length <= maxChars) {
+      return [text];
+    }
+
+    const paragraphs = text.split(/\n\n/).map((p) => p.trim()).filter((p) => p.length > 0);
+    const chunks: string[] = [];
+    let currentChunk = '';
+
+    for (const paragraph of paragraphs) {
+      if (chunks.length >= maxChunks) break;
+
+      const combined = currentChunk
+        ? currentChunk + '\n\n' + paragraph
+        : paragraph;
+
+      if (combined.length <= maxChars) {
+        currentChunk = combined;
+        continue;
+      }
+
+      if (currentChunk) {
+        chunks.push(currentChunk);
+        if (chunks.length >= maxChunks) break;
+        currentChunk = '';
+      }
+
+      if (paragraph.length <= maxChars) {
+        currentChunk = paragraph;
+        continue;
+      }
+
+      // Paragraph exceeds limit — split at sentence/word boundaries
+      let remaining = paragraph;
+      while (remaining.length > 0 && chunks.length < maxChunks) {
+        if (remaining.length <= maxChars) {
+          currentChunk = remaining;
+          remaining = '';
+          break;
+        }
+        const slice = remaining.substring(0, maxChars);
+        const lastSpace = slice.lastIndexOf(' ');
+        if (lastSpace > maxChars * 0.3) {
+          chunks.push(slice.substring(0, lastSpace).trimEnd());
+          remaining = remaining.substring(lastSpace).trimStart();
+        } else {
+          chunks.push(slice.trimEnd());
+          remaining = remaining.substring(maxChars).trimStart();
+        }
+      }
+    }
+
+    if (currentChunk && chunks.length < maxChunks) {
+      chunks.push(currentChunk);
+    }
+
+    return chunks;
+  }
+
   /**
    * Separate the first URL as a link attachment for Threads.
    * Removes it from the text body to avoid duplication.

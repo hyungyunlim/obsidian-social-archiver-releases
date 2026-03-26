@@ -6,6 +6,10 @@ import { App, setIcon, Platform as ObsidianPlatform, Component, TFile } from 'ob
 import type { LinkPreviewRenderer } from './LinkPreviewRenderer';
 import { createSVGElement } from '../../../utils/dom-helpers';
 import { maybeProxyCdnUrl } from '../../../utils/cdnProxy';
+import {
+  type SubscriptionLookupMap,
+  findSubscriptionMatch,
+} from '../../../utils/subscription-matcher';
 
 /**
  * CompactPostCardRenderer - Renders simplified post cards for additional embedded archives
@@ -23,6 +27,8 @@ export class CompactPostCardRenderer extends Component {
   private app?: App; // Obsidian App for resource path conversion
   private linkPreviewRenderer?: LinkPreviewRenderer;
   private parentPost?: PostData; // Parent post for self-boost avatar lookup
+  // Subscription lookup for passive indicator (set by PostCardRenderer)
+  private subscriptionLookup?: SubscriptionLookupMap;
 
   /**
    * Extract plain text from markdown (remove link syntax but keep link text)
@@ -59,6 +65,14 @@ export class CompactPostCardRenderer extends Component {
    */
   public setParentPost(parent: PostData): void {
     this.parentPost = parent;
+  }
+
+  /**
+   * Set subscription lookup for passive subscription indicator
+   * Called by PostCardRenderer after building the lookup from API data
+   */
+  public setSubscriptionLookup(lookup: SubscriptionLookupMap): void {
+    this.subscriptionLookup = lookup;
   }
 
   /**
@@ -242,6 +256,9 @@ export class CompactPostCardRenderer extends Component {
     // Mobile: use smaller font size (11px) for author name
     authorName.addClass(ObsidianPlatform.isMobile ? 'cpcr-author-name--mobile' : 'cpcr-author-name--desktop');
 
+    // Subscription indicator (passive, icon-only) — shown when the post author is subscribed
+    this.maybeRenderSubscriptionIndicator(headerRow, post);
+
     // Content preview
     // For YouTube: show title in bold + description preview
     // For others: show content text
@@ -370,6 +387,37 @@ export class CompactPostCardRenderer extends Component {
     }
 
     return wrapper;
+  }
+
+  /**
+   * Render a small passive subscription indicator icon after the author name.
+   * Only shown when this post's author is matched in the subscription lookup.
+   * Indicator-only — no click action (use PostCardRenderer's full badge for that).
+   */
+  private maybeRenderSubscriptionIndicator(container: HTMLElement, post: PostData): void {
+    if (!this.subscriptionLookup) return;
+    if (!post.author.url || post.platform === 'post') return;
+
+    const isSubscribed = findSubscriptionMatch(this.subscriptionLookup, {
+      platform: post.platform,
+      authorUrl: post.author.url,
+      handle: post.author.handle,
+    });
+
+    if (!isSubscribed) return;
+
+    const indicator = container.createSpan({ cls: 'cpcr-subscription-indicator' });
+    indicator.setAttribute('aria-label', 'Subscribed author');
+    indicator.setAttribute('title', 'Subscribed author');
+    indicator.setCssStyles({
+      display: 'inline-flex',
+      alignItems: 'center',
+      flexShrink: '0',
+      color: 'var(--color-green)',
+    });
+
+    // Inline RSS/broadcast icon (10×10px) — consistent with subscription semantics
+    indicator.innerHTML = `<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="currentColor" stroke="none"/></svg>`;
   }
 
   /**

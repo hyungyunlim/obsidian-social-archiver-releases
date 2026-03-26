@@ -138,6 +138,7 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
     platform,
     id: archive.postId,
     url: archive.originalUrl,
+    sourceArchiveId: archive.id,
     ...(archive.title ? { title: archive.title } : {}),
     author: {
       name: archive.authorName || 'Unknown',

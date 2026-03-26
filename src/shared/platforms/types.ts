@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/types.ts
- * Generated: 2026-03-23T10:36:10.944Z
+ * Generated: 2026-03-26T13:48:45.950Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -259,6 +259,7 @@ export const MOBILE_PLATFORMS = [
   'bluesky',
   'mastodon',
   'web',
+  'post',
 ] as const;
 
 export type MobilePlatform = typeof MOBILE_PLATFORMS[number];
@@ -277,6 +278,7 @@ export const MOBILE_PLATFORM_INFO: Record<MobilePlatform, { name: string; placeh
   bluesky: { name: 'Bluesky', placeholder: 'Bluesky post' },
   mastodon: { name: 'Mastodon', placeholder: 'Mastodon post' },
   web: { name: 'Web Article', placeholder: 'Web page or article URL' },
+  post: { name: 'My Post', placeholder: 'Your composed post' },
 };
 
 // ============================================================================
