@@ -2462,7 +2462,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           });
       });
 
-    // Hide Supertonic option on mobile (FR-07 AC: Desktop이 아니면 Supertonic UI 숨김)
+    // Hide Supertonic option on mobile (FR-07 AC: hide Supertonic UI on non-desktop)
     if (!Platform.isDesktop && this.plugin.settings.tts.provider === 'supertonic') {
       this.plugin.settings.tts.provider = 'azure';
       void this.plugin.saveSettings();

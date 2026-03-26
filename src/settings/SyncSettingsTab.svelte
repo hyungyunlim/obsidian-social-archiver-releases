@@ -273,7 +273,7 @@ async function handleRetryPendingDeletes() {
       <div class="library-sync-header">
         <div class="library-sync-title">Archive Library Sync</div>
         <div class="library-sync-description">
-          서버 계정에 이미 있는 archive를 vault와 맞춥니다. 기존 note는 건너뜁니다.
+          Syncs existing archives from your server account into the vault. Already-saved notes are skipped.
         </div>
       </div>
 

@@ -85,7 +85,7 @@ function startCrossDeviceTimers(sessionId: string, expiresAt: string, pollMs: nu
         const authToken = result.data.authToken;
         if (!authToken) {
           crossDeviceState = 'error';
-          crossDeviceError = '인증 토큰을 받지 못했습니다.';
+          crossDeviceError = 'Failed to receive auth token.';
           return;
         }
         // Complete authentication using existing utility
@@ -105,7 +105,7 @@ function startCrossDeviceTimers(sessionId: string, expiresAt: string, pollMs: nu
           }
         } else {
           crossDeviceState = 'error';
-          crossDeviceError = completion.error || '인증 완료에 실패했습니다.';
+          crossDeviceError = completion.error || 'Authentication failed.';
           showAuthError(crossDeviceError);
         }
       } else if (status === 'rejected') {
@@ -136,7 +136,7 @@ async function handleStartCrossDeviceAuth(): Promise<void> {
 
   if (!result.success || !result.data) {
     crossDeviceState = 'error';
-    crossDeviceError = result.error?.message || '세션을 시작할 수 없습니다.';
+    crossDeviceError = result.error?.message || 'Unable to start session.';
     return;
   }
 
@@ -535,7 +535,7 @@ function getPlatformDisplayName(platform: string): string {
 
         <!-- Cross-Device Auth Divider -->
         <div class="xdev-divider">
-          <span class="xdev-divider-text">또는</span>
+          <span class="xdev-divider-text">or</span>
         </div>
 
         <!-- Cross-Device Auth Section -->
@@ -547,13 +547,13 @@ function getPlatformDisplayName(platform: string): string {
                 onclick={handleStartCrossDeviceAuth}
                 disabled={isSubmitting}
               >
-                모바일 앱으로 로그인
+                Log in with mobile app
               </button>
             </div>
           </div>
         {:else if crossDeviceState === 'loading'}
           <div class="xdev-section">
-            <p class="xdev-hint">세션을 시작하는 중...</p>
+            <p class="xdev-hint">Starting session...</p>
           </div>
         {:else if crossDeviceState === 'code-shown'}
           <div class="xdev-section">
@@ -561,48 +561,48 @@ function getPlatformDisplayName(platform: string): string {
               <div class="xdev-qr-container">
                 {@html crossDeviceQrSvg}
               </div>
-              <p class="xdev-instruction">모바일 앱에서 QR을 스캔하거나 코드를 입력하세요</p>
+              <p class="xdev-instruction">Scan the QR code or enter the code in the mobile app</p>
             {:else}
-              <p class="xdev-instruction">모바일 앱에서 이 코드를 입력하세요</p>
+              <p class="xdev-instruction">Enter this code in the mobile app</p>
             {/if}
             <div class="xdev-code-display">{crossDeviceDisplayCode}</div>
             <p class="xdev-timer">
               {#if crossDeviceSecondsLeft > 0}
-                {Math.floor(crossDeviceSecondsLeft / 60)}:{String(crossDeviceSecondsLeft % 60).padStart(2, '0')} 후 만료
+                Expires in {Math.floor(crossDeviceSecondsLeft / 60)}:{String(crossDeviceSecondsLeft % 60).padStart(2, '0')}
               {:else}
-                만료됨
+                Expired
               {/if}
             </p>
             <div class="xdev-actions">
-              <button onclick={handleCancelCrossDevice}>취소</button>
+              <button onclick={handleCancelCrossDevice}>Cancel</button>
             </div>
           </div>
         {:else if crossDeviceState === 'approved'}
           <div class="xdev-section xdev-success">
-            <p>모바일 앱으로 로그인 완료!</p>
+            <p>Logged in with mobile app!</p>
           </div>
         {:else if crossDeviceState === 'rejected'}
           <div class="xdev-section xdev-error">
-            <p>모바일에서 거부됨</p>
+            <p>Rejected from mobile</p>
             <div class="xdev-actions">
-              <button onclick={handleStartCrossDeviceAuth}>다시 시도</button>
-              <button onclick={handleCancelCrossDevice}>취소</button>
+              <button onclick={handleStartCrossDeviceAuth}>Try again</button>
+              <button onclick={handleCancelCrossDevice}>Cancel</button>
             </div>
           </div>
         {:else if crossDeviceState === 'expired'}
           <div class="xdev-section xdev-error">
-            <p>코드가 만료되었습니다</p>
+            <p>Code has expired</p>
             <div class="xdev-actions">
-              <button onclick={handleStartCrossDeviceAuth}>새 코드 생성</button>
-              <button onclick={handleCancelCrossDevice}>취소</button>
+              <button onclick={handleStartCrossDeviceAuth}>Generate new code</button>
+              <button onclick={handleCancelCrossDevice}>Cancel</button>
             </div>
           </div>
         {:else if crossDeviceState === 'error'}
           <div class="xdev-section xdev-error">
-            <p>{crossDeviceError || '오류가 발생했습니다.'}</p>
+            <p>{crossDeviceError || 'An error occurred.'}</p>
             <div class="xdev-actions">
-              <button onclick={handleStartCrossDeviceAuth}>다시 시도</button>
-              <button onclick={handleCancelCrossDevice}>취소</button>
+              <button onclick={handleStartCrossDeviceAuth}>Try again</button>
+              <button onclick={handleCancelCrossDevice}>Cancel</button>
             </div>
           </div>
         {/if}
