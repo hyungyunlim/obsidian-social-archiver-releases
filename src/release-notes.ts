@@ -33,6 +33,7 @@ Archives, deletes, and composed posts now sync in realtime across Obsidian, mobi
 
 - **Mobile app v1.3.3 required** for realtime sync — please update to the latest version
 - Previously plugin-only deleted archives may reappear once from the server; simply delete again and it will sync properly
+- Older archives with expired CDN media links may sync without images or with broken media
 - Delete sync can be toggled independently (outbound/inbound) in Settings > Sync
 
 ## Crosspost & Threads
