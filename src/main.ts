@@ -62,6 +62,8 @@ import { ArchiveLibrarySyncService } from './plugin/sync/ArchiveLibrarySyncServi
 import { ArchiveDeleteSyncService } from './plugin/sync/ArchiveDeleteSyncService';
 import { AnnotationOutboundService } from './plugin/sync/AnnotationOutboundService';
 import { ArchiveTagOutboundService } from './plugin/sync/ArchiveTagOutboundService';
+import { ArchiveStateSyncService } from './plugin/sync/ArchiveStateSyncService';
+import { ArchiveStateOutboundService } from './plugin/sync/ArchiveStateOutboundService';
 
 // Import styles for Vite to process
 import './styles/index.css';
@@ -101,6 +103,8 @@ export default class SocialArchiverPlugin extends Plugin {
   private annotationSyncService?: AnnotationSyncService; // Mobile annotation sync orchestrator
   public annotationOutboundService?: AnnotationOutboundService; // Outbound comment → server sync
   private archiveTagOutboundService?: ArchiveTagOutboundService; // Outbound archiveTags → server sync
+  private archiveStateSyncService?: ArchiveStateSyncService; // Inbound isBookmarked → fm.archive sync
+  private archiveStateOutboundService?: ArchiveStateOutboundService; // Outbound fm.archive → server isBookmarked sync
 
   // Extracted module instances
   private realtimeEventBridge?: RealtimeEventBridge;
@@ -432,6 +436,9 @@ export default class SocialArchiverPlugin extends Plugin {
     this.annotationOutboundService = undefined;
     this.archiveTagOutboundService?.stop();
     this.archiveTagOutboundService = undefined;
+    this.archiveStateOutboundService?.stop();
+    this.archiveStateOutboundService = undefined;
+    this.archiveStateSyncService = undefined;
     this.archiveLookupService?.destroy();
     this.archiveLookupService = undefined;
     this.annotationSyncService = undefined;
@@ -626,6 +633,33 @@ export default class SocialArchiverPlugin extends Plugin {
       );
       this.archiveTagOutboundService.start();
 
+      // Initialize ArchiveStateSyncService (syncs inbound isBookmarked → fm.archive)
+      this.archiveStateSyncService = new ArchiveStateSyncService(
+        this.app,
+        this.apiClient,
+        this.archiveLookupService,
+        () => this.settings,
+      );
+
+      // Initialize ArchiveStateOutboundService (syncs fm.archive edits → server isBookmarked)
+      this.archiveStateOutboundService?.stop();
+      this.archiveStateOutboundService = new ArchiveStateOutboundService(
+        this.app,
+        this.apiClient,
+        this.archiveLookupService,
+        () => this.settings,
+      );
+      this.archiveStateOutboundService.start();
+
+      // Wire suppression: inbound sync notifies outbound service before writing
+      // so the MetadataCache.changed echo is ignored by ArchiveStateOutboundService.
+      this.archiveStateSyncService.onBeforeInboundWrite = (archiveId: string) => {
+        this.archiveStateOutboundService?.addSuppression(archiveId);
+      };
+      this.archiveStateSyncService.onAfterInboundWrite = () => {
+        this.refreshTimelineView();
+      };
+
       // Restore active jobs from previous session
       const allPendingJobs = await this.pendingJobsManager.getJobs();
       const activeProfileCrawls = allPendingJobs.filter(
@@ -805,6 +839,9 @@ export default class SocialArchiverPlugin extends Plugin {
             await this.archiveDeleteSyncService?.handleInboundDelete(id, undefined, source);
           }
         },
+        reconcileArchiveState: (file, archiveId, isBookmarked) =>
+          this.archiveStateSyncService?.reconcileFromLibrarySync(file, archiveId, isBookmarked) ??
+          Promise.resolve(),
       });
 
       // Create ArchiveDeleteSyncService
@@ -899,6 +936,7 @@ export default class SocialArchiverPlugin extends Plugin {
           subscriptionManager: this.subscriptionManager,
           archiveLookupService: this.archiveLookupService,
           annotationSyncService: this.annotationSyncService,
+          archiveStateSyncService: this.archiveStateSyncService,
           archiveDeleteSyncService: this.archiveDeleteSyncService ?? undefined,
           archiveTagOutboundService: this.archiveTagOutboundService,
           app: this.app,

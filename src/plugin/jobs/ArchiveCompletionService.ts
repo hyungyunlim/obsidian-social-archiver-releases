@@ -658,6 +658,8 @@ export class ArchiveCompletionService {
               type: media.type,
               size: stat?.size || 0,
               file: existingFile,
+              sourceIndex: i,
+              fallbackKind: 'none',
             });
           } else {
             let arrayBuffer: ArrayBuffer;
@@ -713,6 +715,8 @@ export class ArchiveCompletionService {
                   type: media.type,
                   size: firstResult.size || 0,
                   file: firstResult.file,
+                  sourceIndex: i,
+                  fallbackKind: 'none',
                 });
               } else {
                 throw new Error('Naver video download failed');
@@ -753,6 +757,8 @@ export class ArchiveCompletionService {
               type: media.type,
               size: arrayBuffer.byteLength,
               file: file,
+              sourceIndex: i,
+              fallbackKind: 'none',
             });
           }
 

@@ -5,6 +5,25 @@ import { MediaPlaceholderGenerator, type MediaExpiredResult } from '../../MediaP
 import { encodePathForMarkdownLink } from '@/utils/url';
 
 /**
+ * Find a MediaResult by its sourceIndex (position in the original input array).
+ *
+ * This is the correct lookup when results may be a compressed subset of the
+ * original media array (partial failures remove some entries). Falling back to
+ * URL-matching is kept as a secondary safety net.
+ */
+export function findMediaResultBySourceIndex(
+  results: MediaResult[],
+  sourceIndex: number,
+  originalUrl?: string
+): MediaResult | undefined {
+  const byIndex = results.find(r => r.sourceIndex === sourceIndex);
+  if (byIndex) return byIndex;
+  // Secondary fallback: URL match (for callers that don't have a reliable sourceIndex)
+  if (originalUrl) return results.find(r => r.originalUrl === originalUrl);
+  return undefined;
+}
+
+/**
  * MediaFormatter - Format media items for markdown
  * Single Responsibility: Media (images, videos, audio) formatting
  */
@@ -19,13 +38,13 @@ export class MediaFormatter {
    * Format media items for markdown
    * @param media - Original media items from PostData
    * @param platform - Platform name
-   * @param originalUrl - Original post URL
+   * @param originalUrl - Original post URL (used as fallback link target for failed video downloads)
    * @param mediaResults - Downloaded media results (optional, if downloadMedia is enabled)
    */
   formatMedia(
     media: PostData['media'],
     platform: Platform,
-    _originalUrl: string,
+    originalUrl: string,
     mediaResults?: MediaResult[],
     expiredMedia?: MediaExpiredResult[]
   ): string {
@@ -48,8 +67,10 @@ export class MediaFormatter {
 
         // For videos on TikTok/YouTube platforms
         if (item.type === 'video' && isTikTokOrYouTube) {
-          // Try to find downloaded media by index first (more reliable), fallback to URL matching
-          const downloadedMedia = mediaResults?.[index] || mediaResults?.find(r => r.originalUrl === item.url);
+          // Use sourceIndex-based lookup first, fallback to URL matching
+          const downloadedMedia = mediaResults
+            ? findMediaResultBySourceIndex(mediaResults, index, item.url)
+            : undefined;
 
           // Use local path if downloaded, otherwise use original URL
           const mediaUrl = downloadedMedia?.localPath || item.url;
@@ -79,38 +100,31 @@ export class MediaFormatter {
           }
         }
 
-        // For other media types, require mediaResults
-        // Try to find downloaded media by index first (more reliable), fallback to URL matching
-        const downloadedMedia = mediaResults?.[index] || mediaResults?.find(r => r.originalUrl === item.url);
-        const mediaUrl = downloadedMedia?.localPath || null;
+        // For other media types, use sourceIndex-based lookup (R2.2 / R3.2)
+        const downloadedMedia = mediaResults
+          ? findMediaResultBySourceIndex(mediaResults, index, item.url)
+          : undefined;
 
         // If no local path and media is expired, generate placeholder
-        if (!mediaUrl) {
+        if (!downloadedMedia) {
           const expired = expiredMedia?.find(e => e.originalUrl === item.url);
           if (expired) {
             return MediaPlaceholderGenerator.generatePlaceholder(expired, index);
           }
-          // Non-ephemeral CDN: still use original URL as fallback
+          // No download result and not expired — fall through to remote URL rendering
         }
 
-        const resolvedUrl = mediaUrl || item.url;
-
         if (item.type === 'image') {
-          // Display image inline
+          const resolvedUrl = downloadedMedia?.localPath || item.url;
           return `![${this.escapeMarkdown(alt)}](${encodePathForMarkdownLink(resolvedUrl)})`;
         } else if (item.type === 'video') {
           const duration = item.duration ? ` (${this.dateNumberFormatter.formatDuration(item.duration)})` : '';
-          const isRemoteUrl = resolvedUrl.startsWith('http://') || resolvedUrl.startsWith('https://');
-          if (isRemoteUrl) {
-            // Remote video URLs: use clickable link (Obsidian can't render remote .mp4 via ![]() embed)
-            return `[🎥 Video${duration}](${resolvedUrl})`;
-          }
-          // Local vault path: use embed syntax (PostCardRenderer handles iframe rendering in timeline)
-          return `![🎥 Video${duration}](${encodePathForMarkdownLink(resolvedUrl)})`;
+          return this.renderVideo(item, downloadedMedia, duration, originalUrl);
         } else if (item.type === 'audio') {
           // For podcast audio, use Obsidian's native audio embed format
           // This renders as an audio player in both Reading and Live Preview modes
           const duration = item.duration ? ` (${this.dateNumberFormatter.formatDuration(item.duration)})` : '';
+          const resolvedUrl = downloadedMedia?.localPath || item.url;
           // Use ![[file]] format for local files, or embed link for external URLs
           if (!resolvedUrl.startsWith('http://') && !resolvedUrl.startsWith('https://')) {
             return `![[${resolvedUrl}]]`;
@@ -118,6 +132,7 @@ export class MediaFormatter {
           // External audio URL - use HTML audio tag (renders in both modes)
           return `<audio controls src="${resolvedUrl}"></audio>${duration ? `\n*Duration: ${duration.trim().replace(/[()]/g, '')}*` : ''}`;
         } else {
+          const resolvedUrl = downloadedMedia?.localPath || item.url;
           return `[📄 Document](${encodePathForMarkdownLink(resolvedUrl)})`;
         }
       })
@@ -125,6 +140,54 @@ export class MediaFormatter {
       .join('\n\n');
 
     return formattedMedia;
+  }
+
+  /**
+   * Render a video media item following R3.2 fallback rules:
+   * 1. Local video file → embed syntax
+   * 2. No local video, but local thumbnail → clickable thumbnail image linking to post URL
+   * 3. Neither → plain link to post URL
+   *
+   * @param item - Original media item (may carry a local thumbnail path in item.thumbnail)
+   * @param downloadedMedia - Download result (may be thumbnail-only fallback)
+   * @param durationSuffix - Pre-formatted duration string like " (1:23)"
+   * @param postUrl - Original post URL used as click target when no local video
+   */
+  renderVideo(
+    item: PostData['media'][number],
+    downloadedMedia: MediaResult | undefined,
+    durationSuffix: string,
+    postUrl: string
+  ): string {
+    if (downloadedMedia && downloadedMedia.fallbackKind !== 'thumbnail') {
+      // Case 1: local video file available
+      const localVideoPath = downloadedMedia.localPath;
+      return `![🎥 Video${durationSuffix}](${encodePathForMarkdownLink(localVideoPath)})`;
+    }
+
+    // Determine local thumbnail path:
+    // - from downloadedMedia when fallbackKind='thumbnail'
+    // - or from item.thumbnail if it was set by ArchiveOrchestrator/SubscriptionSyncService
+    const localThumbnailPath =
+      (downloadedMedia?.fallbackKind === 'thumbnail' ? downloadedMedia.localPath : undefined) ||
+      (item.thumbnail && !item.thumbnail.startsWith('http') ? item.thumbnail : undefined);
+
+    if (localThumbnailPath) {
+      // Case 2: clickable thumbnail linking to original post
+      const linkTarget = postUrl;
+      return `[![🎥 Video${durationSuffix}](${encodePathForMarkdownLink(localThumbnailPath)})](${linkTarget})`;
+    }
+
+    // Case 3: fallback link only
+    const fallbackUrl = item.url && (item.url.startsWith('http://') || item.url.startsWith('https://'))
+      ? item.url
+      : postUrl;
+    const isRemoteUrl = fallbackUrl.startsWith('http://') || fallbackUrl.startsWith('https://');
+    if (isRemoteUrl) {
+      return `[🎥 Video${durationSuffix}](${fallbackUrl})`;
+    }
+    // Local vault path (shouldn't happen for a failed video, but handle gracefully)
+    return `![🎥 Video${durationSuffix}](${encodePathForMarkdownLink(fallbackUrl)})`;
   }
 
   /**

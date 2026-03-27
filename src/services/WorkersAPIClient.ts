@@ -182,6 +182,7 @@ export interface UserArchive {
   articleMarkdown?: string | null;
   metadata: Record<string, unknown> | null;
   isLiked: boolean;
+  isBookmarked: boolean;
   isArchived: boolean;
   isShared: boolean;
   // Share URL (set when archive has an active share link)

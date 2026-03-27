@@ -1,4 +1,4 @@
-import { setIcon, Notice, Scope, TFile, TFolder, MarkdownRenderer, Component, Modal, Platform as ObsidianPlatform, requestUrl, type Vault, type App } from 'obsidian';
+import { setIcon, Notice, Scope, TFile, TFolder, MarkdownRenderer, Component, Modal, Menu, Platform as ObsidianPlatform, requestUrl, type Vault, type App } from 'obsidian';
 import type { PostData, Comment, PostMetadata, Platform } from '../../../types/post';
 import type SocialArchiverPlugin from '../../../main';
 import * as L from 'leaflet';
@@ -2817,33 +2817,27 @@ export class PostCardRenderer extends Component {
     // Spacer (always render to push action buttons to the right)
     interactions.createDiv({ cls: 'pcr-spacer' });
 
-    // Personal Like button (star icon, right-aligned)
-    this.renderPersonalLikeButton(interactions, post);
-
-    // Share button (right-aligned)
-    this.renderShareButton(interactions, post);
-
-    // Tag button (right-aligned)
-    if (!isEmbedded) {
-      this.renderTagButton(interactions, post, rootElement);
+    if (ObsidianPlatform.isMobile) {
+      // Mobile: show primary buttons inline, collapse rest into overflow menu
+      this.renderPersonalLikeButton(interactions, post);
+      this.renderArchiveButton(interactions, post, rootElement);
+      this.renderShareButton(interactions, post);
+      this.renderOverflowMenuButton(interactions, post, rootElement, isEmbedded);
+    } else {
+      // Desktop: show all buttons inline
+      this.renderPersonalLikeButton(interactions, post);
+      this.renderShareButton(interactions, post);
+      if (!isEmbedded) {
+        this.renderTagButton(interactions, post, rootElement);
+      }
+      this.renderArchiveButton(interactions, post, rootElement);
+      this.renderReaderModeButton(interactions, post);
+      this.renderOpenNoteButton(interactions, post);
+      if (post.platform === 'post') {
+        this.renderEditButton(interactions, post);
+      }
+      this.renderDeleteButton(interactions, post, rootElement);
     }
-
-    // Archive button (right-aligned)
-    this.renderArchiveButton(interactions, post, rootElement);
-
-    // Reader mode button (right-aligned)
-    this.renderReaderModeButton(interactions, post);
-
-    // Open Note button (right-aligned)
-    this.renderOpenNoteButton(interactions, post);
-
-    // Edit button (right-aligned, only for user posts)
-    if (post.platform === 'post') {
-      this.renderEditButton(interactions, post);
-    }
-
-    // Delete button (right-aligned)
-    this.renderDeleteButton(interactions, post, rootElement);
   }
 
   /**
@@ -3013,6 +3007,116 @@ export class PostCardRenderer extends Component {
     deleteBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       void this.deletePost(post, rootElement);
+    });
+  }
+
+  /**
+   * Render overflow "more" button for mobile that opens an Obsidian Menu
+   * with secondary action items (tag, reader mode, open note, edit, delete).
+   */
+  private renderOverflowMenuButton(parent: HTMLElement, post: PostData, rootElement: HTMLElement, isEmbedded: boolean): void {
+    const moreBtn = parent.createDiv({ cls: 'pcr-action-btn' });
+    moreBtn.setAttribute('title', 'More actions');
+
+    const moreIcon = moreBtn.createDiv({ cls: 'pcr-action-icon' });
+    setIcon(moreIcon, 'more-horizontal');
+
+    moreBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+
+      const menu = new Menu();
+
+      // Tag button (not shown for embedded posts)
+      if (!isEmbedded) {
+        const filePath = post.filePath;
+        const tagStore = this.plugin.tagStore;
+        if (filePath && tagStore) {
+          const hasTags = (post.tags?.length ?? 0) > 0;
+          menu.addItem((item) => {
+            item
+              .setIcon('tag')
+              .setTitle('Manage tags')
+              .setChecked(hasTags)
+              .onClick(() => {
+                void import('../modals/TagModal').then(({ TagModal }) => {
+                  const modal = new TagModal(this.plugin.app, tagStore, filePath, () => {
+                    post.tags = tagStore.getTagsForPost(filePath);
+                    // Refresh tag chips
+                    const chipContainer = rootElement.querySelector('.post-tag-chips');
+                    if (chipContainer) {
+                      this.refreshTagChips(chipContainer as HTMLElement, post, rootElement);
+                    } else {
+                      const interactionBar = parent;
+                      const contentArea = interactionBar.parentElement;
+                      if (contentArea) {
+                        this.renderTagChips(contentArea, post, rootElement);
+                        const newChips = contentArea.querySelector('.post-tag-chips:last-child');
+                        if (newChips) {
+                          contentArea.insertBefore(newChips, interactionBar);
+                        }
+                      }
+                    }
+                    if (this.onTagsChangedCallback) {
+                      this.onTagsChangedCallback();
+                    }
+                  }, this.onUIModifyCallback);
+                  modal.open();
+                });
+              });
+          });
+        }
+      }
+
+      // Reader mode
+      menu.addItem((item) => {
+        item
+          .setIcon('book-open')
+          .setTitle('Reader mode')
+          .onClick(() => {
+            this.onReaderModeCallback?.(post);
+          });
+      });
+
+      // Open note
+      menu.addItem((item) => {
+        item
+          .setIcon('external-link')
+          .setTitle('Open note')
+          .onClick(() => {
+            void this.openNote(post);
+          });
+      });
+
+      // Edit button (only for user posts)
+      if (post.platform === 'post') {
+        menu.addItem((item) => {
+          item
+            .setIcon('pencil')
+            .setTitle('Edit post')
+            .onClick(() => {
+              if (this.onEditPostCallback && post.url) {
+                this.onEditPostCallback(post, post.url);
+              }
+            });
+        });
+      }
+
+      menu.addSeparator();
+
+      // Delete button
+      menu.addItem((item) => {
+        item
+          .setIcon('trash-2')
+          .setTitle('Delete')
+          .setWarning(true)
+          .onClick(() => {
+            void this.deletePost(post, rootElement);
+          });
+      });
+
+      // Position the menu below the "more" button
+      const rect = moreBtn.getBoundingClientRect();
+      menu.showAtPosition({ x: rect.left, y: rect.bottom });
     });
   }
 

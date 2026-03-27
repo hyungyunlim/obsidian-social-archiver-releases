@@ -143,6 +143,23 @@ export interface ArchiveLibrarySyncDeps {
    * between server create and sourceArchiveId frontmatter write.
    */
   findByClientPostId?: (clientPostId: string) => TFile | null;
+
+  /**
+   * Reconcile the `archive` frontmatter field on an existing vault file
+   * against the server's `isBookmarked` value.
+   *
+   * Implementations must:
+   * 1. Check outbound suppression — if the archive is suppressed (user just
+   *    changed it locally), do nothing.
+   * 2. Read current `fm.archive` value; if it already equals `isBookmarked`,
+   *    do nothing (no-op guard to avoid unnecessary disk writes).
+   * 3. Register outbound suppression so the resulting MetadataCache.changed
+   *    event does not re-trigger an outbound sync.
+   * 4. Write `fm.archive = isBookmarked` via processFrontMatter.
+   *
+   * Wired to ArchiveStateSyncService.reconcileFromLibrarySync() in main.ts.
+   */
+  reconcileArchiveState?: (file: TFile, archiveId: string, isBookmarked: boolean) => Promise<void>;
 }
 
 // ============================================================================
@@ -474,6 +491,7 @@ export class ArchiveLibrarySyncService {
       // Tier 1: exact match by stable server ID
       const existingById = this.deps.findBySourceArchiveId(archive.id);
       if (existingById) {
+        await this.reconcileExistingArchiveState(existingById, archive);
         this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
         return;
       }
@@ -525,6 +543,7 @@ export class ArchiveLibrarySyncService {
             error,
           });
         }
+        await this.reconcileExistingArchiveState(matched, archive);
         this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
         return;
       }
@@ -551,6 +570,40 @@ export class ArchiveLibrarySyncService {
         error,
       });
       this.updateState({ failedCount: this.runtimeState.failedCount + 1 });
+    }
+  }
+
+  /**
+   * Reconcile the `archive` frontmatter field on an existing vault file against
+   * the server's `isBookmarked` value.
+   *
+   * This is a best-effort, non-fatal operation. Any error is logged and swallowed
+   * so that it never aborts the enclosing processArchive() call.
+   *
+   * Short-circuits (no-op) when:
+   * - `deps.reconcileArchiveState` is not wired (dep is optional)
+   * - `archive.isBookmarked` is not a boolean (server didn't send the field)
+   *
+   * Actual no-op guard (value already matches) and outbound suppression are
+   * handled inside the injected `reconcileArchiveState` implementation.
+   */
+  private async reconcileExistingArchiveState(file: TFile, archive: UserArchive): Promise<void> {
+    if (!this.deps.reconcileArchiveState) return;
+
+    // isBookmarked is present on the server response; guard against undefined
+    // in case an older API version omits the field.
+    const serverIsBookmarked: boolean = archive.isBookmarked;
+    if (typeof serverIsBookmarked !== 'boolean') return;
+
+    try {
+      await this.deps.reconcileArchiveState(file, archive.id, serverIsBookmarked);
+    } catch (error) {
+      // Non-fatal: log and continue — the main sync must not be disrupted
+      console.warn('[Social Archiver] [LibrarySync] reconcileExistingArchiveState failed', {
+        archiveId: archive.id,
+        path: file.path,
+        error,
+      });
     }
   }
 

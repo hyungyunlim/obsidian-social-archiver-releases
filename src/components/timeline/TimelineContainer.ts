@@ -1020,8 +1020,17 @@ export class TimelineContainer {
   }
 
   private async render(): Promise<void> {
-    // Add Tailwind classes individually
+    // Snapshot classes added by TimelineView (e.g. social-archiver-timeline-view,
+    // sa-timeline-safe-area) before replacing className, then re-add them.
+    // These classes drive mobile safe-area inset CSS rules in skeleton-card.css.
+    const preserveClasses = ['social-archiver-timeline-view', 'sa-timeline-safe-area'];
+    const hadClasses = preserveClasses.filter(c => this.containerEl.classList.contains(c));
+
     this.containerEl.className = 'w-full h-full overflow-y-auto p-4 tc-bg-primary sa-overflow-x-hidden sa-box-border sa-timeline-scroll-container';
+
+    for (const cls of hadClasses) {
+      this.containerEl.classList.add(cls);
+    }
 
     if (this.viewMode === 'gallery') {
       await this.renderGalleryView();

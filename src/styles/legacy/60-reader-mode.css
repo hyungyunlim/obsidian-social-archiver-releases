@@ -26,8 +26,8 @@
   opacity: 0;
   transition: opacity .25s ease;
   overflow: hidden;
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-top: max(env(safe-area-inset-top, 0px), var(--reader-safe-area-top-fallback, 0px));
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--reader-safe-area-bottom-fallback, 0px));
   box-sizing: border-box;
   --reader-font-size: 19px;
   touch-action: pan-y

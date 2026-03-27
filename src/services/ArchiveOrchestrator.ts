@@ -451,8 +451,10 @@ export class ArchiveOrchestrator implements IService {
         );
 
         // Update media URLs in PostData (main post + quoted post + embedded archives)
-        mediaResults.forEach((result, index) => {
-          const sourceItem = allMediaToDownload[index];
+        // Use result.sourceIndex (position in original input array) instead of forEach index
+        // to stay correct even when some downloads fail and the results array is shorter.
+        mediaResults.forEach((result) => {
+          const sourceItem = allMediaToDownload[result.sourceIndex];
           if (!sourceItem) return;
 
           if (sourceItem.isQuotedPost) {
@@ -465,7 +467,15 @@ export class ArchiveOrchestrator implements IService {
               // Update quoted post media URL
               if (postData.quotedPost && postData.quotedPost.media[sourceItem.mediaIndex]) {
                 const quotedMedia = postData.quotedPost.media[sourceItem.mediaIndex];
-                if (quotedMedia) quotedMedia.url = result.localPath;
+                if (quotedMedia) {
+                  if (result.fallbackKind === 'thumbnail') {
+                    // Thumbnail fallback: keep original video URL, store thumbnail path separately
+                    quotedMedia.thumbnail = result.localPath;
+                    // media.url stays as the original remote/post URL — do NOT overwrite with image path
+                  } else {
+                    quotedMedia.url = result.localPath;
+                  }
+                }
               }
             }
           } else if (sourceItem.archiveIndex !== undefined) {
@@ -473,12 +483,25 @@ export class ArchiveOrchestrator implements IService {
             const archive = postData.embeddedArchives?.[sourceItem.archiveIndex];
             if (archive && archive.media[sourceItem.mediaIndex]) {
               const archiveMedia = archive.media[sourceItem.mediaIndex];
-              if (archiveMedia) archiveMedia.url = result.localPath;
+              if (archiveMedia) {
+                if (result.fallbackKind === 'thumbnail') {
+                  archiveMedia.thumbnail = result.localPath;
+                } else {
+                  archiveMedia.url = result.localPath;
+                }
+              }
             }
           } else {
             // Update main post media URL
             const mainMedia = postData.media[sourceItem.mediaIndex];
-            if (mainMedia) mainMedia.url = result.localPath;
+            if (mainMedia) {
+              if (result.fallbackKind === 'thumbnail') {
+                // Thumbnail fallback: preserve original URL, store thumbnail locally
+                mainMedia.thumbnail = result.localPath;
+              } else {
+                mainMedia.url = result.localPath;
+              }
+            }
           }
         });
 

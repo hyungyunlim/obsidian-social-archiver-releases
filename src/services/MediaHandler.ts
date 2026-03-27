@@ -29,6 +29,14 @@ export interface MediaResult {
   type: Media['type'];
   size: number;
   file: TFile;
+  /** Index into the input media array passed to downloadMedia() */
+  sourceIndex: number;
+  /**
+   * 'thumbnail' when the original media was a video but only a thumbnail image
+   * was successfully downloaded as a fallback. 'none' or undefined means the
+   * downloaded type matches the requested type.
+   */
+  fallbackKind?: 'none' | 'thumbnail';
 }
 
 /**
@@ -376,7 +384,7 @@ export class MediaHandler implements IService {
       const actualIndex = startIndex + arrayIndex; // Use startIndex offset for correct filename numbering
       return this.downloadQueue.add(async () => {
         try {
-          const result = await this.downloadSingleMedia(item, platform, postId, authorUsername, actualIndex);
+          const result = await this.downloadSingleMedia(item, platform, postId, authorUsername, actualIndex, arrayIndex);
           return result;
         } catch (error) {
           // Don't fail the entire batch - continue with other media
@@ -392,18 +400,35 @@ export class MediaHandler implements IService {
     const results = await Promise.all(downloadPromises);
 
     // Filter out failed downloads (nulls) while preserving order of successful ones
-    return results.filter((r): r is MediaResult => r !== null);
+    const filtered = results.filter((r): r is MediaResult => r !== null);
+
+    // Diagnostic log: summarise download outcomes per post
+    const totalCount = media.length;
+    const successVideo = filtered.filter(r => r.type === 'video' && r.fallbackKind !== 'thumbnail').length;
+    const thumbnailFallback = filtered.filter(r => r.fallbackKind === 'thumbnail').length;
+    const failed = totalCount - filtered.length;
+    if (totalCount > 0) {
+      console.debug(
+        `[MediaHandler] downloadMedia summary: total=${totalCount} ` +
+        `localVideo=${successVideo} thumbnailFallback=${thumbnailFallback} failed=${failed}`
+      );
+    }
+
+    return filtered;
   }
 
   /**
    * Download a single media file
+   * @param index - File naming index (startIndex + arrayIndex)
+   * @param sourceIndex - Position within the input media array (arrayIndex), used for index-safe lookup
    */
   private async downloadSingleMedia(
     media: Media,
     platform: Platform,
     postId: string,
     authorUsername: string,
-    index: number
+    index: number,
+    sourceIndex: number = index
   ): Promise<MediaResult> {
     let resolvedPath: string | null = null;
 
@@ -484,6 +509,16 @@ export class MediaHandler implements IService {
         throw lastCandidateError || new Error('All media download attempts failed');
       }
 
+      // Determine fallbackKind: was the original media a video but we only got an image (thumbnail)?
+      const fallbackKind: MediaResult['fallbackKind'] =
+        (media.type === 'video' && selectedType === 'image') ? 'thumbnail' : 'none';
+
+      if (fallbackKind === 'thumbnail') {
+        console.debug(`[MediaHandler] sourceIndex=${sourceIndex} video download failed, using thumbnail fallback`);
+      } else if (media.type === 'video') {
+        console.debug(`[MediaHandler] sourceIndex=${sourceIndex} local video download succeeded`);
+      }
+
       // Process based on type
       let processedData = selectedData;
       let outputExtension: string | null = null; // Track output extension for optimized images
@@ -550,6 +585,8 @@ export class MediaHandler implements IService {
           type: selectedType,
           size: processedData.byteLength,
           file: existingFile,
+          sourceIndex,
+          fallbackKind,
         };
       }
 
@@ -565,6 +602,8 @@ export class MediaHandler implements IService {
         type: selectedType,
         size: processedData.byteLength,
         file,
+        sourceIndex,
+        fallbackKind,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -581,6 +620,8 @@ export class MediaHandler implements IService {
               type: inferredType,
               size: 0,
               file: existingResolvedFile,
+              sourceIndex,
+              fallbackKind: 'none',
             };
           }
         }
@@ -600,6 +641,8 @@ export class MediaHandler implements IService {
             type: inferredType,
             size: 0, // Unknown size since we didn't download
             file: existingFile,
+            sourceIndex,
+            fallbackKind: 'none',
           };
         }
       }
@@ -1004,6 +1047,8 @@ export class MediaHandler implements IService {
         type: 'video',
         size: data.byteLength,
         file: existingFile,
+        sourceIndex: index,
+        fallbackKind: 'none',
       };
     }
 
@@ -1019,6 +1064,8 @@ export class MediaHandler implements IService {
       type: 'video',
       size: data.byteLength,
       file,
+      sourceIndex: index,
+      fallbackKind: 'none',
     };
   }
 

@@ -18,6 +18,7 @@ import type { ArchiveLookupService } from '../../services/ArchiveLookupService';
 import type { AnnotationSyncService } from '../../services/AnnotationSyncService';
 import type { ArchiveDeleteSyncService } from '../sync/ArchiveDeleteSyncService';
 import type { ArchiveTagOutboundService } from '../sync/ArchiveTagOutboundService';
+import type { ArchiveStateSyncService } from '../sync/ArchiveStateSyncService';
 import type { SocialArchiverSettings } from '../../types/settings';
 import type { PostData, Platform } from '../../types/post';
 import type {
@@ -157,6 +158,7 @@ export interface RealtimeEventBridgeDeps {
   subscriptionManager: { acknowledgePendingPosts: (ids: string[]) => Promise<void> } | undefined;
   archiveLookupService: ArchiveLookupService | undefined;
   annotationSyncService: AnnotationSyncService | undefined;
+  archiveStateSyncService?: ArchiveStateSyncService | undefined;
   archiveDeleteSyncService?: ArchiveDeleteSyncService | undefined;
   archiveTagOutboundService?: ArchiveTagOutboundService | undefined;
   app: App;
@@ -754,6 +756,11 @@ export class RealtimeEventBridge {
         const settings = this.deps.settings();
         if (msg.data.changes.hasAnnotationUpdate && settings.enableMobileAnnotationSync) {
           void this.deps.annotationSyncService?.handleActionUpdated(msg.data);
+        }
+
+        // Archive state sync: update fm.archive when isBookmarked changes from mobile
+        if (msg.data.changes.isBookmarked !== undefined) {
+          void this.deps.archiveStateSyncService?.handleRemoteArchiveState(msg.data);
         }
       }),
     );

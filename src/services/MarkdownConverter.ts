@@ -3,7 +3,7 @@ import type { PostData, Platform } from '@/types/post';
 import type { YamlFrontmatter } from '@/types/archive';
 import { TemplateEngine } from './markdown/template/TemplateEngine';
 import { DateNumberFormatter } from './markdown/formatters/DateNumberFormatter';
-import { MediaFormatter } from './markdown/formatters/MediaFormatter';
+import { MediaFormatter, findMediaResultBySourceIndex } from './markdown/formatters/MediaFormatter';
 import { TextFormatter } from './markdown/formatters/TextFormatter';
 import { TranscriptFormatter } from './markdown/formatters/TranscriptFormatter';
 import { CommentFormatter } from './markdown/formatters/CommentFormatter';
@@ -1549,14 +1549,32 @@ export class MarkdownConverter implements IService {
           section += `**Media:**\n`;
           for (const media of archive.media) {
             // At this point, media.url should already be updated to local path by ArchiveOrchestrator
-            // Convert to relative path based on output file depth
-            const relativePath = toRelativeMediaPath(media.url, outputFilePath);
+            // (or kept as remote URL if it was a thumbnail fallback / total failure)
 
             if (media.type === 'image') {
+              const relativePath = toRelativeMediaPath(media.url, outputFilePath);
               const altText = media.altText || media.alt || 'Image';
               section += `![${altText}](${encodePathForMarkdownLink(relativePath)})\n`;
             } else if (media.type === 'video') {
-              section += `![🎥 Video](${encodePathForMarkdownLink(relativePath)})\n`;
+              // Apply R3.3 fallback rules
+              const isLocalVideo = media.url && !media.url.startsWith('http://') && !media.url.startsWith('https://');
+              const localThumbnailPath = media.thumbnail && !media.thumbnail.startsWith('http')
+                ? media.thumbnail
+                : undefined;
+
+              if (isLocalVideo) {
+                const relativePath = toRelativeMediaPath(media.url, outputFilePath);
+                section += `![🎥 Video](${encodePathForMarkdownLink(relativePath)})\n`;
+              } else if (localThumbnailPath) {
+                const thumbRelative = toRelativeMediaPath(localThumbnailPath, outputFilePath);
+                const linkTarget = archive.url;
+                section += `[![🎥 Video](${encodePathForMarkdownLink(thumbRelative)})](${linkTarget})\n`;
+              } else {
+                const fallbackUrl = (media.url && (media.url.startsWith('http://') || media.url.startsWith('https://')))
+                  ? media.url
+                  : archive.url;
+                section += `[🎥 Video](${fallbackUrl})\n`;
+              }
             }
           }
           section += `\n`;
@@ -1775,14 +1793,34 @@ export class MarkdownConverter implements IService {
           continue;
         }
 
-        // Convert to relative path for local attachments
-        const relativePath = toRelativeMediaPath(media.url, outputFilePath);
-
         if (media.type === 'image') {
+          // Convert to relative path for local attachments
+          const relativePath = toRelativeMediaPath(media.url, outputFilePath);
           const altText = media.altText || media.alt || 'Image';
           section += `![${altText}](${encodePathForMarkdownLink(relativePath)})\n`;
         } else if (media.type === 'video') {
-          section += `![🎥 Video](${encodePathForMarkdownLink(relativePath)})\n`;
+          // Apply R3.3 fallback rules for video rendering:
+          const isLocalVideo = media.url && !media.url.startsWith('http://') && !media.url.startsWith('https://');
+          const localThumbnailPath = media.thumbnail && !media.thumbnail.startsWith('http')
+            ? media.thumbnail
+            : undefined;
+
+          if (isLocalVideo) {
+            // Case 1: local video file
+            const relativePath = toRelativeMediaPath(media.url, outputFilePath);
+            section += `![🎥 Video](${encodePathForMarkdownLink(relativePath)})\n`;
+          } else if (localThumbnailPath) {
+            // Case 2: clickable thumbnail → original post URL
+            const thumbRelative = toRelativeMediaPath(localThumbnailPath, outputFilePath);
+            const linkTarget = quotedPost.url;
+            section += `[![🎥 Video](${encodePathForMarkdownLink(thumbRelative)})](${linkTarget})\n`;
+          } else {
+            // Case 3: plain link to original post URL
+            const fallbackUrl = (media.url && (media.url.startsWith('http://') || media.url.startsWith('https://')))
+              ? media.url
+              : quotedPost.url;
+            section += `[🎥 Video](${fallbackUrl})\n`;
+          }
         }
       }
       section += `\n`;
@@ -1945,9 +1983,10 @@ export class MarkdownConverter implements IService {
     if (isRssBasedPlatform(postData.platform) && mediaResults && mediaResults.length > 0) {
       // Replace IMAGE placeholders with Obsidian image embeds
       // Include surrounding newlines to ensure proper paragraph separation
+      // Use findMediaResultBySourceIndex so partial failures don't misalign the lookup.
       baseText = baseText.replace(/\n*\{\{IMAGE_(\d+)\}\}\n*/g, (_, indexStr: string) => {
         const index = parseInt(indexStr, 10);
-        const mediaResult = mediaResults[index];
+        const mediaResult = findMediaResultBySourceIndex(mediaResults, index);
         if (mediaResult?.localPath) {
           blogMediaUsedInline = true;
           // Use Obsidian embed syntax with just filename
@@ -1960,7 +1999,7 @@ export class MarkdownConverter implements IService {
       // Replace VIDEO placeholders with Obsidian video embeds
       baseText = baseText.replace(/\n*\{\{VIDEO_(\d+)\}\}\n*/g, (_, indexStr: string) => {
         const index = parseInt(indexStr, 10);
-        const mediaResult = mediaResults[index];
+        const mediaResult = findMediaResultBySourceIndex(mediaResults, index);
         if (mediaResult?.localPath) {
           blogMediaUsedInline = true;
           // Use Obsidian embed syntax with just filename

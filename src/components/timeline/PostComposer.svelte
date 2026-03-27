@@ -303,7 +303,10 @@ function applyComposerTopOverlapSafeArea(): void {
   const iosMinTopInset = ObsidianPlatform.isIosApp && isPortrait
     ? (isIPhone ? (isDynamicIslandIPhone ? 59 : 44) : 24)
     : 0;
-  const androidMinTopInset = ObsidianPlatform.isAndroidApp ? 24 : 0;
+  // Android status bars on modern devices with camera cutouts are 28-48px.
+  // Use 32px minimum (24px status bar + 8px breathing room) to match
+  // the timeline container's --timeline-safe-area-top-extra offset.
+  const androidMinTopInset = ObsidianPlatform.isAndroidApp ? 32 : 0;
   const expectedTopInset = Math.max(viewportTop, iosMinTopInset, androidMinTopInset);
   const composerTop = Math.round(composerRootElement.getBoundingClientRect().top);
   const overlap = Math.max(0, expectedTopInset - composerTop);

@@ -403,6 +403,13 @@
   background: var(--background-modifier-hover);
 }
 
+/* Compact action buttons on mobile */
+body.is-mobile .sa-action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+}
+
 /* Pill / badge */
 .sa-pill {
   display: inline-flex;

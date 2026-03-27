@@ -183,7 +183,7 @@ export class FrontmatterGenerator {
       published: published, // Original post date (YYYY-MM-DD HH:mm)
       archived: archived, // Archive timestamp (YYYY-MM-DD HH:mm)
       lastModified: lastModified, // Last modified timestamp (YYYY-MM-DD HH:mm)
-      archive: false, // Default: not archived (visible in timeline)
+      archive: postData.archive ?? false, // Use actual value from PostData; false by default (visible in timeline)
       tags: [],
     };
 

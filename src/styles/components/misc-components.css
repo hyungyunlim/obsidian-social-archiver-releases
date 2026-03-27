@@ -104,7 +104,7 @@
  * ======================================== */
 
 /* Container: hidden column layout until jobs exist */
-.crawl-status-banners {
+.sa-crawl-status-banners {
   display: none;
   flex-direction: column;
   gap: 8px;
@@ -112,7 +112,7 @@
   margin-bottom: 12px;
 }
 
-.crawl-status-banners.csb-visible {
+.sa-crawl-status-banners.csb-visible {
   display: flex;
 }
 
@@ -1743,4 +1743,91 @@
   .library-sync-banner-row .banner-icon.spin svg {
     animation: none;
   }
+}
+
+/* ========================================
+ * Mobile compact banners (body.is-mobile)
+ *
+ * Strips the heavy card chrome (background, border, border-radius)
+ * and replaces it with a flat, inline status-bar look.
+ * Applies to all timeline status banners for consistency.
+ * ======================================== */
+
+/* Containers: tighter vertical spacing */
+body.is-mobile .archive-progress-banners,
+body.is-mobile .sa-crawl-status-banners,
+body.is-mobile .crosspost-status-banners,
+body.is-mobile .library-sync-banner {
+  margin-bottom: 4px;
+  gap: 4px;
+}
+
+/* Banner rows: flat, borderless inline style */
+body.is-mobile .archive-banner,
+body.is-mobile .crawl-banner,
+body.is-mobile .crosspost-banner,
+body.is-mobile .library-sync-banner-row {
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+  gap: 6px;
+}
+
+/* Smaller icons on mobile */
+body.is-mobile .archive-banner .banner-icon,
+body.is-mobile .crawl-banner .banner-icon,
+body.is-mobile .crosspost-banner .banner-icon,
+body.is-mobile .library-sync-banner-row .banner-icon {
+  --icon-size: 14px;
+}
+
+/* Muted text for reduced visual weight */
+body.is-mobile .archive-banner .banner-text,
+body.is-mobile .crawl-banner .banner-text,
+body.is-mobile .crosspost-banner .banner-text,
+body.is-mobile .library-sync-banner-row .banner-text {
+  color: var(--text-muted);
+}
+
+/* Adequate touch targets for action/dismiss buttons */
+body.is-mobile .apb-action-btn,
+body.is-mobile .csb-dismiss-btn,
+body.is-mobile .xpb-dismiss-btn,
+body.is-mobile .lsb-action-btn {
+  min-height: 28px;
+  min-width: 28px;
+}
+
+/* ========================================
+ * Mobile timeline header overflow fix
+ *
+ * Header toolbar has 8 non-shrinkable buttons (40px each)
+ * totalling ~364px, but Android content area is ~328px.
+ * Shrink buttons to 32px and reduce gaps to fit.
+ * ======================================== */
+
+/* Reduce header left-right gap */
+body.is-mobile .sa-flex-between.sa-gap-12 {
+  gap: 4px;
+}
+
+/* Tighter gaps in button groups */
+body.is-mobile .sa-flex-between > .sa-flex-row.sa-gap-8 {
+  gap: 4px;
+}
+
+body.is-mobile .sa-flex-between > .sa-flex-row.sa-gap-4 {
+  gap: 2px;
+}
+
+/* Shrink search/filter toggle buttons on mobile
+   (they use --sa-height/--sa-width: 40px via setCssProps) */
+body.is-mobile .sa-flex-between .sa-dynamic-height {
+  height: 32px !important;
+}
+
+body.is-mobile .sa-flex-between .sa-dynamic-width {
+  width: 32px !important;
 }

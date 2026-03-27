@@ -385,8 +385,10 @@ export class SubscriptionSyncService {
             post.author?.handle || post.author?.name || 'unknown'
           );
 
-          mediaResults.forEach((result, index) => {
-            const sourceItem = allMediaToDownload[index];
+          // Use result.sourceIndex (position in original input array) instead of forEach index
+          // to stay correct even when some downloads fail and the results array is shorter.
+          mediaResults.forEach((result) => {
+            const sourceItem = allMediaToDownload[result.sourceIndex];
             if (!sourceItem) return;
 
             if (sourceItem.isExternalLinkImage) {
@@ -397,19 +399,37 @@ export class SubscriptionSyncService {
               }
             } else if (sourceItem.isQuotedPost) {
               if (post.quotedPost && post.quotedPost.media[sourceItem.mediaIndex]) {
-                post.quotedPost.media[sourceItem.mediaIndex] = {
-                  ...post.quotedPost.media[sourceItem.mediaIndex],
-                  url: result.localPath,
-                  originalUrl: result.originalUrl
-                } as typeof post.quotedPost.media[number];
+                if (result.fallbackKind === 'thumbnail') {
+                  // Thumbnail fallback: keep original URL, store thumbnail path separately
+                  post.quotedPost.media[sourceItem.mediaIndex] = {
+                    ...post.quotedPost.media[sourceItem.mediaIndex],
+                    thumbnail: result.localPath,
+                    // url intentionally NOT overwritten — keep original remote/post URL
+                  } as typeof post.quotedPost.media[number];
+                } else {
+                  post.quotedPost.media[sourceItem.mediaIndex] = {
+                    ...post.quotedPost.media[sourceItem.mediaIndex],
+                    url: result.localPath,
+                    originalUrl: result.originalUrl
+                  } as typeof post.quotedPost.media[number];
+                }
               }
             } else {
               if (post.media[sourceItem.mediaIndex]) {
-                post.media[sourceItem.mediaIndex] = {
-                  ...post.media[sourceItem.mediaIndex],
-                  url: result.localPath,
-                  originalUrl: result.originalUrl
-                } as typeof post.media[number];
+                if (result.fallbackKind === 'thumbnail') {
+                  // Thumbnail fallback: keep original URL, store thumbnail path separately
+                  post.media[sourceItem.mediaIndex] = {
+                    ...post.media[sourceItem.mediaIndex],
+                    thumbnail: result.localPath,
+                    // url intentionally NOT overwritten
+                  } as typeof post.media[number];
+                } else {
+                  post.media[sourceItem.mediaIndex] = {
+                    ...post.media[sourceItem.mediaIndex],
+                    url: result.localPath,
+                    originalUrl: result.originalUrl
+                  } as typeof post.media[number];
+                }
               }
             }
           });

@@ -9,7 +9,7 @@
  * Delegates gesture detection to ReaderModeGestureHandler.
  */
 
-import { TFile, Notice, setIcon, type App } from 'obsidian';
+import { TFile, Notice, setIcon, Platform as ObsidianPlatform, type App } from 'obsidian';
 import type { PostData } from '../../../types/post';
 import type SocialArchiverPlugin from '../../../main';
 import { MediaGalleryRenderer } from '../renderers/MediaGalleryRenderer';
@@ -288,7 +288,11 @@ export class ReaderModeOverlay {
       if (!this.container) return;
 
       const viewport = window.visualViewport;
-      const topInset = Math.max(0, Math.round(viewport?.offsetTop ?? 0));
+      // Android WebView often reports 0 for both env(safe-area-inset-top) and
+      // visualViewport.offsetTop.  Apply a platform-specific minimum so the
+      // header never sits under the status bar / camera cutout.
+      const androidMinTopInset = ObsidianPlatform.isAndroidApp ? 32 : 0;
+      const topInset = Math.max(androidMinTopInset, Math.round(viewport?.offsetTop ?? 0));
 
       let bottomInset = 0;
       if (viewport) {

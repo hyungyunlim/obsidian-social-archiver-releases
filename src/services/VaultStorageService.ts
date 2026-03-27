@@ -314,7 +314,7 @@ export class VaultStorageService {
     // otherwise build from mediaSaved (user-created posts with File objects)
     const mediaResults: MediaResult[] = externalMediaResults ?? mediaSaved
       .filter(result => !result.error)
-      .map(result => {
+      .map((result, index) => {
         // Get the TFile from vault
         const file = this.vault.getFileByPath(result.savedPath);
 
@@ -324,6 +324,8 @@ export class VaultStorageService {
           type: result.originalFile.type.startsWith('video/') ? 'video' as const : 'image' as const,
           size: result.originalFile.size,
           file: file as import('obsidian').TFile,
+          sourceIndex: index,
+          fallbackKind: 'none' as const,
         };
       });
 
@@ -475,9 +477,9 @@ export class VaultStorageService {
     postData.media = allMedia;
 
     // Build MediaResult array for MarkdownConverter
-    const mediaResults = addedMedia
+    const mediaResults: MediaResult[] = addedMedia
       .filter(result => !result.error)
-      .map(result => {
+      .map((result, index) => {
         const file = this.vault.getFileByPath(result.savedPath);
         return {
           originalUrl: result.url,
@@ -485,22 +487,26 @@ export class VaultStorageService {
           type: result.originalFile.type.startsWith('video/') ? 'video' as const : 'image' as const,
           size: result.originalFile.size,
           file: file as import('obsidian').TFile,
+          sourceIndex: index,
+          fallbackKind: 'none' as const,
         };
       });
 
     // Also add kept media to mediaResults for proper markdown generation
-    const keptMediaResults = keptMedia.map(media => {
+    const keptMediaResults: MediaResult[] = keptMedia.map((media, index) => {
       const file = this.vault.getFileByPath(media.url);
       return {
         originalUrl: media.url,
         localPath: media.url,
-        type: media.type as 'image' | 'video',
+        type: media.type as MediaResult['type'],
         size: media.size || 0,
         file: file as import('obsidian').TFile,
+        sourceIndex: index,
+        fallbackKind: 'none' as const,
       };
     });
 
-    const allMediaResults = [...keptMediaResults, ...mediaResults];
+    const allMediaResults: MediaResult[] = [...keptMediaResults, ...mediaResults];
 
     // Read existing file content to preserve user's post body
     const existingContent = await this.vault.read(existingFile);
