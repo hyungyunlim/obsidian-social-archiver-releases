@@ -469,4 +469,100 @@ More content below...
       expect(commentMatch![0]).not.toContain('\n');
     });
   });
+
+  describe('findAllPlaceholders', () => {
+    it('should find zero placeholders in a note without expired media', () => {
+      const content = '# My Note\n\nSome regular content.\n\n![[image.png]]';
+      const results = MediaPlaceholderGenerator.findAllPlaceholders(content);
+      expect(results).toHaveLength(0);
+    });
+
+    it('should find a single placeholder in a note', () => {
+      const expired = createTestExpiredResult({ originalUrl: 'https://cdn.example.com/photo.jpg' });
+      const placeholder = MediaPlaceholderGenerator.generatePlaceholder(expired, 0);
+      const content = `# My Post\n\nSome text.\n\n${placeholder}\n\nMore text.`;
+
+      const results = MediaPlaceholderGenerator.findAllPlaceholders(content);
+      expect(results).toHaveLength(1);
+      expect(results[0]!.result.originalUrl).toBe('https://cdn.example.com/photo.jpg');
+      expect(results[0]!.result.type).toBe('image');
+      expect(results[0]!.blockText).toBe(placeholder);
+    });
+
+    it('should find multiple placeholders in a note', () => {
+      const expired1 = createTestExpiredResult({
+        originalUrl: 'https://cdn.example.com/photo1.jpg',
+        type: 'image',
+      });
+      const expired2 = createTestExpiredResult({
+        originalUrl: 'https://cdn.example.com/video.mp4',
+        type: 'video',
+      });
+      const p1 = MediaPlaceholderGenerator.generatePlaceholder(expired1, 0);
+      const p2 = MediaPlaceholderGenerator.generatePlaceholder(expired2, 1);
+      const content = `# Post\n\n${p1}\n\nSome text between.\n\n${p2}\n\nEnd.`;
+
+      const results = MediaPlaceholderGenerator.findAllPlaceholders(content);
+      expect(results).toHaveLength(2);
+      expect(results[0]!.result.originalUrl).toBe('https://cdn.example.com/photo1.jpg');
+      expect(results[0]!.result.type).toBe('image');
+      expect(results[1]!.result.originalUrl).toBe('https://cdn.example.com/video.mp4');
+      expect(results[1]!.result.type).toBe('video');
+    });
+
+    it('should not match partial or malformed placeholders', () => {
+      const content = [
+        '> [!warning] Media Unavailable (1)',
+        '> This image could not be downloaded (CDN URL expired).',
+        '> Original URL: `https://example.com/test.jpg`',
+        // Missing the HTML comment line
+      ].join('\n');
+
+      const results = MediaPlaceholderGenerator.findAllPlaceholders(content);
+      expect(results).toHaveLength(0);
+    });
+  });
+
+  describe('replacePlaceholderWithEmbed', () => {
+    it('should replace a placeholder block with a wikilink embed', () => {
+      const expired = createTestExpiredResult({ originalUrl: 'https://cdn.example.com/photo.jpg' });
+      const placeholder = MediaPlaceholderGenerator.generatePlaceholder(expired, 0);
+      const content = `# My Post\n\nSome text.\n\n${placeholder}\n\nMore text.`;
+
+      const updated = MediaPlaceholderGenerator.replacePlaceholderWithEmbed(
+        content,
+        placeholder,
+        'attachments/social-archives/facebook/post123/20260328-unknown-post123-1.webp'
+      );
+
+      expect(updated).not.toContain('[!warning]');
+      expect(updated).toContain('![[attachments/social-archives/facebook/post123/20260328-unknown-post123-1.webp]]');
+      expect(updated).toContain('Some text.');
+      expect(updated).toContain('More text.');
+    });
+
+    it('should only replace the specific placeholder block', () => {
+      const expired1 = createTestExpiredResult({
+        originalUrl: 'https://cdn.example.com/photo1.jpg',
+      });
+      const expired2 = createTestExpiredResult({
+        originalUrl: 'https://cdn.example.com/photo2.jpg',
+      });
+      const p1 = MediaPlaceholderGenerator.generatePlaceholder(expired1, 0);
+      const p2 = MediaPlaceholderGenerator.generatePlaceholder(expired2, 1);
+      const content = `${p1}\n\n${p2}`;
+
+      const updated = MediaPlaceholderGenerator.replacePlaceholderWithEmbed(
+        content,
+        p1,
+        'attachments/recovered.webp'
+      );
+
+      // First placeholder replaced
+      expect(updated).toContain('![[attachments/recovered.webp]]');
+      // Second placeholder still present
+      expect(updated).toContain('Media Unavailable (2)');
+      expect(updated).toContain('photo2.jpg');
+    });
+  });
 });

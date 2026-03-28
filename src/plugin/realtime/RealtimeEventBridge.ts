@@ -754,8 +754,12 @@ export class RealtimeEventBridge {
 
         // Annotation sync: patch managed block and frontmatter in the local vault note
         const settings = this.deps.settings();
-        if (msg.data.changes.hasAnnotationUpdate && settings.enableMobileAnnotationSync) {
-          void this.deps.annotationSyncService?.handleActionUpdated(msg.data);
+        if (msg.data.changes.hasAnnotationUpdate) {
+          if (!settings.enableMobileAnnotationSync) {
+            console.debug('[Social Archiver] Annotation update received but Mobile Annotation Sync is disabled. Enable it in Settings → Mobile sync.');
+          } else {
+            void this.deps.annotationSyncService?.handleActionUpdated(msg.data);
+          }
         }
 
         // Archive state sync: update fm.archive when isBookmarked changes from mobile

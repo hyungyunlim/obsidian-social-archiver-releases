@@ -20,6 +20,7 @@ export interface CommandRegistryDeps {
   postCurrentNote: () => Promise<void>;
   postAndShareCurrentNote: () => Promise<void>;
   getEditorTTSController: () => EditorTTSController | undefined;
+  redownloadExpiredMedia: () => Promise<void>;
 }
 
 /**
@@ -32,6 +33,7 @@ export interface CommandRegistryDeps {
  * - Batch transcription (start / pause / resume / cancel)
  * - Post to timeline / Post and share
  * - TTS commands (read document, read selection, toggle pause, stop)
+ * - Re-download expired media
  */
 export function registerCommands(deps: CommandRegistryDeps): void {
   const { app, plugin } = deps;
@@ -43,6 +45,23 @@ export function registerCommands(deps: CommandRegistryDeps): void {
     name: 'Archive social media post',
     callback: () => {
       deps.openArchiveModal();
+    },
+  });
+
+  // ── Re-download expired media ───────────────────────────────────────
+
+  plugin.addCommand({
+    id: 'redownload-expired-media',
+    name: 'Re-download expired media',
+    checkCallback: (checking: boolean) => {
+      const activeFile = app.workspace.getActiveFile();
+      if (activeFile) {
+        if (!checking) {
+          void deps.redownloadExpiredMedia();
+        }
+        return true;
+      }
+      return false;
     },
   });
 

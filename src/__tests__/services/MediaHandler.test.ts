@@ -492,4 +492,52 @@ describe('MediaHandler', () => {
       expect(orphaned).toEqual([]);
     });
   });
+
+  describe('isTransientError', () => {
+    // Access private static method for unit testing
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const isTransientError = (MediaHandler as any).isTransientError.bind(MediaHandler);
+
+    it('should identify timeout errors as transient', () => {
+      expect(isTransientError(new Error('Request timeout'))).toBe(true);
+      expect(isTransientError(new Error('Connection timeout after 30s'))).toBe(true);
+    });
+
+    it('should identify network errors as transient', () => {
+      expect(isTransientError(new Error('Network error'))).toBe(true);
+      expect(isTransientError(new Error('ECONNRESET'))).toBe(true);
+      expect(isTransientError(new Error('ECONNREFUSED'))).toBe(true);
+      expect(isTransientError(new Error('ENOTFOUND'))).toBe(true);
+      expect(isTransientError(new Error('fetch failed'))).toBe(true);
+      expect(isTransientError(new Error('Request aborted'))).toBe(true);
+    });
+
+    it('should identify 5xx errors as transient', () => {
+      expect(isTransientError(new Error('HTTP 500'))).toBe(true);
+      expect(isTransientError(new Error('HTTP 502'))).toBe(true);
+      expect(isTransientError(new Error('HTTP 503'))).toBe(true);
+      expect(isTransientError(new Error('HTTP 504'))).toBe(true);
+      expect(isTransientError(new Error('Proxy returned 502: Bad Gateway'))).toBe(true);
+    });
+
+    it('should NOT identify 4xx errors as transient', () => {
+      expect(isTransientError(new Error('HTTP 404'))).toBe(false);
+      expect(isTransientError(new Error('HTTP 403'))).toBe(false);
+      expect(isTransientError(new Error('HTTP 401'))).toBe(false);
+      expect(isTransientError(new Error('HTTP 400'))).toBe(false);
+    });
+
+    it('should NOT identify non-Error values as transient', () => {
+      expect(isTransientError('some string')).toBe(false);
+      expect(isTransientError(null)).toBe(false);
+      expect(isTransientError(undefined)).toBe(false);
+      expect(isTransientError(42)).toBe(false);
+    });
+
+    it('should NOT identify generic errors as transient', () => {
+      expect(isTransientError(new Error('Invalid media data'))).toBe(false);
+      expect(isTransientError(new Error('File already exists'))).toBe(false);
+      expect(isTransientError(new Error('Unknown error occurred'))).toBe(false);
+    });
+  });
 });

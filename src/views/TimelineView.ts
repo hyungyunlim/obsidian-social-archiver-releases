@@ -639,6 +639,9 @@ export class TimelineView extends ItemView {
       const androidExtraTopGap = ObsidianPlatform.isAndroidApp ? 8 : 0;
       const topInset = Math.max(viewportTop, androidMinTopInset, iosMinTopInset);
 
+      // Android gesture bar (~24dp) or 3-button nav (~48dp) is not reported
+      // by env(safe-area-inset-bottom) or visualViewport in Obsidian WebView.
+      const androidMinBottomInset = ObsidianPlatform.isAndroidApp ? 24 : 0;
       let bottomInset = 0;
       if (viewport) {
         const layoutHeight = window.innerHeight || document.documentElement.clientHeight;
@@ -648,6 +651,7 @@ export class TimelineView extends ItemView {
         // Keyboard may shrink viewport dramatically; keep bottom inset focused on system UI.
         if (bottomInset > 120) bottomInset = 0;
       }
+      bottomInset = Math.max(androidMinBottomInset, bottomInset);
 
       container.setCssProps({
         '--timeline-safe-area-top-fallback': `${topInset}px`,

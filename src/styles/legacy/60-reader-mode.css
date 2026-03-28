@@ -768,14 +768,14 @@ body.is-tablet .sa-reader-mode-action-btn svg {
   bottom: 0;
   transform: translateY(100%);
   width: 100%;
-  border-radius: 16px 16px 0 0;
+  border-radius: 12px 12px 0 0;
   justify-content: center;
-  padding: 14px 20px;
-  padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-  /* Android WebView fallback: env() may resolve to 0 */
-  padding-bottom: calc(14px + max(env(safe-area-inset-bottom, 0px), var(--reader-safe-area-bottom-fallback, 0px)));
-  gap: 12px;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+  padding: 10px 16px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  /* Android WebView fallback: env() may resolve to 0 — read from documentElement */
+  padding-bottom: calc(10px + max(env(safe-area-inset-bottom, 0px), var(--reader-safe-area-bottom-fallback, 0px)));
+  gap: 10px;
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.12);
   border: none;
   border-top: 1px solid var(--background-modifier-border)
 }
@@ -785,24 +785,24 @@ body.is-tablet .sa-reader-mode-action-btn svg {
 }
 
 .sa-highlight-toolbar-mobile .sa-highlight-color-btn {
-  width: 44px;
-  height: 44px;
-  min-width: 44px
+  width: 36px;
+  height: 36px;
+  min-width: 36px
 }
 
 .sa-highlight-toolbar-mobile .sa-highlight-remove-btn {
-  padding: 10px 16px 10px 10px;
-  font-size: 15px
+  padding: 8px 12px 8px 8px;
+  font-size: 14px
 }
 
 .sa-highlight-toolbar-mobile .sa-highlight-toolbar-icon {
-  width: 24px;
-  height: 24px
+  width: 20px;
+  height: 20px
 }
 
 .sa-highlight-toolbar-mobile .sa-highlight-toolbar-icon svg {
-  width: 20px;
-  height: 20px
+  width: 16px;
+  height: 16px
 }
 
 /* Desktop: touch targets for smaller screens (non-mobile) */

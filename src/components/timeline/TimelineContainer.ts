@@ -1497,14 +1497,13 @@ export class TimelineContainer {
 
             // Enqueue composed post for outbound sync (fire-and-forget from UI perspective)
             try {
-              const apiClient = this.plugin.workersApiClient;
               const { ComposedPostSyncService } = await import('../../plugin/sync/ComposedPostSyncService');
               const composedPostSyncService = new ComposedPostSyncService(
                 this.app,
                 this.vault,
                 this.plugin.settings,
-                apiClient,
-                () => this.plugin.saveSettings()
+                () => this.plugin.workersApiClient,
+                () => this.plugin.saveSettingsPartial({}, { reinitialize: false }),
               );
               await composedPostSyncService.enqueueCreate(saveResult.path, post.id);
               void composedPostSyncService.flush();
@@ -5262,8 +5261,8 @@ export class TimelineContainer {
                     this.app,
                     this.vault,
                     this.plugin.settings,
-                    this.plugin.workersApiClient,
-                    () => this.plugin.saveSettings()
+                    () => this.plugin.workersApiClient,
+                    () => this.plugin.saveSettingsPartial({}, { reinitialize: false }),
                   );
                   syncService.enqueueUpdateDebounced(filePath, clientPostId, sourceArchiveId);
                 }

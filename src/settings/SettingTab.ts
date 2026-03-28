@@ -50,7 +50,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   private dangerZoneComponent: ReturnType<typeof mount> | null = null;
   private syncSettingsComponent: ReturnType<typeof mount> | null = null;
   private crossPostComponent: ReturnType<typeof mount> | null = null;
-  private isDisplaying = false;
+  /** Generation counter to detect stale async display calls */
+  private displayGeneration = 0;
   private settingsDirty = false;
 
   constructor(app: App, plugin: SocialArchiverPlugin) {
@@ -150,8 +151,10 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   display(): void {
     // Clean up existing Svelte components synchronously before display
     this.cleanupComponents();
-    // Call async display method
-    void this.displayAsync();
+    // Increment generation so any in-flight displayAsync stops adding elements
+    const generation = ++this.displayGeneration;
+    // Call async display method with generation tracking
+    void this.displayAsync(generation);
   }
 
   /**
@@ -192,11 +195,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     }
   }
 
-  private async displayAsync(): Promise<void> {
-    // Prevent concurrent display calls
-    if (this.isDisplaying) return;
-    this.isDisplaying = true;
-
+  private async displayAsync(generation: number): Promise<void> {
     const { containerEl } = this;
 
     try {
@@ -710,7 +709,9 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     this.renderTTSSettings(containerEl);
 
     // AI Comment Settings Section (Desktop Only)
+    if (this.isStaleGeneration(generation)) return;
     await this.renderAICommentSettings(containerEl);
+    if (this.isStaleGeneration(generation)) return;
 
     // Naver Settings Section
     this.renderNaverSettings(containerEl);
@@ -777,9 +778,14 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         .onClick(() => {
           window.open(PERSONAL_GITHUB_URL, '_blank');
         }));
-    } finally {
-      this.isDisplaying = false;
+    } catch (err) {
+      console.error('[Social Archiver] Settings display error:', err);
     }
+  }
+
+  /** Return true when this generation has been superseded by a new display() call */
+  private isStaleGeneration(generation: number): boolean {
+    return generation !== this.displayGeneration;
   }
 
   /**

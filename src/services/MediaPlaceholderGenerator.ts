@@ -74,4 +74,49 @@ export class MediaPlaceholderGenerator {
       detectedAt: new Date().toISOString(),
     };
   }
+
+  /**
+   * Find all expired-media placeholder callout blocks in a full note.
+   *
+   * Returns an array of { result, blockText } where blockText is the full
+   * `> [!warning] ...` callout (may span multiple lines) that should be
+   * replaced upon successful re-download.
+   */
+  static findAllPlaceholders(
+    noteContent: string
+  ): Array<{ result: MediaExpiredResult; blockText: string }> {
+    // Match the full 4-line callout block (each line starts with "> ")
+    const blockRegex =
+      /^> \[!warning\] Media Unavailable \(\d+\)\n> This (?:image|video|audio|document) could not be downloaded \([^)]+\)\.\n> Original URL: `.+`\n> <!-- social-archiver:expired-media:(?:image|video|audio|document):.+? -->/gm;
+
+    const matches: Array<{ result: MediaExpiredResult; blockText: string }> = [];
+
+    let match: RegExpExecArray | null;
+    while ((match = blockRegex.exec(noteContent)) !== null) {
+      const blockText = match[0];
+      const parsed = this.parsePlaceholder(blockText);
+      if (parsed) {
+        matches.push({ result: parsed, blockText });
+      }
+    }
+
+    return matches;
+  }
+
+  /**
+   * Replace a placeholder callout block with a normal media embed.
+   *
+   * @param noteContent - Full note markdown
+   * @param blockText   - The exact callout block text to replace (from findAllPlaceholders)
+   * @param localPath   - Vault-relative path to the downloaded media file
+   * @returns Updated note content with the placeholder replaced
+   */
+  static replacePlaceholderWithEmbed(
+    noteContent: string,
+    blockText: string,
+    localPath: string
+  ): string {
+    const embed = `![[${localPath}]]`;
+    return noteContent.replace(blockText, embed);
+  }
 }

@@ -55,7 +55,7 @@ export class ComposedPostSyncService {
   private app: App;
   private vault: Vault;
   private settings: SocialArchiverSettings;
-  private apiClient: WorkersAPIClient;
+  private getApiClient: () => WorkersAPIClient;
   private saveSettings: () => Promise<void>;
   private unregisterDeleteListener?: () => void;
 
@@ -92,13 +92,15 @@ export class ComposedPostSyncService {
     app: App,
     vault: Vault,
     settings: SocialArchiverSettings,
-    apiClient: WorkersAPIClient,
+    apiClientOrGetter: WorkersAPIClient | (() => WorkersAPIClient),
     saveSettings: () => Promise<void>
   ) {
     this.app = app;
     this.vault = vault;
     this.settings = settings;
-    this.apiClient = apiClient;
+    this.getApiClient = typeof apiClientOrGetter === 'function'
+      ? apiClientOrGetter
+      : () => apiClientOrGetter;
     this.saveSettings = saveSettings;
   }
 
@@ -294,7 +296,7 @@ export class ComposedPostSyncService {
     mediaItems: ComposedMediaItem[]
   ): Promise<void> {
     const request = this.buildCreateRequest(entry, parsed, mediaItems);
-    const result = await this.apiClient.createComposedPost(request);
+    const result = await this.getApiClient().createComposedPost(request);
 
     // Suppress background watcher before writing sync fields to avoid re-triggering
     this.suppressSelfWrite(entry.clientPostId);
@@ -323,7 +325,7 @@ export class ComposedPostSyncService {
     }
 
     const request = this.buildUpdateRequest(entry, parsed, mediaItems);
-    const result = await this.apiClient.updateComposedPost(entry.sourceArchiveId, request);
+    const result = await this.getApiClient().updateComposedPost(entry.sourceArchiveId, request);
 
     // Suppress background watcher before writing sync fields to avoid re-triggering
     this.suppressSelfWrite(entry.clientPostId);
@@ -519,8 +521,8 @@ export class ComposedPostSyncService {
     const deleteHandler = (abstractFile: TAbstractFile) => {
       void this.onFileDeleted(abstractFile.path);
     };
-    this.vault.on('delete', deleteHandler);
-    this.unregisterDeleteListener = () => this.vault.off('delete', deleteHandler);
+    this.vault.on('delete', deleteHandler as (...data: unknown[]) => unknown);
+    this.unregisterDeleteListener = () => this.vault.off('delete', deleteHandler as (...data: unknown[]) => unknown);
 
     // Listen for MetadataCache changes to detect background edits to composed posts
     this.metadataCacheRef = this.app.metadataCache.on('changed', (file: TFile) => {

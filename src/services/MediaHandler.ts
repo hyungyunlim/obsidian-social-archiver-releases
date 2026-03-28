@@ -4,6 +4,7 @@ import type { Media, Platform } from '@/types/post';
 import { normalizePath, requestUrl } from 'obsidian';
 import type { WorkersAPIClient } from './WorkersAPIClient';
 import { ImageOptimizer } from './ImageOptimizer';
+import type { MediaExpiredResult } from './MediaPlaceholderGenerator';
 
 /**
  * MediaHandler configuration
@@ -418,6 +419,51 @@ export class MediaHandler implements IService {
   }
 
   /**
+   * Re-download a single expired media item.
+   *
+   * Downloads from the original URL (with proxy fallback), saves to vault,
+   * and returns the vault-relative path on success.
+   *
+   * @param expired - Parsed placeholder data (type + originalUrl)
+   * @param platform - Platform for folder organization
+   * @param postId - Post identifier for path generation
+   * @param authorUsername - Author username for filename
+   * @param index - Media index for filename numbering
+   * @returns Vault-relative path on success, null on failure
+   */
+  async redownloadExpiredMedia(
+    expired: MediaExpiredResult,
+    platform: Platform,
+    postId: string,
+    authorUsername: string,
+    index: number
+  ): Promise<string | null> {
+    try {
+      const media: Media = {
+        type: expired.type === 'document' ? 'image' : expired.type,
+        url: expired.originalUrl,
+      };
+
+      const result = await this.downloadSingleMedia(
+        media,
+        platform,
+        postId,
+        authorUsername,
+        index,
+        index
+      );
+
+      return result.localPath;
+    } catch (error) {
+      console.warn(
+        `[MediaHandler] redownloadExpiredMedia failed for ${expired.originalUrl.substring(0, 80)}:`,
+        error instanceof Error ? error.message : String(error)
+      );
+      return null;
+    }
+  }
+
+  /**
    * Download a single media file
    * @param index - File naming index (startIndex + arrayIndex)
    * @param sourceIndex - Position within the input media array (arrayIndex), used for index-safe lookup
@@ -460,7 +506,7 @@ export class MediaHandler implements IService {
 
       for (const candidateUrl of downloadCandidates) {
         try {
-          const candidateData = await this.downloadFromUrl(candidateUrl, platform, media.url);
+          const candidateData = await this.downloadWithRetry(candidateUrl, platform, media.url);
 
           // URL-only detection is not enough for video URLs without extension.
           // Infer video format from binary to preserve video type and extension.
@@ -691,6 +737,67 @@ export class MediaHandler implements IService {
       return MediaHandler.CORS_BLOCKED_DOMAINS.some(domain => hostname.includes(domain));
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Check if an error is transient (network timeout, 5xx) and worth retrying.
+   * 4xx errors (404, 403, etc.) are NOT transient — move to next candidate immediately.
+   */
+  private static isTransientError(error: unknown): boolean {
+    if (!(error instanceof Error)) return false;
+
+    const message = error.message.toLowerCase();
+
+    // Network-level errors
+    if (
+      message.includes('timeout') ||
+      message.includes('network') ||
+      message.includes('econnreset') ||
+      message.includes('econnrefused') ||
+      message.includes('enotfound') ||
+      message.includes('fetch failed') ||
+      message.includes('aborted')
+    ) {
+      return true;
+    }
+
+    // 5xx server errors (retry-worthy)
+    if (/\b5\d{2}\b/.test(message)) {
+      return true;
+    }
+
+    // Explicit HTTP status checks (proxy responses include "HTTP 5xx" or "returned 5xx")
+    if (
+      message.includes('http 500') ||
+      message.includes('http 502') ||
+      message.includes('http 503') ||
+      message.includes('http 504') ||
+      message.includes('returned 500') ||
+      message.includes('returned 502') ||
+      message.includes('returned 503') ||
+      message.includes('returned 504')
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Download from URL with a single retry for transient errors.
+   * 4xx errors skip retry and propagate immediately.
+   */
+  private async downloadWithRetry(url: string, platform?: Platform, originalUrl?: string): Promise<ArrayBuffer> {
+    try {
+      return await this.downloadFromUrl(url, platform, originalUrl);
+    } catch (error) {
+      if (MediaHandler.isTransientError(error)) {
+        console.debug(`[MediaHandler] Transient error downloading ${url.substring(0, 80)}..., retrying in 1s`);
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 1000));
+        return await this.downloadFromUrl(url, platform, originalUrl);
+      }
+      throw error;
     }
   }
 

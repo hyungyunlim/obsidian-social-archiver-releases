@@ -318,6 +318,7 @@ function applyComposerTopOverlapSafeArea(): void {
  * Collapse the composer to show only placeholder
  */
 function collapse(): void {
+  closePostModeMenu();
   isExpanded = false;
   error = null;
   content = ''; // Clear content on collapse
@@ -602,7 +603,8 @@ async function handleSubmit(): Promise<void> {
 
           const response = await capturedClient.crossPost(crossPostRequest);
 
-          if (response.results.threads?.status === 'posted') {
+          const threadsResult = response.results?.threads;
+          if (threadsResult?.status === 'posted') {
             const msg = capturedCrossPostOverLimit
               ? `Cross-posted to Threads (${capturedThreadCount} thread posts)`
               : 'Cross-posted to Threads!';
@@ -612,16 +614,17 @@ async function handleSubmit(): Promise<void> {
             if (capturedFilePath && capturedOnCrossPostComplete) {
               try {
                 await capturedOnCrossPostComplete(capturedFilePath, response.crossPostId, {
-                  postId: response.results.threads.postId,
-                  postUrl: response.results.threads.postUrl,
+                  postId: threadsResult.postId,
+                  postUrl: threadsResult.postUrl,
                 });
               } catch {
                 // Metadata save failure should not affect user experience
               }
             }
-          } else if (response.results.threads?.status === 'failed') {
-            const errMsg = response.results.threads.error ?? 'Unknown error';
-            banner?.fail(errMsg);
+          } else if (threadsResult?.status === 'failed') {
+            banner?.fail(threadsResult.error ?? 'Unknown error');
+          } else {
+            banner?.fail('Cross-post response missing Threads result');
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : 'Unknown error';

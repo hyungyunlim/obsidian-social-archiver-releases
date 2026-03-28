@@ -57,6 +57,8 @@ export class ReaderHighlightManager {
   private markTapHandler: ((e: Event) => void) | null = null;
   private pendingToolbarTimeout: ReturnType<typeof setTimeout> | null = null;
   private selectionDismissTimeout: ReturnType<typeof setTimeout> | null = null;
+  /** Debounce timer for selectionchange-based toolbar show on mobile */
+  private selectionShowTimeout: ReturnType<typeof setTimeout> | null = null;
   /** When true, selectionchange dismiss is suppressed (mark-tap toolbar active) */
   private markTapToolbarActive = false;
 
@@ -141,15 +143,20 @@ export class ReaderHighlightManager {
     };
     bodyEl.addEventListener('click', this.markTapHandler);
 
-    // Dismiss toolbar when selection is cleared.
-    // On mobile, debounce to avoid premature dismiss: iOS/Android native menus
-    // can momentarily collapse the selection during their own interaction.
+    // Dismiss toolbar when selection is cleared, AND show toolbar when a valid
+    // selection appears on mobile. On Android, touchend may fire before the
+    // selection is fully stable, so selectionchange is the reliable trigger.
     this.selectionHandler = () => {
       // Don't dismiss when mark-tap toolbar is active (no selection expected)
       if (this.markTapToolbarActive) return;
 
       const sel = document.getSelection();
       if (!sel || sel.isCollapsed || sel.toString().trim().length === 0) {
+        // Cancel any pending show
+        if (this.selectionShowTimeout) {
+          clearTimeout(this.selectionShowTimeout);
+          this.selectionShowTimeout = null;
+        }
         if (Platform.isMobile) {
           if (this.selectionDismissTimeout) clearTimeout(this.selectionDismissTimeout);
           this.selectionDismissTimeout = setTimeout(() => {
@@ -162,10 +169,21 @@ export class ReaderHighlightManager {
         } else {
           this.hideToolbar();
         }
-      } else if (this.selectionDismissTimeout) {
-        // Selection was restored before timeout — cancel dismiss
-        clearTimeout(this.selectionDismissTimeout);
-        this.selectionDismissTimeout = null;
+      } else {
+        if (this.selectionDismissTimeout) {
+          // Selection was restored before timeout — cancel dismiss
+          clearTimeout(this.selectionDismissTimeout);
+          this.selectionDismissTimeout = null;
+        }
+        // On mobile: also use selectionchange to show/update toolbar.
+        // This catches selections that stabilize after touchend (common on Android).
+        if (Platform.isMobile && !this.toolbar) {
+          if (this.selectionShowTimeout) clearTimeout(this.selectionShowTimeout);
+          this.selectionShowTimeout = setTimeout(() => {
+            this.selectionShowTimeout = null;
+            this.checkSelection();
+          }, 150);
+        }
       }
     };
     document.addEventListener('selectionchange', this.selectionHandler);
@@ -182,6 +200,10 @@ export class ReaderHighlightManager {
     if (this.selectionDismissTimeout) {
       clearTimeout(this.selectionDismissTimeout);
       this.selectionDismissTimeout = null;
+    }
+    if (this.selectionShowTimeout) {
+      clearTimeout(this.selectionShowTimeout);
+      this.selectionShowTimeout = null;
     }
     if (this.mouseUpHandler) {
       document.removeEventListener('mouseup', this.mouseUpHandler);

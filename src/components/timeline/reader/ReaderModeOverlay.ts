@@ -292,6 +292,9 @@ export class ReaderModeOverlay {
       // visualViewport.offsetTop.  Apply a platform-specific minimum so the
       // header never sits under the status bar / camera cutout.
       const androidMinTopInset = ObsidianPlatform.isAndroidApp ? 32 : 0;
+      // Android gesture bar (~24dp) or 3-button nav (~48dp) is not reported
+      // by env(safe-area-inset-bottom) or visualViewport in Obsidian WebView.
+      const androidMinBottomInset = ObsidianPlatform.isAndroidApp ? 24 : 0;
       const topInset = Math.max(androidMinTopInset, Math.round(viewport?.offsetTop ?? 0));
 
       let bottomInset = 0;
@@ -303,11 +306,16 @@ export class ReaderModeOverlay {
         // Ignore keyboard-driven viewport shrink; we only want system UI inset.
         if (bottomInset > 120) bottomInset = 0;
       }
+      bottomInset = Math.max(androidMinBottomInset, bottomInset);
 
       this.container.setCssProps({
         '--reader-safe-area-top-fallback': `${topInset}px`,
         '--reader-safe-area-bottom-fallback': `${bottomInset}px`,
       });
+      // Also set on documentElement so elements outside the container (e.g.
+      // highlight toolbar on document.body) can read the fallback values.
+      document.documentElement.style.setProperty('--reader-safe-area-bottom-fallback', `${bottomInset}px`);
+      document.documentElement.style.setProperty('--reader-safe-area-top-fallback', `${topInset}px`);
     };
 
     this.viewportSafeAreaListener = applyInsets;
@@ -325,6 +333,10 @@ export class ReaderModeOverlay {
     this.attachedVisualViewport?.removeEventListener('resize', this.viewportSafeAreaListener);
     this.attachedVisualViewport?.removeEventListener('scroll', this.viewportSafeAreaListener);
     window.removeEventListener('resize', this.viewportSafeAreaListener);
+
+    // Clean up global CSS vars
+    document.documentElement.style.removeProperty('--reader-safe-area-bottom-fallback');
+    document.documentElement.style.removeProperty('--reader-safe-area-top-fallback');
 
     this.viewportSafeAreaListener = null;
     this.attachedVisualViewport = null;

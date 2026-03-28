@@ -1382,6 +1382,39 @@ export class WorkersAPIClient implements IService {
     );
   }
 
+  // ============================================================================
+  // Media Re-preserve
+  // ============================================================================
+
+  /**
+   * Request the server to re-preserve media for an archive.
+   *
+   * Fire-and-forget — callers should not depend on the result for the
+   * main re-download flow.  The server will re-fetch & store media in R2.
+   */
+  async represerveMedia(
+    archiveId: string,
+    reason: string = 'client_redownload_command'
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      this.ensureInitialized();
+
+      return await this.request<{ success: boolean; error?: string }>(
+        `/api/user/archives/${encodeURIComponent(archiveId)}/represerve-media`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ reason }),
+        }
+      );
+    } catch (error) {
+      console.error(`[WorkersAPIClient] represerveMedia failed for ${archiveId}:`, error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
   /**
    * Convert ArrayBuffer to base64 string
    */

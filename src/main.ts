@@ -64,6 +64,7 @@ import { AnnotationOutboundService } from './plugin/sync/AnnotationOutboundServi
 import { ArchiveTagOutboundService } from './plugin/sync/ArchiveTagOutboundService';
 import { ArchiveStateSyncService } from './plugin/sync/ArchiveStateSyncService';
 import { ArchiveStateOutboundService } from './plugin/sync/ArchiveStateOutboundService';
+import { MediaPlaceholderGenerator } from './services/MediaPlaceholderGenerator';
 
 // Import styles for Vite to process
 import './styles/index.css';
@@ -312,6 +313,7 @@ export default class SocialArchiverPlugin extends Plugin {
       postCurrentNote: () => this.postCurrentNote(),
       postAndShareCurrentNote: () => this.postAndShareCurrentNote(),
       getEditorTTSController: () => this.editorTTSController,
+      redownloadExpiredMedia: () => this.redownloadExpiredMedia(),
     });
 
     // Add settings tab
@@ -1506,6 +1508,102 @@ export default class SocialArchiverPlugin extends Plugin {
    */
   private async postAndShareCurrentNote(): Promise<void> {
     await this.postShareService?.postAndShareCurrentNote();
+  }
+
+  /**
+   * Re-download expired media in the active note.
+   *
+   * Scans the current note for `<!-- social-archiver:expired-media:... -->`
+   * placeholder callouts, attempts to re-download each one, and replaces
+   * successful placeholders with normal media embeds.
+   */
+  private async redownloadExpiredMedia(): Promise<void> {
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!activeFile) {
+      new Notice('No active note');
+      return;
+    }
+
+    // Read note content
+    let content = await this.app.vault.read(activeFile);
+
+    // Find all expired-media placeholder blocks
+    const placeholders = MediaPlaceholderGenerator.findAllPlaceholders(content);
+    if (placeholders.length === 0) {
+      new Notice('No expired media found in this note');
+      return;
+    }
+
+    // Extract platform and metadata from frontmatter
+    const cache = this.app.metadataCache.getFileCache(activeFile);
+    const frontmatter = cache?.frontmatter;
+    const platform = (frontmatter?.platform as Platform) || 'unknown';
+    const authorHandle = (frontmatter?.authorHandle as string)?.replace(/^@/, '') || 'unknown';
+    const sourceArchiveId = frontmatter?.sourceArchiveId as string | undefined;
+
+    // Derive postId from the note's basename (safe fallback)
+    const postId = activeFile.basename.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 60) || 'unknown';
+
+    new Notice(`Re-downloading ${placeholders.length} expired media...`);
+
+    // Fire-and-forget: request server re-preserve if we have an archiveId
+    if (sourceArchiveId && this.apiClient) {
+      void this.apiClient.represerveMedia(sourceArchiveId, 'client_redownload_command');
+    }
+
+    // Create a MediaHandler for this operation
+    const { MediaHandler } = await import('./services/MediaHandler');
+    const mediaHandler = new MediaHandler({
+      vault: this.app.vault,
+      app: this.app,
+      workersClient: this.apiClient,
+      basePath: this.settings.mediaPath || 'attachments/social-archives',
+      optimizeImages: true,
+      imageQuality: 0.8,
+      maxImageDimension: 2048,
+    });
+
+    let recovered = 0;
+    let failed = 0;
+
+    // Process each placeholder sequentially to avoid race conditions on content
+    for (let i = 0; i < placeholders.length; i++) {
+      const placeholder = placeholders[i];
+      if (!placeholder) continue;
+
+      const localPath = await mediaHandler.redownloadExpiredMedia(
+        placeholder.result,
+        platform,
+        postId,
+        authorHandle,
+        i
+      );
+
+      if (localPath) {
+        content = MediaPlaceholderGenerator.replacePlaceholderWithEmbed(
+          content,
+          placeholder.blockText,
+          localPath
+        );
+        recovered++;
+      } else {
+        failed++;
+      }
+    }
+
+    // Write updated content back to note if any placeholders were replaced
+    if (recovered > 0) {
+      await this.app.vault.modify(activeFile, content);
+    }
+
+    // Show summary
+    if (failed === 0) {
+      new Notice(`Recovered ${recovered} media`);
+    } else if (recovered === 0) {
+      new Notice(`Failed to recover ${failed} media`);
+    } else {
+      new Notice(`Recovered ${recovered} media, ${failed} failed`);
+    }
   }
 
   // ============================================================================
