@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/constants/index.ts
- * Generated: 2026-03-28T13:18:05.829Z
+ * Generated: 2026-03-28T13:20:56.117Z
  *
  * To modify, edit the source file in shared/constants/ and run:
  *   npm run sync:shared
