@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/detection.ts
- * Generated: 2026-03-28T13:20:56.115Z
+ * Generated: 2026-04-01T02:04:38.745Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -272,8 +272,8 @@ export function extractPostIdFromUrl(platform: Platform, url: string): string | 
       }
 
       case 'tiktok': {
-        // /@user/video/{id} or /video/{id}
-        const m = pathname.match(/\/video\/(\d+)/);
+        // /@user/video/{id}, /video/{id}, /@user/photo/{id}, or /photo/{id}
+        const m = pathname.match(/\/(?:video|photo)\/(\d+)/);
         return m?.[1] ?? null;
       }
 

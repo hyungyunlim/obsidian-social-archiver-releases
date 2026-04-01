@@ -72,6 +72,12 @@ export interface ActiveCrawlJob {
  */
 export type CrawlJobUpdateCallback = (jobs: ActiveCrawlJob[]) => void;
 
+/**
+ * Callback type for when a crawling job is terminated (cancelled or timed out).
+ * Used to sync persistent storage (e.g., PendingJobsManager).
+ */
+export type CrawlJobTerminatedCallback = (jobId: string, reason: 'cancelled' | 'timeout') => void;
+
 // ============================================================================
 // CrawlJobTracker Service
 // ============================================================================
@@ -80,6 +86,9 @@ export type CrawlJobUpdateCallback = (jobs: ActiveCrawlJob[]) => void;
  * Centralized state management for active profile crawl jobs
  */
 export class CrawlJobTracker {
+  /** Stale job timeout: 5 minutes with no progress → auto-fail */
+  private static readonly STALE_TIMEOUT_MS = 5 * 60 * 1000;
+
   /** Active jobs indexed by internal job ID */
   private jobs: Map<string, ActiveCrawlJob> = new Map();
 
@@ -89,8 +98,14 @@ export class CrawlJobTracker {
   /** Timers for auto-cleanup of completed jobs */
   private completionTimers: Map<string, number> = new Map();
 
+  /** Timers for stale job detection */
+  private staleTimers: Map<string, number> = new Map();
+
   /** Map workerJobId -> internal jobId for WebSocket event matching after restart */
   private workerJobIdMap: Map<string, string> = new Map();
+
+  /** Callback for when a crawling job is terminated */
+  private onTerminatedCallback?: CrawlJobTerminatedCallback;
 
   // --------------------------------------------------------------------------
   // Job Lifecycle Methods
@@ -119,6 +134,9 @@ export class CrawlJobTracker {
     if (workerJobId) {
       this.workerJobIdMap.set(workerJobId, job.jobId);
     }
+
+    // Start stale job timer
+    this.resetStaleTimer(job.jobId);
 
     this.notifyListeners();
   }
@@ -152,6 +170,9 @@ export class CrawlJobTracker {
       if (job.metadata.workerJobId) {
         this.workerJobIdMap.set(job.metadata.workerJobId, job.id);
       }
+
+      // Start stale job timer for restored jobs
+      this.resetStaleTimer(job.id);
     }
 
     if (this.jobs.size > 0) {
@@ -168,6 +189,7 @@ export class CrawlJobTracker {
     const job = this.jobs.get(jobId);
     if (job && job.status === 'crawling') {
       job.receivedPosts++;
+      this.resetStaleTimer(jobId);
       this.notifyListeners();
     }
   }
@@ -182,6 +204,7 @@ export class CrawlJobTracker {
     const job = this.getJobByWorkerJobId(workerJobId);
     if (job && job.status === 'crawling') {
       job.receivedPosts++;
+      this.resetStaleTimer(job.jobId);
       this.notifyListeners();
       return true;
     }
@@ -199,6 +222,7 @@ export class CrawlJobTracker {
     if (job) {
       job.status = 'completed';
       job.receivedPosts = finalCount;
+      this.clearStaleTimer(jobId);
       this.notifyListeners();
 
       // Auto-hide after 5 seconds
@@ -221,8 +245,21 @@ export class CrawlJobTracker {
     if (job) {
       job.status = 'failed';
       job.error = error;
+      this.clearStaleTimer(jobId);
       this.notifyListeners();
     }
+  }
+
+  /**
+   * Cancel a crawling job (user-initiated via cancel button)
+   * Removes the job immediately without transitioning to failed/completed.
+   *
+   * @param jobId - Internal job ID
+   */
+  cancelJob(jobId: string): void {
+    this.clearStaleTimer(jobId);
+    this.onTerminatedCallback?.(jobId, 'cancelled');
+    this.dismissJob(jobId);
   }
 
   /**
@@ -316,6 +353,14 @@ export class CrawlJobTracker {
   // --------------------------------------------------------------------------
 
   /**
+   * Set callback for when a crawling job is terminated (cancelled or timed out).
+   * Used to sync persistent storage (e.g., PendingJobsManager).
+   */
+  onTerminated(callback: CrawlJobTerminatedCallback): void {
+    this.onTerminatedCallback = callback;
+  }
+
+  /**
    * Subscribe to job updates
    *
    * @param callback - Function called when jobs change
@@ -340,6 +385,10 @@ export class CrawlJobTracker {
     this.completionTimers.forEach((timer) => window.clearTimeout(timer));
     this.completionTimers.clear();
 
+    // Clear all stale timers
+    this.staleTimers.forEach((timer) => window.clearTimeout(timer));
+    this.staleTimers.clear();
+
     // Clear all state
     this.jobs.clear();
     this.listeners.clear();
@@ -356,6 +405,7 @@ export class CrawlJobTracker {
   private removeJobInternal(jobId: string): void {
     this.jobs.delete(jobId);
     this.completionTimers.delete(jobId);
+    this.clearStaleTimer(jobId);
 
     // Clean up workerJobId mapping
     for (const [wjid, jid] of this.workerJobIdMap.entries()) {
@@ -366,6 +416,35 @@ export class CrawlJobTracker {
     }
 
     this.notifyListeners();
+  }
+
+  /**
+   * Reset (or start) the stale timer for a crawling job.
+   * If no progress is received within STALE_TIMEOUT_MS, the job is auto-failed.
+   */
+  private resetStaleTimer(jobId: string): void {
+    this.clearStaleTimer(jobId);
+
+    const timer = window.setTimeout(() => {
+      const job = this.jobs.get(jobId);
+      if (job && job.status === 'crawling') {
+        this.onTerminatedCallback?.(jobId, 'timeout');
+        this.failJob(jobId, 'Timed out — no response from server');
+      }
+    }, CrawlJobTracker.STALE_TIMEOUT_MS);
+
+    this.staleTimers.set(jobId, timer);
+  }
+
+  /**
+   * Clear the stale timer for a job
+   */
+  private clearStaleTimer(jobId: string): void {
+    const timer = this.staleTimers.get(jobId);
+    if (timer) {
+      window.clearTimeout(timer);
+      this.staleTimers.delete(jobId);
+    }
   }
 
   /**

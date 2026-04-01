@@ -864,6 +864,28 @@ export class ShareAPIClient implements IService {
   }
 
   /**
+   * Import a share into D1 user_archives, creating an archive-backed identity
+   * for legacy plugin shares that only exist in KV.
+   *
+   * Endpoint: POST /api/user/posts/import-share/:shareId
+   * - Idempotent: returns existing archiveId if already imported
+   * - archiveId === shareId invariant (public URL unchanged)
+   *
+   * @param shareId - The share ID to import
+   * @returns archiveId and whether a new archive was created
+   */
+  async importShareArchive(shareId: string): Promise<{ archiveId: string; created: boolean }> {
+    return this.executeWithRetry(async () => {
+      const result = await this.httpRequest<{
+        success: boolean;
+        data: { archiveId: string; created: boolean };
+      }>('POST', `/api/user/posts/import-share/${shareId}`);
+
+      return result.data;
+    });
+  }
+
+  /**
    * Check if service is initialized
    */
   isInitialized(): boolean {

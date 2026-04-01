@@ -125,6 +125,7 @@ export interface WsProfileCrawlCompleteMessage {
   isBlog?: boolean;
   isXcancel?: boolean;
   isInstagramDirect?: boolean;
+  isFacebookDirect?: boolean;
 }
 
 // ============================================================================
@@ -562,10 +563,10 @@ export class RealtimeEventBridge {
     this.eventRefs.push(
       this.deps.events.on('ws:profile_crawl_complete', async (data: unknown) => {
         const message = data as WsProfileCrawlCompleteMessage;
-        const { jobId, handle, platform, posts, stats, isFediverse, isYouTube, isBlog, isXcancel, isInstagramDirect } =
+        const { jobId, handle, platform, posts, stats, isFediverse, isYouTube, isBlog, isXcancel, isInstagramDirect, isFacebookDirect } =
           message;
         // Direct API platforms: posts delivered via WebSocket (no BrightData webhook)
-        const isDirectApiPlatform = isFediverse || isYouTube || isBlog || isXcancel || isInstagramDirect;
+        const isDirectApiPlatform = isFediverse || isYouTube || isBlog || isXcancel || isInstagramDirect || isFacebookDirect;
 
         // Update CrawlJobTracker status
         if (jobId) {

@@ -126,7 +126,7 @@ export const PLATFORM_DEFINITIONS: Record<Platform, PlatformDefinition> = {
     supportsAI: true,
     maxMediaSize: 200 * 1024 * 1024, // 200MB (videos)
     rateLimit: { requestsPerHour: 100, requestsPerDay: 1000 },
-    features: { stories: false, live: true, reels: false, threads: false },
+    features: { stories: false, live: true, reels: true, threads: false },
   },
 
   x: {

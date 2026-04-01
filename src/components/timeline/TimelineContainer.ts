@@ -1710,9 +1710,14 @@ export class TimelineContainer {
     // Initialize CrawlStatusBanner
     this.crawlStatusBanner = new CrawlStatusBanner(bannerContainer);
 
-    // Handle dismiss callback
+    // Handle dismiss callback (completed/failed jobs)
     this.crawlStatusBanner.onDismiss((jobId) => {
       this.plugin.crawlJobTracker.dismissJob(jobId);
+    });
+
+    // Handle cancel callback (crawling jobs)
+    this.crawlStatusBanner.onCancel((jobId) => {
+      this.plugin.crawlJobTracker.cancelJob(jobId);
     });
 
     // Subscribe to job updates

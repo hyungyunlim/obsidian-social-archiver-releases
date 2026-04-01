@@ -39,6 +39,7 @@ export interface ActiveCrawlJob {
 }
 
 type DismissCallback = (jobId: string) => void;
+type CancelCallback = (jobId: string) => void;
 
 // ============================================================================
 // CrawlStatusBanner Component
@@ -54,6 +55,7 @@ export class CrawlStatusBanner {
   private bannerElements: Map<string, HTMLElement> = new Map();
   private iconElements: Map<string, HTMLElement> = new Map();
   private onDismissCallback?: DismissCallback;
+  private onCancelCallback?: CancelCallback;
   private cleanupFunctions: Array<() => void> = [];
 
   constructor(parentEl: HTMLElement) {
@@ -61,10 +63,17 @@ export class CrawlStatusBanner {
   }
 
   /**
-   * Set callback for dismiss button clicks
+   * Set callback for dismiss button clicks (completed/failed jobs)
    */
   public onDismiss(callback: DismissCallback): void {
     this.onDismissCallback = callback;
+  }
+
+  /**
+   * Set callback for cancel button clicks (crawling jobs)
+   */
+  public onCancel(callback: CancelCallback): void {
+    this.onCancelCallback = callback;
   }
 
   /**
@@ -124,8 +133,10 @@ export class CrawlStatusBanner {
     const textEl = bannerEl.createSpan({ cls: 'banner-text' });
     textEl.setText(this.getStatusText(job));
 
-    // Dismiss button (only for completed or failed jobs)
-    if (job.status === 'failed' || job.status === 'completed') {
+    // Cancel/dismiss button for all statuses
+    if (job.status === 'crawling') {
+      this.addCancelButton(bannerEl, job.jobId);
+    } else {
       this.addDismissButton(bannerEl, job.jobId);
     }
 
@@ -154,9 +165,13 @@ export class CrawlStatusBanner {
         this.setStatusIcon(iconEl, job.status);
       }
 
-      // Add dismiss button if transitioned to completed/failed
-      if ((job.status === 'failed' || job.status === 'completed') &&
-          !bannerEl.querySelector('.banner-dismiss')) {
+      // Replace cancel button with dismiss button on status transition
+      const existingBtn = bannerEl.querySelector('.banner-dismiss, .banner-cancel');
+      if (existingBtn) existingBtn.remove();
+
+      if (job.status === 'crawling') {
+        this.addCancelButton(bannerEl, job.jobId);
+      } else {
         this.addDismissButton(bannerEl, job.jobId);
       }
     }
@@ -169,7 +184,25 @@ export class CrawlStatusBanner {
   }
 
   /**
-   * Add dismiss button to a banner
+   * Add cancel button to a crawling banner
+   */
+  private addCancelButton(bannerEl: HTMLElement, jobId: string): void {
+    const cancelBtn = bannerEl.createEl('button', {
+      cls: 'banner-cancel clickable-icon csb-dismiss-btn',
+      attr: { 'aria-label': 'Cancel crawl' }
+    });
+    setIcon(cancelBtn, 'x');
+
+    const handleClick = (e: MouseEvent) => {
+      e.stopPropagation();
+      this.onCancelCallback?.(jobId);
+    };
+    cancelBtn.addEventListener('click', handleClick);
+    this.cleanupFunctions.push(() => cancelBtn.removeEventListener('click', handleClick));
+  }
+
+  /**
+   * Add dismiss button to a completed/failed banner
    */
   private addDismissButton(bannerEl: HTMLElement, jobId: string): void {
     const dismissBtn = bannerEl.createEl('button', {

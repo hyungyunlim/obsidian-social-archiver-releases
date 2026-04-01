@@ -584,6 +584,9 @@ export default class SocialArchiverPlugin extends Plugin {
 
       // Initialize CrawlJobTracker for profile crawl progress tracking
       this.crawlJobTracker = new CrawlJobTracker();
+      this.crawlJobTracker.onTerminated((jobId) => {
+        this.pendingJobsManager.removeJob(jobId).catch(() => {});
+      });
 
       // Initialize ArchiveJobTracker for archive progress banner
       this.archiveJobTracker = new ArchiveJobTracker();

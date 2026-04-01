@@ -91,6 +91,12 @@ export class PostShareService {
 
       const media = this.buildMediaFromPaths(postResult.copiedMediaPaths);
 
+      // Detect re-share: if sourceArchiveId already exists, reuse the same identity
+      const existingArchiveId = typeof frontmatter.sourceArchiveId === 'string'
+        ? frontmatter.sourceArchiveId
+        : undefined;
+      const isReshare = !!existingArchiveId;
+
       const postData: PostData = {
         platform: 'post' as Platform,
         id: (typeof frontmatter.originalPath === 'string' ? frontmatter.originalPath : null) || postedFile.path,
@@ -121,13 +127,20 @@ export class PostShareService {
         pluginVersion: this.deps.manifest.version,
       });
 
+      // Build share options — for re-shares, pass sourceArchiveId as shareId
+      // so the same public URL / archive identity is reused
+      const shareOptions: { username?: string; tier?: typeof settings.tier; shareId?: string } = {
+        username: settings.username,
+        tier: settings.tier,
+      };
+      if (isReshare && existingArchiveId) {
+        shareOptions.shareId = existingArchiveId;
+      }
+
       const postDataWithoutMedia = { ...postData, media: [] };
       const createResponse = await shareClient.createShare({
         postData: postDataWithoutMedia,
-        options: {
-          username: settings.username,
-          tier: settings.tier,
-        },
+        options: shareOptions,
       });
 
       let shareResponse = createResponse;
@@ -135,18 +148,41 @@ export class PostShareService {
         shareResponse = await shareClient.updateShareWithMedia(
           createResponse.shareId,
           postData,
-          {
-            username: settings.username,
-            tier: settings.tier,
-          }
+          shareOptions,
         );
       }
 
-      await this.updatePostFrontmatter(postedFile, content, {
+      // Build frontmatter updates
+      const frontmatterUpdates: Record<string, unknown> = {
         share: true,
         shareUrl: shareResponse.shareUrl,
         shareMode: settings.shareMode,
-      });
+      };
+
+      // For first-time shares: import into D1 to create archive-backed identity
+      // For re-shares: archive already exists, skip import
+      if (!isReshare) {
+        try {
+          const importResult = await shareClient.importShareArchive(shareResponse.shareId);
+
+          // Backfill stable identity fields
+          frontmatterUpdates.sourceArchiveId = importResult.archiveId;
+          frontmatterUpdates.clientPostId = typeof frontmatter.clientPostId === 'string'
+            ? frontmatter.clientPostId
+            : crypto.randomUUID();
+          frontmatterUpdates.postOrigin = 'shared';
+        } catch (importError) {
+          // Import failure must NOT break the share flow
+          // The share itself succeeded — user can still access the shared link
+          // Archive import can be retried on next share or via on-demand migration
+          console.warn(
+            '[Social Archiver] import-share failed (share itself succeeded):',
+            importError
+          );
+        }
+      }
+
+      await this.updatePostFrontmatter(postedFile, content, frontmatterUpdates);
 
       const clipboardShareUrl = getShareUrlForClipboard(
         shareResponse.shareUrl,

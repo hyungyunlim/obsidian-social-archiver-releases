@@ -748,12 +748,6 @@
   padding-top: 8px;
   margin-top: 8px;
   color: var(--text-muted);
-  flex-wrap: wrap;
-}
-
-/* On mobile, prevent action buttons from wrapping to a second line.
-   Overflow actions are collapsed into a "more" menu instead. */
-body.is-mobile .pcr-interactions {
   flex-wrap: nowrap;
 }
 
@@ -938,6 +932,9 @@ body.is-mobile .pcr-interactions {
 }
 
 .pcr-banner-buttons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   flex-shrink: 0;
 }
 

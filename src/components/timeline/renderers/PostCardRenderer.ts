@@ -2771,7 +2771,7 @@ export class PostCardRenderer extends Component {
     if (!isEmbedded) {
       interactions.addClass('pcr-interactions-bordered');
     }
-    interactions.setCssProps({ '--pcr-interaction-gap': ObsidianPlatform.isMobile ? '12px' : '16px' });
+    interactions.setCssProps({ '--pcr-interaction-gap': ObsidianPlatform.isMobile ? '12px' : '12px' });
 
     // Check if this post has embedded archives
     const hasEmbeddedArchives = post.embeddedArchives && post.embeddedArchives.length > 0;

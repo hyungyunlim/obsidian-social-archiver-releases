@@ -262,8 +262,8 @@ export function extractPostIdFromUrl(platform: Platform, url: string): string | 
       }
 
       case 'tiktok': {
-        // /@user/video/{id} or /video/{id}
-        const m = pathname.match(/\/video\/(\d+)/);
+        // /@user/video/{id}, /video/{id}, /@user/photo/{id}, or /photo/{id}
+        const m = pathname.match(/\/(?:video|photo)\/(\d+)/);
         return m?.[1] ?? null;
       }
 

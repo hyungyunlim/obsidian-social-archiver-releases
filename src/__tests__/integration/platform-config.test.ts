@@ -280,7 +280,7 @@ describe('Platform Configuration', () => {
 			const config = getPlatformConfig('tiktok');
 			expect(config.features.stories).toBe(false);
 			expect(config.features.live).toBe(true);
-			expect(config.features.reels).toBe(false);
+			expect(config.features.reels).toBe(true);
 			expect(config.features.threads).toBe(false);
 		});
 

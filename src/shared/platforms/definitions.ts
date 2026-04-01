@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/definitions.ts
- * Generated: 2026-03-28T13:20:56.114Z
+ * Generated: 2026-04-01T02:04:38.744Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -136,7 +136,7 @@ export const PLATFORM_DEFINITIONS: Record<Platform, PlatformDefinition> = {
     supportsAI: true,
     maxMediaSize: 200 * 1024 * 1024, // 200MB (videos)
     rateLimit: { requestsPerHour: 100, requestsPerDay: 1000 },
-    features: { stories: false, live: true, reels: false, threads: false },
+    features: { stories: false, live: true, reels: true, threads: false },
   },
 
   x: {
