@@ -9,21 +9,38 @@ import { TAG_NAME_MAX_LENGTH } from '@/types/tag';
 const TAG_WHITESPACE_PATTERN = /\s/;
 
 /**
+ * Normalize a raw tag name: trim whitespace and strip leading `#` characters.
+ *
+ * Obsidian uses `#` as a tag prefix in rendered markdown, but the stored
+ * tag name should never include it.  Without this normalisation users can
+ * end up with both `#work` and `work` stored as separate tags.
+ *
+ * @param name - Raw tag input (e.g. `#work`, `##design`, `  travel `)
+ * @returns Cleaned tag name without leading `#` (e.g. `work`, `design`, `travel`)
+ */
+export function normalizeTagName(name: string): string {
+  return name.trim().replace(/^#+/, '');
+}
+
+/**
  * Validate tag name against app rules.
  *
+ * The name is normalised first (trimmed, `#` prefix stripped) before
+ * validation so that user input like `#work` passes correctly.
+ *
  * Rules:
- * - 1..TAG_NAME_MAX_LENGTH chars after trimming
+ * - 1..TAG_NAME_MAX_LENGTH chars after normalising
  * - no whitespace characters (Obsidian tag compatibility)
  *
  * @param name - Raw tag name
  * @returns Error message when invalid, otherwise null
  */
 export function validateTagName(name: string): string | null {
-  const trimmed = name.trim();
-  if (!trimmed || trimmed.length > TAG_NAME_MAX_LENGTH) {
+  const normalised = normalizeTagName(name);
+  if (!normalised || normalised.length > TAG_NAME_MAX_LENGTH) {
     return `Tag name must be 1-${TAG_NAME_MAX_LENGTH} characters`;
   }
-  if (TAG_WHITESPACE_PATTERN.test(trimmed)) {
+  if (TAG_WHITESPACE_PATTERN.test(normalised)) {
     return 'Tag name cannot contain spaces';
   }
   return null;
@@ -58,8 +75,10 @@ export function mergeTagsCaseInsensitive(
   const result: string[] = [];
   const seen = new Set<string>();
 
-  // Add existing tags first (preserving their casing)
-  for (const tag of existingTags) {
+  // Add existing tags first (preserving their casing, normalising # prefix)
+  for (const rawTag of existingTags) {
+    const tag = normalizeTagName(rawTag);
+    if (!tag) continue;
     const lower = tag.toLowerCase();
     if (!seen.has(lower)) {
       seen.add(lower);
@@ -68,7 +87,9 @@ export function mergeTagsCaseInsensitive(
   }
 
   // Add selected tags only if not already present (case-insensitive)
-  for (const tag of selectedTags) {
+  for (const rawTag of selectedTags) {
+    const tag = normalizeTagName(rawTag);
+    if (!tag) continue;
     const lower = tag.toLowerCase();
     if (!seen.has(lower)) {
       seen.add(lower);
@@ -88,6 +109,6 @@ export function mergeTagsCaseInsensitive(
  */
 export function sanitizeTagNames(tags: string[]): string[] {
   return tags
-    .map(t => t.trim())
-    .filter(isValidTagName);
+    .map(normalizeTagName)
+    .filter(t => t.length > 0 && isValidTagName(t));
 }

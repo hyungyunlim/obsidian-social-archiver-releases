@@ -2,7 +2,7 @@ import { Modal, Notice, Platform, setIcon, type App } from 'obsidian';
 import type { TagStore } from '@/services/TagStore';
 import type { TagDefinition } from '@/types/tag';
 import { TAG_COLORS, TAG_NAME_MAX_LENGTH } from '@/types/tag';
-import { validateTagName } from '@/utils/tags';
+import { normalizeTagName, validateTagName } from '@/utils/tags';
 
 const HEX_COLOR_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
@@ -640,8 +640,8 @@ export class TagModal extends Modal {
       postTagsLower.add(t);
     }
 
-    // Filter by search query
-    const rawQuery = query.trim();
+    // Filter by search query — strip leading `#` so "#work" matches "work"
+    const rawQuery = normalizeTagName(query);
     const trimmedQuery = rawQuery.toLowerCase();
     const queryValidationError = rawQuery ? validateTagName(rawQuery) : null;
     const filteredTags = trimmedQuery

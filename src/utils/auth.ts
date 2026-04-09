@@ -133,6 +133,107 @@ export async function refreshUserCredits(plugin: SocialArchiverPlugin): Promise<
 }
 
 /**
+ * Result of an email change request
+ */
+interface EmailChangeRequestResult {
+  success: boolean;
+  newEmailMasked?: string;
+  expiresIn?: number;
+  errorCode?: string;
+  errorMessage?: string;
+}
+
+/**
+ * Request an email change for the authenticated user.
+ *
+ * Calls POST /api/user/change-email/request with the new email.
+ * On success the server sends a verification link to the new address.
+ *
+ * @param plugin - The plugin instance (provides authToken and workerUrl)
+ * @param newEmail - The desired new email address
+ * @returns Promise with masked email and expiry, or error details
+ */
+export async function requestEmailChange(
+  plugin: SocialArchiverPlugin,
+  newEmail: string
+): Promise<EmailChangeRequestResult> {
+  if (!isAuthenticated(plugin)) {
+    return { success: false, errorCode: 'UNAUTHORIZED', errorMessage: 'Not authenticated' };
+  }
+
+  try {
+    const response = await fetch(`${plugin.settings.workerUrl}/api/user/change-email/request`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${plugin.settings.authToken}`,
+        'X-Client': 'obsidian-plugin',
+        'X-Client-Version': plugin.manifest.version,
+      },
+      body: JSON.stringify({ newEmail }),
+    });
+
+    const data = await response.json() as {
+      success: boolean;
+      data?: { newEmailMasked: string; expiresIn: number };
+      error?: { code: string; message: string };
+    };
+
+    if (!data.success || !data.data) {
+      return {
+        success: false,
+        errorCode: data.error?.code || 'REQUEST_FAILED',
+        errorMessage: data.error?.message || 'Failed to request email change',
+      };
+    }
+
+    return {
+      success: true,
+      newEmailMasked: data.data.newEmailMasked,
+      expiresIn: data.data.expiresIn,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      errorCode: 'NETWORK_ERROR',
+      errorMessage: error instanceof Error ? error.message : 'Network error',
+    };
+  }
+}
+
+/**
+ * Refresh the user's canonical email from the server.
+ *
+ * Calls validate-token which now returns the canonical email from KV
+ * (not the stale JWT claim). If the server email differs from the
+ * locally stored email, settings are updated and persisted.
+ *
+ * @param plugin - The plugin instance
+ * @returns The latest canonical email, or null if refresh failed
+ */
+export async function refreshUserEmail(plugin: SocialArchiverPlugin): Promise<string | null> {
+  if (!isAuthenticated(plugin)) {
+    return null;
+  }
+
+  const authService = new AuthService(plugin.settings.workerUrl, plugin.manifest.version);
+  const validation = await authService.validateToken(plugin.settings.authToken);
+
+  if (!validation.success || !validation.data) {
+    return null;
+  }
+
+  const serverEmail = validation.data.email;
+
+  // Update local email if it changed (e.g. after email change completed in browser)
+  if (serverEmail && serverEmail !== plugin.settings.email) {
+    await plugin.saveSettingsPartial({ email: serverEmail });
+  }
+
+  return serverEmail;
+}
+
+/**
  * Display authentication error to user
  *
  * @param error - Error message

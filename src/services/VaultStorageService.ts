@@ -92,6 +92,7 @@ export class VaultStorageService {
     // Create MarkdownConverter if not provided
     this.markdownConverter = config.markdownConverter || new MarkdownConverter({
       frontmatterSettings: config.settings.frontmatter,
+      includeHashtagsAsObsidianTags: config.settings.includeHashtagsAsObsidianTags,
     });
   }
 

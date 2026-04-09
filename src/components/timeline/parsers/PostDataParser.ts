@@ -151,6 +151,11 @@ export class PostDataParser {
         return null;
       }
 
+      // Skip author note files (type: 'social-archiver-author')
+      if (frontmatter['type'] === 'social-archiver-author') {
+        return null;
+      }
+
       // Check if this is a profile-only document (type: profile)
       const isProfileDocument = frontmatter['type'] === 'profile';
 
@@ -1742,6 +1747,9 @@ export class PostDataParser {
       }
 
       if (!frontmatter['platform']) return null;
+
+      // Skip author note files (type: 'social-archiver-author')
+      if (frontmatter['type'] === 'social-archiver-author') return null;
 
       // Profile documents
       const isProfile = frontmatter['type'] === 'profile';

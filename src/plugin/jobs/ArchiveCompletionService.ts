@@ -16,6 +16,7 @@ import { normalizeUrlForDedup } from '../../utils/url';
 import { sanitizeTagNames, mergeTagsCaseInsensitive } from '../../utils/tags';
 import { ProfileDataMapper } from '../../services/mappers/ProfileDataMapper';
 import { getAuthorCatalogStore, type AuthorMetadataUpdate } from '../../services/AuthorCatalogStore';
+import type { AuthorNoteService } from '../../services/AuthorNoteService';
 import { MediaPathResolver, type VideoDownloadFailure } from '../media/MediaPathResolver';
 import { ensureFolderExists } from '../utils/ensureFolderExists';
 import type { CompletedJobResponse } from '../realtime/RealtimeEventBridge';
@@ -32,6 +33,7 @@ export interface ArchiveCompletionServiceDeps {
   archiveJobTracker: ArchiveJobTracker;
   apiClient: () => WorkersAPIClient | undefined;
   authorAvatarService: () => AuthorAvatarService | undefined;
+  authorNoteService: () => AuthorNoteService | undefined;
   tagStore: TagStore;
   refreshTimelineView: () => void;
   refreshCredits: () => Promise<void>;
@@ -72,6 +74,10 @@ export class ArchiveCompletionService {
 
   private get authorAvatarService(): AuthorAvatarService | undefined {
     return this.deps.authorAvatarService();
+  }
+
+  private get authorNoteService(): AuthorNoteService | undefined {
+    return this.deps.authorNoteService();
   }
 
   private get tagStore(): TagStore {
@@ -447,6 +453,15 @@ export class ArchiveCompletionService {
     // ========== STEP 4.5: Enrich Author Metadata ==========
     await this.enrichAuthorMetadata(archivedData, archivedData.platform);
 
+    // ========== STEP 4.6: Upsert Author Note ==========
+    if (this.settings.enableAuthorNotes && this.authorNoteService) {
+      try {
+        await this.authorNoteService.upsertFromArchive(archivedData);
+      } catch (e) {
+        console.warn('[Social Archiver] Failed to upsert author note (embedded):', e);
+      }
+    }
+
     // ========== STEP 5: Check YouTube Local Video ==========
     // If the parent post already downloaded a video for this URL via yt-dlp,
     // replace the archived media with ONLY the matching local video entry
@@ -559,6 +574,7 @@ export class ArchiveCompletionService {
     });
     const markdownConverter = new MarkdownConverter({
       frontmatterSettings: this.settings.frontmatter,
+      includeHashtagsAsObsidianTags: this.settings.includeHashtagsAsObsidianTags,
     });
 
     vaultManager.initialize();
@@ -786,6 +802,15 @@ export class ArchiveCompletionService {
 
     // Enrich author metadata (avatar download, followers, bio, etc.)
     await this.enrichAuthorMetadata(postData, postData.platform);
+
+    // Upsert author note (if feature enabled)
+    if (this.settings.enableAuthorNotes && this.authorNoteService) {
+      try {
+        await this.authorNoteService.upsertFromArchive(postData);
+      } catch (e) {
+        console.warn('[Social Archiver] Failed to upsert author note:', e);
+      }
+    }
 
     // Filter comments based on user option
     const shouldIncludeComments = pendingJob.metadata?.includeComments ?? this.settings.includeComments;

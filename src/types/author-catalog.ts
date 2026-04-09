@@ -119,6 +119,19 @@ export interface AuthorCatalogEntry {
   } | null;
 
   // ============================================================================
+  // Author Note fields
+  // ============================================================================
+
+  /** Whether this author has a vault-native author note */
+  hasNote?: boolean;
+
+  /** Vault-relative path to the author note file */
+  noteFilePath?: string;
+
+  /** User-set display name override from author note */
+  displayNameOverride?: string;
+
+  // ============================================================================
   // Subscription Options (from server subscription data)
   // ============================================================================
 

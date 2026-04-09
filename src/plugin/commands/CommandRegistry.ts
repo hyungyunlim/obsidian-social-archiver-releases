@@ -2,7 +2,10 @@ import { type App, Notice, Plugin } from 'obsidian';
 import type { BatchMode } from '../../types/batch-transcription';
 import type { BatchTranscriptionManager } from '../../services/BatchTranscriptionManager';
 import type { EditorTTSController } from '../../services/tts/EditorTTSController';
+import type { AuthorCatalogEntry } from '../../types/author-catalog';
+import type { AuthorNoteService } from '../../services/AuthorNoteService';
 import { TimelineView, VIEW_TYPE_TIMELINE } from '../../views/TimelineView';
+import { AuthorDetailView, VIEW_TYPE_AUTHOR_DETAIL } from '../../views/AuthorDetailView';
 
 /**
  * Narrow dependency interface for command registration.
@@ -13,6 +16,7 @@ export interface CommandRegistryDeps {
   plugin: Plugin;
   openArchiveModal: (initialUrl?: string) => void;
   activateTimelineView: (location?: 'sidebar' | 'main') => Promise<void>;
+  activateAuthorDetailView: (author: AuthorCatalogEntry, location?: 'sidebar' | 'main') => Promise<void>;
   refreshAllTimelines: () => Promise<void>;
   batchArchiveGoogleMapsLinks: (content: string, sourceNotePath?: string) => Promise<void>;
   startBatchTranscription: (mode: BatchMode) => Promise<void>;
@@ -21,6 +25,8 @@ export interface CommandRegistryDeps {
   postAndShareCurrentNote: () => Promise<void>;
   getEditorTTSController: () => EditorTTSController | undefined;
   redownloadExpiredMedia: () => Promise<void>;
+  getAuthorNoteService: () => AuthorNoteService | undefined;
+  getSettings: () => { enableAuthorNotes: boolean; archivePath: string };
 }
 
 /**
@@ -103,6 +109,37 @@ export function registerCommands(deps: CommandRegistryDeps): void {
         }
       }
       new Notice('Timeline refreshed');
+    },
+  });
+
+  // ── Author Detail View ────────────────────────────────────────────────
+
+  plugin.addCommand({
+    id: 'open-author-detail',
+    name: 'Open author detail',
+    checkCallback: (checking: boolean) => {
+      // Only available if there's an existing Author Detail leaf with valid state
+      const leaves = app.workspace.getLeavesOfType(VIEW_TYPE_AUTHOR_DETAIL);
+      const leafWithState = leaves.find((leaf) => {
+        const view = leaf.view;
+        if (view instanceof AuthorDetailView) {
+          const state = view.getState();
+          return typeof state['authorUrl'] === 'string' && state['authorUrl'] !== '';
+        }
+        return false;
+      });
+
+      if (!leafWithState) {
+        if (!checking) {
+          new Notice('No author detail view with a saved author. Open an author from the Author Catalog or Timeline first.');
+        }
+        return false;
+      }
+
+      if (!checking) {
+        void app.workspace.revealLeaf(leafWithState);
+      }
+      return true;
     },
   });
 
@@ -269,6 +306,69 @@ export function registerCommands(deps: CommandRegistryDeps): void {
         if (checking) return true;
         controller.stop();
         return true;
+      },
+    });
+
+    // ── Author Notes ──────────────────────────────────────────────────────
+
+    plugin.addCommand({
+      id: 'create-all-author-notes',
+      name: 'Create author notes for existing authors',
+      callback: async () => {
+        const noteService = deps.getAuthorNoteService();
+        const settings = deps.getSettings();
+        if (!noteService || !settings.enableAuthorNotes) {
+          new Notice('Author Notes feature is not enabled. Enable it in Settings → Author Notes.');
+          return;
+        }
+
+        new Notice('Scanning vault for authors...');
+
+        try {
+          const { AuthorVaultScanner } = await import('../../services/AuthorVaultScanner');
+          const { AuthorDeduplicator } = await import('../../services/AuthorDeduplicator');
+
+          const scanner = new AuthorVaultScanner({
+            app,
+            archivePath: settings.archivePath,
+            includeEmbeddedArchives: true,
+          });
+
+          const scanResult = await scanner.scanVault();
+          const deduplicator = new AuthorDeduplicator();
+          const dedupeResult = deduplicator.deduplicate(scanResult.authors, new Map());
+
+          const authors = dedupeResult.authors;
+          let created = 0;
+          let updated = 0;
+          const BATCH_SIZE = 50;
+
+          for (let i = 0; i < authors.length; i += BATCH_SIZE) {
+            const batch = authors.slice(i, i + BATCH_SIZE);
+            for (const author of batch) {
+              const result = await noteService.upsertFromCatalogEntry(author);
+              if (result) {
+                // Check if this was a new creation by seeing if archiveCount was 1
+                // In practice, upsertFromCatalogEntry handles both create and update
+                const data = noteService.readNote(result);
+                if (data && data.archiveCount === author.archiveCount) {
+                  created++;
+                } else {
+                  updated++;
+                }
+              }
+            }
+            // Yield to UI between batches
+            if (i + BATCH_SIZE < authors.length) {
+              await new Promise<void>(resolve => window.setTimeout(resolve, 0));
+            }
+          }
+
+          new Notice(`Author notes: ${created} created, ${updated} updated (${authors.length} authors total)`);
+        } catch (err) {
+          console.error('[Social Archiver] Bulk author note generation failed:', err);
+          new Notice('Failed to generate author notes. Check console for details.');
+        }
       },
     });
   }

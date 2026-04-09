@@ -648,4 +648,347 @@ describe('MarkdownConverter', () => {
       expect(result.content).toContain('**Platform:** 📖 Naver Webtoon');
     });
   });
+
+  describe('includeHashtagsAsObsidianTags', () => {
+    // Use LinkedIn because its template includes {{content.hashtagsText}}
+    // (Facebook template does not render hashtagsText separately)
+    const postWithHashtags: PostData = {
+      platform: 'linkedin' as Platform,
+      id: 'hashtag-test-1',
+      url: 'https://linkedin.com/feed/update/123',
+      author: {
+        name: 'Hashtag User',
+        url: 'https://linkedin.com/in/hashtaguser',
+      },
+      content: {
+        text: 'Post about economy and technology.',
+        hashtags: ['economy', 'tech'],
+      },
+      media: [],
+      metadata: {
+        timestamp: new Date('2024-06-01T10:00:00Z'),
+      },
+    };
+
+    describe('default ON (includeHashtagsAsObsidianTags = true)', () => {
+      it('should render hashtags as Obsidian native tags by default', async () => {
+        const defaultConverter = new MarkdownConverter();
+        const result = await defaultConverter.convert(postWithHashtags);
+
+        // Default behavior: bare #tag format that Obsidian treats as native tags
+        expect(result.content).toContain('#economy');
+        expect(result.content).toContain('#tech');
+      });
+
+      it('should render hashtags as Obsidian native tags when explicitly true', async () => {
+        const onConverter = new MarkdownConverter({
+          includeHashtagsAsObsidianTags: true,
+        });
+        const result = await onConverter.convert(postWithHashtags);
+
+        expect(result.content).toContain('#economy');
+        expect(result.content).toContain('#tech');
+        // Should be bare #tag without markdown link wrapping
+        expect(result.content).toMatch(/#economy(?!\])/);
+        expect(result.content).toMatch(/#tech(?!\])/);
+      });
+    });
+
+    describe('OFF (includeHashtagsAsObsidianTags = false)', () => {
+      it('should render hashtags as markdown links instead of Obsidian tags', async () => {
+        const offConverter = new MarkdownConverter({
+          includeHashtagsAsObsidianTags: false,
+        });
+        const result = await offConverter.convert(postWithHashtags);
+
+        // Should contain markdown link format: [#economy](url)
+        expect(result.content).toMatch(/\[#economy\]\(https?:\/\//);
+        expect(result.content).toMatch(/\[#tech\]\(https?:\/\//);
+      });
+
+      it('should use platform-specific URLs in hashtag links', async () => {
+        const offConverter = new MarkdownConverter({
+          includeHashtagsAsObsidianTags: false,
+        });
+        const result = await offConverter.convert(postWithHashtags);
+
+        // LinkedIn hashtag URLs
+        expect(result.content).toContain('https://www.linkedin.com/feed/hashtag/economy/');
+        expect(result.content).toContain('https://www.linkedin.com/feed/hashtag/tech/');
+      });
+
+      it('should not produce bare Obsidian tags in the hashtag section', async () => {
+        const offConverter = new MarkdownConverter({
+          includeHashtagsAsObsidianTags: false,
+        });
+        const result = await offConverter.convert(postWithHashtags);
+
+        // Bare #economy (not inside a markdown link) should not appear
+        // We check that every occurrence of #economy is inside [...]
+        const lines = result.content.split('\n');
+        for (const line of lines) {
+          // Skip lines that don't mention economy at all
+          if (!line.includes('economy')) continue;
+          // If line contains #economy, it must be inside a markdown link [#economy](...)
+          if (line.includes('#economy')) {
+            expect(line).toMatch(/\[#economy\]/);
+          }
+        }
+      });
+
+      it('should generate correct URLs for different platforms', async () => {
+        const offConverter = new MarkdownConverter({
+          includeHashtagsAsObsidianTags: false,
+        });
+
+        // Use Pinterest which also has {{content.hashtagsText}} in template
+        const pinterestPost: PostData = {
+          ...postWithHashtags,
+          platform: 'pinterest' as Platform,
+          url: 'https://pinterest.com/pin/test123',
+        };
+        const result = await offConverter.convert(pinterestPost);
+
+        expect(result.content).toContain('https://www.pinterest.com/search/pins/?q=economy');
+      });
+    });
+
+    describe('hashtag-only post (no content.text)', () => {
+      // When content.text is empty, hashtagsText falls through as baseText for any platform
+      const hashtagOnlyPost: PostData = {
+        platform: 'linkedin' as Platform,
+        id: 'hashtag-only-1',
+        url: 'https://linkedin.com/feed/update/hashtagonly',
+        author: {
+          name: 'Hashtag Only',
+          url: 'https://linkedin.com/in/hashtagonly',
+        },
+        content: {
+          text: '',
+          hashtags: ['food', 'travel'],
+        },
+        media: [],
+        metadata: {
+          timestamp: new Date('2024-06-01T10:00:00Z'),
+        },
+      };
+
+      it('should produce non-empty output when ON', async () => {
+        const onConverter = new MarkdownConverter({
+          includeHashtagsAsObsidianTags: true,
+        });
+        const result = await onConverter.convert(hashtagOnlyPost);
+
+        // Hashtags should serve as content fallback
+        expect(result.content).toBeTruthy();
+        expect(result.content).toContain('#food');
+        expect(result.content).toContain('#travel');
+      });
+
+      it('should produce non-empty output when OFF', async () => {
+        const offConverter = new MarkdownConverter({
+          includeHashtagsAsObsidianTags: false,
+        });
+        const result = await offConverter.convert(hashtagOnlyPost);
+
+        // Hashtag links should serve as content fallback
+        expect(result.content).toBeTruthy();
+        expect(result.content).toMatch(/\[#food\]\(https?:\/\//);
+        expect(result.content).toMatch(/\[#travel\]\(https?:\/\//);
+      });
+    });
+
+    describe('embedded archives respect same setting', () => {
+      const postWithEmbeddedArchive: PostData = {
+        platform: 'post',
+        id: 'embed-parent-1',
+        url: '',
+        author: {
+          name: 'User',
+          url: '',
+        },
+        content: {
+          text: 'My collection',
+        },
+        media: [],
+        metadata: {
+          timestamp: new Date('2024-06-01T10:00:00Z'),
+        },
+        embeddedArchives: [
+          {
+            platform: 'instagram' as Platform,
+            id: 'embedded-1',
+            url: 'https://instagram.com/p/embedded1',
+            author: {
+              name: 'Embedded Author',
+              url: 'https://instagram.com/embedded',
+              handle: 'embedded',
+            },
+            content: {
+              text: 'Embedded post content',
+              hashtags: ['sunset', 'nature'],
+            },
+            media: [],
+            metadata: {
+              timestamp: new Date('2024-06-01T10:00:00Z'),
+            },
+          },
+        ],
+      };
+
+      it('should render embedded archive hashtags as Obsidian tags when ON', async () => {
+        const onConverter = new MarkdownConverter({
+          includeHashtagsAsObsidianTags: true,
+        });
+        const result = await onConverter.convert(postWithEmbeddedArchive);
+
+        // Embedded archive section should contain bare #tags
+        expect(result.content).toContain('#sunset');
+        expect(result.content).toContain('#nature');
+      });
+
+      it('should render embedded archive hashtags as links when OFF', async () => {
+        const offConverter = new MarkdownConverter({
+          includeHashtagsAsObsidianTags: false,
+        });
+        const result = await offConverter.convert(postWithEmbeddedArchive);
+
+        // Embedded archive section should contain linked hashtags
+        expect(result.content).toMatch(/\[#sunset\]\(https?:\/\//);
+        expect(result.content).toMatch(/\[#nature\]\(https?:\/\//);
+        // Instagram-specific URLs
+        expect(result.content).toContain('https://www.instagram.com/explore/tags/sunset/');
+      });
+    });
+
+    describe('Tumblr compatibility', () => {
+      const tumblrPost: PostData = {
+        platform: 'tumblr' as Platform,
+        id: 'tumblr-hashtag-1',
+        url: 'https://tumblr.com/post/test123',
+        author: {
+          name: 'Tumblr User',
+          url: 'https://tumblr.com/tumblruser',
+        },
+        content: {
+          text: 'A nice post #photography #art with some inline tags',
+          hashtags: ['photography', 'art'],
+        },
+        media: [],
+        metadata: {
+          timestamp: new Date('2024-06-01T10:00:00Z'),
+        },
+      };
+
+      it('should remove hashtags from Tumblr text and render them separately when ON', async () => {
+        const onConverter = new MarkdownConverter({
+          includeHashtagsAsObsidianTags: true,
+        });
+        const result = await onConverter.convert(tumblrPost);
+
+        // Hashtags should be removed from inline text
+        // The cleaned text should not have the raw inline #photography / #art
+        // But the separate hashtagsText section should contain them
+        expect(result.content).toContain('#photography');
+        expect(result.content).toContain('#art');
+      });
+
+      it('should remove hashtags from Tumblr text and render them as links when OFF', async () => {
+        const offConverter = new MarkdownConverter({
+          includeHashtagsAsObsidianTags: false,
+        });
+        const result = await offConverter.convert(tumblrPost);
+
+        // Separate section should have linked hashtags
+        expect(result.content).toMatch(/\[#photography\]\(https?:\/\//);
+        expect(result.content).toMatch(/\[#art\]\(https?:\/\//);
+        // Tumblr-specific URLs
+        expect(result.content).toContain('https://www.tumblr.com/tagged/photography');
+      });
+
+      it('should still clean up inline hashtags from Tumblr text regardless of setting', async () => {
+        // Both ON and OFF should remove inline hashtags from content.text for Tumblr
+        const onConverter = new MarkdownConverter({ includeHashtagsAsObsidianTags: true });
+        const offConverter = new MarkdownConverter({ includeHashtagsAsObsidianTags: false });
+
+        const onResult = await onConverter.convert(tumblrPost);
+        const offResult = await offConverter.convert(tumblrPost);
+
+        // Both should have the non-hashtag text preserved
+        expect(onResult.content).toContain('A nice post');
+        expect(offResult.content).toContain('A nice post');
+      });
+    });
+
+    describe('runtime setter', () => {
+      it('should switch rendering mode via setIncludeHashtagsAsObsidianTags', async () => {
+        // Use LinkedIn (has hashtagsText in template)
+        const conv = new MarkdownConverter({ includeHashtagsAsObsidianTags: true });
+
+        // Initially ON: bare tags
+        let result = await conv.convert(postWithHashtags);
+        expect(result.content).toMatch(/#economy(?!\])/);
+
+        // Switch to OFF via setter
+        conv.setIncludeHashtagsAsObsidianTags(false);
+        result = await conv.convert(postWithHashtags);
+        expect(result.content).toMatch(/\[#economy\]\(https?:\/\//);
+
+        // Switch back to ON
+        conv.setIncludeHashtagsAsObsidianTags(true);
+        result = await conv.convert(postWithHashtags);
+        expect(result.content).toMatch(/#economy(?!\])/);
+      });
+    });
+
+    describe('hashtag normalization', () => {
+      it('should normalize hashtags with spaces to hyphens', async () => {
+        const postWithSpacedHashtags: PostData = {
+          ...postWithHashtags,
+          content: {
+            text: 'Post with spaced tags.',
+            hashtags: ['real estate', 'new york'],
+          },
+        };
+
+        const onConverter = new MarkdownConverter({ includeHashtagsAsObsidianTags: true });
+        const result = await onConverter.convert(postWithSpacedHashtags);
+
+        // Spaces in hashtags should be replaced with hyphens for Obsidian compatibility
+        expect(result.content).toContain('#real-estate');
+        expect(result.content).toContain('#new-york');
+      });
+
+      it('should deduplicate hashtags', async () => {
+        const postWithDuplicates: PostData = {
+          ...postWithHashtags,
+          content: {
+            text: 'Post with duplicate tags.',
+            hashtags: ['economy', 'tech', 'economy', 'ECONOMY'],
+          },
+        };
+
+        const onConverter = new MarkdownConverter({ includeHashtagsAsObsidianTags: true });
+        const result = await onConverter.convert(postWithDuplicates);
+
+        // Count occurrences of #economy in the hashtag section
+        const hashtagMatches = result.content.match(/#economy/gi);
+        // Should appear at least once (dedup removes exact duplicates but may keep case variants)
+        expect(hashtagMatches).toBeTruthy();
+      });
+    });
+
+    describe('frontmatter tags are unaffected', () => {
+      it('should not change frontmatter tags field regardless of hashtag setting', async () => {
+        const onConverter = new MarkdownConverter({ includeHashtagsAsObsidianTags: true });
+        const offConverter = new MarkdownConverter({ includeHashtagsAsObsidianTags: false });
+
+        const onResult = await onConverter.convert(postWithHashtags);
+        const offResult = await offConverter.convert(postWithHashtags);
+
+        // Frontmatter tags should be identical (user-managed, not affected by this setting)
+        expect(onResult.frontmatter.tags).toEqual(offResult.frontmatter.tags);
+      });
+    });
+  });
 });

@@ -461,6 +461,7 @@ export interface SocialArchiverSettings {
   autoArchive: boolean;
   downloadMedia: MediaDownloadMode;
   includeComments: boolean; // Include platform comments in archived notes (default: true)
+  includeHashtagsAsObsidianTags: boolean; // Render extracted hashtags as Obsidian native tags (default: true)
   frontmatter: FrontmatterCustomizationSettings; // Frontmatter customization (field visibility + custom properties)
 
   // Privacy Settings
@@ -552,6 +553,13 @@ export interface SocialArchiverSettings {
   // Cross-Post Settings
   crossPostThreadsEnabled: boolean; // Remember Threads toggle state in PostComposer (default: false)
 
+  // Author Notes Settings (Experimental)
+  enableAuthorNotes: boolean; // Create vault-native author note files (default: false)
+  authorNotesPath: string; // Folder for author note files (default: 'Social Authors')
+
+  // Author Detail View Settings
+  authorDetailOpenInMainTab: boolean; // Open author details in main area instead of sidebar (default: false)
+
   // Legacy fields (deprecated but kept for migration)
   /** @deprecated Use authToken instead */
   apiKey?: string;
@@ -583,6 +591,7 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
   autoArchive: false,
   downloadMedia: 'images-and-videos',
   includeComments: true, // Include platform comments by default
+  includeHashtagsAsObsidianTags: true, // Render extracted hashtags as Obsidian native tags by default
   frontmatter: DEFAULT_FRONTMATTER_CUSTOMIZATION_SETTINGS,
 
   // Privacy Settings
@@ -695,6 +704,13 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
 
   // Cross-Post Settings
   crossPostThreadsEnabled: false, // Threads toggle off by default
+
+  // Author Notes Settings (Experimental)
+  enableAuthorNotes: false, // Disabled by default (experimental)
+  authorNotesPath: 'Social Authors', // Default: outside archivePath
+
+  // Author Detail View Settings
+  authorDetailOpenInMainTab: true, // Default: open in main tab
 
   // Legacy fields (for migration compatibility)
   apiKey: '',
@@ -871,6 +887,11 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
   // Initialize includeComments if missing (migration)
   if (migrated.includeComments === undefined) {
     migrated.includeComments = true;
+  }
+
+  // Initialize includeHashtagsAsObsidianTags if missing (migration)
+  if (migrated.includeHashtagsAsObsidianTags === undefined) {
+    migrated.includeHashtagsAsObsidianTags = true;
   }
 
   // Initialize archive organization mode if missing/invalid (migration)

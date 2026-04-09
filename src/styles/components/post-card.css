@@ -20,14 +20,24 @@
 .pcr-card-container-nested {
   padding-left: 16px;
   padding-right: 16px;
-  border-left: 2px solid var(--background-modifier-border);
   margin-left: 4px;
   width: 100%;
+  position: relative;
+}
+
+.pcr-card-container-nested::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--background-modifier-border);
 }
 
 .pcr-card {
   user-select: text;
-  padding: 12px;
+  padding: 16px 12px;
   width: 100%;
 }
 
@@ -122,6 +132,28 @@
 
 .pcr-author-name:hover {
   color: var(--interactive-accent);
+}
+
+/* Author note hover tooltip (appended to document.body) */
+.pcr-author-note-tooltip {
+  position: fixed;
+  z-index: 9999;
+  max-width: 300px;
+  padding: 8px 12px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-size: 12px;
+  font-weight: normal;
+  line-height: 1.5;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  pointer-events: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* ========================================

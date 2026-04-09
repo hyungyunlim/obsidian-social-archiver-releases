@@ -554,6 +554,7 @@ export class BrunchSubscriptionPoller {
     // Generate markdown
     const markdownConverter = new MarkdownConverter({
       frontmatterSettings: this.plugin.settings.frontmatter,
+      includeHashtagsAsObsidianTags: this.plugin.settings.includeHashtagsAsObsidianTags,
     });
     const markdown = markdownConverter.convert(postData);
 

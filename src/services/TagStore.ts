@@ -1,7 +1,7 @@
 import { TFile, TFolder, type App } from 'obsidian';
 import type { TagDefinition, TagWithCount } from '@/types/tag';
 import { TAG_COLORS } from '@/types/tag';
-import { validateTagName } from '@/utils/tags';
+import { normalizeTagName, validateTagName } from '@/utils/tags';
 import type SocialArchiverPlugin from '@/main';
 
 /**
@@ -36,9 +36,9 @@ export class TagStore {
     return this.getTagDefinitions().find(t => t.id === id);
   }
 
-  /** Get a tag definition by name (case-insensitive) */
+  /** Get a tag definition by name (case-insensitive, `#` prefix stripped) */
   getTagByName(name: string): TagDefinition | undefined {
-    const lower = name.toLowerCase();
+    const lower = normalizeTagName(name).toLowerCase();
     return this.getTagDefinitions().find(t => t.name.toLowerCase() === lower);
   }
 
@@ -48,7 +48,7 @@ export class TagStore {
     if (validationError) {
       throw new Error(validationError);
     }
-    const trimmed = name.trim();
+    const trimmed = normalizeTagName(name);
 
     if (this.getTagByName(trimmed)) {
       throw new Error(`Tag "${trimmed}" already exists`);
@@ -208,6 +208,8 @@ export class TagStore {
       const files = this.getMarkdownFiles(folder);
       for (const file of files) {
         const cache = this.app.metadataCache.getFileCache(file);
+        // Skip author note files
+        if (cache?.frontmatter?.type === 'social-archiver-author') continue;
         const rawTagsValue: unknown = cache?.frontmatter?.tags;
         const tags = Array.isArray(rawTagsValue) ? rawTagsValue : [];
         if (Array.isArray(tags)) {
@@ -250,6 +252,8 @@ export class TagStore {
 
     for (const file of files) {
       const cache = this.app.metadataCache.getFileCache(file);
+      // Skip author note files
+      if (cache?.frontmatter?.type === 'social-archiver-author') continue;
       const rawTagsValue: unknown = cache?.frontmatter?.tags;
         const tags = Array.isArray(rawTagsValue) ? rawTagsValue : [];
       if (!Array.isArray(tags)) continue;
@@ -345,6 +349,8 @@ export class TagStore {
 
     for (const file of files) {
       const cache = this.app.metadataCache.getFileCache(file);
+      // Skip author note files
+      if (cache?.frontmatter?.type === 'social-archiver-author') continue;
       const rawTagsValue: unknown = cache?.frontmatter?.tags;
         const tags = Array.isArray(rawTagsValue) ? rawTagsValue : [];
       if (!Array.isArray(tags)) continue;
@@ -370,6 +376,8 @@ export class TagStore {
 
     for (const file of files) {
       const cache = this.app.metadataCache.getFileCache(file);
+      // Skip author note files
+      if (cache?.frontmatter?.type === 'social-archiver-author') continue;
       const rawTagsValue: unknown = cache?.frontmatter?.tags;
         const tags = Array.isArray(rawTagsValue) ? rawTagsValue : [];
       if (!Array.isArray(tags)) continue;
@@ -402,6 +410,8 @@ export class TagStore {
         this.countTagsInFolder(child, countMap, originalNames);
       } else if (child instanceof TFile && child.extension === 'md') {
         const cache = this.app.metadataCache.getFileCache(child);
+        // Skip author note files
+        if (cache?.frontmatter?.type === 'social-archiver-author') continue;
         const rawTagsValue: unknown = cache?.frontmatter?.tags;
         const tags = Array.isArray(rawTagsValue) ? rawTagsValue : [];
         if (Array.isArray(tags)) {

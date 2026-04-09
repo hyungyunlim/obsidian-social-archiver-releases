@@ -470,11 +470,14 @@ export class SubscriptionSyncService {
         }
 
         if (expiredMedia.length > 0) {
-          post._expiredMedia = expiredMedia;
-          new Notice(
-            `\u26A0\uFE0F ${expiredMedia.length} media item(s) could not be downloaded (CDN expired).`,
-            8000
-          );
+          const preservationInProgress = post.mediaPreservationStatus === 'pending' || post.mediaPreservationStatus === 'processing';
+          if (!preservationInProgress) {
+            post._expiredMedia = expiredMedia;
+            new Notice(
+              `\u26A0\uFE0F ${expiredMedia.length} media item(s) could not be downloaded (CDN expired).`,
+              8000
+            );
+          }
         }
       }
 

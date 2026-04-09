@@ -285,6 +285,7 @@ export interface PostData {
    * Stored as frontmatter after Whisper transcription completes
    */
   transcriptionLanguage?: string;
+  mediaPreservationStatus?: 'pending' | 'processing' | 'completed' | 'partial' | 'failed' | 'skipped';
   archiveStatus?: 'archiving' | 'completed' | 'failed'; // Archive status for loading states
   originalUrl?: string;     // Original URL (for preliminary documents with loading state)
   downloadedUrls?: string[]; // Downloaded URLs (for YouTube local video tracking)

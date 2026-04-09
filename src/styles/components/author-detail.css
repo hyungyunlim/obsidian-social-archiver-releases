@@ -1,0 +1,212 @@
+/*
+ * AuthorDetailContainer - Pure TypeScript author detail view styles
+ *
+ * Post cards reuse timeline-feed classes from the main timeline.
+ */
+
+/* ============================================
+ * Container
+ * ============================================ */
+
+.author-detail-ts-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--background-primary);
+}
+
+/* Profile header: subtle overlay + spacing */
+.author-detail-profile-header-target {
+  background: color-mix(in srgb, var(--background-secondary) 40%, transparent);
+  border: none;
+  border-radius: 12px;
+  margin: 4px 8px 12px;
+}
+
+.author-detail-feed-wrapper {
+  flex: 1;
+}
+
+/* ============================================
+ * Main area layout (wider padding + top spacing)
+ * Applied when author detail opens as a tab
+ * instead of the sidebar.
+ *
+ * All three classes land on the SAME element
+ * (containerEl), so use compound selectors.
+ * ============================================ */
+
+.author-detail-ts-container.is-main-area {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 8px 0;
+}
+
+.author-detail-ts-container.is-main-area .author-detail-profile-header-target {
+  margin: 12px 0 20px;
+}
+
+.author-detail-ts-container.is-main-area .ad-loading-state {
+  max-width: 100%;
+  padding: 0;
+}
+
+/* Tag chip bar: ensure it's not clipped and has proper spacing */
+.author-detail-ts-container > .tag-chip-bar {
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+
+/* ============================================
+ * Inline wrapper (within Timeline View)
+ * ============================================ */
+
+.author-detail-inline-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: var(--background-primary);
+}
+
+/* ============================================
+ * Loading state (skeleton cards)
+ * ============================================ */
+
+.ad-loading-state {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 672px;
+  margin: 16px auto 0;
+  padding: 0 8px;
+}
+
+.ad-skeleton-card {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-secondary);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ad-skeleton-header {
+  width: 40%;
+  height: 16px;
+  background: var(--background-modifier-border);
+  border-radius: 4px;
+  animation: ad-skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.ad-skeleton-body {
+  width: 100%;
+  height: 48px;
+  background: var(--background-modifier-border);
+  border-radius: 4px;
+  animation: ad-skeleton-pulse 1.5s ease-in-out 0.1s infinite;
+}
+
+.ad-skeleton-footer {
+  width: 60%;
+  height: 12px;
+  background: var(--background-modifier-border);
+  border-radius: 4px;
+  animation: ad-skeleton-pulse 1.5s ease-in-out 0.2s infinite;
+}
+
+@keyframes ad-skeleton-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* ============================================
+ * Empty state
+ * ============================================ */
+
+.ad-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.ad-empty-icon {
+  color: var(--text-faint);
+  margin-bottom: 12px;
+}
+
+.ad-empty-icon svg {
+  width: 32px;
+  height: 32px;
+}
+
+.ad-empty-text {
+  color: var(--text-muted);
+  font-size: 13px;
+  max-width: 280px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.ad-empty-clear-btn {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+}
+
+.ad-empty-clear-btn:hover {
+  background: var(--background-modifier-hover);
+}
+
+.ad-empty-clear-btn:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* ============================================
+ * Error state
+ * ============================================ */
+
+.ad-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.ad-error-icon {
+  color: var(--text-error);
+  margin-bottom: 12px;
+}
+
+.ad-error-icon svg {
+  width: 32px;
+  height: 32px;
+}
+
+.ad-error-text {
+  color: var(--text-muted);
+  font-size: 13px;
+  max-width: 280px;
+  line-height: 1.5;
+  margin: 0;
+}

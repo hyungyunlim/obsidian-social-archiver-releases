@@ -171,6 +171,24 @@ export interface ArchiveTagsUpdatedEvent {
 }
 
 // ============================================================================
+// Media Preserved Event (private channel)
+// ============================================================================
+
+/**
+ * Sent when the server completes R2 media preservation for an archive.
+ * The plugin should attempt to re-download media to replace placeholders.
+ */
+export interface MediaPreservedEventData {
+  archiveId: string;
+  status: 'completed' | 'partial' | 'failed';
+}
+
+export interface MediaPreservedEvent {
+  type: 'media_preserved';
+  data: MediaPreservedEventData;
+}
+
+// ============================================================================
 // Ping/Pong Events
 // ============================================================================
 
@@ -194,6 +212,7 @@ export type WebSocketEvent =
   | ShareDeletedEvent
   | ArchiveDeletedEvent
   | ArchiveTagsUpdatedEvent
+  | MediaPreservedEvent
   | PongEvent;
 
 // ============================================================================

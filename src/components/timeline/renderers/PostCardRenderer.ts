@@ -1292,12 +1292,65 @@ export class PostCardRenderer extends Component {
     });
 
     if (post.author.url) {
-      authorName.setAttribute('title', `Visit ${displayName}'s profile`);
+      authorName.setAttribute('title', `View ${displayName}'s detail`);
 
       authorName.addEventListener('click', (e) => {
         e.stopPropagation();
-        window.open(post.author.url, '_blank');
+        if (this.onViewAuthorCallback) {
+          this.onViewAuthorCallback(post.author.url, post.platform);
+        } else {
+          // Fallback: open external profile if no callback registered
+          window.open(post.author.url, '_blank');
+        }
       });
+
+      // Author note preview tooltip on hover (desktop only)
+      if (!ObsidianPlatform.isMobile && this.plugin?.settings?.enableAuthorNotes) {
+        const originalTitle = authorName.getAttribute('title') || '';
+        let activeTooltip: HTMLElement | null = null;
+
+        authorName.addEventListener('mouseenter', async () => {
+          // Prevent duplicate tooltips
+          if (activeTooltip) return;
+
+          const noteService = this.plugin.getAuthorNoteService();
+          if (!noteService) return;
+
+          const noteFile = noteService.findNote(post.author.url, post.author.name, post.platform);
+          if (!noteFile) return;
+
+          const body = await noteService.readNoteBody(noteFile);
+          if (!body || body === '## Notes') return;
+
+          const cleanBody = body.replace(/^#+\s+/gm, '').trim();
+          if (!cleanBody) return;
+
+          const preview = cleanBody.length > 120 ? cleanBody.slice(0, 120) + '...' : cleanBody;
+
+          // Suppress native title tooltip
+          authorName.removeAttribute('title');
+
+          // Position tooltip relative to viewport using document.body
+          const rect = authorName.getBoundingClientRect();
+          const tooltip = document.createElement('div');
+          tooltip.addClass('pcr-author-note-tooltip');
+          tooltip.textContent = preview;
+          tooltip.style.top = `${rect.bottom + 4}px`;
+          tooltip.style.left = `${rect.left}px`;
+          document.body.appendChild(tooltip);
+          activeTooltip = tooltip;
+        });
+
+        authorName.addEventListener('mouseleave', () => {
+          if (activeTooltip) {
+            activeTooltip.remove();
+            activeTooltip = null;
+          }
+          if (originalTitle) {
+            authorName.setAttribute('title', originalTitle);
+          }
+        });
+      }
     }
 
     // Subscription badge (only for supported platforms - Instagram, Facebook, LinkedIn, Reddit, TikTok, Pinterest, Bluesky, Mastodon, YouTube, Naver, Brunch, X, RSS platforms)
@@ -1793,14 +1846,20 @@ export class PostCardRenderer extends Component {
     }
 
     const previewLength = 300; // Show 300 characters initially (about 2-3 sentences)
+    // Determine truncation on ORIGINAL text length (before linkification inflates it)
     const isLongContent = cleanContent.length > previewLength;
+
+    // Linkify inline #hashtags when hashtag-as-tag setting is OFF
+    if (!this.plugin.settings.includeHashtagsAsObsidianTags) {
+      cleanContent = this.textFormatter.linkifyInlineHashtags(cleanContent, post.platform);
+    }
 
     const contentText = contentContainer.createDiv({
       cls: 'text-sm leading-relaxed text-[var(--text-normal)] post-body-text pcr-content-text'
     });
 
     if (isLongContent) {
-      // Smart preview truncation - don't cut markdown in half
+      // Smart preview truncation - don't cut markdown links in half
       let preview = cleanContent.substring(0, previewLength);
 
       // Check if we cut off in the middle of a markdown link
@@ -1810,6 +1869,17 @@ export class PostCardRenderer extends Component {
       // If there's an unclosed link at the end, truncate before it
       if (lastOpenBracket > lastCloseBracket) {
         preview = cleanContent.substring(0, lastOpenBracket);
+      }
+
+      // Also check for unclosed parentheses (link URL part)
+      const lastCloseParen = preview.lastIndexOf(')');
+      const lastOpenParen = preview.lastIndexOf('(');
+      if (lastOpenParen > lastCloseParen) {
+        // Find the matching [ before this (
+        const bracketBeforeParen = preview.lastIndexOf('[', lastOpenParen);
+        if (bracketBeforeParen >= 0) {
+          preview = cleanContent.substring(0, bracketBeforeParen);
+        }
       }
 
       // Use Obsidian's native markdown renderer

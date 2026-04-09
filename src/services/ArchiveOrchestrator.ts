@@ -5,6 +5,7 @@ import type { VaultManager } from './VaultManager';
 import type { MediaHandler, MediaResult } from './MediaHandler';
 import type { LinkPreviewExtractor } from './LinkPreviewExtractor';
 import type { AuthorAvatarService } from './AuthorAvatarService';
+import type { AuthorNoteService } from './AuthorNoteService';
 import type { PostData, Platform } from '@/types/post';
 import type { ArchiveOptions, ArchiveResult, ArchiveProgress } from '@/types/archive';
 import type { SocialArchiverSettings } from '@/types/settings';
@@ -23,6 +24,7 @@ export interface OrchestratorConfig {
   mediaHandler: MediaHandler;
   linkPreviewExtractor: LinkPreviewExtractor;
   authorAvatarService?: AuthorAvatarService;
+  authorNoteService?: AuthorNoteService;
   settings?: SocialArchiverSettings;
   enableCache?: boolean;
   maxRetries?: number;
@@ -188,6 +190,7 @@ export class ArchiveOrchestrator implements IService {
   private mediaHandler: MediaHandler;
   private linkPreviewExtractor: LinkPreviewExtractor;
   private authorAvatarService?: AuthorAvatarService;
+  private authorNoteService?: AuthorNoteService;
   private settings?: SocialArchiverSettings;
   private eventEmitter: EventEmitter;
   private cache: Map<string, CacheEntry>;
@@ -205,6 +208,7 @@ export class ArchiveOrchestrator implements IService {
     this.mediaHandler = config.mediaHandler;
     this.linkPreviewExtractor = config.linkPreviewExtractor;
     this.authorAvatarService = config.authorAvatarService;
+    this.authorNoteService = config.authorNoteService;
     this.settings = config.settings;
     this.eventEmitter = new EventEmitter();
     this.cache = new Map();
@@ -214,6 +218,9 @@ export class ArchiveOrchestrator implements IService {
 
     if (this.settings?.frontmatter) {
       this.markdownConverter.setFrontmatterSettings(this.settings.frontmatter);
+    }
+    if (this.settings?.includeHashtagsAsObsidianTags !== undefined) {
+      this.markdownConverter.setIncludeHashtagsAsObsidianTags(this.settings.includeHashtagsAsObsidianTags);
     }
   }
 
@@ -341,6 +348,15 @@ export class ArchiveOrchestrator implements IService {
 
       // Stage 3.5: Extract and apply author profile metadata
       await this.enrichAuthorMetadata(postData, platform);
+
+      // Stage 3.5.1: Upsert author note (if feature enabled)
+      if (this.settings?.enableAuthorNotes && this.authorNoteService) {
+        try {
+          await this.authorNoteService.upsertFromArchive(postData);
+        } catch (e) {
+          console.warn('[ArchiveOrchestrator] Failed to upsert author note:', e);
+        }
+      }
 
       // Stage 3.6: Extract link previews from content
       if (postData.content?.text) {
@@ -814,6 +830,15 @@ export class ArchiveOrchestrator implements IService {
       // Stage 4: Enrich author metadata
       await this.enrichAuthorMetadata(postData, platform);
 
+      // Stage 4.1: Upsert author note (if feature enabled)
+      if (this.settings?.enableAuthorNotes && this.authorNoteService) {
+        try {
+          await this.authorNoteService.upsertFromArchive(postData);
+        } catch (e) {
+          console.warn('[ArchiveOrchestrator] Failed to upsert author note:', e);
+        }
+      }
+
       // Stage 5: Extract link previews from content
       if (postData.content?.text) {
         try {
@@ -958,5 +983,6 @@ export class ArchiveOrchestrator implements IService {
   updateSettings(settings: SocialArchiverSettings): void {
     this.settings = settings;
     this.markdownConverter.setFrontmatterSettings(settings.frontmatter);
+    this.markdownConverter.setIncludeHashtagsAsObsidianTags(settings.includeHashtagsAsObsidianTags);
   }
 }

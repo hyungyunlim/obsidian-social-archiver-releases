@@ -4,7 +4,7 @@ import QRCode from 'qrcode';
 import type SocialArchiverPlugin from '../main';
 import type { SocialArchiverSettings, UserTier, PlatformTiming } from '../types/settings';
 import { AuthService } from '../services/AuthService';
-import { completeAuthentication, showAuthSuccess, showAuthError } from '../utils/auth';
+import { completeAuthentication, showAuthSuccess, showAuthError, requestEmailChange, refreshUserEmail } from '../utils/auth';
 
 interface Props {
   plugin: SocialArchiverPlugin;
@@ -425,6 +425,90 @@ function getPlatformDisplayName(platform: string): string {
   };
   return names[platform] || platform;
 }
+
+// === Email Change State ===
+let showEmailChangeForm = $state(false);
+let newEmailInput = $state('');
+let isRequestingEmailChange = $state(false);
+
+/**
+ * Map server error codes to user-friendly messages
+ */
+function getEmailChangeErrorMessage(code: string, fallback: string): string {
+  const messages: Record<string, string> = {
+    'SAME_EMAIL': "That's already your current email",
+    'EMAIL_ALREADY_IN_USE': 'This email is already used by another account',
+    'RATE_LIMITED': 'Email can only be changed once per 24 hours',
+    'INVALID_EMAIL': 'Please enter a valid email address',
+    'UNAUTHORIZED': 'Please sign in again to change your email',
+  };
+  return messages[code] || fallback;
+}
+
+/**
+ * Handle email change request submission
+ */
+async function handleRequestEmailChange(): Promise<void> {
+  const normalizedEmail = newEmailInput.toLowerCase().trim();
+
+  if (!validateEmail(normalizedEmail)) {
+    new Notice('Please enter a valid email address');
+    return;
+  }
+
+  if (normalizedEmail === settings.email) {
+    new Notice("That's already your current email");
+    return;
+  }
+
+  isRequestingEmailChange = true;
+
+  try {
+    const result = await requestEmailChange(plugin, normalizedEmail);
+
+    if (result.success && result.newEmailMasked) {
+      new Notice(
+        `Verification email sent to ${result.newEmailMasked}. Check your inbox.`,
+        8000
+      );
+      // Reset form
+      showEmailChangeForm = false;
+      newEmailInput = '';
+    } else {
+      const message = getEmailChangeErrorMessage(
+        result.errorCode || '',
+        result.errorMessage || 'Failed to request email change'
+      );
+      new Notice(message, 5000);
+    }
+  } catch {
+    new Notice('Network error. Please try again.', 5000);
+  } finally {
+    isRequestingEmailChange = false;
+  }
+}
+
+/**
+ * Cancel email change form and reset state
+ */
+function handleCancelEmailChange(): void {
+  showEmailChangeForm = false;
+  newEmailInput = '';
+}
+
+// Refresh canonical email from server when the component mounts (authenticated only)
+$effect(() => {
+  if (isAuthenticated) {
+    refreshUserEmail(plugin).then((serverEmail) => {
+      if (serverEmail && serverEmail !== settings.email) {
+        // Update local reactive state to reflect the refreshed email
+        settings = plugin.settings;
+      }
+    }).catch(() => {
+      // Silently ignore - email will be refreshed on next settings open
+    });
+  }
+});
 </script>
 
 <div class="auth-settings-container">
@@ -618,12 +702,53 @@ function getPlatformDisplayName(platform: string): string {
         </div>
         <div class="user-details">
           <div class="user-name">@{settings.username}</div>
-          <div class="user-email">{settings.email}</div>
+          <div class="user-email-row">
+            <span class="user-email">{settings.email}</span>
+            {#if !showEmailChangeForm}
+              <button
+                class="email-change-trigger"
+                onclick={() => { showEmailChangeForm = true; newEmailInput = ''; }}
+              >Change</button>
+            {/if}
+          </div>
         </div>
         <div class="user-tier-badge">
           {tierDisplay}
         </div>
       </div>
+
+      <!-- Inline Email Change Form -->
+      {#if showEmailChangeForm}
+        <div class="email-change-form">
+          <div class="email-change-input-row">
+            <input
+              type="email"
+              class="email-change-input"
+              placeholder="new@example.com"
+              bind:value={newEmailInput}
+              disabled={isRequestingEmailChange}
+              onkeydown={(e: KeyboardEvent) => { if (e.key === 'Enter') handleRequestEmailChange(); }}
+            />
+          </div>
+          <div class="email-change-actions">
+            <button
+              class="mod-cta email-change-submit"
+              onclick={handleRequestEmailChange}
+              disabled={isRequestingEmailChange || !newEmailInput.trim()}
+            >
+              {isRequestingEmailChange ? 'Sending...' : 'Send Verification'}
+            </button>
+            <button
+              class="email-change-cancel"
+              onclick={handleCancelEmailChange}
+              disabled={isRequestingEmailChange}
+            >
+              Cancel
+            </button>
+          </div>
+          <p class="email-change-hint">A verification link will be sent to your new email address.</p>
+        </div>
+      {/if}
 
       <!-- Credits Display - Minimal -->
       <div class="credits-display">
@@ -903,6 +1028,105 @@ function getPlatformDisplayName(platform: string): string {
   background: var(--background-secondary);
   color: var(--text-normal);
   border-color: var(--text-faint);
+}
+
+/* Email Change Styles */
+.user-email-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.email-change-trigger {
+  padding: 1px 8px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.4;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.email-change-trigger:hover {
+  color: var(--text-normal);
+  border-color: var(--text-muted);
+  background: var(--background-secondary);
+}
+
+.email-change-form {
+  padding: 12px 16px;
+  background: var(--background-secondary);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.email-change-input-row {
+  margin-bottom: 8px;
+}
+
+.email-change-input {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  box-sizing: border-box;
+}
+
+.email-change-input:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+}
+
+.email-change-input:disabled {
+  opacity: 0.5;
+}
+
+.email-change-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.email-change-submit {
+  padding: 6px 14px;
+  font-size: 12px;
+}
+
+.email-change-cancel {
+  padding: 6px 14px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.email-change-cancel:hover:not(:disabled) {
+  background: var(--background-primary);
+  color: var(--text-normal);
+}
+
+.email-change-cancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.email-change-hint {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin: 0;
+  line-height: 1.4;
 }
 
 /* Cross-Device Auth Styles */

@@ -1046,7 +1046,8 @@
 }
 
 .tc-search-container.tc-search-expanded {
-  height: 52px;
+  height: 44px;
+  overflow: visible;
 }
 
 .tc-search-container.tc-search-collapsed {
@@ -1059,10 +1060,14 @@
   box-sizing: border-box;
 }
 
-/* Search inner background */
+/* Search inner — all styling via tc-search-inner (sa-* utilities removed from HTML) */
 .tc-search-inner {
-  background: var(--background-modifier-form-field);
+  background: transparent;
+  border: 1px solid var(--background-modifier-border);
   box-sizing: border-box;
+  border-radius: 4px;
+  padding: 4px 12px;
+  height: auto;
 }
 
 /* Search input reset (override obsidian defaults) */
@@ -1070,11 +1075,46 @@
   padding: 2px 8px;
   margin: 0;
   border: none;
+  background: transparent;
   line-height: normal;
   outline: none;
   box-shadow: none;
   -webkit-appearance: none;
   appearance: none;
+}
+
+/* Mobile: compact search bar — doubled selector to beat sa-* utility specificity */
+/* Mobile: iOS-style search bar */
+.is-mobile .tc-search-container.tc-search-expanded,
+.is-phone .tc-search-container.tc-search-expanded {
+  height: 44px;
+  overflow: visible;
+  margin-bottom: 12px;
+}
+
+.is-mobile .tc-search-wrapper,
+.is-phone .tc-search-wrapper {
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.is-mobile .tc-search-inner,
+.is-phone .tc-search-inner {
+  padding: 0 10px;
+  border-radius: 8px;
+  border: none;
+  background: var(--background-modifier-form-field);
+  height: 36px;
+}
+
+.is-mobile .tc-search-input.tc-search-input,
+.is-phone .tc-search-input.tc-search-input {
+  font-size: 15px;
+  padding: 0 4px;
+  line-height: 36px;
+  height: 36px;
 }
 
 /* Header button line-height */
@@ -1398,7 +1438,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 0 12px;
+  padding: 0 0 28px;
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;

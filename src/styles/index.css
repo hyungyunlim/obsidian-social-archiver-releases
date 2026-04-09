@@ -35,5 +35,8 @@
 /* Editor TTS highlight and status bar player */
 @import './components/editor-tts.css';
 
+/* Author Detail container styles */
+@import './components/author-detail.css';
+
 /* Timeline and reader-mode incremental styles */
 @import '../components/timeline/managers/skeleton-card.css';

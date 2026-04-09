@@ -326,6 +326,7 @@ export class BatchGoogleMapsArchiver {
 
     const markdownConverter = new MarkdownConverter({
       frontmatterSettings: settings.frontmatter,
+      includeHashtagsAsObsidianTags: settings.includeHashtagsAsObsidianTags,
     });
 
     if (sourceNotePath) {

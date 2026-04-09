@@ -5,7 +5,7 @@ import type { MediaDownloadMode } from '../types/settings';
 import { getVaultOrganizationStrategy } from '../types/settings';
 import { isAuthenticated } from '../utils/auth';
 import { TAG_NAME_MAX_LENGTH } from '@/types/tag';
-import { isValidTagName, sanitizeTagNames, validateTagName } from '@/utils/tags';
+import { isValidTagName, normalizeTagName, sanitizeTagNames, validateTagName } from '@/utils/tags';
 import { validateAndDetectPlatform } from '@/schemas/platforms';
 import { resolvePinterestUrl } from '@/utils/pinterest';
 import { analyzeUrl, type UrlAnalysisResult } from '@/utils/urlAnalysis';
@@ -2477,7 +2477,7 @@ export class ArchiveModal extends Modal {
     const renderDropdown = (query: string): void => {
       dropdown.empty();
       highlightedIndex = -1;
-      const rawQuery = query.trim();
+      const rawQuery = normalizeTagName(query);
       const trimmed = rawQuery.toLowerCase();
       const queryValidationError = rawQuery ? validateTagName(rawQuery) : null;
 
@@ -2535,10 +2535,10 @@ export class ArchiveModal extends Modal {
         const createRow = dropdown.createDiv({ cls: 'archive-tag-dropdown-item' });
         createRow.addClass('am-tag-create-row');
 
-        createRow.createSpan({ text: `+ Create "${query.trim()}"` });
+        createRow.createSpan({ text: `+ Create "${rawQuery}"` });
 
         createRow.addEventListener('click', () => {
-          const newTagName = query.trim();
+          const newTagName = normalizeTagName(query);
           const validationError = validateTagName(newTagName);
           if (validationError) {
             new Notice(validationError);
@@ -2597,7 +2597,7 @@ export class ArchiveModal extends Modal {
           (items[highlightedIndex] as HTMLElement).click();
         } else if (searchInput.value.trim()) {
           // Create or select the typed tag
-          const typed = searchInput.value.trim();
+          const typed = normalizeTagName(searchInput.value);
           const validationError = validateTagName(typed);
           if (validationError) {
             new Notice(validationError);
@@ -2908,6 +2908,7 @@ export class ArchiveModal extends Modal {
 
       const markdownConverter = new MarkdownConverter({
         frontmatterSettings: this.plugin.settings.frontmatter,
+        includeHashtagsAsObsidianTags: this.plugin.settings.includeHashtagsAsObsidianTags,
       });
       markdownConverter.initialize();
 
@@ -3080,6 +3081,7 @@ export class ArchiveModal extends Modal {
 
       const markdownConverter = new MarkdownConverter({
         frontmatterSettings: this.plugin.settings.frontmatter,
+        includeHashtagsAsObsidianTags: this.plugin.settings.includeHashtagsAsObsidianTags,
       });
       markdownConverter.initialize();
 
@@ -3340,6 +3342,7 @@ export class ArchiveModal extends Modal {
 
       const markdownConverter = new MarkdownConverter({
         frontmatterSettings: this.plugin.settings.frontmatter,
+        includeHashtagsAsObsidianTags: this.plugin.settings.includeHashtagsAsObsidianTags,
       });
       markdownConverter.initialize();
 

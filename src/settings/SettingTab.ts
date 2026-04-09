@@ -225,6 +225,148 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     // Mobile Sync Settings Section (right below Account)
     this.renderMobileSyncSettings(containerEl);
 
+    // Author Settings Section (profile management + notes)
+    new Setting(containerEl).setName('Author').setHeading()
+      .settingEl.addClass('sa-settings-section-header');
+
+    new Setting(containerEl)
+      .setName('Download author avatars')
+      .setDesc('Save author profile images locally for offline access. Avatars are stored in the media folder under "authors".')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.downloadAuthorAvatars)
+        .onChange((value) => {
+          this.plugin.settings.downloadAuthorAvatars = value;
+          this.markDirty();
+        }));
+
+    new Setting(containerEl)
+      .setName('Update author metadata')
+      .setDesc('Track author statistics (followers, posts count, bio) on each archive. Useful for author catalog insights.')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.updateAuthorMetadata)
+        .onChange((value) => {
+          this.plugin.settings.updateAuthorMetadata = value;
+          this.markDirty();
+        }));
+
+    new Setting(containerEl)
+      .setName('Overwrite existing avatars')
+      .setDesc('Replace local avatar file when a new URL is provided. When disabled, existing avatars are preserved.')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.overwriteAuthorAvatar)
+        .onChange((value) => {
+          this.plugin.settings.overwriteAuthorAvatar = value;
+          this.markDirty();
+        }));
+
+    new Setting(containerEl)
+      .setName('Open author details in main area')
+      .setDesc('When enabled, author details open as a tab instead of the sidebar.')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.authorDetailOpenInMainTab)
+        .onChange((value) => {
+          this.plugin.settings.authorDetailOpenInMainTab = value;
+          this.markDirty();
+        }));
+
+    // Author notes sub-section (folder + generate hidden when disabled)
+    const authorNotesContainer = containerEl.createDiv();
+
+    new Setting(containerEl)
+      .setName('Enable author notes')
+      .setDesc('Create vault-native markdown files for each author with profile metadata and space for your notes. Experimental feature.')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.enableAuthorNotes)
+        .onChange((value) => {
+          this.plugin.settings.enableAuthorNotes = value;
+          this.markDirty();
+          authorNotesContainer.toggle(value);
+        }));
+
+    // Conditionally visible settings
+    authorNotesContainer.toggle(this.plugin.settings.enableAuthorNotes);
+
+    new Setting(authorNotesContainer)
+      .setName('Author notes folder')
+      .setDesc('Folder where author note files will be created. Default: "Social Authors" (outside the archive folder to avoid scanner conflicts).')
+      .addText(text => {
+        text
+          .setPlaceholder('Social Authors')
+          .setValue(this.plugin.settings.authorNotesPath)
+          .onChange((value) => {
+            this.plugin.settings.authorNotesPath = value.trim() || 'Social Authors';
+            this.markDirty();
+          });
+        new FolderSuggest(this.app, text.inputEl);
+      });
+
+    const scanSetting = new Setting(authorNotesContainer)
+      .setName('Generate author notes')
+      .setDesc('Scan your vault and create author note files for all discovered authors. Safe to run multiple times.')
+      .addButton((button) => button
+        .setButtonText('Scan & Generate')
+        .setCta()
+        .onClick(async () => {
+          button.setDisabled(true);
+          button.setButtonText('Scanning...');
+
+          try {
+            const { AuthorVaultScanner } = await import('../services/AuthorVaultScanner');
+            const { AuthorDeduplicator } = await import('../services/AuthorDeduplicator');
+            const { AuthorNoteService } = await import('../services/AuthorNoteService');
+
+            const noteService = new AuthorNoteService({
+              app: this.app,
+              getAuthorNotesPath: () => this.plugin.settings.authorNotesPath || 'Social Authors',
+              isEnabled: () => true,
+            });
+
+            const scanner = new AuthorVaultScanner({
+              app: this.app,
+              archivePath: this.plugin.settings.archivePath,
+              includeEmbeddedArchives: true,
+            });
+
+            button.setButtonText('Scanning vault...');
+            const scanResult = await scanner.scanVault();
+
+            button.setButtonText('Deduplicating...');
+            const deduplicator = new AuthorDeduplicator();
+            const dedupeResult = deduplicator.deduplicate(scanResult.authors, new Map());
+
+            const authors = dedupeResult.authors;
+            let created = 0;
+            let updated = 0;
+            const BATCH_SIZE = 50;
+
+            for (let i = 0; i < authors.length; i += BATCH_SIZE) {
+              button.setButtonText(`Processing ${i}/${authors.length}...`);
+              const batch = authors.slice(i, i + BATCH_SIZE);
+              for (const author of batch) {
+                const result = await noteService.upsertFromCatalogEntry(author);
+                if (result) {
+                  const data = noteService.readNote(result);
+                  if (data && data.archiveCount === author.archiveCount) {
+                    created++;
+                  } else {
+                    updated++;
+                  }
+                }
+              }
+              await new Promise<void>(resolve => window.setTimeout(resolve, 0));
+            }
+
+            new Notice(`Author notes: ${created} created, ${updated} updated (${authors.length} authors total)`);
+            scanSetting.setDesc(`Last scan: ${created} created, ${updated} updated (${authors.length} authors). Safe to run again.`);
+          } catch (err) {
+            console.error('[Social Archiver] Author note generation failed:', err);
+            new Notice('Failed to generate author notes. Check console for details.');
+          } finally {
+            button.setButtonText('Scan & Generate');
+            button.setDisabled(false);
+          }
+        }));
+
     // Archive Settings Section
     new Setting(containerEl).setName('Archive').setHeading()
       .settingEl.addClass('sa-settings-section-header');
@@ -407,41 +549,17 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           this.markDirty();
         }));
 
+    new Setting(containerEl)
+      .setName('Include hashtags as Obsidian tags')
+      .setDesc('When enabled, extracted hashtags are rendered as Obsidian tags. Disable this to keep hashtags visible without creating native tags in your vault.')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.includeHashtagsAsObsidianTags)
+        .onChange((value) => {
+          this.plugin.settings.includeHashtagsAsObsidianTags = value;
+          this.markDirty();
+        }));
+
     this.renderFrontmatterSettings(containerEl);
-
-    // Author Profile Management Section
-    new Setting(containerEl).setName('Author profile management').setHeading()
-      .settingEl.addClass('sa-settings-section-header');
-
-    new Setting(containerEl)
-      .setName('Download author avatars')
-      .setDesc('Save author profile images locally for offline access. Avatars are stored in the media folder under "authors".')
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.downloadAuthorAvatars)
-        .onChange((value) => {
-          this.plugin.settings.downloadAuthorAvatars = value;
-          this.markDirty();
-        }));
-
-    new Setting(containerEl)
-      .setName('Update author metadata')
-      .setDesc('Track author statistics (followers, posts count, bio) on each archive. Useful for author catalog insights.')
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.updateAuthorMetadata)
-        .onChange((value) => {
-          this.plugin.settings.updateAuthorMetadata = value;
-          this.markDirty();
-        }));
-
-    new Setting(containerEl)
-      .setName('Overwrite existing avatars')
-      .setDesc('Replace local avatar file when a new URL is provided. When disabled, existing avatars are preserved.')
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.overwriteAuthorAvatar)
-        .onChange((value) => {
-          this.plugin.settings.overwriteAuthorAvatar = value;
-          this.markDirty();
-        }));
 
     // Sharing Settings Section
     new Setting(containerEl).setName('Sharing').setHeading()

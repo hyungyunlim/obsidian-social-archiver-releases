@@ -42,6 +42,7 @@ export interface PostIndexEntry {
   type?: 'post' | 'profile';
   comment?: string;
   shareUrl?: string;
+  previewText?: string;
 
   // Timestamp for sort fallback
   metadataTimestamp: number; // epoch ms
@@ -301,6 +302,7 @@ export class PostIndexService {
       type: metadata.type,
       comment: metadata.comment,
       shareUrl: metadata.shareUrl,
+      previewText: contentText ? contentText.slice(0, 200) : undefined,
       metadataTimestamp: metadata.metadataTimestamp.getTime(),
     };
   }

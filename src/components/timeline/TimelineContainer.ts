@@ -44,6 +44,7 @@ import { SearchIndexService } from '../../services/SearchIndexService';
 import { createSVGElement } from '../../utils/dom-helpers';
 import type { AuthorCatalogEntry, AuthorSubscribeOptions, PlatformAuthorCounts } from '../../types/author-catalog';
 import type { SubscriptionEvent } from '../../services/SubscriptionManager';
+import { AuthorDetailContainer } from '../author-detail/AuthorDetailContainer';
 
 /**
  * Raw subscription data returned by the Worker API.
@@ -247,6 +248,7 @@ export class TimelineContainer {
   private authorPlatformFilter: Platform[] = [...TIMELINE_PLATFORM_IDS] as Platform[];
   private authorSortBy: 'lastRun' | 'lastRunAsc' | 'lastSeen' | 'lastSeenAsc' | 'nameAsc' | 'nameDesc' | 'archiveCount' | 'archiveCountAsc' = 'lastRun';
   private authorPlatformCounts: PlatformAuthorCounts = { all: 0 };
+  private authorCatalogViewMode: 'list' | 'card' = 'list';
 
   // Lazy loading managers
   private observerManager: IntersectionObserverManager;
@@ -294,6 +296,11 @@ export class TimelineContainer {
 
   // Reader mode overlay
   private readerModeOverlay: ReaderModeOverlay | null = null;
+
+  // Author Detail (inline, replaces timeline content)
+  private authorDetailContainer: AuthorDetailContainer | null = null;
+  private authorDetailWrapper: HTMLElement | null = null;
+  private isAuthorDetailActive = false;
 
   constructor(target: HTMLElement, props: TimelineContainerProps) {
     this.containerEl = target;
@@ -969,24 +976,57 @@ export class TimelineContainer {
 
   /**
    * Handle view author event from PostCardRenderer
-   * Switches to Author Catalog view and filters to show the specific author
+   * Opens the Author Detail View for the clicked author
    */
-  private async handleViewAuthor(authorUrl: string, _platform: Platform): Promise<void> {
-    // Set the author search query to filter to this specific author
-    this.authorSearchQuery = authorUrl;
-
-    // Switch to subscription management view if not active
-    if (!this.isSubscriptionViewActive) {
-      this.isSubscriptionViewActive = true;
-      this.syncFiltersTimelineToAuthor();
-      await this.renderSubscriptionManagement();
-    } else {
-      // Re-mount AuthorCatalog with the search query
-      await this.mountAuthorCatalog();
+  private async handleViewAuthor(authorUrl: string, platform: Platform): Promise<void> {
+    // Strategy 1: Find full entry from AuthorCatalogStore
+    let entry: AuthorCatalogEntry | undefined;
+    try {
+      const { getAuthorCatalogStore } = await import('../../services/AuthorCatalogStore');
+      const { get } = await import('svelte/store');
+      const store = getAuthorCatalogStore();
+      const storeState = get(store.state);
+      entry = storeState.authors.find(
+        (a: AuthorCatalogEntry) => a.authorUrl === authorUrl && a.platform === platform
+      );
+    } catch {
+      // Fall through
     }
 
-    // Show notice
-    new Notice('Switched to author catalog');
+    // Strategy 2: Build entry from loaded PostData in timeline
+    if (!entry) {
+      const authorPosts = this.posts.filter(
+        (p) => p.author?.url === authorUrl && p.platform === platform
+      );
+      const firstPost = authorPosts[0];
+      const author = firstPost?.author;
+
+      entry = {
+        authorName: author?.name || authorUrl,
+        authorUrl,
+        platform,
+        avatar: author?.avatar || null,
+        handle: author?.handle || author?.username,
+        bio: author?.bio,
+        followers: author?.followers,
+        lastSeenAt: firstPost?.metadata?.timestamp instanceof Date
+          ? firstPost.metadata.timestamp
+          : new Date(),
+        archiveCount: authorPosts.length,
+        filePaths: authorPosts
+          .map((p) => p.filePath)
+          .filter((fp): fp is string => !!fp),
+        subscriptionId: null,
+        status: 'not_subscribed',
+      };
+    }
+
+    // Respect authorDetailOpenInMainTab setting
+    if (this.plugin.settings.authorDetailOpenInMainTab) {
+      void this.plugin.activateAuthorDetailView(entry, 'main');
+    } else {
+      this.showAuthorDetail(entry);
+    }
   }
 
   /**
@@ -1829,6 +1869,22 @@ export class TimelineContainer {
     const headerWrapper = this.containerEl.createDiv();
     headerWrapper.addClass('sa-mb-4');
 
+    // Remove stuck hover/focus state on toolbar buttons after click/tap
+    // Skip when filter panel or search is open (active state should persist)
+    const clearHoverStates = () => {
+      window.setTimeout(() => {
+        if (this.filterPanel.isOpened || this.searchExpanded || this.sortDropdown.isOpened) return;
+        headerWrapper.querySelectorAll('.sa-bg-hover').forEach((el) => {
+          el.removeClass('sa-bg-hover');
+          el.addClass('sa-bg-transparent');
+        });
+        if (document.activeElement instanceof HTMLElement && document.activeElement !== this.searchInput) {
+          document.activeElement.blur();
+        }
+      }, 150);
+    };
+    headerWrapper.addEventListener('click', clearHoverStates);
+
     const header = headerWrapper.createDiv();
     header.addClass('sa-flex-between');
     header.addClass('sa-gap-12');
@@ -1966,16 +2022,26 @@ export class TimelineContainer {
 
     // Wrapper to add padding for border visibility
     const searchWrapper = this.searchContainer.createDiv();
-    searchWrapper.addClass('sa-h-full', 'tc-search-wrapper');
+    searchWrapper.addClass('tc-search-wrapper');
 
     // Inner container for search input
     const searchInner = searchWrapper.createDiv();
-    searchInner.addClass('sa-flex-row');
-    searchInner.addClass('sa-p-10');
-    searchInner.addClass('sa-px-16');
-    searchInner.addClass('sa-rounded-8');
-    searchInner.addClass('sa-border');
-    searchInner.addClass('sa-h-full', 'tc-search-inner');
+    searchInner.addClass('sa-flex-row', 'tc-search-inner');
+
+    // Mobile: apply inline styles to guarantee override of any utility/Obsidian defaults
+    if (ObsidianPlatform.isMobile) {
+      searchWrapper.setCssProps({});
+      searchWrapper.style.border = 'none';
+      searchWrapper.style.background = 'transparent';
+      searchWrapper.style.boxShadow = 'none';
+      searchWrapper.style.padding = '2px 0';
+
+      searchInner.style.background = 'var(--background-modifier-form-field)';
+      searchInner.style.border = 'none';
+      searchInner.style.borderRadius = '8px';
+      searchInner.style.padding = '0 10px';
+      searchInner.style.height = '36px';
+    }
 
     // Search input (no icon, just placeholder)
     const searchPlaceholder = this.isSubscriptionViewActive
@@ -1996,6 +2062,17 @@ export class TimelineContainer {
     this.searchInput.addClass('sa-text-md');
     // Override obsidian.css input defaults via CSS class
     this.searchInput.addClass('tc-search-input');
+
+    // Mobile: inline style the input to override Obsidian defaults
+    if (ObsidianPlatform.isMobile) {
+      this.searchInput.style.fontSize = '15px';
+      this.searchInput.style.padding = '0 4px';
+      this.searchInput.style.lineHeight = '36px';
+      this.searchInput.style.height = '36px';
+      this.searchInput.style.background = 'transparent';
+      this.searchInput.style.border = 'none';
+      this.searchInput.style.boxShadow = 'none';
+    }
 
     // Get current search query
     const searchQuery = this.isSubscriptionViewActive
@@ -2149,6 +2226,7 @@ export class TimelineContainer {
   // Helper to store button update functions
   private updateSearchButtonState: (() => void) | undefined;
   private updateFilterButtonState: (() => void) | undefined;
+  private updateViewButtonState: (() => void) | undefined;
 
 
   /**
@@ -2857,6 +2935,7 @@ export class TimelineContainer {
     viewIcon.addClass('sa-transition-color');
 
     const updateViewButton = () => {
+      if (!viewSwitcherBtn.isConnected) return;
       if (this.isViewSwitching) {
         setIcon(viewIcon, 'loader-2');
         viewIcon.addClass('tc-view-switch-icon-spinning');
@@ -2873,6 +2952,7 @@ export class TimelineContainer {
       setIcon(viewIcon, isGallery ? 'list' : 'layout-grid');
       viewSwitcherBtn.setAttribute('title', isGallery ? 'Switch to Timeline' : 'Switch to Media Gallery');
     };
+    this.updateViewButtonState = updateViewButton;
     updateViewButton();
 
     viewSwitcherBtn.addEventListener('mouseenter', () => {
@@ -2955,6 +3035,8 @@ export class TimelineContainer {
 
       this.isViewSwitching = false;
       this.containerEl.removeClass('tc-view-switching');
+      // Update the (potentially re-created) view button to clear loading state
+      this.updateViewButtonState?.();
     }
   }
 
@@ -2984,7 +3066,7 @@ export class TimelineContainer {
         subscriptionBtn.addClass('sa-bg-transparent');
         subscriptionIcon.removeClass('tc-sub-icon-active');
         subscriptionIcon.addClass('sa-text-muted');
-        subscriptionBtn.setAttribute('title', 'Manage subscriptions');
+        subscriptionBtn.setAttribute('title', 'Authors');
       }
     };
 
@@ -3751,8 +3833,11 @@ export class TimelineContainer {
         props: {
           app: this.app,
           archivePath: this.archivePath,
+          enableAuthorNotes: this.plugin.settings.enableAuthorNotes,
+          authorNotesPath: this.plugin.settings.authorNotesPath || 'Social Authors',
           hideHeader: true,  // Hide duplicate header
           hideFilters: true, // Hide duplicate filters
+          viewMode: this.authorCatalogViewMode,
           externalSearchQuery: this.authorSearchQuery,
           externalPlatformFilter: this.authorPlatformFilter,
           externalSortBy: this.authorSortBy,
@@ -4213,6 +4298,13 @@ export class TimelineContainer {
               new Notice('Failed to show history panel');
             }
           },
+          onViewDetail: (author: AuthorCatalogEntry) => {
+            if (this.plugin.settings.authorDetailOpenInMainTab) {
+              void this.plugin.activateAuthorDetailView(author, 'main');
+            } else {
+              this.showAuthorDetail(author);
+            }
+          },
           onViewArchives: (author: AuthorCatalogEntry) => {
             // Switch back to timeline view
             this.isSubscriptionViewActive = false;
@@ -4317,18 +4409,47 @@ export class TimelineContainer {
     });
 
     headerTitle.createEl('h3', {
-      text: 'Subscriptions',
+      text: 'Authors',
       attr: {
-        style: 'margin: 0; font-size: 16px; font-weight: 600;'
+        style: 'margin: 0; font-size: 16px; font-weight: 600; flex: 1;'
+      }
+    });
+
+    // View mode toggle (list/card)
+    const viewToggle = headerTitle.createDiv();
+    viewToggle.addClass('sa-action-btn', 'sa-bg-transparent');
+    viewToggle.setAttribute('role', 'button');
+    viewToggle.setAttribute('tabindex', '0');
+    const updateToggleAttrs = () => {
+      const isCard = this.authorCatalogViewMode === 'card';
+      viewToggle.setAttribute('title', isCard ? 'Switch to list view' : 'Switch to card view');
+      viewToggle.setAttribute('aria-pressed', String(isCard));
+      setIcon(viewToggleIcon, isCard ? 'list' : 'layout-grid');
+    };
+
+    const viewToggleIcon = viewToggle.createDiv();
+    viewToggleIcon.addClass('sa-icon-16', 'sa-text-muted', 'sa-transition-color');
+    updateToggleAttrs();
+
+    const toggleViewMode = () => {
+      this.authorCatalogViewMode = this.authorCatalogViewMode === 'list' ? 'card' : 'list';
+      updateToggleAttrs();
+      void this.mountAuthorCatalog();
+    };
+    viewToggle.addEventListener('click', toggleViewMode);
+    viewToggle.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleViewMode();
       }
     });
 
     // Create container for author catalog UI
     // overflow: hidden prevents child elements from overlapping header
     this.authorCatalogContainer = this.containerEl.createDiv({
-      cls: 'author-catalog-container flex-1',
+      cls: 'author-catalog-container',
       attr: {
-        style: 'overflow: hidden; position: relative;'
+        style: 'overflow-y: auto; overflow-x: hidden; position: relative; flex: 1 1 0; width: 100%;'
       }
     });
 
@@ -5444,7 +5565,78 @@ export class TimelineContainer {
    * Format relative time (e.g., "2h ago", "Yesterday", "Mar 15")
    */
 
+  // --------------------------------------------------------------------------
+  // Author Detail (inline within timeline)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Show Author Detail inline, replacing the timeline content.
+   * The timeline DOM is hidden (not destroyed) for fast restoration.
+   */
+  public showAuthorDetail(author: AuthorCatalogEntry): void {
+    if (this.isAuthorDetailActive) {
+      // Already showing author detail — switch author
+      this.authorDetailContainer?.setAuthor(author);
+      return;
+    }
+
+    this.isAuthorDetailActive = true;
+
+    // Hide all existing timeline children
+    for (const child of Array.from(this.containerEl.children)) {
+      (child as HTMLElement).style.display = 'none';
+    }
+
+    // Create wrapper for author detail
+    this.authorDetailWrapper = this.containerEl.createDiv({
+      cls: 'author-detail-inline-wrapper',
+    });
+
+    this.authorDetailContainer = new AuthorDetailContainer(this.authorDetailWrapper, {
+      vault: this.vault,
+      app: this.app,
+      plugin: this.plugin,
+      archivePath: this.archivePath,
+      author,
+      onGoBack: () => this.hideAuthorDetail(),
+      onViewAuthor: (a: AuthorCatalogEntry) => this.showAuthorDetail(a),
+    });
+  }
+
+  /**
+   * Hide Author Detail and restore the timeline content.
+   */
+  public hideAuthorDetail(): void {
+    if (!this.isAuthorDetailActive) return;
+
+    // Destroy author detail
+    if (this.authorDetailContainer) {
+      this.authorDetailContainer.destroy();
+      this.authorDetailContainer = null;
+    }
+
+    if (this.authorDetailWrapper) {
+      this.authorDetailWrapper.remove();
+      this.authorDetailWrapper = null;
+    }
+
+    this.isAuthorDetailActive = false;
+
+    // Restore timeline children
+    for (const child of Array.from(this.containerEl.children)) {
+      (child as HTMLElement).style.display = '';
+    }
+  }
+
   public destroy(): void {
+    // Destroy inline author detail if active
+    if (this.authorDetailContainer) {
+      this.authorDetailContainer.destroy();
+      this.authorDetailContainer = null;
+    }
+    this.authorDetailWrapper = null;
+    this.isAuthorDetailActive = false;
+
     // Flush pending PostIndexService writes to disk
     void this.postIndexService.flush();
 

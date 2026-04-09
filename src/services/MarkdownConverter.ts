@@ -1324,6 +1324,7 @@ export interface ConvertOptions {
 
 interface MarkdownConverterConfig {
   frontmatterSettings?: FrontmatterCustomizationSettings;
+  includeHashtagsAsObsidianTags?: boolean;
 }
 
 function cloneFrontmatterSettings(
@@ -1355,6 +1356,7 @@ function cloneFrontmatterSettings(
 export class MarkdownConverter implements IService {
   private templates: Map<Platform, string>;
   private frontmatterSettings: FrontmatterCustomizationSettings;
+  private includeHashtagsAsObsidianTags: boolean;
 
   // Formatters
   private dateNumberFormatter: DateNumberFormatter;
@@ -1368,6 +1370,7 @@ export class MarkdownConverter implements IService {
   constructor(config?: MarkdownConverterConfig) {
     this.templates = new Map(Object.entries(DEFAULT_TEMPLATES) as [Platform, string][]);
     this.frontmatterSettings = cloneFrontmatterSettings(config?.frontmatterSettings);
+    this.includeHashtagsAsObsidianTags = config?.includeHashtagsAsObsidianTags ?? true;
 
     // Initialize formatters
     this.dateNumberFormatter = new DateNumberFormatter();
@@ -1381,6 +1384,10 @@ export class MarkdownConverter implements IService {
 
   setFrontmatterSettings(settings: FrontmatterCustomizationSettings): void {
     this.frontmatterSettings = cloneFrontmatterSettings(settings);
+  }
+
+  setIncludeHashtagsAsObsidianTags(value: boolean): void {
+    this.includeHashtagsAsObsidianTags = value;
   }
 
   initialize(): void {
@@ -1462,6 +1469,56 @@ export class MarkdownConverter implements IService {
   }
 
   /**
+   * Build hashtags text string from raw hashtag array.
+   *
+   * Deduplicates, normalizes for Obsidian display, and renders either as
+   * Obsidian native tags (`#tag`) or as platform-specific markdown links
+   * (`[#tag](url)`) depending on `includeHashtagsAsObsidianTags`.
+   *
+   * @param hashtags - Raw hashtag strings from PostData.content.hashtags
+   * @param platform - Platform name for link URL generation
+   * @returns Formatted hashtags string, or undefined if no valid hashtags
+   */
+  private buildHashtagsText(
+    hashtags: string[] | undefined,
+    platform: string,
+  ): string | undefined {
+    const rawHashtagsArray = Array.isArray(hashtags) ? hashtags : undefined;
+    const uniqueHashtags = rawHashtagsArray
+      ? Array.from(new Set(rawHashtagsArray.map(tag => tag.trim()).filter(Boolean)))
+      : undefined;
+
+    if (!uniqueHashtags || uniqueHashtags.length === 0) return undefined;
+
+    const normalizeHashtagForObsidian = (tag: string) => {
+      const clean = tag.startsWith('#') ? tag.slice(1) : tag;
+      // Obsidian hashtags cannot include spaces; replace with hyphen for display and link consistency
+      return `#${clean.replace(/\s+/g, '-')}`;
+    };
+
+    const normalizedHashtags = uniqueHashtags.map(normalizeHashtagForObsidian);
+
+    if (this.includeHashtagsAsObsidianTags) {
+      return normalizedHashtags.join(' ');
+    }
+
+    // Render as markdown links instead of Obsidian native tags
+    return this.textFormatter.buildHashtagLinks(uniqueHashtags, platform, normalizedHashtags);
+  }
+
+  /**
+   * Extract unique hashtags from raw hashtag array (for Tumblr content cleanup).
+   * @param hashtags - Raw hashtag strings from PostData.content.hashtags
+   * @returns Deduplicated array of trimmed, non-empty hashtag strings, or undefined
+   */
+  private extractUniqueHashtags(hashtags: string[] | undefined): string[] | undefined {
+    const rawHashtagsArray = Array.isArray(hashtags) ? hashtags : undefined;
+    return rawHashtagsArray
+      ? Array.from(new Set(rawHashtagsArray.map(tag => tag.trim()).filter(Boolean)))
+      : undefined;
+  }
+
+  /**
    * Format embedded archives into markdown
    * @param archives - Array of archived PostData to format
    * @returns Formatted markdown string
@@ -1489,20 +1546,9 @@ export class MarkdownConverter implements IService {
         section += `---\n\n`;
       }
 
-      // Process hashtags (same logic as main convert function)
-      const normalizeHashtagForObsidian = (tag: string) => {
-        const clean = tag.startsWith('#') ? tag.slice(1) : tag;
-        return `#${clean.replace(/\s+/g, '-')}`;
-      };
-
-      const rawHashtagsArray = Array.isArray(archive.content.hashtags) ? archive.content.hashtags : undefined;
-      const uniqueHashtags = rawHashtagsArray
-        ? Array.from(new Set(rawHashtagsArray.map(tag => tag.trim()).filter(Boolean)))
-        : undefined;
-      const normalizedHashtags = uniqueHashtags?.map(normalizeHashtagForObsidian);
-      const hashtagsText = normalizedHashtags && normalizedHashtags.length > 0
-        ? normalizedHashtags.join(' ')
-        : undefined;
+      // Process hashtags via shared helper (respects includeHashtagsAsObsidianTags setting)
+      const uniqueHashtags = this.extractUniqueHashtags(archive.content.hashtags);
+      const hashtagsText = this.buildHashtagsText(archive.content.hashtags, archive.platform);
 
       // YouTube: Show title and description (PostCardRenderer handles the video player)
       if (archive.platform === 'youtube') {
@@ -1532,6 +1578,11 @@ export class MarkdownConverter implements IService {
           const hashtagPattern = /#[^\s#]+(?:\s+[^\s#]+)*/g;
           const cleanedText = contentText.replace(hashtagPattern, '').trim();
           contentText = cleanedText || '';
+        }
+
+        // When hashtags-as-tags is OFF, convert inline #hashtags in embedded content
+        if (!this.includeHashtagsAsObsidianTags && contentText) {
+          contentText = this.textFormatter.linkifyInlineHashtags(contentText, archive.platform);
         }
 
         // Content as plain text (matching main archives)
@@ -1926,20 +1977,9 @@ export class MarkdownConverter implements IService {
       ? this.formatQuotedPost(postData.quotedPost, postData.isReblog, postData._expiredMedia as import('./MediaPlaceholderGenerator').MediaExpiredResult[] | undefined, outputFilePath)
       : undefined;
 
-    const normalizeHashtagForObsidian = (tag: string) => {
-      const clean = tag.startsWith('#') ? tag.slice(1) : tag;
-      // Obsidian hashtags cannot include spaces; replace with hyphen for display and link consistency
-      return `#${clean.replace(/\s+/g, '-')}`;
-    };
-
-    const rawHashtagsArray = Array.isArray(postData.content.hashtags) ? postData.content.hashtags : undefined;
-    const uniqueHashtags = rawHashtagsArray
-      ? Array.from(new Set(rawHashtagsArray.map(tag => tag.trim()).filter(Boolean)))
-      : undefined;
-    const normalizedHashtags = uniqueHashtags?.map(normalizeHashtagForObsidian);
-    const hashtagsText = normalizedHashtags && normalizedHashtags.length > 0
-      ? normalizedHashtags.join(' ')
-      : undefined;
+    // Build hashtags text via shared helper (respects includeHashtagsAsObsidianTags setting)
+    const uniqueHashtags = this.extractUniqueHashtags(postData.content.hashtags);
+    const hashtagsText = this.buildHashtagsText(postData.content.hashtags, postData.platform);
 
     // For Tumblr: remove hashtags from content.text if they're in the hashtags array
     // (hashtags will be displayed separately in the hashtagsText section)
@@ -1968,6 +2008,12 @@ export class MarkdownConverter implements IService {
         ? this.textFormatter.linkifyYouTubeTimestamps(contentText, postData.videoId)
         : contentText)
       : hashtagsText || '';
+
+    // When hashtags-as-tags is OFF, convert inline #hashtags in content text to links
+    // so Obsidian doesn't create native tags from the original post text
+    if (!this.includeHashtagsAsObsidianTags && baseText) {
+      baseText = this.textFormatter.linkifyInlineHashtags(baseText, postData.platform);
+    }
 
     // X Article: append rendered article body (content.html contains Draft.js → Markdown)
     const isXArticle = postData.platform === 'x' && !!postData.content.html;

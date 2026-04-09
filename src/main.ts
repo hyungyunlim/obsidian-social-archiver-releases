@@ -1,4 +1,4 @@
-import { Plugin, Notice, Platform as ObsidianPlatform, Events, TFile, TFolder } from 'obsidian';
+import { Plugin, Notice, Platform as ObsidianPlatform, Events, TFile, TFolder, type WorkspaceLeaf } from 'obsidian';
 import { SocialArchiverSettingTab } from './settings/SettingTab';
 import { SocialArchiverSettings, DEFAULT_SETTINGS, API_ENDPOINT, migrateSettings, getVaultOrganizationStrategy } from './types/settings';
 import { WorkersAPIClient } from './services/WorkersAPIClient';
@@ -15,10 +15,13 @@ import { NaverSubscriptionPoller } from './services/NaverSubscriptionPoller';
 import { BrunchSubscriptionPoller } from './services/BrunchSubscriptionPoller';
 import { WebtoonSyncService } from './services/WebtoonSyncService';
 import { AuthorAvatarService } from './services/AuthorAvatarService';
+import { AuthorNoteService } from './services/AuthorNoteService';
 import { TagStore } from './services/TagStore';
 import type { PostData, Platform } from './types/post';
+import type { AuthorCatalogEntry } from './types/author-catalog';
 import type { UserArchive } from './services/WorkersAPIClient';
 import { TimelineView, VIEW_TYPE_TIMELINE } from './views/TimelineView';
+import { AuthorDetailView, VIEW_TYPE_AUTHOR_DETAIL } from './views/AuthorDetailView';
 import { MediaGalleryView, VIEW_TYPE_MEDIA_GALLERY } from './views/MediaGalleryView';
 import { MediaGalleryView2, VIEW_TYPE_MEDIA_GALLERY_2 } from './views/MediaGalleryView2';
 import { ArchiveModal } from './modals/ArchiveModal';
@@ -87,6 +90,12 @@ export default class SocialArchiverPlugin extends Plugin {
   private syncDebounceTimer?: number; // Debounce timer for subscription sync
   private isSyncingSubscriptions = false; // Track if sync is in progress
   private authorAvatarService?: AuthorAvatarService; // Author avatar download service
+  private authorNoteService?: AuthorNoteService; // Author note CRUD service
+
+  /** Public accessor for author note lookups (e.g., tooltip preview). */
+  public getAuthorNoteService(): AuthorNoteService | undefined {
+    return this.authorNoteService;
+  }
   private wsPostBatchTimer?: number; // Timer for batching WebSocket posts
   private recentlyArchivedUrls = new Set<string>(); // Dedup guard for ws:client_sync (tracks URLs archived locally)
   private pendingTimeouts = new Set<number>(); // Track setTimeout IDs for cleanup on unload
@@ -240,6 +249,12 @@ export default class SocialArchiverPlugin extends Plugin {
       (leaf) => new TimelineView(leaf, this)
     );
 
+    // Register Author Detail View
+    this.registerView(
+      VIEW_TYPE_AUTHOR_DETAIL,
+      (leaf) => new AuthorDetailView(leaf, this)
+    );
+
     // Register Media Gallery View 2 (Simple ItemView)
     this.registerView(
       VIEW_TYPE_MEDIA_GALLERY_2,
@@ -306,6 +321,7 @@ export default class SocialArchiverPlugin extends Plugin {
       plugin: this,
       openArchiveModal: (url) => this.openArchiveModal(url),
       activateTimelineView: (loc) => this.activateTimelineView(loc),
+      activateAuthorDetailView: (author, loc) => this.activateAuthorDetailView(author, loc),
       refreshAllTimelines: () => this.refreshAllTimelines(),
       batchArchiveGoogleMapsLinks: (content, path) => this.batchArchiveGoogleMapsLinks(content, path),
       startBatchTranscription: (mode) => this.startBatchTranscription(mode),
@@ -314,6 +330,8 @@ export default class SocialArchiverPlugin extends Plugin {
       postAndShareCurrentNote: () => this.postAndShareCurrentNote(),
       getEditorTTSController: () => this.editorTTSController,
       redownloadExpiredMedia: () => this.redownloadExpiredMedia(),
+      getAuthorNoteService: () => this.authorNoteService,
+      getSettings: () => ({ enableAuthorNotes: this.settings.enableAuthorNotes, archivePath: this.settings.archivePath }),
     });
 
     // Add settings tab
@@ -693,6 +711,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
       const markdownConverter = new MarkdownConverter({
         frontmatterSettings: this.settings.frontmatter,
+        includeHashtagsAsObsidianTags: this.settings.includeHashtagsAsObsidianTags,
       });
 
       const vaultManager = new VaultManager({
@@ -721,6 +740,13 @@ export default class SocialArchiverPlugin extends Plugin {
         workerApiUrl: API_ENDPOINT,
       });
 
+      // Create AuthorNoteService for vault-native author notes
+      this.authorNoteService = new AuthorNoteService({
+        app: this.app,
+        getAuthorNotesPath: () => this.settings.authorNotesPath || 'Social Authors',
+        isEnabled: () => this.settings.enableAuthorNotes,
+      });
+
       this.orchestrator = new ArchiveOrchestrator({
         archiveService,
         markdownConverter,
@@ -728,6 +754,7 @@ export default class SocialArchiverPlugin extends Plugin {
         mediaHandler,
         linkPreviewExtractor: this.linkPreviewExtractor,
         authorAvatarService: this.authorAvatarService,
+        authorNoteService: this.authorNoteService,
         settings: this.settings,
       });
 
@@ -756,6 +783,7 @@ export default class SocialArchiverPlugin extends Plugin {
         archiveJobTracker: this.archiveJobTracker,
         apiClient: () => this.apiClient,
         authorAvatarService: () => this.authorAvatarService,
+        authorNoteService: () => this.authorNoteService,
         tagStore: this.tagStore,
         refreshTimelineView: () => this.refreshTimelineView(),
         refreshCredits: async () => { await refreshUserCredits(this); },
@@ -1492,6 +1520,70 @@ export default class SocialArchiverPlugin extends Plugin {
       if (view && 'refresh' in view && typeof view.refresh === 'function') {
         await (view.refresh as () => Promise<void>)();
       }
+    }
+  }
+
+  /**
+   * Activate the Author Detail View for a given author.
+   *
+   * - Reuses an existing Author Detail leaf in the same location when possible.
+   * - If reusing, calls showAuthor() instead of creating a new view.
+   * - Location defaults based on settings.authorDetailOpenInMainTab.
+   */
+  async activateAuthorDetailView(
+    author: AuthorCatalogEntry,
+    location?: 'sidebar' | 'main'
+  ): Promise<void> {
+    const effectiveLocation =
+      location ?? (this.settings.authorDetailOpenInMainTab ? 'main' : 'sidebar');
+    const { workspace } = this.app;
+    let leaf: WorkspaceLeaf | undefined;
+
+    if (effectiveLocation === 'main') {
+      // Always open a new tab for each author in main area
+      leaf = workspace.getLeaf('tab');
+      await leaf.setViewState({
+        type: VIEW_TYPE_AUTHOR_DETAIL,
+        active: true,
+        state: { authorUrl: author.authorUrl, platform: author.platform },
+      });
+      const view = leaf.view;
+      if (view instanceof AuthorDetailView) {
+        view.showAuthor(author);
+      }
+    } else {
+      // Sidebar: look for existing Author Detail leaf in right split
+      const existingLeaves = workspace.getLeavesOfType(VIEW_TYPE_AUTHOR_DETAIL);
+      const sidebarLeaf = existingLeaves.find((l) => {
+        const parent = l.getRoot();
+        return parent === workspace.rightSplit;
+      });
+
+      if (sidebarLeaf) {
+        leaf = sidebarLeaf;
+        const view = leaf.view;
+        if (view instanceof AuthorDetailView) {
+          view.showAuthor(author);
+        }
+      } else {
+        const rightLeaf = workspace.getRightLeaf(false);
+        if (rightLeaf) {
+          leaf = rightLeaf;
+          await leaf.setViewState({
+            type: VIEW_TYPE_AUTHOR_DETAIL,
+            active: true,
+            state: { authorUrl: author.authorUrl, platform: author.platform },
+          });
+          const view = leaf.view;
+          if (view instanceof AuthorDetailView) {
+            view.showAuthor(author);
+          }
+        }
+      }
+    }
+
+    if (leaf) {
+      void workspace.revealLeaf(leaf);
     }
   }
 

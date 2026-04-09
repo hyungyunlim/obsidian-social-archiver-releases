@@ -17,6 +17,7 @@ import type { App, EventRef, TFile } from 'obsidian';
 import type { WorkersAPIClient, TagUpsertInput, ArchiveTagMappingInput } from '../../services/WorkersAPIClient';
 import type { ArchiveLookupService } from '../../services/ArchiveLookupService';
 import type { SocialArchiverSettings } from '../../types/settings';
+import { normalizeTagName } from '../../utils/tags';
 
 // ============================================================================
 // Constants
@@ -207,8 +208,10 @@ export class ArchiveTagOutboundService {
     currentTags: string[],
     previousTags: string[],
   ): Promise<void> {
-    const added = currentTags.filter(t => !previousTags.includes(t));
-    const removed = previousTags.filter(t => !currentTags.includes(t));
+    const normCurrent = currentTags.map(normalizeTagName).filter(Boolean);
+    const normPrevious = previousTags.map(normalizeTagName).filter(Boolean);
+    const added = normCurrent.filter(t => !normPrevious.includes(t));
+    const removed = normPrevious.filter(t => !normCurrent.includes(t));
 
     if (added.length === 0 && removed.length === 0) return;
 

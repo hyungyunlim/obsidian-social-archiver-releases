@@ -227,6 +227,11 @@ export class SortDropdown {
     });
   }
 
+  /** Whether the sort dropdown is currently open */
+  get isOpened(): boolean {
+    return this.isOpen;
+  }
+
   /**
    * Close dropdown
    */

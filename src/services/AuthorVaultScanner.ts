@@ -236,6 +236,11 @@ export class AuthorVaultScanner {
       };
     }
 
+    // Skip author note files (type: 'social-archiver-author')
+    if (frontmatter.type === 'social-archiver-author') {
+      return null;
+    }
+
     const platform = frontmatter.platform as string;
 
     // Handle user-created posts (platform: 'post')

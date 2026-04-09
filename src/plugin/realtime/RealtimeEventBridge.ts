@@ -27,6 +27,7 @@ import type {
   ActionUpdatedEventData,
   ArchiveDeletedEventData,
   ArchiveTagsUpdatedEventData,
+  MediaPreservedEventData,
 } from '../../types/websocket';
 import { TimelineView, VIEW_TYPE_TIMELINE } from '../../views/TimelineView';
 
@@ -220,6 +221,7 @@ export class RealtimeEventBridge {
     this.setupActionUpdatedListener();
     this.setupArchiveTagsUpdatedListener();
     this.setupArchiveDeletedListener();
+    this.setupMediaPreservedListener();
   }
 
   // --------------------------------------------------------------------------
@@ -850,6 +852,131 @@ export class RealtimeEventBridge {
         // Delegate to ArchiveDeleteSyncService for proper loop-guard and feature-flag handling
         if (this.deps.archiveDeleteSyncService) {
           void this.deps.archiveDeleteSyncService.handleInboundDelete(archiveId, originalUrl, 'ws');
+        }
+      }),
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // ws:media_preserved
+  // --------------------------------------------------------------------------
+
+  private setupMediaPreservedListener(): void {
+    this.eventRefs.push(
+      this.deps.events.on('ws:media_preserved', async (_message: unknown) => {
+        const msg = _message as { type: string; data: MediaPreservedEventData } | undefined;
+        if (!msg?.data) return;
+
+        const { archiveId, status } = msg.data;
+
+        // Only process when server actually preserved media items
+        if (status !== 'completed' && status !== 'partial') {
+          console.debug('[Social Archiver] media_preserved: skipping status', status, archiveId);
+          return;
+        }
+
+        console.debug('[Social Archiver] media_preserved received:', archiveId, status);
+
+        // Small delay to let any in-flight sync or vault writes complete
+        await new Promise(resolve => window.setTimeout(resolve, 3000));
+
+        try {
+          // Find the vault file by sourceArchiveId
+          const file = this.deps.archiveLookupService?.findBySourceArchiveId(archiveId) ?? null;
+          if (!file) {
+            console.debug('[Social Archiver] media_preserved: no vault file for', archiveId);
+            return;
+          }
+
+          // Read note content and check for placeholder blocks
+          let content = await this.deps.app.vault.read(file);
+
+          const { MediaPlaceholderGenerator } = await import('../../services/MediaPlaceholderGenerator');
+          const placeholders = MediaPlaceholderGenerator.findAllPlaceholders(content);
+          if (placeholders.length === 0) {
+            console.debug('[Social Archiver] media_preserved: no placeholders in', file.path);
+            return;
+          }
+
+          // Extract metadata from frontmatter
+          const cache = this.deps.app.metadataCache.getFileCache(file);
+          const frontmatter = cache?.frontmatter;
+          const platform = (frontmatter?.platform as Platform) || 'unknown';
+          const authorHandle = (frontmatter?.authorHandle as string)?.replace(/^@/, '') || 'unknown';
+
+          // Derive postId from the note's basename (same pattern as main.ts redownloadExpiredMedia)
+          const postId = file.basename.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 60) || 'unknown';
+
+          // Create MediaHandler with same config as the manual redownload command
+          const settings = this.deps.settings();
+          const { MediaHandler } = await import('../../services/MediaHandler');
+          const mediaHandler = new MediaHandler({
+            vault: this.deps.app.vault,
+            app: this.deps.app,
+            workersClient: this.deps.apiClient() as import('../../services/WorkersAPIClient').WorkersAPIClient | undefined,
+            basePath: settings.mediaPath || 'attachments/social-archives',
+            optimizeImages: true,
+            imageQuality: 0.8,
+            maxImageDimension: 2048,
+          });
+
+          try {
+            let recovered = 0;
+            let failed = 0;
+
+            // Process each placeholder sequentially to avoid race conditions on content
+            for (let i = 0; i < placeholders.length; i++) {
+              const placeholder = placeholders[i];
+              if (!placeholder) continue;
+
+              const localPath = await mediaHandler.redownloadExpiredMedia(
+                placeholder.result,
+                platform,
+                postId,
+                authorHandle,
+                i,
+              );
+
+              if (localPath) {
+                content = MediaPlaceholderGenerator.replacePlaceholderWithEmbed(
+                  content,
+                  placeholder.blockText,
+                  localPath,
+                );
+                recovered++;
+              } else {
+                failed++;
+              }
+            }
+
+            // Write updated content back to note if any placeholders were replaced
+            if (recovered > 0) {
+              await this.deps.app.vault.modify(file, content);
+
+              if (failed === 0) {
+                this.deps.notify(`Recovered ${recovered} media for archived note`, 5000);
+              } else {
+                this.deps.notify(`Recovered ${recovered} media, ${failed} failed`, 5000);
+              }
+
+              console.debug(
+                '[Social Archiver] media_preserved: recovered',
+                recovered,
+                'failed',
+                failed,
+                'for',
+                file.path,
+              );
+            }
+          } finally {
+            mediaHandler.dispose();
+          }
+        } catch (error) {
+          console.error(
+            '[Social Archiver] media_preserved handler failed for',
+            archiveId,
+            error instanceof Error ? error.message : String(error),
+          );
         }
       }),
     );

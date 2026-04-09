@@ -319,6 +319,7 @@ export class WebtoonSyncService {
 
     const markdownConverter = new MarkdownConverter({
       frontmatterSettings: this.plugin.settings.frontmatter,
+      includeHashtagsAsObsidianTags: this.plugin.settings.includeHashtagsAsObsidianTags,
     });
     markdownConverter.initialize();
 

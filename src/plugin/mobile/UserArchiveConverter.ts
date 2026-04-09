@@ -195,6 +195,7 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
         },
       } as Omit<PostData, 'quotedPost' | 'embeddedArchives'>,
     } : {}),
+    ...(archive.mediaPreservationStatus ? { mediaPreservationStatus: archive.mediaPreservationStatus } : {}),
     ...(archive.isBookmarked != null ? { archive: archive.isBookmarked } : {}),
     ...(archive.isReblog != null ? { isReblog: archive.isReblog } : {}),
     ...(archive.comments && archive.comments.length > 0 ? {

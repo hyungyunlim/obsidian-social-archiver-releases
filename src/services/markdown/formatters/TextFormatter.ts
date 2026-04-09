@@ -94,50 +94,59 @@ export class TextFormatter {
   buildHashtagLinks(tags: string[] | undefined, platform: string, displayTags?: string[]): string | undefined {
     if (!tags || tags.length === 0) return undefined;
 
-    const buildUrl = (tag: string): string => {
-      const encoded = encodeURIComponent(tag);
-      switch (platform.toLowerCase()) {
-        case 'instagram':
-          return `https://www.instagram.com/explore/tags/${encoded}/`;
-        case 'x':
-        case 'twitter':
-          return `https://twitter.com/hashtag/${encoded}`;
-        case 'facebook':
-          return `https://www.facebook.com/hashtag/${encoded}`;
-        case 'linkedin':
-          return `https://www.linkedin.com/feed/hashtag/${encoded}/`;
-        case 'tiktok':
-          return `https://www.tiktok.com/tag/${encoded}`;
-        case 'threads':
-          return `https://www.threads.com/tag/${encoded}`;
-        case 'youtube':
-          return `https://www.youtube.com/hashtag/${encoded}`;
-        case 'reddit':
-          return `https://www.reddit.com/search/?q=%23${encoded}`;
-        case 'mastodon':
-          return `https://mastodon.social/tags/${encoded}`;
-        case 'bluesky':
-          return `https://bsky.app/search?q=%23${encoded}`;
-        case 'pinterest':
-          return `https://www.pinterest.com/search/pins/?q=${encoded}`;
-        case 'substack':
-          return `https://substack.com/search/${encoded}`;
-        case 'tumblr':
-          return `https://www.tumblr.com/tagged/${encoded}`;
-        default:
-          return `https://www.google.com/search?q=%23${encoded}`;
-      }
-    };
-
     const parts = tags.map((tag, index) => {
       const clean = tag.startsWith('#') ? tag.slice(1) : tag;
-      // Use displayTag if provided, otherwise use original tag
       const displayTag = displayTags && displayTags[index]
         ? (displayTags[index].startsWith('#') ? displayTags[index] : `#${displayTags[index]}`)
         : `#${clean}`;
-      return `[${displayTag}](${buildUrl(clean)})`;
+      const url = this.getHashtagUrl(platform, encodeURIComponent(clean));
+      return `[${displayTag}](${url})`;
     });
 
     return parts.join(' ');
+  }
+
+  /**
+   * Replace inline #hashtags in text with platform-specific markdown links.
+   * Used when includeHashtagsAsObsidianTags is OFF to prevent Obsidian
+   * from creating native tags from content text.
+   *
+   * Skips hashtags that are already inside markdown links [#tag](url).
+   */
+  linkifyInlineHashtags(text: string, platform: string): string {
+    if (!text) return text;
+
+    // Match #hashtag that is NOT already inside a markdown link
+    // Negative lookbehind for [ (already linked) and negative lookahead for ](
+    return text.replace(
+      /(?<!\[)#([\p{L}\p{N}_]+)(?!\]\()/gu,
+      (_match, tag: string) => {
+        const encoded = encodeURIComponent(tag);
+        const url = this.getHashtagUrl(platform, encoded);
+        return `[#${tag}](${url})`;
+      }
+    );
+  }
+
+  /**
+   * Get platform-specific hashtag search URL.
+   */
+  private getHashtagUrl(platform: string, encodedTag: string): string {
+    switch (platform.toLowerCase()) {
+      case 'instagram': return `https://www.instagram.com/explore/tags/${encodedTag}/`;
+      case 'x': case 'twitter': return `https://twitter.com/hashtag/${encodedTag}`;
+      case 'facebook': return `https://www.facebook.com/hashtag/${encodedTag}`;
+      case 'linkedin': return `https://www.linkedin.com/feed/hashtag/${encodedTag}/`;
+      case 'tiktok': return `https://www.tiktok.com/tag/${encodedTag}`;
+      case 'threads': return `https://www.threads.com/tag/${encodedTag}`;
+      case 'youtube': return `https://www.youtube.com/hashtag/${encodedTag}`;
+      case 'reddit': return `https://www.reddit.com/search/?q=%23${encodedTag}`;
+      case 'mastodon': return `https://mastodon.social/tags/${encodedTag}`;
+      case 'bluesky': return `https://bsky.app/search?q=%23${encodedTag}`;
+      case 'pinterest': return `https://www.pinterest.com/search/pins/?q=${encodedTag}`;
+      case 'substack': return `https://substack.com/search/${encodedTag}`;
+      case 'tumblr': return `https://www.tumblr.com/tagged/${encodedTag}`;
+      default: return `https://www.google.com/search?q=%23${encodedTag}`;
+    }
   }
 }

@@ -16,6 +16,7 @@ import type {
   AuthorSubscribeOptions,
   NaverCafeSubscriptionOptions,
 } from '@/types/author-catalog';
+import type { AuthorNoteService } from '@/services/AuthorNoteService';
 import { AuthorVaultScanner } from '@/services/AuthorVaultScanner';
 import { AuthorDeduplicator, generateAuthorKey, type SubscriptionMap } from '@/services/AuthorDeduplicator';
 import {
@@ -48,6 +49,8 @@ export interface AuthorCatalogControllerConfig {
   fetchSubscriptions?: () => Promise<Subscription[]>;
   onSubscribe?: (author: AuthorCatalogEntry, options: AuthorSubscribeOptions) => Promise<unknown>;
   onUnsubscribe?: (author: AuthorCatalogEntry) => Promise<void>;
+  authorNoteService?: AuthorNoteService;
+  enableAuthorNotes?: boolean;
 }
 
 // ============================================================================
@@ -343,6 +346,20 @@ export class AuthorCatalogController {
     const myGeneration = startAuthorLoad();
     store.setLoading(true);
 
+    // Phase 1: Load author notes (fast path — synchronous frontmatter reads)
+    let noteEntries: AuthorCatalogEntry[] = [];
+    if (this.config.enableAuthorNotes && this.config.authorNoteService) {
+      try {
+        const allNotes = this.config.authorNoteService.loadAllNotes();
+        for (const [, { data, file }] of allNotes) {
+          const entry = this.config.authorNoteService.noteToEntry(data, file);
+          noteEntries.push(entry);
+        }
+      } catch (err) {
+        console.warn('[AuthorCatalogController] Failed to load author notes:', err);
+      }
+    }
+
     try {
       const scanner = new AuthorVaultScanner({
         app: this.config.app,
@@ -388,6 +405,42 @@ export class AuthorCatalogController {
       // Deduplicate authors with subscription info
       const deduplicator = new AuthorDeduplicator();
       const dedupeResult = deduplicator.deduplicate(scanResult.authors, subscriptionMap);
+
+      // Merge note-derived entries with vault-scan entries
+      if (noteEntries.length > 0) {
+        // Build a lookup from vault-scan entries by (authorUrl, platform)
+        const scanLookup = new Map<string, number>();
+        for (let i = 0; i < dedupeResult.authors.length; i++) {
+          const a = dedupeResult.authors[i];
+          if (a) {
+            const lookupKey = `${a.platform}:${a.authorUrl}`;
+            scanLookup.set(lookupKey, i);
+          }
+        }
+
+        for (const noteEntry of noteEntries) {
+          const lookupKey = `${noteEntry.platform}:${noteEntry.authorUrl}`;
+          const scanIndex = scanLookup.get(lookupKey);
+
+          if (scanIndex !== undefined && dedupeResult.authors[scanIndex]) {
+            // Merge: scan data + note overrides
+            const scanEntry = dedupeResult.authors[scanIndex]!;
+            dedupeResult.authors[scanIndex] = {
+              ...scanEntry,
+              hasNote: true,
+              noteFilePath: noteEntry.noteFilePath,
+              displayNameOverride: noteEntry.displayNameOverride,
+              ...(noteEntry.bio && { bio: noteEntry.bio }),
+              ...(noteEntry.followers != null && { followers: noteEntry.followers }),
+              ...(noteEntry.postsCount != null && { postsCount: noteEntry.postsCount }),
+              ...(noteEntry.localAvatar && { localAvatar: noteEntry.localAvatar }),
+            };
+          } else {
+            // Note-only author (no vault archives) — add to results
+            dedupeResult.authors.push(noteEntry);
+          }
+        }
+      }
 
       // Find orphaned avatar files for subscription-only authors (batched)
       const AVATAR_BATCH_SIZE = 10;

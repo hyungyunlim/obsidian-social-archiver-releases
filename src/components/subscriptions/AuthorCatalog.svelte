@@ -26,6 +26,7 @@ import {
 } from '@/services/AuthorCatalogStore';
 import { get } from 'svelte/store';
 import AuthorRow from './AuthorRow.svelte';
+import AuthorCardGrid from './AuthorCardGrid.svelte';
 
 // ============================================================================
 // Debug (opt-in)
@@ -147,6 +148,7 @@ interface AuthorCatalogProps {
   onManualRun?: (author: AuthorCatalogEntry) => Promise<void>;
   onViewHistory?: (author: AuthorCatalogEntry) => void;
   onViewArchives?: (author: AuthorCatalogEntry) => void;
+  onViewDetail?: (author: AuthorCatalogEntry) => void;
   hideHeader?: boolean;  // Hide the catalog header
   hideFilters?: boolean; // Hide the filter bar
   externalSearchQuery?: string; // Accept search query from parent
@@ -154,6 +156,9 @@ interface AuthorCatalogProps {
   externalSortBy?: AuthorSortOption; // Accept sort from parent
   externalIncludeArchived?: boolean; // Whether to include timeline-archived posts/authors
   onPlatformCountsChange?: (counts: PlatformAuthorCounts) => void; // Callback when platform counts change
+  enableAuthorNotes?: boolean;
+  authorNotesPath?: string;
+  viewMode?: 'list' | 'card';
 }
 
 let {
@@ -166,13 +171,17 @@ let {
   onManualRun,
   onViewHistory,
   onViewArchives,
+  onViewDetail,
   hideHeader = false,
   hideFilters = false,
   externalSearchQuery = '',
   externalPlatformFilter = ['facebook', 'instagram', 'x', 'threads', 'linkedin', 'tiktok'] as Platform[],
   externalSortBy = 'lastRun',
   externalIncludeArchived = false,
-  onPlatformCountsChange
+  onPlatformCountsChange,
+  enableAuthorNotes = false,
+  authorNotesPath = 'Social Authors',
+  viewMode = 'list' as 'list' | 'card',
 }: AuthorCatalogProps = $props();
 
 // ============================================================================
@@ -1071,6 +1080,48 @@ async function loadAuthors(forceRefresh = false): Promise<void> {
       totalProcessed: dedupeResult.totalProcessed,
     });
 
+    // Merge author note data into dedup results
+    if (enableAuthorNotes && authorNotesPath) {
+      try {
+        const { AuthorNoteService } = await import('../../services/AuthorNoteService');
+        const noteService = new AuthorNoteService({
+          app,
+          getAuthorNotesPath: () => authorNotesPath,
+          isEnabled: () => true,
+        });
+        const allNotes = noteService.loadAllNotes();
+        if (allNotes.size > 0) {
+          const scanLookup = new Map<string, number>();
+          for (let i = 0; i < dedupeResult.authors.length; i++) {
+            const a = dedupeResult.authors[i];
+            if (a) scanLookup.set(`${a.platform}:${a.authorUrl}`, i);
+          }
+          for (const [, { data, file }] of allNotes) {
+            const entry = noteService.noteToEntry(data, file);
+            const lookupKey = `${entry.platform}:${entry.authorUrl}`;
+            const idx = scanLookup.get(lookupKey);
+            if (idx !== undefined && dedupeResult.authors[idx]) {
+              const scan = dedupeResult.authors[idx]!;
+              dedupeResult.authors[idx] = {
+                ...scan,
+                hasNote: true,
+                noteFilePath: entry.noteFilePath,
+                displayNameOverride: entry.displayNameOverride,
+                ...(entry.bio && { bio: entry.bio }),
+                ...(entry.followers != null && { followers: entry.followers }),
+                ...(entry.postsCount != null && { postsCount: entry.postsCount }),
+                ...(entry.localAvatar && { localAvatar: entry.localAvatar }),
+              };
+            } else {
+              dedupeResult.authors.push(entry);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[AuthorCatalog] Failed to merge author notes:', err);
+      }
+    }
+
     // Render first, then do any optional slow enrichments in the background
     stage = 'store:setAuthors';
     store.setAuthorsFromVault(dedupeResult.authors);
@@ -1274,9 +1325,12 @@ async function handleUnsubscribe(author: AuthorCatalogEntry): Promise<void> {
 
 /**
  * Handle view archives action
+ * Prefers onViewDetail (Author Detail View) over onViewArchives (legacy Timeline filter)
  */
 function handleViewArchives(author: AuthorCatalogEntry): void {
-  if (onViewArchives) {
+  if (onViewDetail) {
+    onViewDetail(author);
+  } else if (onViewArchives) {
     onViewArchives(author);
   }
 }
@@ -1457,32 +1511,55 @@ const platformNames: Partial<Record<Platform | 'all', string>> = {
         </div>
       {:else}
         <div class="author-list">
-          {#each displayedAuthors as author (generateAuthorKey(author.authorUrl, author.authorName, author.platform) + ':' + author.status)}
-            {#if AUTHOR_CATALOG_MINIMAL_RENDER}
-              <div class="author-row-minimal">
-                <div class="author-row-minimal__name">{author.authorName}</div>
-                <div class="author-row-minimal__meta">
-                  <span class="pill">{author.platform}</span>
-                  {#if author.handle}
-                    <span class="pill">{author.handle}</span>
-                  {/if}
-                  <span class="pill">{author.archiveCount} archives</span>
-                  <span class="pill">{author.status}</span>
+          {#if viewMode === 'card'}
+            <AuthorCardGrid
+              {app}
+              authors={displayedAuthors}
+              {onViewDetail}
+              onOpenNote={(a) => {
+                const filePath = a.noteFilePath;
+                if (filePath) {
+                  const file = app.vault.getFileByPath(filePath);
+                  if (file) { app.workspace.getLeaf('tab').openFile(file); }
+                }
+              }}
+            />
+          {:else}
+            {#each displayedAuthors as author (generateAuthorKey(author.authorUrl, author.authorName, author.platform) + ':' + author.status)}
+              {#if AUTHOR_CATALOG_MINIMAL_RENDER}
+                <div class="author-row-minimal">
+                  <div class="author-row-minimal__name">{author.authorName}</div>
+                  <div class="author-row-minimal__meta">
+                    <span class="pill">{author.platform}</span>
+                    {#if author.handle}
+                      <span class="pill">{author.handle}</span>
+                    {/if}
+                    <span class="pill">{author.archiveCount} archives</span>
+                    <span class="pill">{author.status}</span>
+                  </div>
                 </div>
-              </div>
-            {:else}
-              <AuthorRow
-                {app}
-                {author}
-                onSubscribe={handleSubscribe}
-                {onUpdateSubscription}
-                onUnsubscribe={handleUnsubscribe}
-                {onManualRun}
-                {onViewHistory}
-                onViewArchives={handleViewArchives}
-              />
-            {/if}
-          {/each}
+              {:else}
+                <AuthorRow
+                  {app}
+                  {author}
+                  onSubscribe={handleSubscribe}
+                  {onUpdateSubscription}
+                  onUnsubscribe={handleUnsubscribe}
+                  {onManualRun}
+                  {onViewHistory}
+                  onViewArchives={handleViewArchives}
+                  {onViewDetail}
+                  onOpenNote={(a) => {
+                    const filePath = a.noteFilePath;
+                    if (filePath) {
+                      const file = app.vault.getFileByPath(filePath);
+                      if (file) { app.workspace.getLeaf('tab').openFile(file); }
+                    }
+                  }}
+                />
+              {/if}
+            {/each}
+          {/if}
 
           {#if displayedAuthors.length < filteredAuthors.length}
             <div class="load-more-hint">

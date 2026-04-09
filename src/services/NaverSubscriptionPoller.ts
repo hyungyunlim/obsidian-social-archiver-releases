@@ -923,6 +923,7 @@ export class NaverSubscriptionPoller {
 
     const markdownConverter = new MarkdownConverter({
       frontmatterSettings: this.plugin.settings.frontmatter,
+      includeHashtagsAsObsidianTags: this.plugin.settings.includeHashtagsAsObsidianTags,
     });
     markdownConverter.initialize();
 
@@ -984,6 +985,7 @@ export class NaverSubscriptionPoller {
 
     const markdownConverter = new MarkdownConverter({
       frontmatterSettings: this.plugin.settings.frontmatter,
+      includeHashtagsAsObsidianTags: this.plugin.settings.includeHashtagsAsObsidianTags,
     });
     markdownConverter.initialize();
 

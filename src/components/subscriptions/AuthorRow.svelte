@@ -41,6 +41,9 @@ interface AuthorRowProps {
   onManualRun?: (author: AuthorCatalogEntry) => Promise<void>;
   onViewHistory?: (author: AuthorCatalogEntry) => void;
   onViewArchives?: (author: AuthorCatalogEntry) => void;
+  onViewDetail?: (author: AuthorCatalogEntry) => void;
+  onOpenNote?: (author: AuthorCatalogEntry) => void;
+  onCreateNote?: (author: AuthorCatalogEntry) => void;
 }
 
 let {
@@ -51,7 +54,10 @@ let {
   onUnsubscribe,
   onManualRun,
   onViewHistory,
-  onViewArchives
+  onViewArchives,
+  onViewDetail,
+  onOpenNote,
+  onCreateNote
 }: AuthorRowProps = $props();
 
 // Derived status for reliable reactivity in conditionals
@@ -94,6 +100,7 @@ const isWebtoon = $derived(author.platform === 'naver-webtoon' || author.platfor
 // Show subscribe button for supported platforms
 // Uses centralized SUBSCRIPTION_SUPPORTED_PLATFORMS from rssPlatforms.ts
 const isSubscriptionSupported = $derived(checkSubscriptionSupported(author.platform));
+const hasNote = $derived(!!author.hasNote);
 
 // Mobile detection for disabling hover effects on touch devices
 const isMobile = ObsidianPlatform.isMobile;
@@ -182,6 +189,8 @@ let isUnsubscribing = $state(false);
 let isRunning = $state(false);
 let showActionMenu = $state(false);
 let isExpanded = $state(false);
+let noteBody = $state('');
+let noteBodyLoaded = $state(false);
 
 // Reddit modal state (no longer needed - using Obsidian native modal)
 
@@ -226,6 +235,28 @@ $effect(() => {
     return () => {
       document.removeEventListener('click', handleOutsideClick);
     };
+  }
+});
+
+/**
+ * Load author note body when expanded and note exists
+ */
+$effect(() => {
+  if (isExpanded && hasNote && author.noteFilePath && !noteBodyLoaded) {
+    const file = app.vault.getFileByPath(author.noteFilePath);
+    if (file) {
+      app.vault.cachedRead(file).then((content) => {
+        const body = content.replace(/^---\n[\s\S]*?\n---\n?/, '').trim();
+        // Remove the default "## Notes" scaffold if it's the only content
+        noteBody = body === '## Notes' ? '' : body;
+        noteBodyLoaded = true;
+      });
+    }
+  }
+  // Reset when collapsed or author changes
+  if (!isExpanded) {
+    noteBodyLoaded = false;
+    noteBody = '';
   }
 });
 
@@ -597,10 +628,13 @@ function handleViewHistory(): void {
 
 /**
  * Handle view archives click (triggered by author name)
+ * Prefers onViewDetail (Author Detail View) over onViewArchives (legacy Timeline filter)
  */
 function handleViewArchives(event: MouseEvent): void {
   event.stopPropagation(); // Prevent row expansion
-  if (onViewArchives) {
+  if (onViewDetail) {
+    onViewDetail(author);
+  } else if (onViewArchives) {
     onViewArchives(author);
   }
 }
@@ -609,7 +643,9 @@ function handleViewArchivesKeydown(event: KeyboardEvent): void {
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault();
     event.stopPropagation();
-    if (onViewArchives) {
+    if (onViewDetail) {
+      onViewDetail(author);
+    } else if (onViewArchives) {
       onViewArchives(author);
     }
   }
@@ -683,6 +719,31 @@ function renderBio(node: HTMLElement, bio: string) {
     }
   };
 }
+
+/**
+ * Svelte action to render author note body as Obsidian markdown
+ */
+function renderNoteBody(node: HTMLElement, body: string) {
+  const component = new Component();
+  component.load();
+
+  async function render(text: string) {
+    node.empty();
+    if (!text) return;
+    await MarkdownRenderer.render(app, text, node, author.noteFilePath || '', component);
+  }
+
+  render(body);
+
+  return {
+    update(newBody: string) {
+      render(newBody);
+    },
+    destroy() {
+      component.unload();
+    }
+  };
+}
 </script>
 
 <div
@@ -744,7 +805,7 @@ function renderBio(node: HTMLElement, bio: string) {
           class="author-name-btn webtoon-title"
           onclick={handleViewArchives}
           onkeydown={handleViewArchivesKeydown}
-          title="View archived episodes"
+          title="View author detail"
         >
           {author.webtoonInfo.titleName}
         </button>
@@ -800,7 +861,7 @@ function renderBio(node: HTMLElement, bio: string) {
           class="author-name-btn"
           onclick={handleViewArchives}
           onkeydown={handleViewArchivesKeydown}
-          title="View archives in timeline"
+          title="View author detail"
         >
           {displayName}
         </button>
@@ -819,6 +880,22 @@ function renderBio(node: HTMLElement, bio: string) {
               <path d={platformIcon.path}/>
             </svg>
           </button>
+        {/if}
+        {#if hasNote && onOpenNote}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <span
+            class="note-icon-inline"
+            onclick={(e) => { e.stopPropagation(); onOpenNote?.(author); }}
+            title="Open author note"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14,2 14,8 20,8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+          </span>
         {/if}
       </div>
       {#if author.handle && author.handle.replace(/^@/, '').toLowerCase() !== 'unknown' && !(author.platform === 'youtube' && author.handle.replace(/^@/, '').startsWith('UC'))}
@@ -897,6 +974,17 @@ function renderBio(node: HTMLElement, bio: string) {
           {bioTruncated}
         </div>
       {/if}
+    {/if}
+
+    <!-- Author Note Body Preview (when expanded and note exists) -->
+    {#if isExpanded && hasNote && noteBodyLoaded && noteBody}
+      <!-- svelte-ignore a11y-click-events-have-key-events -->
+      <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+      <div
+        class="author-note-body"
+        use:renderNoteBody={noteBody}
+        onclick={(e) => e.stopPropagation()}
+      ></div>
     {/if}
   </div>
 
@@ -1347,6 +1435,35 @@ function renderBio(node: HTMLElement, bio: string) {
     text-decoration: none;
   }
 
+  /* Author note body preview (rendered markdown) */
+  .author-note-body {
+    padding: 4px 10px;
+    font-size: var(--font-ui-smaller);
+    line-height: 1.5;
+    color: var(--text-normal);
+    border-left: 2px solid var(--interactive-accent);
+    margin: 6px 0 0;
+    background: var(--background-secondary);
+    border-radius: 0 4px 4px 0;
+  }
+  .author-note-body :global(p) { margin: 2px 0; }
+  .author-note-body :global(h1),
+  .author-note-body :global(h2),
+  .author-note-body :global(h3) { display: none; }
+  .author-note-body :global(a) { color: var(--text-accent); text-decoration: none; }
+  .author-note-body :global(a:hover) { text-decoration: underline; }
+  .author-note-body :global(ul),
+  .author-note-body :global(ol) { margin: 2px 0; padding-left: 16px; }
+
+  .note-icon-inline {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    color: var(--text-faint);
+    flex-shrink: 0;
+  }
+  .note-icon-inline:hover { color: var(--text-accent); }
+
   /* Avatar fallback for image load errors */
   .avatar-fallback {
     position: absolute;
@@ -1358,6 +1475,54 @@ function renderBio(node: HTMLElement, bio: string) {
     flex-shrink: 0;
     position: relative;
     align-self: center;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Note Button (Open Note / Create Note) */
+  .note-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    border-radius: 6px;
+    color: var(--text-muted);
+    transition: color 0.15s ease, background 0.15s ease;
+  }
+
+  .note-btn:hover {
+    color: var(--text-normal);
+    background: var(--background-modifier-hover);
+  }
+
+  .note-btn:focus {
+    outline: none;
+    box-shadow: none;
+  }
+
+  .note-btn.has-note {
+    color: var(--text-accent);
+  }
+
+  .note-btn.has-note:hover {
+    color: var(--text-accent);
+    background: var(--background-modifier-hover);
+  }
+
+  .note-btn.create-note {
+    color: var(--text-faint);
+  }
+
+  .note-btn.create-note:hover {
+    color: var(--text-muted);
   }
 
   /* Subscribed Wrapper - Contains button and schedule */
