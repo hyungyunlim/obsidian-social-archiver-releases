@@ -652,7 +652,8 @@ export default class SocialArchiverPlugin extends Plugin {
         this.app,
         this.apiClient,
         this.archiveLookupService,
-        () => this.settings
+        () => this.settings,
+        this.tagStore,
       );
       this.archiveTagOutboundService.start();
 
@@ -1018,6 +1019,13 @@ export default class SocialArchiverPlugin extends Plugin {
 
         // Sync pending subscription posts on startup (delayed to not block UI)
         this.scheduleTrackedTimeout(() => { void this.syncSubscriptionPosts(); }, 3000);
+
+        // Pull tag definitions from server (merge into local tagDefinitions with colors)
+        if (this.apiClient) {
+          this.scheduleTrackedTimeout(() => {
+            void this.tagStore.pullTagDefinitionsFromServer(this.apiClient!);
+          }, 4000);
+        }
 
         // Catch up on pending mobile sync queue items missed while offline
         if (this.settings.syncClientId) {

@@ -16,6 +16,7 @@
 import type { App, EventRef, TFile } from 'obsidian';
 import type { WorkersAPIClient, TagUpsertInput, ArchiveTagMappingInput } from '../../services/WorkersAPIClient';
 import type { ArchiveLookupService } from '../../services/ArchiveLookupService';
+import type { TagStore } from '../../services/TagStore';
 import type { SocialArchiverSettings } from '../../types/settings';
 import { normalizeTagName } from '../../utils/tags';
 
@@ -60,6 +61,7 @@ export class ArchiveTagOutboundService {
     private readonly apiClient: WorkersAPIClient,
     private readonly archiveLookup: ArchiveLookupService,
     private readonly getSettings: () => SocialArchiverSettings,
+    private readonly tagStore?: TagStore,
   ) {}
 
   // --------------------------------------------------------------------------
@@ -222,12 +224,15 @@ export class ArchiveTagOutboundService {
 
     // 1. Upsert tag entities for newly added tag names
     if (added.length > 0) {
-      const tagsToUpsert: TagUpsertInput[] = added.map(name => ({
-        id: this.tagNameToId.get(name) ?? crypto.randomUUID(),
-        name,
-        color: null,
-        sortOrder: 0,
-      }));
+      const tagsToUpsert: TagUpsertInput[] = added.map(name => {
+        const def = this.tagStore?.getTagByName(name);
+        return {
+          id: this.tagNameToId.get(name) ?? def?.id ?? crypto.randomUUID(),
+          name,
+          color: def?.color ?? null,
+          sortOrder: def?.sortOrder ?? 0,
+        };
+      });
 
       // Seed the ID cache so we can map name → ID for the mapping step
       for (const tag of tagsToUpsert) {

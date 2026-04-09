@@ -3,6 +3,7 @@ import type { TagDefinition, TagWithCount } from '@/types/tag';
 import { TAG_COLORS } from '@/types/tag';
 import { normalizeTagName, validateTagName } from '@/utils/tags';
 import type SocialArchiverPlugin from '@/main';
+import type { WorkersAPIClient, UserTag } from './WorkersAPIClient';
 
 /**
  * TagStore - Manages user-defined tag definitions and tag-post assignments
@@ -314,6 +315,111 @@ export class TagStore {
     }
 
     return results;
+  }
+
+  // ============================================================
+  // Server Tag Sync (inbound: server → local tagDefinitions)
+  // ============================================================
+
+  /**
+   * Pull tag definitions from the server and merge into local tagDefinitions.
+   *
+   * Merge strategy:
+   * - Server tags not in local → add with server color (or auto-assign if null)
+   * - Server tags already in local → update name casing & sortOrder from server,
+   *   keep local color if server color is null (local color takes priority)
+   * - Local-only tags (not on server) → keep as-is
+   * - Deleted tags on server → remove from local
+   */
+  async pullTagDefinitionsFromServer(apiClient: WorkersAPIClient): Promise<number> {
+    try {
+      const response = await apiClient.getUserTags();
+      const { tags: serverTags, deletedIds } = response;
+
+      if (serverTags.length === 0 && deletedIds.length === 0) return 0;
+
+      const definitions = this.getTagDefinitions();
+      const localByName = new Map<string, TagDefinition>();
+      const localById = new Map<string, TagDefinition>();
+      for (const d of definitions) {
+        localByName.set(d.name.toLowerCase(), d);
+        localById.set(d.id, d);
+      }
+
+      let changeCount = 0;
+
+      // Remove server-deleted tags from local
+      if (deletedIds.length > 0) {
+        const deleteSet = new Set(deletedIds);
+        const before = definitions.length;
+        const filtered = definitions.filter(d => !deleteSet.has(d.id));
+        if (filtered.length < before) {
+          definitions.length = 0;
+          definitions.push(...filtered);
+          changeCount += before - filtered.length;
+        }
+      }
+
+      // Merge server tags
+      for (const serverTag of serverTags) {
+        const normalizedName = normalizeTagName(serverTag.name);
+        if (!normalizedName) continue;
+
+        const existingById = localById.get(serverTag.id);
+        const existingByName = localByName.get(normalizedName.toLowerCase());
+        const existing = existingById || existingByName;
+
+        if (existing) {
+          // Update existing: server wins for name/sortOrder, local wins for color if server is null
+          let changed = false;
+          if (existing.name !== normalizedName) {
+            existing.name = normalizedName;
+            changed = true;
+          }
+          if (serverTag.sortOrder !== existing.sortOrder) {
+            existing.sortOrder = serverTag.sortOrder;
+            changed = true;
+          }
+          if (serverTag.color && serverTag.color !== existing.color) {
+            existing.color = serverTag.color;
+            changed = true;
+          }
+          // Sync server ID if matched by name but has different local ID
+          if (existing.id !== serverTag.id) {
+            existing.id = serverTag.id;
+            changed = true;
+          }
+          if (serverTag.updatedAt && serverTag.updatedAt > (existing.updatedAt || '')) {
+            existing.updatedAt = serverTag.updatedAt;
+          }
+          if (changed) changeCount++;
+        } else {
+          // New tag from server — add with color (auto-assign if server color is null)
+          const newDef: TagDefinition = {
+            id: serverTag.id,
+            name: normalizedName,
+            color: serverTag.color || this.getNextColor(definitions),
+            sortOrder: serverTag.sortOrder,
+            createdAt: serverTag.createdAt || new Date().toISOString(),
+            updatedAt: serverTag.updatedAt || new Date().toISOString(),
+          };
+          definitions.push(newDef);
+          localByName.set(normalizedName.toLowerCase(), newDef);
+          localById.set(serverTag.id, newDef);
+          changeCount++;
+        }
+      }
+
+      if (changeCount > 0) {
+        await this.saveTagDefinitions(definitions);
+        console.debug(`[Social Archiver] Tag sync: ${changeCount} changes merged from server (${serverTags.length} tags, ${deletedIds.length} deleted)`);
+      }
+
+      return changeCount;
+    } catch (err) {
+      console.error('[Social Archiver] Failed to pull tag definitions from server:', err instanceof Error ? err.message : String(err));
+      return 0;
+    }
   }
 
   // ============================================================
