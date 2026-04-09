@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/types.ts
- * Generated: 2026-04-09T12:58:01.461Z
+ * Generated: 2026-04-09T13:01:04.903Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
