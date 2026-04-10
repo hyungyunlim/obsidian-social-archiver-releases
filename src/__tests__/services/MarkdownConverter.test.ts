@@ -122,7 +122,7 @@ describe('MarkdownConverter', () => {
 
       expect(result.content).toContain('Fact Checks');
       expect(result.content).toContain('AI is revolutionary');
-      expect(result.content).toContain('Verdict: true');
+      expect(result.content).toContain('Verdict: Verified');
       expect(result.content).toContain('Confidence: 95%');
       expect(result.content).toContain('Evidence: Multiple studies confirm');
     });
@@ -205,6 +205,126 @@ describe('MarkdownConverter', () => {
       const result = await converter.convert(threadsPost);
 
       expect(result.content).toContain('Threads');
+    });
+
+    it('should preserve per-post inline media for Threads self-thread archives', async () => {
+      const threadsPost: PostData = {
+        platform: 'threads',
+        id: 'thread-123',
+        url: 'https://threads.com/@user/post/ABC123',
+        author: {
+          name: 'Thread Author',
+          url: 'https://threads.com/@user',
+        },
+        content: {
+          text: 'Main post\n\n---\n\nSecond post',
+          markdown: 'Main post\n\n{{IMAGE_0}}\n\n> [!note]+ Threads Note\n> Extra context\n\n---\n\nSecond post\n\n{{VIDEO_1}}',
+          snippet: 'Extra context',
+        },
+        media: [
+          {
+            type: 'image',
+            url: 'https://cdn.threads.net/image-1.jpg',
+            altText: 'image 1',
+          },
+          {
+            type: 'video',
+            url: 'https://cdn.threads.net/video-1.mp4',
+          },
+        ],
+        metadata: {
+          timestamp: new Date('2024-03-20T09:30:00Z'),
+        },
+      };
+
+      const mediaResults = [
+        {
+          sourceIndex: 0,
+          localPath: 'attachments/social-archives/threads/thread-123/image-1.webp',
+          originalUrl: 'https://cdn.threads.net/image-1.jpg',
+        },
+        {
+          sourceIndex: 1,
+          localPath: 'attachments/social-archives/threads/thread-123/video-1.mp4',
+          originalUrl: 'https://cdn.threads.net/video-1.mp4',
+        },
+      ] as any;
+
+      const result = await converter.convert(threadsPost, undefined, mediaResults);
+
+      expect(result.content).toContain('Main post');
+      expect(result.content).toContain('![[image-1.webp]]');
+      expect(result.content).toContain('> [!note]+ Threads Note');
+      expect(result.content).toContain('Second post');
+      expect(result.content).toContain('![[video-1.mp4]]');
+      expect(result.content).not.toMatch(/\n---\n\n!\[/);
+      expect(result.content).not.toContain('{{IMAGE_0}}');
+      expect(result.content).not.toContain('{{VIDEO_1}}');
+    });
+
+    it('should preserve web article markdown and suppress duplicate media section when inline images exist', async () => {
+      const webPost: PostData = {
+        platform: 'web',
+        id: 'web-article',
+        url: 'https://example.com/article',
+        title: 'Example Article',
+        author: {
+          name: 'Example Author',
+          url: 'https://example.com/article',
+        },
+        content: {
+          text: 'Plain text fallback that should not be used here.',
+          markdown: '## Section\n\nIntro paragraph.\n\n![Inline](https://example.com/inline.jpg)\n\nClosing paragraph.',
+        },
+        media: [
+          {
+            type: 'image',
+            url: 'https://example.com/og.jpg',
+            altText: 'OG image',
+          },
+        ],
+        metadata: {
+          timestamp: new Date('2024-03-20T09:30:00Z'),
+        },
+      };
+
+      const result = await converter.convert(webPost);
+
+      expect(result.content).toContain('## Section');
+      expect(result.content).toContain('![Inline](https://example.com/inline.jpg)');
+      expect(result.content).not.toContain('https://example.com/og.jpg');
+    });
+
+    it('should keep the web media section when the article body has no inline images', async () => {
+      const webPost: PostData = {
+        platform: 'web',
+        id: 'web-article-no-inline',
+        url: 'https://example.com/article-no-inline',
+        title: 'Example Article',
+        author: {
+          name: 'Example Author',
+          url: 'https://example.com/article-no-inline',
+        },
+        content: {
+          text: 'Body without inline media.',
+          markdown: '## Section\n\nBody without inline media.',
+        },
+        media: [
+          {
+            type: 'image',
+            url: 'https://example.com/og.jpg',
+            altText: 'OG image',
+          },
+        ],
+        metadata: {
+          timestamp: new Date('2024-03-20T09:30:00Z'),
+        },
+      };
+
+      const result = await converter.convert(webPost);
+
+      expect(result.content).toContain('## Section');
+      expect(result.content).toContain('![OG image](https://example.com/og.jpg)');
     });
 
     it('should include media section for user-created posts with attachments', async () => {
@@ -467,9 +587,7 @@ describe('MarkdownConverter', () => {
     it('should format arrays correctly in YAML', async () => {
       const result = await converter.convert(mockPostData);
 
-      expect(result.fullDocument).toContain('tags:');
-      expect(result.fullDocument).toContain('  - social/facebook');
-      expect(result.fullDocument).toContain('  - topic/tech');
+      expect(result.fullDocument).not.toContain('\ntags:');
     });
 
     it('should quote values with special characters', async () => {
@@ -505,7 +623,7 @@ describe('MarkdownConverter', () => {
 
       const result = await converter.convert(postWithAudio);
 
-      expect(result.content).toContain('[🎵 Audio](https://example.com/audio.mp3)');
+      expect(result.content).toContain('<audio controls src="https://example.com/audio.mp3"></audio>');
     });
 
     it('should format documents correctly', async () => {

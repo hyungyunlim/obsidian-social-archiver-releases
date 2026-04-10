@@ -13,8 +13,28 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   overflow-y: auto;
+  overflow-x: hidden;
   background: var(--background-primary);
+}
+
+.author-detail-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 100%;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.author-detail-pane-content,
+.author-detail-feed-wrapper {
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* Profile header: subtle overlay + spacing */
@@ -27,34 +47,70 @@
 
 .author-detail-feed-wrapper {
   flex: 1;
+  width: 100%;
+  min-height: 0;
 }
 
 /* ============================================
- * Main area layout (wider padding + top spacing)
- * Applied when author detail opens as a tab
- * instead of the sidebar.
- *
- * All three classes land on the SAME element
- * (containerEl), so use compound selectors.
+ * Main area layout
+ * Keep the scroll container full-width so the
+ * whole pane scrolls, then constrain an inner
+ * content column for readability.
  * ============================================ */
 
 .author-detail-ts-container.is-main-area {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 24px 8px 0;
+  --author-detail-main-inline-gap: clamp(24px, 4vw, 40px);
+}
+
+.author-detail-ts-container.is-main-area .author-detail-content {
+  padding-top: 20px;
+}
+
+.author-detail-ts-container.is-main-area .author-detail-content > .author-detail-profile-header-target,
+.author-detail-ts-container.is-main-area .author-detail-content > .author-detail-toolbar,
+.author-detail-ts-container.is-main-area .author-detail-content > .author-detail-tag-chip-bar,
+.author-detail-ts-container.is-main-area .author-detail-content > .author-detail-feed-wrapper {
+  width: auto;
+  max-width: none;
+  margin-left: var(--author-detail-main-inline-gap);
+  margin-right: var(--author-detail-main-inline-gap);
 }
 
 .author-detail-ts-container.is-main-area .author-detail-profile-header-target {
   margin: 12px 0 20px;
 }
 
+.author-detail-timeline-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.author-detail-ts-container:not(.is-main-area) .author-detail-timeline-feed {
+  max-width: 42rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.author-detail-ts-container.is-main-area .author-detail-timeline-feed,
+.author-detail-ts-container.is-main-area .author-detail-gallery-container,
+.author-detail-ts-container.is-main-area .author-detail-gallery-loading,
+.author-detail-ts-container.is-main-area .ad-loading-state,
+.author-detail-ts-container.is-main-area .ad-empty-state,
+.author-detail-ts-container.is-main-area .ad-error-state {
+  width: auto;
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
+}
+
 .author-detail-ts-container.is-main-area .ad-loading-state {
-  max-width: 100%;
   padding: 0;
 }
 
 /* Tag chip bar: ensure it's not clipped and has proper spacing */
-.author-detail-ts-container > .tag-chip-bar {
+.author-detail-tag-chip-bar {
   margin-bottom: 8px;
   flex-shrink: 0;
 }

@@ -1944,6 +1944,15 @@ export class MarkdownConverter implements IService {
     mediaResults?: import('./MediaHandler').MediaResult[],
     outputFilePath?: string
   ): Record<string, unknown> {
+    const isWebArticle = postData.platform === 'web';
+    const isThreadsInlineArchive = postData.platform === 'threads' && !!postData.content.markdown?.trim();
+    const inlineMarkdownBody = (isWebArticle || isThreadsInlineArchive)
+      ? postData.content.markdown?.trim()
+      : undefined;
+    let formattedSnippet = postData.content.snippet
+      ? `> [!note]+ Threads Note\n> ${postData.content.snippet.replace(/\n/g, '\n> ')}`
+      : undefined;
+
     // Generate author mention for Instagram
     const authorMention = postData.platform === 'instagram' && postData.author.handle
       ? `[@${postData.author.handle}](https://instagram.com/${postData.author.handle})`
@@ -1983,7 +1992,7 @@ export class MarkdownConverter implements IService {
 
     // For Tumblr: remove hashtags from content.text if they're in the hashtags array
     // (hashtags will be displayed separately in the hashtagsText section)
-    let contentText = postData.content.text || '';
+    let contentText = inlineMarkdownBody || postData.content.text || '';
     if (postData.platform === 'tumblr' && uniqueHashtags && uniqueHashtags.length > 0 && contentText) {
       // Remove hashtags from text (they're displayed separately)
       // Match both plain hashtags (#tag) and markdown link format ([#tag](url))
@@ -2011,7 +2020,7 @@ export class MarkdownConverter implements IService {
 
     // When hashtags-as-tags is OFF, convert inline #hashtags in content text to links
     // so Obsidian doesn't create native tags from the original post text
-    if (!this.includeHashtagsAsObsidianTags && baseText) {
+    if (!this.includeHashtagsAsObsidianTags && baseText && !inlineMarkdownBody) {
       baseText = this.textFormatter.linkifyInlineHashtags(baseText, postData.platform);
     }
 
@@ -2024,7 +2033,8 @@ export class MarkdownConverter implements IService {
         : articleBody;
     }
 
-    // For RSS-based platforms: replace {{IMAGE_N}} and {{VIDEO_N}} placeholders with actual embeds
+    // For RSS-based platforms and Threads inline archives: replace media
+    // placeholders with actual embeds while preserving per-post ordering.
     let blogMediaUsedInline = false;
     if (isRssBasedPlatform(postData.platform) && mediaResults && mediaResults.length > 0) {
       // Replace IMAGE placeholders with Obsidian image embeds
@@ -2059,6 +2069,18 @@ export class MarkdownConverter implements IService {
       baseText = baseText.replace(/\n{3,}/g, '\n\n');
     }
 
+    if (isThreadsInlineArchive) {
+      const replaced = this.replaceInlineMediaPlaceholders(
+        baseText,
+        postData.media,
+        postData.platform,
+        postData.url,
+        mediaResults
+      );
+      baseText = replaced.text;
+      blogMediaUsedInline = blogMediaUsedInline || replaced.usedInlineMedia;
+    }
+
     // For RSS-based platforms, also check if text already contains inline markdown images
     // (e.g., Naver cafe posts already have ![Image](...) in text, not placeholders)
     if (isRssBasedPlatform(postData.platform) && !blogMediaUsedInline) {
@@ -2069,27 +2091,33 @@ export class MarkdownConverter implements IService {
       }
     }
 
+    if ((isWebArticle || isThreadsInlineArchive) && this.containsInlineMediaMarkdown(baseText)) {
+      blogMediaUsedInline = true;
+    }
+
     // For RSS-based platforms, web articles, and X Articles, preserve markdown headings and ordered lists
     // (they come from HTML/Draft.js conversion and are intentional)
     // For other platforms, escape headings and ordered lists to prevent rendering issues
-    const isWebArticle = postData.platform === 'web';
-    const preserveMarkdown = isRssBasedPlatform(postData.platform) || isWebArticle || isXArticle;
+    const preserveMarkdown = isRssBasedPlatform(postData.platform) || isWebArticle || isXArticle || isThreadsInlineArchive;
     const sanitizedText = preserveMarkdown
       ? baseText
       : this.escapeOrderedListPatterns(this.escapeLeadingMarkdownHeadings(baseText));
 
-    // For RSS-based platforms with inline images, don't show media section at bottom
-    const finalMedia = (isRssBasedPlatform(postData.platform) && blogMediaUsedInline) ? '' : formattedMedia;
+    // For RSS-based platforms and web articles with inline images, don't show a
+    // duplicate media section at the bottom of the note.
+    const finalMedia = ((isRssBasedPlatform(postData.platform) || isWebArticle || isThreadsInlineArchive) && blogMediaUsedInline)
+      ? ''
+      : formattedMedia;
 
     // Format series genre array as comma-separated string (for naver-webtoon template)
     const seriesGenre = postData.series?.genre?.length
       ? postData.series.genre.join(', ')
       : undefined;
 
-    // Format Threads Notes snippet as Obsidian callout
-    const formattedSnippet = postData.content.snippet
-      ? `> [!note]+ Threads Note\n> ${postData.content.snippet.replace(/\n/g, '\n> ')}`
-      : undefined;
+    if (isThreadsInlineArchive && formattedSnippet) {
+      baseText = this.insertThreadsSnippetIntoInlineMarkdown(baseText, formattedSnippet);
+      formattedSnippet = undefined;
+    }
 
     return {
       ...postData,
@@ -2185,5 +2213,96 @@ export class MarkdownConverter implements IService {
     // Escape "number. " at the start of a line (ordered list syntax)
     // Pattern: line start, optional whitespace, number, period, space
     return text.replace(/^(\s*)(\d+)\. /gm, '$1$2\\. ');
+  }
+
+  private containsInlineMediaMarkdown(text: string): boolean {
+    if (!text) {
+      return false;
+    }
+
+    return /!\[\[[^\]]+\]\]/.test(text) ||
+      /!\[[\s\S]*?\]\([^)]+\)/.test(text) ||
+      /<img\b/i.test(text);
+  }
+
+  private replaceInlineMediaPlaceholders(
+    text: string,
+    media: PostData['media'],
+    platform: Platform,
+    originalUrl: string,
+    mediaResults?: import('./MediaHandler').MediaResult[],
+  ): { text: string; usedInlineMedia: boolean } {
+    if (!text) {
+      return { text, usedInlineMedia: false };
+    }
+
+    let usedInlineMedia = false;
+    const replaced = text
+      .replace(/\n*\{\{IMAGE_(\d+)\}\}\n*/g, (_match, indexStr: string) => {
+        const index = parseInt(indexStr, 10);
+        const item = media[index];
+        if (!item) {
+          return '\n\n';
+        }
+
+        usedInlineMedia = true;
+        const mediaResult = mediaResults
+          ? findMediaResultBySourceIndex(mediaResults, index, item.url)
+          : undefined;
+
+        if (mediaResult?.localPath) {
+          const filename = mediaResult.localPath.split('/').pop() || mediaResult.localPath;
+          return `\n\n![[${filename}]]\n\n`;
+        }
+
+        const alt = this.escapeInlineMediaAlt(item.altText || item.alt || `image ${index + 1}`);
+        return `\n\n![${alt}](${encodePathForMarkdownLink(item.url)})\n\n`;
+      })
+      .replace(/\n*\{\{VIDEO_(\d+)\}\}\n*/g, (_match, indexStr: string) => {
+        const index = parseInt(indexStr, 10);
+        const item = media[index];
+        if (!item) {
+          return '\n\n';
+        }
+
+        usedInlineMedia = true;
+        const mediaResult = mediaResults
+          ? findMediaResultBySourceIndex(mediaResults, index, item.url)
+          : undefined;
+
+        if (mediaResult?.localPath) {
+          const filename = mediaResult.localPath.split('/').pop() || mediaResult.localPath;
+          return `\n\n![[${filename}]]\n\n`;
+        }
+
+        const label = item.duration
+          ? `🎥 Video (${this.dateNumberFormatter.formatDuration(item.duration)})`
+          : '🎥 Video';
+        const remoteUrl = item.url && /^https?:\/\//.test(item.url) ? item.url : originalUrl;
+        return `\n\n[${label}](${remoteUrl})\n\n`;
+      })
+      .replace(/\n{3,}/g, '\n\n');
+
+    return { text: replaced, usedInlineMedia };
+  }
+
+  private escapeInlineMediaAlt(text: string): string {
+    return text.replace(/([\\\[\]])/g, '\\$1');
+  }
+
+  private insertThreadsSnippetIntoInlineMarkdown(markdown: string, snippetCallout: string): string {
+    if (!markdown.trim()) {
+      return snippetCallout;
+    }
+
+    const separator = '\n\n---\n\n';
+    const separatorIndex = markdown.indexOf(separator);
+    if (separatorIndex === -1) {
+      return `${markdown}\n\n${snippetCallout}`;
+    }
+
+    const firstSection = markdown.slice(0, separatorIndex);
+    const remainder = markdown.slice(separatorIndex + separator.length);
+    return `${firstSection}\n\n${snippetCallout}${separator}${remainder}`;
   }
 }

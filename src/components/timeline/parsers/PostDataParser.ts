@@ -226,6 +226,9 @@ export class PostDataParser {
       }
 
       const comments = this.extractComments(content);
+      const threadsInlineMarkdown = frontmatter.platform === 'threads'
+        ? this.extractThreadsInlineContent(content)
+        : undefined;
 
       const publishedDate = frontmatter.published ? new Date(frontmatter.published) : undefined;
       const archivedDate = frontmatter.archived ? new Date(frontmatter.archived) : undefined;
@@ -489,6 +492,8 @@ export class PostDataParser {
           // For X articles: extract article body and unescape markdown artifacts
           rawMarkdown: (isRssBasedPlatform(frontmatter.platform) || frontmatter.platform === 'web')
             ? this.extractBlogContentWithImages(content)
+            : threadsInlineMarkdown
+              ? threadsInlineMarkdown
             : (frontmatter.platform === 'x' && this.isXArticlePost(frontmatter, content))
               ? this.extractXArticleContent(content)
               : undefined,
@@ -734,6 +739,20 @@ export class PostDataParser {
     content = content.trim();
 
     return content;
+  }
+
+  private extractThreadsInlineContent(markdown: string): string | undefined {
+    const content = this.extractBlogContentWithImages(markdown);
+    if (!this.hasInlineMediaMarkdown(content)) {
+      return undefined;
+    }
+    return content;
+  }
+
+  private hasInlineMediaMarkdown(markdown: string): boolean {
+    return /!\[\[[^\]]+\]\]/.test(markdown) ||
+      /!\[[\s\S]*?\]\([^)]+\)/.test(markdown) ||
+      /<img\b/i.test(markdown);
   }
 
   /**

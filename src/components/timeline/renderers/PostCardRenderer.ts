@@ -632,7 +632,8 @@ export class PostCardRenderer extends Component {
     const hasLocalVideoForEmbed = isVideoEmbed && post.media && post.media.length > 0 &&
       post.media.some(m => m.type === 'video' && !m.url.startsWith('http'));
 
-    // RSS-based platforms and X articles render images inline with content, so skip media gallery
+    // RSS-based platforms, Threads inline thread notes, and X/web articles render
+    // images inline with content, so skip the separate media gallery.
     // Exception: podcast platform needs audio player rendered via media gallery
     // Exception: blog with audio media should also render audio player (podcast-like feeds without iTunes namespace)
     const hasAudioMedia = post.media.some(m => m.type === 'audio');
@@ -641,10 +642,12 @@ export class PostCardRenderer extends Component {
       /!\[\[[^\]]+\]\]/.test(rawMarkdown) ||
       /!\[[\s\S]*?\]\([^)]+\)/.test(rawMarkdown) ||
       /<img\b/i.test(rawMarkdown);
+    const isThreadsInlineArchive = post.platform === 'threads' && !!post.content.rawMarkdown && hasInlineImageMarkdown;
     const isXArticleWithInline = post.platform === 'x' && !!post.content.rawMarkdown;
     const isWebArticleWithInlineImages = post.platform === 'web' && !!post.content.rawMarkdown && hasInlineImageMarkdown;
     const isBlogWithInlineImages =
       (isRssBasedPlatform(post.platform) && post.platform !== 'podcast' && !hasAudioMedia && post.content.rawMarkdown)
+      || isThreadsInlineArchive
       || isXArticleWithInline
       || isWebArticleWithInlineImages;
 
@@ -1810,8 +1813,9 @@ export class PostCardRenderer extends Component {
       titleEl.setText(post.title);
     }
 
-    // For RSS-based platforms, web articles, and X articles: use rawMarkdown with inline images
-    if ((isRssBasedPlatform(post.platform) || post.platform === 'web' || (post.platform === 'x' && post.content.rawMarkdown))
+    // For RSS-based platforms, Threads inline archives, web articles, and X articles:
+    // use rawMarkdown with inline images.
+    if ((isRssBasedPlatform(post.platform) || post.platform === 'threads' || post.platform === 'web' || (post.platform === 'x' && post.content.rawMarkdown))
         && post.content.rawMarkdown) {
       await this.renderBlogContent(contentContainer, post);
       return;

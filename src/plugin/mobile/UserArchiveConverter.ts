@@ -10,6 +10,10 @@
 import type { PostData, Media, Platform } from '../../types/post';
 import type { UserArchive } from '../../services/WorkersAPIClient';
 
+const LEGACY_WEB_CLIP_SEPARATOR = '\n\n---\n\n';
+const LEADING_WEB_CLIP_SEPARATOR = '---\n\n';
+const EMPTY_MARKDOWN_LINK_LINE_PATTERN = /^(?:\s*\[\]\([^)]+\)\s*)+$/;
+
 /**
  * Normalize a handle string by trimming whitespace and removing leading '@'.
  * Returns undefined if the input is falsy or empty after normalization.
@@ -52,6 +56,65 @@ export function buildProfileUrl(platform: Platform, handle?: string): string {
   }
 }
 
+function normalizeTitle(value?: string | null): string {
+  return (value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function stripLeadingMatchingTitle(markdown: string, title?: string | null): string {
+  if (!title) return markdown.trim();
+
+  const headingMatch = markdown.match(/^#\s+([^\n]+)\n+/);
+  if (headingMatch?.[1] && normalizeTitle(headingMatch[1]) === normalizeTitle(title)) {
+    return markdown.slice(headingMatch[0].length).trimStart();
+  }
+
+  const lines = markdown.split('\n');
+  const firstMeaningfulIndex = lines.findIndex(line => line.trim().length > 0);
+  if (firstMeaningfulIndex >= 0 && normalizeTitle(lines[firstMeaningfulIndex]) === normalizeTitle(title)) {
+    return lines.slice(firstMeaningfulIndex + 1).join('\n').trimStart();
+  }
+
+  return markdown.trim();
+}
+
+function stripLeadingEmptyLinkLines(markdown: string): string {
+  const lines = markdown.split('\n');
+  let idx = 0;
+
+  while (idx < lines.length) {
+    const line = lines[idx] ?? '';
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      idx++;
+      continue;
+    }
+
+    if (EMPTY_MARKDOWN_LINK_LINE_PATTERN.test(line)) {
+      idx++;
+      continue;
+    }
+
+    break;
+  }
+
+  return (idx > 0 ? lines.slice(idx).join('\n') : markdown).trimStart();
+}
+
+function extractWebArticleBody(archive: Pick<UserArchive, 'fullContent' | 'previewText' | 'title'>): string {
+  const source = (archive.fullContent || archive.previewText || '').trim();
+  if (!source) return '';
+
+  const separatorIndex = source.indexOf(LEGACY_WEB_CLIP_SEPARATOR);
+  const body = source.startsWith(LEADING_WEB_CLIP_SEPARATOR)
+    ? source.slice(LEADING_WEB_CLIP_SEPARATOR.length).trim()
+    : separatorIndex >= 0
+      ? source.slice(0, separatorIndex).trim() || source.slice(separatorIndex + LEGACY_WEB_CLIP_SEPARATOR.length).trim()
+      : source;
+
+  return stripLeadingEmptyLinkLines(stripLeadingMatchingTitle(body, archive.title)).trim();
+}
+
 /**
  * Convert a UserArchive server response into the local PostData format.
  *
@@ -64,6 +127,9 @@ export function buildProfileUrl(platform: Platform, handle?: string): string {
  */
 export function convertUserArchiveToPostData(archive: UserArchive): PostData {
   const platform = archive.platform as Platform;
+  const normalizedWebBody = platform === 'web'
+    ? extractWebArticleBody(archive)
+    : archive.fullContent || archive.previewText || '';
   const authorUsername = normalizeHandle(archive.authorHandle);
   const authorHandle = authorUsername ? `@${authorUsername}` : undefined;
   const authorUrl =
@@ -149,7 +215,7 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
       bio: archive.authorBio || undefined,
     },
     content: {
-      text: archive.fullContent || archive.previewText || '',
+      text: normalizedWebBody,
       html: (archive.isArticle || archive.articleMarkdown) ? (archive.articleMarkdown ?? undefined) : undefined,
     },
     media: normalizedMedia,

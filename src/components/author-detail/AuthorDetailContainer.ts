@@ -81,6 +81,7 @@ export interface AuthorDetailContainerProps {
 export class AuthorDetailContainer {
   // Container & props
   private readonly target: HTMLElement;
+  private contentRoot: HTMLElement | null = null;
   private readonly props: AuthorDetailContainerProps;
   private vault: Vault;
   private app: App;
@@ -352,6 +353,7 @@ export class AuthorDetailContainer {
     this.currentAuthor = undefined;
     this.posts = [];
     this.filteredPosts = [];
+    this.contentRoot = null;
     this.feedWrapper = null;
     this.toolbarEl = null;
     this.searchInput = null;
@@ -370,6 +372,8 @@ export class AuthorDetailContainer {
   private renderShell(): void {
     this.target.empty();
     this.target.addClass('author-detail-ts-container');
+    const contentRoot = this.target.createDiv({ cls: 'author-detail-content' });
+    this.contentRoot = contentRoot;
 
     // 1. Profile header (Svelte component)
     this.mountProfileHeader();
@@ -381,7 +385,7 @@ export class AuthorDetailContainer {
     // Will be populated in renderTagChipBar() after loadPosts()
 
     // 4. Feed wrapper (posts rendered here)
-    this.feedWrapper = this.target.createDiv({ cls: 'author-detail-feed-wrapper' });
+    this.feedWrapper = contentRoot.createDiv({ cls: 'author-detail-feed-wrapper' });
   }
 
   // --------------------------------------------------------------------------
@@ -389,8 +393,11 @@ export class AuthorDetailContainer {
   // --------------------------------------------------------------------------
 
   private mountProfileHeader(): void {
-    this.headerTarget = this.target.createDiv({
-      cls: 'author-detail-profile-header-target',
+    const contentRoot = this.contentRoot;
+    if (!contentRoot) return;
+
+    this.headerTarget = contentRoot.createDiv({
+      cls: 'author-detail-profile-header-target author-detail-pane-content',
     });
 
     if (!this.currentAuthor) return;
@@ -409,13 +416,16 @@ export class AuthorDetailContainer {
       this.headerTarget.remove();
     }
 
+    const contentRoot = this.contentRoot;
+    if (!contentRoot) return;
+
     // Re-create at top (before toolbar)
-    const firstChild = this.target.firstChild;
-    this.headerTarget = this.target.createDiv({
-      cls: 'author-detail-profile-header-target',
+    const firstChild = contentRoot.firstChild;
+    this.headerTarget = contentRoot.createDiv({
+      cls: 'author-detail-profile-header-target author-detail-pane-content',
     });
     if (firstChild && firstChild !== this.headerTarget) {
-      this.target.insertBefore(this.headerTarget, firstChild);
+      contentRoot.insertBefore(this.headerTarget, firstChild);
     }
 
     if (!this.currentAuthor) return;
@@ -466,8 +476,11 @@ export class AuthorDetailContainer {
    * using identical CSS classes for visual consistency.
    */
   private renderToolbar(): void {
-    const headerWrapper = this.target.createDiv();
-    headerWrapper.addClass('sa-mb-4');
+    const contentRoot = this.contentRoot;
+    if (!contentRoot) return;
+
+    const headerWrapper = contentRoot.createDiv();
+    headerWrapper.addClass('author-detail-toolbar', 'author-detail-pane-content', 'sa-mb-4');
     this.toolbarEl = headerWrapper;
 
     // Remove stuck hover/focus state on toolbar buttons after click/tap
@@ -765,11 +778,12 @@ export class AuthorDetailContainer {
 
     // Render between toolbar and feed (insert before feedWrapper)
     if (this.feedWrapper && this.toolbarEl) {
-      this.tagChipBar.render(this.target, authorTags);
+      this.tagChipBar.render(this.contentRoot ?? this.target, authorTags);
       // Move to correct position (after toolbar, before feed)
-      const chipBar = this.target.querySelector('.tag-chip-bar');
+      const chipBar = (this.contentRoot ?? this.target).querySelector('.tag-chip-bar');
       if (chipBar && this.feedWrapper) {
-        this.target.insertBefore(chipBar, this.feedWrapper);
+        chipBar.addClass('author-detail-tag-chip-bar', 'author-detail-pane-content');
+        (this.contentRoot ?? this.target).insertBefore(chipBar, this.feedWrapper);
       }
     }
   }
@@ -1180,7 +1194,7 @@ export class AuthorDetailContainer {
 
     // Create feed with same CSS classes as timeline
     const feed = this.feedWrapper.createDiv({
-      cls: 'flex flex-col gap-4 max-w-2xl mx-auto timeline-feed',
+      cls: 'author-detail-timeline-feed author-detail-pane-content timeline-feed',
     });
 
     // Render posts asynchronously
@@ -1208,7 +1222,9 @@ export class AuthorDetailContainer {
     this.galleryRenderer = new GalleryViewRenderer(this.app, this.vault, this.archivePath);
 
     // Show loading indicator
-    const loadingEl = this.feedWrapper.createDiv({ cls: 'sa-media-gallery-loading' });
+    const loadingEl = this.feedWrapper.createDiv({
+      cls: 'author-detail-gallery-loading author-detail-pane-content sa-media-gallery-loading',
+    });
     loadingEl.createDiv('sa-media-gallery-spinner');
     loadingEl.createDiv({ cls: 'sa-media-gallery-loading-text', text: 'Loading media...' });
 
@@ -1228,7 +1244,7 @@ export class AuthorDetailContainer {
       loadingEl.remove();
 
       if (mediaItems.length === 0) {
-        const emptyEl = this.feedWrapper.createDiv({ cls: 'ad-empty-state' });
+        const emptyEl = this.feedWrapper.createDiv({ cls: 'ad-empty-state author-detail-pane-content' });
         const iconEl = emptyEl.createDiv({ cls: 'ad-empty-icon' });
         setIcon(iconEl, 'image');
         emptyEl.createEl('p', {
@@ -1239,7 +1255,11 @@ export class AuthorDetailContainer {
       }
 
       const galleryContainer = this.feedWrapper.createDiv('sa-media-gallery-container');
-      galleryContainer.addClass('tc-gallery-fadein');
+      galleryContainer.addClass(
+        'author-detail-gallery-container',
+        'author-detail-pane-content',
+        'tc-gallery-fadein'
+      );
       this.galleryRenderer.renderGallery(galleryContainer, mediaItems, 'none');
 
       // Fade in
@@ -1248,7 +1268,7 @@ export class AuthorDetailContainer {
       });
     } catch (error) {
       loadingEl.remove();
-      const errorEl = this.feedWrapper.createDiv({ cls: 'ad-error-state' });
+      const errorEl = this.feedWrapper.createDiv({ cls: 'ad-error-state author-detail-pane-content' });
       const iconEl = errorEl.createDiv({ cls: 'ad-error-icon' });
       setIcon(iconEl, 'alert-triangle');
       errorEl.createEl('p', {
@@ -1267,7 +1287,7 @@ export class AuthorDetailContainer {
     if (!this.feedWrapper) return;
     this.feedWrapper.empty();
 
-    const loadingEl = this.feedWrapper.createDiv({ cls: 'ad-loading-state' });
+    const loadingEl = this.feedWrapper.createDiv({ cls: 'ad-loading-state author-detail-pane-content' });
 
     // Render skeleton cards for loading feel
     for (let i = 0; i < 3; i++) {
@@ -1282,7 +1302,7 @@ export class AuthorDetailContainer {
     if (!this.feedWrapper) return;
     this.feedWrapper.empty();
 
-    const emptyEl = this.feedWrapper.createDiv({ cls: 'ad-empty-state' });
+    const emptyEl = this.feedWrapper.createDiv({ cls: 'ad-empty-state author-detail-pane-content' });
     const iconEl = emptyEl.createDiv({ cls: 'ad-empty-icon' });
     setIcon(iconEl, 'inbox');
     emptyEl.createEl('p', {
@@ -1295,7 +1315,7 @@ export class AuthorDetailContainer {
     if (!this.feedWrapper) return;
     this.feedWrapper.empty();
 
-    const emptyEl = this.feedWrapper.createDiv({ cls: 'ad-empty-state' });
+    const emptyEl = this.feedWrapper.createDiv({ cls: 'ad-empty-state author-detail-pane-content' });
     const iconEl = emptyEl.createDiv({ cls: 'ad-empty-icon' });
     setIcon(iconEl, 'inbox');
 
@@ -1332,7 +1352,7 @@ export class AuthorDetailContainer {
     if (!this.feedWrapper) return;
     this.feedWrapper.empty();
 
-    const errorEl = this.feedWrapper.createDiv({ cls: 'ad-error-state' });
+    const errorEl = this.feedWrapper.createDiv({ cls: 'ad-error-state author-detail-pane-content' });
     const iconEl = errorEl.createDiv({ cls: 'ad-error-icon' });
     setIcon(iconEl, 'alert-triangle');
     errorEl.createEl('p', {
