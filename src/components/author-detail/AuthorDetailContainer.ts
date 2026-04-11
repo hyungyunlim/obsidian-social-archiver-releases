@@ -207,7 +207,7 @@ export class AuthorDetailContainer {
 
     // Initialize FilterSortManager (reuse timeline component for sort logic)
     this.filterSortManager = new FilterSortManager(
-      { includeArchived: true },
+      { activeTab: 'all' },
       {
         by: this.plugin.settings.timelineSortBy,
         order: this.plugin.settings.timelineSortOrder,

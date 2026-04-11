@@ -13,7 +13,7 @@
  *   8. Action bar: engagement metrics | star, share, tag, archive, open, edit, delete
  */
 
-import { Component, MarkdownRenderer, setIcon, Notice, type App } from 'obsidian';
+import { Component, MarkdownRenderer, setIcon, Notice, Platform as ObsidianPlatform, type App } from 'obsidian';
 import type { PostData } from '../../../types/post';
 import type SocialArchiverPlugin from '../../../main';
 import { MediaGalleryRenderer } from '../renderers/MediaGalleryRenderer';
@@ -361,26 +361,33 @@ export class ReaderModeContentRenderer extends Component {
     badge.addClass('sa-flex-shrink-0');
 
     if (isSubscribed) {
-      badge.setCssProps({ '--sa-bg': 'rgba(var(--color-green-rgb), 0.15)', '--sa-color': 'var(--color-green)' });
-      badge.addClass('sa-dynamic-bg');
-      badge.addClass('sa-dynamic-color');
+      if (ObsidianPlatform.isMobile) {
+        badge.addClass('sa-dynamic-color');
+        badge.setCssProps({ '--sa-color': 'var(--color-green)' });
+      } else {
+        badge.setCssProps({ '--sa-bg': 'rgba(var(--color-green-rgb), 0.15)', '--sa-color': 'var(--color-green)' });
+        badge.addClass('sa-dynamic-bg');
+        badge.addClass('sa-dynamic-color');
+      }
       badge.setAttribute('title', 'Subscribed — click to unsubscribe');
 
       const iconContainer = badge.createDiv();
       iconContainer.addClass('sa-icon-10');
-      setIcon(iconContainer, 'bell');
+      setIcon(iconContainer, ObsidianPlatform.isMobile ? 'rss' : 'bell');
       iconContainer.querySelector('svg')?.addClass('rmcr-badge-icon-subscribed');
-      badge.createSpan({ text: 'Subscribed' });
+      if (!ObsidianPlatform.isMobile) badge.createSpan({ text: 'Subscribed' });
     } else {
-      badge.addClass('sa-bg-hover');
+      if (!ObsidianPlatform.isMobile) {
+        badge.addClass('sa-bg-hover');
+      }
       badge.addClass('sa-text-muted');
       badge.setAttribute('title', 'Click to subscribe');
 
       const iconContainer = badge.createDiv();
       iconContainer.addClass('sa-icon-10');
-      setIcon(iconContainer, 'bell-plus');
+      setIcon(iconContainer, ObsidianPlatform.isMobile ? 'rss' : 'bell-plus');
       iconContainer.querySelector('svg')?.addClass('rmcr-badge-icon-muted');
-      badge.createSpan({ text: 'Subscribe' });
+      if (!ObsidianPlatform.isMobile) badge.createSpan({ text: 'Subscribe' });
     }
 
     // Hover effects

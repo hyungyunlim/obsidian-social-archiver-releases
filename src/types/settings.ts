@@ -118,6 +118,8 @@ export interface WebtoonStreamingSettings {
   mobileDataSaver: boolean;
 }
 
+export type TimelineArchiveTab = 'inbox' | 'archive' | 'all';
+
 export interface TimelineFilterPreferences {
   platforms: string[];
   likedOnly: boolean;
@@ -129,6 +131,7 @@ export interface TimelineFilterPreferences {
     start: string | null;
     end: string | null;
   };
+  activeTab: TimelineArchiveTab;
 }
 
 export function createDefaultTimelineFilters(): TimelineFilterPreferences {
@@ -142,7 +145,8 @@ export function createDefaultTimelineFilters(): TimelineFilterPreferences {
     dateRange: {
       start: null,
       end: null
-    }
+    },
+    activeTab: 'inbox',
   };
 }
 
@@ -765,6 +769,7 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
   if (!migrated.timelineFilters) {
     migrated.timelineFilters = createDefaultTimelineFilters();
   } else {
+    const hadActiveTab = 'activeTab' in migrated.timelineFilters && migrated.timelineFilters.activeTab;
     const defaults = createDefaultTimelineFilters();
     const persistedPlatforms = Array.isArray(migrated.timelineFilters.platforms)
       ? migrated.timelineFilters.platforms.filter((platform): platform is typeof TIMELINE_PLATFORM_IDS[number] =>
@@ -782,6 +787,10 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
         end: migrated.timelineFilters.dateRange?.end ?? defaults.dateRange.end
       }
     };
+
+    if (!hadActiveTab) {
+      migrated.timelineFilters.activeTab = migrated.timelineFilters.includeArchived ? 'all' : 'inbox';
+    }
   }
 
   // Initialize transcription settings if missing (migration)

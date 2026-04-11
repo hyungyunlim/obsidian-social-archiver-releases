@@ -14,7 +14,7 @@
  * - Metadata badges (genre, age rating, publish day)
  */
 
-import { Component, setIcon, TFile, TFolder, Notice, type App } from 'obsidian';
+import { Component, setIcon, TFile, TFolder, Notice, Platform as ObsidianPlatform, type App } from 'obsidian';
 import type { SeriesGroup, SeriesEpisode, SeriesViewState } from '../../../types/series';
 import type { PostData } from '../../../types/post';
 import type { WebtoonComment } from '../../../types/webtoon';
@@ -348,13 +348,12 @@ export class SeriesCardRenderer extends Component {
         badge.addClass('sa-dynamic-bg', 'sa-text-success', 'scr-sub-badge--subscribed');
         badge.setAttribute('title', 'Click to unsubscribe');
 
-        // Bell icon
         const iconContainer = badge.createDiv();
         iconContainer.addClass('sa-icon-10');
-        setIcon(iconContainer, 'bell');
+        setIcon(iconContainer, ObsidianPlatform.isMobile ? 'rss' : 'bell');
         iconContainer.addClass('scr-sub-icon-subscribed');
 
-        badge.createSpan({ text: 'Subscribed' });
+        if (!ObsidianPlatform.isMobile) badge.createSpan({ text: 'Subscribed' });
       } else {
         // Not subscribed state - subtle badge
         badge.addClass('sa-bg-hover', 'sa-text-muted', 'scr-sub-badge--not-subscribed');
@@ -370,11 +369,11 @@ export class SeriesCardRenderer extends Component {
           setIcon(iconContainer, 'loader-2');
           iconContainer.addClass('scr-sub-icon-loading');
         } else {
-          setIcon(iconContainer, 'bell-plus');
+          setIcon(iconContainer, ObsidianPlatform.isMobile ? 'rss' : 'bell-plus');
           iconContainer.addClass('scr-sub-icon-default');
         }
 
-        badge.createSpan({ text: loading ? loadingText : 'Subscribe' });
+        if (!ObsidianPlatform.isMobile) badge.createSpan({ text: loading ? loadingText : 'Subscribe' });
       }
     };
 

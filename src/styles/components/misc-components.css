@@ -1307,6 +1307,71 @@
   min-height: 36px;
 }
 
+.tc-selection-left-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tc-quick-filter-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--background-modifier-border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.tc-quick-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid transparent !important;
+  border-radius: 8px;
+  background: transparent !important;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: none !important;
+  outline: none !important;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.tc-quick-filter-btn:hover {
+  background: var(--background-modifier-hover) !important;
+  color: var(--text-normal);
+}
+
+.tc-quick-filter-btn.is-active {
+  color: var(--text-on-accent) !important;
+  background: var(--interactive-accent) !important;
+  border-color: var(--interactive-accent) !important;
+}
+
+.tc-quick-filter-btn.is-active:hover {
+  background: var(--interactive-accent-hover) !important;
+  border-color: var(--interactive-accent-hover) !important;
+}
+
+.tc-quick-filter-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  line-height: 0;
+  flex-shrink: 0;
+}
+
+.tc-quick-filter-icon svg {
+  display: block;
+}
+
 .tc-selection-count-pill {
   display: inline-flex;
   align-items: center;
@@ -1553,6 +1618,36 @@
     min-width: 26px;
     padding: 3px 8px;
     font-size: 11px;
+  }
+
+  .tc-quick-filter-divider {
+    height: 14px;
+    margin: 0 6px 0 10px;
+  }
+
+  .tc-quick-filter-btn {
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    justify-content: center;
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    box-shadow: none !important;
+    border-radius: 6px;
+    color: var(--text-faint);
+  }
+
+  .tc-quick-filter-btn:hover:not(:disabled) {
+    background: transparent !important;
+    color: var(--text-muted);
+  }
+
+  .tc-quick-filter-btn.is-active {
+    color: var(--text-on-accent) !important;
+    background: var(--interactive-accent) !important;
+    border-color: var(--interactive-accent) !important;
   }
 
   .tc-selection-actions {

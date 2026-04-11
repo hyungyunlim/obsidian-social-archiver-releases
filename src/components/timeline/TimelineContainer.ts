@@ -1,7 +1,7 @@
 import { setIcon, Notice, Platform as ObsidianPlatform, requestUrl, TFile, type Vault, type App } from 'obsidian';
 import type { PostData, Platform } from '../../types/post';
 import type SocialArchiverPlugin from '../../main';
-import type { SocialArchiverSettings, TimelineFilterPreferences } from '../../types/settings';
+import type { SocialArchiverSettings, TimelineFilterPreferences, TimelineArchiveTab } from '../../types/settings';
 import { siObsidian, type PlatformIcon as SimpleIcon } from '../../constants/platform-icons';
 import {
   getPlatformSimpleIcon as getIconServiceSimpleIcon,
@@ -890,6 +890,8 @@ export class TimelineContainer {
       this.filterSortManager.updateFilter(filter);
       this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
       this.persistFilterPreferences();
+      this.updateTabButtonState?.();
+      void this.refreshBulkSelectionPresentation();
     });
 
     this.filterPanel.onRerender(() => {
@@ -1042,32 +1044,40 @@ export class TimelineContainer {
 
   /**
    * Handle archive toggle event from PostCardRenderer
-   * If the post is archived and includeArchived filter is false, remove the card with animation
+   * Remove the card with animation when it no longer belongs to the active tab:
+   * - inbox tab: archiving a post removes it
+   * - archive tab: unarchiving a post removes it
+   * - all tab: no removal on archive/unarchive
    */
   private handleArchiveToggle(post: PostData, newArchiveStatus: boolean, cardElement: HTMLElement): void {
     const filterState = this.filterSortManager.getFilterState();
+    const { activeTab } = filterState;
 
-    // If post is archived and includeArchived filter is false, remove the card
-    if (newArchiveStatus && !filterState.includeArchived) {
-      // Animate card removal (fade out and slide up)
-      cardElement.addClass('tc-card-removing');
+    // Determine if the card should be removed
+    const shouldRemove =
+      (activeTab === 'inbox' && newArchiveStatus) ||
+      (activeTab === 'archive' && !newArchiveStatus);
 
-      // Remove from DOM after animation
-      window.setTimeout(() => {
-        cardElement.remove();
+    if (!shouldRemove) return;
 
-        // Update filteredPosts array
-        const index = this.filteredPosts.findIndex(p => p.id === post.id);
-        if (index !== -1) {
-          this.filteredPosts.splice(index, 1);
-        }
+    // Animate card removal (fade out and slide up)
+    cardElement.addClass('tc-card-removing');
 
-        // If no posts left, show empty state
-        if (this.filteredPosts.length === 0) {
-          this.renderEmpty();
-        }
-      }, 300);
-    }
+    // Remove from DOM after animation
+    window.setTimeout(() => {
+      cardElement.remove();
+
+      // Update filteredPosts array
+      const index = this.filteredPosts.findIndex(p => p.id === post.id);
+      if (index !== -1) {
+        this.filteredPosts.splice(index, 1);
+      }
+
+      // If no posts left, show empty state
+      if (this.filteredPosts.length === 0) {
+        this.renderEmpty();
+      }
+    }, 300);
   }
 
   private async render(): Promise<void> {
@@ -1272,7 +1282,7 @@ export class TimelineContainer {
 
     // Check if empty because all tagged posts are archived
     const filterState = this.filterSortManager.getFilterState();
-    if (filterState.selectedTags.size > 0 && !filterState.includeArchived) {
+    if (filterState.selectedTags.size > 0 && filterState.activeTab === 'inbox') {
       const archivedWithTag = this.posts.filter(post => {
         if (post.archive !== true) return false;
         if (!post.tags || post.tags.length === 0) return false;
@@ -1289,7 +1299,7 @@ export class TimelineContainer {
     }
 
     // Check if empty because matching archived posts are hidden
-    if (filterState.searchQuery && filterState.searchQuery.trim().length > 0 && !filterState.includeArchived) {
+    if (filterState.searchQuery && filterState.searchQuery.trim().length > 0 && filterState.activeTab === 'inbox') {
       const query = filterState.searchQuery.trim();
       const archivedEntries = this.indexEntries.filter(e => e.archive);
 
@@ -1338,6 +1348,7 @@ export class TimelineContainer {
       this.filterSortManager.resetFilters(this.getDefaultFilterState());
       this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
       this.persistFilterPreferences();
+      this.updateTabButtonState?.();
       this.updateFilterButtonState?.();
       this.updateSearchButtonState?.();
 
@@ -1397,9 +1408,10 @@ export class TimelineContainer {
     });
 
     includeBtn.addEventListener('click', () => void (async () => {
-      this.filterSortManager.updateFilter({ includeArchived: true });
+      this.filterSortManager.updateFilter({ activeTab: 'all' });
       this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
       this.persistFilterPreferences();
+      this.updateTabButtonState?.();
       this.updateFilterButtonState?.();
 
       if (this.viewMode === 'gallery') {
@@ -1418,6 +1430,7 @@ export class TimelineContainer {
       this.filterSortManager.resetFilters(this.getDefaultFilterState());
       this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
       this.persistFilterPreferences();
+      this.updateTabButtonState?.();
       this.updateFilterButtonState?.();
       this.updateSearchButtonState?.();
 
@@ -1467,9 +1480,10 @@ export class TimelineContainer {
       cls: 'px-4 py-2 rounded bg-[var(--interactive-accent)] text-[var(--text-on-accent)] hover:opacity-90 transition-colors cursor-pointer'
     });
     includeBtn.addEventListener('click', () => void (async () => {
-      this.filterSortManager.updateFilter({ includeArchived: true });
+      this.filterSortManager.updateFilter({ activeTab: 'all' });
       this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
       this.persistFilterPreferences();
+      this.updateTabButtonState?.();
       this.updateFilterButtonState?.();
       if (this.viewMode === 'gallery') {
         await this.renderGalleryContent();
@@ -1930,9 +1944,10 @@ export class TimelineContainer {
     rightButtons.addClass('sa-flex-row');
     rightButtons.addClass('sa-gap-4');
 
-    // Tag manage, Archive and View Switcher buttons (now also visible in Author mode)
+    // Tag manage, Archive, Tab Cycle and View Switcher buttons (now also visible in Author mode)
     this.renderArchiveButton(rightButtons);
     this.renderTagManageButton(rightButtons);
+    this.renderTabCycleButton(rightButtons);
     this.renderViewSwitcherButton(rightButtons);
 
     this.renderSubscriptionButton(rightButtons);
@@ -2240,6 +2255,7 @@ export class TimelineContainer {
   // Helper to store button update functions
   private updateSearchButtonState: (() => void) | undefined;
   private updateFilterButtonState: (() => void) | undefined;
+  private updateTabButtonState: (() => void) | undefined;
   private updateViewButtonState: (() => void) | undefined;
 
 
@@ -2833,10 +2849,11 @@ export class TimelineContainer {
 
     archiveOption.addEventListener('click', () => {
       const currentState = this.filterSortManager.getFilterState();
-      const newIncludeArchived = !currentState.includeArchived;
+      const newActiveTab: TimelineArchiveTab = currentState.activeTab === 'inbox' ? 'all' : 'inbox';
 
-      this.filterSortManager.updateFilter({ includeArchived: newIncludeArchived });
+      this.filterSortManager.updateFilter({ activeTab: newActiveTab });
       this.persistFilterPreferences();
+      this.updateTabButtonState?.();
       this.updateFilterButtonState?.();
 
       if (this.authorCatalogComponent) {
@@ -2934,6 +2951,123 @@ export class TimelineContainer {
       // Open archive modal via plugin
       this.plugin.openArchiveModal();
     });
+  }
+
+  /**
+   * Render tab cycle button (Inbox / Archive / All)
+   */
+  private renderTabCycleButton(parent: HTMLElement): void {
+    const tabBtn = parent.createDiv();
+    tabBtn.addClass('sa-action-btn');
+    tabBtn.setAttribute('role', 'button');
+    tabBtn.setAttribute('tabindex', '0');
+
+    const tabIcon = tabBtn.createDiv();
+    tabIcon.addClass('sa-icon-16');
+    tabIcon.addClass('sa-transition-color');
+
+    const getTabConfig = (tab: TimelineArchiveTab) => {
+      switch (tab) {
+        case 'inbox':
+          return {
+            icon: 'inbox',
+            tooltip: 'Inbox posts. Click to switch to Archive.',
+            ariaLabel: 'Current tab: Inbox. Click to switch to Archive.',
+          };
+        case 'archive':
+          return {
+            icon: 'archive',
+            tooltip: 'Archived posts. Click to switch to All.',
+            ariaLabel: 'Current tab: Archive. Click to switch to All.',
+          };
+        case 'all':
+          return {
+            icon: 'layers',
+            tooltip: 'All posts. Click to switch to Inbox.',
+            ariaLabel: 'Current tab: All. Click to switch to Inbox.',
+          };
+      }
+    };
+
+    const getNextTab = (tab: TimelineArchiveTab): TimelineArchiveTab => {
+      switch (tab) {
+        case 'inbox': return 'archive';
+        case 'archive': return 'all';
+        case 'all': return 'inbox';
+      }
+    };
+
+    const updateTabButton = () => {
+      if (!tabBtn.isConnected) return;
+      const currentTab = this.filterSortManager.getFilterState().activeTab;
+      const config = getTabConfig(currentTab);
+      setIcon(tabIcon, config.icon);
+      tabBtn.setAttribute('title', config.tooltip);
+      tabBtn.setAttribute('aria-label', config.ariaLabel);
+
+      // Accent style when not inbox (indicating non-default state)
+      if (currentTab !== 'inbox') {
+        tabBtn.removeClass('sa-bg-transparent');
+        tabBtn.addClass('sa-bg-accent');
+        tabIcon.removeClass('sa-text-muted');
+        tabIcon.addClass('sa-text-accent');
+      } else {
+        tabBtn.removeClass('sa-bg-accent');
+        tabBtn.addClass('sa-bg-transparent');
+        tabIcon.removeClass('sa-text-accent');
+        tabIcon.addClass('sa-text-muted');
+      }
+    };
+    this.updateTabButtonState = updateTabButton;
+    updateTabButton();
+
+    tabBtn.addEventListener('mouseenter', () => {
+      const currentTab = this.filterSortManager.getFilterState().activeTab;
+      if (currentTab === 'inbox') {
+        tabBtn.removeClass('sa-bg-transparent');
+        tabBtn.addClass('sa-bg-hover');
+        tabIcon.removeClass('sa-text-muted');
+        tabIcon.addClass('sa-text-accent');
+      }
+    });
+
+    tabBtn.addEventListener('mouseleave', () => {
+      updateTabButton();
+    });
+
+    const handleClick = () => {
+      const currentTab = this.filterSortManager.getFilterState().activeTab;
+      this.switchTab(getNextTab(currentTab));
+    };
+
+    tabBtn.addEventListener('click', handleClick);
+
+    tabBtn.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        handleClick();
+      }
+    });
+  }
+
+  /**
+   * Switch the archive tab, re-filter, persist, and re-render
+   */
+  private switchTab(tab: TimelineArchiveTab): void {
+    this.filterSortManager.updateFilter({ activeTab: tab });
+    this.filteredPosts = this.dedupePostsByFilePath(
+      this.filterSortManager.applyFiltersAndSort(this.posts)
+    );
+    this.persistFilterPreferences();
+    this.updateTabButtonState?.();
+    this.updateFilterButtonState?.();
+    void this.refreshBulkSelectionPresentation();
+
+    if (this.viewMode === 'gallery') {
+      void this.renderGalleryContent();
+    } else {
+      void this.renderPostsFeed();
+    }
   }
 
   /**
@@ -4340,7 +4474,7 @@ export class TimelineContainer {
             }
 
             // Update filters BEFORE rendering header so search state is correct
-            this.filterSortManager.updateFilter({ searchQuery: author.authorName, includeArchived: true });
+            this.filterSortManager.updateFilter({ searchQuery: author.authorName, activeTab: 'archive' });
             // Reset authorSearchQuery so it doesn't persist when returning to Author Catalog
             this.authorSearchQuery = '';
 
@@ -5353,6 +5487,62 @@ export class TimelineContainer {
     setIcon(parent, this.getLucideIcon(platform));
   }
 
+  private renderQuickFilterButtons(parent: HTMLElement): void {
+    const filterState = this.filterSortManager.getFilterState();
+    const isMobile = ObsidianPlatform.isMobile;
+
+    const quickFilters: Array<{
+      key: 'likedOnly' | 'sharedOnly' | 'commentedOnly' | 'subscribedOnly';
+      icon: string;
+      label: string;
+      titleOn: string;
+      titleOff: string;
+    }> = [
+      { key: 'likedOnly', icon: 'star', label: 'Starred', titleOn: 'Showing starred only', titleOff: 'Show starred only' },
+      { key: 'commentedOnly', icon: 'message-square', label: 'Notes', titleOn: 'Showing with notes only', titleOff: 'Show with notes only' },
+      { key: 'sharedOnly', icon: 'share-2', label: 'Shared', titleOn: 'Showing shared only', titleOff: 'Show shared only' },
+      { key: 'subscribedOnly', icon: isMobile ? 'rss' : 'bell', label: 'Subscribed', titleOn: 'Showing subscribed only', titleOff: 'Show subscribed only' },
+    ];
+
+    for (const qf of quickFilters) {
+      const active = filterState[qf.key];
+      const btn = parent.createEl('button', {
+        cls: 'tc-quick-filter-btn',
+        attr: {
+          type: 'button',
+          title: active ? qf.titleOn : qf.titleOff,
+          'aria-label': active ? qf.titleOn : qf.titleOff,
+          'aria-pressed': String(active),
+        },
+      });
+      if (active) btn.addClass('is-active');
+
+      const btnIcon = btn.createSpan({ cls: 'tc-quick-filter-icon' });
+      setIcon(btnIcon, qf.icon);
+
+      if (!isMobile) {
+        btn.createSpan({ text: qf.label });
+      }
+
+      btn.addEventListener('click', () => {
+        const current = this.filterSortManager.getFilterState()[qf.key];
+        this.filterSortManager.updateFilter({ [qf.key]: !current });
+        this.filteredPosts = this.dedupePostsByFilePath(
+          this.filterSortManager.applyFiltersAndSort(this.posts),
+        );
+        this.persistFilterPreferences();
+        this.updateFilterButtonState?.();
+        void this.refreshBulkSelectionPresentation();
+
+        if (this.viewMode === 'gallery') {
+          void this.renderGalleryContent();
+        } else {
+          void this.renderPostsFeed();
+        }
+      });
+    }
+  }
+
   private renderBulkSelectionControls(hasTagChipBar: boolean): void {
     this.syncBulkSelectionState();
 
@@ -5369,16 +5559,20 @@ export class TimelineContainer {
     row.addClass(hasTagChipBar ? 'tc-selection-row-with-tags' : 'tc-selection-row-no-tags');
 
     const summary = getBulkSelectionSummary(this.filteredPosts, this.selectedPostPaths);
-    const inboxCount = this.filteredPosts.filter((post) => post.archive !== true).length;
+    const tabCount = this.filteredPosts.length;
     const selectedPosts = this.getSelectedBulkPosts();
     const selectedArchivablePosts = this.getSelectedArchivablePosts();
+    const selectedUnarchivablePosts = selectedPosts.filter((post) => post.archive === true);
+    const activeTab = this.filterSortManager.getFilterState().activeTab;
     const starTargetState = this.getBulkStarTargetState(selectedPosts);
     const isMobile = ObsidianPlatform.isMobile;
 
     if (!this.selectionMode) {
       row.addClass('tc-selection-row-idle');
 
-      const selectBtn = row.createEl('button', {
+      const leftGroup = row.createDiv({ cls: 'tc-selection-left-group' });
+
+      const selectBtn = leftGroup.createEl('button', {
         cls: 'tc-selection-toggle',
         attr: {
           type: 'button',
@@ -5405,8 +5599,11 @@ export class TimelineContainer {
         void this.enterBulkSelectionMode();
       });
 
+      leftGroup.createDiv({ cls: 'tc-quick-filter-divider' });
+      this.renderQuickFilterButtons(leftGroup);
+
       row.createDiv({
-        text: String(inboxCount),
+        text: String(tabCount),
         cls: 'tc-selection-count-pill',
       });
       return;
@@ -5460,15 +5657,47 @@ export class TimelineContainer {
       void this.setSelectedPostsStarred(starTargetState);
     });
 
-    const archiveBtn = actions.createEl('button', {
-      text: 'Archive selected',
-      cls: 'tc-selection-action-btn tc-selection-action-btn-primary',
-      attr: { type: 'button' },
-    });
-    archiveBtn.disabled = selectedArchivablePosts.length === 0;
-    archiveBtn.addEventListener('click', () => {
-      void this.archiveSelectedPosts();
-    });
+    if (activeTab === 'archive') {
+      const unarchiveBtn = actions.createEl('button', {
+        text: 'Unarchive selected',
+        cls: 'tc-selection-action-btn tc-selection-action-btn-primary',
+        attr: { type: 'button' },
+      });
+      unarchiveBtn.disabled = selectedUnarchivablePosts.length === 0;
+      unarchiveBtn.addEventListener('click', () => {
+        void this.unarchiveSelectedPosts();
+      });
+    } else if (activeTab === 'all') {
+      const archiveBtn = actions.createEl('button', {
+        text: 'Archive selected',
+        cls: 'tc-selection-action-btn tc-selection-action-btn-primary',
+        attr: { type: 'button' },
+      });
+      archiveBtn.disabled = selectedArchivablePosts.length === 0;
+      archiveBtn.addEventListener('click', () => {
+        void this.archiveSelectedPosts();
+      });
+
+      const unarchiveBtn = actions.createEl('button', {
+        text: 'Unarchive selected',
+        cls: 'tc-selection-action-btn',
+        attr: { type: 'button' },
+      });
+      unarchiveBtn.disabled = selectedUnarchivablePosts.length === 0;
+      unarchiveBtn.addEventListener('click', () => {
+        void this.unarchiveSelectedPosts();
+      });
+    } else {
+      const archiveBtn = actions.createEl('button', {
+        text: 'Archive selected',
+        cls: 'tc-selection-action-btn tc-selection-action-btn-primary',
+        attr: { type: 'button' },
+      });
+      archiveBtn.disabled = selectedArchivablePosts.length === 0;
+      archiveBtn.addEventListener('click', () => {
+        void this.archiveSelectedPosts();
+      });
+    }
 
     const deleteBtn = actions.createEl('button', {
       text: 'Delete selected',
@@ -5513,7 +5742,7 @@ export class TimelineContainer {
       row.setAttribute('tabindex', '0');
 
       const check = row.createDiv({ cls: 'tc-selection-check' });
-      setIcon(check, isSelected ? 'check-square' : isArchived ? 'archive' : 'square');
+      setIcon(check, isSelected ? 'check-square' : 'square');
 
       const main = row.createDiv({ cls: 'tc-selection-main' });
       const meta = main.createDiv({ cls: 'tc-selection-meta' });
@@ -5751,6 +5980,71 @@ export class TimelineContainer {
     }
   }
 
+  private async unarchiveSelectedPosts(): Promise<void> {
+    this.syncBulkSelectionState();
+
+    const selectedPosts = this.getSelectedBulkPosts().filter((post) => post.archive === true);
+
+    if (selectedPosts.length === 0) {
+      new Notice('Select at least one archived post to unarchive.');
+      return;
+    }
+
+    const confirmed = await showConfirmModal(this.app, {
+      title: `Unarchive ${selectedPosts.length} selected post${selectedPosts.length === 1 ? '' : 's'}?`,
+      message: 'Posts will be moved back to your inbox.',
+      confirmText: 'Unarchive selected',
+      confirmClass: 'warning',
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    let unarchivedCount = 0;
+    let failedCount = 0;
+
+    for (const post of selectedPosts) {
+      const file = this.vault.getAbstractFileByPath(post.filePath);
+      if (!(file instanceof TFile)) {
+        failedCount++;
+        continue;
+      }
+
+      try {
+        this.onUIModify?.(post.filePath);
+        await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
+          delete frontmatter['archive'];
+        });
+        unarchivedCount++;
+      } catch (error) {
+        failedCount++;
+        console.error('[TimelineContainer] Failed to unarchive post in bulk mode:', post.filePath, error);
+      }
+
+      if (unarchivedCount > 0 && unarchivedCount % 25 === 0) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+      }
+    }
+
+    this.selectedPostPaths.clear();
+
+    if (unarchivedCount > 0) {
+      this.forceReload = true;
+      await this.loadPosts();
+    } else {
+      await this.refreshBulkSelectionPresentation();
+    }
+
+    if (unarchivedCount > 0 && failedCount === 0) {
+      new Notice(`Unarchived ${unarchivedCount} post${unarchivedCount === 1 ? '' : 's'}.`);
+    } else if (unarchivedCount > 0) {
+      new Notice(`Unarchived ${unarchivedCount} post${unarchivedCount === 1 ? '' : 's'} (${failedCount} failed).`);
+    } else {
+      new Notice('No posts were unarchived.');
+    }
+  }
+
   private async deleteSelectedPosts(): Promise<void> {
     this.syncBulkSelectionState();
 
@@ -5824,6 +6118,7 @@ export class TimelineContainer {
       sharedOnly: false,
       subscribedOnly: false,
       includeArchived: false,
+      activeTab: 'inbox',
       dateRange: { start: null, end: null },
       searchQuery: ''
     };
@@ -5837,6 +6132,9 @@ export class TimelineContainer {
       return defaults;
     }
 
+    // Migration: derive activeTab from legacy includeArchived when activeTab is absent
+    const activeTab: TimelineArchiveTab = prefs.activeTab ?? (prefs.includeArchived ? 'all' : 'inbox');
+
     return {
       ...defaults,
       platforms: new Set<string>(
@@ -5845,7 +6143,8 @@ export class TimelineContainer {
       likedOnly: prefs.likedOnly ?? defaults.likedOnly,
       commentedOnly: prefs.commentedOnly ?? defaults.commentedOnly,
       sharedOnly: prefs.sharedOnly ?? defaults.sharedOnly,
-      includeArchived: prefs.includeArchived ?? defaults.includeArchived,
+      includeArchived: activeTab !== 'inbox',
+      activeTab,
       dateRange: {
         start: prefs.dateRange?.start ? new Date(prefs.dateRange.start) : null,
         end: prefs.dateRange?.end ? new Date(prefs.dateRange.end) : null
@@ -5866,7 +6165,8 @@ export class TimelineContainer {
       dateRange: {
         start: state.dateRange.start ? state.dateRange.start.toISOString() : null,
         end: state.dateRange.end ? state.dateRange.end.toISOString() : null
-      }
+      },
+      activeTab: state.activeTab,
     };
 
     void this.plugin.saveSettingsPartial(

@@ -52,12 +52,6 @@ export class FilterPanel {
     this.panelEl.addClass('sa-absolute', 'sa-z-1000', 'sa-bg-primary', 'sa-border', 'sa-rounded-8', 'sa-p-16');
 
     this.renderPlatformFilters(this.panelEl, filterState, updateFilterButton);
-    this.renderDivider(this.panelEl);
-    this.renderLikeFilter(this.panelEl, filterState, updateFilterButton);
-    this.renderCommentFilter(this.panelEl, filterState, updateFilterButton);
-    this.renderSharedFilter(this.panelEl, filterState, updateFilterButton);
-    this.renderSubscribedFilter(this.panelEl, filterState, updateFilterButton);
-    this.renderArchiveFilter(this.panelEl, filterState, updateFilterButton);
 
     this.attachOutsideClickHandler();
     this.isOpen = true;
@@ -484,11 +478,12 @@ export class FilterPanel {
     archiveOption.addEventListener('click', () => {
       // Get latest filter state
       const currentState = this.getFilterStateCallback?.() || filterState;
-      const newIncludeArchived = !currentState.includeArchived;
-      archiveOption.toggleClass('sa-bg-hover', newIncludeArchived);
-      archiveCheckIcon.toggleClass('sa-hidden', !newIncludeArchived);
+      // Toggle maps to inbox <-> all; normalizer derives includeArchived
+      const newTab = currentState.includeArchived ? 'inbox' : 'all';
+      archiveOption.toggleClass('sa-bg-hover', newTab !== 'inbox');
+      archiveCheckIcon.toggleClass('sa-hidden', newTab === 'inbox');
 
-      this.onFilterChangeCallback?.({ includeArchived: newIncludeArchived });
+      this.onFilterChangeCallback?.({ activeTab: newTab as FilterState['activeTab'] });
       this.onRerenderCallback?.();
       updateFilterButton();
     });

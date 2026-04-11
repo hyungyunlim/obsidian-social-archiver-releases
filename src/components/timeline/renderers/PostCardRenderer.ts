@@ -1598,13 +1598,12 @@ export class PostCardRenderer extends Component {
         badge.addClass('pcr-badge-subscribed');
         badge.setAttribute('title', 'Click to unsubscribe');
 
-        // Bell icon
         const iconContainer = badge.createDiv({ cls: 'pcr-badge-icon' });
-        setIcon(iconContainer, 'bell');
+        setIcon(iconContainer, ObsidianPlatform.isMobile ? 'rss' : 'bell');
         const bellSvg = iconContainer.querySelector('svg');
         if (bellSvg) { bellSvg.addClass('pcr-badge-svg-subscribed'); }
 
-        badge.createSpan({ text: 'Subscribed' });
+        if (!ObsidianPlatform.isMobile) badge.createSpan({ text: 'Subscribed' });
       } else {
         // Not subscribed state - subtle badge
         badge.addClass('pcr-badge-unsubscribed');
@@ -1620,12 +1619,12 @@ export class PostCardRenderer extends Component {
           const loaderSvg = iconContainer.querySelector('svg');
           if (loaderSvg) { loaderSvg.addClass('pcr-badge-svg-loading'); }
         } else {
-          setIcon(iconContainer, 'bell-plus');
+          setIcon(iconContainer, ObsidianPlatform.isMobile ? 'rss' : 'bell-plus');
           const bellSvg = iconContainer.querySelector('svg');
           if (bellSvg) { bellSvg.addClass('pcr-badge-svg-unsubscribed'); }
         }
 
-        badge.createSpan({ text: loading ? loadingText : 'Subscribe' });
+        if (!ObsidianPlatform.isMobile) badge.createSpan({ text: loading ? loadingText : 'Subscribe' });
       }
     };
 

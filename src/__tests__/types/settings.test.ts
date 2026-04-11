@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_SETTINGS,
   migrateSettings,
+  createDefaultTimelineFilters,
 } from '@/types/settings';
 import type { SocialArchiverSettings } from '@/types/settings';
 
@@ -54,6 +55,70 @@ describe('settings', () => {
       const migrated = migrateSettings(settingsWithUndefined);
 
       expect(migrated.includeHashtagsAsObsidianTags).toBe(true);
+    });
+
+    it('should derive activeTab "all" from legacy includeArchived true', () => {
+      const legacy: Partial<SocialArchiverSettings> = {
+        timelineFilters: {
+          platforms: [],
+          likedOnly: false,
+          commentedOnly: false,
+          sharedOnly: false,
+          includeArchived: true,
+          searchQuery: '',
+          dateRange: { start: null, end: null },
+        } as SocialArchiverSettings['timelineFilters'],
+      };
+
+      const migrated = migrateSettings(legacy);
+
+      expect(migrated.timelineFilters.activeTab).toBe('all');
+    });
+
+    it('should derive activeTab "inbox" from legacy includeArchived false', () => {
+      const legacy: Partial<SocialArchiverSettings> = {
+        timelineFilters: {
+          platforms: [],
+          likedOnly: false,
+          commentedOnly: false,
+          sharedOnly: false,
+          includeArchived: false,
+          searchQuery: '',
+          dateRange: { start: null, end: null },
+        } as SocialArchiverSettings['timelineFilters'],
+      };
+
+      const migrated = migrateSettings(legacy);
+
+      expect(migrated.timelineFilters.activeTab).toBe('inbox');
+    });
+
+    it('should preserve existing activeTab when already set', () => {
+      const settings: Partial<SocialArchiverSettings> = {
+        timelineFilters: {
+          platforms: [],
+          likedOnly: false,
+          commentedOnly: false,
+          sharedOnly: false,
+          includeArchived: true,
+          searchQuery: '',
+          dateRange: { start: null, end: null },
+          activeTab: 'archive',
+        },
+      };
+
+      const migrated = migrateSettings(settings);
+
+      expect(migrated.timelineFilters.activeTab).toBe('archive');
+    });
+  });
+
+  describe('createDefaultTimelineFilters', () => {
+    it('should include activeTab set to inbox', () => {
+      const defaults = createDefaultTimelineFilters();
+
+      expect(defaults.activeTab).toBe('inbox');
+      expect(defaults.includeArchived).toBe(false);
     });
   });
 });

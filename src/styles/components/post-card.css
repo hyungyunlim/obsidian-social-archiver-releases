@@ -317,6 +317,17 @@
   color: var(--text-normal);
 }
 
+.is-mobile .pcr-badge-subscribed,
+.is-mobile .pcr-badge-unsubscribed {
+  background-color: transparent;
+  padding: 2px;
+}
+
+.is-mobile .pcr-badge-subscribed:hover,
+.is-mobile .pcr-badge-unsubscribed:hover {
+  background-color: transparent;
+}
+
 .pcr-badge-icon {
   width: 10px;
   height: 10px;

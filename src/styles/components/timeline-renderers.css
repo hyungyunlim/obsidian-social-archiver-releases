@@ -53,6 +53,17 @@
   color: var(--text-normal);
 }
 
+.is-mobile .scr-sub-badge--subscribed,
+.is-mobile .scr-sub-badge--not-subscribed {
+  background: transparent;
+  padding: 2px;
+}
+
+.is-mobile .scr-sub-badge--subscribed:hover,
+.is-mobile .scr-sub-badge--not-subscribed:hover {
+  background: transparent;
+}
+
 /* -- Unread badge --------------------------------------------------------- */
 .scr-unread-badge {
   display: inline-flex;

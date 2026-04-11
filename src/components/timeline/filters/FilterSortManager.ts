@@ -3,6 +3,7 @@ import { prepareSimpleSearch } from 'obsidian';
 import { TIMELINE_PLATFORM_IDS } from '../../../constants/timelinePlatforms';
 import type { PostIndexEntry } from '../../../services/PostIndexService';
 import type { SearchIndexService } from '../../../services/SearchIndexService';
+import type { TimelineArchiveTab } from '../../../types/settings';
 
 /**
  * Filter state interface
@@ -15,8 +16,30 @@ export interface FilterState {
   sharedOnly: boolean;
   subscribedOnly: boolean;
   includeArchived: boolean;
+  activeTab: TimelineArchiveTab;
   dateRange: { start: Date | null; end: Date | null };
   searchQuery: string;
+}
+
+function deriveIncludeArchived(tab: TimelineArchiveTab): boolean {
+  return tab !== 'inbox';
+}
+
+function normalizeArchiveState(
+  next: Partial<FilterState>,
+  prev: FilterState,
+): Pick<FilterState, 'activeTab' | 'includeArchived'> {
+  if (next.activeTab) {
+    return {
+      activeTab: next.activeTab,
+      includeArchived: deriveIncludeArchived(next.activeTab),
+    };
+  }
+  if (typeof next.includeArchived === 'boolean') {
+    const activeTab = next.includeArchived ? 'all' : 'inbox';
+    return { activeTab, includeArchived: next.includeArchived };
+  }
+  return { activeTab: prev.activeTab, includeArchived: prev.includeArchived };
 }
 
 /**
@@ -137,8 +160,15 @@ export class FilterSortManager {
     }
 
     // Filter by archive status
-    if (!this.filterState.includeArchived) {
-      filtered = filtered.filter(post => post.archive !== true);
+    switch (this.filterState.activeTab) {
+      case 'inbox':
+        filtered = filtered.filter(post => post.archive !== true);
+        break;
+      case 'archive':
+        filtered = filtered.filter(post => post.archive === true);
+        break;
+      case 'all':
+        break;
     }
 
     // Filter by date range
@@ -273,8 +303,15 @@ export class FilterSortManager {
     if (this.filterState.subscribedOnly) {
       filtered = filtered.filter(e => e.subscribed);
     }
-    if (!this.filterState.includeArchived) {
-      filtered = filtered.filter(e => !e.archive);
+    switch (this.filterState.activeTab) {
+      case 'inbox':
+        filtered = filtered.filter(e => !e.archive);
+        break;
+      case 'archive':
+        filtered = filtered.filter(e => e.archive);
+        break;
+      case 'all':
+        break;
     }
 
     // Date range
@@ -388,7 +425,8 @@ export class FilterSortManager {
    * Update filter state
    */
   updateFilter(filter: Partial<FilterState>): void {
-    this.filterState = { ...this.filterState, ...filter };
+    const normalized = normalizeArchiveState(filter, this.filterState);
+    this.filterState = { ...this.filterState, ...filter, ...normalized };
   }
 
   /**
@@ -442,7 +480,7 @@ export class FilterSortManager {
       Boolean(this.filterState.commentedOnly) ||
       Boolean(this.filterState.sharedOnly) ||
       Boolean(this.filterState.subscribedOnly) ||
-      Boolean(this.filterState.includeArchived) ||
+      this.filterState.activeTab !== 'inbox' ||
       this.filterState.dateRange.start !== null ||
       this.filterState.dateRange.end !== null
       // Search query removed - search and filter are now independent
@@ -451,7 +489,7 @@ export class FilterSortManager {
   }
 
   private buildFilterState(initialFilterState?: Partial<FilterState>): FilterState {
-    return {
+    const raw = {
       platforms: initialFilterState?.platforms
         ? new Set(initialFilterState.platforms)
         : new Set<string>(TIMELINE_PLATFORM_IDS),
@@ -463,11 +501,14 @@ export class FilterSortManager {
       sharedOnly: initialFilterState?.sharedOnly ?? false,
       subscribedOnly: initialFilterState?.subscribedOnly ?? false,
       includeArchived: initialFilterState?.includeArchived ?? false,
+      activeTab: initialFilterState?.activeTab ?? 'inbox' as const,
       dateRange: {
         start: initialFilterState?.dateRange?.start ?? null,
         end: initialFilterState?.dateRange?.end ?? null
       },
       searchQuery: initialFilterState?.searchQuery ?? ''
     };
+    const normalized = normalizeArchiveState(initialFilterState ?? {}, raw);
+    return { ...raw, ...normalized };
   }
 }
