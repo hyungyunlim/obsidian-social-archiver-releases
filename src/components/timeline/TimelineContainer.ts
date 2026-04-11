@@ -45,6 +45,12 @@ import { createSVGElement } from '../../utils/dom-helpers';
 import type { AuthorCatalogEntry, AuthorSubscribeOptions, PlatformAuthorCounts } from '../../types/author-catalog';
 import type { SubscriptionEvent } from '../../services/SubscriptionManager';
 import { AuthorDetailContainer } from '../author-detail/AuthorDetailContainer';
+import { showConfirmModal } from '../../utils/confirm-modal';
+import {
+  getBulkSelectionSelectableFilePaths,
+  getBulkSelectionSummary,
+  normalizeBulkSelection,
+} from './bulkSelection';
 
 /**
  * Raw subscription data returned by the Worker API.
@@ -293,6 +299,9 @@ export class TimelineContainer {
 
   // Tag chip bar for filtering by user-defined tags
   private tagChipBar: TagChipBar;
+  private bulkSelectionContainer: HTMLElement | null = null;
+  private selectionMode = false;
+  private selectedPostPaths: Set<string> = new Set();
 
   // Reader mode overlay
   private readerModeOverlay: ReaderModeOverlay | null = null;
@@ -419,6 +428,8 @@ export class TimelineContainer {
       if (this.onUIDelete) {
         this.onUIDelete(filePath);
       }
+
+      this.selectedPostPaths.delete(filePath);
 
       // If deleted post was part of a series, re-render to update series card
       if (isSeriesPost) {
@@ -1088,6 +1099,7 @@ export class TimelineContainer {
 
     // First time loading - show full screen loading
     this.containerEl.empty();
+    this.bulkSelectionContainer = null;
 
     const loading = this.containerEl.createDiv({
       cls: 'flex flex-col items-center justify-center min-h-[300px] text-[var(--text-muted)]'
@@ -1157,6 +1169,7 @@ export class TimelineContainer {
 
   private renderError(message: string): void {
     this.containerEl.empty();
+    this.bulkSelectionContainer = null;
 
     const errorDiv = this.containerEl.createDiv({
       cls: 'flex flex-col items-center justify-center min-h-[300px] text-center'
@@ -1181,6 +1194,7 @@ export class TimelineContainer {
 
   private renderEmpty(): void {
     this.containerEl.empty();
+    this.bulkSelectionContainer = null;
 
     const emptyDiv = this.containerEl.createDiv({
       cls: 'flex flex-col items-center justify-center text-center text-[var(--text-muted)]'
@@ -3006,6 +3020,11 @@ export class TimelineContainer {
     const switchStartedAt = Date.now();
 
     try {
+      if (this.selectionMode) {
+        this.selectionMode = false;
+        this.selectedPostPaths.clear();
+      }
+
       // If in Author mode, disable it first before switching views
       if (this.isSubscriptionViewActive) {
         this.isSubscriptionViewActive = false;
@@ -3086,6 +3105,11 @@ export class TimelineContainer {
     });
 
     subscriptionBtn.addEventListener('click', () => void (async () => {
+      if (!this.isSubscriptionViewActive && this.selectionMode) {
+        this.selectionMode = false;
+        this.selectedPostPaths.clear();
+      }
+
       this.isSubscriptionViewActive = !this.isSubscriptionViewActive;
       updateButtonState();
 
@@ -4471,6 +4495,7 @@ export class TimelineContainer {
     this.removeLoadingBar();
 
     this.containerEl.empty();
+    this.bulkSelectionContainer = null;
     // Clear previous YouTube controllers when re-rendering
     this.youtubeControllers.clear();
 
@@ -4480,8 +4505,14 @@ export class TimelineContainer {
     // Render header with filter/sort controls
     this.renderHeader();
 
-    // Render tag chip bar below header (if tags exist)
-    this.renderTagChipBar();
+    const hasTagChipBar = this.hasVisibleTagChipBar();
+    if (hasTagChipBar) {
+      this.renderTagChipBar();
+    }
+    this.bulkSelectionContainer = this.containerEl.createDiv({
+      cls: 'max-w-2xl mx-auto tc-selection-row-host',
+    });
+    this.renderBulkSelectionControls(hasTagChipBar);
 
     // Render banners below header (search/filter/archive buttons)
     this.renderLibrarySyncBanner();
@@ -4491,6 +4522,11 @@ export class TimelineContainer {
 
     // Mark that posts have been rendered (for subsequent reloads)
     this.hasRenderedPosts = true;
+
+    if (this.filteredPosts.length === 0) {
+      this.renderFilteredEmptyState();
+      return;
+    }
 
     // Render posts feed
     await this.renderPostsFeed();
@@ -4504,6 +4540,11 @@ export class TimelineContainer {
   private async renderPostsFeed(): Promise<void> {
     // Don't render posts if in subscription view
     if (this.isSubscriptionViewActive) {
+      return;
+    }
+
+    if (this.selectionMode) {
+      this.renderBulkSelectionFeed();
       return;
     }
 
@@ -4581,6 +4622,11 @@ export class TimelineContainer {
    * Used when enableLazyLoad is false
    */
   private async renderPostsFeedImmediate(renderGeneration?: number): Promise<void> {
+    if (this.selectionMode) {
+      this.renderBulkSelectionFeed();
+      return;
+    }
+
     const activeGeneration = renderGeneration ?? this.beginFeedRenderGeneration();
 
     // Group posts by date (with series grouping)
@@ -4649,6 +4695,12 @@ export class TimelineContainer {
 
     // Also update legacy PostData filtered list
     this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
+
+    if (this.selectionMode) {
+      this.syncBulkSelectionState();
+      await this.refreshBulkSelectionPresentation();
+      return;
+    }
 
     // Handle empty state
     if (this.filteredPosts.length === 0) {
@@ -4927,8 +4979,10 @@ export class TimelineContainer {
       if (this.filteredPosts.length === 0) {
         if (this.posts.length === 0) {
           this.renderEmpty();
-        } else {
+        } else if (this.viewMode === 'gallery') {
           this.renderFilteredEmptyState();
+        } else {
+          await this.renderPosts();
         }
         return;
       }
@@ -5154,6 +5208,611 @@ export class TimelineContainer {
     }
 
     // If no existing bar and we have tags, do nothing - it'll show on next full render
+  }
+
+  private hasVisibleTagChipBar(): boolean {
+    const tagStore = this.plugin.tagStore;
+    if (!tagStore) return false;
+
+    return tagStore.getTagsWithCounts().some((tag) => tag.archiveCount > 0);
+  }
+
+  private getBulkSelectionListPosts(): Array<PostData & { filePath: string }> {
+    return this.filteredPosts.filter(
+      (post): post is PostData & { filePath: string } =>
+        typeof post.filePath === 'string' && post.filePath.length > 0,
+    );
+  }
+
+  private getSelectedBulkPosts(): Array<PostData & { filePath: string }> {
+    return this.getBulkSelectionListPosts().filter((post) =>
+      this.selectedPostPaths.has(post.filePath),
+    );
+  }
+
+  private getSelectedArchivablePosts(): Array<PostData & { filePath: string }> {
+    return this.getSelectedBulkPosts().filter((post) => post.archive !== true);
+  }
+
+  private getBulkStarTargetState(posts: Array<Pick<PostData, 'like'>>): boolean {
+    return !posts.every((post) => post.like === true);
+  }
+
+  private syncBulkSelectionState(): void {
+    this.selectedPostPaths = normalizeBulkSelection(
+      this.filteredPosts,
+      this.selectedPostPaths,
+    );
+  }
+
+  private async enterBulkSelectionMode(initialFilePath?: string): Promise<void> {
+    const eligiblePaths = getBulkSelectionSelectableFilePaths(this.filteredPosts);
+    if (eligiblePaths.length === 0) {
+      new Notice('No selectable posts in the current results.');
+      return;
+    }
+
+    this.selectionMode = true;
+    this.selectedPostPaths.clear();
+
+    if (initialFilePath && eligiblePaths.includes(initialFilePath)) {
+      this.selectedPostPaths.add(initialFilePath);
+    }
+
+    await this.refreshBulkSelectionPresentation();
+  }
+
+  private async exitBulkSelectionMode(options?: {
+    clearSelection?: boolean;
+    rerender?: boolean;
+  }): Promise<void> {
+    this.selectionMode = false;
+
+    if (options?.clearSelection ?? true) {
+      this.selectedPostPaths.clear();
+    }
+
+    if (options?.rerender ?? true) {
+      await this.refreshBulkSelectionPresentation();
+    }
+  }
+
+  private async toggleBulkSelectionForPost(filePath: string): Promise<void> {
+    const eligiblePaths = new Set(getBulkSelectionSelectableFilePaths(this.filteredPosts));
+    if (!eligiblePaths.has(filePath)) {
+      return;
+    }
+
+    if (this.selectedPostPaths.has(filePath)) {
+      this.selectedPostPaths.delete(filePath);
+    } else {
+      this.selectedPostPaths.add(filePath);
+    }
+
+    this.syncBulkSelectionState();
+    await this.refreshBulkSelectionPresentation();
+  }
+
+  private getBulkSelectionPreviewText(post: PostData): string {
+    const rawText =
+      post.content.snippet ||
+      post.content.text ||
+      post.comment ||
+      post.title ||
+      post.url ||
+      '';
+
+    const normalizedText = rawText
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/\[\[([^\]]+)\]\]/g, '$1')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    return normalizedText || 'Untitled post';
+  }
+
+  private formatBulkSelectionRelativeTime(post: PostData): string {
+    const timestamp =
+      post.publishedDate ??
+      post.archivedDate ??
+      (post.metadata.timestamp instanceof Date
+        ? post.metadata.timestamp
+        : new Date(post.metadata.timestamp));
+
+    const now = new Date();
+    const diffMs = now.getTime() - timestamp.getTime();
+
+    const minute = 60_000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+
+    if (diffMs < minute) return 'Just now';
+    if (diffMs < hour) return `${Math.max(1, Math.floor(diffMs / minute))}m ago`;
+    if (diffMs < day) return `${Math.floor(diffMs / hour)}h ago`;
+    if (diffMs < day * 2) return 'Yesterday';
+    if (diffMs < day * 7) return `${Math.floor(diffMs / day)}d ago`;
+
+    return timestamp.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+    });
+  }
+
+  private renderBulkSelectionPlatformIcon(parent: HTMLElement, platform: string): void {
+    const simpleIcon = this.getPlatformSimpleIcon(platform);
+    if (simpleIcon) {
+      const svg = createSVGElement(simpleIcon, {
+        fill: 'currentColor',
+        width: '100%',
+        height: '100%',
+      });
+      parent.appendChild(svg);
+      return;
+    }
+
+    setIcon(parent, this.getLucideIcon(platform));
+  }
+
+  private renderBulkSelectionControls(hasTagChipBar: boolean): void {
+    this.syncBulkSelectionState();
+
+    const host =
+      this.bulkSelectionContainer && this.bulkSelectionContainer.isConnected
+        ? this.bulkSelectionContainer
+        : this.containerEl.createDiv({ cls: 'max-w-2xl mx-auto tc-selection-row-host' });
+
+    host.empty();
+    this.bulkSelectionContainer = host;
+
+    const row = host.createDiv({ cls: 'tc-selection-row' });
+
+    row.addClass(hasTagChipBar ? 'tc-selection-row-with-tags' : 'tc-selection-row-no-tags');
+
+    const summary = getBulkSelectionSummary(this.filteredPosts, this.selectedPostPaths);
+    const inboxCount = this.filteredPosts.filter((post) => post.archive !== true).length;
+    const selectedPosts = this.getSelectedBulkPosts();
+    const selectedArchivablePosts = this.getSelectedArchivablePosts();
+    const starTargetState = this.getBulkStarTargetState(selectedPosts);
+    const isMobile = ObsidianPlatform.isMobile;
+
+    if (!this.selectionMode) {
+      row.addClass('tc-selection-row-idle');
+
+      const selectBtn = row.createEl('button', {
+        cls: 'tc-selection-toggle',
+        attr: {
+          type: 'button',
+          title:
+            summary.selectableCount > 0
+              ? 'Select posts'
+              : 'No selectable posts in the current results',
+        },
+      });
+
+      if (isMobile) {
+        selectBtn.addClass('tc-selection-toggle-mobile');
+        selectBtn.setAttribute('aria-label', 'Select posts');
+      }
+
+      const iconEl = selectBtn.createSpan({ cls: 'tc-selection-toggle-icon' });
+      setIcon(iconEl, 'check-square');
+      if (!isMobile) {
+        selectBtn.createSpan({ text: 'Select' });
+      }
+      selectBtn.disabled = summary.selectableCount === 0;
+
+      selectBtn.addEventListener('click', () => {
+        void this.enterBulkSelectionMode();
+      });
+
+      row.createDiv({
+        text: String(inboxCount),
+        cls: 'tc-selection-count-pill',
+      });
+      return;
+    }
+
+    const selectionBar = row.createDiv({ cls: 'tc-selection-mode-bar' });
+
+    const selectionSummary = selectionBar.createDiv({ cls: 'tc-selection-summary' });
+    selectionSummary.createSpan({
+      text: `${summary.selectedCount} selected`,
+      cls: 'tc-selection-summary-count',
+    });
+    selectionSummary.createSpan({
+      text: `${summary.selectableCount} in results`,
+      cls: 'tc-selection-summary-total',
+    });
+
+    const actions = selectionBar.createDiv({ cls: 'tc-selection-actions' });
+
+    const selectAllBtn = actions.createEl('button', {
+      text: 'Select all filtered',
+      cls: 'tc-selection-action-btn',
+      attr: { type: 'button' },
+    });
+    selectAllBtn.disabled = summary.selectableCount === 0 || summary.allSelected;
+    selectAllBtn.addEventListener('click', () => {
+      this.selectedPostPaths = new Set(
+        getBulkSelectionSelectableFilePaths(this.filteredPosts),
+      );
+      void this.refreshBulkSelectionPresentation();
+    });
+
+    const clearBtn = actions.createEl('button', {
+      text: 'Clear',
+      cls: 'tc-selection-action-btn',
+      attr: { type: 'button' },
+    });
+    clearBtn.disabled = summary.selectedCount === 0;
+    clearBtn.addEventListener('click', () => {
+      this.selectedPostPaths.clear();
+      void this.refreshBulkSelectionPresentation();
+    });
+
+    const starBtn = actions.createEl('button', {
+      text: starTargetState ? 'Star selected' : 'Unstar selected',
+      cls: 'tc-selection-action-btn',
+      attr: { type: 'button' },
+    });
+    starBtn.disabled = selectedPosts.length === 0;
+    starBtn.addEventListener('click', () => {
+      void this.setSelectedPostsStarred(starTargetState);
+    });
+
+    const archiveBtn = actions.createEl('button', {
+      text: 'Archive selected',
+      cls: 'tc-selection-action-btn tc-selection-action-btn-primary',
+      attr: { type: 'button' },
+    });
+    archiveBtn.disabled = selectedArchivablePosts.length === 0;
+    archiveBtn.addEventListener('click', () => {
+      void this.archiveSelectedPosts();
+    });
+
+    const deleteBtn = actions.createEl('button', {
+      text: 'Delete selected',
+      cls: 'tc-selection-action-btn tc-selection-action-btn-danger',
+      attr: { type: 'button' },
+    });
+    deleteBtn.disabled = selectedPosts.length === 0;
+    deleteBtn.addEventListener('click', () => {
+      void this.deleteSelectedPosts();
+    });
+
+    const cancelBtn = actions.createEl('button', {
+      text: 'Cancel',
+      cls: 'tc-selection-action-btn',
+      attr: { type: 'button' },
+    });
+    cancelBtn.addEventListener('click', () => {
+      void this.exitBulkSelectionMode();
+    });
+  }
+
+  private renderBulkSelectionFeed(): void {
+    this.syncBulkSelectionState();
+    const isMobile = ObsidianPlatform.isMobile;
+
+    this.removeAllTimelineFeeds();
+    this.observerManager.unobserveAll();
+    this.youtubeControllers.clear();
+    this.youtubeEmbedRenderer.disconnectAllObservers();
+
+    const feed = this.containerEl.createDiv({
+      cls: 'flex flex-col gap-2 max-w-2xl mx-auto timeline-feed tc-selection-feed',
+    });
+
+    for (const post of this.getBulkSelectionListPosts()) {
+      const isArchived = post.archive === true;
+      const isSelected = this.selectedPostPaths.has(post.filePath);
+
+      const row = feed.createDiv({ cls: 'tc-selection-item' });
+      if (isSelected) row.addClass('is-selected');
+      row.setAttribute('role', 'button');
+      row.setAttribute('tabindex', '0');
+
+      const check = row.createDiv({ cls: 'tc-selection-check' });
+      setIcon(check, isSelected ? 'check-square' : isArchived ? 'archive' : 'square');
+
+      const main = row.createDiv({ cls: 'tc-selection-main' });
+      const meta = main.createDiv({ cls: 'tc-selection-meta' });
+
+      const platformIcon = meta.createDiv({ cls: 'tc-selection-platform-icon' });
+      if (isMobile) {
+        platformIcon.addClass('tc-selection-platform-icon-mobile');
+      }
+      this.renderBulkSelectionPlatformIcon(platformIcon, post.platform);
+
+      meta.createSpan({
+        text: post.author?.name || post.author?.handle || 'Unknown author',
+        cls: 'tc-selection-author',
+      });
+      meta.createSpan({
+        text: this.formatBulkSelectionRelativeTime(post),
+        cls: 'tc-selection-time',
+      });
+
+      main.createDiv({
+        text: this.getBulkSelectionPreviewText(post),
+        cls: 'tc-selection-preview',
+      });
+
+      const sideItems: Array<{ text: string; cls: string }> = [];
+
+      if (!isMobile) {
+        sideItems.push({
+          text:
+            TIMELINE_PLATFORM_LABELS[
+              post.platform as keyof typeof TIMELINE_PLATFORM_LABELS
+            ] || post.platform,
+          cls: 'tc-selection-platform-label',
+        });
+      }
+
+      if (post.media.length > 0) {
+        sideItems.push({
+          text: `${post.media.length} media`,
+          cls: 'tc-selection-pill',
+        });
+      }
+
+      if (post.like) {
+        sideItems.push({
+          text: 'Starred',
+          cls: 'tc-selection-pill',
+        });
+      }
+
+      if (isArchived) {
+        sideItems.push({
+          text: 'Archived',
+          cls: 'tc-selection-pill tc-selection-pill-archived',
+        });
+      }
+
+      if (sideItems.length > 0) {
+        const side = row.createDiv({ cls: 'tc-selection-side' });
+        for (const item of sideItems) {
+          side.createSpan({
+            text: item.text,
+            cls: item.cls,
+          });
+        }
+      }
+
+      const toggleSelection = () => {
+        void this.toggleBulkSelectionForPost(post.filePath);
+      };
+
+      row.addEventListener('click', toggleSelection);
+      row.addEventListener('keydown', (event: KeyboardEvent) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          toggleSelection();
+        }
+      });
+    }
+  }
+
+  private async refreshBulkSelectionPresentation(): Promise<void> {
+    if (!this.bulkSelectionContainer?.isConnected) {
+      await this.renderPosts();
+      return;
+    }
+
+    const hasTagChipBar = this.containerEl.querySelector('.tag-chip-bar') !== null;
+    this.renderBulkSelectionControls(hasTagChipBar);
+
+    if (this.filteredPosts.length === 0) {
+      this.renderFilteredEmptyState();
+      return;
+    }
+
+    await this.renderPostsFeed();
+  }
+
+  private async setSelectedPostsStarred(targetState: boolean): Promise<void> {
+    this.syncBulkSelectionState();
+
+    const selectedPosts = this.getSelectedBulkPosts().filter(
+      (post) => (post.like === true) !== targetState,
+    );
+
+    if (selectedPosts.length === 0) {
+      new Notice(
+        targetState
+          ? 'Selected posts are already starred.'
+          : 'Selected posts are already unstarred.',
+      );
+      return;
+    }
+
+    let updatedCount = 0;
+    let failedCount = 0;
+
+    for (const post of selectedPosts) {
+      const file = this.vault.getAbstractFileByPath(post.filePath);
+      if (!(file instanceof TFile)) {
+        failedCount++;
+        continue;
+      }
+
+      try {
+        this.onUIModify?.(post.filePath);
+        await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
+          frontmatter['like'] = targetState;
+        });
+
+        post.like = targetState;
+        const indexed = this.indexEntries.find((entry) => entry.filePath === post.filePath);
+        if (indexed) {
+          indexed.like = targetState;
+        }
+        updatedCount++;
+      } catch (error) {
+        failedCount++;
+        console.error('[TimelineContainer] Failed to update star state in bulk mode:', post.filePath, error);
+      }
+    }
+
+    if (updatedCount === 0) {
+      new Notice('No posts were updated.');
+      return;
+    }
+
+    this.filteredPosts = this.dedupePostsByFilePath(
+      this.filterSortManager.applyFiltersAndSort(this.posts),
+    );
+    this.filteredIndexEntries = this.filterSortManager.applyFiltersAndSortIndex(this.indexEntries);
+    this.filterSortManager.updatePreviousFiltered(
+      this.filteredIndexEntries.map((entry) => entry.filePath),
+    );
+
+    await this.refreshBulkSelectionPresentation();
+
+    if (failedCount === 0) {
+      new Notice(
+        targetState
+          ? `Starred ${updatedCount} post${updatedCount === 1 ? '' : 's'}.`
+          : `Removed star from ${updatedCount} post${updatedCount === 1 ? '' : 's'}.`,
+      );
+    } else {
+      new Notice(
+        targetState
+          ? `Starred ${updatedCount} post${updatedCount === 1 ? '' : 's'} (${failedCount} failed).`
+          : `Removed star from ${updatedCount} post${updatedCount === 1 ? '' : 's'} (${failedCount} failed).`,
+      );
+    }
+  }
+
+  private async archiveSelectedPosts(): Promise<void> {
+    this.syncBulkSelectionState();
+
+    const selectedPosts = this.getSelectedArchivablePosts();
+
+    if (selectedPosts.length === 0) {
+      new Notice('Select at least one post to archive.');
+      return;
+    }
+
+    const confirmed = await showConfirmModal(this.app, {
+      title: `Archive ${selectedPosts.length} selected post${selectedPosts.length === 1 ? '' : 's'}?`,
+      message: 'Archived posts are hidden from the timeline by default, but you can still reveal them with the Include archived filter.',
+      confirmText: 'Archive selected',
+      confirmClass: 'warning',
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    let archivedCount = 0;
+    let failedCount = 0;
+
+    for (const post of selectedPosts) {
+      const file = this.vault.getAbstractFileByPath(post.filePath);
+      if (!(file instanceof TFile)) {
+        failedCount++;
+        continue;
+      }
+
+      try {
+        this.onUIModify?.(post.filePath);
+        await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
+          frontmatter['archive'] = true;
+        });
+        archivedCount++;
+      } catch (error) {
+        failedCount++;
+        console.error('[TimelineContainer] Failed to archive post in bulk mode:', post.filePath, error);
+      }
+
+      if (archivedCount > 0 && archivedCount % 25 === 0) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+      }
+    }
+
+    this.selectedPostPaths.clear();
+
+    if (archivedCount > 0) {
+      this.forceReload = true;
+      await this.loadPosts();
+    } else {
+      await this.refreshBulkSelectionPresentation();
+    }
+
+    if (archivedCount > 0 && failedCount === 0) {
+      new Notice(`Archived ${archivedCount} post${archivedCount === 1 ? '' : 's'}.`);
+    } else if (archivedCount > 0) {
+      new Notice(`Archived ${archivedCount} post${archivedCount === 1 ? '' : 's'} (${failedCount} failed).`);
+    } else {
+      new Notice('No posts were archived.');
+    }
+  }
+
+  private async deleteSelectedPosts(): Promise<void> {
+    this.syncBulkSelectionState();
+
+    const selectedPosts = this.getSelectedBulkPosts();
+    if (selectedPosts.length === 0) {
+      new Notice('Select at least one post to delete.');
+      return;
+    }
+
+    const mediaCount = selectedPosts.reduce((count, post) => {
+      const mediaItems = [
+        ...post.media,
+        ...(post.embeddedArchives || []).flatMap((archive) => archive.media || []),
+      ];
+      return count + mediaItems.filter((media) =>
+        media.url &&
+        !media.url.startsWith('http://') &&
+        !media.url.startsWith('https://'),
+      ).length;
+    }, 0);
+
+    const confirmed = await showConfirmModal(this.app, {
+      title: `Delete ${selectedPosts.length} selected post${selectedPosts.length === 1 ? '' : 's'}?`,
+      message: [
+        mediaCount > 0 ? `${mediaCount} local media file(s) may also be deleted.` : '',
+        'This action cannot be undone.',
+      ].filter(Boolean).join('\n'),
+      confirmText: 'Delete selected',
+      confirmClass: 'danger',
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    let deletedCount = 0;
+    let failedCount = 0;
+
+    for (const post of selectedPosts) {
+      const deleted = await this.postCardRenderer.deletePostForBulk(post);
+      if (deleted) {
+        deletedCount++;
+        this.selectedPostPaths.delete(post.filePath);
+      } else {
+        failedCount++;
+      }
+    }
+
+    if (deletedCount > 0) {
+      this.forceReload = true;
+      await this.loadPosts();
+    } else {
+      await this.refreshBulkSelectionPresentation();
+    }
+
+    if (deletedCount > 0 && failedCount === 0) {
+      new Notice(`Deleted ${deletedCount} post${deletedCount === 1 ? '' : 's'}.`);
+    } else if (deletedCount > 0) {
+      new Notice(`Deleted ${deletedCount} post${deletedCount === 1 ? '' : 's'} (${failedCount} failed).`);
+    } else {
+      new Notice('No posts were deleted.');
+    }
   }
 
   private getDefaultFilterState(): FilterState {

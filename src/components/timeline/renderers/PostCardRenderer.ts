@@ -45,6 +45,12 @@ import {
 import type { WhisperModel } from '../../../utils/whisper';
 import { maybeProxyCdnUrl } from '../../../utils/cdnProxy';
 
+interface DeletePostOptions {
+  skipConfirm?: boolean;
+  skipAnimation?: boolean;
+  suppressSuccessNotice?: boolean;
+}
+
 /**
  * PostCardRenderer - Renders individual post cards
  * Handles post card HTML generation, interactions, and state updates
@@ -89,6 +95,9 @@ export class PostCardRenderer extends Component {
 
   // Callback for UI-initiated deletions (to prevent double refresh)
   private onUIDeleteCallback?: (filePath: string) => void;
+
+  // Callback after a post delete completed successfully
+  private onDeleteCompleteCallback?: (post: PostData, filePath: string) => void | Promise<void>;
 
   // Callback for UI-initiated modifications (to prevent double refresh)
   private onUIModifyCallback?: (filePath: string) => void;
@@ -186,6 +195,13 @@ export class PostCardRenderer extends Component {
    */
   public onUIDelete(callback: (filePath: string) => void): void {
     this.onUIDeleteCallback = callback;
+  }
+
+  /**
+   * Set callback for successful post deletion completion.
+   */
+  public onDeleteComplete(callback: (post: PostData, filePath: string) => void | Promise<void>): void {
+    this.onDeleteCompleteCallback = callback;
   }
 
   /**
@@ -2256,7 +2272,17 @@ export class PostCardRenderer extends Component {
 
       if (linkedFile) {
         const resourcePath = this.app.vault.getResourcePath(linkedFile);
-        img.setAttribute('src', resourcePath);
+        const isVideo = /\.(mp4|mov|webm|avi|mkv|m4v)$/i.test(linkedFile.path);
+        if (isVideo) {
+          const video = document.createElement('video');
+          video.setAttribute('src', resourcePath);
+          video.setAttribute('controls', 'true');
+          video.setAttribute('preload', 'metadata');
+          video.className = 'pcr-inline-media';
+          img.replaceWith(video);
+        } else {
+          img.setAttribute('src', resourcePath);
+        }
       }
     }
 
@@ -2281,8 +2307,8 @@ export class PostCardRenderer extends Component {
   }
 
   /**
-   * Style inline images in blog content for better presentation
-   * Groups consecutive images into gallery format
+   * Style inline media in blog content for better presentation.
+   * Groups consecutive image/video-only paragraphs into a carousel.
    */
   private styleBlogInlineImages(contentEl: HTMLElement): void {
     // Find all paragraphs that contain only images (no text)
@@ -2317,22 +2343,22 @@ export class PostCardRenderer extends Component {
         i++;
         continue;
       }
-      const img = p.querySelector('img');
+      const mediaEl = p.querySelector<HTMLElement>('img, video');
       const pText = p.textContent?.trim() ?? '';
-      const hasOnlyImage = img && pText === '';
+      const hasOnlyMedia = mediaEl && pText === '';
 
-      if (!hasOnlyImage) {
+      if (!hasOnlyMedia) {
         // Style single images that are mixed with text
-        if (img) {
-          img.addClass('pcr-inline-media');
+        if (mediaEl) {
+          mediaEl.addClass('pcr-inline-media');
         }
         i++;
         continue;
       }
 
-      // Found an image-only paragraph, check for consecutive ones
+      // Found a media-only paragraph, check for consecutive ones
       // Now we check DOM adjacency, not just array order
-      const consecutiveImages: HTMLImageElement[] = [img];
+      const consecutiveMedia: HTMLElement[] = [mediaEl];
       const paragraphsToRemove: HTMLParagraphElement[] = [];
       let j = i + 1;
       let lastP = p;
@@ -2343,26 +2369,26 @@ export class PostCardRenderer extends Component {
           j++;
           continue;
         }
-        const nextImg = nextP.querySelector('img');
+        const nextMedia = nextP.querySelector<HTMLElement>('img, video');
         const nextText = nextP.textContent?.trim() ?? '';
-        const nextHasOnlyImage = nextImg && nextText === '';
+        const nextHasOnlyMedia = nextMedia && nextText === '';
 
-        if (!nextHasOnlyImage) break;
+        if (!nextHasOnlyMedia) break;
 
         // Check if this paragraph is truly adjacent in the DOM (no content between)
         if (!areElementsAdjacent(lastP, nextP)) {
           break;
         }
 
-        consecutiveImages.push(nextImg);
+        consecutiveMedia.push(nextMedia);
         paragraphsToRemove.push(nextP);
         lastP = nextP;
         j++;
       }
 
-      if (consecutiveImages.length >= 2) {
-        // Create gallery for 2+ consecutive images
-        const gallery = this.createInlineImageGallery(consecutiveImages);
+      if (consecutiveMedia.length >= 2) {
+        // Create gallery for 2+ consecutive media items
+        const gallery = this.createInlineImageGallery(consecutiveMedia);
         p.replaceWith(gallery);
 
         // Remove the other paragraphs that were merged into gallery
@@ -2371,17 +2397,17 @@ export class PostCardRenderer extends Component {
         // Skip the paragraphs we just processed
         i = j;
       } else {
-        // Single image - style it normally
-        img.addClass('pcr-inline-media');
+        // Single media item - style it normally
+        mediaEl.addClass('pcr-inline-media');
         i++;
       }
     }
 
-    // Handle any remaining images not in paragraphs
-    const remainingImages = contentEl.querySelectorAll('img:not(.gallery-image)');
-    remainingImages.forEach((img) => {
-      if (!img.closest('.inline-image-gallery')) {
-        (img as HTMLElement).addClass('pcr-inline-media');
+    // Handle any remaining media elements not in a gallery
+    const remainingMedia = contentEl.querySelectorAll('img:not(.gallery-image), video:not(.gallery-image)');
+    remainingMedia.forEach((media) => {
+      if (!media.closest('.inline-image-gallery')) {
+        (media as HTMLElement).addClass('pcr-inline-media');
       }
     });
 
@@ -2397,13 +2423,13 @@ export class PostCardRenderer extends Component {
   }
 
   /**
-   * Create an inline image gallery similar to media gallery
+   * Create an inline media gallery similar to the card media carousel.
    */
-  private createInlineImageGallery(images: HTMLImageElement[]): HTMLElement {
+  private createInlineImageGallery(mediaItems: HTMLElement[]): HTMLElement {
     const gallery = document.createElement('div');
     gallery.className = 'inline-image-gallery pcr-gallery';
 
-    const count = images.length;
+    const count = mediaItems.length;
 
     // Main display area
     const mainDisplay = document.createElement('div');
@@ -2413,11 +2439,15 @@ export class PostCardRenderer extends Component {
     const mainImageContainer = document.createElement('div');
     mainImageContainer.className = 'pcr-gallery-main-container';
 
-    const firstImage = images[0];
-    if (!firstImage) return gallery;
-    const mainImage = firstImage.cloneNode(true) as HTMLImageElement;
-    mainImage.className = 'gallery-image gallery-main-image pcr-gallery-main-image';
-    mainImageContainer.appendChild(mainImage);
+    const firstMedia = mediaItems[0];
+    if (!firstMedia) return gallery;
+    const mainMedia = firstMedia.cloneNode(true) as HTMLElement;
+    mainMedia.className = 'gallery-image gallery-main-image pcr-gallery-main-image';
+    if (mainMedia instanceof HTMLVideoElement) {
+      mainMedia.setAttribute('controls', 'true');
+      mainMedia.setAttribute('preload', 'metadata');
+    }
+    mainImageContainer.appendChild(mainMedia);
     mainDisplay.appendChild(mainImageContainer);
 
     // Add counter badge if more than 1 image
@@ -2442,19 +2472,30 @@ export class PostCardRenderer extends Component {
       // Navigation logic
       let currentIndex = 0;
       const updateDisplay = () => {
-        const currentImage = images[currentIndex];
-        if (!currentImage) return;
-        const newImg = currentImage.cloneNode(true) as HTMLImageElement;
+        const currentMedia = mediaItems[currentIndex];
+        if (!currentMedia) return;
+        const newImg = currentMedia.cloneNode(true) as HTMLElement;
         newImg.className = 'gallery-image gallery-main-image pcr-gallery-main-image';
+        if (newImg instanceof HTMLVideoElement) {
+          newImg.setAttribute('controls', 'true');
+          newImg.setAttribute('preload', 'metadata');
+        }
         mainImageContainer.empty();
         mainImageContainer.appendChild(newImg);
         counter.textContent = `${currentIndex + 1}/${count}`;
 
-        // Add click handler to new image
-        newImg.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.openImageLightbox(images.map(img => img.src), currentIndex);
-        });
+        if (newImg instanceof HTMLImageElement) {
+          newImg.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const imageUrls = mediaItems
+              .filter((item): item is HTMLImageElement => item instanceof HTMLImageElement)
+              .map((item) => item.src);
+            const imageIndex = imageUrls.indexOf(newImg.src);
+            if (imageIndex >= 0) {
+              this.openImageLightbox(imageUrls, imageIndex);
+            }
+          });
+        }
       };
 
       prevBtn.addEventListener('click', (e) => {
@@ -2469,17 +2510,26 @@ export class PostCardRenderer extends Component {
         updateDisplay();
       });
 
-      // Click main image to open lightbox
-      mainImage.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.openImageLightbox(images.map(img => img.src), currentIndex);
-      });
+      if (mainMedia instanceof HTMLImageElement) {
+        mainMedia.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const imageUrls = mediaItems
+            .filter((item): item is HTMLImageElement => item instanceof HTMLImageElement)
+            .map((item) => item.src);
+          const imageIndex = imageUrls.indexOf(mainMedia.src);
+          if (imageIndex >= 0) {
+            this.openImageLightbox(imageUrls, imageIndex);
+          }
+        });
+      }
     } else {
       // Single image - just add click handler
-      mainImage.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.openImageLightbox([mainImage.src], 0);
-      });
+      if (mainMedia instanceof HTMLImageElement) {
+        mainMedia.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.openImageLightbox([mainMedia.src], 0);
+        });
+      }
     }
 
     gallery.appendChild(mainDisplay);
@@ -2489,27 +2539,49 @@ export class PostCardRenderer extends Component {
       const thumbnailStrip = document.createElement('div');
       thumbnailStrip.className = 'gallery-thumbnails pcr-gallery-thumbnails';
 
-      images.forEach((img, index) => {
+      mediaItems.forEach((media, index) => {
         const thumb = document.createElement('div');
         thumb.className = index === 0 ? 'pcr-gallery-thumb pcr-gallery-thumb-active' : 'pcr-gallery-thumb pcr-gallery-thumb-inactive';
 
-        const thumbImg = img.cloneNode(true) as HTMLImageElement;
+        const thumbImg = media.cloneNode(true) as HTMLElement;
         thumbImg.className = 'gallery-image pcr-gallery-thumb-img';
+        if (thumbImg instanceof HTMLVideoElement) {
+          thumbImg.removeAttribute('controls');
+          thumbImg.muted = true;
+          thumbImg.preload = 'metadata';
+        }
         thumb.appendChild(thumbImg);
 
         thumb.addEventListener('click', (e) => {
           e.stopPropagation();
           // Update main display
-          const clickedImage = images[index];
+          const clickedImage = mediaItems[index];
           if (!clickedImage) return;
-          const newImg = clickedImage.cloneNode(true) as HTMLImageElement;
+          const newImg = clickedImage.cloneNode(true) as HTMLElement;
           newImg.className = 'gallery-image gallery-main-image pcr-gallery-main-image';
+          if (newImg instanceof HTMLVideoElement) {
+            newImg.setAttribute('controls', 'true');
+            newImg.setAttribute('preload', 'metadata');
+          }
           mainImageContainer.empty();
           mainImageContainer.appendChild(newImg);
 
           // Update counter
           const counter = mainDisplay.querySelector('.gallery-counter');
           if (counter) counter.textContent = `${index + 1}/${count}`;
+
+          if (newImg instanceof HTMLImageElement) {
+            newImg.addEventListener('click', (event) => {
+              event.stopPropagation();
+              const imageUrls = mediaItems
+                .filter((item): item is HTMLImageElement => item instanceof HTMLImageElement)
+                .map((item) => item.src);
+              const imageIndex = imageUrls.indexOf(newImg.src);
+              if (imageIndex >= 0) {
+                this.openImageLightbox(imageUrls, imageIndex);
+              }
+            });
+          }
 
           // Update thumbnail styles
           thumbnailStrip.querySelectorAll('div').forEach((t, i) => {
@@ -2518,11 +2590,18 @@ export class PostCardRenderer extends Component {
             thumbEl.addClass(i === index ? 'pcr-gallery-thumb-active' : 'pcr-gallery-thumb-inactive');
           });
 
-          // Add click handler to new main image
-          newImg.addEventListener('click', (ev) => {
-            ev.stopPropagation();
-            this.openImageLightbox(images.map(img => img.src), index);
-          });
+          if (newImg instanceof HTMLImageElement) {
+            newImg.addEventListener('click', (ev) => {
+              ev.stopPropagation();
+              const imageUrls = mediaItems
+                .filter((item): item is HTMLImageElement => item instanceof HTMLImageElement)
+                .map((item) => item.src);
+              const imageIndex = imageUrls.indexOf(newImg.src);
+              if (imageIndex >= 0) {
+                this.openImageLightbox(imageUrls, imageIndex);
+              }
+            });
+          }
         });
 
         thumbnailStrip.appendChild(thumb);
@@ -3762,7 +3841,11 @@ export class PostCardRenderer extends Component {
   /**
    * Delete post and remove card from timeline
    */
-  private async deletePost(post: PostData, rootElement: HTMLElement): Promise<boolean> {
+  private async deletePost(
+    post: PostData,
+    rootElement: HTMLElement,
+    options?: DeletePostOptions,
+  ): Promise<boolean> {
     try {
       const filePath = post.filePath;
       if (!filePath) {
@@ -3796,7 +3879,9 @@ export class PostCardRenderer extends Component {
         'This action cannot be undone.'
       ].filter(Boolean).join('\n');
 
-      const confirmed = await this.showConfirmDialog('Delete Post?', message);
+      const confirmed = options?.skipConfirm
+        ? true
+        : await this.showConfirmDialog('Delete Post?', message);
 
       if (!confirmed) {
         return false;
@@ -3883,10 +3968,12 @@ export class PostCardRenderer extends Component {
       }
 
       // Animate card removal (fade out and slide up)
-      rootElement.addClass('pcr-delete-animation');
+      if (!options?.skipAnimation) {
+        rootElement.addClass('pcr-delete-animation');
 
-      // Wait for animation to complete
-      await new Promise(resolve => window.setTimeout(resolve, 300));
+        // Wait for animation to complete
+        await new Promise(resolve => window.setTimeout(resolve, 300));
+      }
 
       // Delete media files first (all relative paths, not http(s) URLs)
       // Include both post media and embedded archives media
@@ -3996,11 +4083,15 @@ export class PostCardRenderer extends Component {
       // Remove from DOM
       rootElement.remove();
 
+      await this.onDeleteCompleteCallback?.(post, filePath);
+
       // Show success notice
-      const successMsg = deletedMedia.length > 0
-        ? `Post and ${deletedMedia.length} media file(s) deleted successfully`
-        : 'Post deleted successfully';
-      new Notice(successMsg);
+      if (!options?.suppressSuccessNotice) {
+        const successMsg = deletedMedia.length > 0
+          ? `Post and ${deletedMedia.length} media file(s) deleted successfully`
+          : 'Post deleted successfully';
+        new Notice(successMsg);
+      }
 
       if (failedMedia.length > 0) {
         // Failed media deletions are non-critical; main post was deleted
@@ -4468,7 +4559,20 @@ export class PostCardRenderer extends Component {
    */
   public async deletePostForReader(post: PostData): Promise<boolean> {
     const tmpEl = document.createElement('div');
-    return this.deletePost(post, tmpEl);
+    return this.deletePost(post, tmpEl, { skipAnimation: true });
+  }
+
+  /**
+   * Delete post for bulk actions.
+   * Skips per-post confirmation and success notices; callers should confirm once up front.
+   */
+  public async deletePostForBulk(post: PostData): Promise<boolean> {
+    const tmpEl = document.createElement('div');
+    return this.deletePost(post, tmpEl, {
+      skipConfirm: true,
+      skipAnimation: true,
+      suppressSuccessNotice: true,
+    });
   }
 
   /**

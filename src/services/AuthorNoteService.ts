@@ -10,7 +10,7 @@
  *   - Identity is `authorKey` in frontmatter, NOT the filename.
  *   - Lookup scans `authorNotesPath` and reads `type: social-archiver-author`.
  *   - Body (markdown below frontmatter) is NEVER auto-modified after creation.
- *   - User-owned fields (`displayNameOverride`, `aliases`, `tags`) are NEVER overwritten.
+ *   - User-owned fields (`displayNameOverride`, `bioOverride`, `aliases`) are NEVER overwritten.
  *   - Uses `app.fileManager.processFrontMatter` for atomic frontmatter updates.
  */
 
@@ -18,6 +18,7 @@ import { type App, TFile, TFolder, normalizePath } from 'obsidian';
 import type { Platform } from '@/types/post';
 import type { PostData } from '@/types/post';
 import type { AuthorCatalogEntry } from '@/types/author-catalog';
+import type { AuthorProfileUpsertInput, UserAuthorProfile } from '@/types/author-profile';
 import {
   AUTHOR_NOTE_TYPE,
   AUTHOR_NOTE_VERSION,
@@ -210,6 +211,25 @@ export class AuthorNoteService {
   }
 
   /**
+   * Build an editable profile sync payload from an existing author note.
+   */
+  buildEditableProfilePayload(file: TFile): AuthorProfileUpsertInput | null {
+    const data = this.readNote(file);
+    if (!data) return null;
+
+    return {
+      authorKey: data.authorKey,
+      platform: data.platform,
+      authorName: data.authorName,
+      authorUrl: data.authorUrl ?? null,
+      authorHandle: data.authorHandle ?? null,
+      displayNameOverride: data.displayNameOverride ?? null,
+      bioOverride: data.bioOverride ?? null,
+      aliases: data.aliases ?? [],
+    };
+  }
+
+  /**
    * Read the body (markdown content below frontmatter) of an author note.
    * Returns the trimmed body, or empty string if no body content.
    */
@@ -237,6 +257,85 @@ export class AuthorNoteService {
     });
 
     this.invalidateIndex();
+  }
+
+  /**
+   * Apply synced user-owned profile fields to an author note.
+   */
+  async applySyncedProfileFields(
+    file: TFile,
+    profile: Pick<UserAuthorProfile, 'displayNameOverride' | 'bioOverride' | 'aliases' | 'fetchedBio'>,
+  ): Promise<void> {
+    await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+      if (profile.displayNameOverride?.trim()) {
+        fm.displayNameOverride = profile.displayNameOverride.trim();
+      } else {
+        delete fm.displayNameOverride;
+      }
+
+      if (profile.bioOverride?.trim()) {
+        fm.bioOverride = profile.bioOverride.trim();
+      } else {
+        delete fm.bioOverride;
+      }
+
+      const aliases = (profile.aliases ?? []).map((value) => value.trim()).filter(Boolean);
+      if (aliases.length > 0) {
+        fm.aliases = aliases;
+      } else {
+        delete fm.aliases;
+      }
+
+      if (profile.fetchedBio?.trim()) {
+        fm.bio = profile.fetchedBio.trim();
+      }
+    });
+
+    this.invalidateIndex();
+  }
+
+  /**
+   * Create or update an author note from a synced editable profile record.
+   */
+  async upsertFromSyncedProfile(profile: UserAuthorProfile): Promise<TFile | null> {
+    const existingFile = await this.findExistingNoteForSyncedProfile(profile);
+    if (existingFile) {
+      await this.applySyncedProfileFields(existingFile, profile);
+      return existingFile;
+    }
+
+    if (!this.isEnabled()) {
+      return null;
+    }
+
+    const hasUserFields = !!(
+      profile.displayNameOverride?.trim() ||
+      profile.bioOverride?.trim() ||
+      (profile.aliases?.length ?? 0) > 0 ||
+      profile.fetchedBio?.trim()
+    );
+    if (!hasUserFields) {
+      return null;
+    }
+
+    const noteData: AuthorNoteData = {
+      type: AUTHOR_NOTE_TYPE,
+      noteVersion: AUTHOR_NOTE_VERSION,
+      authorKey: profile.authorKey,
+      legacyKeys: [],
+      platform: profile.platform as Platform,
+      authorName: profile.authorName,
+      authorUrl: profile.authorUrl || undefined,
+      authorHandle: profile.authorHandle || undefined,
+      archiveCount: 0,
+      lastMetadataUpdate: profile.updatedAt,
+      bio: profile.fetchedBio || undefined,
+      displayNameOverride: profile.displayNameOverride || undefined,
+      bioOverride: profile.bioOverride || undefined,
+      aliases: profile.aliases.length > 0 ? profile.aliases : undefined,
+    };
+
+    return this.createNote(noteData);
   }
 
   /**
@@ -469,7 +568,7 @@ export class AuthorNoteService {
       localAvatar: data.localAvatar || null,
       followers: data.followers ?? null,
       postsCount: data.postsCount ?? null,
-      bio: data.bio || null,
+      bio: data.bioOverride || data.bio || null,
       lastMetadataUpdate: data.lastMetadataUpdate
         ? new Date(data.lastMetadataUpdate)
         : null,
@@ -524,9 +623,163 @@ export class AuthorNoteService {
     this.indexCache = null;
   }
 
+  private async findExistingNoteForSyncedProfile(profile: UserAuthorProfile): Promise<TFile | null> {
+    const directMatch = this.findNoteByKey(profile.authorKey);
+    if (directMatch) {
+      return directMatch;
+    }
+
+    const candidateMatch = await this.findMatchingNoteAtCandidatePaths(
+      profile.authorKey,
+      profile.platform as Platform,
+      profile.authorHandle || undefined,
+      profile.authorName,
+    );
+    if (candidateMatch) {
+      return candidateMatch;
+    }
+
+    return await this.findMatchingNoteByScan(profile.authorKey);
+  }
+
   // ============================================================================
   // Internal helpers
   // ============================================================================
+
+  private async findMatchingNoteAtCandidatePaths(
+    authorKey: string,
+    platform: Platform,
+    authorHandle: string | undefined,
+    authorName: string,
+  ): Promise<TFile | null> {
+    const notesPath = normalizePath(this.getAuthorNotesPath());
+    const filename = this.generateFilename(platform, authorHandle, authorName);
+    const base = filename.replace(/\.md$/, '');
+    const paths = [
+      normalizePath(`${notesPath}/${filename}`),
+      normalizePath(`${notesPath}/${base}--${this.shortHash(authorKey)}.md`),
+    ];
+
+    for (const path of paths) {
+      const file = this.app.vault.getFileByPath(path);
+      if (!(file instanceof TFile)) continue;
+      if (await this.matchesAuthorKey(file, authorKey)) {
+        return file;
+      }
+    }
+
+    return null;
+  }
+
+  private async findMatchingNoteByScan(authorKey: string): Promise<TFile | null> {
+    for (const file of this.listNotes()) {
+      if (await this.matchesAuthorKey(file, authorKey)) {
+        return file;
+      }
+    }
+    return null;
+  }
+
+  private async matchesAuthorKey(file: TFile, authorKey: string): Promise<boolean> {
+    const identity = await this.readAuthorIdentity(file);
+    if (!identity) return false;
+    return identity.authorKey === authorKey || identity.legacyKeys.includes(authorKey);
+  }
+
+  private async readAuthorIdentity(
+    file: TFile,
+  ): Promise<{ authorKey: string; legacyKeys: string[] } | null> {
+    const cachedFrontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+    if (cachedFrontmatter) {
+      return this.extractAuthorIdentity(cachedFrontmatter as Record<string, unknown>);
+    }
+
+    try {
+      const content = await this.app.vault.cachedRead(file);
+      return this.extractAuthorIdentityFromContent(content);
+    } catch {
+      return null;
+    }
+  }
+
+  private extractAuthorIdentity(
+    fm: Record<string, unknown>,
+  ): { authorKey: string; legacyKeys: string[] } | null {
+    if (fm.type !== AUTHOR_NOTE_TYPE) {
+      return null;
+    }
+
+    const authorKey = typeof fm.authorKey === 'string' ? fm.authorKey : '';
+    if (!authorKey) {
+      return null;
+    }
+
+    const legacyKeys = Array.isArray(fm.legacyKeys)
+      ? fm.legacyKeys.filter((key): key is string => typeof key === 'string')
+      : [];
+
+    return { authorKey, legacyKeys };
+  }
+
+  private extractAuthorIdentityFromContent(
+    content: string,
+  ): { authorKey: string; legacyKeys: string[] } | null {
+    const match = content.match(/^---\n([\s\S]*?)\n---\n?/);
+    if (!match?.[1]) {
+      return null;
+    }
+
+    let type: string | undefined;
+    let authorKey: string | undefined;
+    const legacyKeys: string[] = [];
+    let inLegacyKeys = false;
+
+    for (const rawLine of match[1].split('\n')) {
+      const line = rawLine.trimEnd();
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      if (trimmed.startsWith('type:')) {
+        type = this.unquoteYamlScalar(trimmed.slice('type:'.length).trim());
+        inLegacyKeys = false;
+        continue;
+      }
+
+      if (trimmed.startsWith('authorKey:')) {
+        authorKey = this.unquoteYamlScalar(trimmed.slice('authorKey:'.length).trim());
+        inLegacyKeys = false;
+        continue;
+      }
+
+      if (trimmed === 'legacyKeys:') {
+        inLegacyKeys = true;
+        continue;
+      }
+
+      if (inLegacyKeys && trimmed.startsWith('- ')) {
+        legacyKeys.push(this.unquoteYamlScalar(trimmed.slice(2).trim()));
+        continue;
+      }
+
+      inLegacyKeys = false;
+    }
+
+    if (type !== AUTHOR_NOTE_TYPE || !authorKey) {
+      return null;
+    }
+
+    return { authorKey, legacyKeys };
+  }
+
+  private unquoteYamlScalar(value: string): string {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      return value.slice(1, -1).replace(/\\"/g, '"');
+    }
+    return value;
+  }
 
   /**
    * Parse frontmatter record into AuthorNoteData.
@@ -553,11 +806,9 @@ export class AuthorNoteService {
       lastSeenAt: fm.lastSeenAt ? String(fm.lastSeenAt) : undefined,
       lastMetadataUpdate: fm.lastMetadataUpdate ? String(fm.lastMetadataUpdate) : undefined,
       displayNameOverride: fm.displayNameOverride ? String(fm.displayNameOverride) : undefined,
+      bioOverride: fm.bioOverride ? String(fm.bioOverride) : undefined,
       aliases: Array.isArray(fm.aliases)
         ? fm.aliases.filter((a): a is string => typeof a === 'string')
-        : undefined,
-      tags: Array.isArray(fm.tags)
-        ? fm.tags.filter((t): t is string => typeof t === 'string')
         : undefined,
     };
   }
@@ -607,6 +858,7 @@ export class AuthorNoteService {
     addField('platform', data.platform);
     addField('authorName', data.authorName);
     addField('displayNameOverride', data.displayNameOverride);
+    addField('bioOverride', data.bioOverride);
     addField('authorUrl', data.authorUrl);
     addField('authorHandle', data.authorHandle);
     addField('avatar', data.avatar);
@@ -619,7 +871,6 @@ export class AuthorNoteService {
     addField('lastSeenAt', data.lastSeenAt);
     addField('lastMetadataUpdate', data.lastMetadataUpdate);
     addField('aliases', data.aliases);
-    addField('tags', data.tags);
 
     return lines.join('\n') + '\n';
   }

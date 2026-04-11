@@ -17,6 +17,7 @@ import { sanitizeTagNames, mergeTagsCaseInsensitive } from '../../utils/tags';
 import { ProfileDataMapper } from '../../services/mappers/ProfileDataMapper';
 import { getAuthorCatalogStore, type AuthorMetadataUpdate } from '../../services/AuthorCatalogStore';
 import type { AuthorNoteService } from '../../services/AuthorNoteService';
+import { normalizeAuthorName, normalizeAuthorUrl } from '../../services/AuthorDeduplicator';
 import { MediaPathResolver, type VideoDownloadFailure } from '../media/MediaPathResolver';
 import { ensureFolderExists } from '../utils/ensureFolderExists';
 import type { CompletedJobResponse } from '../realtime/RealtimeEventBridge';
@@ -301,6 +302,34 @@ export class ArchiveCompletionService {
             postData.author.localAvatar = localAvatarPath;
           }
         }
+      }
+
+      if (postData.author.bio && this.apiClient) {
+        const normalizedKey = (() => {
+          if (postData.author.url) {
+            const normalized = normalizeAuthorUrl(postData.author.url, platform);
+            if (normalized.url) {
+              return `${platform}:url:${normalized.url}`;
+            }
+          }
+          return `${platform}:name:${normalizeAuthorName(postData.author.name || 'unknown')}`;
+        })();
+
+        void this.apiClient.upsertUserAuthorProfilesSystem(
+          [{
+            authorKey: normalizedKey,
+            platform,
+            authorName: postData.author.name || 'Unknown',
+            authorUrl: postData.author.url || null,
+            authorHandle: postData.author.handle || null,
+            fetchedBio: postData.author.bio,
+            fetchedBioSource: 'plugin_local',
+            fetchedBioUpdatedAt: new Date().toISOString(),
+          }],
+          this.settings.syncClientId || '',
+        ).catch((error) => {
+          console.warn('[Social Archiver] Failed to sync fetched author bio:', error);
+        });
       }
 
       // Update AuthorCatalogStore if metadata updates are enabled

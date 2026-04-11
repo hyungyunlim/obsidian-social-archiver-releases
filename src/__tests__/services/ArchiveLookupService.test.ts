@@ -83,8 +83,11 @@ function createMockApp(fileConfigs: MockFileConfig[]): {
   let changedHandler: ((file: TFile, data: string, cache: CachedMetadata) => void) | null = null;
 
   const mockMetadataCache = {
-    on: vi.fn((_event: string, handler: (file: TFile, data: string, cache: CachedMetadata) => void): EventRef => {
-      changedHandler = handler;
+    resolved: false,
+    on: vi.fn((event: string, handler: (file: TFile, data: string, cache: CachedMetadata) => void): EventRef => {
+      if (event === 'changed') {
+        changedHandler = handler;
+      }
       return STUB_EVENT_REF;
     }),
     off: vi.fn(),
@@ -97,6 +100,8 @@ function createMockApp(fileConfigs: MockFileConfig[]): {
   } satisfies Partial<MetadataCache> as unknown as MetadataCache;
 
   const mockVault = {
+    on: vi.fn((): EventRef => STUB_EVENT_REF),
+    offref: vi.fn(),
     getMarkdownFiles: vi.fn((): TFile[] => {
       return [...tFileMap.values()];
     }),
@@ -301,6 +306,28 @@ describe('ArchiveLookupService', () => {
       expect(svc.findByOriginalUrl('https://reddit.com/r/all/comments/abc123/title/?param=sig')).toHaveLength(1);
       // Without sig param — different normalized URL, no match
       expect(svc.findByOriginalUrl('https://reddit.com/r/all/comments/abc123/title')).toHaveLength(0);
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  describe('getIdentityByPath', () => {
+    it('tracks originalUrl-only notes so delete sync can resolve legacy archives', () => {
+      const { app } = createMockApp([
+        {
+          path: 'Social Archives/legacy-post.md',
+          frontmatter: { originalUrl: 'https://example.com/legacy-post' },
+        },
+      ]);
+      const svc = new ArchiveLookupService(app);
+      svc.initialize();
+
+      const identity = svc.getIdentityByPath('Social Archives/legacy-post.md');
+
+      expect(identity).toEqual({
+        path: 'Social Archives/legacy-post.md',
+        archiveId: undefined,
+        originalUrl: 'https://example.com/legacy-post',
+      });
     });
   });
 

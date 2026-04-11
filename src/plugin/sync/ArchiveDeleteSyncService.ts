@@ -40,7 +40,7 @@ import type {
  */
 export interface ArchiveFileIdentity {
   path: string;
-  archiveId: string;
+  archiveId?: string;
   originalUrl?: string;
 }
 
@@ -53,6 +53,9 @@ export type { DeleteSyncSettings, PendingArchiveDeleteEntry };
 
 /** Suppression TTL: ignore outbound delete events triggered by inbound deletes. */
 const SUPPRESSION_TTL_MS = 30_000;
+
+/** Retry interval for deferred flush attempts while library sync is active. */
+const DEFERRED_FLUSH_RETRY_MS = 5_000;
 
 /** Log prefix for all messages from this service. */
 const LOG_PREFIX = '[Social Archiver] [DeleteSync]';
@@ -82,7 +85,7 @@ export interface ArchiveDeleteSyncDeps {
 
   /**
    * Returns true if a library sync run is currently in progress.
-   * Outbound deletes during library sync are suppressed to avoid race conditions.
+   * Server deletes are deferred until the sync is idle to avoid race conditions.
    */
   isLibrarySyncRunning: () => boolean;
 
@@ -97,6 +100,9 @@ export interface ArchiveDeleteSyncDeps {
 export class ArchiveDeleteSyncService {
   // -- Single-flight guard ---------------------------------------------------
   private isFlushing = false;
+
+  // -- Deferred flush retry --------------------------------------------------
+  private deferredFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
   // -- Inbound-delete loop prevention ---------------------------------------
   /**
@@ -141,6 +147,10 @@ export class ArchiveDeleteSyncService {
       this.unsubscribeFileDeleted();
       this.unsubscribeFileDeleted = null;
     }
+    if (this.deferredFlushTimer !== null) {
+      clearTimeout(this.deferredFlushTimer);
+      this.deferredFlushTimer = null;
+    }
     this.suppressedInboundDeleteIds.clear();
   }
 
@@ -175,6 +185,10 @@ export class ArchiveDeleteSyncService {
   cancelAndClear(): void {
     const settings = this.deps.settings();
     this.setQueue(settings, []);
+    if (this.deferredFlushTimer !== null) {
+      clearTimeout(this.deferredFlushTimer);
+      this.deferredFlushTimer = null;
+    }
     this.suppressedInboundDeleteIds.clear();
     // Save asynchronously — best effort on sign-out
     this.deps.saveSettings().catch((err: unknown) => {
@@ -192,7 +206,6 @@ export class ArchiveDeleteSyncService {
    * Does nothing if:
    * - The archiveId is suppressed (was deleted by an inbound delete event)
    * - outboundEnabled is false
-   * - Library sync is running
    * - Auth credentials are missing
    */
   private async handleOutboundDelete(identity: ArchiveFileIdentity): Promise<void> {
@@ -200,7 +213,7 @@ export class ArchiveDeleteSyncService {
     this.purgeExpiredSuppressions();
 
     // Loop guard: was this delete triggered by our own inbound delete?
-    if (this.consumeSuppression(identity.archiveId)) {
+    if (identity.archiveId && this.consumeSuppression(identity.archiveId)) {
       console.debug(`${LOG_PREFIX} Outbound delete suppressed (inbound loop guard)`, {
         archiveId: identity.archiveId,
       });
@@ -217,24 +230,44 @@ export class ArchiveDeleteSyncService {
       return;
     }
 
-    // Do not interfere while library sync is running
-    if (this.deps.isLibrarySyncRunning()) {
-      console.debug(`${LOG_PREFIX} Library sync running — skipping outbound delete`, {
-        archiveId: identity.archiveId,
-      });
-      return;
-    }
-
     // Auth guard
     if (!this.isAuthenticated(settings)) {
       console.debug(`${LOG_PREFIX} Not authenticated — skipping outbound delete`, {
         archiveId: identity.archiveId,
+        originalUrl: identity.originalUrl,
       });
       return;
     }
 
-    // Enqueue and flush — always propagate to server (no confirmation modal)
-    await this.enqueue(identity, settings);
+    const resolvedArchiveIds = await this.resolveArchiveIds(identity);
+    if (resolvedArchiveIds.length === 0) {
+      console.warn(`${LOG_PREFIX} Unable to resolve archiveId for deleted file — skipping`, {
+        path: identity.path,
+        originalUrl: identity.originalUrl,
+      });
+      return;
+    }
+
+    // Always enqueue first so an in-flight library sync can see the tombstones
+    // and avoid re-importing the same archive in the current run.
+    for (const archiveId of resolvedArchiveIds) {
+      const resolvedIdentity: ArchiveFileIdentity = {
+        ...identity,
+        archiveId,
+      };
+      await this.enqueue(resolvedIdentity, settings);
+    }
+
+    // Defer the server DELETE until library sync is idle. This preserves the
+    // stable paging window while still honoring the local delete intent.
+    if (this.deps.isLibrarySyncRunning()) {
+      console.debug(`${LOG_PREFIX} Library sync running — deferred server delete`, {
+        archiveIds: resolvedArchiveIds,
+      });
+      this.scheduleDeferredFlush();
+      return;
+    }
+
     await this.flushPendingDeletes();
   }
 
@@ -245,6 +278,10 @@ export class ArchiveDeleteSyncService {
     identity: ArchiveFileIdentity,
     settings: SocialArchiverSettings
   ): Promise<void> {
+    if (!identity.archiveId) {
+      throw new Error('enqueue requires a resolved archiveId');
+    }
+
     const queue = this.getQueue(settings);
 
     // Avoid duplicate entries for the same archiveId
@@ -291,6 +328,12 @@ export class ArchiveDeleteSyncService {
   async flushPendingDeletes(): Promise<void> {
     if (this.isFlushing) {
       console.debug(`${LOG_PREFIX} flushPendingDeletes called while already flushing — ignored`);
+      return;
+    }
+
+    if (this.deps.isLibrarySyncRunning()) {
+      console.debug(`${LOG_PREFIX} Library sync running — deferring flushPendingDeletes`);
+      this.scheduleDeferredFlush();
       return;
     }
 
@@ -563,6 +606,98 @@ export class ArchiveDeleteSyncService {
     queue[idx] = updated;
     this.setQueue(settings, queue);
     await this.deps.saveSettings();
+  }
+
+  /**
+   * Resolve the stable server archive IDs for a deleted vault file.
+   *
+   * Prefer the ID captured in the vault index. If the note predates
+   * `sourceArchiveId`, fall back to a server lookup by `originalUrl`.
+   *
+   * For legacy notes without a stable ID, multiple server matches indicate
+   * duplicate archives for the same original URL. In that case we queue all
+   * matching archive IDs so the post does not reappear via library sync.
+   */
+  private async resolveArchiveIds(identity: ArchiveFileIdentity): Promise<string[]> {
+    if (identity.archiveId && identity.archiveId.length > 0) {
+      return [identity.archiveId];
+    }
+
+    if (!identity.originalUrl) {
+      return [];
+    }
+
+    const apiClient = this.deps.apiClient();
+    if (!apiClient) {
+      return [];
+    }
+
+    try {
+      const matchedArchives = await this.fetchArchivesByOriginalUrl(apiClient, identity.originalUrl);
+      const matchedIds = [...new Set(
+        matchedArchives
+          .map((archive) => archive.id)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      )];
+
+      if (matchedIds.length > 1) {
+        console.warn(`${LOG_PREFIX} originalUrl matched multiple server archives — deleting all legacy matches`, {
+          path: identity.path,
+          originalUrl: identity.originalUrl,
+          matchCount: matchedIds.length,
+          archiveIds: matchedIds,
+        });
+      }
+
+      return matchedIds;
+    } catch (error) {
+      console.warn(`${LOG_PREFIX} Failed to resolve archiveId for deleted file`, {
+        path: identity.path,
+        originalUrl: identity.originalUrl,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    return [];
+  }
+
+  private async fetchArchivesByOriginalUrl(
+    apiClient: WorkersAPIClient,
+    originalUrl: string,
+  ): Promise<Array<{ id: string }>> {
+    const archives: Array<{ id: string }> = [];
+    let offset = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const response = await apiClient.getUserArchives({
+        originalUrl,
+        limit: 50,
+        offset,
+      });
+
+      archives.push(...response.archives);
+
+      if (!response.hasMore || response.archives.length === 0) {
+        break;
+      }
+
+      offset += response.archives.length;
+      hasMore = response.hasMore;
+    }
+
+    return archives;
+  }
+
+  private scheduleDeferredFlush(): void {
+    if (this.deferredFlushTimer !== null) {
+      return;
+    }
+
+    this.deferredFlushTimer = setTimeout(() => {
+      this.deferredFlushTimer = null;
+      void this.flushPendingDeletes();
+    }, DEFERRED_FLUSH_RETRY_MS);
   }
 
   // --------------------------------------------------------------------------

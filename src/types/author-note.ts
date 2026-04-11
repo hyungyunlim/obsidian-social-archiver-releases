@@ -84,10 +84,10 @@ export interface AuthorNoteData {
   // ── User-owned fields (NEVER overwritten by plugin) ────────────────
   /** User's custom display name override */
   displayNameOverride?: string;
+  /** User's custom bio override / correction */
+  bioOverride?: string;
   /** User-defined aliases */
   aliases?: string[];
-  /** User-defined tags */
-  tags?: string[];
 }
 
 // ============================================================================
@@ -123,6 +123,6 @@ export const PLUGIN_MANAGED_FIELDS: ReadonlySet<keyof AuthorNoteData> = new Set(
  */
 export const USER_OWNED_FIELDS: ReadonlySet<keyof AuthorNoteData> = new Set([
   'displayNameOverride',
+  'bioOverride',
   'aliases',
-  'tags',
 ]);

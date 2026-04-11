@@ -19,6 +19,11 @@ import type {
   CancelPendingJobResponse,
 } from '@/types/pending-job';
 import type { TextHighlight, UserNote } from '@/types/annotations';
+import type {
+  AuthorProfileSystemUpsertInput,
+  AuthorProfileUpsertInput,
+  UserAuthorProfile,
+} from '@/types/author-profile';
 
 // ============================================================================
 // Multi-Client Sync Types
@@ -424,6 +429,20 @@ export interface UpsertTagsResult {
 
 /** Response from POST /api/user/archive-tags */
 export interface UpsertArchiveTagsResult {
+  upserted: number;
+  serverTime: string;
+}
+
+// ============================================================================
+// User Author Profiles Types
+// ============================================================================
+
+export interface UserAuthorProfilesResponse {
+  profiles: UserAuthorProfile[];
+  serverTime: string;
+}
+
+export interface UpsertAuthorProfilesResult {
   upserted: number;
   serverTime: string;
 }
@@ -1273,6 +1292,68 @@ export class WorkersAPIClient implements IService {
       method: 'POST',
       headers: extraHeaders,
       body: JSON.stringify({ mappings }),
+    });
+  }
+
+  /**
+   * Get editable author profiles stored on the server.
+   */
+  async getUserAuthorProfiles(params: {
+    updatedAfter?: string;
+    authorKey?: string;
+  } = {}): Promise<UserAuthorProfilesResponse> {
+    this.ensureInitialized();
+
+    const query = new URLSearchParams();
+    if (params.updatedAfter) query.set('updatedAfter', params.updatedAfter);
+    if (params.authorKey) query.set('authorKey', params.authorKey);
+
+    const suffix = query.toString();
+    return await this.request<UserAuthorProfilesResponse>(
+      `/api/user/author-profiles${suffix ? `?${suffix}` : ''}`,
+      { method: 'GET' },
+    );
+  }
+
+  /**
+   * Upsert editable author profiles on the server.
+   */
+  async upsertUserAuthorProfiles(
+    profiles: AuthorProfileUpsertInput[],
+    clientId: string,
+  ): Promise<UpsertAuthorProfilesResult> {
+    this.ensureInitialized();
+
+    const extraHeaders: Record<string, string> = {};
+    if (clientId) {
+      extraHeaders['X-Client-Id'] = clientId;
+    }
+
+    return await this.request<UpsertAuthorProfilesResult>('/api/user/author-profiles', {
+      method: 'POST',
+      headers: extraHeaders,
+      body: JSON.stringify({ profiles }),
+    });
+  }
+
+  /**
+   * Upsert system-fetched author profile metadata on the server.
+   */
+  async upsertUserAuthorProfilesSystem(
+    profiles: AuthorProfileSystemUpsertInput[],
+    clientId: string,
+  ): Promise<UpsertAuthorProfilesResult> {
+    this.ensureInitialized();
+
+    const extraHeaders: Record<string, string> = {};
+    if (clientId) {
+      extraHeaders['X-Client-Id'] = clientId;
+    }
+
+    return await this.request<UpsertAuthorProfilesResult>('/api/user/author-profiles/system', {
+      method: 'POST',
+      headers: extraHeaders,
+      body: JSON.stringify({ profiles }),
     });
   }
 

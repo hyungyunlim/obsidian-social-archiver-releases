@@ -1414,6 +1414,10 @@ export class AuthorDetailContainer {
       // post count update removed
     });
 
+    this.postCardRenderer.onDeleteComplete(async () => {
+      await this.plugin.refreshAllTimelines();
+    });
+
     // Reader mode: open ReaderModeOverlay with author's filtered posts
     this.postCardRenderer.onReaderMode((post) => {
       this.openReaderMode(post);

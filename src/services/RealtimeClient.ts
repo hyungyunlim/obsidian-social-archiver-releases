@@ -18,6 +18,7 @@ export type RealtimeMessageType =
   | 'share_deleted' // From share deletion
   | 'archive_deleted' // From archive deletion
   | 'archive_tags_updated' // From tag changes (mobile/web)
+  | 'author_profile_updated' // From editable author profile changes
   | 'media_preserved' // From R2 media preservation
   | 'pong'; // WebSocket pong response
 

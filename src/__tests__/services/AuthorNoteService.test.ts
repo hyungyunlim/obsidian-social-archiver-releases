@@ -49,12 +49,14 @@ function createMockApp() {
   const files = new Map<string, TFile>();
   const folderMap = new Map<string, TFolder>();
   const fileCacheMap = new Map<string, { frontmatter: Record<string, unknown> }>();
+  const fileContentMap = new Map<string, string>();
 
   const mockApp = {
     vault: {
       create: vi.fn(async (path: string, _content: string) => {
         const file = makeTFile(path);
         files.set(path, file);
+        fileContentMap.set(path, _content);
         return file;
       }),
       getFileByPath: vi.fn((path: string) => files.get(path) || null),
@@ -64,6 +66,7 @@ function createMockApp() {
         folderMap.set(path, folder);
         return folder;
       }),
+      cachedRead: vi.fn(async (file: TFile) => fileContentMap.get(file.path) || ''),
     },
     metadataCache: {
       getFileCache: vi.fn((file: TFile) => {
@@ -82,7 +85,7 @@ function createMockApp() {
     } as unknown as FileManager,
   } as unknown as App;
 
-  return { mockApp, files, folderMap, fileCacheMap };
+  return { mockApp, files, folderMap, fileCacheMap, fileContentMap };
 }
 
 function createService(
@@ -109,6 +112,7 @@ function setupIndexableNote(
   const file = makeTFile(filePath);
   ctx.files.set(filePath, file);
   ctx.fileCacheMap.set(filePath, { frontmatter });
+  ctx.fileContentMap.set(filePath, frontmatterToContent(frontmatter));
 
   // Set up the Authors folder with this file as a child
   const folderPath = filePath.substring(0, filePath.lastIndexOf('/')) || 'Authors';
@@ -120,6 +124,31 @@ function setupIndexableNote(
   }
 
   return file;
+}
+
+function frontmatterToContent(frontmatter: Record<string, unknown>): string {
+  const serialize = (value: unknown): string => {
+    if (typeof value === 'string') {
+      const needsQuotes = value.includes(':') || value.includes('#') || value.includes('[') ||
+        value.includes(']') || value.includes('{') || value.includes('}') ||
+        value.includes(',') || value.includes('"') || value.includes("'") ||
+        value === '';
+      return needsQuotes ? `"${value.replace(/"/g, '\\"')}"` : value;
+    }
+    return String(value);
+  };
+
+  const lines = Object.entries(frontmatter).flatMap(([key, value]) => {
+    if (Array.isArray(value)) {
+      if (value.length === 0) {
+        return [`${key}: []`];
+      }
+      return [`${key}:`, ...value.map((item) => `  - ${serialize(item)}`)];
+    }
+    return [`${key}: ${serialize(value)}`];
+  });
+
+  return `---\n${lines.join('\n')}\n---\n\n## Notes\n`;
 }
 
 function makeNoteData(overrides?: Partial<AuthorNoteData>): AuthorNoteData {
@@ -414,6 +443,88 @@ describe('AuthorNoteService', () => {
       await service.createNote(data);
 
       expect(ctx.mockApp.vault.createFolder).toHaveBeenCalled();
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // upsertFromSyncedProfile
+  // --------------------------------------------------------------------------
+  describe('upsertFromSyncedProfile', () => {
+    it('updates an existing note even when metadata cache is cold on startup', async () => {
+      const ctx = createMockApp();
+      const service = createService(ctx.mockApp);
+
+      const filePath = 'Authors/facebook-johndoe.md';
+      const file = setupIndexableNote(ctx, filePath, {
+        type: AUTHOR_NOTE_TYPE,
+        noteVersion: AUTHOR_NOTE_VERSION,
+        authorKey: 'facebook:url:https://www.facebook.com/johndoe',
+        legacyKeys: [],
+        platform: 'facebook',
+        authorName: 'John Doe',
+      });
+
+      // Simulate startup before MetadataCache parsed the author note.
+      ctx.fileCacheMap.clear();
+      service.invalidateIndex();
+
+      const result = await service.upsertFromSyncedProfile({
+        authorKey: 'facebook:url:https://www.facebook.com/johndoe',
+        platform: 'facebook',
+        authorName: 'John Doe',
+        authorUrl: 'https://www.facebook.com/johndoe',
+        authorHandle: 'johndoe',
+        displayNameOverride: 'Johnny',
+        bioOverride: '',
+        aliases: [],
+        fetchedBio: 'Fetched bio',
+        updatedAt: '2026-04-10T00:00:00.000Z',
+      } as any);
+
+      expect(result).toBe(file);
+      expect(ctx.mockApp.vault.create).not.toHaveBeenCalled();
+      expect(ctx.mockApp.fileManager.processFrontMatter).toHaveBeenCalledWith(
+        file,
+        expect.any(Function),
+      );
+    });
+
+    it('finds a renamed note by scanning disk frontmatter when the index misses', async () => {
+      const ctx = createMockApp();
+      const service = createService(ctx.mockApp);
+
+      const filePath = 'Authors/custom-renamed-author-note.md';
+      const file = setupIndexableNote(ctx, filePath, {
+        type: AUTHOR_NOTE_TYPE,
+        noteVersion: AUTHOR_NOTE_VERSION,
+        authorKey: 'facebook:url:https://www.facebook.com/johndoe',
+        legacyKeys: [],
+        platform: 'facebook',
+        authorName: 'John Doe',
+      });
+
+      ctx.fileCacheMap.clear();
+      service.invalidateIndex();
+
+      const result = await service.upsertFromSyncedProfile({
+        authorKey: 'facebook:url:https://www.facebook.com/johndoe',
+        platform: 'facebook',
+        authorName: 'John Doe',
+        authorUrl: 'https://www.facebook.com/johndoe',
+        authorHandle: 'johndoe',
+        displayNameOverride: '',
+        bioOverride: 'My bio',
+        aliases: ['JD'],
+        fetchedBio: '',
+        updatedAt: '2026-04-10T00:00:00.000Z',
+      } as any);
+
+      expect(result).toBe(file);
+      expect(ctx.mockApp.vault.create).not.toHaveBeenCalled();
+      expect(ctx.mockApp.fileManager.processFrontMatter).toHaveBeenCalledWith(
+        file,
+        expect.any(Function),
+      );
     });
   });
 

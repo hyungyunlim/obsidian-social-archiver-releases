@@ -65,8 +65,12 @@ import { ArchiveLibrarySyncService } from './plugin/sync/ArchiveLibrarySyncServi
 import { ArchiveDeleteSyncService } from './plugin/sync/ArchiveDeleteSyncService';
 import { AnnotationOutboundService } from './plugin/sync/AnnotationOutboundService';
 import { ArchiveTagOutboundService } from './plugin/sync/ArchiveTagOutboundService';
+import { AuthorProfileOutboundService } from './plugin/sync/AuthorProfileOutboundService';
+import { AuthorProfileSyncService } from './plugin/sync/AuthorProfileSyncService';
 import { ArchiveStateSyncService } from './plugin/sync/ArchiveStateSyncService';
 import { ArchiveStateOutboundService } from './plugin/sync/ArchiveStateOutboundService';
+import { LikeStateSyncService } from './plugin/sync/LikeStateSyncService';
+import { LikeStateOutboundService } from './plugin/sync/LikeStateOutboundService';
 import { MediaPlaceholderGenerator } from './services/MediaPlaceholderGenerator';
 
 // Import styles for Vite to process
@@ -113,8 +117,12 @@ export default class SocialArchiverPlugin extends Plugin {
   private annotationSyncService?: AnnotationSyncService; // Mobile annotation sync orchestrator
   public annotationOutboundService?: AnnotationOutboundService; // Outbound comment → server sync
   private archiveTagOutboundService?: ArchiveTagOutboundService; // Outbound archiveTags → server sync
+  private authorProfileOutboundService?: AuthorProfileOutboundService; // Outbound author note profile edits → server sync
   private archiveStateSyncService?: ArchiveStateSyncService; // Inbound isBookmarked → fm.archive sync
   private archiveStateOutboundService?: ArchiveStateOutboundService; // Outbound fm.archive → server isBookmarked sync
+  private likeStateSyncService?: LikeStateSyncService; // Inbound isLiked → fm.like sync
+  private likeStateOutboundService?: LikeStateOutboundService; // Outbound fm.like → server isLiked sync
+  private authorProfileSyncService?: AuthorProfileSyncService; // Inbound/startup synced author profile application
 
   // Extracted module instances
   private realtimeEventBridge?: RealtimeEventBridge;
@@ -456,9 +464,15 @@ export default class SocialArchiverPlugin extends Plugin {
     this.annotationOutboundService = undefined;
     this.archiveTagOutboundService?.stop();
     this.archiveTagOutboundService = undefined;
+    this.authorProfileOutboundService?.stop();
+    this.authorProfileOutboundService = undefined;
     this.archiveStateOutboundService?.stop();
     this.archiveStateOutboundService = undefined;
     this.archiveStateSyncService = undefined;
+    this.likeStateOutboundService?.stop();
+    this.likeStateOutboundService = undefined;
+    this.likeStateSyncService = undefined;
+    this.authorProfileSyncService = undefined;
     this.archiveLookupService?.destroy();
     this.archiveLookupService = undefined;
     this.annotationSyncService = undefined;
@@ -684,6 +698,29 @@ export default class SocialArchiverPlugin extends Plugin {
         this.refreshTimelineView();
       };
 
+      this.likeStateSyncService = new LikeStateSyncService(
+        this.app,
+        this.apiClient,
+        this.archiveLookupService,
+        () => this.settings,
+      );
+
+      this.likeStateOutboundService?.stop();
+      this.likeStateOutboundService = new LikeStateOutboundService(
+        this.app,
+        this.apiClient,
+        this.archiveLookupService,
+        () => this.settings,
+      );
+      this.likeStateOutboundService.start();
+
+      this.likeStateSyncService.onBeforeInboundWrite = (archiveId: string) => {
+        this.likeStateOutboundService?.addSuppression(archiveId);
+      };
+      this.likeStateSyncService.onAfterInboundWrite = () => {
+        this.refreshTimelineView();
+      };
+
       // Restore active jobs from previous session
       const allPendingJobs = await this.pendingJobsManager.getJobs();
       const activeProfileCrawls = allPendingJobs.filter(
@@ -747,6 +784,20 @@ export default class SocialArchiverPlugin extends Plugin {
         getAuthorNotesPath: () => this.settings.authorNotesPath || 'Social Authors',
         isEnabled: () => this.settings.enableAuthorNotes,
       });
+
+      this.authorProfileSyncService = new AuthorProfileSyncService(
+        this.apiClient,
+        this.authorNoteService,
+        (authorKey: string) => this.authorProfileOutboundService?.addSuppression(authorKey),
+      );
+      this.authorProfileOutboundService?.stop();
+      this.authorProfileOutboundService = new AuthorProfileOutboundService(
+        this.app,
+        this.apiClient,
+        this.authorNoteService,
+        () => this.settings,
+      );
+      this.authorProfileOutboundService.start();
 
       this.orchestrator = new ArchiveOrchestrator({
         archiveService,
@@ -876,6 +927,9 @@ export default class SocialArchiverPlugin extends Plugin {
         reconcileArchiveState: (file, archiveId, isBookmarked) =>
           this.archiveStateSyncService?.reconcileFromLibrarySync(file, archiveId, isBookmarked) ??
           Promise.resolve(),
+        reconcileLikeState: (file, archiveId, isLiked) =>
+          this.likeStateSyncService?.reconcileFromLibrarySync(file, archiveId, isLiked) ??
+          Promise.resolve(),
       });
 
       // Create ArchiveDeleteSyncService
@@ -971,8 +1025,10 @@ export default class SocialArchiverPlugin extends Plugin {
           archiveLookupService: this.archiveLookupService,
           annotationSyncService: this.annotationSyncService,
           archiveStateSyncService: this.archiveStateSyncService,
+          likeStateSyncService: this.likeStateSyncService,
           archiveDeleteSyncService: this.archiveDeleteSyncService ?? undefined,
           archiveTagOutboundService: this.archiveTagOutboundService,
+          authorProfileOutboundService: this.authorProfileOutboundService,
           app: this.app,
           settings: () => this.settings,
           apiClient: () => this.apiClient,
@@ -981,6 +1037,8 @@ export default class SocialArchiverPlugin extends Plugin {
           saveSubscriptionPost: (post) => this.saveSubscriptionPost(post),
           syncSubscriptionPosts: () => this.syncSubscriptionPosts(),
           createProfileNote: (msg) => this.createProfileNote(msg),
+          applyAuthorProfileUpdate: (profile) => this.authorProfileSyncService?.applyInboundProfile(profile) ?? Promise.resolve(),
+          syncAuthorProfiles: () => this.authorProfileSyncService?.syncAllFromServer() ?? Promise.resolve(),
           refreshTimelineView: () => this.refreshTimelineView(),
           processPendingSyncQueue: () => this.mobileSyncService?.processPendingSyncQueue() ?? Promise.resolve(),
           processSyncQueueItem: (queueId, archiveId, clientId) =>
@@ -1025,6 +1083,16 @@ export default class SocialArchiverPlugin extends Plugin {
           this.scheduleTrackedTimeout(() => {
             void this.tagStore.pullTagDefinitionsFromServer(this.apiClient!);
           }, 4000);
+        }
+
+        if (this.authorProfileSyncService) {
+          this.scheduleTrackedTimeout(() => {
+            void this.authorProfileSyncService?.syncAllFromServer()
+              .then(() => { this.refreshTimelineView(); })
+              .catch((error) => {
+                console.warn('[Social Archiver] Author profile sync failed:', error);
+              });
+          }, 4500);
         }
 
         // Catch up on pending mobile sync queue items missed while offline

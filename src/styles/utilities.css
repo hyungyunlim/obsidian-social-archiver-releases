@@ -980,3 +980,8 @@ body.is-mobile .sa-action-btn {
   padding-top: calc(max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px), var(--timeline-safe-area-top-fallback, 0px)) + var(--timeline-safe-area-top-extra, 0px));
   padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px), var(--timeline-safe-area-bottom-fallback, 0px));
 }
+
+.sa-author-detail-safe-area {
+  padding-top: calc(max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px), var(--author-detail-safe-area-top-fallback, 0px)) + var(--author-detail-safe-area-top-extra, 0px));
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px), var(--author-detail-safe-area-bottom-fallback, 0px));
+}

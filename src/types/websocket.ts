@@ -5,6 +5,8 @@
  * These types should match the server-side definitions in workers/src/types/websocket.ts
  */
 
+import type { Platform } from './post';
+
 // ============================================================================
 // Client Sync Event (from mobile app sync)
 // ============================================================================
@@ -171,6 +173,32 @@ export interface ArchiveTagsUpdatedEvent {
 }
 
 // ============================================================================
+// Author Profile Updated Event (private channel)
+// ============================================================================
+
+export interface AuthorProfileUpdatedEventData {
+  profile: {
+    authorKey: string;
+    platform: Platform;
+    authorName: string;
+    authorUrl: string | null;
+    authorHandle: string | null;
+    displayNameOverride: string | null;
+    bioOverride: string | null;
+    aliases: string[];
+    updatedAt: string;
+  };
+  updatedAt: string;
+  timestamp: number;
+  sourceClientId?: string;
+}
+
+export interface AuthorProfileUpdatedEvent {
+  type: 'author_profile_updated';
+  data: AuthorProfileUpdatedEventData;
+}
+
+// ============================================================================
 // Media Preserved Event (private channel)
 // ============================================================================
 
@@ -212,6 +240,7 @@ export type WebSocketEvent =
   | ShareDeletedEvent
   | ArchiveDeletedEvent
   | ArchiveTagsUpdatedEvent
+  | AuthorProfileUpdatedEvent
   | MediaPreservedEvent
   | PongEvent;
 

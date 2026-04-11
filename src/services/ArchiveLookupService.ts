@@ -61,7 +61,7 @@ interface ArchiveIndex {
   bySourceArchiveId: Map<string, TFile>;
   /** normalized originalUrl -> TFile[] (may have multiple if re-archived) */
   byOriginalUrl: Map<string, TFile[]>;
-  /** file path -> ArchiveFileIdentity (for delete sync) */
+  /** file path -> ArchiveFileIdentity (for delete sync / path fallback) */
   byPath: Map<string, ArchiveFileIdentity>;
   /** Set of file paths already in index (for tracking deletions/renames) */
   indexedPaths: Set<string>;
@@ -307,14 +307,17 @@ export class ArchiveLookupService implements IService {
     // Always track the file path
     this.index.indexedPaths.add(file.path);
 
-    // Register by sourceArchiveId (stable 1:1 mapping)
-    if (data.sourceArchiveId && data.sourceArchiveId.length > 0) {
-      this.index.bySourceArchiveId.set(data.sourceArchiveId, file);
+    if (data.sourceArchiveId || data.originalUrl) {
       this.index.byPath.set(file.path, {
         path: file.path,
         archiveId: data.sourceArchiveId,
         originalUrl: data.originalUrl,
       });
+    }
+
+    // Register by sourceArchiveId (stable 1:1 mapping)
+    if (data.sourceArchiveId && data.sourceArchiveId.length > 0) {
+      this.index.bySourceArchiveId.set(data.sourceArchiveId, file);
     }
 
     // Register by normalized originalUrl (many-to-one mapping)
@@ -335,8 +338,8 @@ export class ArchiveLookupService implements IService {
   /**
    * Return the ArchiveFileIdentity for a vault file by its path.
    *
-   * Only files whose frontmatter contains a `sourceArchiveId` are tracked in
-   * the `byPath` index.  Returns `null` when the path is not indexed.
+   * Files with either `sourceArchiveId` or `originalUrl` are tracked in the
+   * `byPath` index. Returns `null` when the path is not indexed.
    *
    * Complexity: O(1) after index is built.
    */
@@ -405,13 +408,19 @@ export class ArchiveLookupService implements IService {
     // Index by sourceArchiveId (stable 1:1 mapping)
     const archiveId: unknown = fm.sourceArchiveId;
     const originalUrl: unknown = fm.originalUrl;
-    if (typeof archiveId === 'string' && archiveId.length > 0) {
-      this.index.bySourceArchiveId.set(archiveId, file);
+    if (
+      (typeof archiveId === 'string' && archiveId.length > 0) ||
+      (typeof originalUrl === 'string' && originalUrl.length > 0)
+    ) {
       this.index.byPath.set(file.path, {
         path: file.path,
-        archiveId,
+        archiveId: typeof archiveId === 'string' && archiveId.length > 0 ? archiveId : undefined,
         originalUrl: typeof originalUrl === 'string' ? originalUrl : undefined,
       });
+    }
+
+    if (typeof archiveId === 'string' && archiveId.length > 0) {
+      this.index.bySourceArchiveId.set(archiveId, file);
     }
 
     // Index by normalised originalUrl (may be many-to-one)

@@ -19,6 +19,7 @@ import type { AnnotationSyncService } from '../../services/AnnotationSyncService
 import type { ArchiveDeleteSyncService } from '../sync/ArchiveDeleteSyncService';
 import type { ArchiveTagOutboundService } from '../sync/ArchiveTagOutboundService';
 import type { ArchiveStateSyncService } from '../sync/ArchiveStateSyncService';
+import type { LikeStateSyncService } from '../sync/LikeStateSyncService';
 import type { SocialArchiverSettings } from '../../types/settings';
 import type { PostData, Platform } from '../../types/post';
 import type {
@@ -28,8 +29,10 @@ import type {
   ArchiveDeletedEventData,
   ArchiveTagsUpdatedEventData,
   MediaPreservedEventData,
+  AuthorProfileUpdatedEventData,
 } from '../../types/websocket';
 import { TimelineView, VIEW_TYPE_TIMELINE } from '../../views/TimelineView';
+import type { UserAuthorProfile } from '@/types/author-profile';
 
 // ============================================================================
 // Inline WS Payload Types (moved from main.ts)
@@ -161,8 +164,10 @@ export interface RealtimeEventBridgeDeps {
   archiveLookupService: ArchiveLookupService | undefined;
   annotationSyncService: AnnotationSyncService | undefined;
   archiveStateSyncService?: ArchiveStateSyncService | undefined;
+  likeStateSyncService?: LikeStateSyncService | undefined;
   archiveDeleteSyncService?: ArchiveDeleteSyncService | undefined;
   archiveTagOutboundService?: ArchiveTagOutboundService | undefined;
+  authorProfileOutboundService?: { addSuppression: (authorKey: string) => void; isSuppressed: (authorKey: string) => boolean } | undefined;
   app: App;
   settings: () => SocialArchiverSettings;
   apiClient: () => RealtimeApiClient | undefined;
@@ -171,6 +176,8 @@ export interface RealtimeEventBridgeDeps {
   saveSubscriptionPost: (pendingPost: PendingPost) => Promise<boolean>;
   syncSubscriptionPosts: () => Promise<void>;
   createProfileNote: (message: WsProfileMetadataMessage) => Promise<void>;
+  applyAuthorProfileUpdate?: (profile: UserAuthorProfile) => Promise<void>;
+  syncAuthorProfiles?: () => Promise<void>;
   refreshTimelineView: () => void;
   processPendingSyncQueue: () => Promise<void>;
   processSyncQueueItem: (queueId: string, archiveId: string, clientId: string) => Promise<boolean>;
@@ -220,6 +227,7 @@ export class RealtimeEventBridge {
     this.setupShareDeletedListener();
     this.setupActionUpdatedListener();
     this.setupArchiveTagsUpdatedListener();
+    this.setupAuthorProfileUpdatedListener();
     this.setupArchiveDeletedListener();
     this.setupMediaPreservedListener();
   }
@@ -401,6 +409,7 @@ export class RealtimeEventBridge {
       this.deps.events.on('ws:connected', () => {
         // Flush any pending outbound deletes queued while offline
         void this.deps.archiveDeleteSyncService?.flushPendingDeletes();
+        void this.deps.syncAuthorProfiles?.();
 
         // Process any pending sync queue items missed while offline
         const settings = this.deps.settings();
@@ -769,6 +778,11 @@ export class RealtimeEventBridge {
         if (msg.data.changes.isBookmarked !== undefined) {
           void this.deps.archiveStateSyncService?.handleRemoteArchiveState(msg.data);
         }
+
+        // Like state sync: update fm.like when isLiked changes from mobile/web
+        if (msg.data.changes.isLiked !== undefined) {
+          void this.deps.likeStateSyncService?.handleRemoteLikeState(msg.data);
+        }
       }),
     );
   }
@@ -853,6 +867,34 @@ export class RealtimeEventBridge {
         if (this.deps.archiveDeleteSyncService) {
           void this.deps.archiveDeleteSyncService.handleInboundDelete(archiveId, originalUrl, 'ws');
         }
+      }),
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // ws:author_profile_updated
+  // --------------------------------------------------------------------------
+
+  private setupAuthorProfileUpdatedListener(): void {
+    this.eventRefs.push(
+      this.deps.events.on('ws:author_profile_updated', async (_message: unknown) => {
+        const msg = _message as { type: string; data: AuthorProfileUpdatedEventData } | undefined;
+        if (!msg?.data?.profile) return;
+
+        const { profile, sourceClientId } = msg.data;
+        const settings = this.deps.settings();
+
+        if (sourceClientId && sourceClientId === settings.syncClientId) {
+          return;
+        }
+
+        if (this.deps.authorProfileOutboundService?.isSuppressed(profile.authorKey)) {
+          return;
+        }
+
+        this.deps.authorProfileOutboundService?.addSuppression(profile.authorKey);
+        await this.deps.applyAuthorProfileUpdate?.(profile);
+        this.deps.refreshTimelineView();
       }),
     );
   }

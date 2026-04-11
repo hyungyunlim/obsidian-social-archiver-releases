@@ -1,6 +1,7 @@
 import {
   ItemView,
   WorkspaceLeaf,
+  Platform as ObsidianPlatform,
   debounce,
   type Debouncer,
   type ViewStateResult,
@@ -50,6 +51,8 @@ interface AuthorDetailViewState {
  */
 export class AuthorDetailView extends ItemView {
   private plugin: SocialArchiverPlugin;
+  private safeAreaListener: (() => void) | null = null;
+  private safeAreaVisualViewport: VisualViewport | null = null;
 
   /** Currently displayed author identity (canonical key for persistence) */
   private authorUrl = '';
@@ -167,6 +170,7 @@ export class AuthorDetailView extends ItemView {
     const container = this.containerEl;
     container.empty();
     container.addClass('social-archiver-author-detail-view');
+    this.setupSafeAreaFallback(container);
 
     // Detect main-area vs sidebar for layout adjustments
     const root = this.leaf.getRoot();
@@ -207,6 +211,8 @@ export class AuthorDetailView extends ItemView {
   }
 
   onClose(): Promise<void> {
+    this.teardownSafeAreaFallback();
+
     // Cancel pending debounced refreshes
     this.debouncedFileChange.cancel();
 
@@ -419,5 +425,68 @@ export class AuthorDetailView extends ItemView {
    */
   private updateLeafHeader(): void {
     (this.leaf as WorkspaceLeaf & { updateHeader?: () => void }).updateHeader?.();
+  }
+
+  /**
+   * Mobile WebView environments may report env(safe-area-inset-*) as 0.
+   * Mirror TimelineView behavior so author detail headers do not clip under
+   * the status bar / notch when opened as a dedicated ItemView on mobile.
+   */
+  private setupSafeAreaFallback(container: HTMLElement): void {
+    if (!ObsidianPlatform.isMobile || this.safeAreaListener) return;
+    const dynamicIslandHeights = new Set([852, 874, 932, 956]);
+
+    const applyInsets = () => {
+      const viewport = window.visualViewport;
+      const viewportTop = Math.max(0, Math.round(viewport?.offsetTop ?? 0));
+      const isPortrait = window.innerHeight >= window.innerWidth;
+      const isIPhone = ObsidianPlatform.isIosApp && ObsidianPlatform.isPhone;
+      const screenLongestEdge = Math.round(
+        Math.max(window.screen.width || 0, window.screen.height || 0),
+      );
+      const isDynamicIslandIPhone = isIPhone && dynamicIslandHeights.has(screenLongestEdge);
+      const androidMinTopInset = ObsidianPlatform.isAndroidApp ? 24 : 0;
+      const iosMinTopInset = ObsidianPlatform.isIosApp && isPortrait
+        ? (isIPhone ? (isDynamicIslandIPhone ? 59 : 44) : 24)
+        : 0;
+      const androidExtraTopGap = ObsidianPlatform.isAndroidApp ? 8 : 0;
+      const topInset = Math.max(viewportTop, androidMinTopInset, iosMinTopInset);
+
+      const androidMinBottomInset = ObsidianPlatform.isAndroidApp ? 24 : 0;
+      let bottomInset = 0;
+      if (viewport) {
+        const layoutHeight = window.innerHeight || document.documentElement.clientHeight;
+        const viewportBottom = viewport.offsetTop + viewport.height;
+        bottomInset = Math.max(0, Math.round(layoutHeight - viewportBottom));
+        if (bottomInset > 120) bottomInset = 0;
+      }
+      bottomInset = Math.max(androidMinBottomInset, bottomInset);
+
+      container.setCssProps({
+        '--author-detail-safe-area-top-fallback': `${topInset}px`,
+        '--author-detail-safe-area-bottom-fallback': `${bottomInset}px`,
+        '--author-detail-safe-area-top-extra': `${androidExtraTopGap}px`,
+      });
+      container.addClass('sa-author-detail-safe-area');
+    };
+
+    this.safeAreaListener = applyInsets;
+    this.safeAreaVisualViewport = window.visualViewport ?? null;
+
+    applyInsets();
+    this.safeAreaVisualViewport?.addEventListener('resize', applyInsets);
+    this.safeAreaVisualViewport?.addEventListener('scroll', applyInsets);
+    window.addEventListener('resize', applyInsets);
+  }
+
+  private teardownSafeAreaFallback(): void {
+    if (!this.safeAreaListener) return;
+
+    this.safeAreaVisualViewport?.removeEventListener('resize', this.safeAreaListener);
+    this.safeAreaVisualViewport?.removeEventListener('scroll', this.safeAreaListener);
+    window.removeEventListener('resize', this.safeAreaListener);
+
+    this.safeAreaListener = null;
+    this.safeAreaVisualViewport = null;
   }
 }
