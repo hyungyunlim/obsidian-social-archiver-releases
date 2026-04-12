@@ -364,7 +364,13 @@ async function handleRetryPendingDeletes() {
             type="checkbox"
             checked={settings.deleteSync.outboundEnabled}
             onchange={async (e) => {
-              plugin.settings.deleteSync.outboundEnabled = (e.target as HTMLInputElement).checked;
+              const enabled = (e.target as HTMLInputElement).checked;
+              plugin.settings.deleteSync.outboundEnabled = enabled;
+              if (!enabled && (plugin.settings.pendingArchiveDeletes?.length ?? 0) > 0) {
+                plugin.settings.pendingArchiveDeletes = [];
+                plugin.archiveDeleteSyncService?.cancelAndClear();
+                new Notice('Outbound delete sync disabled — pending deletes cleared.');
+              }
               await plugin.saveSettings();
               settings = plugin.settings;
             }}
@@ -395,7 +401,7 @@ async function handleRetryPendingDeletes() {
         </label>
       </div>
 
-      <!-- Pending deletes info + retry button -->
+      <!-- Pending deletes info + retry/clear buttons -->
       {#if pendingDeleteCount > 0}
         <div class="delete-sync-pending-row">
           <span class="delete-sync-pending-text">
@@ -407,6 +413,19 @@ async function handleRetryPendingDeletes() {
             disabled={flushingDeletes}
           >
             {flushingDeletes ? 'Retrying…' : 'Retry Pending Deletes'}
+          </button>
+          <button
+            class="delete-sync-retry-button"
+            onclick={async () => {
+              plugin.settings.pendingArchiveDeletes = [];
+              plugin.archiveDeleteSyncService?.cancelAndClear();
+              await plugin.saveSettings();
+              settings = plugin.settings;
+              new Notice(`Cleared ${pendingDeleteCount} pending deletes.`);
+            }}
+            disabled={flushingDeletes}
+          >
+            Clear Queue
           </button>
         </div>
       {/if}
