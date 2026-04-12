@@ -140,6 +140,7 @@ export interface ShareDeletedEvent {
 export interface ArchiveDeletedEventData {
   archiveId: string;
   originalUrl?: string;
+  sourceClientId?: string;
   updatedAt: string;
   timestamp: number;
 }

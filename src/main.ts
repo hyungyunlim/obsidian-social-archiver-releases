@@ -71,6 +71,7 @@ import { ArchiveStateSyncService } from './plugin/sync/ArchiveStateSyncService';
 import { ArchiveStateOutboundService } from './plugin/sync/ArchiveStateOutboundService';
 import { LikeStateSyncService } from './plugin/sync/LikeStateSyncService';
 import { LikeStateOutboundService } from './plugin/sync/LikeStateOutboundService';
+import { BulkArchiveActionAccumulator } from './plugin/sync/BulkArchiveActionAccumulator';
 import { MediaPlaceholderGenerator } from './services/MediaPlaceholderGenerator';
 
 // Import styles for Vite to process
@@ -122,6 +123,7 @@ export default class SocialArchiverPlugin extends Plugin {
   private archiveStateOutboundService?: ArchiveStateOutboundService; // Outbound fm.archive → server isBookmarked sync
   private likeStateSyncService?: LikeStateSyncService; // Inbound isLiked → fm.like sync
   private likeStateOutboundService?: LikeStateOutboundService; // Outbound fm.like → server isLiked sync
+  private bulkArchiveActionAccumulator?: BulkArchiveActionAccumulator; // Shared accumulator for batching outbound like/archive API calls
   private authorProfileSyncService?: AuthorProfileSyncService; // Inbound/startup synced author profile application
 
   // Extracted module instances
@@ -472,6 +474,8 @@ export default class SocialArchiverPlugin extends Plugin {
     this.likeStateOutboundService?.stop();
     this.likeStateOutboundService = undefined;
     this.likeStateSyncService = undefined;
+    this.bulkArchiveActionAccumulator?.destroy();
+    this.bulkArchiveActionAccumulator = undefined;
     this.authorProfileSyncService = undefined;
     this.archiveLookupService?.destroy();
     this.archiveLookupService = undefined;
@@ -720,6 +724,12 @@ export default class SocialArchiverPlugin extends Plugin {
       this.likeStateSyncService.onAfterInboundWrite = () => {
         this.refreshTimelineView();
       };
+
+      // Create shared accumulator for batching outbound like/archive API calls
+      this.bulkArchiveActionAccumulator?.destroy();
+      this.bulkArchiveActionAccumulator = new BulkArchiveActionAccumulator(this.apiClient);
+      this.archiveStateOutboundService.setAccumulator(this.bulkArchiveActionAccumulator);
+      this.likeStateOutboundService.setAccumulator(this.bulkArchiveActionAccumulator);
 
       // Restore active jobs from previous session
       const allPendingJobs = await this.pendingJobsManager.getJobs();

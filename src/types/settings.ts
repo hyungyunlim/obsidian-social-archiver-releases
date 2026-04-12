@@ -662,7 +662,7 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
 
   // Delete Sync Settings
   deleteSync: {
-    outboundEnabled: true,
+    outboundEnabled: false, // Safety default: vault file deletions do NOT propagate to server
     inboundEnabled: true,
     confirmBeforeServerDelete: true,
   },

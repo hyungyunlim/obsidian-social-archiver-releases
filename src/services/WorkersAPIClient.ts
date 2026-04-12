@@ -1195,6 +1195,40 @@ export class WorkersAPIClient implements IService {
   }
 
   /**
+   * Bulk update archive actions (isLiked / isBookmarked) for multiple archives.
+   *
+   * PATCH /api/user/archives/bulk-actions
+   *
+   * Uses the same X-Client-Id header as the single-item endpoint for echo
+   * suppression. Server returns per-item success/failure results.
+   *
+   * @param actions - Array of archive action updates (max 200 per request)
+   * @returns Updated IDs and per-item failures
+   */
+  async bulkUpdateArchiveActions(
+    actions: Array<{ archiveId: string; isLiked?: boolean; isBookmarked?: boolean }>,
+  ): Promise<{
+    updatedIds: string[];
+    failed: Array<{ archiveId: string; code: string; message: string }>;
+  }> {
+    this.ensureInitialized();
+
+    const extraHeaders: Record<string, string> = {};
+    if (this.config.clientId) {
+      extraHeaders['X-Client-Id'] = this.config.clientId;
+    }
+
+    return await this.request<{
+      updatedIds: string[];
+      failed: Array<{ archiveId: string; code: string; message: string }>;
+    }>('/api/user/archives/bulk-actions', {
+      method: 'PATCH',
+      body: JSON.stringify({ actions }),
+      headers: extraHeaders,
+    });
+  }
+
+  /**
    * Delete an archive by ID
    *
    * DELETE /api/user/archives/:archiveId
@@ -1205,8 +1239,14 @@ export class WorkersAPIClient implements IService {
   async deleteArchive(archiveId: string): Promise<{ success: boolean }> {
     this.ensureInitialized();
 
+    const extraHeaders: Record<string, string> = {};
+    if (this.config.clientId) {
+      extraHeaders['X-Client-Id'] = this.config.clientId;
+    }
+
     return this.request<{ success: boolean }>(`/api/user/archives/${archiveId}`, {
       method: 'DELETE',
+      headers: extraHeaders,
     });
   }
 

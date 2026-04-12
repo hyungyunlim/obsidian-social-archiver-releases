@@ -28,7 +28,7 @@ import type {
   DeleteSyncSettings,
   PendingArchiveDeleteEntry,
 } from '../../types/settings';
-// DeleteConfirmModal reserved for future use (v2: "Keep on Server" option)
+import { showDeleteConfirmModal } from './DeleteConfirmModal';
 
 // ============================================================================
 // Interfaces (provided by other agents / parallel modules)
@@ -56,6 +56,12 @@ const SUPPRESSION_TTL_MS = 30_000;
 
 /** Retry interval for deferred flush attempts while library sync is active. */
 const DEFERRED_FLUSH_RETRY_MS = 5_000;
+
+/** Maximum deletes per flush call — prevents mass deletion when queue grows large. */
+const MAX_FLUSH_BATCH_SIZE = 10;
+
+/** Maximum pending queue size — stops enqueuing beyond this to prevent unbounded growth. */
+const MAX_QUEUE_SIZE = 20;
 
 /** Log prefix for all messages from this service. */
 const LOG_PREFIX = '[Social Archiver] [DeleteSync]';
@@ -248,6 +254,22 @@ export class ArchiveDeleteSyncService {
       return;
     }
 
+    // Safety guard: refuse to grow the queue beyond MAX_QUEUE_SIZE to prevent
+    // unbounded accumulation that could cause mass server deletion on flush.
+    const currentQueue = this.getQueue(settings);
+    if (currentQueue.length >= MAX_QUEUE_SIZE) {
+      console.warn(
+        `${LOG_PREFIX} Delete queue at safety limit (${currentQueue.length}/${MAX_QUEUE_SIZE}) — additional deletes will not be synced to server`,
+        { archiveIds: resolvedArchiveIds.map((id) => id) }
+      );
+      this.deps.notify(
+        `Delete sync queue full (${MAX_QUEUE_SIZE} items) — this vault deletion will not be synced to server. ` +
+        `Go to Settings → Sync to manage pending deletes.`,
+        8000,
+      );
+      return;
+    }
+
     // Always enqueue first so an in-flight library sync can see the tombstones
     // and avoid re-importing the same archive in the current run.
     for (const archiveId of resolvedArchiveIds) {
@@ -361,10 +383,50 @@ export class ArchiveDeleteSyncService {
       return;
     }
 
+    // -----------------------------------------------------------------------
+    // Confirmation gate: ask the user before sending server deletes
+    // -----------------------------------------------------------------------
+    const deleteSettings = settings.deleteSync;
+    // Safety cap: only process up to MAX_FLUSH_BATCH_SIZE per flush to prevent
+    // mass deletion when queue has grown large (e.g., from offline accumulation).
+    const batchSize = Math.min(eligible.length, MAX_FLUSH_BATCH_SIZE);
+    const remaining = eligible.length - batchSize;
+
+    if (deleteSettings?.confirmBeforeServerDelete) {
+      const result = await showDeleteConfirmModal(this.deps.app, batchSize);
+
+      // Persist "don't ask again" preference
+      if (result.dontAskAgain && deleteSettings) {
+        deleteSettings.confirmBeforeServerDelete = false;
+        await this.deps.saveSettings();
+      }
+
+      if (result.action === 'keep-on-server') {
+        // User chose to keep server copies — clear ALL eligible entries for
+        // the current user (not just the batch), since the intent is to keep
+        // everything. Entries for other users (if any) are preserved.
+        const eligibleIds = new Set(eligible.map((e) => e.archiveId));
+        const remaining = queue.filter((e) => !eligibleIds.has(e.archiveId));
+        this.setQueue(settings, remaining);
+        await this.deps.saveSettings();
+        console.debug(
+          `${LOG_PREFIX} User chose "Keep on Server" — cleared ${eligible.length} pending deletes`,
+        );
+        return;
+      }
+    }
+
+    const batch = eligible.slice(0, batchSize);
+    if (remaining > 0) {
+      console.warn(
+        `${LOG_PREFIX} Flush capped at ${MAX_FLUSH_BATCH_SIZE} — ${remaining} remaining in queue`,
+      );
+    }
+
     this.isFlushing = true;
 
     try {
-      for (const entry of eligible) {
+      for (const entry of batch) {
         const shouldStop = await this.processQueueEntry(entry, apiClient);
         if (shouldStop) {
           console.debug(`${LOG_PREFIX} Flush stopped early`, {
@@ -375,6 +437,12 @@ export class ArchiveDeleteSyncService {
       }
     } finally {
       this.isFlushing = false;
+
+      // If items remain in the queue after this batch, schedule a deferred
+      // follow-up flush so the queue eventually drains in increments.
+      if (remaining > 0) {
+        this.scheduleDeferredFlush();
+      }
     }
   }
 
@@ -641,12 +709,15 @@ export class ArchiveDeleteSyncService {
       )];
 
       if (matchedIds.length > 1) {
-        console.warn(`${LOG_PREFIX} originalUrl matched multiple server archives — deleting all legacy matches`, {
+        // Safety: refuse to delete when URL matches multiple server archives.
+        // Deleting all would risk removing re-archived or updated content.
+        console.warn(`${LOG_PREFIX} originalUrl matched multiple server archives — skipping to avoid unintended data loss`, {
           path: identity.path,
           originalUrl: identity.originalUrl,
           matchCount: matchedIds.length,
           archiveIds: matchedIds,
         });
+        return [];
       }
 
       return matchedIds;
@@ -665,11 +736,12 @@ export class ArchiveDeleteSyncService {
     apiClient: WorkersAPIClient,
     originalUrl: string,
   ): Promise<Array<{ id: string }>> {
+    const MAX_PAGES = 5; // Safety cap: max 250 archives per URL lookup
     const archives: Array<{ id: string }> = [];
     let offset = 0;
-    let hasMore = true;
+    let pagesFetched = 0;
 
-    while (hasMore) {
+    while (pagesFetched < MAX_PAGES) {
       const response = await apiClient.getUserArchives({
         originalUrl,
         limit: 50,
@@ -677,13 +749,13 @@ export class ArchiveDeleteSyncService {
       });
 
       archives.push(...response.archives);
+      pagesFetched += 1;
 
       if (!response.hasMore || response.archives.length === 0) {
         break;
       }
 
       offset += response.archives.length;
-      hasMore = response.hasMore;
     }
 
     return archives;

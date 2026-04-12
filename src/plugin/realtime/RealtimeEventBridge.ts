@@ -407,8 +407,9 @@ export class RealtimeEventBridge {
   private setupConnectionStatusListeners(): void {
     this.eventRefs.push(
       this.deps.events.on('ws:connected', () => {
-        // Flush any pending outbound deletes queued while offline
-        void this.deps.archiveDeleteSyncService?.flushPendingDeletes();
+        // REMOVED: Auto-flushing pending deletes on reconnect caused mass deletion
+        // when accumulated vault file removals were all sent at once.
+        // void this.deps.archiveDeleteSyncService?.flushPendingDeletes();
         void this.deps.syncAuthorProfiles?.();
 
         // Process any pending sync queue items missed while offline
@@ -859,6 +860,13 @@ export class RealtimeEventBridge {
       this.deps.events.on('ws:archive_deleted', async (_message: unknown) => {
         const msg = _message as { type: string; data: ArchiveDeletedEventData } | undefined;
         if (!msg?.data) return;
+
+        // Echo suppression: skip if this event was triggered by our own client
+        const settings = this.deps.settings();
+        if (msg.data.sourceClientId && msg.data.sourceClientId === settings.syncClientId) {
+          console.debug('[Social Archiver] Skipping own archive_deleted echo for:', msg.data.archiveId);
+          return;
+        }
 
         const { archiveId, originalUrl } = msg.data;
         console.debug('[Social Archiver] Archive deleted via WS:', archiveId);

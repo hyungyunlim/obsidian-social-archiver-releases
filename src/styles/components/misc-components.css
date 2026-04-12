@@ -1467,6 +1467,51 @@
   color: var(--text-error);
 }
 
+/* Bulk operation progress bar */
+.tc-bulk-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  margin-top: 4px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.tc-bulk-progress-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tc-bulk-progress-text {
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.tc-bulk-progress-cancel {
+  font-size: var(--font-ui-smaller);
+  padding: 2px 8px;
+}
+
+.tc-bulk-progress-bar-outer {
+  width: 100%;
+  height: 4px;
+  background: var(--background-modifier-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.tc-bulk-progress-bar-inner {
+  height: 100%;
+  background: var(--interactive-accent);
+  border-radius: 2px;
+  transition: width 0.15s ease-out;
+}
+
 .tc-selection-feed {
   gap: 10px;
 }

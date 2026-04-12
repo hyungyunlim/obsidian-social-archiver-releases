@@ -27,10 +27,12 @@ export interface DeleteConfirmResult {
 
 export class DeleteConfirmModal extends Modal {
   private readonly resolve: (result: DeleteConfirmResult) => void;
+  private readonly pendingCount: number;
 
-  constructor(app: App, resolve: (result: DeleteConfirmResult) => void) {
+  constructor(app: App, resolve: (result: DeleteConfirmResult) => void, pendingCount: number) {
     super(app);
     this.resolve = resolve;
+    this.pendingCount = pendingCount;
   }
 
   onOpen(): void {
@@ -46,15 +48,18 @@ export class DeleteConfirmModal extends Modal {
       cls: 'sa-delete-confirm-title',
     });
 
-    // Explanation
+    // Explanation with count
+    const countText = this.pendingCount === 1
+      ? '1 archived note was'
+      : `${this.pendingCount} archived notes were`;
     contentEl.createEl('p', {
-      text: 'This note was already deleted from the vault. Do you also want to delete the server copy?',
+      text: `${countText} deleted from the vault. Do you also want to delete the server copies?`,
       cls: 'sa-delete-confirm-desc',
     });
 
     // Warning about Library Sync re-importing the note
     contentEl.createEl('p', {
-      text: 'If you keep it on the server, it may appear again during Library Sync.',
+      text: 'If you keep them on the server, they may appear again during Library Sync.',
       cls: 'sa-delete-confirm-warning mod-warning',
     });
 
@@ -105,7 +110,7 @@ export class DeleteConfirmModal extends Modal {
  * The promise never rejects — if the user dismisses the modal without
  * clicking a button (e.g. pressing Escape), it resolves with `keep-on-server`.
  */
-export function showDeleteConfirmModal(app: App): Promise<DeleteConfirmResult> {
+export function showDeleteConfirmModal(app: App, pendingCount: number): Promise<DeleteConfirmResult> {
   return new Promise<DeleteConfirmResult>((resolve) => {
     // Wrap the resolve so that if the modal is closed without a button click
     // (e.g. Escape key / backdrop click) we still get a safe default.
@@ -116,7 +121,7 @@ export function showDeleteConfirmModal(app: App): Promise<DeleteConfirmResult> {
       resolve(result);
     };
 
-    const modal = new DeleteConfirmModal(app, settle);
+    const modal = new DeleteConfirmModal(app, settle, pendingCount);
 
     // If the user closes without choosing, treat as "keep on server"
     const origOnClose = modal.onClose.bind(modal);

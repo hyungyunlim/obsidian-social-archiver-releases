@@ -9,6 +9,7 @@ import type { App, EventRef, TFile } from 'obsidian';
 import type { WorkersAPIClient } from '@/services/WorkersAPIClient';
 import type { SocialArchiverSettings } from '@/types/settings';
 import type { ArchiveLookupService } from '@/services/ArchiveLookupService';
+import type { BulkArchiveActionAccumulator } from './BulkArchiveActionAccumulator';
 
 const DEBOUNCE_MS = 2000;
 const SUPPRESSION_TTL_MS = 10_000;
@@ -22,12 +23,24 @@ export class LikeStateOutboundService {
   private changedEventRef: EventRef | null = null;
   private startedAt = 0;
 
+  /** Optional shared accumulator for debounced bulk API calls. */
+  private accumulator: BulkArchiveActionAccumulator | null = null;
+
   constructor(
     private readonly app: App,
     private readonly apiClient: WorkersAPIClient,
     private readonly archiveLookup: ArchiveLookupService,
     private readonly getSettings: () => SocialArchiverSettings,
   ) {}
+
+  /**
+   * Set the shared accumulator instance. When set, outbound syncs delegate
+   * the actual API call to the accumulator (which batches multiple changes
+   * into a single bulk request). When null, falls back to direct API calls.
+   */
+  setAccumulator(accumulator: BulkArchiveActionAccumulator | null): void {
+    this.accumulator = accumulator;
+  }
 
   start(): void {
     if (this.changedEventRef !== null) return;
@@ -148,7 +161,13 @@ export class LikeStateOutboundService {
         return;
       }
 
-      await this.apiClient.updateArchiveActions(archiveId, { isLiked });
+      if (this.accumulator) {
+        // Delegate to shared accumulator for debounced batch flush
+        this.accumulator.enqueue({ archiveId, isLiked });
+      } else {
+        // Fallback: direct single-item API call
+        await this.apiClient.updateArchiveActions(archiveId, { isLiked });
+      }
       this.addSuppression(archiveId);
 
       console.debug(

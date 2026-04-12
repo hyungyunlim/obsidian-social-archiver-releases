@@ -29,6 +29,7 @@ import type { App, EventRef, TFile } from 'obsidian';
 import type { WorkersAPIClient } from '@/services/WorkersAPIClient';
 import type { SocialArchiverSettings } from '@/types/settings';
 import type { ArchiveLookupService } from '@/services/ArchiveLookupService';
+import type { BulkArchiveActionAccumulator } from './BulkArchiveActionAccumulator';
 
 // ============================================================================
 // Constants
@@ -76,12 +77,24 @@ export class ArchiveStateOutboundService {
    */
   private startedAt = 0;
 
+  /** Optional shared accumulator for debounced bulk API calls. */
+  private accumulator: BulkArchiveActionAccumulator | null = null;
+
   constructor(
     private readonly app: App,
     private readonly apiClient: WorkersAPIClient,
     private readonly archiveLookup: ArchiveLookupService,
     private readonly getSettings: () => SocialArchiverSettings,
   ) {}
+
+  /**
+   * Set the shared accumulator instance. When set, outbound syncs delegate
+   * the actual API call to the accumulator (which batches multiple changes
+   * into a single bulk request). When null, falls back to direct API calls.
+   */
+  setAccumulator(accumulator: BulkArchiveActionAccumulator | null): void {
+    this.accumulator = accumulator;
+  }
 
   // --------------------------------------------------------------------------
   // Lifecycle
@@ -269,8 +282,13 @@ export class ArchiveStateOutboundService {
         return;
       }
 
-      // PATCH to server
-      await this.apiClient.updateArchiveActions(archiveId, { isBookmarked });
+      if (this.accumulator) {
+        // Delegate to shared accumulator for debounced batch flush
+        this.accumulator.enqueue({ archiveId, isBookmarked });
+      } else {
+        // Fallback: direct single-item PATCH to server
+        await this.apiClient.updateArchiveActions(archiveId, { isBookmarked });
+      }
 
       // Suppress the resulting inbound WS echo
       this.addSuppression(archiveId);

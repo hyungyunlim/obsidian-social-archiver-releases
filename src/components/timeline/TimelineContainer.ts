@@ -302,6 +302,8 @@ export class TimelineContainer {
   private bulkSelectionContainer: HTMLElement | null = null;
   private selectionMode = false;
   private selectedPostPaths: Set<string> = new Set();
+  private bulkProgress: { current: number; total: number; cancelled: boolean } | null = null;
+  private bulkProgressContainer: HTMLElement | null = null;
 
   // Reader mode overlay
   private readerModeOverlay: ReaderModeOverlay | null = null;
@@ -5717,6 +5719,71 @@ export class TimelineContainer {
     cancelBtn.addEventListener('click', () => {
       void this.exitBulkSelectionMode();
     });
+
+    // Render progress bar when a bulk operation is in progress
+    if (this.bulkProgress !== null) {
+      this.renderBulkProgressBar(host);
+    }
+  }
+
+  /**
+   * Render a progress indicator showing bulk operation status with a cancel
+   * button. Displayed inside the bulk selection controls host when a bulk
+   * operation is running.
+   */
+  private renderBulkProgressBar(parent: HTMLElement): void {
+    if (this.bulkProgress === null) return;
+
+    // Remove previous progress container if present
+    this.bulkProgressContainer?.remove();
+
+    const container = parent.createDiv({ cls: 'tc-bulk-progress' });
+    this.bulkProgressContainer = container;
+
+    const { current, total } = this.bulkProgress;
+    const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+
+    const info = container.createDiv({ cls: 'tc-bulk-progress-info' });
+    info.createSpan({
+      text: `Processing ${current}/${total}...`,
+      cls: 'tc-bulk-progress-text',
+    });
+
+    const cancelBtn = info.createEl('button', {
+      text: 'Cancel',
+      cls: 'tc-selection-action-btn tc-bulk-progress-cancel',
+      attr: { type: 'button' },
+    });
+    cancelBtn.addEventListener('click', () => {
+      if (this.bulkProgress) {
+        this.bulkProgress.cancelled = true;
+      }
+    });
+
+    const barOuter = container.createDiv({ cls: 'tc-bulk-progress-bar-outer' });
+    const barInner = barOuter.createDiv({ cls: 'tc-bulk-progress-bar-inner' });
+    barInner.style.width = `${pct}%`;
+  }
+
+  /**
+   * Update the progress bar in-place without re-rendering the full
+   * selection controls. This avoids flickering during bulk operations.
+   */
+  private updateBulkProgressBar(): void {
+    if (!this.bulkProgressContainer?.isConnected || this.bulkProgress === null) return;
+
+    const { current, total } = this.bulkProgress;
+    const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+
+    const textEl = this.bulkProgressContainer.querySelector('.tc-bulk-progress-text');
+    if (textEl) {
+      textEl.textContent = `Processing ${current}/${total}...`;
+    }
+
+    const barInner = this.bulkProgressContainer.querySelector<HTMLElement>('.tc-bulk-progress-bar-inner');
+    if (barInner) {
+      barInner.style.width = `${pct}%`;
+    }
   }
 
   private renderBulkSelectionFeed(): void {
@@ -5857,13 +5924,22 @@ export class TimelineContainer {
       return;
     }
 
+    // Initialize progress tracking
+    this.bulkProgress = { current: 0, total: selectedPosts.length, cancelled: false };
+    const hasTagChipBar = this.containerEl.querySelector('.tag-chip-bar') !== null;
+    this.renderBulkSelectionControls(hasTagChipBar);
+
     let updatedCount = 0;
     let failedCount = 0;
 
     for (const post of selectedPosts) {
+      if (this.bulkProgress.cancelled) break;
+
       const file = this.vault.getAbstractFileByPath(post.filePath);
       if (!(file instanceof TFile)) {
         failedCount++;
+        this.bulkProgress.current++;
+        this.updateBulkProgressBar();
         continue;
       }
 
@@ -5883,13 +5959,24 @@ export class TimelineContainer {
         failedCount++;
         console.error('[TimelineContainer] Failed to update star state in bulk mode:', post.filePath, error);
       }
+
+      this.bulkProgress.current++;
+      if (updatedCount > 0 && updatedCount % 25 === 0) {
+        this.updateBulkProgressBar();
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+      }
     }
 
-    if (updatedCount === 0) {
+    const wasCancelled = this.bulkProgress?.cancelled === true;
+    this.bulkProgress = null;
+    this.bulkProgressContainer = null;
+
+    if (updatedCount === 0 && !wasCancelled) {
       new Notice('No posts were updated.');
       return;
     }
 
+    // Incremental refresh: re-apply filters/sort in-memory instead of full loadPosts()
     this.filteredPosts = this.dedupePostsByFilePath(
       this.filterSortManager.applyFiltersAndSort(this.posts),
     );
@@ -5900,17 +5987,15 @@ export class TimelineContainer {
 
     await this.refreshBulkSelectionPresentation();
 
+    const label = targetState ? 'Starred' : 'Removed star from';
+    const suffix = wasCancelled ? ' (cancelled)' : '';
     if (failedCount === 0) {
       new Notice(
-        targetState
-          ? `Starred ${updatedCount} post${updatedCount === 1 ? '' : 's'}.`
-          : `Removed star from ${updatedCount} post${updatedCount === 1 ? '' : 's'}.`,
+        `${label} ${updatedCount} post${updatedCount === 1 ? '' : 's'}.${suffix}`,
       );
     } else {
       new Notice(
-        targetState
-          ? `Starred ${updatedCount} post${updatedCount === 1 ? '' : 's'} (${failedCount} failed).`
-          : `Removed star from ${updatedCount} post${updatedCount === 1 ? '' : 's'} (${failedCount} failed).`,
+        `${label} ${updatedCount} post${updatedCount === 1 ? '' : 's'} (${failedCount} failed).${suffix}`,
       );
     }
   }
@@ -5936,13 +6021,22 @@ export class TimelineContainer {
       return;
     }
 
+    // Initialize progress tracking
+    this.bulkProgress = { current: 0, total: selectedPosts.length, cancelled: false };
+    const hasTagChipBar = this.containerEl.querySelector('.tag-chip-bar') !== null;
+    this.renderBulkSelectionControls(hasTagChipBar);
+
     let archivedCount = 0;
     let failedCount = 0;
 
     for (const post of selectedPosts) {
+      if (this.bulkProgress.cancelled) break;
+
       const file = this.vault.getAbstractFileByPath(post.filePath);
       if (!(file instanceof TFile)) {
         failedCount++;
+        this.bulkProgress.current++;
+        this.updateBulkProgressBar();
         continue;
       }
 
@@ -5951,32 +6045,62 @@ export class TimelineContainer {
         await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
           frontmatter['archive'] = true;
         });
+
+        // In-memory update for incremental refresh
+        post.archive = true;
+        const indexed = this.indexEntries.find((entry) => entry.filePath === post.filePath);
+        if (indexed) {
+          indexed.archive = true;
+        }
         archivedCount++;
       } catch (error) {
         failedCount++;
         console.error('[TimelineContainer] Failed to archive post in bulk mode:', post.filePath, error);
       }
 
-      if (archivedCount > 0 && archivedCount % 25 === 0) {
+      this.bulkProgress.current++;
+      if (this.bulkProgress.current % 25 === 0) {
+        this.updateBulkProgressBar();
         await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
       }
     }
 
+    const wasCancelled = this.bulkProgress?.cancelled === true;
+    this.bulkProgress = null;
+    this.bulkProgressContainer = null;
+
     this.selectedPostPaths.clear();
 
     if (archivedCount > 0) {
+      // Incremental refresh: re-apply filters in-memory.
+      // Archived posts may be filtered out depending on the active tab, so
+      // a full re-filter is needed, but not a full disk loadPosts().
+      this.filteredPosts = this.dedupePostsByFilePath(
+        this.filterSortManager.applyFiltersAndSort(this.posts),
+      );
+      this.filteredIndexEntries = this.filterSortManager.applyFiltersAndSortIndex(this.indexEntries);
+      this.filterSortManager.updatePreviousFiltered(
+        this.filteredIndexEntries.map((entry) => entry.filePath),
+      );
+    }
+
+    // Use loadPosts() as fallback only on cancel/partial failure for full consistency
+    if (wasCancelled || (failedCount > 0 && archivedCount > 0)) {
       this.forceReload = true;
       await this.loadPosts();
     } else {
       await this.refreshBulkSelectionPresentation();
     }
 
+    const suffix = wasCancelled ? ' (cancelled)' : '';
     if (archivedCount > 0 && failedCount === 0) {
-      new Notice(`Archived ${archivedCount} post${archivedCount === 1 ? '' : 's'}.`);
+      new Notice(`Archived ${archivedCount} post${archivedCount === 1 ? '' : 's'}.${suffix}`);
     } else if (archivedCount > 0) {
-      new Notice(`Archived ${archivedCount} post${archivedCount === 1 ? '' : 's'} (${failedCount} failed).`);
-    } else {
+      new Notice(`Archived ${archivedCount} post${archivedCount === 1 ? '' : 's'} (${failedCount} failed).${suffix}`);
+    } else if (!wasCancelled) {
       new Notice('No posts were archived.');
+    } else {
+      new Notice(`Archive cancelled. ${archivedCount} post${archivedCount === 1 ? '' : 's'} archived before cancellation.`);
     }
   }
 
@@ -6001,13 +6125,22 @@ export class TimelineContainer {
       return;
     }
 
+    // Initialize progress tracking
+    this.bulkProgress = { current: 0, total: selectedPosts.length, cancelled: false };
+    const hasTagChipBar = this.containerEl.querySelector('.tag-chip-bar') !== null;
+    this.renderBulkSelectionControls(hasTagChipBar);
+
     let unarchivedCount = 0;
     let failedCount = 0;
 
     for (const post of selectedPosts) {
+      if (this.bulkProgress.cancelled) break;
+
       const file = this.vault.getAbstractFileByPath(post.filePath);
       if (!(file instanceof TFile)) {
         failedCount++;
+        this.bulkProgress.current++;
+        this.updateBulkProgressBar();
         continue;
       }
 
@@ -6016,32 +6149,60 @@ export class TimelineContainer {
         await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
           delete frontmatter['archive'];
         });
+
+        // In-memory update for incremental refresh
+        post.archive = false;
+        const indexed = this.indexEntries.find((entry) => entry.filePath === post.filePath);
+        if (indexed) {
+          indexed.archive = false;
+        }
         unarchivedCount++;
       } catch (error) {
         failedCount++;
         console.error('[TimelineContainer] Failed to unarchive post in bulk mode:', post.filePath, error);
       }
 
-      if (unarchivedCount > 0 && unarchivedCount % 25 === 0) {
+      this.bulkProgress.current++;
+      if (this.bulkProgress.current % 25 === 0) {
+        this.updateBulkProgressBar();
         await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
       }
     }
 
+    const wasCancelled = this.bulkProgress?.cancelled === true;
+    this.bulkProgress = null;
+    this.bulkProgressContainer = null;
+
     this.selectedPostPaths.clear();
 
     if (unarchivedCount > 0) {
+      // Incremental refresh: re-apply filters in-memory
+      this.filteredPosts = this.dedupePostsByFilePath(
+        this.filterSortManager.applyFiltersAndSort(this.posts),
+      );
+      this.filteredIndexEntries = this.filterSortManager.applyFiltersAndSortIndex(this.indexEntries);
+      this.filterSortManager.updatePreviousFiltered(
+        this.filteredIndexEntries.map((entry) => entry.filePath),
+      );
+    }
+
+    // Use loadPosts() as fallback only on cancel/partial failure for full consistency
+    if (wasCancelled || (failedCount > 0 && unarchivedCount > 0)) {
       this.forceReload = true;
       await this.loadPosts();
     } else {
       await this.refreshBulkSelectionPresentation();
     }
 
+    const suffix = wasCancelled ? ' (cancelled)' : '';
     if (unarchivedCount > 0 && failedCount === 0) {
-      new Notice(`Unarchived ${unarchivedCount} post${unarchivedCount === 1 ? '' : 's'}.`);
+      new Notice(`Unarchived ${unarchivedCount} post${unarchivedCount === 1 ? '' : 's'}.${suffix}`);
     } else if (unarchivedCount > 0) {
-      new Notice(`Unarchived ${unarchivedCount} post${unarchivedCount === 1 ? '' : 's'} (${failedCount} failed).`);
-    } else {
+      new Notice(`Unarchived ${unarchivedCount} post${unarchivedCount === 1 ? '' : 's'} (${failedCount} failed).${suffix}`);
+    } else if (!wasCancelled) {
       new Notice('No posts were unarchived.');
+    } else {
+      new Notice(`Unarchive cancelled. ${unarchivedCount} post${unarchivedCount === 1 ? '' : 's'} unarchived before cancellation.`);
     }
   }
 
@@ -6080,32 +6241,68 @@ export class TimelineContainer {
       return;
     }
 
+    // Initialize progress tracking
+    this.bulkProgress = { current: 0, total: selectedPosts.length, cancelled: false };
+    const hasTagChipBar = this.containerEl.querySelector('.tag-chip-bar') !== null;
+    this.renderBulkSelectionControls(hasTagChipBar);
+
     let deletedCount = 0;
     let failedCount = 0;
+    const deletedFilePaths = new Set<string>();
 
     for (const post of selectedPosts) {
+      if (this.bulkProgress.cancelled) break;
+
       const deleted = await this.postCardRenderer.deletePostForBulk(post);
       if (deleted) {
         deletedCount++;
+        deletedFilePaths.add(post.filePath);
         this.selectedPostPaths.delete(post.filePath);
       } else {
         failedCount++;
       }
+
+      this.bulkProgress.current++;
+      if (this.bulkProgress.current % 25 === 0) {
+        this.updateBulkProgressBar();
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+      }
     }
 
+    const wasCancelled = this.bulkProgress?.cancelled === true;
+    this.bulkProgress = null;
+    this.bulkProgressContainer = null;
+
     if (deletedCount > 0) {
+      // Incremental refresh: remove deleted posts from in-memory collections
+      this.posts = this.posts.filter((p) => !p.filePath || !deletedFilePaths.has(p.filePath));
+      this.indexEntries = this.indexEntries.filter((e) => !deletedFilePaths.has(e.filePath));
+      this.filteredPosts = this.dedupePostsByFilePath(
+        this.filterSortManager.applyFiltersAndSort(this.posts),
+      );
+      this.filteredIndexEntries = this.filterSortManager.applyFiltersAndSortIndex(this.indexEntries);
+      this.filterSortManager.updatePreviousFiltered(
+        this.filteredIndexEntries.map((entry) => entry.filePath),
+      );
+    }
+
+    // Use loadPosts() as fallback only on cancel/partial failure for full consistency
+    if (wasCancelled || (failedCount > 0 && deletedCount > 0)) {
       this.forceReload = true;
       await this.loadPosts();
     } else {
       await this.refreshBulkSelectionPresentation();
     }
 
+    const suffix = wasCancelled ? ' (cancelled)' : '';
     if (deletedCount > 0 && failedCount === 0) {
-      new Notice(`Deleted ${deletedCount} post${deletedCount === 1 ? '' : 's'}.`);
+      new Notice(`Deleted ${deletedCount} post${deletedCount === 1 ? '' : 's'}.${suffix}`);
     } else if (deletedCount > 0) {
-      new Notice(`Deleted ${deletedCount} post${deletedCount === 1 ? '' : 's'} (${failedCount} failed).`);
-    } else {
+      new Notice(`Deleted ${deletedCount} post${deletedCount === 1 ? '' : 's'} (${failedCount} failed).${suffix}`);
+    } else if (!wasCancelled) {
       new Notice('No posts were deleted.');
+    } else {
+      new Notice(`Delete cancelled. ${deletedCount} post${deletedCount === 1 ? '' : 's'} deleted before cancellation.`);
     }
   }
 
