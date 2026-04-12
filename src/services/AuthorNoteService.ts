@@ -266,34 +266,71 @@ export class AuthorNoteService {
     file: TFile,
     profile: Pick<UserAuthorProfile, 'displayNameOverride' | 'bioOverride' | 'aliases' | 'fetchedBio'>,
   ): Promise<void> {
-    await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-      if (profile.displayNameOverride?.trim()) {
-        fm.displayNameOverride = profile.displayNameOverride.trim();
+    try {
+      await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+        this.applyProfileToFrontmatter(fm, profile);
+      });
+    } catch (error) {
+      // If YAML parsing fails (e.g., existing file has malformed multiline values),
+      // repair the frontmatter by reading raw content and rewriting it.
+      if (error instanceof Error && error.message.includes('Implicit keys need to be on a single line')) {
+        console.warn('[AuthorNoteService] Repairing broken YAML frontmatter', { path: file.path });
+        await this.repairFrontmatter(file, profile);
       } else {
-        delete fm.displayNameOverride;
+        throw error;
       }
-
-      if (profile.bioOverride?.trim()) {
-        // Collapse newlines to single space — YAML frontmatter plain scalars
-        // cannot contain literal newlines without block scalar syntax.
-        fm.bioOverride = profile.bioOverride.trim().replace(/\n+/g, ' ');
-      } else {
-        delete fm.bioOverride;
-      }
-
-      const aliases = (profile.aliases ?? []).map((value) => value.trim()).filter(Boolean);
-      if (aliases.length > 0) {
-        fm.aliases = aliases;
-      } else {
-        delete fm.aliases;
-      }
-
-      if (profile.fetchedBio?.trim()) {
-        fm.bio = profile.fetchedBio.trim().replace(/\n+/g, ' ');
-      }
-    });
+    }
 
     this.invalidateIndex();
+  }
+
+  private applyProfileToFrontmatter(
+    fm: Record<string, unknown>,
+    profile: Pick<UserAuthorProfile, 'displayNameOverride' | 'bioOverride' | 'aliases' | 'fetchedBio'>,
+  ): void {
+    if (profile.displayNameOverride?.trim()) {
+      fm.displayNameOverride = profile.displayNameOverride.trim();
+    } else {
+      delete fm.displayNameOverride;
+    }
+    if (profile.bioOverride?.trim()) {
+      fm.bioOverride = profile.bioOverride.trim().replace(/\n+/g, ' ');
+    } else {
+      delete fm.bioOverride;
+    }
+    const aliases = (profile.aliases ?? []).map((value) => value.trim()).filter(Boolean);
+    if (aliases.length > 0) {
+      fm.aliases = aliases;
+    } else {
+      delete fm.aliases;
+    }
+    if (profile.fetchedBio?.trim()) {
+      fm.bio = profile.fetchedBio.trim().replace(/\n+/g, ' ');
+    }
+  }
+
+  private async repairFrontmatter(
+    file: TFile,
+    profile: Pick<UserAuthorProfile, 'displayNameOverride' | 'bioOverride' | 'aliases' | 'fetchedBio'>,
+  ): Promise<void> {
+    const content = await this.app.vault.read(file);
+    const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+    if (!fmMatch || !fmMatch[1]) return;
+
+    const rawFm = fmMatch[1];
+    const fixedFm = rawFm.replace(
+      /^(\w[\w]*:\s*.+)\n(?![\w][\w]*:|---|- )/gm,
+      '$1 ',
+    );
+
+    if (fixedFm !== rawFm) {
+      const fixedContent = content.replace(fmMatch[0], `---\n${fixedFm}\n---`);
+      await this.app.vault.modify(file, fixedContent);
+    }
+
+    await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+      this.applyProfileToFrontmatter(fm, profile);
+    });
   }
 
   /**
