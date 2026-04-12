@@ -274,7 +274,9 @@ export class AuthorNoteService {
       }
 
       if (profile.bioOverride?.trim()) {
-        fm.bioOverride = profile.bioOverride.trim();
+        // Collapse newlines to single space — YAML frontmatter plain scalars
+        // cannot contain literal newlines without block scalar syntax.
+        fm.bioOverride = profile.bioOverride.trim().replace(/\n+/g, ' ');
       } else {
         delete fm.bioOverride;
       }
@@ -287,7 +289,7 @@ export class AuthorNoteService {
       }
 
       if (profile.fetchedBio?.trim()) {
-        fm.bio = profile.fetchedBio.trim();
+        fm.bio = profile.fetchedBio.trim().replace(/\n+/g, ' ');
       }
     });
 

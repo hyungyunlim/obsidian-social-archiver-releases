@@ -21,8 +21,15 @@ export class AuthorProfileSyncService {
 
   async applyProfiles(profiles: UserAuthorProfile[]): Promise<void> {
     for (const profile of profiles) {
-      this.beforeApply?.(profile.authorKey);
-      await this.authorNoteService.upsertFromSyncedProfile(profile);
+      try {
+        this.beforeApply?.(profile.authorKey);
+        await this.authorNoteService.upsertFromSyncedProfile(profile);
+      } catch (error) {
+        console.error('[AuthorProfileSync] Failed to apply profile — skipping', {
+          authorKey: profile.authorKey,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
   }
 }
