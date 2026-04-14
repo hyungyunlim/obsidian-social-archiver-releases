@@ -160,12 +160,6 @@ export interface ArchiveLibrarySyncDeps {
    * Wired to ArchiveStateSyncService.reconcileFromLibrarySync() in main.ts.
    */
   reconcileArchiveState?: (file: TFile, archiveId: string, isBookmarked: boolean) => Promise<void>;
-
-  /**
-   * Reconcile the `like` frontmatter field on an existing vault file
-   * against the server's `isLiked` value.
-   */
-  reconcileLikeState?: (file: TFile, archiveId: string, isLiked: boolean) => Promise<void>;
 }
 
 // ============================================================================
@@ -498,7 +492,6 @@ export class ArchiveLibrarySyncService {
       const existingById = this.deps.findBySourceArchiveId(archive.id);
       if (existingById) {
         await this.reconcileExistingArchiveState(existingById, archive);
-        await this.reconcileExistingLikeState(existingById, archive);
         this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
         return;
       }
@@ -551,7 +544,6 @@ export class ArchiveLibrarySyncService {
           });
         }
         await this.reconcileExistingArchiveState(matched, archive);
-        await this.reconcileExistingLikeState(matched, archive);
         this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
         return;
       }
@@ -608,27 +600,6 @@ export class ArchiveLibrarySyncService {
     } catch (error) {
       // Non-fatal: log and continue — the main sync must not be disrupted
       console.warn('[Social Archiver] [LibrarySync] reconcileExistingArchiveState failed', {
-        archiveId: archive.id,
-        path: file.path,
-        error,
-      });
-    }
-  }
-
-  /**
-   * Reconcile the `like` frontmatter field on an existing vault file against
-   * the server's `isLiked` value.
-   */
-  private async reconcileExistingLikeState(file: TFile, archive: UserArchive): Promise<void> {
-    if (!this.deps.reconcileLikeState) return;
-
-    const serverIsLiked: boolean = archive.isLiked;
-    if (typeof serverIsLiked !== 'boolean') return;
-
-    try {
-      await this.deps.reconcileLikeState(file, archive.id, serverIsLiked);
-    } catch (error) {
-      console.warn('[Social Archiver] [LibrarySync] reconcileExistingLikeState failed', {
         archiveId: archive.id,
         path: file.path,
         error,

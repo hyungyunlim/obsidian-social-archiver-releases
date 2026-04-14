@@ -182,6 +182,8 @@ export class AuthorNoteService {
 
   /**
    * Find an author note by its authorKey value.
+   * Falls back to Facebook domain variant keys (web./m./bare → www.)
+   * to find notes created before URL normalization was unified.
    */
   findNoteByKey(authorKey: string): TFile | null {
     const index = this.getIndex();
@@ -193,7 +195,47 @@ export class AuthorNoteService {
       if (file instanceof TFile) return file;
     }
 
+    // Fallback: try Facebook domain variants for legacy notes
+    if (authorKey.startsWith('facebook:url:')) {
+      for (const variant of this.facebookDomainVariants(authorKey)) {
+        const variantPath = index.get(variant);
+        if (variantPath) {
+          const file = this.app.vault.getFileByPath(variantPath);
+          if (file instanceof TFile) return file;
+        }
+      }
+    }
+
     return null;
+  }
+
+  /**
+   * Generate Facebook domain variant keys for legacy note lookup.
+   * Given a canonical key with www.facebook.com, produces variants
+   * with web., m., bare domain etc. (and vice versa).
+   */
+  private facebookDomainVariants(authorKey: string): string[] {
+    const prefix = 'facebook:url:https://';
+    if (!authorKey.startsWith(prefix)) return [];
+
+    const afterPrefix = authorKey.slice(prefix.length);
+    // Extract the path after domain
+    const slashIdx = afterPrefix.indexOf('/');
+    if (slashIdx === -1) return [];
+
+    const path = afterPrefix.slice(slashIdx);
+    const domains = [
+      'www.facebook.com',
+      'web.facebook.com',
+      'm.facebook.com',
+      'mbasic.facebook.com',
+      'touch.facebook.com',
+      'facebook.com',
+    ];
+
+    return domains
+      .map((d) => `${prefix}${d}${path}`)
+      .filter((k) => k !== authorKey);
   }
 
   /**
@@ -428,14 +470,11 @@ export class AuthorNoteService {
       if (postData.author.bio) updates.bio = postData.author.bio;
       if (postData.author.verified != null) updates.verified = postData.author.verified;
 
-      // Legacy key promotion: name-based → URL-based
-      if (
-        authorUrl &&
-        existingData.authorKey.includes(':name:') &&
-        !authorKey.includes(':name:')
-      ) {
+      // Key promotion: update authorKey to canonical form when it changed
+      // (name-based → URL-based, or domain variant → canonical domain)
+      if (authorKey !== existingData.authorKey) {
         updates.authorKey = authorKey;
-        updates.authorUrl = authorUrl;
+        if (authorUrl) updates.authorUrl = authorUrl;
         const legacyKeys = [...(existingData.legacyKeys || [])];
         if (!legacyKeys.includes(existingData.authorKey)) {
           legacyKeys.push(existingData.authorKey);
@@ -504,14 +543,10 @@ export class AuthorNoteService {
       if (entry.handle) updates.authorHandle = entry.handle;
       if (entry.lastSeenAt) updates.lastSeenAt = entry.lastSeenAt.toISOString();
 
-      // Legacy key promotion
-      if (
-        entry.authorUrl &&
-        existingData.authorKey.includes(':name:') &&
-        !authorKey.includes(':name:')
-      ) {
+      // Key promotion: update authorKey to canonical form when it changed
+      if (authorKey !== existingData.authorKey) {
         updates.authorKey = authorKey;
-        updates.authorUrl = entry.authorUrl;
+        if (entry.authorUrl) updates.authorUrl = entry.authorUrl;
         const legacyKeys = [...(existingData.legacyKeys || [])];
         if (!legacyKeys.includes(existingData.authorKey)) {
           legacyKeys.push(existingData.authorKey);

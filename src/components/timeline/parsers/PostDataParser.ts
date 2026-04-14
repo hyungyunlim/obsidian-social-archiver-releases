@@ -227,7 +227,7 @@ export class PostDataParser {
 
       const comments = this.extractComments(content);
       const threadsInlineMarkdown = frontmatter.platform === 'threads'
-        ? this.extractThreadsInlineContent(content)
+        ? this.extractThreadsInlineContent(content, mediaUrls)
         : undefined;
 
       const publishedDate = frontmatter.published ? new Date(frontmatter.published) : undefined;
@@ -491,7 +491,7 @@ export class PostDataParser {
           // For RSS-based platforms and web articles: preserve raw markdown with inline images for proper rendering
           // For X articles: extract article body and unescape markdown artifacts
           rawMarkdown: (isRssBasedPlatform(frontmatter.platform) || frontmatter.platform === 'web')
-            ? this.extractBlogContentWithImages(content)
+            ? this.extractBlogContentWithInlineMedia(content, mediaUrls)
             : threadsInlineMarkdown
               ? threadsInlineMarkdown
             : (frontmatter.platform === 'x' && this.isXArticlePost(frontmatter, content))
@@ -741,8 +741,73 @@ export class PostDataParser {
     return content;
   }
 
-  private extractThreadsInlineContent(markdown: string): string | undefined {
-    const content = this.extractBlogContentWithImages(markdown);
+  /**
+   * Extract blog content and replace any surviving {{IMAGE_N}}/{{VIDEO_N}}
+   * placeholders with Obsidian embeds. Used for RSS-based platforms and web
+   * articles where MarkdownConverter may have left placeholders intact
+   * (e.g. media download disabled or failed).
+   */
+  private extractBlogContentWithInlineMedia(markdown: string, mediaUrls?: string[]): string {
+    let content = this.extractBlogContentWithImages(markdown);
+
+    if (mediaUrls && mediaUrls.length > 0 && /\{\{(?:IMAGE|VIDEO)_\d+\}\}/.test(content)) {
+      const { content: replaced } = this.replaceMediaPlaceholders(content, mediaUrls);
+      content = replaced;
+    }
+
+    return content;
+  }
+
+  /**
+   * Replace {{IMAGE_N}} / {{VIDEO_N}} placeholders with Obsidian image embeds
+   * and deduplicate any trailing media entries that match the inlined filenames.
+   *
+   * Workers generate these placeholders for inline media placement (Threads,
+   * GenericRSS, NaverMarkdownConverter). MarkdownConverter normally replaces
+   * them during vault save, but if media download fails or is disabled the
+   * placeholders survive into the markdown file.
+   */
+  private replaceMediaPlaceholders(content: string, mediaUrls: string[]): { content: string; replacedAny: boolean } {
+    const inlinedFilenames = new Set<string>();
+    let replacedAny = false;
+
+    let result = content.replace(/\{\{(?:IMAGE|VIDEO)_(\d+)\}\}/g, (_match, indexStr: string) => {
+      const index = parseInt(indexStr, 10);
+      const mediaPath = mediaUrls[index];
+      if (!mediaPath) return '';
+      replacedAny = true;
+      const filename = mediaPath.split('/').pop() || mediaPath;
+      inlinedFilenames.add(filename);
+      return `![[${filename}]]`;
+    });
+
+    if (replacedAny) {
+      // Remove any remaining standalone image embeds whose filename was already
+      // inlined above. These are trailing media entries that
+      // extractBlogContentWithImages failed to strip (e.g. extra --- separator).
+      for (const filename of inlinedFilenames) {
+        const escaped = filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        result = result.replace(
+          new RegExp(`\\n*(?:---\\n+)?!\\[[^\\]]*\\]\\([^)]*${escaped}[^)]*\\)\\s*(?:---\\s*)?`, 'g'),
+          '',
+        );
+      }
+      result = result.replace(/\n{3,}/g, '\n\n').trim();
+    }
+
+    return { content: result, replacedAny };
+  }
+
+  private extractThreadsInlineContent(markdown: string, mediaUrls?: string[]): string | undefined {
+    let content = this.extractBlogContentWithImages(markdown);
+
+    if (mediaUrls && mediaUrls.length > 0) {
+      const { content: replaced, replacedAny } = this.replaceMediaPlaceholders(content, mediaUrls);
+      if (replacedAny) {
+        return replaced || undefined;
+      }
+    }
+
     if (!this.hasInlineMediaMarkdown(content)) {
       return undefined;
     }

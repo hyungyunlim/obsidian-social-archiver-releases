@@ -34,7 +34,8 @@ const PLATFORM_URL_PATTERNS: Record<string, RegExp[]> = {
   ],
   facebook: [
     /^https?:\/\/(www\.)?(facebook|fb)\.com\/([^/?#]+)/i,
-    /^https?:\/\/m\.facebook\.com\/([^/?#]+)/i
+    /^https?:\/\/(?:m|mobile|web|mbasic|touch)\.facebook\.com\/([^/?#]+)/i,
+    /^https?:\/\/[a-z]{2}-[a-z]{2}\.facebook\.com\/([^/?#]+)/i
   ],
   linkedin: [
     /^https?:\/\/([a-z]{2}\.)?linkedin\.com\/in\/([^/?#]+)/i,  // Personal: /in/username (with optional country subdomain)

@@ -789,6 +789,99 @@ describe('AuthorNoteService', () => {
       const uniqueKeys = [...new Set(legacyKeys)];
       expect(legacyKeys.length).toBe(uniqueKeys.length);
     });
+
+    it('should find note with web.facebook.com key when canonical www key is used', async () => {
+      const ctx = createMockApp();
+      const service = createService(ctx.mockApp);
+
+      const filePath = 'Authors/facebook-sanghyun.simon.park.md';
+      const oldKey = 'facebook:url:https://web.facebook.com/sanghyun.simon.park';
+
+      setupIndexableNote(ctx, filePath, {
+        type: AUTHOR_NOTE_TYPE,
+        noteVersion: AUTHOR_NOTE_VERSION,
+        authorKey: oldKey,
+        legacyKeys: [],
+        platform: 'facebook',
+        authorName: 'Sanghyun Park',
+        authorUrl: 'https://web.facebook.com/sanghyun.simon.park',
+        archiveCount: 5,
+      });
+
+      service.invalidateIndex();
+
+      const postData = {
+        platform: 'facebook',
+        id: 'post-999',
+        url: 'https://www.facebook.com/sanghyun.simon.park/posts/999',
+        author: {
+          name: 'Sanghyun Park',
+          url: 'https://www.facebook.com/sanghyun.simon.park',
+        },
+        content: { text: 'New post' },
+        media: [],
+        metadata: { timestamp: new Date() },
+      };
+
+      await service.upsertFromArchive(postData as any);
+
+      const updatedFm = ctx.fileCacheMap.get(filePath)!.frontmatter;
+
+      // Key should be promoted to canonical www.facebook.com form
+      expect(updatedFm.authorKey).toBe(
+        'facebook:url:https://www.facebook.com/sanghyun.simon.park'
+      );
+      // Old web.facebook.com key should be preserved in legacyKeys
+      expect(updatedFm.legacyKeys).toContain(oldKey);
+      // authorUrl should be updated
+      expect(updatedFm.authorUrl).toBe(
+        'https://www.facebook.com/sanghyun.simon.park'
+      );
+    });
+
+    it('should find note with bare facebook.com key via domain variant fallback', async () => {
+      const ctx = createMockApp();
+      const service = createService(ctx.mockApp);
+
+      const filePath = 'Authors/facebook-testuser.md';
+      const oldKey = 'facebook:url:https://facebook.com/testuser';
+
+      setupIndexableNote(ctx, filePath, {
+        type: AUTHOR_NOTE_TYPE,
+        noteVersion: AUTHOR_NOTE_VERSION,
+        authorKey: oldKey,
+        legacyKeys: [],
+        platform: 'facebook',
+        authorName: 'Test User',
+        authorUrl: 'https://facebook.com/testuser',
+        archiveCount: 2,
+      });
+
+      service.invalidateIndex();
+
+      const postData = {
+        platform: 'facebook',
+        id: 'post-100',
+        url: 'https://www.facebook.com/testuser/posts/100',
+        author: {
+          name: 'Test User',
+          url: 'https://www.facebook.com/testuser',
+        },
+        content: { text: 'Post content' },
+        media: [],
+        metadata: { timestamp: new Date() },
+      };
+
+      await service.upsertFromArchive(postData as any);
+
+      const updatedFm = ctx.fileCacheMap.get(filePath)!.frontmatter;
+
+      // Key promoted to canonical form
+      expect(updatedFm.authorKey).toBe(
+        'facebook:url:https://www.facebook.com/testuser'
+      );
+      expect(updatedFm.legacyKeys).toContain(oldKey);
+    });
   });
 
   // --------------------------------------------------------------------------

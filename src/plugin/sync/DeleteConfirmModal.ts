@@ -39,14 +39,13 @@ export class DeleteConfirmModal extends Modal {
     const { contentEl, modalEl } = this;
     contentEl.empty();
 
-    // Modal class for scoped CSS
     modalEl.addClass('social-archiver-modal', 'sa-delete-confirm-modal');
+    modalEl.style.maxWidth = '420px';
 
     // Title
     contentEl.createEl('h3', {
       text: 'Delete from server too?',
-      cls: 'sa-delete-confirm-title',
-    });
+    }).style.marginBottom = '8px';
 
     // Explanation with count
     const countText = this.pendingCount === 1
@@ -54,39 +53,44 @@ export class DeleteConfirmModal extends Modal {
       : `${this.pendingCount} archived notes were`;
     contentEl.createEl('p', {
       text: `${countText} deleted from the vault. Do you also want to delete the server copies?`,
-      cls: 'sa-delete-confirm-desc',
-    });
+    }).style.marginBottom = '8px';
 
-    // Warning about Library Sync re-importing the note
-    contentEl.createEl('p', {
+    // Warning
+    const warning = contentEl.createEl('p', {
       text: 'If you keep them on the server, they may appear again during Library Sync.',
-      cls: 'sa-delete-confirm-warning mod-warning',
     });
+    warning.style.color = 'var(--text-error)';
+    warning.style.fontSize = '0.85em';
+    warning.style.marginBottom = '16px';
 
-    // "Don't ask again" checkbox row
-    const checkboxContainer = contentEl.createDiv({ cls: 'sa-delete-confirm-checkbox' });
-    const checkbox = checkboxContainer.createEl('input', { type: 'checkbox' });
+    // "Don't ask again" checkbox
+    const checkboxRow = contentEl.createDiv();
+    checkboxRow.style.display = 'flex';
+    checkboxRow.style.alignItems = 'center';
+    checkboxRow.style.gap = '6px';
+    checkboxRow.style.marginBottom = '16px';
+    const checkbox = checkboxRow.createEl('input', { type: 'checkbox' });
     checkbox.id = 'sa-delete-dont-ask-again';
-    checkboxContainer.createEl('label', {
-      text: " Don't ask again",
+    checkboxRow.createEl('label', {
+      text: "Don't ask again",
       attr: { for: 'sa-delete-dont-ask-again' },
-    });
+    }).style.fontSize = '0.9em';
 
-    // Button row
-    const buttonContainer = contentEl.createDiv({ cls: 'sa-delete-confirm-buttons' });
+    // Buttons
+    const buttonRow = contentEl.createDiv();
+    buttonRow.style.display = 'flex';
+    buttonRow.style.justifyContent = 'flex-end';
+    buttonRow.style.gap = '8px';
 
-    const keepBtn = buttonContainer.createEl('button', {
-      text: 'Keep on Server',
-      cls: 'sa-delete-confirm-keep',
-    });
+    const keepBtn = buttonRow.createEl('button', { text: 'Keep on Server' });
     keepBtn.addEventListener('click', () => {
       this.resolve({ action: 'keep-on-server', dontAskAgain: checkbox.checked });
       this.close();
     });
 
-    const deleteBtn = buttonContainer.createEl('button', {
+    const deleteBtn = buttonRow.createEl('button', {
       text: 'Delete on Server',
-      cls: 'sa-delete-confirm-delete mod-warning',
+      cls: 'mod-warning',
     });
     deleteBtn.addEventListener('click', () => {
       this.resolve({ action: 'delete-on-server', dontAskAgain: checkbox.checked });

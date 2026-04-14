@@ -428,6 +428,73 @@ describe('AuthorDeduplicator', () => {
     });
   });
 
+  describe('Facebook domain variant handle extraction', () => {
+    it('should extract handle from web.facebook.com', () => {
+      const result = normalizeAuthorUrl(
+        'https://web.facebook.com/sanghyun.simon.park',
+        'facebook'
+      );
+      expect(result.handle).toBe('sanghyun.simon.park');
+      expect(result.platform).toBe('facebook');
+    });
+
+    it('should extract handle from mbasic.facebook.com', () => {
+      const result = normalizeAuthorUrl(
+        'https://mbasic.facebook.com/sanghyun.simon.park',
+        'facebook'
+      );
+      expect(result.handle).toBe('sanghyun.simon.park');
+      expect(result.platform).toBe('facebook');
+    });
+
+    it('should extract handle from touch.facebook.com', () => {
+      const result = normalizeAuthorUrl(
+        'https://touch.facebook.com/sanghyun.simon.park',
+        'facebook'
+      );
+      expect(result.handle).toBe('sanghyun.simon.park');
+      expect(result.platform).toBe('facebook');
+    });
+
+    it('should extract handle from mobile.facebook.com', () => {
+      const result = normalizeAuthorUrl(
+        'https://mobile.facebook.com/sanghyun.simon.park',
+        'facebook'
+      );
+      expect(result.handle).toBe('sanghyun.simon.park');
+      expect(result.platform).toBe('facebook');
+    });
+
+    it('should extract handle from locale subdomain (ko-kr.facebook.com)', () => {
+      const result = normalizeAuthorUrl(
+        'https://ko-kr.facebook.com/sanghyun.simon.park',
+        'facebook'
+      );
+      expect(result.handle).toBe('sanghyun.simon.park');
+      expect(result.platform).toBe('facebook');
+    });
+
+    it('should still normalize m.facebook.com domain', () => {
+      const result = normalizeAuthorUrl(
+        'https://m.facebook.com/sanghyun.simon.park',
+        'facebook'
+      );
+      // Existing behavior: m.facebook.com → facebook.com
+      expect(result.url).toBe('https://facebook.com/sanghyun.simon.park');
+      expect(result.handle).toBe('sanghyun.simon.park');
+    });
+
+    it('should still normalize fb.com domain', () => {
+      const result = normalizeAuthorUrl(
+        'https://fb.com/sanghyun.simon.park',
+        'facebook'
+      );
+      // Existing behavior: fb.com → facebook.com
+      expect(result.url).toBe('https://facebook.com/sanghyun.simon.park');
+      expect(result.handle).toBe('sanghyun.simon.park');
+    });
+  });
+
   describe('normalizeAuthorUrl for GitHub Pages / Jekyll blogs', () => {
     it('should normalize GitHub Pages user site URL (strip post path)', () => {
       const result = normalizeAuthorUrl(

@@ -187,10 +187,6 @@ export class FrontmatterGenerator {
       tags: [],
     };
 
-    if (postData.like === true) {
-      frontmatter.like = true;
-    }
-
     // Only add originalUrl if it exists (User posts don't have external URLs)
     if (postData.url) {
       frontmatter.originalUrl = postData.url;
