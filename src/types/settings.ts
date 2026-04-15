@@ -59,6 +59,9 @@ export function getVaultOrganizationStrategy(mode?: ArchiveOrganizationMode): 'p
 // Share mode types
 export type ShareMode = 'full' | 'preview';
 
+export type ViewLocation = 'sidebar' | 'main';
+export type ViewLocationOverride = 'default' | ViewLocation;
+
 // User tier types
 export type UserTier = 'beta-free' | 'free' | 'pro' | 'admin';
 
@@ -561,8 +564,22 @@ export interface SocialArchiverSettings {
   enableAuthorNotes: boolean; // Create vault-native author note files (default: false)
   authorNotesPath: string; // Folder for author note files (default: 'Social Authors')
 
-  // Author Detail View Settings
-  authorDetailOpenInMainTab: boolean; // Open author details in main area instead of sidebar (default: false)
+  // View Location Settings
+  viewLocationDefault: ViewLocation;
+  timelineLocation: ViewLocationOverride;
+  authorDetailLocation: ViewLocationOverride;
+  /** @deprecated Use viewLocationDefault / timelineLocation instead */
+  timelineOpenInMainTab?: boolean;
+  /** @deprecated Use viewLocationDefault / authorDetailLocation instead */
+  authorDetailOpenInMainTab?: boolean;
+  /** @deprecated Use viewLocationDefault / timelineLocation instead */
+  timelineLocationDesktop?: ViewLocation;
+  /** @deprecated Use viewLocationDefault / timelineLocation instead */
+  timelineLocationMobile?: ViewLocation;
+  /** @deprecated Use viewLocationDefault / authorDetailLocation instead */
+  authorDetailLocationDesktop?: ViewLocation;
+  /** @deprecated Use viewLocationDefault / authorDetailLocation instead */
+  authorDetailLocationMobile?: ViewLocation;
 
   // Legacy fields (deprecated but kept for migration)
   /** @deprecated Use authToken instead */
@@ -713,14 +730,26 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
   enableAuthorNotes: false, // Disabled by default (experimental)
   authorNotesPath: 'Social Authors', // Default: outside archivePath
 
-  // Author Detail View Settings
-  authorDetailOpenInMainTab: true, // Default: open in main tab
+  // View Location Settings
+  viewLocationDefault: 'sidebar',
+  timelineLocation: 'default',
+  authorDetailLocation: 'default',
 
   // Legacy fields (for migration compatibility)
   apiKey: '',
   licenseKey: '',
   creditsRemaining: 10
 };
+
+/**
+ * Resolve a view location override against the default.
+ */
+export function resolveViewLocation(
+  override: ViewLocationOverride,
+  defaultLocation: ViewLocation,
+): ViewLocation {
+  return override === 'default' ? defaultLocation : override;
+}
 
 /**
  * Migrate legacy settings to new authentication structure
@@ -996,6 +1025,30 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
   // Initialize composed post sync queue if missing (migration)
   if (!Array.isArray(migrated.pendingComposedPostSyncs)) {
     migrated.pendingComposedPostSyncs = [];
+  }
+
+  // Migrate legacy view location settings to unified default + override model
+  // Priority: new fields > v3.2.3 per-platform fields > v3.2.2 boolean fields
+  if (!settings.viewLocationDefault) {
+    if (legacy['timelineLocationDesktop']) {
+      migrated.viewLocationDefault = legacy['timelineLocationDesktop'] as ViewLocation;
+    } else if (legacy['timelineOpenInMainTab'] !== undefined) {
+      migrated.viewLocationDefault = legacy['timelineOpenInMainTab'] ? 'main' : 'sidebar';
+    }
+  }
+  if (!settings.timelineLocation) {
+    if (legacy['timelineLocationDesktop'] && legacy['timelineLocationDesktop'] !== migrated.viewLocationDefault) {
+      migrated.timelineLocation = legacy['timelineLocationDesktop'] as ViewLocation;
+    }
+  }
+  if (!settings.authorDetailLocation) {
+    if (legacy['authorDetailLocationDesktop']) {
+      const adLoc = legacy['authorDetailLocationDesktop'] as ViewLocation;
+      migrated.authorDetailLocation = adLoc === migrated.viewLocationDefault ? 'default' : adLoc;
+    } else if (legacy['authorDetailOpenInMainTab'] !== undefined) {
+      const adLoc: ViewLocation = legacy['authorDetailOpenInMainTab'] ? 'main' : 'sidebar';
+      migrated.authorDetailLocation = adLoc === migrated.viewLocationDefault ? 'default' : adLoc;
+    }
   }
 
   return migrated;

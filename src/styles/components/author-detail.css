@@ -87,6 +87,10 @@
   width: 100%;
 }
 
+.author-detail-ts-container:not(.is-main-area) .author-detail-content {
+  padding: 12px 12px 0;
+}
+
 .author-detail-ts-container:not(.is-main-area) .author-detail-timeline-feed {
   max-width: 42rem;
   margin-left: auto;

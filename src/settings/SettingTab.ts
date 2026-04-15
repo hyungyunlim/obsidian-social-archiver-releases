@@ -225,6 +225,48 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     // Mobile Sync Settings Section (right below Account)
     this.renderMobileSyncSettings(containerEl);
 
+    // View Settings
+    new Setting(containerEl).setName('View').setHeading()
+      .settingEl.addClass('sa-settings-section-header');
+
+    new Setting(containerEl)
+      .setName('Default view location')
+      .setDesc('Where views open by default. Individual views below can override this.')
+      .addDropdown(dropdown => dropdown
+        .addOption('sidebar', 'Right sidebar')
+        .addOption('main', 'Main tab')
+        .setValue(this.plugin.settings.viewLocationDefault)
+        .onChange((value) => {
+          this.plugin.settings.viewLocationDefault = value as 'sidebar' | 'main';
+          this.markDirty();
+        }));
+
+    new Setting(containerEl)
+      .setName('Timeline view')
+      .setDesc('Override the default location for the timeline view.')
+      .addDropdown(dropdown => dropdown
+        .addOption('default', 'Use default')
+        .addOption('sidebar', 'Right sidebar')
+        .addOption('main', 'Main tab')
+        .setValue(this.plugin.settings.timelineLocation)
+        .onChange((value) => {
+          this.plugin.settings.timelineLocation = value as 'default' | 'sidebar' | 'main';
+          this.markDirty();
+        }));
+
+    new Setting(containerEl)
+      .setName('Author detail')
+      .setDesc('Override the default location for the author detail view.')
+      .addDropdown(dropdown => dropdown
+        .addOption('default', 'Use default')
+        .addOption('sidebar', 'Right sidebar')
+        .addOption('main', 'Main tab')
+        .setValue(this.plugin.settings.authorDetailLocation)
+        .onChange((value) => {
+          this.plugin.settings.authorDetailLocation = value as 'default' | 'sidebar' | 'main';
+          this.markDirty();
+        }));
+
     // Author Settings Section (profile management + notes)
     new Setting(containerEl).setName('Author').setHeading()
       .settingEl.addClass('sa-settings-section-header');
@@ -259,15 +301,6 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           this.markDirty();
         }));
 
-    new Setting(containerEl)
-      .setName('Open author details in main area')
-      .setDesc('When enabled, author details open as a tab instead of the sidebar.')
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.authorDetailOpenInMainTab)
-        .onChange((value) => {
-          this.plugin.settings.authorDetailOpenInMainTab = value;
-          this.markDirty();
-        }));
 
     // Author notes sub-section (folder + generate hidden when disabled)
     const authorNotesContainer = containerEl.createDiv();

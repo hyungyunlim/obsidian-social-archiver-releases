@@ -1,6 +1,6 @@
 import { Plugin, Notice, Platform as ObsidianPlatform, Events, TFile, TFolder, type WorkspaceLeaf } from 'obsidian';
 import { SocialArchiverSettingTab } from './settings/SettingTab';
-import { SocialArchiverSettings, DEFAULT_SETTINGS, API_ENDPOINT, migrateSettings, getVaultOrganizationStrategy } from './types/settings';
+import { SocialArchiverSettings, DEFAULT_SETTINGS, API_ENDPOINT, migrateSettings, getVaultOrganizationStrategy, resolveViewLocation } from './types/settings';
 import { WorkersAPIClient } from './services/WorkersAPIClient';
 import { ArchiveOrchestrator } from './services/ArchiveOrchestrator';
 import { VaultManager } from './services/VaultManager';
@@ -318,10 +318,11 @@ export default class SocialArchiverPlugin extends Plugin {
     });
 
     // Add ribbon icon for timeline
-    // On mobile: opens in main area (full screen)
-    // On desktop: opens in sidebar (side-by-side with notes)
     this.addRibbonIcon('calendar-clock', 'Open timeline view', () => {
-      const location = ObsidianPlatform.isMobile ? 'main' : 'sidebar';
+      const location = resolveViewLocation(
+        this.settings.timelineLocation,
+        this.settings.viewLocationDefault,
+      );
       void this.activateTimelineView(location);
     });
 
@@ -1224,16 +1225,10 @@ export default class SocialArchiverPlugin extends Plugin {
    */
   public refreshTimelineView(): void {
     const leaves = this.app.workspace.getLeavesOfType('social-archiver-timeline');
-    if (leaves.length > 0) {
-      if (ObsidianPlatform.isMobile) {
-        leaves.forEach(leaf => {
-          const view = leaf.view;
-          if (view && 'refresh' in view && typeof view.refresh === 'function') {
-            (view.refresh as () => void)();
-          }
-        });
-      } else {
-        void this.activateTimelineView();
+    for (const leaf of leaves) {
+      const view = leaf.view;
+      if (view && 'refresh' in view && typeof view.refresh === 'function') {
+        (view.refresh as () => void)();
       }
     }
   }
@@ -1614,14 +1609,16 @@ export default class SocialArchiverPlugin extends Plugin {
    *
    * - Reuses an existing Author Detail leaf in the same location when possible.
    * - If reusing, calls showAuthor() instead of creating a new view.
-   * - Location defaults based on settings.authorDetailOpenInMainTab.
+   * - Location defaults based on authorDetailLocation settings.
    */
   async activateAuthorDetailView(
     author: AuthorCatalogEntry,
     location?: 'sidebar' | 'main'
   ): Promise<void> {
-    const effectiveLocation =
-      location ?? (this.settings.authorDetailOpenInMainTab ? 'main' : 'sidebar');
+    const effectiveLocation = location ?? resolveViewLocation(
+      this.settings.authorDetailLocation,
+      this.settings.viewLocationDefault,
+    );
     const { workspace } = this.app;
     let leaf: WorkspaceLeaf | undefined;
 

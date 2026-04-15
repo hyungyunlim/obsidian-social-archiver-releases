@@ -2,6 +2,7 @@ import { setIcon, Notice, Platform as ObsidianPlatform, requestUrl, TFile, type 
 import type { PostData, Platform } from '../../types/post';
 import type SocialArchiverPlugin from '../../main';
 import type { SocialArchiverSettings, TimelineFilterPreferences, TimelineArchiveTab } from '../../types/settings';
+import { resolveViewLocation } from '../../types/settings';
 import { siObsidian, type PlatformIcon as SimpleIcon } from '../../constants/platform-icons';
 import {
   getPlatformSimpleIcon as getIconServiceSimpleIcon,
@@ -1036,12 +1037,11 @@ export class TimelineContainer {
       };
     }
 
-    // Respect authorDetailOpenInMainTab setting
-    if (this.plugin.settings.authorDetailOpenInMainTab) {
-      void this.plugin.activateAuthorDetailView(entry, 'main');
-    } else {
-      this.showAuthorDetail(entry);
-    }
+    const authorLocation = resolveViewLocation(
+      this.plugin.settings.authorDetailLocation,
+      this.plugin.settings.viewLocationDefault,
+    );
+    void this.plugin.activateAuthorDetailView(entry, authorLocation);
   }
 
   /**
@@ -4459,11 +4459,11 @@ export class TimelineContainer {
             }
           },
           onViewDetail: (author: AuthorCatalogEntry) => {
-            if (this.plugin.settings.authorDetailOpenInMainTab) {
-              void this.plugin.activateAuthorDetailView(author, 'main');
-            } else {
-              this.showAuthorDetail(author);
-            }
+            const adLocation = resolveViewLocation(
+              this.plugin.settings.authorDetailLocation,
+              this.plugin.settings.viewLocationDefault,
+            );
+            void this.plugin.activateAuthorDetailView(author, adLocation);
           },
           onViewArchives: (author: AuthorCatalogEntry) => {
             // Switch back to timeline view
