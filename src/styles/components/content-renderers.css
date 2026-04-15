@@ -381,6 +381,14 @@
 /* Search icon */
 .tr-search-icon {
   left: var(--tr-search-icon-left, 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.tr-search-icon svg {
+  width: 14px;
+  height: 14px;
 }
 
 .tr-search-icon-mobile {
@@ -389,7 +397,7 @@
 
 /* Search input */
 .tr-search-input {
-  padding: var(--tr-input-pad, 6px 10px 6px 34px);
+  padding: var(--tr-input-pad, 7px 10px 7px 32px);
   font-size: var(--tr-input-size, 13px);
   outline: none;
 }

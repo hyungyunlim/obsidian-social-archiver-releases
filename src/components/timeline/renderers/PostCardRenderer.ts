@@ -673,6 +673,18 @@ export class PostCardRenderer extends Component {
         this.mediaGalleryRenderer.renderWithTranscript(contentArea, post.media, post);
       } else {
         this.mediaGalleryRenderer.render(contentArea, post.media, post);
+
+        // Render VideoTranscriptPlayer for posts with local video + whisper transcript
+        // (YouTube/TikTok handled above; this covers Facebook reels, Instagram, etc.)
+        const hasWhisperTranscript = post.whisperTranscript?.segments && post.whisperTranscript.segments.length > 0;
+        if (hasWhisperTranscript) {
+          const videoEl = contentArea.querySelector('video') as HTMLVideoElement | null;
+          if (videoEl) {
+            const player = new VideoTranscriptPlayer(this.app);
+            player.render(contentArea, post, { videoElement: videoEl });
+            this.videoTranscriptPlayers.set(post.id, player);
+          }
+        }
       }
     }
 

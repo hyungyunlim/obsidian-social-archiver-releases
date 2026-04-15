@@ -10,6 +10,8 @@ import type { TranscriptionSegment } from '../../../types/transcription';
 export class VideoCaptionOverlay {
   private track: TextTrack | null = null;
   private videoElement: HTMLVideoElement | null = null;
+  private pendingSegments: TranscriptionSegment[] | null = null;
+  private metadataHandler: (() => void) | null = null;
 
   /**
    * Attach captions to a video element.
@@ -37,6 +39,19 @@ export class VideoCaptionOverlay {
 
     this.populateCues(segments);
     this.track.mode = 'showing';
+
+    // Re-populate cues once metadata loads (portrait detection needs videoWidth/Height)
+    if (videoElement.readyState < 1) {
+      this.pendingSegments = segments;
+      this.metadataHandler = () => {
+        if (this.pendingSegments && this.track) {
+          this.clearCues();
+          this.populateCues(this.pendingSegments);
+          this.pendingSegments = null;
+        }
+      };
+      videoElement.addEventListener('loadedmetadata', this.metadataHandler, { once: true });
+    }
   }
 
   /**
@@ -71,6 +86,11 @@ export class VideoCaptionOverlay {
    * but we can disable it and clear all cues.
    */
   destroy(): void {
+    if (this.metadataHandler && this.videoElement) {
+      this.videoElement.removeEventListener('loadedmetadata', this.metadataHandler);
+      this.metadataHandler = null;
+    }
+    this.pendingSegments = null;
     if (this.track) {
       this.track.mode = 'disabled';
       this.clearCues();
@@ -98,6 +118,11 @@ export class VideoCaptionOverlay {
   private populateCues(segments: TranscriptionSegment[]): void {
     if (!this.track) return;
 
+    // Detect portrait orientation to adjust cue sizing
+    const isPortrait = this.videoElement
+      ? this.videoElement.videoWidth > 0 && this.videoElement.videoHeight > this.videoElement.videoWidth
+      : false;
+
     for (const seg of segments) {
       // Guard: VTTCue requires start < end and non-negative times
       const start = Math.max(0, seg.start);
@@ -105,9 +130,9 @@ export class VideoCaptionOverlay {
 
       const cue = new VTTCue(start, end, seg.text);
       cue.snapToLines = false;
-      cue.line = 82; // percentage from top (finer control than integer lines)
-      cue.size = 100; // full width cue box
-      cue.align = 'center'; // text centered within the box
+      cue.line = isPortrait ? 88 : 85;
+      cue.size = 100;
+      cue.align = 'center';
       this.track.addCue(cue);
     }
   }

@@ -478,19 +478,32 @@ export class TranscriptRenderer {
 
     const inputWrapper = searchBar.createDiv({ cls: 'transcript-search-wrapper sa-relative sa-flex-row' });
 
-    // Search icon
+    // Search icon — use inline styles to avoid Obsidian CSS specificity issues
     const searchIcon = inputWrapper.createSpan({ cls: 'search-icon sa-absolute sa-flex-row sa-text-muted tr-search-icon' });
     if (this.isMobile) {
       searchIcon.addClass('sa-icon-14');
       searchIcon.addClass('tr-search-icon-mobile');
     }
     setIcon(searchIcon, 'search');
+    Object.assign(searchIcon.style, {
+      top: '50%', transform: 'translateY(-50%)',
+      left: this.isMobile ? '8px' : '10px',
+      pointerEvents: 'none',
+    });
+    const iconSvg = searchIcon.querySelector('svg');
+    if (iconSvg) {
+      const iconSize = this.isMobile ? '12px' : '14px';
+      iconSvg.style.width = iconSize;
+      iconSvg.style.height = iconSize;
+    }
 
     const input = inputWrapper.createEl('input', {
       type: 'text',
       placeholder: this.isMobile ? 'Search...' : 'Search transcript...',
       cls: 'transcript-search-input sa-w-full sa-border sa-rounded-4 sa-bg-primary tr-search-input'
     });
+    // Inline padding-left to beat Obsidian's input[type="text"] specificity
+    input.style.paddingLeft = this.isMobile ? '28px' : '34px';
     if (this.isMobile) {
       input.addClass('tr-search-input-mobile');
     }

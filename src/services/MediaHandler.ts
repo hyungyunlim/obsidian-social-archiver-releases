@@ -220,7 +220,7 @@ class MediaPathGenerator {
    * Also handles Windows-specific issues like consecutive dots and invisible Unicode characters
    */
   private sanitizeFilename(filename: string): string {
-    return filename
+    let sanitized = filename
       // Remove invisible Unicode characters (Zero-Width Space, Non-Breaking Space, etc.)
       .replace(/[\u200B-\u200D\u2060\u00A0\uFEFF\u200E\u200F\u202A-\u202E]/g, '')
       .replace(/[\\/:*?"<>|]/g, '-')
@@ -230,6 +230,14 @@ class MediaPathGenerator {
       .replace(/-{2,}/g, '-')
       .replace(/\s+/g, '_')
       .trim();
+
+    // Truncate to prevent ENAMETOOLONG (macOS/Linux: 255 bytes per component)
+    // Reserve space for date prefix, postId suffix, index, and extension (~60 chars)
+    if (sanitized.length > 80) {
+      sanitized = sanitized.substring(0, 80).replace(/-$|_$/, '');
+    }
+
+    return sanitized;
   }
 
   /**
