@@ -482,6 +482,9 @@ export default class SocialArchiverPlugin extends Plugin {
     this.archiveLookupService = undefined;
     this.annotationSyncService = undefined;
 
+    // Stop recovery polling before disposing services
+    this.subscriptionSyncService?.stopRecoveryPolling();
+
     // Cleanup services (fire-and-forget; onunload must be synchronous per Obsidian Plugin API)
     void this.subscriptionManager?.dispose();
     this.pendingJobsManager?.dispose();
@@ -675,6 +678,12 @@ export default class SocialArchiverPlugin extends Plugin {
         this.tagStore,
       );
       this.archiveTagOutboundService.start();
+
+      // Initial cache build from current local definitions
+      const localTagDefs = this.tagStore.getTagDefinitions();
+      this.archiveTagOutboundService.rebuildTagCache(
+        localTagDefs.map(d => ({ id: d.id, name: d.name }))
+      );
 
       // Initialize ArchiveStateSyncService (syncs inbound isBookmarked → fm.archive)
       this.archiveStateSyncService = new ArchiveStateSyncService(
@@ -884,7 +893,7 @@ export default class SocialArchiverPlugin extends Plugin {
       this.subscriptionSyncService = new SubscriptionSyncService({
         app: this.app,
         settings: () => this.settings,
-        subscriptionManager: this.subscriptionManager,
+        subscriptionManager: () => this.subscriptionManager,
         apiClient: () => this.apiClient,
         authorAvatarService: () => this.authorAvatarService,
         archiveCompletionService: this.archiveCompletionService,
@@ -1032,7 +1041,8 @@ export default class SocialArchiverPlugin extends Plugin {
           pendingJobsManager: this.pendingJobsManager,
           archiveJobTracker: this.archiveJobTracker,
           crawlJobTracker: this.crawlJobTracker,
-          subscriptionManager: this.subscriptionManager,
+          acknowledgePendingPosts: (ids: string[]) =>
+            this.subscriptionManager?.acknowledgePendingPosts(ids) ?? Promise.resolve(),
           archiveLookupService: this.archiveLookupService,
           annotationSyncService: this.annotationSyncService,
           archiveStateSyncService: this.archiveStateSyncService,
@@ -1046,7 +1056,7 @@ export default class SocialArchiverPlugin extends Plugin {
           processCompletedJob: (job, payload) => completionService.processCompletedJob(job, payload),
           processFailedJob: (job, msg) => completionService.processFailedJob(job, msg),
           saveSubscriptionPost: (post) => this.saveSubscriptionPost(post),
-          syncSubscriptionPosts: () => this.syncSubscriptionPosts(),
+          syncSubscriptionPosts: (trigger?: string) => this.syncSubscriptionPosts(trigger),
           createProfileNote: (msg) => this.createProfileNote(msg),
           applyAuthorProfileUpdate: (profile) => this.authorProfileSyncService?.applyInboundProfile(profile) ?? Promise.resolve(),
           syncAuthorProfiles: () => this.authorProfileSyncService?.syncAllFromServer() ?? Promise.resolve(),
@@ -1087,12 +1097,21 @@ export default class SocialArchiverPlugin extends Plugin {
         await this.subscriptionManager.initialize();
 
         // Sync pending subscription posts on startup (delayed to not block UI)
-        this.scheduleTrackedTimeout(() => { void this.syncSubscriptionPosts(); }, 3000);
+        this.scheduleTrackedTimeout(() => { void this.syncSubscriptionPosts('startup'); }, 3000);
+
+        // Start low-frequency recovery polling for missed pending posts
+        this.subscriptionSyncService?.startRecoveryPolling();
 
         // Pull tag definitions from server (merge into local tagDefinitions with colors)
         if (this.apiClient) {
           this.scheduleTrackedTimeout(() => {
-            void this.tagStore.pullTagDefinitionsFromServer(this.apiClient!);
+            void this.tagStore.pullTagDefinitionsFromServer(this.apiClient!).then(() => {
+              // Rebuild outbound cache with latest definitions (includes server IDs)
+              const defs = this.tagStore.getTagDefinitions();
+              this.archiveTagOutboundService?.rebuildTagCache(
+                defs.map(d => ({ id: d.id, name: d.name }))
+              );
+            });
           }, 4000);
         }
 
@@ -1181,8 +1200,11 @@ export default class SocialArchiverPlugin extends Plugin {
     return this.pendingJobOrchestrator?.checkPendingJobs();
   }
 
-  async syncSubscriptionPosts(): Promise<void> {
-    await this.subscriptionSyncService?.syncSubscriptionPosts();
+  async syncSubscriptionPosts(trigger?: string): Promise<void> {
+    // Return value intentionally discarded — callers in main.ts and
+    // RealtimeEventBridge don't need the result. Recovery polling
+    // calls syncSubscriptionPosts directly on the service instance.
+    await this.subscriptionSyncService?.syncSubscriptionPosts(trigger);
   }
 
   // ============================================================================

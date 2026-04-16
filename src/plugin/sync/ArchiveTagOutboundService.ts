@@ -242,7 +242,14 @@ export class ArchiveTagOutboundService {
       }
 
       try {
-        await this.apiClient.upsertTags(tagsToUpsert, clientId);
+        const result = await this.apiClient.upsertTags(tagsToUpsert, clientId);
+        // Update cache with canonical IDs from server response
+        if (result.resolvedTags) {
+          for (const resolved of result.resolvedTags) {
+            const tag = resolved.canonicalTag;
+            this.tagNameToId.set(tag.name, tag.id);
+          }
+        }
       } catch (err) {
         console.error(`${LOG_PREFIX} upsertTags failed for ${archiveId}:`, err instanceof Error ? err.message : String(err));
         throw err;
@@ -264,14 +271,14 @@ export class ArchiveTagOutboundService {
       }
     }
 
-    // 3. Delete archive-tag mappings for removed tags (only if we know the tag ID)
+    // 3. Delete archive-tag mappings for removed tags (cache + tagStore fallback)
     if (removed.length > 0) {
       const pairsToRemove: ArchiveTagMappingInput[] = removed
-        .filter(name => this.tagNameToId.has(name))
-        .map(name => ({
-          archiveId,
-          tagId: this.tagNameToId.get(name)!,
-        }));
+        .map(name => {
+          const id = this.tagNameToId.get(name) ?? this.tagStore?.getTagByName(name)?.id;
+          return id ? { archiveId, tagId: id } : null;
+        })
+        .filter((pair): pair is ArchiveTagMappingInput => pair !== null);
 
       if (pairsToRemove.length > 0) {
         try {
@@ -282,9 +289,10 @@ export class ArchiveTagOutboundService {
         }
       }
 
-      if (pairsToRemove.length < removed.length) {
+      const skipped = removed.length - pairsToRemove.length;
+      if (skipped > 0) {
         console.warn(
-          `${LOG_PREFIX} Skipped ${removed.length - pairsToRemove.length} removal(s) for ${archiveId} — tag ID unknown. ` +
+          `${LOG_PREFIX} Skipped ${skipped} removal(s) for ${archiveId} — tag ID unknown. ` +
           'These will be removed on next full sync.',
         );
       }
@@ -300,10 +308,11 @@ export class ArchiveTagOutboundService {
   }
 
   /**
-   * Seed the tag name → ID cache from a freshly fetched tags response.
-   * Call this during initial sync or after a full getUserTags() fetch.
+   * Rebuild the tag name → ID cache from a complete set of tag definitions.
+   * Uses replace semantics (clears first) to remove stale entries from renames.
    */
-  seedTagCache(tags: Array<{ id: string; name: string }>): void {
+  rebuildTagCache(tags: Array<{ id: string; name: string }>): void {
+    this.tagNameToId.clear();
     for (const tag of tags) {
       this.tagNameToId.set(tag.name, tag.id);
     }

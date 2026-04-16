@@ -30,6 +30,10 @@
   padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--reader-safe-area-bottom-fallback, 0px));
   box-sizing: border-box;
   --reader-font-size: 19px;
+  --reader-content-width: 680px;
+  --reader-line-height: 1.75;
+  --reader-letter-spacing: 0em;
+  --reader-font-family: inherit;
   touch-action: pan-y
 }
 
@@ -61,7 +65,7 @@
 }
 
 .sa-reader-mode-content {
-  max-width: 680px;
+  max-width: var(--reader-content-width, 680px);
   margin: 0 auto;
   width: 100%;
   padding-bottom: 32px;
@@ -72,58 +76,74 @@
 
 .sa-reader-mode-header-wrapper {
   flex-shrink: 0;
-  padding: 6px 24px;
+  padding: 4px 16px;
   background: var(--background-primary);
   border: none
 }
 
 .sa-reader-mode-header-content {
-  max-width: 680px;
+  max-width: 100%;
   margin: 0 auto
 }
 
 .sa-reader-mode-header {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative
+}
+
+.sa-reader-mode-header-left {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none
+}
+
+.sa-reader-mode-header-center {
+  flex: 1
 }
 
 .sa-reader-mode-header-btn {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  border-radius: 6px;
-  color: var(--text-muted);
-  transition: background .15s, color .15s;
+  border-radius: 0;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  transition: color .15s;
   -webkit-tap-highlight-color: transparent;
   -webkit-user-select: none;
   -moz-user-select: none;
-  user-select: none
+  user-select: none;
+  padding: 0
 }
 
 @media(hover:hover) {
   .sa-reader-mode-header-btn:hover {
-    background: var(--background-modifier-hover);
+    background: none;
     color: var(--text-normal)
   }
 }
 
 .sa-reader-mode-header-btn:active {
-  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+  background: none;
   transition: none
 }
 
 .sa-reader-mode-header-btn svg {
-  width: 20px;
-  height: 20px
+  width: 18px;
+  height: 18px
 }
 
 .sa-reader-mode-position {
-  font-size: 14px;
-  color: var(--text-muted);
+  font-size: 12px;
+  color: var(--text-faint);
   font-variant-numeric: tabular-nums
 }
 
@@ -233,7 +253,9 @@
 
 .sa-reader-mode-body {
   font-size: var(--reader-font-size, 19px);
-  line-height: 1.75;
+  line-height: var(--reader-line-height, 1.75);
+  letter-spacing: var(--reader-letter-spacing, 0em);
+  font-family: var(--reader-font-family, inherit);
   color: var(--text-normal);
   margin-bottom: 24px;
   word-wrap: break-word;
@@ -277,7 +299,10 @@
 }
 
 .sa-reader-mode-media {
-  margin-bottom: 24px
+  margin-bottom: 24px;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto
 }
 
 .sa-reader-mode-media img {
@@ -388,7 +413,7 @@ body:has(.sa-reader-mode-container-visible) .modal-container {
   }
 
   .sa-reader-mode-body {
-    line-height: 1.7
+    line-height: var(--reader-line-height, 1.7)
   }
 
   .sa-reader-mode-title {
@@ -413,8 +438,8 @@ body:has(.sa-reader-mode-container-visible) .modal-container {
   }
 
   .sa-reader-mode-header-right .sa-reader-mode-header-btn {
-    width: 30px;
-    height: 30px
+    width: 28px;
+    height: 28px
   }
 
   .sa-reader-mode-header-right .sa-reader-mode-header-btn svg {
@@ -821,5 +846,283 @@ body.is-tablet .sa-reader-mode-action-btn svg {
   .sa-highlight-toolbar:not(.sa-highlight-toolbar-mobile) .sa-highlight-remove-btn {
     padding: 8px 12px 8px 8px;
     font-size: 14px
+  }
+}
+
+/* ============================================================================
+   Typography Panel
+   ============================================================================ */
+
+/* "Aa" button label */
+.sa-reader-typography-button-label {
+  font-size: 14px;
+  font-weight: 500;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
+  letter-spacing: -0.01em;
+  line-height: 1
+}
+
+/* Active state for the "Aa" button */
+.sa-reader-typography-button-active {
+  color: var(--interactive-accent) !important;
+  background: none
+}
+
+/* Anchor wrapper for positioning */
+.sa-reader-typography-anchor {
+  position: relative;
+  display: inline-flex
+}
+
+/* Panel */
+.sa-reader-typography-panel {
+  position: absolute;
+  top: calc(100% + 18px);
+  right: -4px;
+  z-index: 100;
+  width: 220px;
+  padding: 10px 12px;
+  background: var(--background-primary);
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  animation: sa-tp-in 0.12s ease-out
+}
+
+/* Override Obsidian default button styles inside panel */
+.sa-reader-typography-panel button {
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background: none;
+  -webkit-appearance: none;
+  appearance: none
+}
+
+@keyframes sa-tp-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sa-reader-typography-panel {
+    animation: none
+  }
+}
+
+/* Row */
+.sa-reader-typography-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0
+}
+
+.sa-reader-typography-row-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center
+}
+
+.sa-reader-typography-label {
+  font-size: 11px;
+  color: var(--text-muted)
+}
+
+.sa-reader-typography-value {
+  font-size: 11px;
+  color: var(--text-normal);
+  font-family: var(--font-monospace, 'SF Mono', Consolas, monospace);
+  font-variant-numeric: tabular-nums
+}
+
+/* Range row control */
+.sa-reader-typography-row-control {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 20px
+}
+
+/* Step buttons (-/+) */
+.sa-reader-typography-step-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  color: var(--text-faint);
+  font-size: 13px;
+  font-weight: 400;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
+  cursor: pointer;
+  transition: color 0.1s ease;
+  padding: 0
+}
+
+.sa-reader-typography-step-button:hover:not(:disabled) {
+  color: var(--text-normal)
+}
+
+.sa-reader-typography-step-button:disabled {
+  opacity: 0.2;
+  cursor: default
+}
+
+/* Range slider */
+.sa-reader-typography-range {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  box-shadow: none
+}
+
+.sa-reader-typography-range::-webkit-slider-runnable-track {
+  height: 2px;
+  border-radius: 1px;
+  background: var(--background-modifier-border)
+}
+
+.sa-reader-typography-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  border: none;
+  margin-top: -2px;
+  cursor: grab;
+  box-shadow: none
+}
+
+.sa-reader-typography-range::-moz-range-track {
+  height: 2px;
+  border-radius: 1px;
+  background: var(--background-modifier-border);
+  border: none
+}
+
+.sa-reader-typography-range::-moz-range-thumb {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  border: none;
+  cursor: grab;
+  box-shadow: none
+}
+
+/* Separator */
+.sa-reader-typography-separator {
+  height: 1px;
+  background: var(--background-modifier-border);
+  margin: 2px -12px;
+  opacity: 0.5
+}
+
+/* Font family grid */
+.sa-reader-typography-fonts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 6px 0
+}
+
+.sa-reader-typography-font-button {
+  padding: 4px 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-faint);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: center;
+  transition: color 0.1s ease
+}
+
+.sa-reader-typography-font-button:hover {
+  color: var(--text-normal)
+}
+
+.sa-reader-typography-font-button-active {
+  color: var(--interactive-accent)
+}
+
+/* Reset button */
+.sa-reader-typography-reset {
+  width: 100%;
+  padding: 4px 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  color: var(--text-faint);
+  font-size: 10px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
+  cursor: pointer;
+  text-align: center;
+  transition: color 0.1s ease
+}
+
+.sa-reader-typography-reset:hover {
+  color: var(--text-muted)
+}
+
+/* Mobile responsive: larger touch targets */
+body.is-mobile .sa-reader-typography-panel {
+  width: min(280px, calc(100vw - 24px));
+  right: -8px
+}
+
+body.is-mobile .sa-reader-typography-step-button {
+  width: 36px;
+  height: 36px;
+  font-size: 18px
+}
+
+body.is-mobile .sa-reader-typography-font-button {
+  padding: 8px 0;
+  font-size: 12px
+}
+
+body.is-mobile .sa-reader-typography-reset {
+  padding: 10px 0;
+  font-size: 12px
+}
+
+body.is-mobile .sa-reader-typography-label,
+body.is-mobile .sa-reader-typography-value {
+  font-size: 12px
+}
+
+body.is-mobile .sa-reader-typography-range::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  margin-top: -6px
+}
+
+body.is-mobile .sa-reader-typography-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px
+}
+
+/* Narrow viewport responsive */
+@media (max-width: 768px) {
+  .sa-reader-typography-panel {
+    width: min(280px, calc(100vw - 24px))
   }
 }

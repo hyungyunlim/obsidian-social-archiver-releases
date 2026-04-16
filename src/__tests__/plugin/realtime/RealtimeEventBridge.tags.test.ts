@@ -103,7 +103,7 @@ function makeDeps(overrides: Partial<RealtimeEventBridgeDeps> = {}): RealtimeEve
       completeJob: vi.fn(),
       incrementProgressByWorkerJobId: vi.fn(),
     } as any,
-    subscriptionManager: undefined,
+    acknowledgePendingPosts: undefined,
     archiveLookupService: undefined,
     annotationSyncService: undefined,
     archiveDeleteSyncService: undefined,

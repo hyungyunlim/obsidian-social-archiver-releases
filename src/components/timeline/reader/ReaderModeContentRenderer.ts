@@ -56,6 +56,10 @@ export interface ReaderContentCallbacks {
   highlightCount: number;
   /** Called after body is rendered so highlight manager can attach */
   onBodyRendered?: (bodyEl: HTMLElement, plainText: string) => void;
+  /** Typography panel toggle (replaces old font +/- buttons) */
+  onTypographyToggle?: (anchorEl: HTMLElement) => void;
+  /** Whether the typography panel is currently open */
+  isTypographyOpen?: () => boolean;
 }
 
 export class ReaderModeContentRenderer extends Component {
@@ -166,41 +170,38 @@ export class ReaderModeContentRenderer extends Component {
   ): void {
     const header = parent.createDiv({ cls: 'sa-reader-mode-header' });
 
-    // Left group: close button
-    const closeBtn = header.createDiv({ cls: 'sa-reader-mode-header-btn' });
-    closeBtn.setAttribute('title', 'Close reader (esc)');
-    setIcon(closeBtn, 'x');
-    closeBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      callbacks.onClose();
-    });
-
-    // Position label (center)
-    const posLabel = header.createDiv({ cls: 'sa-reader-mode-position' });
+    // Left group: position label
+    const leftGroup = header.createDiv({ cls: 'sa-reader-mode-header-left' });
+    const posLabel = leftGroup.createDiv({ cls: 'sa-reader-mode-position' });
     posLabel.textContent = `${index + 1} / ${total}`;
 
-    // Right group: font controls | copy
+    // Center spacer
+    header.createDiv({ cls: 'sa-reader-mode-header-center' });
+
+    // Right group: typography | TTS | copy | close
     const rightGroup = header.createDiv({ cls: 'sa-reader-mode-header-right' });
 
-    // Font size decrease
-    const fontDecBtn = rightGroup.createDiv({ cls: 'sa-reader-mode-header-btn' });
-    fontDecBtn.setAttribute('title', 'Decrease font size');
-    setIcon(fontDecBtn, 'minus');
-    fontDecBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      callbacks.onFontSizeChange(-2);
-    });
+    // Typography "Aa" button
+    if (callbacks.onTypographyToggle) {
+      const aaBtn = rightGroup.createDiv({ cls: 'sa-reader-mode-header-btn sa-reader-typography-button' });
+      aaBtn.setAttribute('title', 'Typography settings');
+      aaBtn.setAttribute('aria-label', 'Typography settings');
+      aaBtn.setAttribute('aria-haspopup', 'dialog');
+      aaBtn.setAttribute('aria-expanded', String(callbacks.isTypographyOpen?.() ?? false));
 
-    // Font size increase
-    const fontIncBtn = rightGroup.createDiv({ cls: 'sa-reader-mode-header-btn' });
-    fontIncBtn.setAttribute('title', 'Increase font size');
-    setIcon(fontIncBtn, 'plus');
-    fontIncBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      callbacks.onFontSizeChange(2);
-    });
+      aaBtn.createSpan({ text: 'Aa', cls: 'sa-reader-typography-button-label' });
 
-    // TTS button (before copy, feature-flagged)
+      if (callbacks.isTypographyOpen?.()) {
+        aaBtn.addClass('sa-reader-typography-button-active');
+      }
+
+      aaBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        callbacks.onTypographyToggle!(aaBtn);
+      });
+    }
+
+    // TTS button (feature-flagged)
     if (callbacks.ttsController) {
       callbacks.ttsController.renderHeaderButton(rightGroup);
     }
@@ -214,6 +215,15 @@ export class ReaderModeContentRenderer extends Component {
       const text = post.content.text || post.content.markdown || '';
       void navigator.clipboard.writeText(text);
       new Notice('Text copied to clipboard');
+    });
+
+    // Close button (rightmost)
+    const closeBtn = rightGroup.createDiv({ cls: 'sa-reader-mode-header-btn' });
+    closeBtn.setAttribute('title', 'Close reader (esc)');
+    setIcon(closeBtn, 'x');
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      callbacks.onClose();
     });
   }
 

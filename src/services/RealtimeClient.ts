@@ -16,6 +16,7 @@ export type RealtimeMessageType =
   | 'share_created' // From share link creation
   | 'action_updated' // From web/mobile action (like, bookmark, share)
   | 'share_deleted' // From share deletion
+  | 'archive_added' // From new archive creation (subscription or manual)
   | 'archive_deleted' // From archive deletion
   | 'archive_tags_updated' // From tag changes (mobile/web)
   | 'author_profile_updated' // From editable author profile changes

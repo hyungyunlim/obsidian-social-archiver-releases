@@ -102,6 +102,21 @@ export interface WsProfileMetadataMessage {
   profileUrl: string;
 }
 
+/** Shape of the ws:archive_added WebSocket event payload. */
+export interface WsArchiveAddedMessage {
+  type: 'archive_added';
+  data?: {
+    archiveId?: string;
+    platform?: string;
+    url?: string;
+    title?: string | null;
+    source?: 'subscription' | string;
+    subscriptionId?: string;
+    updatedAt?: string;
+    timestamp?: number;
+  };
+}
+
 /** Minimal shape of a job status response passed to processCompletedJob. */
 export interface CompletedJobResponse {
   result?: {
@@ -160,7 +175,7 @@ export interface RealtimeEventBridgeDeps {
   pendingJobsManager: RealtimePendingJobsManager;
   archiveJobTracker: ArchiveJobTracker;
   crawlJobTracker: CrawlJobTracker;
-  subscriptionManager: { acknowledgePendingPosts: (ids: string[]) => Promise<void> } | undefined;
+  acknowledgePendingPosts?: (ids: string[]) => Promise<void>;
   archiveLookupService: ArchiveLookupService | undefined;
   annotationSyncService: AnnotationSyncService | undefined;
   archiveStateSyncService?: ArchiveStateSyncService | undefined;
@@ -174,7 +189,7 @@ export interface RealtimeEventBridgeDeps {
   processCompletedJob: (job: PendingJob, payload: CompletedJobResponse) => Promise<void>;
   processFailedJob: (job: PendingJob, message: string) => Promise<void>;
   saveSubscriptionPost: (pendingPost: PendingPost) => Promise<boolean>;
-  syncSubscriptionPosts: () => Promise<void>;
+  syncSubscriptionPosts: (trigger?: string) => Promise<void>;
   createProfileNote: (message: WsProfileMetadataMessage) => Promise<void>;
   applyAuthorProfileUpdate?: (profile: UserAuthorProfile) => Promise<void>;
   syncAuthorProfiles?: () => Promise<void>;
@@ -197,6 +212,7 @@ export interface RealtimeEventBridgeDeps {
 export class RealtimeEventBridge {
   private eventRefs: EventRef[] = [];
   private readonly deps: RealtimeEventBridgeDeps;
+  private subscriptionArchiveAddedSyncTimer?: number;
 
   constructor(deps: RealtimeEventBridgeDeps) {
     this.deps = deps;
@@ -208,6 +224,11 @@ export class RealtimeEventBridge {
   clear(): void {
     this.eventRefs.forEach(ref => this.deps.events.offref(ref));
     this.eventRefs = [];
+
+    if (this.subscriptionArchiveAddedSyncTimer !== undefined) {
+      window.clearTimeout(this.subscriptionArchiveAddedSyncTimer);
+      this.subscriptionArchiveAddedSyncTimer = undefined;
+    }
   }
 
   /**
@@ -221,6 +242,7 @@ export class RealtimeEventBridge {
     this.setupTruncationWarningListener();
     this.setupConnectionStatusListeners();
     this.setupSubscriptionPostListener();
+    this.setupArchiveAddedListener();
     this.setupProfileMetadataListener();
     this.setupProfileCrawlCompleteListener();
     this.setupClientSyncListener();
@@ -412,6 +434,13 @@ export class RealtimeEventBridge {
         // void this.deps.archiveDeleteSyncService?.flushPendingDeletes();
         void this.deps.syncAuthorProfiles?.();
 
+        // Sync subscription pending posts missed while offline
+        this.deps.schedule(() => {
+          void this.deps.syncSubscriptionPosts('ws-connected').catch((error) => {
+            console.debug('[Social Archiver] Subscription sync on WS reconnect failed:', error);
+          });
+        }, 1000);
+
         // Process any pending sync queue items missed while offline
         const settings = this.deps.settings();
         if (settings.syncClientId) {
@@ -486,9 +515,9 @@ export class RealtimeEventBridge {
             const saved = await this.deps.saveSubscriptionPost(pendingPost);
             if (saved) {
               // Acknowledge the pending post to remove it from KV
-              if (message.pendingPostId && this.deps.subscriptionManager) {
+              if (message.pendingPostId && this.deps.acknowledgePendingPosts) {
                 try {
-                  await this.deps.subscriptionManager.acknowledgePendingPosts([message.pendingPostId]);
+                  await this.deps.acknowledgePendingPosts([message.pendingPostId]);
                 } catch {
                   // Non-critical: post is saved, KV cleanup will happen eventually
                 }
@@ -536,13 +565,39 @@ export class RealtimeEventBridge {
             console.error('[Social Archiver] Failed to save WebSocket post:', error);
             // Fall back to KV sync after delay
             await new Promise(resolve => window.setTimeout(resolve, 2000));
-            await this.deps.syncSubscriptionPosts();
+            await this.deps.syncSubscriptionPosts('subscription-post-fallback');
           }
         } else {
           // Fallback: fetch from KV (for older message format)
           await new Promise(resolve => window.setTimeout(resolve, 1000));
-          await this.deps.syncSubscriptionPosts();
+          await this.deps.syncSubscriptionPosts('subscription-post-fallback');
         }
+      }),
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // ws:archive_added (subscription pending-post sync trigger)
+  // --------------------------------------------------------------------------
+
+  private setupArchiveAddedListener(): void {
+    this.eventRefs.push(
+      this.deps.events.on('ws:archive_added', (data: unknown) => {
+        const message = data as WsArchiveAddedMessage;
+        if (message.data?.source !== 'subscription') return;
+
+        // Debounce: subscription runs produce multiple posts rapidly.
+        // Batch into a single syncSubscriptionPosts() call after 2s of quiet.
+        if (this.subscriptionArchiveAddedSyncTimer !== undefined) {
+          window.clearTimeout(this.subscriptionArchiveAddedSyncTimer);
+        }
+
+        this.subscriptionArchiveAddedSyncTimer = this.deps.schedule(() => {
+          this.subscriptionArchiveAddedSyncTimer = undefined;
+          void this.deps.syncSubscriptionPosts('archive-added').catch((error) => {
+            console.debug('[Social Archiver] Subscription sync from archive_added failed:', error);
+          });
+        }, 2000);
       }),
     );
   }

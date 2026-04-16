@@ -42,13 +42,24 @@ export interface SavePendingPostResult {
 }
 
 /**
+ * Aggregate result from a syncSubscriptionPosts() call.
+ * Returned so callers (e.g. recovery polling) can inspect counts
+ * for backoff / notification decisions.
+ */
+export interface SyncSubscriptionResult {
+  total: number;
+  saved: number;
+  failed: number;
+}
+
+/**
  * Dependencies injected into SubscriptionSyncService.
  * Each dependency represents a capability the service needs from the plugin.
  */
 export interface SubscriptionSyncServiceDeps {
   app: App;
   settings: () => SocialArchiverSettings;
-  subscriptionManager: SubscriptionManager | undefined;
+  subscriptionManager: () => SubscriptionManager | undefined;
   apiClient: () => WorkersAPIClient | undefined;
   authorAvatarService: () => AuthorAvatarService | undefined;
   archiveCompletionService: {
@@ -67,6 +78,15 @@ export class SubscriptionSyncService {
   private readonly deps: SubscriptionSyncServiceDeps;
   private isSyncingSubscriptions = false;
   private syncDebounceTimer?: number;
+
+  /** Recovery polling state */
+  private recoveryPollTimer?: number;
+  private recoveryPollIntervalMs = 5 * 60 * 1000; // 5 minutes default
+
+  private static readonly RECOVERY_POLL_MIN_MS = 5 * 60 * 1000;   // 5 min
+  private static readonly RECOVERY_POLL_MAX_MS = 15 * 60 * 1000;   // 15 min
+  private static readonly RECOVERY_POLL_STEP_MS = 5 * 60 * 1000;   // 5 min increment
+  private static readonly RECOVERY_POLL_INITIAL_DELAY_MS = 10_000;  // 10 sec
 
   constructor(deps: SubscriptionSyncServiceDeps) {
     this.deps = deps;
@@ -87,10 +107,18 @@ export class SubscriptionSyncService {
   /**
    * Sync pending subscription posts from server to vault.
    * Debounces concurrent calls - if already syncing, schedules a retry.
+   *
+   * @param trigger - Identifies what triggered this sync for structured logging.
+   *   Common values: 'manual', 'startup', 'ws-connected', 'archive-added',
+   *   'recovery-poll', 'subscription-post-fallback'.
    */
-  async syncSubscriptionPosts(): Promise<void> {
-    if (!this.deps.subscriptionManager || !this.deps.subscriptionManager.isInitialized) {
-      return;
+  private static readonly EMPTY_SYNC_RESULT: SyncSubscriptionResult = { total: 0, saved: 0, failed: 0 };
+
+  async syncSubscriptionPosts(trigger: string = 'manual'): Promise<SyncSubscriptionResult> {
+    const subscriptionManager = this.deps.subscriptionManager();
+    if (!subscriptionManager?.isInitialized) {
+      console.debug(`[Social Archiver] syncSubscriptionPosts(${trigger}): skipped — manager not ready`);
+      return SubscriptionSyncService.EMPTY_SYNC_RESULT;
     }
 
     if (this.isSyncingSubscriptions) {
@@ -99,12 +127,13 @@ export class SubscriptionSyncService {
       }
       this.syncDebounceTimer = window.setTimeout(() => {
         this.syncDebounceTimer = undefined;
-        void this.syncSubscriptionPosts();
+        void this.syncSubscriptionPosts(trigger);
       }, 500);
-      return;
+      return SubscriptionSyncService.EMPTY_SYNC_RESULT;
     }
 
     this.isSyncingSubscriptions = true;
+    const startTime = Date.now();
 
     const timelineLeaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_TIMELINE);
     for (const leaf of timelineLeaves) {
@@ -115,10 +144,17 @@ export class SubscriptionSyncService {
     }
 
     try {
-      const result = await this.deps.subscriptionManager.syncPendingPosts(
+      const result = await subscriptionManager.syncPendingPosts(
         async (pendingPost: PendingPost) => {
           return this.saveSubscriptionPost(pendingPost);
         }
+      );
+
+      const durationMs = Date.now() - startTime;
+      console.debug(
+        `[Social Archiver] syncSubscriptionPosts(${trigger}): ` +
+        `total=${result.total} saved=${result.saved} failed=${result.failed ?? 0} ` +
+        `duration=${durationMs}ms`
       );
 
       if (result.total > 0) {
@@ -142,6 +178,8 @@ export class SubscriptionSyncService {
           }
         }
       }
+
+      return { total: result.total, saved: result.saved, failed: result.failed };
     } catch (error) {
       console.error('[Social Archiver] Failed to sync subscription posts:', error);
       new Notice('Subscription sync failed. Check console for details.');
@@ -151,9 +189,84 @@ export class SubscriptionSyncService {
           view.resumeAutoRefresh(false);
         }
       }
+      throw error;
     } finally {
       this.isSyncingSubscriptions = false;
     }
+  }
+
+  // ─── Recovery Polling ───────────────────────────────────────────
+
+  /**
+   * Start periodic recovery polling for missed pending posts.
+   * No-op if already running. First poll fires after a short initial delay.
+   */
+  startRecoveryPolling(): void {
+    if (this.recoveryPollTimer != null) return;
+    console.debug('[Social Archiver] Recovery polling started');
+    this.scheduleNextRecoveryPoll(SubscriptionSyncService.RECOVERY_POLL_INITIAL_DELAY_MS);
+  }
+
+  /**
+   * Stop recovery polling and clear the pending timer.
+   */
+  stopRecoveryPolling(): void {
+    if (this.recoveryPollTimer != null) {
+      window.clearTimeout(this.recoveryPollTimer);
+      this.recoveryPollTimer = undefined;
+      console.debug('[Social Archiver] Recovery polling stopped');
+    }
+  }
+
+  /**
+   * Schedule the next recovery poll after `delayMs`.
+   */
+  private scheduleNextRecoveryPoll(delayMs: number = this.recoveryPollIntervalMs): void {
+    this.recoveryPollTimer = window.setTimeout(() => {
+      this.recoveryPollTimer = undefined;
+      void this.runRecoveryPollOnce();
+    }, delayMs);
+  }
+
+  /**
+   * Execute one recovery poll cycle:
+   * - Routes through syncSubscriptionPosts('recovery-poll') so the
+   *   isSyncingSubscriptions guard prevents concurrent vault work
+   * - Backs off interval when no posts are found (5m -> 10m -> 15m)
+   * - Resets interval to 5m when posts are found or an error occurs
+   * - Schedules the next poll automatically
+   */
+  private async runRecoveryPollOnce(): Promise<void> {
+    try {
+      const result = await this.syncSubscriptionPosts('recovery-poll');
+
+      if (result.total > 0) {
+        // Posts found — reset to minimum interval
+        this.recoveryPollIntervalMs = SubscriptionSyncService.RECOVERY_POLL_MIN_MS;
+
+        console.debug(
+          `[Social Archiver] Recovery poll: found ${result.total} pending posts ` +
+          `(saved=${result.saved}, failed=${result.failed}), ` +
+          `next poll in ${this.recoveryPollIntervalMs / 1000}s`
+        );
+      } else {
+        // No pending posts (or sync was skipped/debounced) — back off
+        this.recoveryPollIntervalMs = Math.min(
+          this.recoveryPollIntervalMs + SubscriptionSyncService.RECOVERY_POLL_STEP_MS,
+          SubscriptionSyncService.RECOVERY_POLL_MAX_MS,
+        );
+        console.debug(
+          `[Social Archiver] Recovery poll: no pending posts, ` +
+          `next poll in ${this.recoveryPollIntervalMs / 1000}s`
+        );
+      }
+    } catch (error) {
+      // Error — reset to minimum interval for faster retry
+      this.recoveryPollIntervalMs = SubscriptionSyncService.RECOVERY_POLL_MIN_MS;
+      console.debug('[Social Archiver] Recovery poll failed, resetting interval:', error);
+    }
+
+    this.scheduleNextRecoveryPoll();
   }
 
   /**

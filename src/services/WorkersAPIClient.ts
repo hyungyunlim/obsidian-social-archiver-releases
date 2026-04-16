@@ -421,10 +421,27 @@ export interface UserTagsResponse {
   serverTime: string;
 }
 
+/** A resolved tag entry returned from POST /api/user/tags */
+export interface ResolvedTagEntry {
+  /** The client-supplied ID that was sent */
+  requestedId: string;
+  /** The canonical (server-authoritative) tag */
+  canonicalTag: {
+    id: string;
+    name: string;
+    color: string | null;
+    sortOrder: number;
+    createdAt: string;
+    updatedAt: string;
+  };
+}
+
 /** Response from POST /api/user/tags */
 export interface UpsertTagsResult {
   upserted: number;
   serverTime: string;
+  /** Canonical tag mappings — present when server supports ID resolution */
+  resolvedTags?: ResolvedTagEntry[];
 }
 
 /** Response from POST /api/user/archive-tags */

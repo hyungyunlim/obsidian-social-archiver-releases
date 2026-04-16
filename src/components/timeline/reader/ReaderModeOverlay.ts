@@ -18,6 +18,18 @@ import { ReaderModeContentRenderer } from './ReaderModeContentRenderer';
 import { ReaderModeGestureHandler } from './ReaderModeGestureHandler';
 import { ReaderHighlightManager } from './ReaderHighlightManager';
 import { ReaderTTSController } from './ReaderTTSController';
+import {
+  ReaderTypographyPanel,
+  FONT_SIZE,
+  LINE_HEIGHT,
+  LETTER_SPACING,
+  CONTENT_WIDTH_PRESETS,
+  CONTENT_WIDTH_DEFAULT,
+  FONT_FAMILY_DEFAULT,
+  FONT_FAMILIES,
+  type ReaderTypographyState,
+  type ReaderFontFamilyKey,
+} from './ReaderTypographyPanel';
 import { FEATURE_READER_TTS_ENABLED } from '../../../shared/constants';
 import { resolveTTSProvider } from '../../../services/tts/resolveProvider';
 import type { PluginTTSProvider } from '../../../services/tts/types';
@@ -81,11 +93,18 @@ export class ReaderModeOverlay {
   // Track whether a child modal (e.g. TagModal) is open — suppress keys while true
   private modalOpen = false;
 
-  // Font size state
+  // Typography state (replaces old fontSize-only state)
   private static readonly FONT_SIZE_KEY = 'social-archiver-reader-font-size';
-  private static readonly MIN_FONT = 14;
-  private static readonly MAX_FONT = 28;
+  private static readonly CONTENT_WIDTH_KEY = 'social-archiver-reader-content-width';
+  private static readonly LINE_HEIGHT_KEY = 'social-archiver-reader-line-height';
+  private static readonly LETTER_SPACING_KEY = 'social-archiver-reader-letter-spacing';
+  private static readonly FONT_FAMILY_KEY = 'social-archiver-reader-font-family';
+  private static readonly MIN_FONT = 12;
+  private static readonly MAX_FONT = 40;
   private fontSize: number;
+  private typographyState: ReaderTypographyState;
+  private typographyPanel: ReaderTypographyPanel | null = null;
+  private typographyPanelOpen = false;
 
   // Safe-area fallback listeners (for Android WebView where env() may resolve to 0)
   private viewportSafeAreaListener: (() => void) | null = null;
@@ -95,9 +114,9 @@ export class ReaderModeOverlay {
     this.context = context;
     this.currentIndex = context.currentIndex;
 
-    // Restore persisted font size
-    const stored = this.context.app.loadLocalStorage(ReaderModeOverlay.FONT_SIZE_KEY) as unknown;
-    this.fontSize = stored ? Math.max(ReaderModeOverlay.MIN_FONT, Math.min(ReaderModeOverlay.MAX_FONT, Number(stored))) : 19;
+    // Restore persisted typography state
+    this.typographyState = this.loadTypographyState();
+    this.fontSize = this.typographyState.fontSize;
   }
 
   get isActive(): boolean {
@@ -122,8 +141,8 @@ export class ReaderModeOverlay {
     document.body.appendChild(this.container);
     this.setupSafeAreaFallback();
 
-    // Apply persisted font size
-    this.applyFontSize();
+    // Apply persisted typography (CSS variables)
+    this.applyTypography();
 
     // Single panel
     this.panel = this.container.createDiv({ cls: 'sa-reader-mode-panel-wrapper rmo-panel-animated' });
@@ -156,6 +175,8 @@ export class ReaderModeOverlay {
       if (this.ttsController?.handleKeyDown(e)) return;
 
       if (e.key === 'Escape') {
+        // Typography panel Escape is handled by the panel's own keydown listener
+        // (capture phase, stopPropagation). If we reach here, the panel is closed.
         e.preventDefault();
         this.close();
       } else if (e.key === 'ArrowLeft') {
@@ -227,6 +248,9 @@ export class ReaderModeOverlay {
       this.gestureHandler.destroy();
       this.gestureHandler = null;
     }
+
+    // Cleanup typography panel
+    this.closeTypographyPanel();
 
     // Cleanup highlight manager
     if (this.highlightManager) {
@@ -349,6 +373,9 @@ export class ReaderModeOverlay {
    */
   private async navigate(direction: -1 | 1, fromSwipe = false): Promise<void> {
     if (this.transitioning) return;
+
+    // Close typography panel before navigation re-render
+    this.closeTypographyPanel();
 
     const newIndex = this.currentIndex + direction;
     if (newIndex < 0) {
@@ -1132,22 +1159,212 @@ export class ReaderModeOverlay {
     }
   }
 
-  // ---------- Font Size ----------
+  // ---------- Typography ----------
 
-  private applyFontSize(): void {
-    if (this.container) {
-      this.container.setCssProps({ '--reader-font-size': `${this.fontSize}px` });
+  /**
+   * Load all typography settings from Obsidian localStorage, with validation.
+   */
+  private loadTypographyState(): ReaderTypographyState {
+    const app = this.context.app;
+
+    // Font size (backward compatible with existing key)
+    const rawFs = app.loadLocalStorage(ReaderModeOverlay.FONT_SIZE_KEY) as unknown;
+    let fontSize = FONT_SIZE.default;
+    if (rawFs !== null && rawFs !== undefined) {
+      const n = Number(rawFs);
+      if (Number.isFinite(n)) fontSize = Math.max(FONT_SIZE.min, Math.min(FONT_SIZE.max, Math.round(n)));
+    }
+
+    // Content width
+    const rawCw = app.loadLocalStorage(ReaderModeOverlay.CONTENT_WIDTH_KEY) as unknown;
+    let contentWidth = CONTENT_WIDTH_DEFAULT;
+    if (rawCw !== null && rawCw !== undefined) {
+      const n = Number(rawCw);
+      if (Number.isFinite(n)) {
+        contentWidth = (CONTENT_WIDTH_PRESETS as readonly number[]).includes(n)
+          ? n
+          : this.snapToContentWidthPreset(n);
+      }
+    }
+
+    // Line height
+    const rawLh = app.loadLocalStorage(ReaderModeOverlay.LINE_HEIGHT_KEY) as unknown;
+    let lineHeight = LINE_HEIGHT.default;
+    if (rawLh !== null && rawLh !== undefined) {
+      const n = Number(rawLh);
+      if (Number.isFinite(n)) {
+        lineHeight = Math.max(LINE_HEIGHT.min, Math.min(LINE_HEIGHT.max,
+          Math.round(n / LINE_HEIGHT.step) * LINE_HEIGHT.step));
+        lineHeight = parseFloat(lineHeight.toFixed(2));
+      }
+    }
+
+    // Letter spacing
+    const rawLs = app.loadLocalStorage(ReaderModeOverlay.LETTER_SPACING_KEY) as unknown;
+    let letterSpacing = LETTER_SPACING.default;
+    if (rawLs !== null && rawLs !== undefined) {
+      const n = Number(rawLs);
+      if (Number.isFinite(n)) {
+        letterSpacing = Math.max(LETTER_SPACING.min, Math.min(LETTER_SPACING.max,
+          Math.round(n / LETTER_SPACING.step) * LETTER_SPACING.step));
+        letterSpacing = parseFloat(letterSpacing.toFixed(3));
+      }
+    }
+
+    // Font family
+    const rawFf = app.loadLocalStorage(ReaderModeOverlay.FONT_FAMILY_KEY) as unknown;
+    let fontFamily: ReaderFontFamilyKey = FONT_FAMILY_DEFAULT;
+    if (rawFf !== null && rawFf !== undefined && typeof rawFf === 'string') {
+      const valid = FONT_FAMILIES.some(f => f.key === rawFf);
+      if (valid) fontFamily = rawFf as ReaderFontFamilyKey;
+    }
+
+    return { fontSize, contentWidth, lineHeight, letterSpacing, fontFamily };
+  }
+
+  /**
+   * Apply all typography CSS variables to the reader container.
+   * This is the ONLY thing that changes on typography updates - no body re-render.
+   */
+  private applyTypography(): void {
+    if (!this.container) return;
+    const s = this.typographyState;
+    const fontStack = FONT_FAMILIES.find(f => f.key === s.fontFamily)?.stack ?? 'inherit';
+    this.container.setCssProps({
+      '--reader-font-size': `${s.fontSize}px`,
+      '--reader-content-width': `${s.contentWidth}px`,
+      '--reader-line-height': String(s.lineHeight),
+      '--reader-letter-spacing': `${s.letterSpacing}em`,
+      '--reader-font-family': fontStack,
+    });
+  }
+
+  /**
+   * Persist all typography settings to Obsidian localStorage.
+   */
+  private saveTypographyState(): void {
+    const app = this.context.app;
+    const s = this.typographyState;
+    app.saveLocalStorage(ReaderModeOverlay.FONT_SIZE_KEY, String(s.fontSize));
+    app.saveLocalStorage(ReaderModeOverlay.CONTENT_WIDTH_KEY, String(s.contentWidth));
+    app.saveLocalStorage(ReaderModeOverlay.LINE_HEIGHT_KEY, String(s.lineHeight));
+    app.saveLocalStorage(ReaderModeOverlay.LETTER_SPACING_KEY, String(s.letterSpacing));
+    app.saveLocalStorage(ReaderModeOverlay.FONT_FAMILY_KEY, s.fontFamily);
+  }
+
+  /**
+   * Handle a partial typography change from the panel.
+   * Validates, clamps, persists, and applies CSS variables without re-rendering.
+   */
+  private handleTypographyChange(patch: Partial<ReaderTypographyState>): void {
+    const s = this.typographyState;
+
+    if (patch.fontSize !== undefined) {
+      s.fontSize = Math.max(FONT_SIZE.min, Math.min(FONT_SIZE.max, Math.round(patch.fontSize)));
+    }
+    if (patch.contentWidth !== undefined) {
+      s.contentWidth = (CONTENT_WIDTH_PRESETS as readonly number[]).includes(patch.contentWidth)
+        ? patch.contentWidth
+        : this.snapToContentWidthPreset(patch.contentWidth);
+    }
+    if (patch.lineHeight !== undefined) {
+      const raw = patch.lineHeight;
+      const stepped = Math.round(raw / LINE_HEIGHT.step) * LINE_HEIGHT.step;
+      s.lineHeight = Math.max(LINE_HEIGHT.min, Math.min(LINE_HEIGHT.max, parseFloat(stepped.toFixed(2))));
+    }
+    if (patch.letterSpacing !== undefined) {
+      const raw = patch.letterSpacing;
+      const stepped = Math.round(raw / LETTER_SPACING.step) * LETTER_SPACING.step;
+      s.letterSpacing = Math.max(LETTER_SPACING.min, Math.min(LETTER_SPACING.max, parseFloat(stepped.toFixed(3))));
+    }
+    if (patch.fontFamily !== undefined) {
+      const valid = FONT_FAMILIES.some(f => f.key === patch.fontFamily);
+      if (valid) s.fontFamily = patch.fontFamily!;
+    }
+
+    // Keep legacy field in sync
+    this.fontSize = s.fontSize;
+
+    this.saveTypographyState();
+    this.applyTypography();
+
+    // Update the panel UI to reflect validated values
+    this.typographyPanel?.updateState(s);
+  }
+
+  /**
+   * Reset all typography to defaults, persist, and apply.
+   */
+  private resetTypography(): void {
+    this.typographyState = {
+      fontSize: FONT_SIZE.default,
+      contentWidth: CONTENT_WIDTH_DEFAULT,
+      lineHeight: LINE_HEIGHT.default,
+      letterSpacing: LETTER_SPACING.default,
+      fontFamily: FONT_FAMILY_DEFAULT,
+    };
+    this.fontSize = this.typographyState.fontSize;
+    this.saveTypographyState();
+    this.applyTypography();
+    this.typographyPanel?.updateState(this.typographyState);
+  }
+
+  /**
+   * Toggle the typography panel open/closed.
+   */
+  private toggleTypographyPanel(anchorEl: HTMLElement): void {
+    if (this.typographyPanelOpen) {
+      this.closeTypographyPanel();
+    } else {
+      this.openTypographyPanel(anchorEl);
     }
   }
 
+  private openTypographyPanel(anchorEl: HTMLElement): void {
+    if (this.typographyPanelOpen || !this.container) return;
+
+    this.typographyPanelOpen = true;
+    this.typographyPanel = new ReaderTypographyPanel({
+      anchorEl,
+      containerEl: this.container,
+      state: { ...this.typographyState },
+      onChange: (patch) => this.handleTypographyChange(patch),
+      onReset: () => this.resetTypography(),
+      onClose: () => this.closeTypographyPanel(),
+    });
+    this.typographyPanel.open();
+
+    // Update the Aa button active state
+    anchorEl.classList.add('sa-reader-typography-button-active');
+    anchorEl.setAttribute('aria-expanded', 'true');
+  }
+
+  private closeTypographyPanel(): void {
+    if (!this.typographyPanelOpen) return;
+    this.typographyPanelOpen = false;
+    this.typographyPanel?.destroy();
+    this.typographyPanel = null;
+
+    // Update the Aa button active state (if still in DOM)
+    const aaBtn = this.container?.querySelector('.sa-reader-typography-button');
+    if (aaBtn) {
+      aaBtn.classList.remove('sa-reader-typography-button-active');
+      aaBtn.setAttribute('aria-expanded', 'false');
+    }
+  }
+
+  /**
+   * Legacy font size change handler (still called by callbacks.onFontSizeChange).
+   * Delegates to the typography change handler.
+   */
   private changeFontSize(delta: number): void {
-    const next = this.fontSize + delta;
-    if (next < ReaderModeOverlay.MIN_FONT || next > ReaderModeOverlay.MAX_FONT) return;
-    this.fontSize = next;
-    this.applyFontSize();
-    this.context.app.saveLocalStorage(ReaderModeOverlay.FONT_SIZE_KEY, String(this.fontSize));
-    // Re-render to update the font label in header
-    this.reRenderPreservingScroll().catch(console.error);
+    this.handleTypographyChange({ fontSize: this.typographyState.fontSize + delta });
+  }
+
+  private snapToContentWidthPreset(value: number): number {
+    return [...CONTENT_WIDTH_PRESETS].reduce((closest, preset) =>
+      Math.abs(preset - value) < Math.abs(closest - value) ? preset : closest
+    );
   }
 
   // ---------- Rendering ----------
@@ -1199,6 +1416,8 @@ export class ReaderModeOverlay {
         onEdit: () => this.editPost(post),
         onDelete: () => void this.deletePost(post),
         currentFontSize: this.fontSize,
+        onTypographyToggle: (anchorEl) => this.toggleTypographyPanel(anchorEl),
+        isTypographyOpen: () => this.typographyPanelOpen,
         isArchived: !!post.archive,
         isLiked: !!post.like,
         isShared: !!post.shareUrl,

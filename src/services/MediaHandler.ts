@@ -812,8 +812,34 @@ export class MediaHandler implements IService {
   /**
    * Download from URL with timeout
    * Uses Workers proxy if available (required for Instagram, TikTok, Threads due to CORS)
+   * Wraps downloadFromUrlInner() with Promise.race to enforce this.timeout
    */
   private async downloadFromUrl(url: string, platform?: Platform, _originalUrl?: string): Promise<ArrayBuffer> {
+    let timeoutId: number | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = window.setTimeout(
+        () => reject(new Error(`Download timeout after ${this.timeout}ms`)),
+        this.timeout,
+      );
+    });
+
+    try {
+      return await Promise.race([
+        this.downloadFromUrlInner(url, platform, _originalUrl),
+        timeoutPromise,
+      ]);
+    } finally {
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
+    }
+  }
+
+  /**
+   * Inner download implementation (no timeout — called via downloadFromUrl wrapper)
+   * Uses Workers proxy if available (required for Instagram, TikTok, Threads due to CORS)
+   */
+  private async downloadFromUrlInner(url: string, platform?: Platform, _originalUrl?: string): Promise<ArrayBuffer> {
     // Check if it's a blob URL (TikTok videos from BrightData)
     if (url.startsWith('blob:')) {
       // Download blob URL directly in browser context (Electron/browser environment)

@@ -875,9 +875,12 @@ body.is-mobile .sa-reader-mode-metric-icon svg {
   }
 }
 
-.post-body-text.post-body-text,
-.sa-reader-mode-body.sa-reader-mode-body {
+.post-body-text.post-body-text {
   font-family: var(--font-text)
+}
+
+.sa-reader-mode-body.sa-reader-mode-body {
+  font-family: var(--reader-font-family, var(--font-text))
 }
 
 .timeline-feed>.mb-2 {
