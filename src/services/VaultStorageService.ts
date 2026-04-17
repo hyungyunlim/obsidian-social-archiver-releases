@@ -15,6 +15,7 @@ import { getVaultOrganizationStrategy, type SocialArchiverSettings } from '../ty
 import type { MediaResult } from './MediaHandler';
 import { VaultManager } from './VaultManager';
 import { MarkdownConverter } from './MarkdownConverter';
+import { USER_CONTROLLED_FRONTMATTER_FIELDS } from './markdown/frontmatter/constants';
 import { App, Vault, TFile, normalizePath, stringifyYaml } from 'obsidian';
 
 /**
@@ -521,12 +522,13 @@ export class VaultStorageService {
     const markdown = this.markdownConverter.convert(postData, undefined, allMediaResults, { outputFilePath: existingFile.path });
 
     // Merge existing frontmatter with new frontmatter
-    // Preserve share-related fields AND download tracking (processedUrls comes from new data)
-    const preservedFields = ['share', 'shareId', 'shareUrl', 'sharePassword', 'downloadedUrls', 'transcribedUrls'];
+    // Preserve user-controlled fields (share state, per-URL download decisions,
+    // detach markers, etc.) so re-archive/update doesn't clobber user intent.
+    // See USER_CONTROLLED_FRONTMATTER_FIELDS in frontmatter/constants.ts.
     const mergedFrontmatter: Record<string, unknown> = { ...markdown.frontmatter };
+    const existingFm = existingFrontmatter as Record<string, unknown>;
 
-    for (const field of preservedFields) {
-      const existingFm = existingFrontmatter as Record<string, unknown>;
+    for (const field of USER_CONTROLLED_FRONTMATTER_FIELDS) {
       if (existingFm[field] !== undefined) {
         mergedFrontmatter[field] = existingFm[field];
       }

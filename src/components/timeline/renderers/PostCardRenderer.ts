@@ -44,6 +44,7 @@ import {
 } from '../../../utils/subscription-matcher';
 import type { WhisperModel } from '../../../utils/whisper';
 import { maybeProxyCdnUrl } from '../../../utils/cdnProxy';
+import { truncatePreview } from '../../../utils/preview-truncate';
 
 interface DeletePostOptions {
   skipConfirm?: boolean;
@@ -1866,57 +1867,45 @@ export class PostCardRenderer extends Component {
     // Escape angle brackets to prevent HTML interpretation (e.g., <책 제목> → literal text)
     cleanContent = this.escapeAngleBrackets(cleanContent);
 
-    // Process timestamps for YouTube videos (at render time for backward compatibility)
-    if (post.platform === 'youtube' && post.videoId) {
-      cleanContent = this.textFormatter.linkifyYouTubeTimestamps(cleanContent, post.videoId);
-    }
-
-    // Linkify @mentions for X posts
-    if (post.platform === 'x') {
-      cleanContent = this.textFormatter.linkifyXMentions(cleanContent);
-    }
-
     const previewLength = 300; // Show 300 characters initially (about 2-3 sentences)
-    // Determine truncation on ORIGINAL text length (before linkification inflates it)
-    const isLongContent = cleanContent.length > previewLength;
 
-    // Linkify inline #hashtags when hashtag-as-tag setting is OFF
-    if (!this.plugin.settings.includeHashtagsAsObsidianTags) {
-      cleanContent = this.textFormatter.linkifyInlineHashtags(cleanContent, post.platform);
-    }
+    // Canonical truncation (see .taskmaster/docs/prd-preview-truncate-policy.md).
+    // Truncate on the preview source BEFORE timestamp/mention/hashtag
+    // linkification so the length budget reflects the raw body, then apply
+    // linkification to both preview and expanded versions.
+    const truncation = truncatePreview({
+      markdown: cleanContent,
+      maxChars: previewLength,
+    });
+    const isLongContent = truncation.truncated;
+
+    // Apply platform-specific linkification to both preview and full content.
+    const linkify = (text: string): string => {
+      let out = text;
+      if (post.platform === 'youtube' && post.videoId) {
+        out = this.textFormatter.linkifyYouTubeTimestamps(out, post.videoId);
+      }
+      if (post.platform === 'x') {
+        out = this.textFormatter.linkifyXMentions(out);
+      }
+      if (!this.plugin.settings.includeHashtagsAsObsidianTags) {
+        out = this.textFormatter.linkifyInlineHashtags(out, post.platform);
+      }
+      return out;
+    };
+
+    const fullContent = linkify(cleanContent);
+    const previewContent = isLongContent ? linkify(truncation.preview) : fullContent;
 
     const contentText = contentContainer.createDiv({
       cls: 'text-sm leading-relaxed text-[var(--text-normal)] post-body-text pcr-content-text'
     });
 
     if (isLongContent) {
-      // Smart preview truncation - don't cut markdown links in half
-      let preview = cleanContent.substring(0, previewLength);
-
-      // Check if we cut off in the middle of a markdown link
-      const lastOpenBracket = preview.lastIndexOf('[');
-      const lastCloseBracket = preview.lastIndexOf(']');
-
-      // If there's an unclosed link at the end, truncate before it
-      if (lastOpenBracket > lastCloseBracket) {
-        preview = cleanContent.substring(0, lastOpenBracket);
-      }
-
-      // Also check for unclosed parentheses (link URL part)
-      const lastCloseParen = preview.lastIndexOf(')');
-      const lastOpenParen = preview.lastIndexOf('(');
-      if (lastOpenParen > lastCloseParen) {
-        // Find the matching [ before this (
-        const bracketBeforeParen = preview.lastIndexOf('[', lastOpenParen);
-        if (bracketBeforeParen >= 0) {
-          preview = cleanContent.substring(0, bracketBeforeParen);
-        }
-      }
-
       // Use Obsidian's native markdown renderer
       await MarkdownRenderer.render(
         this.app,
-        preview + '...',
+        previewContent,
         contentText,
         '', // sourcePath (empty for non-file content)
         this // component for lifecycle management
@@ -1936,7 +1925,7 @@ export class PostCardRenderer extends Component {
         void (async () => {
           if (expanded) {
             contentText.empty();
-            await MarkdownRenderer.render(this.app, cleanContent, contentText, '', this);
+            await MarkdownRenderer.render(this.app, fullContent, contentText, '', this);
             seeMoreBtn.setText('See less');
             // Re-add timestamp handlers after re-rendering
             if (post.platform === 'youtube' && post.videoId) {
@@ -1948,7 +1937,7 @@ export class PostCardRenderer extends Component {
             this.normalizeTagFontSizes(contentText);
           } else {
             contentText.empty();
-            await MarkdownRenderer.render(this.app, preview + '...', contentText, '', this);
+            await MarkdownRenderer.render(this.app, previewContent, contentText, '', this);
             seeMoreBtn.setText('See more...');
             // Re-add timestamp handlers after re-rendering
             if (post.platform === 'youtube' && post.videoId) {
@@ -1969,7 +1958,7 @@ export class PostCardRenderer extends Component {
       // Use Obsidian's native markdown renderer for short content
       await MarkdownRenderer.render(
         this.app,
-        cleanContent,
+        fullContent,
         contentText,
         '', // sourcePath (empty for non-file content)
         this // component for lifecycle management
@@ -2084,7 +2073,6 @@ export class PostCardRenderer extends Component {
     }
 
     const previewLength = 500; // Blog posts get longer preview (about 4-5 paragraphs)
-    const isLongContent = rawMarkdown.length > previewLength;
 
     const contentText = contentContainer.createDiv({
       cls: 'text-sm leading-relaxed text-[var(--text-normal)] sa-blog-content-inline post-body-text pcr-content-text'
@@ -2101,18 +2089,21 @@ export class PostCardRenderer extends Component {
     // ![[filename.webp]] -> ![](filename.webp)
     rawMarkdown = this.convertWikilinkImages(rawMarkdown);
 
-    if (isLongContent) {
-      // For blog posts, find a good truncation point (end of paragraph)
-      let preview = rawMarkdown.substring(0, previewLength);
-      const lastParagraphEnd = preview.lastIndexOf('\n\n');
-      if (lastParagraphEnd > previewLength * 0.5) {
-        preview = rawMarkdown.substring(0, lastParagraphEnd);
-      }
+    // Canonical truncation (see .taskmaster/docs/prd-preview-truncate-policy.md).
+    // Unified policy with the social path — block boundaries are preferred only
+    // when they sit near the budget, otherwise fall back to sentence/word.
+    const truncation = truncatePreview({
+      markdown: rawMarkdown,
+      maxChars: previewLength,
+    });
+    const isLongContent = truncation.truncated;
+    const previewMarkdown = truncation.preview;
 
+    if (isLongContent) {
       // Use Obsidian's native markdown renderer with sourcePath for image resolution
       await MarkdownRenderer.render(
         this.app,
-        preview + '\n\n...',
+        previewMarkdown,
         contentText,
         sourcePath,
         this
@@ -2138,7 +2129,7 @@ export class PostCardRenderer extends Component {
             await MarkdownRenderer.render(this.app, rawMarkdown, contentText, sourcePath, this);
             seeMoreBtn.setText('See less');
           } else {
-            await MarkdownRenderer.render(this.app, preview + '\n\n...', contentText, sourcePath, this);
+            await MarkdownRenderer.render(this.app, previewMarkdown, contentText, sourcePath, this);
             seeMoreBtn.setText('See more...');
           }
           // Resolve image paths after rendering
@@ -3265,6 +3256,38 @@ export class PostCardRenderer extends Component {
         });
       }
 
+      // Large Media Guard: detach / re-download local media (main post only).
+      // See prd-large-media-guard.md. Eligibility is computed from
+      // frontmatter fields already parsed into PostData.
+      if (!isEmbedded && post.filePath) {
+        const detachService = this.plugin.detachedMediaService;
+        if (detachService) {
+          const file = this.vault.getAbstractFileByPath(post.filePath);
+          if (file instanceof TFile) {
+            if (detachService.canDetachSync(file)) {
+              menu.addItem((item) => {
+                item
+                  .setIcon('unlink')
+                  .setTitle('Detach local media')
+                  .onClick(() => {
+                    void detachService.detachWithUserFeedback(file);
+                  });
+              });
+            }
+            if (detachService.canRedownloadSync(file)) {
+              menu.addItem((item) => {
+                item
+                  .setIcon('download')
+                  .setTitle('Re-download detached media')
+                  .onClick(() => {
+                    void detachService.redownloadWithUserFeedback(file);
+                  });
+              });
+            }
+          }
+        }
+      }
+
       menu.addSeparator();
 
       // Delete button
@@ -3616,15 +3639,36 @@ export class PostCardRenderer extends Component {
       // 3. Delete REMOVED media files from R2
       // 4. Convert markdown image paths from local to R2 URLs
       // 5. Update the share in KV with the corrected data
-      await shareClient.updateShareWithMedia(shareId, sanitizedImagePost, {
+      //
+      // sourceArchiveId + mediaSourceUrls enable the auto-resolve path —
+      // preserved archive media will be reused instead of re-uploaded.
+      const result = await shareClient.updateShareWithMedia(shareId, sanitizedImagePost, {
         username: username,
-        tier: this.plugin.settings.tier
+        tier: this.plugin.settings.tier,
+        sourceArchiveId: sanitizedImagePost.sourceArchiveId ?? post.sourceArchiveId,
+        mediaSourceUrls: sanitizedImagePost.mediaSourceUrls ?? post.mediaSourceUrls,
       }, onProgress);
 
       // Hide progress notice and show completion message
       progressNotice?.hide();
 
-      if (totalMedia > 0) {
+      // Build an accurate summary. Distinguishes uploaded vs reused from
+      // archive so users don't see "X uploaded" when nothing was actually
+      // sent over the wire (auto-resolve happy path).
+      const stats = result.mediaStats;
+      if (stats && stats.totalCount > 0) {
+        const parts: string[] = [];
+        if (stats.uploadedCount > 0) parts.push(`${stats.uploadedCount} uploaded`);
+        if (stats.reusedCount > 0) parts.push(`${stats.reusedCount} reused from archive`);
+        if (stats.keptCount > 0) parts.push(`${stats.keptCount} kept`);
+        if (stats.skippedCount > 0) parts.push(`${stats.skippedCount} skipped`);
+        const summary = parts.length > 0 ? parts.join(', ') : 'no media changes';
+        new Notice(`✅ Share updated (${summary})`);
+      } else if (totalMedia > 0) {
+        // Defensive fallback — `updateShareWithMedia` always populates
+        // mediaStats on success, so this branch only matters if a future
+        // refactor forgets to. Keep the existing wording to avoid visible
+        // regressions in that edge case.
         const mediaType = isAdmin && hasVideos ? 'media file' : 'image';
         const successMsg = `✅ ${totalMedia} ${mediaType}${totalMedia > 1 ? 's' : ''} uploaded successfully!`;
         const videoMsg = !isAdmin && hasVideos ? ' (Videos excluded from upload)' : '';

@@ -13,7 +13,11 @@
  */
 
 import { Platform, setIcon } from 'obsidian';
-import type { TextHighlight, HighlightColor } from '../../../types/annotations';
+import type {
+  TextHighlight,
+  HighlightColor,
+  HighlightRenderProfile,
+} from '../../../types/annotations';
 
 // ============================================================================
 // Constants
@@ -31,15 +35,142 @@ const HIGHLIGHT_COLORS: { color: HighlightColor; cssVar: string; btnCssVar: stri
 /** Context chars stored before/after highlight for re-anchoring */
 const CONTEXT_CHARS = 30;
 
+/**
+ * Matches Obsidian `==text==` inline highlight marks in the plain body.
+ *
+ * - `(?![-=])` negative lookahead avoids matching `===` (Setext heading rule)
+ *   and `==-` style sequences, mirroring the regex used in
+ *   `HighlightBodyMarker` so both modules reconcile the same way.
+ * - `[\s\S]+?` allows multi-line inner text with a lazy match.
+ *
+ * Exported for tests (canonical-offset mapping is pure and verifiable).
+ */
+export const HIGHLIGHT_MARK_REGEX = /==(?![-=])([\s\S]+?)==/g;
+
+/**
+ * Result of stripping `==text==` delimiters from a source body.
+ *
+ * - `canonical` — the body with every pair of `==` delimiters removed,
+ *   inner text preserved. Selection offsets MUST be stored relative to this
+ *   string so subsequent highlights are not shifted by earlier marks.
+ * - `dirtyToCanonical` — same length as the input; `dirtyToCanonical[i]` is
+ *   the matching offset in `canonical`, or `-1` when the char is a `=`
+ *   delimiter that was stripped.
+ */
+export interface CanonicalStripResult {
+  canonical: string;
+  dirtyToCanonical: Int32Array;
+}
+
+/**
+ * Strip `==...==` highlight marks from a plain body, producing the canonical
+ * text that new highlights must be measured against.
+ *
+ * The forward map (`dirtyToCanonical`) is produced in the same pass so
+ * callers can translate offsets they already computed on the dirty body
+ * (e.g. via `indexOf`) without re-scanning.
+ *
+ * Pure, no DOM — exposed as a module-level function so it can be unit-tested
+ * directly without instantiating the manager.
+ */
+export function stripHighlightMarks(dirtyBody: string): CanonicalStripResult {
+  const dirtyToCanonical = new Int32Array(dirtyBody.length);
+  if (dirtyBody.length === 0) {
+    return { canonical: '', dirtyToCanonical };
+  }
+
+  const pieces: string[] = [];
+  let cursor = 0; // position in dirty
+  let canonicalLen = 0;
+  // Fresh RegExp instance so we don't mutate the module-level lastIndex.
+  const regex = new RegExp(HIGHLIGHT_MARK_REGEX.source, 'g');
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(dirtyBody)) !== null) {
+    const markStart = match.index;
+    const inner = match[1] ?? '';
+    const innerStart = markStart + 2;
+    const innerEnd = innerStart + inner.length;
+    const markEnd = innerEnd + 2;
+
+    // 1. Copy everything between previous cursor and this mark 1:1.
+    for (let i = cursor; i < markStart; i += 1) {
+      dirtyToCanonical[i] = canonicalLen + (i - cursor);
+    }
+    if (markStart > cursor) {
+      pieces.push(dirtyBody.slice(cursor, markStart));
+      canonicalLen += markStart - cursor;
+    }
+
+    // 2. Opening `==` delimiter → no canonical position.
+    dirtyToCanonical[markStart] = -1;
+    dirtyToCanonical[markStart + 1] = -1;
+
+    // 3. Inner text copied, map 1:1.
+    for (let i = innerStart; i < innerEnd; i += 1) {
+      dirtyToCanonical[i] = canonicalLen + (i - innerStart);
+    }
+    if (inner.length > 0) {
+      pieces.push(inner);
+      canonicalLen += inner.length;
+    }
+
+    // 4. Closing `==` delimiter → no canonical position.
+    dirtyToCanonical[innerEnd] = -1;
+    dirtyToCanonical[innerEnd + 1] = -1;
+
+    cursor = markEnd;
+  }
+
+  // Trailing tail after the last match.
+  for (let i = cursor; i < dirtyBody.length; i += 1) {
+    dirtyToCanonical[i] = canonicalLen + (i - cursor);
+  }
+  if (cursor < dirtyBody.length) {
+    pieces.push(dirtyBody.slice(cursor));
+    canonicalLen += dirtyBody.length - cursor;
+  }
+
+  return {
+    canonical: pieces.join(''),
+    dirtyToCanonical,
+  };
+}
+
 // ============================================================================
 // Types
 // ============================================================================
 
+/**
+ * Callback payload for a newly created highlight. `renderProfile` is supplied
+ * by the overlay (it has archive-level context) so the manager itself does
+ * not need to import the render-profile vendor module.
+ */
 export interface HighlightManagerCallbacks {
   /** Called when user creates a new highlight. Must persist to vault + API. */
   onHighlightCreate: (highlight: TextHighlight) => Promise<void>;
   /** Called when user removes an existing highlight. Must persist removal. */
   onHighlightRemove: (highlightId: string) => Promise<void>;
+  /**
+   * Resolve the render profile to tag on newly created highlights (for
+   * `TextHighlight.createdProfile`). Optional — if omitted, the field is left
+   * unset (older rows behave the same as before).
+   */
+  getRenderProfile?: () => HighlightRenderProfile | undefined;
+  /**
+   * Resolve the title + whether the canonical fullText should prepend it.
+   * When returned and `includeTitlePrefix` is true, `computeCanonicalOffsets`
+   * records offsets relative to `title + "\n\n" + strippedBody` so Phase 2
+   * cross-client round-trip (share-web, mobile) sees the same canonical
+   * coordinate space for article archives.
+   *
+   * Optional — when omitted or `includeTitlePrefix` is false, offsets are
+   * relative to the stripped body only (pre-Phase-2.5 behavior; fine for
+   * social posts where `includeTitlePrefix === false`).
+   */
+  getCanonicalBasis?: () =>
+    | { title?: string; includeTitlePrefix: boolean }
+    | undefined;
 }
 
 // ============================================================================
@@ -429,19 +560,16 @@ export class ReaderHighlightManager {
   // ---------- Highlight CRUD ----------
 
   private async createHighlight(text: string, color: HighlightColor, sel: Selection): Promise<void> {
-    // Compute offsets in plain text
-    const startOffset = this.computePlainTextOffset(text);
-    const endOffset = startOffset >= 0 ? startOffset + text.length : -1;
-
-    // Extract context for re-anchoring
-    const contextBefore = startOffset > 0
-      ? this.plainText.substring(Math.max(0, startOffset - CONTEXT_CHARS), startOffset)
-      : '';
-    const contextAfter = endOffset > 0
-      ? this.plainText.substring(endOffset, endOffset + CONTEXT_CHARS)
-      : '';
+    // Compute canonical offsets — strip ==...== marks from the source plain
+    // text so later highlights are not shifted by earlier marks already
+    // present in the vault body. See Phase 2.5 #5.
+    const { canonical, startOffset, endOffset, contextBefore, contextAfter } =
+      this.computeCanonicalOffsets(text);
 
     const now = new Date().toISOString();
+    // Optional render profile supplied by the overlay (has archive context).
+    const createdProfile = this.callbacks.getRenderProfile?.();
+
     const highlight: TextHighlight = {
       id: this.generateId(),
       text,
@@ -450,9 +578,17 @@ export class ReaderHighlightManager {
       color,
       contextBefore,
       contextAfter,
+      // Phase 2 canonical coordinates: marks stripped, offsets into `fullText`
+      // surrogate (the post body) rather than DOM visible text.
+      schemaVersion: 2,
+      coordinateVersion: 'fulltext-v1',
+      ...(createdProfile ? { createdProfile } : {}),
       createdAt: now,
       updatedAt: now,
     };
+    // `canonical` is intentionally unused past this point — kept as a named
+    // destructured field for readability and to keep the helper pure.
+    void canonical;
 
     this.highlights.push(highlight);
     this.hideToolbar();
@@ -737,12 +873,76 @@ export class ReaderHighlightManager {
   // ---------- Plain Text Offset ----------
 
   /**
-   * Compute the start offset of `text` within the post plain text.
-   * Uses a simple indexOf for now; context matching can be added later.
+   * Compute canonical offsets + context for a newly selected fragment.
+   *
+   * Strategy:
+   *   1. Strip all existing `==...==` marks from the plain body to build the
+   *      canonical reference string. Offsets recorded on the server/vault
+   *      MUST be relative to this canonical text so subsequent highlights
+   *      are not shifted by earlier marks (Phase 2.5 #5).
+   *   2. Locate `text` in `canonical`. If absent (shouldn't happen — the user
+   *      just selected it from the rendered DOM), fall back to -1 and let
+   *      the caller clamp to 0.
+   *   3. Build `contextBefore` / `contextAfter` windows (30 chars each) from
+   *      the canonical string, matching the {@link CONTEXT_CHARS} window
+   *      used by {@link HighlightBodyMarker} / `resolveHighlightRange`.
+   *
+   * Returns the canonical string too so tests can assert the mapping.
    */
-  private computePlainTextOffset(text: string): number {
-    if (!this.plainText) return -1;
-    return this.plainText.indexOf(text);
+  private computeCanonicalOffsets(text: string): {
+    canonical: string;
+    startOffset: number;
+    endOffset: number;
+    contextBefore: string;
+    contextAfter: string;
+  } {
+    if (!this.plainText || !text) {
+      return { canonical: this.plainText, startOffset: -1, endOffset: -1, contextBefore: '', contextAfter: '' };
+    }
+
+    // Step 1: strip `==...==` marks from the body → canonical body.
+    const strip = stripHighlightMarks(this.plainText);
+    const canonicalBody = strip.canonical;
+
+    // Step 2: build the canonical fullText the rest of the clients use.
+    //   Article profiles (StructuredMd / WebArticle) prepend `title + "\n\n"`
+    //   so offsets stored here align with share-web's `computeFullText` + the
+    //   mobile canonical aligner. Social profiles keep body-only.
+    const basis = this.callbacks.getCanonicalBasis?.();
+    const prefix =
+      basis && basis.includeTitlePrefix && basis.title
+        ? `${basis.title}\n\n`
+        : '';
+    const canonical = prefix + canonicalBody;
+    const prefixLen = prefix.length;
+
+    // Step 3: locate selection in the canonical body (the text the user sees).
+    let bodyStart = canonicalBody.indexOf(text);
+
+    // Fallback: if the selection spans across an existing `==..==` boundary
+    // in such a way that the stripped body diverges from the visible
+    // selection, try indexing against the original dirty body and mapping
+    // back through the offset table.
+    if (bodyStart < 0) {
+      const dirtyIdx = this.plainText.indexOf(text);
+      if (dirtyIdx >= 0) {
+        const mapped = strip.dirtyToCanonical[dirtyIdx];
+        bodyStart = typeof mapped === 'number' && mapped >= 0 ? mapped : -1;
+      }
+    }
+
+    // Step 4: shift body-relative offsets into the canonical fullText frame.
+    const startOffset = bodyStart >= 0 ? bodyStart + prefixLen : -1;
+    const endOffset = startOffset >= 0 ? startOffset + text.length : -1;
+
+    const contextBefore = startOffset > 0
+      ? canonical.substring(Math.max(0, startOffset - CONTEXT_CHARS), startOffset)
+      : '';
+    const contextAfter = endOffset > 0
+      ? canonical.substring(endOffset, endOffset + CONTEXT_CHARS)
+      : '';
+
+    return { canonical, startOffset, endOffset, contextBefore, contextAfter };
   }
 
   // ---------- Utility ----------

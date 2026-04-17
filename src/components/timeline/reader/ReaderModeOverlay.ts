@@ -33,7 +33,8 @@ import {
 import { FEATURE_READER_TTS_ENABLED } from '../../../shared/constants';
 import { resolveTTSProvider } from '../../../services/tts/resolveProvider';
 import type { PluginTTSProvider } from '../../../services/tts/types';
-import type { TextHighlight } from '../../../types/annotations';
+import type { TextHighlight, HighlightRenderProfile } from '../../../types/annotations';
+import { getRenderProfileForArchive, RENDER_PROFILE_CONFIG } from '../../../vendor/highlight-core';
 
 export interface ReaderModeContext {
   posts: PostData[];
@@ -147,10 +148,17 @@ export class ReaderModeOverlay {
     // Single panel
     this.panel = this.container.createDiv({ cls: 'sa-reader-mode-panel-wrapper rmo-panel-animated' });
 
-    // Initialize highlight manager
+    // Initialize highlight manager.
+    //
+    // `getRenderProfile` is called synchronously at selection time so the
+    // manager can stamp `createdProfile` onto the outgoing highlight without
+    // needing archive-level context itself (SRP: the manager only knows the
+    // body element and the selection).
     this.highlightManager = new ReaderHighlightManager({
       onHighlightCreate: (highlight) => this.handleHighlightCreate(highlight),
       onHighlightRemove: (highlightId) => this.handleHighlightRemove(highlightId),
+      getRenderProfile: () => this.resolveRenderProfileForCurrentPost(),
+      getCanonicalBasis: () => this.resolveCanonicalBasisForCurrentPost(),
     });
 
     // Initialize TTS controller (feature-flagged)
@@ -1046,9 +1054,19 @@ export class ReaderModeOverlay {
   /**
    * Sync highlights to the server API (background, non-blocking).
    * Server broadcasts hasAnnotationUpdate via WebSocket to mobile app.
+   *
+   * `sourceArchiveId` fallback:
+   *   - Inbound annotation sync auto-backfills this field when the archive
+   *     is first touched by another client (mobile / share-web). Plugin
+   *     archives that only ever saw plugin-side highlights may not have
+   *     it yet — without it this method used to silently return, so
+   *     plugin-authored highlights never left the vault.
+   *   - When missing, look the archive up by `originalUrl` via
+   *     `getUserArchives({ originalUrl })`, backfill the frontmatter,
+   *     and proceed. If lookup finds nothing the archive is genuinely
+   *     local-only and we skip quietly.
    */
   private syncHighlightsToServer(post: PostData, highlights: TextHighlight[]): void {
-    // Read sourceArchiveId from frontmatter
     const filePath = post.filePath;
     if (!filePath) return;
 
@@ -1056,23 +1074,130 @@ export class ReaderModeOverlay {
     if (!file || !(file instanceof TFile)) return;
 
     const cache = this.context.app.metadataCache.getFileCache(file);
-    const sourceArchiveId = cache?.frontmatter?.sourceArchiveId as string | undefined;
-    if (!sourceArchiveId) {
-      // No server archive ID — cannot sync. This is expected for local-only posts.
-      return;
+    const directId = cache?.frontmatter?.sourceArchiveId as string | undefined;
+    const originalUrl = cache?.frontmatter?.originalUrl as string | undefined;
+
+    void (async () => {
+      const archiveId = await this.resolveArchiveIdForSync(file, directId, originalUrl);
+      if (!archiveId) return; // genuinely local-only — nothing to sync
+
+      try {
+        const apiClient = this.context.plugin.workersApiClient;
+        await apiClient.updateArchiveActions(archiveId, {
+          userHighlights: highlights,
+        });
+      } catch (err) {
+        console.error('[Social Archiver] Failed to sync highlights to server:', err);
+      }
+    })();
+  }
+
+  /**
+   * Resolve the server archive id for the current note, backfilling the
+   * frontmatter when we have to look it up by `originalUrl`. Returns
+   * `null` when the archive doesn't live on the server yet.
+   */
+  private async resolveArchiveIdForSync(
+    file: TFile,
+    directId: string | undefined,
+    originalUrl: string | undefined
+  ): Promise<string | null> {
+    if (directId) return directId;
+    if (!originalUrl) return null;
+
+    let apiClient;
+    try {
+      apiClient = this.context.plugin.workersApiClient;
+    } catch {
+      return null;
     }
+    if (!apiClient) return null;
 
     try {
-      const apiClient = this.context.plugin.workersApiClient;
-      // Fire and forget — don't block UI on network
-      void apiClient.updateArchiveActions(sourceArchiveId, {
-        userHighlights: highlights,
-      }).catch(err => {
-        console.error('[Social Archiver] Failed to sync highlights to server:', err);
-      });
-    } catch {
-      // API client not initialized — skip sync silently
+      const response = await apiClient.getUserArchives({ originalUrl, limit: 1 });
+      const found = response.archives?.[0]?.id;
+      if (!found) {
+        console.debug('[Social Archiver] No server archive found for originalUrl — skipping highlight sync.', originalUrl);
+        return null;
+      }
+
+      try {
+        await this.context.app.fileManager.processFrontMatter(file, (fm) => {
+          if (!fm.sourceArchiveId) fm.sourceArchiveId = found;
+        });
+      } catch (err) {
+        // Non-fatal — we can still sync even if the backfill write fails.
+        console.warn('[Social Archiver] Failed to backfill sourceArchiveId frontmatter:', err);
+      }
+
+      return found;
+    } catch (err) {
+      console.error('[Social Archiver] Lookup by originalUrl failed:', err);
+      return null;
     }
+  }
+
+  /**
+   * Resolve the render profile that the manager should stamp onto new
+   * highlights created inside the reader overlay.
+   *
+   * The plugin's `PostData` shape does not carry the canonical
+   * `isArticle` / `contentType` flags that mobile uses, so we derive them
+   * conservatively here:
+   *   - `post.platform === 'web'` or `'post'` with a title/rawMarkdown →
+   *      treat as structured markdown (long-form blog-style content).
+   *   - X-article posts (platform `x` + presence of `rawMarkdown`) →
+   *      structured-md.
+   *   - Everything else → social-plain (default fallback in highlight-core).
+   */
+  private resolveRenderProfileForCurrentPost(): HighlightRenderProfile | undefined {
+    const post = this.context.posts[this.currentIndex];
+    if (!post) return undefined;
+
+    const rawMarkdown = post.content.rawMarkdown ?? '';
+    const hasRawMd = rawMarkdown.trim().length > 0;
+    const platform = post.platform;
+
+    const isWebArticle = platform === 'web' && hasRawMd;
+    const isXArticle = platform === 'x' && hasRawMd;
+    // `platform: 'post'` is user-created composed content — treat as article-
+    // like when it carries raw markdown (matches the "writer" reader experience).
+    const isUserPostArticle = platform === 'post' && hasRawMd;
+    const isArticle = isWebArticle || isXArticle || isUserPostArticle;
+
+    return getRenderProfileForArchive({
+      platform,
+      isArticle,
+      isXArticle,
+      isWebArticle,
+    });
+  }
+
+  /**
+   * Resolve the canonical fullText basis for the current post:
+   *   - `title` — the post title (undefined when missing).
+   *   - `includeTitlePrefix` — whether the current render profile prepends
+   *     `title + "\n\n"` to the body when computing canonical fullText.
+   *
+   * Used by `ReaderHighlightManager.computeCanonicalOffsets` so plugin-side
+   * saves record offsets in the same coordinate space as share-web / mobile
+   * (both of which go through `computeFullText`). Without this, article
+   * highlights stored by the plugin landed `title.length + 2` chars short
+   * of the canonical frame and the other clients mis-rendered them.
+   */
+  private resolveCanonicalBasisForCurrentPost():
+    | { title?: string; includeTitlePrefix: boolean }
+    | undefined {
+    const post = this.context.posts[this.currentIndex];
+    if (!post) return undefined;
+    const profile = this.resolveRenderProfileForCurrentPost();
+    if (!profile) return undefined;
+    const includeTitlePrefix = RENDER_PROFILE_CONFIG[profile]?.includeTitlePrefix ?? false;
+    const rawTitle = (post.title ?? '').trim();
+    return {
+      title: rawTitle.length > 0 ? rawTitle : undefined,
+      includeTitlePrefix,
+    };
   }
 
   // ---------- Highlight Text Search Helpers ----------

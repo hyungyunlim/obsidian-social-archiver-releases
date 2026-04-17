@@ -4,6 +4,7 @@ import type { BatchTranscriptionManager } from '../../services/BatchTranscriptio
 import type { EditorTTSController } from '../../services/tts/EditorTTSController';
 import type { AuthorCatalogEntry } from '../../types/author-catalog';
 import type { AuthorNoteService } from '../../services/AuthorNoteService';
+import type { DetachedMediaService } from '../media/DetachedMediaService';
 import { TimelineView, VIEW_TYPE_TIMELINE } from '../../views/TimelineView';
 import { AuthorDetailView, VIEW_TYPE_AUTHOR_DETAIL } from '../../views/AuthorDetailView';
 
@@ -26,6 +27,7 @@ export interface CommandRegistryDeps {
   getEditorTTSController: () => EditorTTSController | undefined;
   redownloadExpiredMedia: () => Promise<void>;
   getAuthorNoteService: () => AuthorNoteService | undefined;
+  getDetachedMediaService: () => DetachedMediaService | undefined;
   getSettings: () => { enableAuthorNotes: boolean; archivePath: string };
 }
 
@@ -68,6 +70,40 @@ export function registerCommands(deps: CommandRegistryDeps): void {
         return true;
       }
       return false;
+    },
+  });
+
+  // ── Large Media Guard: detach local media in active note ─────────────
+  // See prd-large-media-guard.md Flow B.
+
+  plugin.addCommand({
+    id: 'detach-local-media',
+    name: 'Detach local media in active note',
+    checkCallback: (checking: boolean) => {
+      const activeFile = app.workspace.getActiveFile();
+      const service = deps.getDetachedMediaService();
+      if (!activeFile || !service) return false;
+      if (!service.canDetachSync(activeFile)) return false;
+      if (checking) return true;
+      void service.detachWithUserFeedback(activeFile);
+      return true;
+    },
+  });
+
+  // ── Large Media Guard: re-download detached media ────────────────────
+  // See prd-large-media-guard.md Flow C.
+
+  plugin.addCommand({
+    id: 'redownload-detached-media',
+    name: 'Re-download detached media in active note',
+    checkCallback: (checking: boolean) => {
+      const activeFile = app.workspace.getActiveFile();
+      const service = deps.getDetachedMediaService();
+      if (!activeFile || !service) return false;
+      if (!service.canRedownloadSync(activeFile)) return false;
+      if (checking) return true;
+      void service.redownloadWithUserFeedback(activeFile);
+      return true;
     },
   });
 

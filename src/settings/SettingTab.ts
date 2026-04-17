@@ -572,6 +572,21 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           this.markDirty();
         }));
 
+    // Large Media Guard — prompt before downloading oversized top-level videos.
+    // See prd-large-media-guard.md (Flow A / Prevention).
+    new Setting(containerEl)
+      .setName('Large video prompt threshold (MB)')
+      .setDesc('Prompt before downloading videos larger than this size. Set to 0 to always download without prompting.')
+      .addText(text => text
+        .setPlaceholder('100')
+        .setValue(String(this.plugin.settings.largeVideoPromptThresholdMB ?? 100))
+        .onChange((value) => {
+          const parsed = Number.parseInt(value, 10);
+          const normalized = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+          this.plugin.settings.largeVideoPromptThresholdMB = normalized;
+          this.markDirty();
+        }));
+
     new Setting(containerEl)
       .setName('Include comments')
       .setDesc('Include platform comments in archived notes. When disabled, only the post content and your personal notes are saved. This setting serves as the default for the archive modal.')

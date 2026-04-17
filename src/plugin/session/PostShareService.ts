@@ -2,9 +2,12 @@ import { Notice, TFile } from 'obsidian';
 import type { App } from 'obsidian';
 import { PostService } from '../../services/PostService';
 import type { PostData, Platform, Media } from '../../types/post';
+import type { ResolvedShareMediaItem } from '../../types/share';
+import { buildShareResolveHints } from '../../utils/shareResolveHints';
 import { TimelineView, VIEW_TYPE_TIMELINE } from '../../views/TimelineView';
 import { getShareUrlForClipboard } from '../../utils/shareUrl';
 import type { SocialArchiverSettings } from '../../types/settings';
+import type { ShareAPIClient } from '../../services/ShareAPIClient';
 
 // ─── Deps ────────────────────────────────────────────────────────────
 
@@ -128,14 +131,35 @@ export class PostShareService {
       });
 
       // Build share options — for re-shares, pass sourceArchiveId as shareId
-      // so the same public URL / archive identity is reused
-      const shareOptions: { username?: string; tier?: typeof settings.tier; shareId?: string } = {
+      // so the same public URL / archive identity is reused.
+      //
+      // sourceArchiveId is also forwarded to the worker as a defensive
+      // re-resolve hint (PRD §6.3): if the client forgot to resolve,
+      // the worker may still patch up top-level media URLs server-side.
+      const shareOptions: {
+        username?: string;
+        tier?: typeof settings.tier;
+        shareId?: string;
+        sourceArchiveId?: string;
+      } = {
         username: settings.username,
         tier: settings.tier,
       };
       if (isReshare && existingArchiveId) {
         shareOptions.shareId = existingArchiveId;
+        shareOptions.sourceArchiveId = existingArchiveId;
       }
+
+      // Attempt to resolve already-preserved archive media BEFORE touching
+      // the local disk. A `null` result (worker error / feature disabled /
+      // preconditions unmet) is not fatal — we fall back to the legacy
+      // full-upload path (PRD §5.2).
+      const resolvedMediaMap = await this.resolveArchiveMedia(
+        shareClient,
+        existingArchiveId,
+        frontmatter,
+        media
+      );
 
       const postDataWithoutMedia = { ...postData, media: [] };
       const createResponse = await shareClient.createShare({
@@ -149,7 +173,25 @@ export class PostShareService {
           createResponse.shareId,
           postData,
           shareOptions,
+          undefined,
+          resolvedMediaMap ?? undefined,
         );
+
+        // Drive the status message off the authoritative stats returned by
+        // `updateShareWithMedia` instead of inferring from the resolve map —
+        // that way auto-resolve (from any caller) also produces accurate
+        // "reused from archive" messaging.
+        const stats = shareResponse.mediaStats;
+        if (stats && stats.totalCount > 0) {
+          const parts: string[] = [];
+          if (stats.uploadedCount > 0) parts.push(`${stats.uploadedCount} uploaded`);
+          if (stats.reusedCount > 0) parts.push(`${stats.reusedCount} reused from archive`);
+          if (stats.keptCount > 0) parts.push(`${stats.keptCount} kept`);
+          if (stats.skippedCount > 0) parts.push(`${stats.skippedCount} skipped`);
+          if (parts.length > 0) {
+            new Notice(`Media: ${parts.join(', ')}`);
+          }
+        }
       }
 
       // Build frontmatter updates
@@ -200,6 +242,62 @@ export class PostShareService {
   }
 
   // ─── Private helpers ─────────────────────────────────────────────────
+
+  /**
+   * Ask the worker which top-level media items are already preserved under
+   * the archive's R2 namespace so we can skip re-uploading them.
+   *
+   * Preconditions (PRD §9.3):
+   *   - frontmatter contains `sourceArchiveId`
+   *   - there is at least one top-level media item
+   *   - `mediaSourceUrls` is populated with at least one usable hint
+   *
+   * Returns a Map keyed by `media[]` index → resolved archive object, or
+   * `null` if reuse is not attempted / the server returns no usable data.
+   */
+  private async resolveArchiveMedia(
+    shareClient: ShareAPIClient,
+    sourceArchiveId: string | undefined,
+    frontmatter: Record<string, unknown>,
+    media: Media[]
+  ): Promise<Map<number, ResolvedShareMediaItem> | null> {
+    if (!sourceArchiveId || media.length === 0) {
+      return null;
+    }
+
+    const rawSourceUrls = frontmatter['mediaSourceUrls'];
+    if (!Array.isArray(rawSourceUrls) || rawSourceUrls.length === 0) {
+      return null;
+    }
+    const sourceUrls = rawSourceUrls.filter((u): u is string => typeof u === 'string' && u.length > 0);
+    if (sourceUrls.length === 0) {
+      return null;
+    }
+
+    // Use the shared hint builder so this eager path and the ShareAPIClient
+    // auto-resolve path cannot drift — the server's matching rules (PRD §7)
+    // rely on both clients emitting the same hint shape.
+    const hints = buildShareResolveHints(media, sourceUrls);
+
+    try {
+      const response = await shareClient.resolveShareMedia(sourceArchiveId, hints);
+      if (!response || response.resolvedCount <= 0) {
+        return null;
+      }
+
+      const map = new Map<number, ResolvedShareMediaItem>();
+      response.resolved.forEach((item, index) => {
+        if (item && typeof item.url === 'string' && item.url.length > 0) {
+          map.set(index, item);
+        }
+      });
+      return map.size > 0 ? map : null;
+    } catch (error) {
+      // Fail-open: never block share creation on resolve errors.
+      console.warn('[Social Archiver] resolveShareMedia failed:', error);
+      return null;
+    }
+  }
 
   /**
    * Extract body content from markdown (remove frontmatter)

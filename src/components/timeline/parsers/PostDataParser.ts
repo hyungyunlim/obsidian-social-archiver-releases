@@ -122,7 +122,11 @@ export class PostDataParser {
         (!frontmatter['linkPreviews'] && content.includes('linkPreviews:')) ||
         (!frontmatter['processedUrls'] && content.includes('processedUrls:')) ||
         (!frontmatter['downloadedUrls'] && content.includes('downloadedUrls:')) ||
-        (!frontmatter['transcribedUrls'] && content.includes('transcribedUrls:'))
+        (!frontmatter['transcribedUrls'] && content.includes('transcribedUrls:')) ||
+        // Large Media Guard fields (prd-large-media-guard.md)
+        (!frontmatter['mediaSourceUrls'] && content.includes('mediaSourceUrls:')) ||
+        (frontmatter['mediaDetached'] === undefined && content.includes('mediaDetached:')) ||
+        (frontmatter['mediaPromptSuppressed'] === undefined && content.includes('mediaPromptSuppressed:'))
       );
 
       if (needsManualParsing || !frontmatter) {
@@ -141,6 +145,15 @@ export class PostDataParser {
           }
           if (!frontmatter['transcribedUrls'] && parsedFrontmatter['transcribedUrls']) {
             frontmatter['transcribedUrls'] = parsedFrontmatter['transcribedUrls'];
+          }
+          if (!frontmatter['mediaSourceUrls'] && parsedFrontmatter['mediaSourceUrls']) {
+            frontmatter['mediaSourceUrls'] = parsedFrontmatter['mediaSourceUrls'];
+          }
+          if (frontmatter['mediaDetached'] === undefined && parsedFrontmatter['mediaDetached'] !== undefined) {
+            frontmatter['mediaDetached'] = parsedFrontmatter['mediaDetached'];
+          }
+          if (frontmatter['mediaPromptSuppressed'] === undefined && parsedFrontmatter['mediaPromptSuppressed'] !== undefined) {
+            frontmatter['mediaPromptSuppressed'] = parsedFrontmatter['mediaPromptSuppressed'];
           }
         } else if (!frontmatter) {
           frontmatter = parsedFrontmatter;
@@ -444,6 +457,20 @@ export class PostDataParser {
         processedUrls: processedUrls.length > 0 ? processedUrls : undefined,
         downloadedUrls: downloadedUrls.length > 0 ? downloadedUrls : undefined,
         transcribedUrls: transcribedUrls.length > 0 ? transcribedUrls : undefined,
+        // Archive-backed identity (also used for share-media reuse resolve path)
+        sourceArchiveId: typeof frontmatter['sourceArchiveId'] === 'string'
+          ? (frontmatter['sourceArchiveId'] as string)
+          : undefined,
+        // Large Media Guard fields (prd-large-media-guard.md)
+        mediaSourceUrls: Array.isArray(frontmatter['mediaSourceUrls'])
+          ? (frontmatter['mediaSourceUrls'] as string[])
+          : undefined,
+        mediaDetached: typeof frontmatter['mediaDetached'] === 'boolean'
+          ? (frontmatter['mediaDetached'] as boolean)
+          : undefined,
+        mediaPromptSuppressed: typeof frontmatter['mediaPromptSuppressed'] === 'boolean'
+          ? (frontmatter['mediaPromptSuppressed'] as boolean)
+          : undefined,
         videoTranscribed: frontmatter['videoTranscribed'] as boolean | undefined,
         videoTranscriptionRequestedAt: frontmatter['videoTranscriptionRequestedAt'] as string | undefined,
         videoTranscriptionError: frontmatter['videoTranscriptionError'] as string | undefined,

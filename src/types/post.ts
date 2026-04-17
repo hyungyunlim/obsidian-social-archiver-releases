@@ -254,6 +254,10 @@ export interface PostData {
   publishedDate?: Date;     // Original post publication date
   archivedDate?: Date;      // Date when post was archived
   mediaSourceUrls?: string[]; // Original media URLs (before proxy download)
+  /** Large Media Guard: user removed local top-level media from this note (prd-large-media-guard.md) */
+  mediaDetached?: boolean;
+  /** Large Media Guard: skip threshold prompt for this archive on subsequent runs */
+  mediaPromptSuppressed?: boolean;
   linkPreviews?: string[]; // Extracted URLs for link preview generation
   ai?: AIAnalysis;
   /**
@@ -562,6 +566,8 @@ export const PostDataSchema: z.ZodType<PostData> = z.lazy(() => z.object({
   publishedDate: z.date().nullish(),
   archivedDate: z.date().nullish(),
   mediaSourceUrls: z.array(z.string()).nullish(),
+  mediaDetached: z.boolean().nullish(),
+  mediaPromptSuppressed: z.boolean().nullish(),
   linkPreviews: z.array(z.string()).nullish(),
   ai: z.object({
     summary: z.string(),

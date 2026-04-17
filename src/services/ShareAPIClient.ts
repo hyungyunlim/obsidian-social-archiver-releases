@@ -15,6 +15,14 @@ import { requestUrl, Platform, type Vault } from 'obsidian';
 import type { PostData, Media } from '@/types/post';
 import type { IService } from './base/IService';
 import type { UserTier } from '@/types/settings';
+import type {
+  ResolveShareMediaHint,
+  ResolveShareMediaRequest,
+  ResolveShareMediaResponse,
+  ResolvedShareMediaItem,
+  ShareMediaPayloadItem,
+} from '@/types/share';
+import { buildShareResolveHints } from '@/utils/shareResolveHints';
 import {
   HttpError,
   NetworkError,
@@ -47,7 +55,36 @@ export interface ShareAPIRequest {
     shareId?: string; // For updates
     tier?: UserTier; // User tier for video upload permissions
     archiveId?: string; // Server archive ID for composed posts (associates share with archive record)
+    sourceArchiveId?: string; // Archive-backed local note — lets the worker reuse preserved R2 media (PRD §6.3)
+    /**
+     * Frontmatter `mediaSourceUrls` forwarded from the caller so
+     * `updateShareWithMedia` can auto-build resolve hints without the caller
+     * needing to pre-call `resolveShareMedia`. Not serialized to the server.
+     */
+    mediaSourceUrls?: string[];
   };
+}
+
+/**
+ * Breakdown of what `updateShareWithMedia` did with each main-post media
+ * item. Attached to the response so callers can show accurate notices
+ * (e.g. distinguishing "uploaded" from "reused from archive").
+ *
+ * Counts refer to the top-level `postData.media` array observed by the
+ * method, AFTER any filtering the caller did (e.g. video removal for
+ * non-admin tier in PostCardRenderer).
+ */
+export interface ShareMediaStats {
+  /** Total top-level media items considered. */
+  totalCount: number;
+  /** New media actually POSTed to `/api/upload-share-media`. */
+  uploadedCount: number;
+  /** Items reused from `archives/*` R2 (auto-resolve or caller-provided map). */
+  reusedCount: number;
+  /** Items kept because a `shares/*` object with the same filename already existed. */
+  keptCount: number;
+  /** Items skipped (non-admin video, podcast audio, vault file missing, upload failed). */
+  skippedCount: number;
 }
 
 /**
@@ -58,6 +95,11 @@ export interface ShareAPIResponse {
   shareUrl: string;
   passwordProtected: boolean;
   expiresAt?: number;
+  /**
+   * Populated only by `updateShareWithMedia`. Other endpoints
+   * (`createShare`, `getShareInfo`) leave this `undefined`.
+   */
+  mediaStats?: ShareMediaStats;
 }
 
 /**
@@ -194,6 +236,20 @@ export class ShareAPIClient implements IService {
   // Request queue for serializing updateShare calls per shareId
   // This prevents race conditions when multiple updates happen simultaneously
   private static updateQueues: Map<string, Promise<ShareAPIResponse>> = new Map();
+
+  // In-flight dedupe guard for updateShareWithMedia.
+  // Multiple code paths can legitimately trigger a share update in response
+  // to a single user action (e.g. PostCardRenderer.createShare fires a
+  // fire-and-forget media upload AND processFrontMatter triggers a vault
+  // 'modify' event that some listeners react to). Without this guard,
+  // `updateShareWithMedia` ends up POSTing to `/api/share` and
+  // `/api/share/resolve-media` twice for a single shareId.
+  //
+  // Keyed by shareId → the live promise. While an update is in-flight for
+  // a given shareId, any concurrent caller reuses the same promise instead
+  // of kicking off a duplicate request. The entry is removed once the
+  // promise settles.
+  private static inflightUpdateWithMedia: Map<string, Promise<ShareAPIResponse>> = new Map();
 
   constructor(config: ShareAPIConfig) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -386,25 +442,209 @@ export class ShareAPIClient implements IService {
   }
 
   /**
-   * Update share with media handling - uploads new media, deletes removed media, converts markdown paths
+   * Ask the worker which top-level media items are already preserved under
+   * `archives/{userId}/{archiveId}/media/*` and can therefore be reused
+   * without re-uploading.
+   *
+   * Fail-open contract (PRD §5.2):
+   *   - Any network / HTTP error → returns `null` (caller must fall back
+   *     to the legacy upload flow).
+   *   - Server returns a malformed payload → returns `null`.
+   *
+   * The caller is responsible for deciding *whether* to call this
+   * (preconditions are in PRD §9.3).
+   */
+  async resolveShareMedia(
+    archiveId: string,
+    items: ResolveShareMediaHint[]
+  ): Promise<ResolveShareMediaResponse | null> {
+    if (!archiveId || !Array.isArray(items) || items.length === 0) {
+      return null;
+    }
+
+    const request: ResolveShareMediaRequest = { archiveId, items };
+
+    try {
+      const result = await this.httpRequest<
+        | { success: boolean; data: ResolveShareMediaResponse }
+        | ResolveShareMediaResponse
+      >('POST', '/api/share/resolve-media', request);
+
+      const payload = ShareAPIClient.unwrapApiResponse<ResolveShareMediaResponse>(result);
+      if (!payload || typeof payload !== 'object') {
+        return null;
+      }
+
+      // Minimal shape validation — anything unexpected → fail-open.
+      if (
+        typeof payload.archiveId !== 'string' ||
+        !Array.isArray(payload.resolved) ||
+        typeof payload.resolvedCount !== 'number' ||
+        typeof payload.totalCount !== 'number'
+      ) {
+        return null;
+      }
+
+      return payload;
+    } catch (error) {
+      if (this.config.debug) {
+        console.warn('[ShareAPIClient] resolveShareMedia failed (falling back to legacy upload):', error);
+      }
+      return null;
+    }
+  }
+
+  /**
+   * Build resolve hints from `media` + `mediaSourceUrls` and invoke
+   * `resolveShareMedia`, returning the index→item map used by
+   * `updateShareWithMedia`. Fully fail-open: any null response or error
+   * yields `undefined`, so the caller falls through to the legacy upload.
+   *
+   * See `utils/shareResolveHints.ts` for the shared hint-construction logic
+   * that keeps this path in sync with `PostShareService.resolveArchiveMedia`.
+   */
+  private async autoResolveMedia(
+    archiveId: string,
+    media: Media[],
+    sourceUrls: string[]
+  ): Promise<Map<number, ResolvedShareMediaItem> | undefined> {
+    try {
+      const hints = buildShareResolveHints(media, sourceUrls);
+      if (hints.length === 0) return undefined;
+
+      const response = await this.resolveShareMedia(archiveId, hints);
+      if (!response || response.resolvedCount <= 0) return undefined;
+
+      const map = new Map<number, ResolvedShareMediaItem>();
+      response.resolved.forEach((item, index) => {
+        if (item && typeof item.url === 'string' && item.url.length > 0) {
+          map.set(index, item);
+        }
+      });
+
+      if (this.config.debug) {
+        console.debug('[ShareAPIClient] auto-resolve:', {
+          archiveId,
+          hints: hints.length,
+          resolvedFromServer: response.resolvedCount,
+          mappedAfterFilter: map.size,
+          preservationStatus: response.preservationStatus,
+        });
+      }
+
+      return map.size > 0 ? map : undefined;
+    } catch (error) {
+      if (this.config.debug) {
+        console.warn('[ShareAPIClient] auto-resolve threw (falling back to legacy upload):', error);
+      }
+      return undefined;
+    }
+  }
+
+  /**
+   * Helper: unwrap the worker's `{ success, data }` envelope when present.
+   * Keeps handler code type-safe without duplicating the pattern.
+   */
+  private static unwrapApiResponse<T>(
+    result: { success: boolean; data: T } | T | null | undefined
+  ): T | null {
+    if (result == null) return null;
+    if (
+      typeof result === 'object' &&
+      'success' in (result as Record<string, unknown>) &&
+      'data' in (result as Record<string, unknown>)
+    ) {
+      return (result as { success: boolean; data: T }).data;
+    }
+    return result as T;
+  }
+
+  /**
+   * Update share with media handling - uploads new media, deletes removed media, converts markdown paths.
+   *
+   * When `resolvedMediaMap` is provided, each entry tells this method that
+   * a given top-level `postData.media[index]` already exists as a preserved
+   * archive R2 object. Those items are NOT re-uploaded; their URL is
+   * swapped for `resolved.url` and `mediaOrigin` is set to `'archive'`.
+   * Unresolved items go through the existing local-read + upload path with
+   * `mediaOrigin = 'share'`.
    *
    * @param shareId - Share ID to update
    * @param postData - New post data with local media paths
-   * @param options - Share options (username, password, expiry)
-   * @param onProgress - Optional progress callback (current, total)
+   * @param options - Share options (username, password, expiry, sourceArchiveId)
+   * @param onProgress - Optional progress callback (current, total). Total reflects *actual*
+   *                     upload work, i.e. excludes resolved-and-reused items.
+   * @param resolvedMediaMap - Optional map of `postData.media` index → preserved archive object
    * @returns Updated share response
    */
   async updateShareWithMedia(
     shareId: string,
     postData: PostData,
     options?: ShareAPIRequest['options'],
-    onProgress?: (current: number, total: number) => void
+    onProgress?: (current: number, total: number) => void,
+    resolvedMediaMap?: Map<number, ResolvedShareMediaItem>
+  ): Promise<ShareAPIResponse> {
+    // In-flight dedupe: reuse the live promise if another caller already
+    // started an update for this shareId. Keyed per-shareId because that's
+    // the R2 / KV unit of work. Cross-instance safe: uses static map so
+    // separate `new ShareAPIClient(...)` calls in different code paths
+    // still dedupe against each other.
+    const existing = ShareAPIClient.inflightUpdateWithMedia.get(shareId);
+    if (existing) {
+      return existing;
+    }
+
+    const promise = this.doUpdateShareWithMedia(
+      shareId,
+      postData,
+      options,
+      onProgress,
+      resolvedMediaMap
+    );
+    ShareAPIClient.inflightUpdateWithMedia.set(shareId, promise);
+    try {
+      return await promise;
+    } finally {
+      // Only clear if it's still us — avoids a racy delete overwriting a
+      // newer in-flight entry created after we settle.
+      if (ShareAPIClient.inflightUpdateWithMedia.get(shareId) === promise) {
+        ShareAPIClient.inflightUpdateWithMedia.delete(shareId);
+      }
+    }
+  }
+
+  /**
+   * Actual implementation of update-share-with-media.
+   * Wrapped by `updateShareWithMedia` above which adds in-flight dedupe.
+   */
+  private async doUpdateShareWithMedia(
+    shareId: string,
+    postData: PostData,
+    options?: ShareAPIRequest['options'],
+    onProgress?: (current: number, total: number) => void,
+    resolvedMediaMap?: Map<number, ResolvedShareMediaItem>
   ): Promise<ShareAPIResponse> {
     if (!this.vault) {
       throw new Error('Vault is required for media operations. Please provide vault in ShareAPIClient config.');
     }
 
-    const uploadedMedia: Record<string, unknown>[] = [];
+    // Auto-resolve gate: if the caller didn't pre-resolve but passed enough
+    // context to build hints, try resolve-first transparently. This covers
+    // the many callers (TimelineContainer action bar, PostCardRenderer,
+    // TimelineView inline editor) that historically called this method
+    // without going through PostShareService's explicit resolve flow.
+    //
+    // Fail-open: any error / malformed response inside `autoResolveMedia`
+    // returns null and we proceed with the legacy upload path.
+    let effectiveResolvedMap = resolvedMediaMap;
+    // Always-on diagnostic so the reuse path is visible in production without a debug flag.
+    const gateArchiveId = options?.sourceArchiveId ?? postData.sourceArchiveId;
+    if (!effectiveResolvedMap && postData.media && postData.media.length > 0 && gateArchiveId) {
+      const sourceUrls = options?.mediaSourceUrls ?? postData.mediaSourceUrls ?? [];
+      effectiveResolvedMap = await this.autoResolveMedia(gateArchiveId, postData.media, sourceUrls);
+    }
+
+    const uploadedMedia: ShareMediaPayloadItem[] = [];
 
     try {
       // STEP 1: Fetch existing share data to detect changes
@@ -419,7 +659,7 @@ export class ShareAPIClient implements IService {
         return result;
       });
 
-      // STEP 2: Build filename maps
+      // STEP 2: Build filename maps + identify resolved (archive-reused) main-post media
       // Map: filename -> existing R2 media object
       const existingMediaByFilename = new Map<string, Record<string, unknown>>();
       ((existingShareData as Record<string, unknown> | undefined)?.['media'] as Record<string, unknown>[] || []).forEach((m) => {
@@ -429,12 +669,29 @@ export class ShareAPIClient implements IService {
         }
       });
 
+      // Pre-compute the set of main-post media local paths that the caller
+      // has already resolved against archive-preserved R2 objects. These are
+      // excluded from the filename-based upload/keep classification below so
+      // we do NOT touch local files for them.
+      const resolvedLocalPaths = new Set<string>();
+      if (effectiveResolvedMap && effectiveResolvedMap.size > 0) {
+        for (const [index] of effectiveResolvedMap.entries()) {
+          const localItem = postData.media[index];
+          if (localItem?.url) {
+            resolvedLocalPaths.add(localItem.url);
+          }
+        }
+      }
+
       // Map: filename -> new local media object
-      // Include media from main post AND embedded archives
+      // Include media from main post AND embedded archives.
+      // Resolved main-post items are skipped here because they'll be injected
+      // directly as archive-origin entries in STEP 3.
       const newMediaByFilename = new Map<string, Media>();
 
-      // Add main post media
+      // Add main post media (skip resolved ones)
       postData.media.forEach(m => {
+        if (resolvedLocalPaths.has(m.url)) return;
         const filename = m.url.split('/').pop();
         if (filename) {
           newMediaByFilename.set(filename, m);
@@ -442,6 +699,8 @@ export class ShareAPIClient implements IService {
       });
 
       // Add embedded archives media (for User Posts with embedded archives)
+      // NOTE: v1 scope is top-level media only (PRD §4) — embedded archive
+      // media is never resolved via resolveShareMedia, always uploaded normally.
       if (postData.embeddedArchives) {
         postData.embeddedArchives.forEach(archive => {
           (archive.media || []).forEach(m => {
@@ -455,14 +714,31 @@ export class ShareAPIClient implements IService {
 
       // Determine what to upload and what to keep
       const mediaToUpload: typeof postData.media = [];
-      const mediaToKeep: Record<string, unknown>[] = [];
+      const mediaToKeep: ShareMediaPayloadItem[] = [];
+      // Explicit skip counter — any `continue` in the classifier below or
+      // in the upload loop adds 1. We keep it separate from uploadedCount so
+      // callers can show accurate "X skipped" messages in the Notice.
+      let skippedCount = 0;
 
       for (const [filename, localMedia] of newMediaByFilename.entries()) {
         if (existingMediaByFilename.has(filename)) {
           // File already exists in R2, keep the R2 version (but skip videos and podcast audio)
           if (localMedia.type !== 'video' && !(postData.platform === 'podcast' && localMedia.type === 'audio')) {
             const existingMedia = existingMediaByFilename.get(filename);
-            if (existingMedia) mediaToKeep.push(existingMedia);
+            if (existingMedia) {
+              // Merge the wire record with the local item's Media-required fields
+              // (e.g. `type`) to satisfy ShareMediaPayloadItem without losing any
+              // server-side metadata like `mediaOrigin` / `r2Key` (PRD §6.7).
+              mediaToKeep.push({
+                ...localMedia,
+                ...(existingMedia as Partial<ShareMediaPayloadItem>),
+                url: (existingMedia['url'] as string | undefined) ?? localMedia.url,
+              });
+            }
+          } else {
+            // Filename matched but skipped re-use (video / podcast audio) —
+            // count as skipped so the summary reflects "not uploaded, not kept".
+            skippedCount++;
           }
         } else {
           // Videos are expensive for R2 - only admin tier can upload
@@ -471,6 +747,7 @@ export class ShareAPIClient implements IService {
             // Only admin tier can upload videos
             if (options?.tier !== 'admin') {
               // Skip video upload for non-admin tiers
+              skippedCount++;
               continue;
             }
             // Admin tier: proceed with video upload
@@ -478,6 +755,7 @@ export class ShareAPIClient implements IService {
           // NEVER upload audio for podcasts - use streaming URL from downloadedUrls instead
           if (postData.platform === 'podcast' && localMedia.type === 'audio') {
             // Skip podcast audio upload - will use downloadedUrls for streaming
+            skippedCount++;
             continue;
           }
           // New image file, needs upload
@@ -485,15 +763,33 @@ export class ShareAPIClient implements IService {
         }
       }
 
-      // Determine what to delete (files in R2 but not in new postData)
+      // Determine what to delete (files in R2 but not in new postData or resolved map)
+      // Resolved items have archive R2 URLs — their filenames will not appear in
+      // newMediaByFilename, so we additionally guard against deleting any R2
+      // object whose key/URL clearly originates from the archives/ namespace.
+      const resolvedFilenames = new Set<string>();
+      if (effectiveResolvedMap) {
+        for (const resolved of effectiveResolvedMap.values()) {
+          const fn = resolved.url.split('/').pop();
+          if (fn) resolvedFilenames.add(fn);
+        }
+      }
+
       const mediaToDelete: string[] = [];
       for (const [filename, existingMedia] of existingMediaByFilename.entries()) {
-        if (!newMediaByFilename.has(filename)) {
-          // File exists in R2 but not in new postData, delete it
-          const url = existingMedia?.url as string | undefined;
-          if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
-            mediaToDelete.push(url);
-          }
+        if (newMediaByFilename.has(filename) || resolvedFilenames.has(filename)) {
+          continue;
+        }
+        // File exists in R2 but not in new postData, delete it
+        const url = existingMedia?.['url'] as string | undefined;
+        const r2Key = existingMedia?.['r2Key'] as string | undefined;
+        const origin = existingMedia?.['mediaOrigin'] as string | undefined;
+        // Defense in depth (PRD §6.8): never delete archive-owned objects.
+        if (origin === 'archive' || (r2Key && r2Key.startsWith('archives/'))) {
+          continue;
+        }
+        if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+          mediaToDelete.push(url);
         }
       }
 
@@ -501,12 +797,32 @@ export class ShareAPIClient implements IService {
         console.debug('[ShareAPIClient] Media sync analysis:', {
           toUpload: mediaToUpload.length,
           toDelete: mediaToDelete.length,
-          toKeep: mediaToKeep.length
+          toKeep: mediaToKeep.length,
+          toReuseFromArchive: effectiveResolvedMap?.size ?? 0,
         });
       }
 
       // STEP 3: Upload new media files to R2
-      const remoteMedia: (import('../types/post').Media | Record<string, unknown>)[] = [...mediaToKeep];
+      // Start from kept items + inject resolved archive-origin entries.
+      const remoteMedia: ShareMediaPayloadItem[] = [...mediaToKeep];
+
+      if (effectiveResolvedMap && effectiveResolvedMap.size > 0) {
+        for (const [index, resolved] of effectiveResolvedMap.entries()) {
+          const localItem = postData.media[index];
+          if (!localItem) continue;
+          const archiveEntry: ShareMediaPayloadItem = {
+            ...localItem,
+            url: resolved.url,
+            thumbnail: resolved.url,
+            mediaOrigin: 'archive',
+            r2Key: resolved.r2Key,
+            sourceArchiveId: options?.sourceArchiveId ?? postData.sourceArchiveId,
+            sourceIndex: resolved.sourceIndex ?? index,
+            variant: resolved.variant,
+          };
+          remoteMedia.push(archiveEntry);
+        }
+      }
 
       for (let i = 0; i < mediaToUpload.length; i++) {
         const mediaItem = mediaToUpload[i];
@@ -528,6 +844,7 @@ export class ShareAPIClient implements IService {
               mediaFile: mediaFile
             });
             remoteMedia.push(mediaItem);
+            skippedCount++;
             continue;
           }
 
@@ -558,15 +875,17 @@ export class ShareAPIClient implements IService {
           );
 
           if (uploadResponse?.success && uploadResponse?.data?.url) {
-            const uploadedItem = {
+            const uploadedItem: ShareMediaPayloadItem = {
               ...mediaItem,
               url: uploadResponse.data.url,
-              thumbnail: uploadResponse.data.url
+              thumbnail: uploadResponse.data.url,
+              mediaOrigin: 'share',
             };
             remoteMedia.push(uploadedItem);
             uploadedMedia.push(uploadedItem);
 
-            // Report progress
+            // Report progress — total reflects only actual upload work,
+            // not reused archive items (PRD §6.4 / §7 UX note).
             if (onProgress) {
               onProgress(i + 1, mediaToUpload.length);
             }
@@ -574,11 +893,15 @@ export class ShareAPIClient implements IService {
             if (mediaItem) {
               remoteMedia.push(mediaItem);
             }
+            // Upload returned non-success; count as skipped so the summary
+            // stays honest (we kept the local-path reference, not an R2 one).
+            skippedCount++;
           }
         } catch {
           if (mediaItem) {
             remoteMedia.push(mediaItem);
           }
+          skippedCount++;
         }
       }
 
@@ -602,17 +925,30 @@ export class ShareAPIClient implements IService {
       // STEP 5: Build path mapping for markdown conversion
       const pathMapping = new Map<string, string>();
 
-      // Map all postData.media items (which have local paths) to their R2 URLs
+      // Resolved archive-origin items have an explicit index → URL mapping.
+      // Use that first so filename collisions (unlikely but possible) don't
+      // mis-route a reused archive URL.
+      if (effectiveResolvedMap && effectiveResolvedMap.size > 0) {
+        for (const [index, resolved] of effectiveResolvedMap.entries()) {
+          const localItem = postData.media[index];
+          if (localItem && resolved.url && localItem.url !== resolved.url) {
+            pathMapping.set(localItem.url, resolved.url);
+          }
+        }
+      }
+
+      // Map remaining postData.media items (which have local paths) to their R2 URLs
       for (const localMedia of postData.media) {
+        if (pathMapping.has(localMedia.url)) continue;
         const remoteItem = remoteMedia.find(r => {
           // Find by matching filename
           const localFilename = localMedia.url.split('/').pop();
-          const remoteFilename = (r.url as string | undefined)?.split('/').pop();
+          const remoteFilename = r.url.split('/').pop();
           return localFilename === remoteFilename;
         });
 
-        if (remoteItem && (remoteItem.url as string | undefined) !== localMedia.url) {
-          pathMapping.set(localMedia.url, remoteItem.url as string);
+        if (remoteItem && remoteItem.url !== localMedia.url) {
+          pathMapping.set(localMedia.url, remoteItem.url);
         }
       }
 
@@ -622,12 +958,12 @@ export class ShareAPIClient implements IService {
           (archive.media || []).forEach(localMedia => {
             const remoteItem = remoteMedia.find(r => {
               const localFilename = localMedia.url.split('/').pop();
-              const remoteFilename = (r.url as string | undefined)?.split('/').pop();
+              const remoteFilename = r.url.split('/').pop();
               return localFilename === remoteFilename;
             });
 
-            if (remoteItem && (remoteItem.url as string | undefined) !== localMedia.url) {
-              pathMapping.set(localMedia.url, remoteItem.url as string);
+            if (remoteItem && remoteItem.url !== localMedia.url) {
+              pathMapping.set(localMedia.url, remoteItem.url);
             }
           });
         });
@@ -681,7 +1017,9 @@ export class ShareAPIClient implements IService {
           hashtags: postData.content.hashtags,
           community: postData.content.community  // Reddit subreddit info
         },
-        media: remoteMedia as import('../types/post').Media[],
+        // ShareMediaPayloadItem extends Media, so this is structurally valid;
+        // extra share-origin metadata (mediaOrigin/r2Key/etc.) is preserved on the wire.
+        media: remoteMedia,
         embeddedArchives: updatedEmbeddedArchives,
         metadata: {
           ...postData.metadata,
@@ -713,15 +1051,44 @@ export class ShareAPIClient implements IService {
         });
       }
 
-      return await this.updateShare(shareId, updateRequest);
+      const response = await this.updateShare(shareId, updateRequest);
+
+      // Compose media stats.
+      // - reusedCount: archive-origin items injected from the resolve map
+      //   (only main-post media is eligible — PRD §4)
+      // - uploadedCount: successful `/api/upload-share-media` calls
+      // - keptCount: items reused from the existing share payload (shares/*)
+      // - skippedCount: accumulated above at every skip site
+      // - totalCount: top-level main-post media count the method observed
+      const mediaStats: ShareMediaStats = {
+        totalCount: postData.media.length,
+        uploadedCount: uploadedMedia.length,
+        reusedCount: effectiveResolvedMap?.size ?? 0,
+        keptCount: mediaToKeep.length,
+        skippedCount,
+      };
+
+      if (this.config.debug) {
+        console.debug('[ShareAPIClient] Media sync result:', {
+          uploaded: mediaStats.uploadedCount,
+          reused: mediaStats.reusedCount,
+          kept: mediaStats.keptCount,
+          skipped: mediaStats.skippedCount,
+          total: mediaStats.totalCount,
+        });
+      }
+
+      return { ...response, mediaStats };
 
     } catch (error) {
-      // ROLLBACK: Delete newly uploaded media on failure
+      // ROLLBACK: Delete newly uploaded media on failure.
+      // Only share-origin items land in `uploadedMedia`; archive-origin reused
+      // items are never added there, so this loop is safe by construction
+      // (PRD §6.8 delete safety).
       if (uploadedMedia.length > 0) {
         for (const media of uploadedMedia) {
           try {
-            const mediaUrl = media.url as string | undefined;
-            const urlParts = (mediaUrl ?? '').split('/');
+            const urlParts = media.url.split('/');
             const filename = urlParts[urlParts.length - 1];
             await this.httpRequest('DELETE', `/api/upload-share-media/${shareId}/${filename}`);
           } catch {

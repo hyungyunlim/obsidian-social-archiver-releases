@@ -39,6 +39,25 @@ export interface RealtimeMessage {
 export type TicketFetcher = () => Promise<string | null>;
 
 /**
+ * Which WebSocket channel is currently connected.
+ * - `private`: authenticated channel; receives annotation & action events
+ * - `public`:  degraded / unauthenticated channel; misses private-only events
+ * - `none`:    not connected
+ */
+export type RealtimeChannelMode = 'private' | 'public' | 'none';
+
+/**
+ * Structured ticket failure log (§5.10).
+ * Emitted one line per failure (not per retry).
+ */
+export interface TicketFailureLog {
+  reason: 'rate-limit' | 'expired' | 'auth' | 'network' | 'other' | 'unavailable';
+  httpStatus?: number;
+  message?: string;
+  at: string;
+}
+
+/**
  * RealtimeClient - WebSocket connection to Workers API
  * Handles real-time job completion notifications
  *
@@ -55,6 +74,22 @@ export class RealtimeClient {
   private isIntentionallyClosed = false;
   private pingInterval: number | null = null;
   private ticketFetcher: TicketFetcher | null = null;
+  private currentMode: RealtimeChannelMode = 'none';
+  /** Track whether we logged a ticket failure for the current degraded session. */
+  private ticketFailureLogged = false;
+
+  /**
+   * Optional callback invoked when the client transitions to the public
+   * (degraded) channel. Consumers use this to start a fallback polling
+   * loop (§5.8) to catch annotation events missed on the public channel.
+   */
+  onDegraded?: () => void;
+
+  /**
+   * Optional callback invoked when the client recovers to the private
+   * channel. Consumers use this to stop the fallback polling loop.
+   */
+  onRecovered?: () => void;
 
   constructor(
     private apiUrl: string,
@@ -63,6 +98,11 @@ export class RealtimeClient {
     ticketFetcher?: TicketFetcher
   ) {
     this.ticketFetcher = ticketFetcher ?? null;
+  }
+
+  /** Return the active channel mode. */
+  getChannelMode(): RealtimeChannelMode {
+    return this.currentMode;
   }
 
   /**
@@ -82,22 +122,32 @@ export class RealtimeClient {
 
     // Try private channel first
     let wsUrl: string;
+    let nextMode: RealtimeChannelMode;
     if (this.ticketFetcher) {
       try {
         const ticket = await this.ticketFetcher();
         if (ticket) {
           wsUrl = `${baseWsUrl}/api/ws/private/${this.username}?ticket=${ticket}`;
+          nextMode = 'private';
           console.debug('[RealtimeClient] Connecting to private channel');
         } else {
           wsUrl = `${baseWsUrl}/api/ws/${this.username}`;
+          nextMode = 'public';
+          this.logTicketFailure({
+            reason: 'unavailable',
+            message: 'ticketFetcher returned null',
+            at: new Date().toISOString(),
+          });
           console.debug('[RealtimeClient] No ticket available, falling back to public channel');
         }
       } catch (err) {
         wsUrl = `${baseWsUrl}/api/ws/${this.username}`;
-        console.warn('[RealtimeClient] Ticket fetch failed, falling back to public channel:', err instanceof Error ? err.message : String(err));
+        nextMode = 'public';
+        this.logTicketFailure(this.classifyTicketFailure(err));
       }
     } else {
       wsUrl = `${baseWsUrl}/api/ws/${this.username}`;
+      nextMode = 'public';
     }
 
     try {
@@ -109,6 +159,8 @@ export class RealtimeClient {
 
         // Start ping/pong to keep connection alive
         this.startPing();
+
+        this.setChannelMode(nextMode);
 
         this.events.trigger('ws:connected');
       };
@@ -135,6 +187,9 @@ export class RealtimeClient {
 
       this.ws.onclose = (event) => {
         this.stopPing();
+        // Mode resets to `none` on disconnect; the next connect() determines
+        // whether we land on private or public. Do not emit onRecovered here.
+        this.currentMode = 'none';
         this.events.trigger('ws:closed', event);
 
         // Reconnect if not intentionally closed
@@ -150,6 +205,69 @@ export class RealtimeClient {
   }
 
   /**
+   * Transition channel mode and fire degraded/recovered callbacks exactly
+   * at transition boundaries (public↔private). No-op on same-mode re-entry.
+   */
+  private setChannelMode(next: RealtimeChannelMode): void {
+    const prev = this.currentMode;
+    if (prev === next) return;
+    this.currentMode = next;
+    if (next === 'public') {
+      try { this.onDegraded?.(); } catch (err) {
+        console.warn('[RealtimeClient] onDegraded callback threw:', err instanceof Error ? err.message : String(err));
+      }
+    } else if (next === 'private' && prev !== 'private') {
+      // Recovered: reset ticket-failure debounce so future degrade logs again
+      this.ticketFailureLogged = false;
+      try { this.onRecovered?.(); } catch (err) {
+        console.warn('[RealtimeClient] onRecovered callback threw:', err instanceof Error ? err.message : String(err));
+      }
+    }
+  }
+
+  /**
+   * Emit a single structured ticket-failure log line per degraded session
+   * (not per retry). Resets after recovery to private.
+   */
+  private logTicketFailure(detail: TicketFailureLog): void {
+    if (this.ticketFailureLogged) return;
+    this.ticketFailureLogged = true;
+    console.warn('[RealtimeClient] private ticket failure', {
+      reason: detail.reason,
+      httpStatus: detail.httpStatus,
+      message: detail.message,
+      at: detail.at,
+    });
+  }
+
+  /**
+   * Classify a ticket-fetch error into a coarse reason bucket for logging.
+   * Avoids logging sensitive response bodies; only pulls HTTP status when
+   * the error exposes it on a well-known field.
+   */
+  private classifyTicketFailure(err: unknown): TicketFailureLog {
+    const message = err instanceof Error ? err.message : String(err);
+    const lowered = message.toLowerCase();
+    const statusCandidate =
+      (err as { status?: unknown; statusCode?: unknown } | null)?.status ??
+      (err as { status?: unknown; statusCode?: unknown } | null)?.statusCode;
+    const httpStatus = typeof statusCandidate === 'number' ? statusCandidate : undefined;
+
+    let reason: TicketFailureLog['reason'] = 'other';
+    if (httpStatus === 429 || lowered.includes('rate')) reason = 'rate-limit';
+    else if (httpStatus === 401 || httpStatus === 403 || lowered.includes('auth') || lowered.includes('forbidden')) reason = 'auth';
+    else if (lowered.includes('expire')) reason = 'expired';
+    else if (lowered.includes('network') || lowered.includes('fetch') || lowered.includes('timeout') || lowered.includes('offline')) reason = 'network';
+
+    return {
+      reason,
+      httpStatus,
+      message: message.length > 120 ? message.slice(0, 120) + '…' : message,
+      at: new Date().toISOString(),
+    };
+  }
+
+  /**
    * Disconnect from WebSocket server
    */
   disconnect(): void {
@@ -161,6 +279,7 @@ export class RealtimeClient {
       this.ws.close(1000, 'Client disconnect');
       this.ws = null;
     }
+    this.currentMode = 'none';
   }
 
   /**

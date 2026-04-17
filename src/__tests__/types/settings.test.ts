@@ -113,6 +113,47 @@ describe('settings', () => {
     });
   });
 
+  describe('enableMobileAnnotationSync (Phase 3 default-on migration)', () => {
+    it('DEFAULT_SETTINGS has enableMobileAnnotationSync = true', () => {
+      expect(DEFAULT_SETTINGS.enableMobileAnnotationSync).toBe(true);
+    });
+
+    it('sets enableMobileAnnotationSync = true when the key is absent (legacy users)', () => {
+      // Legacy settings with no annotation-sync key persisted
+      const legacy = {
+        archivePath: 'Social Archives',
+      } as Partial<SocialArchiverSettings>;
+
+      const migrated = migrateSettings(legacy);
+
+      expect(migrated.enableMobileAnnotationSync).toBe(true);
+    });
+
+    it('preserves explicit opt-out (false) across migration', () => {
+      const optedOut: Partial<SocialArchiverSettings> = {
+        enableMobileAnnotationSync: false,
+      };
+
+      const migrated = migrateSettings(optedOut);
+
+      expect(migrated.enableMobileAnnotationSync).toBe(false);
+    });
+
+    it('is idempotent: re-running migration preserves explicit false', () => {
+      const once = migrateSettings({ enableMobileAnnotationSync: false });
+      const twice = migrateSettings(once);
+
+      expect(twice.enableMobileAnnotationSync).toBe(false);
+    });
+
+    it('is idempotent: re-running migration keeps explicit true', () => {
+      const once = migrateSettings({ enableMobileAnnotationSync: true });
+      const twice = migrateSettings(once);
+
+      expect(twice.enableMobileAnnotationSync).toBe(true);
+    });
+  });
+
   describe('createDefaultTimelineFilters', () => {
     it('should include activeTab set to inbox', () => {
       const defaults = createDefaultTimelineFilters();

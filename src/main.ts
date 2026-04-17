@@ -47,6 +47,8 @@ import { ArchiveLookupService } from './services/ArchiveLookupService';
 import { AnnotationSyncService } from './services/AnnotationSyncService';
 import { AnnotationRenderer } from './services/AnnotationRenderer';
 import { AnnotationSectionManager } from './services/AnnotationSectionManager';
+import { HighlightBodyMarker } from './services/HighlightBodyMarker';
+import { AnnotationFallbackPoller } from './services/AnnotationFallbackPoller';
 
 // Extracted modules
 import { registerCommands, registerEditorTTSMenu } from './plugin/commands/CommandRegistry';
@@ -54,6 +56,10 @@ import { RealtimeEventBridge, type WsProfileMetadataMessage } from './plugin/rea
 import { MobileSyncService } from './plugin/mobile/MobileSyncService';
 import { LocalArchiveCoordinator } from './plugin/local-archive/LocalArchiveCoordinator';
 import { MediaPathResolver } from './plugin/media/MediaPathResolver';
+import { LargeMediaGuardService } from './plugin/media/LargeMediaGuardService';
+import { DetachedMediaService } from './plugin/media/DetachedMediaService';
+import { createLogger } from './services/Logger';
+import { LogLevel } from './types/logger';
 import { PendingJobOrchestrator } from './plugin/jobs/PendingJobOrchestrator';
 import { ArchiveCompletionService } from './plugin/jobs/ArchiveCompletionService';
 import { ensureFolderExists as ensureFolderExistsUtil } from './plugin/utils/ensureFolderExists';
@@ -70,8 +76,10 @@ import { AuthorProfileSyncService } from './plugin/sync/AuthorProfileSyncService
 import { ArchiveStateSyncService } from './plugin/sync/ArchiveStateSyncService';
 import { ArchiveStateOutboundService } from './plugin/sync/ArchiveStateOutboundService';
 import { LikeStateSyncService } from './plugin/sync/LikeStateSyncService';
+import { ShareStateSyncService } from './plugin/sync/ShareStateSyncService';
 import { LikeStateOutboundService } from './plugin/sync/LikeStateOutboundService';
 import { BulkArchiveActionAccumulator } from './plugin/sync/BulkArchiveActionAccumulator';
+import { RemoteArchiveIngestService } from './plugin/sync/RemoteArchiveIngestService';
 import { MediaPlaceholderGenerator } from './services/MediaPlaceholderGenerator';
 
 // Import styles for Vite to process
@@ -87,6 +95,7 @@ export default class SocialArchiverPlugin extends Plugin {
   public pendingJobsManager!: PendingJobsManager; // Pending jobs manager for async archiving
   private jobCheckInterval?: number; // Background job checker interval ID
   private realtimeClient?: RealtimeClient; // WebSocket client for real-time job updates
+  private annotationFallbackPoller?: AnnotationFallbackPoller; // Public-WS fallback polling (§5.8)
   public processingJobs: Set<string> = new Set(); // Track jobs being processed to prevent concurrent processing
   public subscriptionManager?: SubscriptionManager; // Subscription management service
   public naverPoller?: NaverSubscriptionPoller; // Naver Blog/Cafe local subscription poller
@@ -123,8 +132,10 @@ export default class SocialArchiverPlugin extends Plugin {
   private archiveStateOutboundService?: ArchiveStateOutboundService; // Outbound fm.archive → server isBookmarked sync
   private likeStateSyncService?: LikeStateSyncService; // Inbound isLiked → fm.like sync
   private likeStateOutboundService?: LikeStateOutboundService; // Outbound fm.like → server isLiked sync
+  private shareStateSyncService?: ShareStateSyncService; // Inbound shareUrl → fm.share/fm.shareUrl sync
   private bulkArchiveActionAccumulator?: BulkArchiveActionAccumulator; // Shared accumulator for batching outbound like/archive API calls
   private authorProfileSyncService?: AuthorProfileSyncService; // Inbound/startup synced author profile application
+  private remoteArchiveIngestService?: RemoteArchiveIngestService; // Shared single-archive fetch+save for WS events
 
   // Extracted module instances
   private realtimeEventBridge?: RealtimeEventBridge;
@@ -132,6 +143,8 @@ export default class SocialArchiverPlugin extends Plugin {
   private localArchiveCoordinator?: LocalArchiveCoordinator;
   public archiveLibrarySyncService?: ArchiveLibrarySyncService;
   private mediaPathResolver!: MediaPathResolver;
+  public largeMediaGuardService?: LargeMediaGuardService; // Large Media Guard prevention prompt (prd-large-media-guard.md)
+  public detachedMediaService?: DetachedMediaService; // Large Media Guard remediation (detach/re-download)
   private pendingJobOrchestrator?: PendingJobOrchestrator;
   private archiveCompletionService?: ArchiveCompletionService;
   private subscriptionSyncService?: SubscriptionSyncService;
@@ -342,6 +355,7 @@ export default class SocialArchiverPlugin extends Plugin {
       getEditorTTSController: () => this.editorTTSController,
       redownloadExpiredMedia: () => this.redownloadExpiredMedia(),
       getAuthorNoteService: () => this.authorNoteService,
+      getDetachedMediaService: () => this.detachedMediaService,
       getSettings: () => ({ enableAuthorNotes: this.settings.enableAuthorNotes, archivePath: this.settings.archivePath }),
     });
 
@@ -397,6 +411,10 @@ export default class SocialArchiverPlugin extends Plugin {
 
     // Disconnect WebSocket
     this.realtimeClient?.disconnect();
+
+    // Stop annotation fallback polling (public-WS degraded mode)
+    this.annotationFallbackPoller?.stop();
+    this.annotationFallbackPoller = undefined;
 
     // Stop periodic job checker
     if (this.jobCheckInterval) {
@@ -475,6 +493,7 @@ export default class SocialArchiverPlugin extends Plugin {
     this.likeStateOutboundService?.stop();
     this.likeStateOutboundService = undefined;
     this.likeStateSyncService = undefined;
+    this.shareStateSyncService = undefined;
     this.bulkArchiveActionAccumulator?.destroy();
     this.bulkArchiveActionAccumulator = undefined;
     this.authorProfileSyncService = undefined;
@@ -495,10 +514,30 @@ export default class SocialArchiverPlugin extends Plugin {
   async loadSettings(): Promise<void> {
     const rawData: unknown = await this.loadData();
     const savedData: Partial<SocialArchiverSettings> = (rawData ?? {}) as Partial<SocialArchiverSettings>;
+    // Detect Phase-3 migration: enableMobileAnnotationSync key missing in persisted data.
+    // If present, migrateSettings will respect the explicit value (including `false` opt-out).
+    const needsAnnotationSyncDefaultWriteBack =
+      savedData && typeof savedData === 'object'
+        ? !('enableMobileAnnotationSync' in savedData)
+        : false;
     this.settings = migrateSettings(savedData);
 
     // Rebuild naverCookie from individual fields (in case migration populated them)
     this.rebuildNaverCookie();
+
+    // Persist the Phase-3 annotation-sync default so subsequent loads see an
+    // explicit value. Idempotent: the next load sees the key present and
+    // skips this write-back.
+    if (needsAnnotationSyncDefaultWriteBack) {
+      try {
+        await this.saveData(this.settings);
+      } catch (err) {
+        console.warn(
+          '[Social Archiver] Failed to persist annotation-sync migration default:',
+          err instanceof Error ? err.message : String(err)
+        );
+      }
+    }
   }
 
   /**
@@ -642,13 +681,15 @@ export default class SocialArchiverPlugin extends Plugin {
       // Initialize AnnotationSyncService (syncs mobile notes -> comment frontmatter + annotation block)
       const annotationRenderer = new AnnotationRenderer();
       const annotationSectionManager = new AnnotationSectionManager();
+      const highlightBodyMarker = new HighlightBodyMarker();
       this.annotationSyncService = new AnnotationSyncService(
         this.app,
         this.apiClient,
         this.archiveLookupService,
         annotationRenderer,
         annotationSectionManager,
-        () => this.settings
+        () => this.settings,
+        highlightBodyMarker
       );
 
       // Initialize AnnotationOutboundService (syncs comment edits -> server primary note)
@@ -732,6 +773,16 @@ export default class SocialArchiverPlugin extends Plugin {
         this.likeStateOutboundService?.addSuppression(archiveId);
       };
       this.likeStateSyncService.onAfterInboundWrite = () => {
+        this.refreshTimelineView();
+      };
+
+      this.shareStateSyncService = new ShareStateSyncService(
+        this.app,
+        this.apiClient,
+        this.archiveLookupService,
+        () => this.settings,
+      );
+      this.shareStateSyncService.onAfterInboundWrite = () => {
         this.refreshTimelineView();
       };
 
@@ -819,6 +870,24 @@ export default class SocialArchiverPlugin extends Plugin {
       );
       this.authorProfileOutboundService.start();
 
+      // Large Media Guard (prevention half) — foreground-only oversized video
+      // prompt. See prd-large-media-guard.md.
+      this.largeMediaGuardService = new LargeMediaGuardService(
+        this.app,
+        this.settings,
+      );
+
+      // Large Media Guard (remediation half) — detach / re-download local
+      // media on existing notes. See prd-large-media-guard.md (Flows B, C).
+      this.detachedMediaService = new DetachedMediaService({
+        app: this.app,
+        mediaHandler,
+        markdownConverter,
+        largeMediaGuard: this.largeMediaGuardService,
+        settings: this.settings,
+        logger: createLogger({ enableConsole: true, level: LogLevel.INFO }),
+      });
+
       this.orchestrator = new ArchiveOrchestrator({
         archiveService,
         markdownConverter,
@@ -827,6 +896,7 @@ export default class SocialArchiverPlugin extends Plugin {
         linkPreviewExtractor: this.linkPreviewExtractor,
         authorAvatarService: this.authorAvatarService,
         authorNoteService: this.authorNoteService,
+        largeMediaGuard: this.largeMediaGuardService,
         settings: this.settings,
       });
 
@@ -887,6 +957,17 @@ export default class SocialArchiverPlugin extends Plugin {
         },
         schedule: (cb, delay) => this.scheduleTrackedTimeout(cb, delay),
         notify: (msg, timeout) => new Notice(msg, timeout),
+      });
+
+      // Create RemoteArchiveIngestService (shared single-archive fetch+save for WS events)
+      this.remoteArchiveIngestService = new RemoteArchiveIngestService({
+        apiClient: () => this.apiClient,
+        settings: () => ({ archivePath: this.settings.archivePath }),
+        hasRecentlyArchivedUrl: (url) => this.hasRecentlyArchivedUrl(url),
+        archiveLookupService: this.archiveLookupService ?? null,
+        convertUserArchiveToPostData: (archive) => this.convertUserArchiveToPostData(archive),
+        saveSubscriptionPost: (post) => this.saveSubscriptionPost(post),
+        refreshTimelineView: () => this.refreshTimelineView(),
       });
 
       // Create SubscriptionSyncService
@@ -950,6 +1031,9 @@ export default class SocialArchiverPlugin extends Plugin {
         reconcileLikeState: (file, archiveId, isLiked) =>
           this.likeStateSyncService?.reconcileFromLibrarySync(file, archiveId, isLiked) ??
           Promise.resolve(),
+        reconcileAnnotationState: (file, archive) =>
+          this.annotationSyncService?.reconcileFromLibrarySync(file, archive) ??
+          Promise.resolve(),
       });
 
       // Create ArchiveDeleteSyncService
@@ -1006,6 +1090,11 @@ export default class SocialArchiverPlugin extends Plugin {
         this.realtimeClient.disconnect();
         this.realtimeClient = undefined;
       }
+      // Tear down any prior fallback poller so a re-init starts clean.
+      if (this.annotationFallbackPoller) {
+        this.annotationFallbackPoller.stop();
+        this.annotationFallbackPoller = undefined;
+      }
 
       if (this.settings.username) {
         // Create ticket fetcher for private WS channel (requires auth)
@@ -1028,6 +1117,44 @@ export default class SocialArchiverPlugin extends Plugin {
           ticketFetcher
         );
 
+        // §5.8 + §5.9: when the Realtime WS falls back to the public channel,
+        // run a 30 s ± 5 s jitter polling loop that re-fetches the user's
+        // archive delta (includeDeleted=true) so annotation/action events
+        // missed on the public channel still reach the vault. Stops as soon
+        // as the private channel is restored.
+        if (this.apiClient && this.annotationSyncService && this.archiveLookupService) {
+          const apiClient = this.apiClient;
+          const annotationSync = this.annotationSyncService;
+          const lookup = this.archiveLookupService;
+          this.annotationFallbackPoller = new AnnotationFallbackPoller({
+            apiClient,
+            onArchiveUpdate: (archive) => {
+              // Only reconcile archives that currently have annotations —
+              // otherwise we churn vault files for unrelated updates.
+              const hasAnnotations =
+                (archive.userHighlightCount ?? 0) > 0 ||
+                (archive.userNoteCount ?? 0) > 0 ||
+                (archive.userNotes?.length ?? 0) > 0 ||
+                (archive.userHighlights?.length ?? 0) > 0;
+              if (!hasAnnotations) return;
+
+              const file =
+                lookup.findBySourceArchiveId(archive.id)
+                ?? (lookup.findByOriginalUrl(archive.originalUrl).length === 1
+                  ? lookup.findByOriginalUrl(archive.originalUrl)[0]
+                  : null);
+              if (!file) return;
+              void annotationSync.applyAnnotationState(file, archive);
+            },
+          });
+          this.realtimeClient.onDegraded = () => {
+            this.annotationFallbackPoller?.start();
+          };
+          this.realtimeClient.onRecovered = () => {
+            this.annotationFallbackPoller?.stop();
+          };
+        }
+
         // Set up RealtimeEventBridge
         // Need a reference to `this` for the reactive accessors below
         // eslint-disable-next-line @typescript-eslint/no-this-alias
@@ -1047,6 +1174,7 @@ export default class SocialArchiverPlugin extends Plugin {
           annotationSyncService: this.annotationSyncService,
           archiveStateSyncService: this.archiveStateSyncService,
           likeStateSyncService: this.likeStateSyncService,
+          shareStateSyncService: this.shareStateSyncService,
           archiveDeleteSyncService: this.archiveDeleteSyncService ?? undefined,
           archiveTagOutboundService: this.archiveTagOutboundService,
           authorProfileOutboundService: this.authorProfileOutboundService,
@@ -1066,6 +1194,9 @@ export default class SocialArchiverPlugin extends Plugin {
             this.mobileSyncService?.processSyncQueueItem(queueId, archiveId, clientId) ?? Promise.resolve(false),
           getReadableErrorMessage: (code, msg) => this.getReadableErrorMessage(code, msg),
           processingJobs: this.processingJobs,
+          hasRecentlyArchivedUrl: (url: string) => this.hasRecentlyArchivedUrl(url),
+          ingestRemoteArchive: (archiveId: string, source: 'client_sync' | 'archive_complete') =>
+            this.remoteArchiveIngestService?.ingestArchiveById(archiveId, source) ?? Promise.resolve('skipped' as const),
           notify: (msg, timeout) => new Notice(msg, timeout),
           schedule: (cb, delay) => this.scheduleTrackedTimeout(cb, delay),
           currentCrawlWorkerJobId: {
@@ -1130,13 +1261,25 @@ export default class SocialArchiverPlugin extends Plugin {
           this.scheduleTrackedTimeout(() => { void this.mobileSyncService?.processPendingSyncQueue(); }, 5000);
         }
 
-        // Auto-start Archive Library Sync on startup if applicable
+        // Auto-start Archive Library Sync on startup.
+        //
+        // Conditions:
+        //   1. Never completed → fresh bootstrap or an interrupted run.
+        //   2. Completed more than LIBRARY_SYNC_MAX_AGE_MS ago → periodic
+        //      refresh to backfill drift (new archives from other clients,
+        //      `sourceArchiveId` frontmatter on older notes, etc.).
+        //      Real-time WebSocket delta covers most cases, but when the
+        //      vault has been opened after a long gap, or when individual
+        //      action broadcasts were missed, a full sweep catches up.
         if (this.settings.syncClientId) {
+          const LIBRARY_SYNC_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
           const libSync = this.settings.archiveLibrarySync;
-          const shouldAutoStart =
-            // Never completed — covers fresh bootstrap AND interrupted runs
-            // (lastStatus may be 'idle', 'running', or 'error' — all need sync)
-            !libSync || !libSync.completedAt;
+          const completedAt = libSync?.completedAt;
+          const completedAtMs = completedAt ? Date.parse(completedAt) : 0;
+          const stale =
+            completedAtMs > 0 &&
+            Date.now() - completedAtMs > LIBRARY_SYNC_MAX_AGE_MS;
+          const shouldAutoStart = !libSync || !libSync.completedAt || stale;
 
           if (shouldAutoStart) {
             // Delay to let services fully initialise before starting sync

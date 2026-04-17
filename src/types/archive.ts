@@ -100,6 +100,25 @@ export interface YamlFrontmatter {
   userHighlightCount?: number;
   /** True when at least one note or highlight exists for this archive */
   hasAnnotations?: boolean;
+  // Large Media Guard fields (see prd-large-media-guard.md)
+  /**
+   * True when the user intentionally removed top-level local media from this
+   * note. Local attachments have been deleted and the main media section has
+   * been rewritten to remote render/link form. Re-download is possible when
+   * {@link mediaSourceUrls} is present.
+   */
+  mediaDetached?: boolean;
+  /**
+   * Skip the large-video threshold prompt for this archive on subsequent
+   * foreground archive flows (e.g. after the user chose an explicit action).
+   */
+  mediaPromptSuppressed?: boolean;
+  /**
+   * Ordered list of top-level media source URLs for the main post. Preserved
+   * so that detach/re-download can reconstruct the media section even after
+   * local attachments have been removed. MVP: main post top-level media only.
+   */
+  mediaSourceUrls?: string[];
   [key: string]: unknown; // Allow custom fields
 }
 

@@ -160,6 +160,28 @@ export interface ArchiveLibrarySyncDeps {
    * Wired to ArchiveStateSyncService.reconcileFromLibrarySync() in main.ts.
    */
   reconcileArchiveState?: (file: TFile, archiveId: string, isBookmarked: boolean) => Promise<void>;
+
+  /**
+   * Reconcile the `like` frontmatter field on an existing vault file
+   * against the server's `isLiked` value. Same contract as
+   * `reconcileArchiveState` but for the like flag.
+   *
+   * Wired to LikeStateSyncService.reconcileFromLibrarySync() in main.ts.
+   */
+  reconcileLikeState?: (file: TFile, archiveId: string, isLiked: boolean) => Promise<void>;
+
+  /**
+   * Reconcile an existing vault file's annotation state (userNotes +
+   * userHighlights) against the server archive. Writes the managed
+   * annotation block and inline `==text==` marks so reader mode / timeline
+   * cards visualise highlights created on other clients.
+   *
+   * Must be idempotent — repeated calls with the same archive must not
+   * produce diffs.
+   *
+   * Wired to AnnotationSyncService.reconcileFromLibrarySync() in main.ts.
+   */
+  reconcileAnnotationState?: (file: TFile, archive: UserArchive) => Promise<void>;
 }
 
 // ============================================================================
@@ -492,6 +514,8 @@ export class ArchiveLibrarySyncService {
       const existingById = this.deps.findBySourceArchiveId(archive.id);
       if (existingById) {
         await this.reconcileExistingArchiveState(existingById, archive);
+        await this.reconcileExistingLikeState(existingById, archive);
+        await this.reconcileExistingAnnotationState(existingById, archive);
         this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
         return;
       }
@@ -544,6 +568,8 @@ export class ArchiveLibrarySyncService {
           });
         }
         await this.reconcileExistingArchiveState(matched, archive);
+        await this.reconcileExistingLikeState(matched, archive);
+        await this.reconcileExistingAnnotationState(matched, archive);
         this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
         return;
       }
@@ -600,6 +626,46 @@ export class ArchiveLibrarySyncService {
     } catch (error) {
       // Non-fatal: log and continue — the main sync must not be disrupted
       console.warn('[Social Archiver] [LibrarySync] reconcileExistingArchiveState failed', {
+        archiveId: archive.id,
+        path: file.path,
+        error,
+      });
+    }
+  }
+
+  private async reconcileExistingLikeState(file: TFile, archive: UserArchive): Promise<void> {
+    if (!this.deps.reconcileLikeState) return;
+
+    const serverIsLiked: boolean = archive.isLiked;
+    if (typeof serverIsLiked !== 'boolean') return;
+
+    try {
+      await this.deps.reconcileLikeState(file, archive.id, serverIsLiked);
+    } catch (error) {
+      console.warn('[Social Archiver] [LibrarySync] reconcileExistingLikeState failed', {
+        archiveId: archive.id,
+        path: file.path,
+        error,
+      });
+    }
+  }
+
+  /**
+   * Reconcile annotation state (userNotes + userHighlights) on an existing
+   * vault file. Non-fatal — errors are logged and swallowed.
+   *
+   * Short-circuits when:
+   *   - `deps.reconcileAnnotationState` is not wired
+   *   - the archive carries no annotation payload AND frontmatter already
+   *     reflects "no annotations" (handled inside the wired implementation)
+   */
+  private async reconcileExistingAnnotationState(file: TFile, archive: UserArchive): Promise<void> {
+    if (!this.deps.reconcileAnnotationState) return;
+
+    try {
+      await this.deps.reconcileAnnotationState(file, archive);
+    } catch (error) {
+      console.warn('[Social Archiver] [LibrarySync] reconcileExistingAnnotationState failed', {
         archiveId: archive.id,
         path: file.path,
         error,

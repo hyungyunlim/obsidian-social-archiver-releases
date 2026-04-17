@@ -265,6 +265,9 @@ export const DEFAULT_FRONTMATTER_PROPERTY_ORDER: string[] = [
   'commentCount',
   'media_expired',
   'media_expired_urls',
+  'mediaSourceUrls',
+  'mediaDetached',
+  'mediaPromptSuppressed',
   'videoDownloaded',
   'videoDownloadFailed',
   'videoDownloadFailedCount',
@@ -564,6 +567,14 @@ export interface SocialArchiverSettings {
   enableAuthorNotes: boolean; // Create vault-native author note files (default: false)
   authorNotesPath: string; // Folder for author note files (default: 'Social Authors')
 
+  // Large Media Guard Settings
+  /**
+   * Prompt before downloading a top-level video larger than this size (MB)
+   * during a foreground archive. 0 disables the prompt.
+   * @default 100
+   */
+  largeVideoPromptThresholdMB: number;
+
   // View Location Settings
   viewLocationDefault: ViewLocation;
   timelineLocation: ViewLocationOverride;
@@ -675,7 +686,7 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
   syncClientId: '', // Empty until registered
 
   // Mobile Annotation Sync Settings
-  enableMobileAnnotationSync: false, // Opt-in beta; default off until feature is stable
+  enableMobileAnnotationSync: true, // Phase 3: default ON; opt-out via UI (migration respects explicit false)
 
   // Delete Sync Settings
   deleteSync: {
@@ -729,6 +740,9 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
   // Author Notes Settings (Experimental)
   enableAuthorNotes: false, // Disabled by default (experimental)
   authorNotesPath: 'Social Authors', // Default: outside archivePath
+
+  // Large Media Guard Settings
+  largeVideoPromptThresholdMB: 100, // Prompt before downloading top-level videos larger than 100MB
 
   // View Location Settings
   viewLocationDefault: 'sidebar',
@@ -1012,14 +1026,32 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
     migrated.syncClientId = '';
   }
 
-  // Initialize mobile annotation sync setting if missing (migration)
-  if (migrated.enableMobileAnnotationSync === undefined) {
-    migrated.enableMobileAnnotationSync = false;
+  // Phase 3 migration: enableMobileAnnotationSync default ON.
+  // Respect explicit opt-out (false) if the key is present in the raw settings;
+  // if the key is absent (existing users without a persisted value), enable it.
+  // This migration is idempotent — running it twice produces the same result
+  // because once the key is written to settings, subsequent loads will see it.
+  if (!('enableMobileAnnotationSync' in (settings as object))) {
+    migrated.enableMobileAnnotationSync = true;
+  } else if (migrated.enableMobileAnnotationSync === undefined) {
+    // Key present but value is undefined (edge case) — default ON
+    migrated.enableMobileAnnotationSync = true;
   }
 
   // Initialize archive library sync settings if missing (migration)
   if (migrated.archiveLibrarySync === undefined) {
     migrated.archiveLibrarySync = DEFAULT_SETTINGS.archiveLibrarySync;
+  }
+
+  // Initialize large-media guard threshold if missing (migration)
+  if (
+    migrated.largeVideoPromptThresholdMB === undefined ||
+    migrated.largeVideoPromptThresholdMB === null ||
+    typeof migrated.largeVideoPromptThresholdMB !== 'number' ||
+    !Number.isFinite(migrated.largeVideoPromptThresholdMB) ||
+    migrated.largeVideoPromptThresholdMB < 0
+  ) {
+    migrated.largeVideoPromptThresholdMB = DEFAULT_SETTINGS.largeVideoPromptThresholdMB;
   }
 
   // Initialize composed post sync queue if missing (migration)

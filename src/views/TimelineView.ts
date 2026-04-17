@@ -338,65 +338,81 @@ export class TimelineView extends ItemView {
           return;
         }
         if (file.path.startsWith(archivePath)) {
-          // Check if this file was modified via UI (toggle actions) - skip refresh but still process share updates
+          // Check if this file was modified via UI (toggle actions) - skip refresh AND share updates
           // Note: Don't remove from set here - let the timeout handle it, so metadataCache.on('changed') can also check
           const isUIModified = this.uiModifiedPaths.has(file.path);
 
-          // Check if this post is shared and auto-update it
-          try {
-            // Type guard: ensure file is TFile (has content)
-            if (!('stat' in file)) return;
-            if (!(file instanceof TFile)) return; // Additional type guard
+          // UI-initiated modifications (share toggle, unshare, frontmatter toggles, etc.)
+          // already invoke ShareAPIClient.updateShareWithMedia explicitly at the call site
+          // (PostCardRenderer.createShare, TimelineContainer composer flow, etc.).
+          //
+          // Auto-triggering another update here from the generic vault 'modify' event
+          // causes duplicate POST /api/share requests for a single user action — which is
+          // exactly the bug reproduced on 2026-04-17 (same shareId hit [share-reuse] gate
+          // + autoResolve twice for a single action-bar toggle).
+          //
+          // Only run the auto-update for EXTERNAL edits (e.g. user manually editing the
+          // markdown file in the Obsidian editor). UI-initiated edits are skipped.
+          if (!isUIModified) {
+            try {
+              // Type guard: ensure file is TFile (has content)
+              if (!('stat' in file)) return;
+              if (!(file instanceof TFile)) return; // Additional type guard
 
-            const content = await this.app.vault.read(file);
-            const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
-            if (frontmatterMatch) {
-              const frontmatter = frontmatterMatch[1];
-              const shareUrlMatch = frontmatter?.match(/shareUrl:\s*["']?([^"'\n]+)["']?/);
+              const content = await this.app.vault.read(file);
+              const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+              if (frontmatterMatch) {
+                const frontmatter = frontmatterMatch[1];
+                const shareUrlMatch = frontmatter?.match(/shareUrl:\s*["']?([^"'\n]+)["']?/);
 
-              if (shareUrlMatch && shareUrlMatch[1]) {
-                const shareUrl = shareUrlMatch[1];
-                const shareId = shareUrl.split('/').pop();
+                if (shareUrlMatch && shareUrlMatch[1]) {
+                  const shareUrl = shareUrlMatch[1];
+                  const shareId = shareUrl.split('/').pop();
 
-                if (shareId) {
-                  // Parse the updated post
-                  const { PostDataParser } = await import('../components/timeline/parsers/PostDataParser');
-                  const parser = new PostDataParser(this.app.vault, this.app);
-                  const postData = await parser.parseFile(file);
+                  if (shareId) {
+                    // Parse the updated post
+                    const { PostDataParser } = await import('../components/timeline/parsers/PostDataParser');
+                    const parser = new PostDataParser(this.app.vault, this.app);
+                    const postData = await parser.parseFile(file);
 
-                  if (postData) {
-                    // IMPORTANT: Ensure embeddedArchives is explicitly set
-                    // If PostDataParser didn't find any, set to empty array (not undefined)
-                    // This tells Workers to clear embeddedArchives, not preserve them
-                    if (postData.embeddedArchives === undefined) {
-                      postData.embeddedArchives = [];
+                    if (postData) {
+                      // IMPORTANT: Ensure embeddedArchives is explicitly set
+                      // If PostDataParser didn't find any, set to empty array (not undefined)
+                      // This tells Workers to clear embeddedArchives, not preserve them
+                      if (postData.embeddedArchives === undefined) {
+                        postData.embeddedArchives = [];
+                      }
+
+                      // IMPORTANT: Ensure linkPreviews is explicitly set
+                      // If PostDataParser didn't find any, set to empty array (not undefined)
+                      // This tells Workers to clear linkPreviews, not preserve them
+                      if (postData.linkPreviews === undefined) {
+                        postData.linkPreviews = [];
+                      }
+
+                      // Update the share
+                      const { ShareAPIClient } = await import('../services/ShareAPIClient');
+                      const shareClient = new ShareAPIClient({
+                        baseURL: this.plugin.settings.workerUrl,
+                        apiKey: this.plugin.settings.authToken,
+                        vault: this.app.vault
+                      });
+
+                      // Forward archive identity so ShareAPIClient.updateShareWithMedia
+                      // can auto-resolve and skip re-uploading preserved archive media.
+                      await shareClient.updateShareWithMedia(shareId, postData, {
+                        username: this.plugin.settings.username,
+                        tier: this.plugin.settings.tier,
+                        sourceArchiveId: postData.sourceArchiveId,
+                        mediaSourceUrls: postData.mediaSourceUrls,
+                      });
                     }
-
-                    // IMPORTANT: Ensure linkPreviews is explicitly set
-                    // If PostDataParser didn't find any, set to empty array (not undefined)
-                    // This tells Workers to clear linkPreviews, not preserve them
-                    if (postData.linkPreviews === undefined) {
-                      postData.linkPreviews = [];
-                    }
-
-                    // Update the share
-                    const { ShareAPIClient } = await import('../services/ShareAPIClient');
-                    const shareClient = new ShareAPIClient({
-                      baseURL: this.plugin.settings.workerUrl,
-                      apiKey: this.plugin.settings.authToken,
-                      vault: this.app.vault
-                    });
-
-                    await shareClient.updateShareWithMedia(shareId, postData, {
-                      username: this.plugin.settings.username,
-                      tier: this.plugin.settings.tier
-                    });
                   }
                 }
               }
+            } catch {
+              // Silent fail
             }
-          } catch {
-            // Silent fail
           }
 
           // Skip refresh if this was a UI modification (card already updated)

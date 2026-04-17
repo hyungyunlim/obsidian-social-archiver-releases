@@ -15,6 +15,7 @@ import {
 import { DateNumberFormatter } from '../formatters/DateNumberFormatter';
 import { TextFormatter } from '../formatters/TextFormatter';
 import { TemplateEngine } from '../template/TemplateEngine';
+import { USER_CONTROLLED_FRONTMATTER_FIELDS } from './constants';
 import { uniqueStrings } from '@/utils/array';
 import { normalizeUrlForDedup } from '@/utils/url';
 
@@ -75,6 +76,14 @@ function normalizeAuthorUrl(url: string | undefined, platform: Platform): string
  */
 export interface FrontmatterOptions {
   customization?: FrontmatterCustomizationSettings;
+  /**
+   * Existing frontmatter from a file being updated. When provided, fields
+   * listed in USER_CONTROLLED_FRONTMATTER_FIELDS are preserved from this
+   * object, overriding the freshly generated values. Used on re-archive /
+   * update flows to avoid clobbering user intent (share state, detach
+   * markers, download decisions, etc.).
+   */
+  existingFrontmatter?: Record<string, unknown>;
 }
 
 const CORE_LOCKED_FRONTMATTER_FIELDS = new Set<string>(FRONTMATTER_CORE_LOCKED_FIELDS);
@@ -97,7 +106,7 @@ const CATEGORY_FIELDS: Record<keyof FrontmatterFieldVisibility, string[]> = {
   seriesInfo: ['series', 'seriesUrl', 'seriesId', 'episode', 'totalEpisodes', 'starScore', 'genre', 'ageRating', 'finished', 'publishDay'],
   podcastInfo: ['channelTitle', 'audioUrl', 'audioSize', 'audioType', 'season', 'subtitle', 'hosts', 'guests', 'explicit'],
   reblogInfo: ['isReblog', 'originalAuthor', 'originalAuthorHandle', 'originalAuthorUrl', 'originalPostUrl', 'originalAuthorAvatar'],
-  mediaMetadata: ['media_expired', 'media_expired_urls', 'processedUrls'],
+  mediaMetadata: ['media_expired', 'media_expired_urls', 'processedUrls', 'mediaSourceUrls', 'mediaDetached', 'mediaPromptSuppressed'],
   workflow: [
     'share',
     'archive',
@@ -300,6 +309,59 @@ export class FrontmatterGenerator {
     if (expiredMedia && expiredMedia.length > 0) {
       frontmatter.media_expired = expiredMedia.length;
       frontmatter.media_expired_urls = expiredMedia.map(e => e.originalUrl);
+    }
+
+    // Large Media Guard: persist ordered top-level media source URLs so the
+    // user can detach local files and later re-download, or rebuild a remote
+    // render view. MVP scope: main post top-level image/video only.
+    // See prd-large-media-guard.md.
+    const topLevelMediaSourceUrls = Array.isArray(postData.media)
+      ? uniqueStrings(
+          postData.media
+            .filter((m) => m && (m.type === 'image' || m.type === 'video'))
+            .map((m) => (typeof m.url === 'string' ? m.url : ''))
+            .filter((url) => !!url && /^https?:\/\//i.test(url))
+        )
+      : [];
+    if (topLevelMediaSourceUrls.length > 0) {
+      frontmatter.mediaSourceUrls = topLevelMediaSourceUrls;
+    }
+
+    // Large Media Guard: forward explicit note-level flags + per-URL markers
+    // from postData. These are populated by ArchiveOrchestrator when the user
+    // opts into "Keep note only" / "Don't ask again". We apply them here so
+    // the flags survive even without an `existingFrontmatter` blob (fresh
+    // archive path). `existingFrontmatter` preservation below still wins on
+    // re-archive where the user intent has already been recorded to disk.
+    if (postData.mediaDetached === true) {
+      frontmatter.mediaDetached = true;
+    }
+    if (postData.mediaPromptSuppressed === true) {
+      frontmatter.mediaPromptSuppressed = true;
+    }
+    if (Array.isArray(postData.downloadedUrls) && postData.downloadedUrls.length > 0) {
+      // Keep existing value if already set (e.g. fresh archive where we've
+      // merged download + declined markers; preserves order).
+      const existing = Array.isArray(frontmatter.downloadedUrls)
+        ? (frontmatter.downloadedUrls as string[])
+        : [];
+      const merged = Array.from(new Set([...existing, ...postData.downloadedUrls]));
+      if (merged.length > 0) {
+        frontmatter.downloadedUrls = merged;
+      }
+    }
+
+    // Preserve user-controlled fields from existing frontmatter (re-archive /
+    // update). Intentionally merged BEFORE visibility/alias passes so that
+    // downstream category filtering still applies to preserved fields.
+    const existingFmRecord = options?.existingFrontmatter;
+    if (existingFmRecord && typeof existingFmRecord === 'object') {
+      for (const field of USER_CONTROLLED_FRONTMATTER_FIELDS) {
+        const preservedValue = existingFmRecord[field];
+        if (preservedValue !== undefined) {
+          frontmatter[field] = preservedValue;
+        }
+      }
     }
 
     const customization = options?.customization;

@@ -1,6 +1,7 @@
 export * from './settings';
 export * from './post';
 export * from './archive';
+export * from './share';
 export * from './api';
 export * from './errors';
 export * from './platform';

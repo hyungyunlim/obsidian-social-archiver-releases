@@ -23,10 +23,11 @@
 import type { App, TFile } from 'obsidian';
 import type { ActionUpdatedEventData } from '@/types/websocket';
 import type { SocialArchiverSettings } from '@/types/settings';
-import type { WorkersAPIClient } from './WorkersAPIClient';
+import type { WorkersAPIClient, UserArchive } from './WorkersAPIClient';
 import type { ArchiveLookupService } from './ArchiveLookupService';
 import type { AnnotationRenderer } from './AnnotationRenderer';
 import type { AnnotationSectionManager } from './AnnotationSectionManager';
+import { HighlightBodyMarker } from './HighlightBodyMarker';
 
 // ============================================================================
 // Coalescing state per archiveId
@@ -49,6 +50,7 @@ export class AnnotationSyncService {
   private readonly archiveLookup: ArchiveLookupService;
   private readonly annotationRenderer: AnnotationRenderer;
   private readonly annotationSectionManager: AnnotationSectionManager;
+  private readonly highlightBodyMarker: HighlightBodyMarker;
   private readonly getSettings: () => SocialArchiverSettings;
 
   /** Per-archiveId coalescing state */
@@ -67,13 +69,15 @@ export class AnnotationSyncService {
     archiveLookup: ArchiveLookupService,
     annotationRenderer: AnnotationRenderer,
     annotationSectionManager: AnnotationSectionManager,
-    getSettings: () => SocialArchiverSettings
+    getSettings: () => SocialArchiverSettings,
+    highlightBodyMarker: HighlightBodyMarker = new HighlightBodyMarker()
   ) {
     this.app = app;
     this.workersApiClient = workersApiClient;
     this.archiveLookup = archiveLookup;
     this.annotationRenderer = annotationRenderer;
     this.annotationSectionManager = annotationSectionManager;
+    this.highlightBodyMarker = highlightBodyMarker;
     this.getSettings = getSettings;
   }
 
@@ -175,42 +179,48 @@ export class AnnotationSyncService {
     }
     console.debug('[AnnotationSyncService] Found vault file:', file.path);
 
-    // 3. Extract notes and highlights from server response
+    await this.applyAnnotationState(file, archive);
+  }
+
+  /**
+   * Apply an archive's notes + highlights to a specific vault file.
+   *
+   * Shared pipeline used by:
+   *   - `runSync()` (triggered by WebSocket action_updated events)
+   *   - `reconcileFromLibrarySync()` (triggered per-archive during library sync)
+   *
+   * Never throws — failures at any stage are logged and swallowed so the
+   * caller's outer loop (e.g. library sync) keeps progressing.
+   */
+  async applyAnnotationState(file: TFile, archive: UserArchive): Promise<void> {
+    const archiveId = archive.id;
     const notes = archive.userNotes ?? [];
     const highlights = archive.userHighlights ?? [];
     const noteCount = notes.length;
     const highlightCount = highlights.length;
     const hasAnnotations = noteCount > 0 || highlightCount > 0;
 
-    // 4. Determine comment from synthetic primary note only
-    //    The synthetic primary note has id = "obsidian:{clientId}:primary"
-    //    Only update the `comment` field if a synthetic primary note exists.
-    //    If no primary note exists but other (mobile) notes do, leave comment as-is.
-    //    If all notes are cleared, remove the comment field.
+    // Determine comment from synthetic primary note only. See runSync for
+    // the full semantics of this rule.
     const clientId = this.getSettings().syncClientId || '';
     const syntheticNoteId = `obsidian:${clientId}:primary`;
     const primaryNote = notes.find((n) => n.id === syntheticNoteId);
 
-    // 5. Notify outbound service to suppress echo before we write
+    // Notify outbound service to suppress echo before we write
     this.onBeforeInboundWrite?.(archiveId);
 
-    // 6. Update frontmatter (comment + counts + flags)
+    // Update frontmatter (comment + counts + flags)
     try {
       await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-        // Backfill sourceArchiveId if not already set
         if (!fm.sourceArchiveId) {
           fm.sourceArchiveId = archiveId;
         }
 
-        // Sync comment from synthetic primary note only
         if (primaryNote) {
-          // Primary note present — reflect its content in comment
           fm.comment = primaryNote.content;
         } else if (noteCount === 0) {
-          // All notes cleared on mobile — remove comment
           delete fm.comment;
         }
-        // If no primary note but other (mobile) notes exist, leave comment as-is
 
         fm.userNoteCount = noteCount;
         fm.userHighlightCount = highlightCount;
@@ -225,13 +235,23 @@ export class AnnotationSyncService {
       // Non-fatal: continue to update body
     }
 
-    // 7. Render the managed annotation block with ALL notes and highlights
+    // Render the managed annotation block with ALL notes and highlights
     const annotationBlock = this.annotationRenderer.render({ notes, highlights });
 
-    // 8. Apply annotation block to note body
+    // Apply annotation block to note body, and reconcile inline ==text== marks
+    // so reader mode / timeline cards visualise the highlights.
+    //
+    // Phase 3 (PRD §5.4, §5.5) — we pass the archive envelope so dual-read
+    // can see `coordinateVersion` / `schemaVersion` on the envelope and run
+    // the 4-state runtime classification. Plugin is read-only here: no
+    // write-back is scheduled (plugin is the canonical WRITE-path per §5.5).
     try {
       const content = await this.app.vault.read(file);
-      const updatedContent = this.annotationSectionManager.upsert(content, annotationBlock);
+      const reconciledBody = this.highlightBodyMarker.reconcile(content, {
+        id: archiveId,
+        userHighlights: highlights,
+      });
+      const updatedContent = this.annotationSectionManager.upsert(reconciledBody, annotationBlock);
       if (updatedContent !== content) {
         await this.app.vault.modify(file, updatedContent);
       }
@@ -249,6 +269,15 @@ export class AnnotationSyncService {
       file.path,
       { noteCount, highlightCount, hasAnnotations }
     );
+  }
+
+  /**
+   * Reconcile a file's annotation state against an archive payload already
+   * fetched by the library sync. Avoids the extra server round-trip that
+   * `runSync()` performs.
+   */
+  async reconcileFromLibrarySync(file: TFile, archive: UserArchive): Promise<void> {
+    await this.applyAnnotationState(file, archive);
   }
 
   // --------------------------------------------------------------------------

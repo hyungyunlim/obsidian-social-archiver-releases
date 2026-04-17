@@ -1,5 +1,6 @@
 import { setIcon, Notice, Platform as ObsidianPlatform, requestUrl, TFile, type Vault, type App } from 'obsidian';
 import type { PostData, Platform } from '../../types/post';
+import type { ShareMediaStats } from '../../services/ShareAPIClient';
 import type SocialArchiverPlugin from '../../main';
 import type { SocialArchiverSettings, TimelineFilterPreferences, TimelineArchiveTab } from '../../types/settings';
 import { resolveViewLocation } from '../../types/settings';
@@ -885,6 +886,26 @@ export class TimelineContainer {
   }
 
   /**
+   * Format a compact parenthesized summary of media upload stats for Notices.
+   * Returns an empty string when there's nothing meaningful to report —
+   * callers can concatenate the return value directly.
+   *
+   * Example outputs:
+   *   ""
+   *   " (3 reused from archive)"
+   *   " (1 uploaded, 2 reused from archive)"
+   */
+  private formatMediaStatsSummary(stats: ShareMediaStats | undefined): string {
+    if (!stats || stats.totalCount <= 0) return '';
+    const parts: string[] = [];
+    if (stats.uploadedCount > 0) parts.push(`${stats.uploadedCount} uploaded`);
+    if (stats.reusedCount > 0) parts.push(`${stats.reusedCount} reused from archive`);
+    if (stats.keptCount > 0) parts.push(`${stats.keptCount} kept`);
+    if (stats.skippedCount > 0) parts.push(`${stats.skippedCount} skipped`);
+    return parts.length > 0 ? ` (${parts.join(', ')})` : '';
+  }
+
+  /**
    * Setup callbacks for filter and sort changes
    */
   private setupCallbacks(): void {
@@ -1625,15 +1646,22 @@ export class TimelineContainer {
                   }
 
                   // STEP 2: Update share with media (uploads to R2)
+                  let mediaSummary = '';
                   if (finalPostData.media && finalPostData.media.length > 0) {
-                    await shareClient.updateShareWithMedia(
+                    // Forward archive identity so ShareAPIClient.updateShareWithMedia
+                    // auto-triggers resolve-first and skips re-uploading any media
+                    // that's already preserved under `archives/{userId}/{archiveId}/media/*`.
+                    const result = await shareClient.updateShareWithMedia(
                       initialShareResult.shareId,
                       finalPostData,
                       {
                         username: this.plugin.settings.username,
-                        tier: this.plugin.settings.tier
+                        tier: this.plugin.settings.tier,
+                        sourceArchiveId: finalPostData.sourceArchiveId,
+                        mediaSourceUrls: finalPostData.mediaSourceUrls,
                       }
                     );
+                    mediaSummary = this.formatMediaStatsSummary(result.mediaStats);
                   }
 
                   // STEP 3: Update YAML frontmatter with share data atomically
@@ -1643,7 +1671,7 @@ export class TimelineContainer {
                     initialShareResult.shareUrl
                   ));
 
-                  new Notice('Post shared to web!');
+                  new Notice(`Post shared to web!${mediaSummary}`);
                 }
               } catch {
                 new Notice('Post saved but sharing failed. You can share it later from the post card.');
@@ -6614,12 +6642,16 @@ export class TimelineContainer {
                   // - Uploads new local media files to R2
                   // - Deletes removed media files from R2
                   // - Converts markdown image paths from local to R2 URLs
-                  await shareClient.updateShareWithMedia(shareId, finalPostData, {
+                  // Pass sourceArchiveId + mediaSourceUrls to enable auto-resolve
+                  // (skips re-uploading preserved archive media).
+                  const reshareResult = await shareClient.updateShareWithMedia(shareId, finalPostData, {
                     username: frontmatter?.username as string | undefined,
-                    tier: this.plugin.settings.tier
+                    tier: this.plugin.settings.tier,
+                    sourceArchiveId: finalPostData.sourceArchiveId,
+                    mediaSourceUrls: finalPostData.mediaSourceUrls,
                   });
 
-                  new Notice('Post and share updated successfully');
+                  new Notice(`Post and share updated successfully${this.formatMediaStatsSummary(reshareResult.mediaStats)}`);
                 } catch {
                   new Notice('Post updated, but failed to update share link');
                 }
@@ -6664,15 +6696,19 @@ export class TimelineContainer {
                   }
 
                   // STEP 2: Update share with media (uploads to R2)
+                  let mediaSummary = '';
                   if (finalPostData.media && finalPostData.media.length > 0) {
-                    await shareClient.updateShareWithMedia(
+                    const result = await shareClient.updateShareWithMedia(
                       initialShareResult.shareId,
                       finalPostData,
                       {
                         username: this.plugin.settings.username,
-                        tier: this.plugin.settings.tier
+                        tier: this.plugin.settings.tier,
+                        sourceArchiveId: finalPostData.sourceArchiveId,
+                        mediaSourceUrls: finalPostData.mediaSourceUrls,
                       }
                     );
+                    mediaSummary = this.formatMediaStatsSummary(result.mediaStats);
                   }
 
                   // STEP 3: Update YAML frontmatter with share data atomically
@@ -6682,7 +6718,7 @@ export class TimelineContainer {
                     initialShareResult.shareUrl
                   ));
 
-                  new Notice('Post updated and shared to web!');
+                  new Notice(`Post updated and shared to web!${mediaSummary}`);
                 } catch {
                   new Notice('Post updated, but failed to share to web');
                 }

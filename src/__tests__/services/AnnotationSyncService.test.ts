@@ -102,6 +102,12 @@ function makeSectionManager(result: string = 'patched content') {
   };
 }
 
+function makeBodyMarker(passthrough = true) {
+  return {
+    reconcile: vi.fn().mockImplementation((content: string) => (passthrough ? content : '')),
+  };
+}
+
 function makeSettings(enableSync = true) {
   return () => ({ enableMobileAnnotationSync: enableSync } as any);
 }

@@ -6,6 +6,7 @@ import type { MediaHandler, MediaResult } from './MediaHandler';
 import type { LinkPreviewExtractor } from './LinkPreviewExtractor';
 import type { AuthorAvatarService } from './AuthorAvatarService';
 import type { AuthorNoteService } from './AuthorNoteService';
+import type { LargeMediaGuardService } from '@/plugin/media/LargeMediaGuardService';
 import type { PostData, Platform } from '@/types/post';
 import type { ArchiveOptions, ArchiveResult, ArchiveProgress } from '@/types/archive';
 import type { SocialArchiverSettings } from '@/types/settings';
@@ -25,6 +26,12 @@ export interface OrchestratorConfig {
   linkPreviewExtractor: LinkPreviewExtractor;
   authorAvatarService?: AuthorAvatarService;
   authorNoteService?: AuthorNoteService;
+  /**
+   * Prevention half of the Large Media Guard flow. Optional: when omitted
+   * (e.g. in tests) the orchestrator behaves as if the feature were disabled.
+   * @see prd-large-media-guard.md
+   */
+  largeMediaGuard?: LargeMediaGuardService;
   settings?: SocialArchiverSettings;
   enableCache?: boolean;
   maxRetries?: number;
@@ -38,6 +45,17 @@ export interface OrchestratorOptions extends ArchiveOptions {
   customTemplate?: string;
   organizationStrategy?: 'platform' | 'platform-only' | 'date' | 'flat';
   abortSignal?: AbortSignal;
+  /**
+   * Foreground vs background archive flow indicator.
+   *
+   * Only foreground flows are allowed to engage the Large Media Guard
+   * (oversized video prompt). Background callers — subscription/realtime
+   * crawls, batch importers, etc. — must pass `false` to guarantee no modal
+   * is ever shown. Defaults to `true` since the default caller is the user.
+   *
+   * @see prd-large-media-guard.md, section "Scope Guardrails"
+   */
+  isForeground?: boolean;
 }
 
 /**
@@ -191,6 +209,7 @@ export class ArchiveOrchestrator implements IService {
   private linkPreviewExtractor: LinkPreviewExtractor;
   private authorAvatarService?: AuthorAvatarService;
   private authorNoteService?: AuthorNoteService;
+  private largeMediaGuard?: LargeMediaGuardService;
   private settings?: SocialArchiverSettings;
   private eventEmitter: EventEmitter;
   private cache: Map<string, CacheEntry>;
@@ -209,6 +228,7 @@ export class ArchiveOrchestrator implements IService {
     this.linkPreviewExtractor = config.linkPreviewExtractor;
     this.authorAvatarService = config.authorAvatarService;
     this.authorNoteService = config.authorNoteService;
+    this.largeMediaGuard = config.largeMediaGuard;
     this.settings = config.settings;
     this.eventEmitter = new EventEmitter();
     this.cache = new Map();
@@ -378,6 +398,60 @@ export class ArchiveOrchestrator implements IService {
         }
       }
 
+      // Stage 3.7: Large Media Guard — prevention prompt (foreground only)
+      //
+      // Before we commit bandwidth/disk to downloading oversized videos, ask
+      // the user whether to keep local media or keep note only. PRD scope
+      // guardrails say prompt is foreground-only and main-post top-level only.
+      // See prd-large-media-guard.md.
+      const isForeground = options.isForeground !== false;
+      const detachedTopLevelUrls = new Set<string>();
+      if (
+        isForeground &&
+        options.downloadMedia &&
+        this.largeMediaGuard &&
+        postData.mediaPromptSuppressed !== true &&
+        (this.settings?.largeVideoPromptThresholdMB ?? 0) > 0 &&
+        postData.media.length > 0 &&
+        // YouTube is excluded: videos are never downloaded (iframe embed via original URL),
+        // so there is no bandwidth/disk cost for the user to decide about.
+        platform !== 'youtube'
+      ) {
+        try {
+          const thresholdMb = this.settings?.largeVideoPromptThresholdMB ?? 0;
+          const oversizedInfo = await this.largeMediaGuard.inspectTopLevelMedia(
+            postData.media,
+            thresholdMb,
+          );
+          if (oversizedInfo.oversizedVideoUrls.length > 0) {
+            const decision = await this.largeMediaGuard.promptIfNeeded(oversizedInfo, postData);
+            if (decision) {
+              if (decision.action === 'detach') {
+                // Mark every oversized top-level video URL as declined so that
+                // the downloader skips them and the frontmatter records the
+                // user's choice per URL.
+                for (const url of oversizedInfo.oversizedVideoUrls) {
+                  detachedTopLevelUrls.add(url);
+                }
+                postData.mediaDetached = true;
+                // Append `declined:${url}` markers idempotently.
+                const existing = new Set(postData.downloadedUrls ?? []);
+                for (const url of oversizedInfo.oversizedVideoUrls) {
+                  existing.add(`declined:${url}`);
+                }
+                postData.downloadedUrls = Array.from(existing);
+              }
+              if (decision.suppressPromptForArchive) {
+                postData.mediaPromptSuppressed = true;
+              }
+            }
+          }
+        } catch (error) {
+          // Never block archive on a guard failure — fail open.
+          console.warn('[ArchiveOrchestrator] Large media guard failed:', error);
+        }
+      }
+
       // Stage 4: Download media (if enabled)
       // Note: YouTube videos use original URL embed, no download needed
       let mediaResults: MediaResult[] = [];
@@ -386,8 +460,12 @@ export class ArchiveOrchestrator implements IService {
       const allMediaToDownload: Array<{ media: typeof postData.media[0]; archiveIndex?: number; mediaIndex: number; isQuotedPost?: boolean; isExternalLinkImage?: boolean }> = [];
 
       // Main post media
+      // Large Media Guard: skip top-level videos the user declined. They stay
+      // in postData.media with their remote URL intact so MediaFormatter
+      // renders the remote fallback instead of a broken local embed.
       if (postData.media.length > 0 && platform !== 'youtube') {
         postData.media.forEach((media, index) => {
+          if (detachedTopLevelUrls.has(media.url)) return;
           allMediaToDownload.push({ media, mediaIndex: index });
         });
       }
@@ -469,6 +547,12 @@ export class ArchiveOrchestrator implements IService {
         // Update media URLs in PostData (main post + quoted post + embedded archives)
         // Use result.sourceIndex (position in original input array) instead of forEach index
         // to stay correct even when some downloads fail and the results array is shorter.
+        //
+        // Large Media Guard (Flow A): collect per-URL `downloaded:` markers for
+        // top-level main-post media that actually downloaded. Declined URLs
+        // already got `declined:` markers above and are skipped by the downloader,
+        // so there is no double-write risk.
+        const newlyDownloadedTopLevelUrls = new Set<string>();
         mediaResults.forEach((result) => {
           const sourceItem = allMediaToDownload[result.sourceIndex];
           if (!sourceItem) return;
@@ -518,8 +602,24 @@ export class ArchiveOrchestrator implements IService {
                 mainMedia.url = result.localPath;
               }
             }
+            // Record per-URL success marker for Large Media Guard. We use
+            // `result.originalUrl` (pre-download source URL) so the marker
+            // matches what the user/guard sees for future re-archive flows.
+            if (result.originalUrl && result.localPath) {
+              newlyDownloadedTopLevelUrls.add(result.originalUrl);
+            }
           }
         });
+
+        // Flow A: append idempotent `downloaded:${url}` markers for the
+        // top-level main-post URLs that actually downloaded.
+        if (newlyDownloadedTopLevelUrls.size > 0) {
+          const existing = new Set(postData.downloadedUrls ?? []);
+          for (const url of newlyDownloadedTopLevelUrls) {
+            existing.add(`downloaded:${url}`);
+          }
+          postData.downloadedUrls = Array.from(existing);
+        }
 
         transaction.createdMediaFiles = mediaResults.map(r => r.file);
         this.checkCancellation(options.abortSignal);

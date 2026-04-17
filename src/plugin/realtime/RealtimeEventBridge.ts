@@ -20,9 +20,11 @@ import type { ArchiveDeleteSyncService } from '../sync/ArchiveDeleteSyncService'
 import type { ArchiveTagOutboundService } from '../sync/ArchiveTagOutboundService';
 import type { ArchiveStateSyncService } from '../sync/ArchiveStateSyncService';
 import type { LikeStateSyncService } from '../sync/LikeStateSyncService';
+import type { ShareStateSyncService } from '../sync/ShareStateSyncService';
 import type { SocialArchiverSettings } from '../../types/settings';
 import type { PostData, Platform } from '../../types/post';
 import type {
+  ArchiveCompleteEventData,
   ClientSyncEventData,
   ShareDeletedEventData,
   ActionUpdatedEventData,
@@ -31,6 +33,7 @@ import type {
   MediaPreservedEventData,
   AuthorProfileUpdatedEventData,
 } from '../../types/websocket';
+import type { IngestResult } from '../sync/RemoteArchiveIngestService';
 import { TimelineView, VIEW_TYPE_TIMELINE } from '../../views/TimelineView';
 import type { UserAuthorProfile } from '@/types/author-profile';
 
@@ -180,6 +183,7 @@ export interface RealtimeEventBridgeDeps {
   annotationSyncService: AnnotationSyncService | undefined;
   archiveStateSyncService?: ArchiveStateSyncService | undefined;
   likeStateSyncService?: LikeStateSyncService | undefined;
+  shareStateSyncService?: ShareStateSyncService | undefined;
   archiveDeleteSyncService?: ArchiveDeleteSyncService | undefined;
   archiveTagOutboundService?: ArchiveTagOutboundService | undefined;
   authorProfileOutboundService?: { addSuppression: (authorKey: string) => void; isSuppressed: (authorKey: string) => boolean } | undefined;
@@ -198,6 +202,8 @@ export interface RealtimeEventBridgeDeps {
   processSyncQueueItem: (queueId: string, archiveId: string, clientId: string) => Promise<boolean>;
   getReadableErrorMessage: (code: string | undefined, msg: string | undefined) => string;
   processingJobs: Set<string>;
+  hasRecentlyArchivedUrl: (url: string) => boolean;
+  ingestRemoteArchive: (archiveId: string, source: 'client_sync' | 'archive_complete') => Promise<IngestResult>;
   notify: (message: string, timeout?: number) => void;
   schedule: (callback: () => void, delay: number) => number;
   currentCrawlWorkerJobId: { value: string | undefined };
@@ -246,6 +252,7 @@ export class RealtimeEventBridge {
     this.setupProfileMetadataListener();
     this.setupProfileCrawlCompleteListener();
     this.setupClientSyncListener();
+    this.setupArchiveCompleteListener();
     this.setupShareDeletedListener();
     this.setupActionUpdatedListener();
     this.setupArchiveTagsUpdatedListener();
@@ -774,6 +781,59 @@ export class RealtimeEventBridge {
   }
 
   // --------------------------------------------------------------------------
+  // ws:archive_complete (direct archives from external clients)
+  // --------------------------------------------------------------------------
+
+  private setupArchiveCompleteListener(): void {
+    this.eventRefs.push(
+      this.deps.events.on('ws:archive_complete', async (message: unknown) => {
+        const msg = message as { type: 'archive_complete'; data?: ArchiveCompleteEventData } | undefined;
+        const data = msg?.data;
+        if (!data?.archiveId) return;
+
+        // Only process success events
+        if (data.status !== 'completed') {
+          console.debug('[Social Archiver] archive_complete: ignoring non-success status', data.status);
+          return;
+        }
+
+        // Guard 1: Currently being processed locally (job_completed race)
+        if (data.jobId && this.deps.processingJobs.has(data.jobId)) return;
+
+        // Guard 2: Self-echo — we just archived this URL locally
+        if (data.url && this.deps.hasRecentlyArchivedUrl(data.url)) return;
+
+        // Guard 3: Already in vault by sourceArchiveId
+        if (this.deps.archiveLookupService?.findBySourceArchiveId(data.archiveId)) {
+          this.deps.refreshTimelineView();
+          return;
+        }
+
+        // Short delay to let client_sync or in-flight save finish first
+        await new Promise<void>(resolve => window.setTimeout(resolve, 1500));
+
+        // Re-check after delay
+        if (data.url && this.deps.hasRecentlyArchivedUrl(data.url)) return;
+        if (this.deps.archiveLookupService?.findBySourceArchiveId(data.archiveId)) {
+          this.deps.refreshTimelineView();
+          return;
+        }
+
+        // Fallback: fetch and save via shared ingest service
+        try {
+          const result = await this.deps.ingestRemoteArchive(data.archiveId, 'archive_complete');
+          if (result === 'created') {
+            const displayTitle = data.title || data.authorName || data.platform || 'Archive';
+            new Notice(`Synced: ${displayTitle}`, 3000);
+          }
+        } catch (error) {
+          console.warn('[Social Archiver] archive_complete: fallback ingest failed', error);
+        }
+      }),
+    );
+  }
+
+  // --------------------------------------------------------------------------
   // ws:share_deleted
   // --------------------------------------------------------------------------
 
@@ -838,6 +898,11 @@ export class RealtimeEventBridge {
         // Like state sync: update fm.like when isLiked changes from mobile/web
         if (msg.data.changes.isLiked !== undefined) {
           void this.deps.likeStateSyncService?.handleRemoteLikeState(msg.data);
+        }
+
+        // Share state sync: update fm.share/fm.shareUrl when shareUrl changes from mobile/web
+        if (msg.data.changes.shareUrl !== undefined) {
+          void this.deps.shareStateSyncService?.handleRemoteShareState(msg.data);
         }
       }),
     );
