@@ -46,7 +46,9 @@ export class CommentFormatter {
   }
 
   /**
-   * Format comments for markdown (nested style with indentation)
+   * Format comments for markdown (nested style with indentation).
+   * Top-level comments are separated by `---`. Nested replies are joined by blank lines
+   * and indented by `'  '.repeat(depth)`.
    */
   formatComments(comments: PostData['comments'], platform: Platform): string {
     if (!comments || comments.length === 0) {
@@ -60,119 +62,7 @@ export class CommentFormatter {
         : comments;
 
       return processedComments
-        .map((comment) => {
-          // Defensive checks
-          if (!comment || !comment.author || !comment.content) {
-            return '';
-          }
-
-          // Main comment - support both handle and username
-          // LinkedIn: use name instead of handle (handles can be URL-encoded)
-          // Instagram: use handle with link
-          // Reddit: use username with link
-          // Others: use handle if available, otherwise name
-          const authorHandle = comment.author.handle || comment.author.username;
-
-          let authorDisplay: string;
-          if (platform === 'linkedin') {
-            // LinkedIn: always use display name with link
-            authorDisplay = comment.author.url
-              ? `[${comment.author.name}](${comment.author.url})`
-              : comment.author.name;
-          } else if (platform === 'instagram' && authorHandle) {
-            // Instagram: use handle with link
-            authorDisplay = `[@${authorHandle}](https://instagram.com/${authorHandle})`;
-          } else if (platform === 'reddit' && authorHandle) {
-            // Reddit: use username with link
-            authorDisplay = comment.author.url
-              ? `[@${authorHandle}](${comment.author.url})`
-              : `@${authorHandle}`;
-          } else if (platform === 'x' && authorHandle) {
-            // X: use handle with link
-            authorDisplay = `[@${authorHandle}](https://x.com/${authorHandle})`;
-          } else {
-            // Others: use handle or name
-            authorDisplay = authorHandle ? `@${authorHandle}` : comment.author.name;
-          }
-
-          const timestamp = this.dateNumberFormatter.formatDate(comment.timestamp);
-          const likes = comment.likes ? ` · ${comment.likes} likes` : '';
-
-          // Convert @mentions in comment content to links
-          const commentContent = platform === 'instagram'
-            ? this.textFormatter.linkifyInstagramMentions(comment.content)
-            : platform === 'x'
-            ? this.textFormatter.linkifyXMentions(comment.content)
-            : comment.content;
-
-          // Format header: author [· timestamp] [· likes]
-          const timestampPart = timestamp ? ` · ${timestamp}` : '';
-          // Render inline media after comment text
-          const commentMediaBlock = this.formatCommentMedia(comment.media);
-          const mediaSection = commentMediaBlock ? `\n${commentMediaBlock}` : '';
-          let result = `**${authorDisplay}**${timestampPart}${likes}\n${commentContent}${mediaSection}`;
-
-          // Nested replies with indentation
-          if (comment.replies && comment.replies.length > 0) {
-            const formattedReplies = comment.replies
-              .map((reply: Comment) => {
-                if (!reply || !reply.author || !reply.content) {
-                  return '';
-                }
-                const replyHandle = reply.author.handle || reply.author.username;
-
-                // Same logic as main comment
-                let replyAuthorDisplay: string;
-                if (platform === 'linkedin') {
-                  // LinkedIn: always use display name with link
-                  replyAuthorDisplay = reply.author.url
-                    ? `[${reply.author.name}](${reply.author.url})`
-                    : reply.author.name;
-                } else if (platform === 'instagram' && replyHandle) {
-                  // Instagram: use handle with link
-                  replyAuthorDisplay = `[@${replyHandle}](https://instagram.com/${replyHandle})`;
-                } else if (platform === 'reddit' && replyHandle) {
-                  // Reddit: use username with link
-                  replyAuthorDisplay = reply.author.url
-                    ? `[@${replyHandle}](${reply.author.url})`
-                    : `@${replyHandle}`;
-                } else if (platform === 'x' && replyHandle) {
-                  // X: use handle with link
-                  replyAuthorDisplay = `[@${replyHandle}](https://x.com/${replyHandle})`;
-                } else {
-                  // Others: use handle or name
-                  replyAuthorDisplay = replyHandle ? `@${replyHandle}` : reply.author.name;
-                }
-
-                const replyTime = this.dateNumberFormatter.formatDate(reply.timestamp);
-                const replyLikes = reply.likes ? ` · ${reply.likes} likes` : '';
-
-                // Convert @mentions in reply content to links
-                // Pass isReply=true to remove redundant first @mention (Instagram)
-                const replyContent = platform === 'instagram'
-                  ? this.textFormatter.linkifyInstagramMentions(reply.content, true)
-                  : platform === 'x'
-                  ? this.textFormatter.linkifyXMentions(reply.content)
-                  : reply.content;
-
-                // Render inline media after reply text
-                const replyMediaBlock = this.formatCommentMedia(reply.media, '  ');
-                const replyMediaSection = replyMediaBlock ? `\n${replyMediaBlock}` : '';
-
-                // Format reply header: author [· timestamp] [· likes]
-                const replyTimePart = replyTime ? ` · ${replyTime}` : '';
-                return `  ↳ **${replyAuthorDisplay}**${replyTimePart}${replyLikes}\n  ${replyContent}${replyMediaSection}`;
-              })
-              .filter((r: string) => r.length > 0)
-              .join('\n\n');
-
-            if (formattedReplies.length > 0) {
-              result += '\n\n' + formattedReplies;
-            }
-          }
-
-          return result;
-        })
+        .map((comment) => this.renderCommentRecursive(comment, platform, 0))
         .filter(c => c.length > 0)
         .join('\n\n---\n\n');
     } catch {
@@ -181,9 +71,88 @@ export class CommentFormatter {
   }
 
   /**
+   * Render a single comment and its reply subtree at the given depth.
+   *
+   * depth 0: no prefix, no indent.
+   * depth N >= 1: `↳ **author** ...` prefix, body indented by `'  '.repeat(N)`.
+   *
+   * Returns an empty string for invalid/missing comments so the caller can filter them out.
+   */
+  private renderCommentRecursive(comment: Comment, platform: Platform, depth: number): string {
+    if (!comment || !comment.author || !comment.content) {
+      return '';
+    }
+
+    const indent = '  '.repeat(depth);
+    const prefix = depth === 0 ? '' : '↳ ';
+    // At depth >= 1 treat this as a reply for platform-specific @mention handling
+    // (e.g. Instagram strips the redundant leading @mention).
+    const isReply = depth >= 1;
+
+    const authorDisplay = this.buildAuthorDisplay(comment, platform);
+    const timestamp = this.dateNumberFormatter.formatDate(comment.timestamp);
+    const timestampPart = timestamp ? ` · ${timestamp}` : '';
+    const likes = comment.likes ? ` · ${comment.likes} likes` : '';
+
+    const commentContent = platform === 'instagram'
+      ? this.textFormatter.linkifyInstagramMentions(comment.content, isReply)
+      : platform === 'x'
+      ? this.textFormatter.linkifyXMentions(comment.content)
+      : comment.content;
+
+    const mediaBlock = this.formatCommentMedia(comment.media, indent);
+    const mediaSection = mediaBlock ? `\n${mediaBlock}` : '';
+
+    let result = `${indent}${prefix}**${authorDisplay}**${timestampPart}${likes}\n${indent}${commentContent}${mediaSection}`;
+
+    if (comment.replies && comment.replies.length > 0) {
+      const formattedReplies = comment.replies
+        .map((reply) => this.renderCommentRecursive(reply, platform, depth + 1))
+        .filter((r) => r.length > 0)
+        .join('\n\n');
+
+      if (formattedReplies.length > 0) {
+        result += '\n\n' + formattedReplies;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Build the platform-specific author display string (plain text or markdown link).
+   */
+  private buildAuthorDisplay(comment: Comment, platform: Platform): string {
+    const authorHandle = comment.author.handle || comment.author.username;
+
+    if (platform === 'linkedin') {
+      // LinkedIn: always use display name with link
+      return comment.author.url
+        ? `[${comment.author.name}](${comment.author.url})`
+        : comment.author.name;
+    }
+
+    if (platform === 'instagram' && authorHandle) {
+      return `[@${authorHandle}](https://instagram.com/${authorHandle})`;
+    }
+
+    if (platform === 'reddit' && authorHandle) {
+      return comment.author.url
+        ? `[@${authorHandle}](${comment.author.url})`
+        : `@${authorHandle}`;
+    }
+
+    if (platform === 'x' && authorHandle) {
+      return `[@${authorHandle}](https://x.com/${authorHandle})`;
+    }
+
+    return authorHandle ? `@${authorHandle}` : comment.author.name;
+  }
+
+  /**
    * Format media items inline for a comment or reply
    * @param media - Media items from comment
-   * @param indent - Indentation prefix (e.g., '  ' for replies)
+   * @param indent - Indentation prefix (e.g., '  ' for a depth-1 reply)
    */
   private formatCommentMedia(media?: Media[], indent = ''): string {
     if (!media || media.length === 0) return '';
