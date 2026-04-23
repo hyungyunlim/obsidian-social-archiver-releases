@@ -193,7 +193,14 @@ export class FrontmatterGenerator {
       archived: archived, // Archive timestamp (YYYY-MM-DD HH:mm)
       lastModified: lastModified, // Last modified timestamp (YYYY-MM-DD HH:mm)
       archive: postData.archive ?? false, // Use actual value from PostData; false by default (visible in timeline)
-      tags: [],
+      // Seed with any pre-existing user tags carried on PostData (e.g. from
+      // the Instagram Saved Posts import flow). `applyArchiveTags` below
+      // still merges the archive organization tags on top with dedupe.
+      tags: Array.isArray(postData.tags)
+        ? postData.tags
+            .map((t) => (typeof t === 'string' ? t.trim() : ''))
+            .filter((t) => t.length > 0)
+        : [],
     };
 
     // Only add originalUrl if it exists (User posts don't have external URLs)

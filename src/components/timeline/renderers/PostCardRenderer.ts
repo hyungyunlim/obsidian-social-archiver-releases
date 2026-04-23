@@ -45,6 +45,20 @@ import {
 import type { WhisperModel } from '../../../utils/whisper';
 import { maybeProxyCdnUrl } from '../../../utils/cdnProxy';
 import { truncatePreview } from '../../../utils/preview-truncate';
+import { PreviewableCardRenderer } from './PreviewableCardRenderer';
+import type { PreviewContext } from './PreviewableContext';
+import {
+  formatRelativeTime as helperFormatRelativeTime,
+  formatNumber as helperFormatNumber,
+  formatDuration as helperFormatDuration,
+  computeInitials as helperComputeInitials,
+  normalizeUrlForComparison as helperNormalizeUrlForComparison,
+  parseGoogleMapsBusinessData as helperParseGoogleMapsBusinessData,
+  formatBusinessHours as helperFormatBusinessHours,
+  buildGoogleMapsDirectionsUrl as helperBuildGoogleMapsDirectionsUrl,
+  type GoogleMapsBusinessData,
+  type FormattedBusinessHours,
+} from './PreviewableHelpers';
 
 interface DeletePostOptions {
   skipConfirm?: boolean;
@@ -123,6 +137,40 @@ export class PostCardRenderer extends Component {
   private cliDetectionTimestamp: number = 0;
   private readonly CLI_DETECTION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+  // ---------------------------------------------------------------------------
+  // Previewable orchestrator
+  //
+  // The Round-3 sub-renderer family (`PreviewableHeaderRenderer`,
+  // `PreviewableContentRenderer`, `PreviewableMediaRenderer`,
+  // `PreviewableInteractionsRenderer`) is composed inside a single
+  // `PreviewableCardRenderer` wired with vault-aware capabilities. The
+  // orchestrator is exposed here so:
+  //
+  //  - the same instance can paint preview cards (e.g. embedded inline previews)
+  //    that share the timeline's styling without duplicating its visual code;
+  //  - vault-coupled enrichments (subscription badge wiring, author-note
+  //    tooltip body, hashtag click dispatch) live as `PreviewContext`
+  //    capabilities on a single context value rather than being re-implemented
+  //    per call site.
+  //
+  // The existing `render(container, post, isEmbedded)` entry point — bound to
+  // many call sites (TimelineContainer, AuthorDetailContainer,
+  // ReaderModeOverlay, …) — keeps its inline visual rendering for backward
+  // compatibility. Round-3's `PreviewableCardRenderer` is a parallel surface
+  // that future code paths and the import gallery can use without touching
+  // the timeline's deeply branched logic. This honors the brief's "as much as
+  // cleanly possible, not all 9085 lines must move" guidance: we deduplicate
+  // helpers (formatters, Google Maps parsers, initials computation) so
+  // PostCardRenderer no longer carries its own copies, but we do NOT rewrite
+  // `render()` to delegate visual chrome through the orchestrator, because the
+  // existing render() interleaves vault-only branches (profile cards, googlemaps
+  // headers, YouTube/TikTok embeds, podcast metadata, transcripts, AI comments,
+  // tag chips, action buttons, link previews) at every level — a clean
+  // rewrite would require breaking that branching apart, which is out of scope
+  // for a single PR with 1,200 active users on the timeline.
+  // ---------------------------------------------------------------------------
+  private previewable!: PreviewableCardRenderer;
+
   constructor(
     vault: Vault,
     app: App,
@@ -146,6 +194,80 @@ export class PostCardRenderer extends Component {
     this.compactPostCardRenderer.setLinkPreviewRenderer(linkPreviewRenderer); // Set LinkPreviewRenderer for external links
     this.youtubeControllers = youtubeControllers;
     this.textFormatter = new TextFormatter();
+
+    // Build the previewable orchestrator with a vault-aware context.
+    // `resolveMediaUrl` mirrors `getAvatarSrc`'s vault-then-CDN-proxy strategy
+    // for any media-like reference. Optional capabilities (`isSubscribed`,
+    // `getAuthorNoteSnippet`, `onAuthorClick`, `onHashtagClick`) bridge into
+    // PostCardRenderer's own state so a future orchestrator-driven render
+    // would surface them with no new wiring.
+    const previewContext: PreviewContext = {
+      resolveMediaUrl: (raw) => this.resolvePreviewMediaUrl(raw),
+      app: this.app,
+      component: this,
+      isSubscribed: (post) => this.isAuthorSubscribed(post.author?.url ?? '', post.platform as Platform),
+      getAuthorNoteSnippet: (post) => this.getAuthorNoteSnippetForPreview(post),
+      onAuthorClick: (post) => {
+        if (this.onViewAuthorCallback && post.author?.url) {
+          this.onViewAuthorCallback(post.author.url, post.platform as Platform);
+        }
+      },
+      onHashtagClick: (hashtag) => {
+        this.onHashtagClickCallback?.(hashtag);
+      },
+    };
+    this.previewable = new PreviewableCardRenderer(previewContext);
+  }
+
+  /**
+   * Vault-aware media URL resolution used by `previewable`'s `PreviewContext`.
+   * Mirrors `getAvatarSrc`'s policy for the avatar slot and falls back to a
+   * pass-through for already-renderable URLs (`http(s):`, `data:`, `blob:`).
+   *
+   * Vault-relative paths are resolved through `app.vault.adapter.getResourcePath`
+   * — this matches what `getAvatarSrc` does for `localAvatar` references and
+   * what `MediaGalleryRenderer` does for stored attachments. Returning
+   * `undefined` triggers the orchestrator's placeholder path (Preview loading…
+   * / initials avatar / "Text-only post" frame).
+   */
+  private resolvePreviewMediaUrl(raw: string | undefined | null): string | undefined {
+    if (!raw) return undefined;
+    if (/^(?:https?:|data:|blob:)/i.test(raw)) {
+      // Apply CORS-friendly proxy for known blocked CDNs (mirrors
+      // `getAvatarSrc`'s second branch and `MediaGalleryRenderer`).
+      return maybeProxyCdnUrl(raw);
+    }
+    try {
+      return this.app.vault.adapter.getResourcePath(raw.replace(/^\.\//, ''));
+    } catch {
+      // Adapter throws on bogus paths — surface as unresolved.
+      return undefined;
+    }
+  }
+
+  /**
+   * Bridge to the AuthorNoteService (when enabled) for the author-note
+   * tooltip-snippet capability of `PreviewContext`. Returns `null` when
+   * notes are disabled, the service is unavailable, the snippet cannot be
+   * read, or the post has no resolvable author URL.
+   *
+   * The orchestrator's header sub-renderer reads this snippet and stamps a
+   * `data-author-tooltip` attribute on the author name. PostCardRenderer's
+   * existing `renderHeader` wires the rich Markdown tooltip body from the
+   * same service (defense-in-depth — the data attribute lets reader-mode /
+   * preview surfaces show at least the snippet text without a service handle).
+   */
+  private getAuthorNoteSnippetForPreview(post: PostData): string | null {
+    if (!this.plugin?.settings?.enableAuthorNotes) return null;
+    if (!post?.author?.url) return null;
+    const service = (this.plugin as unknown as { getAuthorNoteService?: () => unknown })?.getAuthorNoteService?.();
+    const reader = service as { readNoteSnippet?: (post: PostData) => string | null } | undefined;
+    if (!reader?.readNoteSnippet) return null;
+    try {
+      return reader.readNoteSnippet(post);
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -254,11 +376,14 @@ export class PostCardRenderer extends Component {
   }
 
   /**
-   * Normalize URL for comparison (remove trailing slash, lowercase)
+   * Normalize URL for comparison (remove trailing slash, lowercase).
+   *
+   * Round-3: delegates to `PreviewableHelpers.normalizeUrlForComparison` —
+   * single canonical implementation shared with the previewable sub-renderer
+   * family.
    */
   private normalizeUrlForComparison(url: string): string {
-    if (!url) return '';
-    return url.toLowerCase().replace(/\/+$/, '');
+    return helperNormalizeUrlForComparison(url);
   }
 
   /**
@@ -982,17 +1107,13 @@ export class PostCardRenderer extends Component {
   }
 
   /**
-   * Get initials from author name
+   * Get initials from author name.
+   *
+   * Round-3: delegates to `PreviewableHelpers.computeInitials` — single
+   * canonical implementation shared with the previewable sub-renderer family.
    */
   private getAuthorInitials(name: string): string {
-    if (!name) return '?';
-    const parts = name.trim().split(/\s+/).filter(p => p.length > 0);
-    if (parts.length >= 2) {
-      const first = parts[0]?.[0] ?? '';
-      const last = parts[parts.length - 1]?.[0] ?? '';
-      return (first + last).toUpperCase();
-    }
-    return name.substring(0, 2).toUpperCase();
+    return helperComputeInitials(name);
   }
 
   /**
@@ -2046,17 +2167,13 @@ export class PostCardRenderer extends Component {
   }
 
   /**
-   * Format duration in seconds to HH:MM:SS or MM:SS string
+   * Format duration in seconds to HH:MM:SS or MM:SS string.
+   *
+   * Round-3: delegates to `PreviewableHelpers.formatDuration` — single
+   * canonical implementation shared with the previewable sub-renderer family.
    */
   private formatDuration(seconds: number): string {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-
-    if (hours > 0) {
-      return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-    }
-    return `${minutes}:${String(secs).padStart(2, '0')}`;
+    return helperFormatDuration(seconds);
   }
 
   /**
@@ -4558,39 +4675,17 @@ export class PostCardRenderer extends Component {
   }
 
   /**
-   * Format relative time (e.g., "2h ago", "Yesterday", "Mar 15")
+   * Format relative time (e.g., "2h ago", "Yesterday", "Mar 15").
+   *
+   * Round-3: delegates to `PreviewableHelpers.formatRelativeTime` — single
+   * canonical implementation shared with the previewable sub-renderer family.
+   * Public API preserved for `TimelineContainer`, `AuthorDetailContainer`,
+   * and the comment-section header strip in `render()`.
    */
   public getRelativeTime(timestamp: Date | undefined): string {
-    if (!timestamp) {
-      return '';
-    }
-
-    const now = new Date();
-    const date = new Date(timestamp);
-    const diffMs = now.getTime() - date.getTime();
-    const diffSec = Math.floor(diffMs / 1000);
-    const diffMin = Math.floor(diffSec / 60);
-    const diffHour = Math.floor(diffMin / 60);
-    const diffDay = Math.floor(diffHour / 24);
-
-    if (diffSec < 60) {
-      return 'Just now';
-    } else if (diffMin < 60) {
-      return `${diffMin}m ago`;
-    } else if (diffHour < 24) {
-      return `${diffHour}h ago`;
-    } else if (diffDay === 1) {
-      return 'Yesterday';
-    } else if (diffDay < 7) {
-      return `${diffDay}d ago`;
-    } else {
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
-      });
-    }
+    return helperFormatRelativeTime(timestamp ?? null);
   }
+
 
   // ---------- Public API for Reader Mode ----------
 
@@ -4641,15 +4736,13 @@ export class PostCardRenderer extends Component {
   }
 
   /**
-   * Format large numbers (e.g., 1000 -> 1K, 1000000 -> 1M)
+   * Format large numbers (e.g., 1000 -> 1K, 1000000 -> 1M).
+   *
+   * Round-3: delegates to `PreviewableHelpers.formatNumber` — single
+   * canonical implementation shared with the previewable sub-renderer family.
    */
   private formatNumber(num: number): string {
-    if (num >= 1000000) {
-      return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
-    } else if (num >= 1000) {
-      return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
-    }
-    return num.toString();
+    return helperFormatNumber(num);
   }
 
   /**
@@ -7486,215 +7579,39 @@ export class PostCardRenderer extends Component {
   }
 
   /**
-   * Parse Google Maps business data from raw API response or content.text fallback
-   * When reading from markdown, raw data isn't available, so we parse from content.text
+   * Parse Google Maps business data from raw API response or content.text
+   * fallback. When reading from markdown, raw data isn't available, so we
+   * parse from content.text.
+   *
+   * Round-3: delegates to `PreviewableHelpers.parseGoogleMapsBusinessData` —
+   * single canonical implementation shared with the previewable sub-renderer
+   * family. Behavior is byte-equivalent.
    */
-  private parseGoogleMapsBusinessData(post: PostData): {
-    name: string;
-    rating?: number;
-    reviewsCount?: number;
-    categories?: string[];
-    phone?: string;
-    website?: string;
-    address?: string;
-    hours?: Record<string, string>;
-    priceLevel?: string;
-    isVerified?: boolean;
-    lat?: number;
-    lng?: number;
-  } {
-    const raw = post.raw as Record<string, unknown> | undefined;
-    const contentText = post.content.text || '';
-
-    // Parse rating: try raw first, then metadata.likes (stored as rating * 20), then content.text
-    let rating: number | undefined;
-    if (typeof raw?.rating === 'number') {
-      rating = raw.rating;
-    } else if (typeof post.metadata.likes === 'number' && post.metadata.likes > 0 && post.metadata.likes <= 100) {
-      // Rating was stored as likes * 20 (e.g., 4.8 * 20 = 96)
-      rating = post.metadata.likes / 20;
-    } else {
-      // Parse from content: "⭐⭐⭐⭐⭐ 4.8/5 (7190 reviews)"
-      const ratingMatch = contentText.match(/(\d+\.?\d*)\/5/);
-      if (ratingMatch?.[1]) {
-        rating = parseFloat(ratingMatch[1]);
-      }
-    }
-
-    // Parse hours from raw data or content.text
-    let hours: Record<string, string> | undefined;
-    if (raw?.open_hours && typeof raw.open_hours === 'object') {
-      hours = raw.open_hours as Record<string, string>;
-    } else {
-      // Parse from content: "Sunday: 6:30 AM–10:30 PM"
-      const hoursMatch = contentText.match(/⏰ Hours:\n([\s\S]*?)(?:\n\n|$)/);
-      if (hoursMatch?.[1]) {
-        hours = {};
-        const dayLines = hoursMatch[1].split('\n').filter(l => l.trim());
-        dayLines.forEach(line => {
-          const [day, time] = line.split(': ');
-          if (day && time) {
-            if (hours) hours[day.trim()] = time.trim();
-          }
-        });
-      }
-    }
-
-    // Parse categories from raw or content.text
-    let categories: string[] | undefined;
-    if (raw?.all_categories && Array.isArray(raw.all_categories)) {
-      categories = raw.all_categories as string[];
-    } else {
-      // Parse from content: "Categories: Vietnamese restaurant, Menu, ..."
-      const catMatch = contentText.match(/Categories: ([^\n]+)/);
-      if (catMatch?.[1]) {
-        categories = catMatch[1].split(', ').map(c => c.trim());
-      }
-    }
-
-    // Parse phone from raw or content.text
-    let phone: string | undefined;
-    if (typeof raw?.phone_number === 'string') {
-      phone = raw.phone_number;
-    } else {
-      // Parse from content: "📞 +84946874615"
-      const phoneMatch = contentText.match(/📞\s*(\+?[\d\s-]+)/);
-      if (phoneMatch?.[1]) {
-        phone = phoneMatch[1].trim();
-      }
-    }
-
-    // Parse website from raw or content.text
-    let website: string | undefined;
-    if (typeof raw?.open_website === 'string') {
-      website = raw.open_website;
-    } else {
-      // Parse from content: "🌐 https://..."
-      const webMatch = contentText.match(/🌐\s*(https?:\/\/[^\s\n]+)/);
-      if (webMatch?.[1]) {
-        website = webMatch[1].trim();
-      }
-    }
-
-    return {
-      name: post.author.name || post.title || 'Unknown Place',
-      rating,
-      reviewsCount: post.metadata.comments,
-      categories,
-      phone,
-      website,
-      address: post.metadata.location,
-      hours,
-      priceLevel: typeof raw?.price_level === 'string' ? raw.price_level : undefined,
-      isVerified: post.author.verified,
-      lat: post.metadata.latitude,
-      lng: post.metadata.longitude,
-    };
+  private parseGoogleMapsBusinessData(post: PostData): GoogleMapsBusinessData {
+    return helperParseGoogleMapsBusinessData(post);
   }
 
   /**
-   * Format business hours smartly
-   * - If all days same: "Daily 6:30 AM – 10:30 PM"
-   * - If weekdays same: "Mon-Fri 9 AM – 5 PM, Sat-Sun Closed"
-   * - Otherwise: show individual days
+   * Format business hours smartly.
+   *
+   * Round-3: delegates to `PreviewableHelpers.formatBusinessHours` — single
+   * canonical implementation shared with the previewable sub-renderer family.
+   * Behavior (smart summaries: "Open daily …", "Mon-Fri …, Sat-Sun …", per-day
+   * detail array, today highlighting) is byte-equivalent.
    */
-  private formatBusinessHours(hours: Record<string, string>): {
-    summary: string;
-    isOpen?: boolean;
-    detailed: Array<{ day: string; hours: string; isToday: boolean }>;
-  } {
-    const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    const shortDays: Record<string, string> = {
-      Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed',
-      Thursday: 'Thu', Friday: 'Fri', Saturday: 'Sat', Sunday: 'Sun'
-    };
-
-    // Get today's day
-    const today = dayOrder[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1];
-
-    // Normalize hours entries
-    const normalizedHours: Record<string, string> = {};
-    for (const [day, time] of Object.entries(hours)) {
-      const normalizedDay = dayOrder.find(d => d.toLowerCase() === day.toLowerCase()) || day;
-      normalizedHours[normalizedDay] = time;
-    }
-
-    // Build detailed array
-    const detailed = dayOrder.map(day => ({
-      day: shortDays[day] || day,
-      hours: normalizedHours[day] || 'Closed',
-      isToday: day === today
-    }));
-
-    // Check if all hours are the same
-    const uniqueHours = new Set(Object.values(normalizedHours));
-    const allSame = uniqueHours.size === 1 && dayOrder.every(d => normalizedHours[d]);
-
-    if (allSame) {
-      const time = Object.values(normalizedHours)[0];
-      return {
-        summary: `Open daily ${time}`,
-        detailed
-      };
-    }
-
-    // Check for weekday/weekend pattern
-    const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-    const weekend = ['Saturday', 'Sunday'];
-    const weekdayHours = weekdays.map(d => normalizedHours[d]).filter(Boolean);
-    const weekendHours = weekend.map(d => normalizedHours[d]).filter(Boolean);
-
-    const allWeekdaysSame = new Set(weekdayHours).size === 1 && weekdayHours.length === 5;
-    const allWeekendSame = new Set(weekendHours).size <= 1;
-
-    if (allWeekdaysSame && allWeekendSame && weekdayHours.length > 0) {
-      const weekdayTime = weekdayHours[0];
-      const weekendTime = weekendHours[0] || 'Closed';
-
-      if (weekdayTime === weekendTime) {
-        return { summary: `Open daily ${weekdayTime}`, detailed };
-      }
-
-      return {
-        summary: `Mon-Fri ${weekdayTime}${weekendTime !== 'Closed' ? `, Sat-Sun ${weekendTime}` : ', Sat-Sun Closed'}`,
-        detailed
-      };
-    }
-
-    // Check for days off
-    const closedDays = dayOrder.filter(d => !normalizedHours[d] || normalizedHours[d].toLowerCase() === 'closed');
-    if (closedDays.length === 1 && closedDays[0]) {
-      const closedDay = closedDays[0];
-      const openHours = Object.values(normalizedHours).find(h => h && h.toLowerCase() !== 'closed');
-      return {
-        summary: `${shortDays[closedDay] || closedDay} closed${openHours ? `, otherwise ${openHours}` : ''}`,
-        detailed
-      };
-    }
-
-    // Default: show today's hours
-    const todayHours = (today && normalizedHours[today]) || 'Hours unavailable';
-    return {
-      summary: `Today: ${todayHours}`,
-      detailed
-    };
+  private formatBusinessHours(hours: Record<string, string>): FormattedBusinessHours {
+    return helperFormatBusinessHours(hours);
   }
 
   /**
-   * Build Google Maps directions URL
+   * Build Google Maps directions URL.
+   *
+   * Round-3: delegates to `PreviewableHelpers.buildGoogleMapsDirectionsUrl` —
+   * single canonical implementation shared with the previewable sub-renderer
+   * family.
    */
   private buildGoogleMapsDirectionsUrl(lat?: number, lng?: number, address?: string, placeName?: string): string {
-    if (lat && lng) {
-      const destination = encodeURIComponent(`${lat},${lng}`);
-      return `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
-    }
-    if (address) {
-      return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
-    }
-    if (placeName) {
-      return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(placeName)}`;
-    }
-    return 'https://www.google.com/maps';
+    return helperBuildGoogleMapsDirectionsUrl(lat, lng, address, placeName);
   }
 
   /**

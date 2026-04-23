@@ -400,6 +400,34 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           }
         }));
 
+    // Instagram Saved Import Section (Experimental — PRD §5.3, §12.1)
+    // Mobile gating (PRD §11 / F6.1): the section still renders on mobile for
+    // transparency, but the toggle is disabled and the description is replaced
+    // with the desktop-only explanation.
+    new Setting(containerEl).setName('Instagram Saved Import (Experimental)').setHeading()
+      .settingEl.addClass('sa-settings-section-header');
+
+    const instagramImportDesc = Platform.isMobile
+      ? 'Desktop-only. Run the import on desktop, then sync to mobile.'
+      : 'Import Instagram Saved Posts from a .zip file exported by the Social Archiver '
+          + 'Chrome extension. Adds a ribbon icon and a Command Palette entry. '
+          + 'Experimental — requires a compatible export package.';
+
+    new Setting(containerEl)
+      .setName('Enable Instagram Saved import')
+      .setDesc(instagramImportDesc)
+      .addToggle(toggle => {
+        toggle
+          .setValue(this.plugin.settings.instagramImportEnabled)
+          .onChange((value) => {
+            this.plugin.settings.instagramImportEnabled = value;
+            this.markDirty();
+          });
+        if (Platform.isMobile) {
+          toggle.setDisabled(true);
+        }
+      });
+
     // Archive Settings Section
     new Setting(containerEl).setName('Archive').setHeading()
       .settingEl.addClass('sa-settings-section-header');

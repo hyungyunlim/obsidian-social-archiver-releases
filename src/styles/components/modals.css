@@ -1411,3 +1411,127 @@
   font-weight: bold;
   opacity: 0.6;
 }
+
+/* ========================================
+ * InstagramImportModal (sa-ig-import-modal)
+ *
+ * The import flow has a multi-pane shape (preflight → gallery → progress)
+ * and the gallery in particular needs space for a card grid. We expand the
+ * modal to near-full-screen on desktop so the grid is actually browsable.
+ * ======================================== */
+
+.sa-ig-import-modal.sa-ig-import-modal {
+  /* `.sa-ig-import-modal.sa-ig-import-modal` doubles specificity so this
+     beats Obsidian's default `.modal { width: 700px; }` without !important. */
+  width: 92vw;
+  max-width: 1280px;
+  height: auto;
+  max-height: 90vh;
+  /* Smooth resize when toggling maximize. */
+  transition: width 180ms ease, max-width 180ms ease, max-height 180ms ease;
+}
+
+/* Maximized state — true full-viewport. */
+.sa-ig-import-modal.sa-ig-import-modal--maximized.sa-ig-import-modal--maximized {
+  width: 100vw;
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  border-radius: 0;
+}
+
+/* Maximize / restore toggle button — sits to the LEFT of Obsidian's close
+   button (which is positioned via `.modal-close-button`). Mirror its size
+   + hover for visual consistency.
+   Specificity bump (`button.sa-ig-import-modal__maximize`) beats Obsidian's
+   core `button` border + background defaults that win over a plain
+   `.modal-class .button-class` selector. */
+button.sa-ig-import-modal__maximize.sa-ig-import-modal__maximize {
+  position: absolute;
+  top: 12px;
+  /* Obsidian's close button is at `right: 12px` and is ~28px wide. Sit
+     just to its left. */
+  right: 48px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  border-radius: var(--radius-s, 4px);
+  cursor: pointer;
+  z-index: 1;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+button.sa-ig-import-modal__maximize.sa-ig-import-modal__maximize:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+  border: none;
+  box-shadow: none;
+}
+
+button.sa-ig-import-modal__maximize.sa-ig-import-modal__maximize:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+  border: none;
+  box-shadow: none;
+}
+
+button.sa-ig-import-modal__maximize.sa-ig-import-modal__maximize svg {
+  width: 16px;
+  height: 16px;
+}
+
+.sa-ig-import-modal .modal-content,
+.sa-ig-import-modal.am-content--archive,
+.sa-ig-import-modal .am-content--archive {
+  /* Outer modal-content is bounded by max-height only — DO NOT force
+     `height` here. The preflight view is short and must size to its own
+     content; only the gallery view needs to fill the viewport. The gallery
+     enforces its own height via `.sa-ig-gallery` below. We keep
+     `overflow-y: auto` as a defensive overflow handler in case something
+     pushes past the max-height; the visible scrollbar is suppressed
+     (see scrollbar-hiding rules below) so the modal looks chrome-free. */
+  max-height: calc(90vh - 60px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+}
+
+.sa-ig-import-modal--maximized .modal-content,
+.sa-ig-import-modal--maximized.am-content--archive,
+.sa-ig-import-modal--maximized .am-content--archive {
+  max-height: calc(100dvh - 60px);
+}
+
+/* Hide the visible scrollbar on the outer modal-content AND the inner
+   gallery body. Wheel/trackpad/touch/keyboard scrolling still works —
+   only the visible bar is suppressed so the gallery feels like an
+   Instagram-style feed rather than an Obsidian modal with chrome. */
+.sa-ig-import-modal .modal-content,
+.sa-ig-import-modal .sa-ig-gallery__body {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge legacy */
+}
+
+.sa-ig-import-modal .modal-content::-webkit-scrollbar,
+.sa-ig-import-modal .sa-ig-gallery__body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* Mobile fallback (the import feature is gated off on mobile per PRD §11,
+   but defensive sizing for any future relaxation of that rule). */
+.sa-ig-import-modal.am-modal--mobile.am-modal--mobile {
+  width: 100vw;
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  border-radius: 0;
+}

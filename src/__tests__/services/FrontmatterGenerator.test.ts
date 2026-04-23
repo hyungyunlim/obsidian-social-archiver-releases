@@ -1106,4 +1106,41 @@ describe('FrontmatterGenerator', () => {
       });
     });
   });
+
+  describe('postData.tags pass-through', () => {
+    it('seeds frontmatter.tags from postData.tags when no archive customization runs', () => {
+      const postData = createTestPostData();
+      (postData as PostData & { tags?: string[] }).tags = ['ig/saved', 'Travel'];
+      const frontmatter = generator.generateFrontmatter(postData);
+      expect(frontmatter.tags).toEqual(['ig/saved', 'Travel']);
+    });
+
+    it('merges postData.tags with archive org tag and dedupes case-insensitively', () => {
+      const postData = createTestPostData({
+        platform: 'instagram',
+        metadata: { timestamp: new Date('2024-06-01T00:00:00Z') },
+      });
+      (postData as PostData & { tags?: string[] }).tags = ['MAINTAG', 'ig/saved'];
+      const frontmatter = generator.generateFrontmatter(postData, {
+        customization: {
+          enabled: true,
+          fieldVisibility: {},
+          customProperties: [],
+          tagRoot: 'maintag',
+          tagOrganization: 'flat',
+        },
+      });
+      // `MAINTAG` (user-supplied) wins over the lowercase archive tag.
+      expect(frontmatter.tags).toEqual(['MAINTAG', 'ig/saved']);
+    });
+
+    it('treats archive flag on postData as-is (inbox vs archive destination)', () => {
+      const inboxPost = createTestPostData();
+      (inboxPost as PostData & { archive?: boolean }).archive = false;
+      const archivedPost = createTestPostData();
+      (archivedPost as PostData & { archive?: boolean }).archive = true;
+      expect(generator.generateFrontmatter(inboxPost).archive).toBe(false);
+      expect(generator.generateFrontmatter(archivedPost).archive).toBe(true);
+    });
+  });
 });

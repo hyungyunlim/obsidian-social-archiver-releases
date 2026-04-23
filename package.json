@@ -1,6 +1,6 @@
 {
   "name": "obsidian-social-archiver",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "description": "Save social media posts directly into your Obsidian vault",
   "main": "main.js",
   "type": "module",
@@ -64,6 +64,7 @@
     "@tiptap/starter-kit": "^3.10.1",
     "axios": "^1.12.2",
     "cheerio": "^1.1.2",
+    "jszip": "^3.10.1",
     "leaflet": "^1.9.4",
     "libheif-js": "^1.19.8",
     "nanoid": "^3.3.11",

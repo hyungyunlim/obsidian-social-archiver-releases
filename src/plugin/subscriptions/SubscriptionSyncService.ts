@@ -16,7 +16,7 @@ import { VaultManager } from '../../services/VaultManager';
 import type { SubscriptionManager, PendingPost } from '../../services/SubscriptionManager';
 import type { WorkersAPIClient } from '../../services/WorkersAPIClient';
 import type { AuthorAvatarService } from '../../services/AuthorAvatarService';
-import type { SocialArchiverSettings } from '../../types/settings';
+import type { MediaDownloadMode, SocialArchiverSettings } from '../../types/settings';
 import { getVaultOrganizationStrategy } from '../../types/settings';
 import type { PostData, Platform, Media } from '../../types/post';
 import type { MediaExpiredResult } from '../../services/MediaPlaceholderGenerator';
@@ -50,6 +50,11 @@ export interface SyncSubscriptionResult {
   total: number;
   saved: number;
   failed: number;
+}
+
+interface MediaDownloadCandidate {
+  media: Media;
+  mediaIndex: number;
 }
 
 /**
@@ -100,6 +105,34 @@ export class SubscriptionSyncService {
 
   private get settings(): SocialArchiverSettings {
     return this.deps.settings();
+  }
+
+  private resolveDownloadMode(): MediaDownloadMode {
+    const mode = this.settings.downloadMedia;
+    if (mode === 'text-only' || mode === 'images-only' || mode === 'images-and-videos') {
+      return mode;
+    }
+    return 'images-and-videos';
+  }
+
+  private buildDownloadCandidates(
+    media: Media[] | undefined,
+    downloadMode: MediaDownloadMode,
+    options: { excludeAudio?: boolean } = {}
+  ): MediaDownloadCandidate[] {
+    if (downloadMode === 'text-only' || !media || media.length === 0) {
+      return [];
+    }
+
+    const candidates: MediaDownloadCandidate[] = [];
+    media.forEach((item, index) => {
+      if (!item) return;
+      if (options.excludeAudio && item.type === 'audio') return;
+      if (downloadMode === 'images-only' && item.type !== 'image') return;
+      candidates.push({ media: item, mediaIndex: index });
+    });
+
+    return candidates;
   }
 
   // ─── Public API ─────────────────────────────────────────────────
@@ -358,19 +391,21 @@ export class SubscriptionSyncService {
       let mediaResults: import('../../services/MediaHandler').MediaResult[] | undefined;
       let mediaHandledLocally = false;
 
-      const mainMediaToDownload = post.platform === 'podcast'
-        ? post.media?.filter((m: typeof post.media[number]) => m.type !== 'audio')
-        : post.media;
+      const downloadMode = this.resolveDownloadMode();
+      const mainMediaCandidates = this.buildDownloadCandidates(post.media, downloadMode, {
+        excludeAudio: post.platform === 'podcast',
+      });
 
-      const quotedMediaToDownload = (post.quotedPost?.media && post.quotedPost.media.length > 0
+      const quotedMediaCandidates = (post.quotedPost?.media && post.quotedPost.media.length > 0
         && post.quotedPost.platform !== 'youtube' && post.quotedPost.platform !== 'tiktok')
-        ? post.quotedPost.media
+        ? this.buildDownloadCandidates(post.quotedPost.media, downloadMode)
         : [];
 
-      const mediaToDownload = mainMediaToDownload;
+      const mediaToDownload = mainMediaCandidates.map(candidate => candidate.media);
 
-      const hasQuotedExternalLinkImage = !!post.quotedPost?.metadata?.externalLinkImage;
-      const hasMainExternalLinkImage = !!post.metadata?.externalLinkImage;
+      const shouldDownloadExternalLinkImages = downloadMode !== 'text-only';
+      const hasQuotedExternalLinkImage = shouldDownloadExternalLinkImages && !!post.quotedPost?.metadata?.externalLinkImage;
+      const hasMainExternalLinkImage = shouldDownloadExternalLinkImages && !!post.metadata?.externalLinkImage;
 
       // Naver Webtoon: Use local service for faster image downloads
       if (post.platform === 'naver-webtoon' && mediaToDownload && mediaToDownload.length > 0) {
@@ -391,7 +426,7 @@ export class SubscriptionSyncService {
           console.debug(`[Social Archiver] Downloading ${totalImages} webtoon images locally (subscription)`);
 
           for (let i = 0; i < totalImages; i++) {
-            const media = mediaToDownload[i];
+            const media = mainMediaCandidates[i]?.media;
             if (!media?.url) continue;
 
             try {
@@ -444,8 +479,8 @@ export class SubscriptionSyncService {
 
       // Other platforms: Use Worker proxy for media downloads
       const apiClient = this.deps.apiClient();
-      const hasMainMedia = !mediaHandledLocally && !mediaResults && mediaToDownload && mediaToDownload.length > 0;
-      const hasQuotedMedia = quotedMediaToDownload.length > 0;
+      const hasMainMedia = !mediaHandledLocally && !mediaResults && mainMediaCandidates.length > 0;
+      const hasQuotedMedia = quotedMediaCandidates.length > 0;
       const hasExternalLinkImages = hasQuotedExternalLinkImage || hasMainExternalLinkImage;
       if ((hasMainMedia || hasQuotedMedia || hasExternalLinkImages) && apiClient) {
         try {
@@ -459,23 +494,23 @@ export class SubscriptionSyncService {
             maxImageDimension: 2048
           });
 
-          const allMediaToDownload: Array<{ media: typeof post.media[0]; mediaIndex: number; isQuotedPost?: boolean; isExternalLinkImage?: boolean }> = [];
+          const allMediaToDownload: Array<{ media: Media; mediaIndex: number; isQuotedPost?: boolean; isExternalLinkImage?: boolean }> = [];
 
-          if (hasMainMedia && mediaToDownload) {
-            mediaToDownload.forEach((media: typeof post.media[0], index: number) => {
-              allMediaToDownload.push({ media, mediaIndex: index });
+          if (hasMainMedia) {
+            mainMediaCandidates.forEach(({ media, mediaIndex }) => {
+              allMediaToDownload.push({ media, mediaIndex });
             });
           }
 
           if (hasQuotedMedia) {
-            quotedMediaToDownload.forEach((media: typeof post.media[0], index: number) => {
-              allMediaToDownload.push({ media, mediaIndex: index, isQuotedPost: true });
+            quotedMediaCandidates.forEach(({ media, mediaIndex }) => {
+              allMediaToDownload.push({ media, mediaIndex, isQuotedPost: true });
             });
           }
 
           if (hasQuotedExternalLinkImage && post.quotedPost?.metadata?.externalLinkImage) {
             allMediaToDownload.push({
-              media: { type: 'image', url: post.quotedPost.metadata.externalLinkImage } as typeof post.media[0],
+              media: { type: 'image', url: post.quotedPost.metadata.externalLinkImage },
               mediaIndex: -1,
               isQuotedPost: true,
               isExternalLinkImage: true,
@@ -484,7 +519,7 @@ export class SubscriptionSyncService {
 
           if (hasMainExternalLinkImage && post.metadata?.externalLinkImage) {
             allMediaToDownload.push({
-              media: { type: 'image', url: post.metadata.externalLinkImage } as typeof post.media[0],
+              media: { type: 'image', url: post.metadata.externalLinkImage },
               mediaIndex: -2,
               isExternalLinkImage: true,
             });
@@ -556,8 +591,8 @@ export class SubscriptionSyncService {
         const { CdnExpiryDetector } = await import('../../services/CdnExpiryDetector');
 
         const allOriginalMedia = [
-          ...(mainMediaToDownload || []),
-          ...quotedMediaToDownload,
+          ...mainMediaCandidates.map(candidate => candidate.media),
+          ...quotedMediaCandidates.map(candidate => candidate.media),
         ];
 
         const downloadedUrls = new Set<string>();

@@ -873,6 +873,11 @@
   font-weight: 500;
 }
 
+.pcr-mention-span {
+  color: var(--interactive-accent);
+  font-weight: 500;
+}
+
 .pcr-wiki-link {
   color: var(--link-color);
   text-decoration: var(--link-decoration);

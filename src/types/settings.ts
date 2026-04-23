@@ -567,6 +567,15 @@ export interface SocialArchiverSettings {
   enableAuthorNotes: boolean; // Create vault-native author note files (default: false)
   authorNotesPath: string; // Folder for author note files (default: 'Social Authors')
 
+  // Instagram Saved Import Settings (Experimental — PRD §12.1)
+  /**
+   * Gate for the Instagram Saved Posts import feature. When false:
+   * - the "Import Instagram Saved Export" command is not registered
+   * - the import ribbon icon is hidden
+   * Default: false (experimental opt-in, parity with Chrome extension feature flag).
+   */
+  instagramImportEnabled: boolean;
+
   // Large Media Guard Settings
   /**
    * Prompt before downloading a top-level video larger than this size (MB)
@@ -740,6 +749,9 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
   // Author Notes Settings (Experimental)
   enableAuthorNotes: false, // Disabled by default (experimental)
   authorNotesPath: 'Social Authors', // Default: outside archivePath
+
+  // Instagram Saved Import Settings (Experimental — PRD §12.1)
+  instagramImportEnabled: false, // Disabled by default (experimental)
 
   // Large Media Guard Settings
   largeVideoPromptThresholdMB: 100, // Prompt before downloading top-level videos larger than 100MB

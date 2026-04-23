@@ -27,6 +27,8 @@ import { MediaGalleryView2, VIEW_TYPE_MEDIA_GALLERY_2 } from './views/MediaGalle
 import { ArchiveModal } from './modals/ArchiveModal';
 import { WebtoonArchiveModal } from './modals/WebtoonArchiveModal';
 import { ReleaseNotesModal } from './modals/ReleaseNotesModal';
+import { InstagramImportModal } from './modals/InstagramImportModal';
+import type { ImportOrchestrator } from './types/import';
 import { NaverWebtoonLocalService } from './services/NaverWebtoonLocalService';
 import { RELEASE_NOTES } from './release-notes';
 import { completeAuthentication, showAuthError, showAuthSuccess, refreshUserCredits } from './utils/auth';
@@ -89,6 +91,16 @@ export default class SocialArchiverPlugin extends Plugin {
   settings: SocialArchiverSettings = DEFAULT_SETTINGS;
   private apiClient?: WorkersAPIClient;
   private orchestrator?: ArchiveOrchestrator;
+
+  /** Ribbon icon element for the Instagram Saved import feature (PRD §12.1 gate). */
+  private instagramImportRibbonEl: HTMLElement | null = null;
+
+  /**
+   * Lazily-instantiated Instagram Saved import orchestrator. Created on first
+   * modal open so the core module's side-effects (state store, worker timer)
+   * don't run for users who never use the feature.
+   */
+  private importOrchestrator?: ImportOrchestrator;
   public linkPreviewExtractor!: LinkPreviewExtractor; // Link preview URL extractor
   private settingTab?: SocialArchiverSettingTab; // Settings tab reference for refresh
   public events: Events = new Events();
@@ -338,6 +350,44 @@ export default class SocialArchiverPlugin extends Plugin {
       );
       void this.activateTimelineView(location);
     });
+
+    // Add ribbon icon for Instagram Saved import (experimental — PRD §5.3, §12.1)
+    // The icon is hidden via display:none when the toggle is off; runtime flips
+    // are driven by the `settings-changed` event below.
+    //
+    // Mobile gating (PRD §11 / F6.1, F6.3): Instagram Saved import is desktop-only.
+    // Registration itself is skipped on mobile so the ribbon icon and command are
+    // not just hidden but truly unreachable as entry points.
+    if (!ObsidianPlatform.isMobile) {
+      this.instagramImportRibbonEl = this.addRibbonIcon(
+        'package',
+        'Import Instagram Saved Export',
+        () => {
+          if (!this.settings.instagramImportEnabled) return;
+          void this.openInstagramImportModal();
+        },
+      );
+      this.updateInstagramImportRibbonVisibility();
+
+      // Register import command (gated by setting via checkCallback → hidden when off)
+      this.addCommand({
+        id: 'import-instagram-export',
+        name: 'Import Instagram Saved Export',
+        checkCallback: (checking: boolean) => {
+          if (!this.settings.instagramImportEnabled) return false;
+          if (checking) return true;
+          void this.openInstagramImportModal();
+          return true;
+        },
+      });
+
+      // React to runtime toggle flips — refresh ribbon visibility.
+      this.registerEvent(
+        this.events.on('settings-changed', () => {
+          this.updateInstagramImportRibbonVisibility();
+        }),
+      );
+    }
 
     // Delegate command registration to extracted module
     registerCommands({
@@ -1723,6 +1773,121 @@ export default class SocialArchiverPlugin extends Plugin {
    */
   async ensureFolderExists(path: string): Promise<void> {
     await ensureFolderExistsUtil(this.app, path);
+  }
+
+  // --------------------------------------------------------------------------
+  // Instagram Saved Import (PRD §5.3) — UI plumbing only; core owned by
+  // `src/services/import/*` (Agent E).
+  // --------------------------------------------------------------------------
+
+  /**
+   * Show/hide the Instagram import ribbon icon based on the current setting.
+   * Called on plugin load and whenever `settings-changed` fires.
+   */
+  private updateInstagramImportRibbonVisibility(): void {
+    const el = this.instagramImportRibbonEl;
+    if (!el) return;
+    el.style.display = this.settings.instagramImportEnabled ? '' : 'none';
+  }
+
+  /**
+   * Lazily import the orchestrator factory from the service module. Using
+   * dynamic import lets the UI compile even before Agent E lands the service
+   * file, and keeps the module out of the plugin's critical load path.
+   */
+  private async getImportOrchestrator(): Promise<ImportOrchestrator> {
+    if (this.importOrchestrator) return this.importOrchestrator;
+
+    // Dynamic import — the engine module is only loaded when the feature is
+    // actually used, keeping it out of the plugin's critical load path.
+    const mod = await import('./services/import').catch((err) => {
+      throw new Error(
+        `Instagram import engine is not installed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    });
+
+    const factory = mod.createImportOrchestrator;
+    if (typeof factory !== 'function') {
+      throw new Error('createImportOrchestrator is not exported by the import engine module.');
+    }
+
+    const logger = createLogger({ enableConsole: true, level: LogLevel.INFO });
+    const toMeta = (v: unknown): Record<string, unknown> | undefined => {
+      if (v === undefined || v === null) return undefined;
+      if (typeof v === 'object') return v as Record<string, unknown>;
+      return { value: v };
+    };
+    const importLogger = {
+      info: (m: string, extra?: unknown) => logger.info(m, toMeta(extra)),
+      warn: (m: string, extra?: unknown) => logger.warn(m, toMeta(extra)),
+      error: (m: string, e?: unknown) =>
+        logger.error(m, e instanceof Error ? e : undefined, toMeta(e)),
+    };
+
+    if (!this.apiClient) {
+      throw new Error('WorkersAPIClient is not initialized.');
+    }
+
+    this.importOrchestrator = await factory({
+      plugin: this,
+      http: this.apiClient,
+      logger: importLogger,
+      sourceClientId: this.settings.syncClientId,
+      mediaBasePath: this.settings.mediaPath || 'attachments/social-archives',
+      /**
+       * Called by the engine after each successful archive create + upload.
+       * Mirrors the existing archive → vault note path so imported archives
+       * appear as vault notes (PRD §9.2). Failures here must not stall the
+       * job; the engine catches the throw and flips the item outcome to
+       * `imported_with_warnings`.
+       */
+      onArchiveCreated: async (archiveId: string, postData: PostData) => {
+        const orch = this.orchestrator;
+        if (!orch) {
+          throw new Error('ArchiveOrchestrator not initialized');
+        }
+        await orch.createNoteForArchive(archiveId, postData);
+      },
+    });
+
+    if (!this.importOrchestrator) {
+      throw new Error('Import orchestrator factory returned undefined.');
+    }
+    return this.importOrchestrator;
+  }
+
+  /**
+   * Open the Instagram Saved Posts import modal. No-op if the feature flag is
+   * off — the ribbon/command are already gated but we double-check here.
+   */
+  async openInstagramImportModal(): Promise<void> {
+    if (!this.settings.instagramImportEnabled) {
+      new Notice('Instagram import is disabled. Enable it in Social Archiver settings.');
+      return;
+    }
+
+    try {
+      const orchestrator = await this.getImportOrchestrator();
+      const modal = new InstagramImportModal(this.app, this, orchestrator);
+      modal.open();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      new Notice(`Cannot open import: ${message}`);
+      console.error('[Social Archiver] Failed to open Instagram import modal', err);
+    }
+  }
+
+  /**
+   * Open the vault note for a given imported archive. Called from the
+   * completion pane's "Open most recent imported archive" deep link.
+   */
+  async openImportedArchive(archiveId: string): Promise<void> {
+    const file = this.archiveLookupService?.findBySourceArchiveId(archiveId) ?? null;
+    if (!file) {
+      new Notice('Archive note is not available yet. Try again in a moment.');
+      return;
+    }
+    await this.app.workspace.getLeaf(false).openFile(file);
   }
 
   /**

@@ -247,7 +247,19 @@ export class HighlightBodyMarker {
   ): string {
     if (rendered.text.length === 0) return workingBody;
 
-    const wrapped = `==${rendered.text}==`;
+    // Push edge whitespace outside the `==` delimiters so Obsidian still
+    // parses the span as a highlight (its mark rule rejects `== text ==`).
+    const leftPadMatch = rendered.text.match(/^\s+/);
+    const rightPadMatch = rendered.text.match(/\s+$/);
+    const trimmedText = rendered.text.slice(
+      leftPadMatch?.[0].length ?? 0,
+      rendered.text.length - (rightPadMatch?.[0].length ?? 0)
+    );
+    if (trimmedText.length === 0) return workingBody;
+    const leftPad = leftPadMatch?.[0] ?? '';
+    const rightPad = rightPadMatch?.[0] ?? '';
+
+    const wrapped = `${leftPad}==${trimmedText}==${rightPad}`;
     if (workingBody.includes(wrapped)) return workingBody;
 
     const rangeStart = rendered.rangeStart;

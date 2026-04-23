@@ -26,6 +26,36 @@ import { getPlatformName } from '@/shared/platforms';
 import { createCustomSVG } from '@/utils/dom-helpers';
 import type { ReaderTTSController } from './ReaderTTSController';
 
+/**
+ * Matches `==text==` highlight marks, including ones with whitespace padding
+ * inside the delimiters (e.g. `== text ==`). Inner cannot start with `=` or `-`
+ * to avoid matching Setext heading rules and `===` separators.
+ */
+const HIGHLIGHT_MARK_PADDED_REGEX = /==(?![-=])([\s\S]+?)==/g;
+
+/**
+ * Push edge whitespace outside `==text==` delimiters so Obsidian's renderer
+ * still parses the span as a highlight. Obsidian's mark rule rejects
+ * `== text ==` because the opening/closing delimiters must hug non-whitespace,
+ * but synced highlights from other clients sometimes include selection padding.
+ *
+ * Input  : `prefix == hello ==suffix`
+ * Output : `prefix  ==hello== suffix`
+ *
+ * Idempotent and a no-op when no padding is present.
+ */
+function normalizeHighlightMarks(source: string): string {
+  if (!source || !source.includes('==')) return source;
+  return source.replace(HIGHLIGHT_MARK_PADDED_REGEX, (full, inner: string) => {
+    const leftMatch = inner.match(/^(\s+)/);
+    const rightMatch = inner.match(/(\s+)$/);
+    if (!leftMatch && !rightMatch) return full;
+    const trimmed = inner.replace(/^\s+/, '').replace(/\s+$/, '');
+    if (trimmed.length === 0) return full;
+    return `${leftMatch?.[0] ?? ''}==${trimmed}==${rightMatch?.[0] ?? ''}`;
+  });
+}
+
 export interface ReaderContentCallbacks {
   onClose: () => void;
   onFontSizeChange: (delta: number) => void;
@@ -484,6 +514,8 @@ export class ReaderModeContentRenderer extends Component {
       source = source.replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
+    source = normalizeHighlightMarks(source);
+
     const sourcePath = post.filePath || '';
     await MarkdownRenderer.render(this.app, source, bodyEl, sourcePath, this);
     return bodyEl;
@@ -529,7 +561,9 @@ export class ReaderModeContentRenderer extends Component {
     const bodyText = quoted.content?.text || quoted.content?.markdown || '';
     if (bodyText.trim()) {
       const bodyEl = wrapper.createDiv({ cls: 'sa-reader-mode-body rmcr-quoted-body' });
-      const escaped = bodyText.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const escaped = normalizeHighlightMarks(
+        bodyText.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      );
       await MarkdownRenderer.render(this.app, escaped, bodyEl, sourcePath, this);
     }
 

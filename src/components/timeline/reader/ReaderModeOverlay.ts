@@ -1003,16 +1003,30 @@ export class ReaderModeOverlay {
         return;
       }
 
-      // Check if already wrapped with ==
+      // Push edge whitespace outside the `==` so Obsidian still parses the
+      // span as a highlight (its mark rule rejects `== text ==`).
+      const leftPadMatch = highlight.text.match(/^\s+/);
+      const rightPadMatch = highlight.text.match(/\s+$/);
+      const trimmedText = highlight.text.slice(
+        leftPadMatch?.[0].length ?? 0,
+        highlight.text.length - (rightPadMatch?.[0].length ?? 0)
+      );
+      if (trimmedText.length === 0) return;
+      const leftPad = leftPadMatch?.[0] ?? '';
+      const rightPad = rightPadMatch?.[0] ?? '';
+
+      // Check if already wrapped with == (around the trimmed content)
       const absoluteIdx = fmEnd + idx;
-      const before2 = content.substring(Math.max(0, absoluteIdx - 2), absoluteIdx);
-      const after2 = content.substring(absoluteIdx + highlight.text.length, absoluteIdx + highlight.text.length + 2);
+      const trimmedIdx = absoluteIdx + leftPad.length;
+      const trimmedEnd = trimmedIdx + trimmedText.length;
+      const before2 = content.substring(Math.max(0, trimmedIdx - 2), trimmedIdx);
+      const after2 = content.substring(trimmedEnd, trimmedEnd + 2);
       if (before2 === '==' && after2 === '==') return; // Already highlighted
 
-      // Wrap with ==...==
+      // Wrap with ==...== keeping any leading/trailing whitespace outside.
       const newContent =
         content.substring(0, absoluteIdx) +
-        '==' + highlight.text + '==' +
+        leftPad + '==' + trimmedText + '==' + rightPad +
         content.substring(absoluteIdx + highlight.text.length);
 
       await vault.modify(file, newContent);
@@ -1036,13 +1050,26 @@ export class ReaderModeOverlay {
       this.context.onUIModify?.(filePath);
 
       const content = await vault.read(file);
-      const wrapped = '==' + highlight.text + '==';
-      const idx = content.indexOf(wrapped);
+      // Try the canonical (trimmed) wrapping first — that's what new writes
+      // use. Fall back to the legacy `==<raw text>==` form for highlights
+      // saved before the trim was introduced.
+      const trimmedText = highlight.text.replace(/^\s+/, '').replace(/\s+$/, '');
+      const wrappedTrimmed = trimmedText.length > 0 ? '==' + trimmedText + '==' : '';
+      const wrappedRaw = '==' + highlight.text + '==';
+
+      let idx = wrappedTrimmed ? content.indexOf(wrappedTrimmed) : -1;
+      let wrapped = wrappedTrimmed;
+      let replacement = trimmedText;
+      if (idx < 0) {
+        idx = content.indexOf(wrappedRaw);
+        wrapped = wrappedRaw;
+        replacement = highlight.text;
+      }
       if (idx < 0) return;
 
       const newContent =
         content.substring(0, idx) +
-        highlight.text +
+        replacement +
         content.substring(idx + wrapped.length);
 
       await vault.modify(file, newContent);

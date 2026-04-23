@@ -879,6 +879,52 @@ export class ArchiveOrchestrator implements IService {
   }
 
   /**
+   * Create (or refresh) a vault note from a PostData record whose archive
+   * row already exists on the server.
+   *
+   * Used by the Instagram Saved Posts import path (PRD §5.3 / §9.2): the
+   * import worker creates archives via `POST /api/archive` and uploads media
+   * via `POST /api/archive/:id/media`; this method then materializes the
+   * corresponding vault note using the same MarkdownConverter + VaultManager
+   * pipeline as `orchestrate()`.
+   *
+   * Differences from `orchestrate()`:
+   * - NO network fetch (server already has the archive row)
+   * - NO media download (media already uploaded via the import API)
+   * - NO progress emission (the import progress bus handles that)
+   * - Creates or updates a vault file based on the existing savePost logic
+   *
+   * Failures here are the caller's responsibility to absorb — the import
+   * worker flips the item outcome to `imported_with_warnings` when this
+   * method throws so the import job as a whole does not fail.
+   *
+   * @param archiveId - Server-assigned archive id (used for logging only)
+   * @param postData - Canonical PostData; must be fully populated
+   * @returns Absolute vault path of the created note
+   */
+  async createNoteForArchive(
+    archiveId: string,
+    postData: PostData,
+  ): Promise<string> {
+    if (!postData || !postData.platform || !postData.id) {
+      throw new Error(
+        `createNoteForArchive: invalid postData for archive ${archiveId}`,
+      );
+    }
+
+    // Convert to markdown using the same converter the main orchestrate path
+    // uses. No media results are passed because the media has already been
+    // uploaded to R2 by the import media endpoint; existing `media[].url`
+    // values on PostData point at server-hosted URLs.
+    const markdown = this.markdownConverter.convert(postData);
+
+    // Save through VaultManager (reuses folder strategy, filename dedup,
+    // frontmatter merge with existing notes, etc.).
+    const filePath = await this.vaultManager.savePost(postData, markdown);
+    return filePath;
+  }
+
+  /**
    * Fetch post data without saving to vault
    *
    * Used for inline archiving in PostComposer - fetches post data from API

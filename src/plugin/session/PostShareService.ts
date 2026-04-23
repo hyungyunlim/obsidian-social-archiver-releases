@@ -214,11 +214,31 @@ export class PostShareService {
             : crypto.randomUUID();
           frontmatterUpdates.postOrigin = 'shared';
         } catch (importError) {
-          // Import failure must NOT break the share flow
-          // The share itself succeeded — user can still access the shared link
-          // Archive import can be retried on next share or via on-demand migration
+          // Import failure must NOT break the share flow — fail-open.
+          // The share itself succeeded (KV); user can still access the shared
+          // link. The D1 archive import can be retried on next share or via
+          // on-demand migration (admin apply endpoint). We do NOT show a
+          // user-facing Notice: degrading UX for a corner case that heals on
+          // the next share is worse than silent recovery.
+          //
+          // PRD §6.7 / §7.3 — Phase M3 future-orphan observability.
+          // Prefix with `[Social Archiver][M3]` so drift is greppable in
+          // devtools / mobile log exports without any extra telemetry layer.
+          const errType = importError instanceof Error
+            ? importError.name
+            : typeof importError;
+          const errMessage = importError instanceof Error
+            ? importError.message
+            : String(importError);
           console.warn(
-            '[Social Archiver] import-share failed (share itself succeeded):',
+            '[Social Archiver][M3] import-share failed (share itself succeeded, orphan candidate):',
+            {
+              shareId: shareResponse.shareId,
+              shareUrl: shareResponse.shareUrl,
+              errorType: errType,
+              errorMessage: errMessage,
+              orphanSource: 'plugin-import-share-failure-2026-04',
+            },
             importError
           );
         }

@@ -16,6 +16,13 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+const serviceMocks = vi.hoisted(() => ({
+  mediaHandlerDownloadMedia: vi.fn(),
+  vaultStorageSavePost: vi.fn(),
+  vaultManagerGenerateFilePath: vi.fn(),
+  cdnIsEphemeral: vi.fn(),
+}));
+
 // Mock TimelineView to avoid deep import chain requiring Obsidian Component
 vi.mock('../../../views/TimelineView', () => ({
   TimelineView: class MockTimelineView {
@@ -23,6 +30,34 @@ vi.mock('../../../views/TimelineView', () => ({
     resumeAutoRefresh(_triggerRefresh?: boolean) {}
   },
   VIEW_TYPE_TIMELINE: 'timeline',
+}));
+
+vi.mock('../../../services/VaultManager', () => ({
+  VaultManager: vi.fn().mockImplementation(() => ({
+    generateFilePath: serviceMocks.vaultManagerGenerateFilePath,
+  })),
+}));
+
+vi.mock('../../../services/VaultStorageService', () => ({
+  VaultStorageService: vi.fn().mockImplementation(() => ({
+    savePost: serviceMocks.vaultStorageSavePost,
+  })),
+}));
+
+vi.mock('../../../services/MediaHandler', () => ({
+  MediaHandler: vi.fn().mockImplementation(() => ({
+    downloadMedia: serviceMocks.mediaHandlerDownloadMedia,
+  })),
+}));
+
+vi.mock('../../../services/CdnExpiryDetector', () => ({
+  CdnExpiryDetector: {
+    isEphemeralCdn: serviceMocks.cdnIsEphemeral,
+  },
+}));
+
+vi.mock('../../../shared/platforms', () => ({
+  getPlatformName: vi.fn().mockReturnValue('X'),
 }));
 
 import {
@@ -72,6 +107,7 @@ function makeDeps(overrides: Partial<SubscriptionSyncServiceDeps> = {}): Subscri
       mediaPath: 'attachments/social-archives',
       archiveOrganization: 'platform',
       fileNameFormat: 'default',
+      downloadMedia: 'images-and-videos',
       downloadAuthorAvatars: false,
       overwriteAuthorAvatar: false,
       includeComments: false,
@@ -102,11 +138,68 @@ async function advanceAndFlush(ms: number): Promise<void> {
   }
 }
 
+function makePendingPost(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'pending-1',
+    subscriptionId: 'subscription-1',
+    subscriptionName: 'Mobile Sync',
+    destinationFolder: 'Social Archives',
+    archivedAt: '2026-04-23T00:00:00.000Z',
+    post: {
+      platform: 'x',
+      id: 'post-1',
+      url: 'https://x.com/alice/status/1',
+      title: 'Post',
+      author: {
+        name: 'Alice',
+        handle: '@alice',
+        url: 'https://x.com/alice',
+      },
+      content: { text: 'hello' },
+      media: [
+        { type: 'image', url: 'https://cdn.example.com/main.jpg' },
+        { type: 'video', url: 'https://video.twimg.com/ext/main.mp4' },
+      ],
+      metadata: {
+        timestamp: '2026-04-23T00:00:00.000Z',
+        externalLinkImage: 'https://cdn.example.com/main-link.jpg',
+      },
+      quotedPost: {
+        platform: 'x',
+        id: 'quoted-1',
+        url: 'https://x.com/bob/status/2',
+        author: { name: 'Bob', url: 'https://x.com/bob' },
+        content: { text: 'quoted' },
+        media: [
+          { type: 'video', url: 'https://video.twimg.com/ext/quoted.mp4' },
+          { type: 'image', url: 'https://cdn.example.com/quoted.jpg' },
+        ],
+        metadata: {
+          timestamp: '2026-04-22T00:00:00.000Z',
+          externalLinkImage: 'https://cdn.example.com/quoted-link.jpg',
+        },
+      },
+      ...overrides,
+    },
+  } as any;
+}
+
 // ---- Tests ------------------------------------------------------------------
 
 describe('SubscriptionSyncService', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    serviceMocks.mediaHandlerDownloadMedia.mockReset();
+    serviceMocks.mediaHandlerDownloadMedia.mockResolvedValue([]);
+    serviceMocks.vaultStorageSavePost.mockReset();
+    serviceMocks.vaultStorageSavePost.mockResolvedValue({
+      path: 'Social Archives/X/Post.md',
+      file: { path: 'Social Archives/X/Post.md' },
+    });
+    serviceMocks.vaultManagerGenerateFilePath.mockReset();
+    serviceMocks.vaultManagerGenerateFilePath.mockReturnValue('Social Archives/X/Post.md');
+    serviceMocks.cdnIsEphemeral.mockReset();
+    serviceMocks.cdnIsEphemeral.mockReturnValue(false);
   });
 
   afterEach(() => {
@@ -216,6 +309,60 @@ describe('SubscriptionSyncService', () => {
 
       // Second call should eventually have been invoked via debounce
       expect(manager.syncPendingPosts).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('saveSubscriptionPostDetailed media download mode', () => {
+    it('downloads images but skips videos when settings are images-only', async () => {
+      const deps = makeDeps({
+        settings: () => ({
+          archivePath: 'Social Archives',
+          mediaPath: 'attachments/social-archives',
+          archiveOrganization: 'platform',
+          fileNameFormat: 'default',
+          downloadMedia: 'images-only',
+          downloadAuthorAvatars: false,
+          overwriteAuthorAvatar: false,
+          includeComments: false,
+        } as any),
+        apiClient: () => ({ proxyMedia: vi.fn() } as any),
+      });
+
+      const service = new SubscriptionSyncService(deps);
+      const result = await service.saveSubscriptionPostDetailed(makePendingPost());
+
+      expect(result.status).toBe('created');
+      expect(serviceMocks.mediaHandlerDownloadMedia).toHaveBeenCalledOnce();
+      const downloadedMedia = serviceMocks.mediaHandlerDownloadMedia.mock.calls[0][0];
+      expect(downloadedMedia).toEqual([
+        { type: 'image', url: 'https://cdn.example.com/main.jpg' },
+        { type: 'image', url: 'https://cdn.example.com/quoted.jpg' },
+        { type: 'image', url: 'https://cdn.example.com/quoted-link.jpg' },
+        { type: 'image', url: 'https://cdn.example.com/main-link.jpg' },
+      ]);
+      expect(downloadedMedia.some((item: { type: string }) => item.type === 'video')).toBe(false);
+    });
+
+    it('does not download any post media when settings are text-only', async () => {
+      const deps = makeDeps({
+        settings: () => ({
+          archivePath: 'Social Archives',
+          mediaPath: 'attachments/social-archives',
+          archiveOrganization: 'platform',
+          fileNameFormat: 'default',
+          downloadMedia: 'text-only',
+          downloadAuthorAvatars: false,
+          overwriteAuthorAvatar: false,
+          includeComments: false,
+        } as any),
+        apiClient: () => ({ proxyMedia: vi.fn() } as any),
+      });
+
+      const service = new SubscriptionSyncService(deps);
+      const result = await service.saveSubscriptionPostDetailed(makePendingPost());
+
+      expect(result.status).toBe('created');
+      expect(serviceMocks.mediaHandlerDownloadMedia).not.toHaveBeenCalled();
     });
   });
 

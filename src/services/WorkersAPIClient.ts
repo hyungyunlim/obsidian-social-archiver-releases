@@ -775,6 +775,41 @@ export class WorkersAPIClient implements IService {
     this.config.clientId = clientId;
   }
 
+  // -------------------------------------------------------------------------
+  // AdapterHttp surface (consumed by ImportAPIClientAdapter for the Phase 2
+  // import feature). These are thin accessors over private config so the
+  // adapter can build requests that match this client's conventions (base
+  // URL, auth token, X-Client/X-Platform headers) without going through the
+  // JSON-only `request<T>()` helper.
+  // -------------------------------------------------------------------------
+
+  /** API base URL from settings (readonly for callers). */
+  getEndpoint(): string {
+    return this.config.endpoint;
+  }
+
+  /** Current Bearer token; `null` when the user is not authenticated. */
+  getAuthToken(): string | null {
+    return this.config.authToken ?? null;
+  }
+
+  /**
+   * Standard client identity headers every request carries. Callers add
+   * `Content-Type` and `Authorization` as needed. Exposed so we don't have
+   * to duplicate the X-Client/X-Platform convention in each consumer.
+   */
+  getClientHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      'X-Client': 'obsidian-plugin',
+      'X-Client-Version': this.config.pluginVersion || '0.0.0',
+      'X-Platform': this.getPlatformIdentifier(),
+    };
+    if (this.config.clientId) {
+      headers['X-Client-Id'] = this.config.clientId;
+    }
+    return headers;
+  }
+
   /**
    * Get platform identifier for X-Platform header
    */
