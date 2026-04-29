@@ -31,7 +31,7 @@ import { InstagramImportModal } from './modals/InstagramImportModal';
 import type { ImportOrchestrator } from './types/import';
 import { NaverWebtoonLocalService } from './services/NaverWebtoonLocalService';
 import { RELEASE_NOTES } from './release-notes';
-import { completeAuthentication, showAuthError, showAuthSuccess, refreshUserCredits } from './utils/auth';
+import { completeAuthentication, showAuthError, showAuthSuccess, refreshUserCredits, refreshUserBillingUsage } from './utils/auth';
 import { normalizeUrlForDedup } from './utils/url';
 
 import { ProcessManager } from './services/ProcessManager';
@@ -620,7 +620,11 @@ export default class SocialArchiverPlugin extends Plugin {
     }
 
     if (options.notify) {
-      this.events.trigger('settings-changed', this.settings);
+      this.events.trigger(
+        'settings-changed',
+        this.settings,
+        Object.keys(partial) as Array<keyof SocialArchiverSettings>
+      );
     }
   }
 
@@ -1238,6 +1242,7 @@ export default class SocialArchiverPlugin extends Plugin {
           createProfileNote: (msg) => this.createProfileNote(msg),
           applyAuthorProfileUpdate: (profile) => this.authorProfileSyncService?.applyInboundProfile(profile) ?? Promise.resolve(),
           syncAuthorProfiles: () => this.authorProfileSyncService?.syncAllFromServer() ?? Promise.resolve(),
+          refreshBillingUsage: () => refreshUserBillingUsage(this, { notify: true }),
           refreshTimelineView: () => this.refreshTimelineView(),
           processPendingSyncQueue: () => this.mobileSyncService?.processPendingSyncQueue() ?? Promise.resolve(),
           processSyncQueueItem: (queueId, archiveId, clientId) =>
@@ -2152,6 +2157,7 @@ export default class SocialArchiverPlugin extends Plugin {
     this.settings.byPlatform = {};
     this.settings.byCountry = {};
     this.settings.timingByPlatform = {};
+    this.settings.billingUsage = undefined;
 
     // 6. Clear Reddit state
     this.settings.redditConnected = false;

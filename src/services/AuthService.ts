@@ -1,5 +1,5 @@
 import { Platform, requestUrl } from 'obsidian';
-import type { SocialArchiverSettings } from '../types/settings';
+import type { BillingUsageSummary, SocialArchiverSettings } from '../types/settings';
 
 /**
  * Response from token validation API
@@ -246,6 +246,57 @@ export class AuthService {
       }
 
       return data as unknown as { success: boolean; data?: SocialArchiverSettings; error?: { code: string; message: string } };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          code: 'NETWORK_ERROR',
+          message: error instanceof Error ? error.message : 'Network error'
+        }
+      };
+    }
+  }
+
+  /**
+   * Fetch current billing usage and archive quota summary
+   */
+  async getUserUsage(token: string): Promise<{
+    success: boolean;
+    data?: BillingUsageSummary;
+    error?: { code: string; message: string };
+  }> {
+    try {
+      const response = await requestUrl({
+        url: `${this.workerUrl}/api/user/usage`,
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-Client': 'obsidian-plugin',
+          'X-Client-Version': this.pluginVersion,
+          'X-Platform': this.getPlatformIdentifier()
+        },
+        throw: false
+      });
+
+      const data = response.json as Record<string, unknown>;
+
+      if (response.status !== 200) {
+        const dataError = data['error'] as { code: string; message: string } | undefined;
+        return {
+          success: false,
+          error: dataError ?? {
+            code: 'FETCH_FAILED',
+            message: 'Failed to fetch billing usage'
+          }
+        };
+      }
+
+      return data as unknown as {
+        success: boolean;
+        data?: BillingUsageSummary;
+        error?: { code: string; message: string };
+      };
     } catch (error) {
       return {
         success: false,

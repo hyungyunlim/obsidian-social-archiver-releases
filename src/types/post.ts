@@ -108,6 +108,22 @@ export interface SeriesInfo {
   commentCount?: number; // Episode comment count (for display in timeline)
 }
 
+/**
+ * Recognized web publisher attribution.
+ *
+ * Mirrors `workers/src/types/post.ts`. Resolved from `originalUrl` by the
+ * worker for `platform: 'web'` archives and persisted in plugin frontmatter
+ * as `publisher` (slug) and `publisherName` (display name).
+ */
+export interface PublisherInfo {
+  /** Canonical registry slug (matches `shared/icons/publisher-lookup.ts`). */
+  slug: string;
+  /** Human-readable display name (e.g. "The New Yorker"). */
+  name: string;
+  /** Canonical mapped domain (e.g. "newyorker.com"). */
+  domain: string;
+}
+
 // Comment types
 export interface Comment {
   id: string;
@@ -436,6 +452,13 @@ export interface PostData {
 
   /** Number of text highlights/annotations in the post content */
   highlightCount?: number;
+
+  /**
+   * Recognized publisher attribution for `platform: 'web'` archives.
+   * Resolved from `originalUrl` via the shared publisher registry on the
+   * worker side. Absent when the URL does not match any registered publisher.
+   */
+  publisher?: PublisherInfo;
 }
 
 // Zod schema for validation with version

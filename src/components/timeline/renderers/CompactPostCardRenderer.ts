@@ -1,6 +1,7 @@
 import type { PostData, Platform } from '../../../types/post';
 import {
   getPlatformSimpleIcon,
+  getPublisherIconEntry,
 } from '../../../services/IconService';
 import { App, setIcon, Platform as ObsidianPlatform, Component, TFile } from 'obsidian';
 import type { LinkPreviewRenderer } from './LinkPreviewRenderer';
@@ -217,7 +218,18 @@ export class CompactPostCardRenderer extends Component {
     const platformIcon = card.createDiv({ cls: 'platform-icon-badge' });
     platformIcon.addClass('sa-absolute', 'sa-rounded-full', 'sa-bg-primary', 'sa-border', 'sa-flex-center', 'sa-z-10', 'cpcr-platform-icon');
     platformIcon.addClass(externalUrl ? 'cpcr-platform-icon--linkable' : 'cpcr-platform-icon--static');
-    platformIcon.setAttribute('title', externalUrl ? `Open on ${post.platform}` : post.platform);
+    // Publisher attribution (web archives only): prefer persisted slug, fall
+    // back to URL-based lookup. When matched, the rendered icon and tooltip
+    // reflect the publisher rather than the generic web platform.
+    const publisherEntry = post.platform === 'web'
+      ? getPublisherIconEntry(post.publisher?.slug, post.url)
+      : null;
+
+    const tooltipLabel = publisherEntry
+      ? (externalUrl ? `Open on ${publisherEntry.name}` : publisherEntry.name)
+      : (externalUrl ? `Open on ${post.platform}` : post.platform);
+    platformIcon.setAttribute('title', tooltipLabel);
+    platformIcon.setAttribute('aria-label', tooltipLabel);
     platformIcon.addEventListener('click', (event) => {
       event.stopPropagation();
       if (externalUrl) {
@@ -226,16 +238,41 @@ export class CompactPostCardRenderer extends Component {
     });
     const iconWrapper = platformIcon.createDiv();
     iconWrapper.addClass('sa-icon-14');
-    const simpleIcon = getPlatformSimpleIcon(post.platform);
-    if (simpleIcon) {
-      const svg = createSVGElement(simpleIcon, {
-        fill: 'var(--text-accent)',
-        width: '100%',
-        height: '100%'
-      });
-      iconWrapper.appendChild(svg);
+
+    if (publisherEntry) {
+      if (publisherEntry.icon.type === 'svg') {
+        const svg = createSVGElement(
+          publisherEntry.icon.data,
+          {
+            fill: 'var(--text-accent)',
+            width: '100%',
+            height: '100%',
+          },
+          publisherEntry.icon.viewBox
+        );
+        iconWrapper.appendChild(svg);
+      } else {
+        const img = iconWrapper.createEl('img', {
+          attr: {
+            src: publisherEntry.icon.url,
+            alt: publisherEntry.name,
+            loading: 'lazy',
+          },
+        });
+        img.classList.add('publisher-icon-img');
+      }
     } else {
-      setIcon(iconWrapper, 'external-link');
+      const simpleIcon = getPlatformSimpleIcon(post.platform);
+      if (simpleIcon) {
+        const svg = createSVGElement(simpleIcon, {
+          fill: 'var(--text-accent)',
+          width: '100%',
+          height: '100%'
+        });
+        iconWrapper.appendChild(svg);
+      } else {
+        setIcon(iconWrapper, 'external-link');
+      }
     }
     // Hover effects handled by CSS .cpcr-platform-icon--linkable:hover
 

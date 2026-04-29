@@ -16,6 +16,11 @@
  */
 
 import {
+  getPublisherFromUrl,
+  getPublisherBySlug,
+  type PublisherEntry,
+} from '@/constants/publisher-lookup';
+import {
   siFacebook,
   siInstagram,
   siLinkedin,
@@ -349,4 +354,48 @@ export function getPlatformColor(
 ): string | undefined {
   const icon = getPlatformSimpleIcon(platform, authorUrl);
   return icon?.hex;
+}
+
+// ============================================================================
+// Publisher (web archive) Icon Lookup
+// ============================================================================
+
+export type { PublisherEntry };
+
+/**
+ * Resolve a publisher for a web archive: prefer the persisted slug, fall back
+ * to URL-based lookup. Returns `null` when no publisher matches either.
+ *
+ * Renderers should call this only when `post.platform === 'web'`. The returned
+ * entry exposes both the icon variant (svg/image) and the human-readable
+ * display name, which surfaces use for the visible label / aria-label /
+ * tooltip on publisher matches.
+ *
+ * @param publisherSlug - Slug persisted in frontmatter (`publisher` field).
+ *   When present and matched, wins over the URL fallback.
+ * @param fallbackUrl - Optional URL fallback used when the slug is missing
+ *   or does not match the registry (e.g. legacy archives).
+ * @returns Resolved {@link PublisherEntry}, or `null` when no match.
+ *
+ * @example
+ * const entry = getPublisherIconEntry(post.publisher?.slug, post.url);
+ * if (entry) {
+ *   if (entry.icon.type === 'svg') {
+ *     const svg = createSVGElement(entry.icon.data, styles, entry.icon.viewBox);
+ *     parent.appendChild(svg);
+ *   } else {
+ *     // image variant — favicon CDN URL
+ *   }
+ * }
+ */
+export function getPublisherIconEntry(
+  publisherSlug: string | undefined,
+  fallbackUrl?: string
+): PublisherEntry | null {
+  if (publisherSlug) {
+    const bySlug = getPublisherBySlug(publisherSlug);
+    if (bySlug) return bySlug;
+  }
+  if (fallbackUrl) return getPublisherFromUrl(fallbackUrl);
+  return null;
 }

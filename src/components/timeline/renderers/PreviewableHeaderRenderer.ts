@@ -54,6 +54,7 @@ import {
 import {
   getPlatformSimpleIcon,
   getPlatformLucideIcon,
+  getPublisherIconEntry,
 } from '@/services/IconService';
 import { createSVGElement } from '@/utils/dom-helpers';
 import type { PreviewContext } from './PreviewableContext';
@@ -266,27 +267,65 @@ export class PreviewableHeaderRenderer {
     if (hasLink) {
       linkContainer.classList.add('pcr-platform-link-clickable');
     }
-    linkContainer.setAttribute('title', hasLink ? `Open on ${post.platform}` : post.platform);
+
+    // Publisher attribution (web archives only): prefer persisted slug, fall
+    // back to URL-based lookup. When matched, the rendered icon and tooltip
+    // reflect the publisher rather than the generic web platform.
+    const publisherEntry = post.platform === 'web'
+      ? getPublisherIconEntry(post.publisher?.slug, post.url)
+      : null;
+
+    const tooltipLabel = publisherEntry
+      ? (hasLink ? `Open on ${publisherEntry.name}` : publisherEntry.name)
+      : (hasLink ? `Open on ${post.platform}` : post.platform);
+    linkContainer.setAttribute('title', tooltipLabel);
+    linkContainer.setAttribute('aria-label', tooltipLabel);
 
     const iconWrapper = this.makeDiv(linkContainer, 'pcr-platform-icon-wrapper');
 
-    const icon = getPlatformSimpleIcon(post.platform, post.author?.url);
-    if (icon) {
-      try {
-        const svg = createSVGElement(icon, {
-          fill: 'var(--text-accent)',
-          width: '100%',
-          height: '100%',
-        });
-        iconWrapper.appendChild(svg);
-      } catch {
-        // SVG creation failed in degraded environments; iconWrapper stays empty.
+    if (publisherEntry) {
+      if (publisherEntry.icon.type === 'svg') {
+        try {
+          const svg = createSVGElement(
+            publisherEntry.icon.data,
+            {
+              fill: 'var(--text-accent)',
+              width: '100%',
+              height: '100%',
+            },
+            publisherEntry.icon.viewBox
+          );
+          iconWrapper.appendChild(svg);
+        } catch {
+          // SVG creation failed in degraded environments; iconWrapper stays empty.
+        }
+      } else {
+        const img = document.createElement('img');
+        img.setAttribute('src', publisherEntry.icon.url);
+        img.setAttribute('alt', publisherEntry.name);
+        img.setAttribute('loading', 'lazy');
+        img.classList.add('publisher-icon-img');
+        iconWrapper.appendChild(img);
       }
     } else {
-      // Lucide fallback (e.g. LinkedIn).
-      const lucideIconName = getPlatformLucideIcon(post.platform);
-      const lucideWrapper = this.makeDiv(iconWrapper, 'pcr-lucide-fill');
-      this.safeSetIcon(lucideWrapper, lucideIconName);
+      const icon = getPlatformSimpleIcon(post.platform, post.author?.url);
+      if (icon) {
+        try {
+          const svg = createSVGElement(icon, {
+            fill: 'var(--text-accent)',
+            width: '100%',
+            height: '100%',
+          });
+          iconWrapper.appendChild(svg);
+        } catch {
+          // SVG creation failed in degraded environments; iconWrapper stays empty.
+        }
+      } else {
+        // Lucide fallback (e.g. LinkedIn).
+        const lucideIconName = getPlatformLucideIcon(post.platform);
+        const lucideWrapper = this.makeDiv(iconWrapper, 'pcr-lucide-fill');
+        this.safeSetIcon(lucideWrapper, lucideIconName);
+      }
     }
 
     const finalUrl = targetUrl || podcastFallbackUrl;

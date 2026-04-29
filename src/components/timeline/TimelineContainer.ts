@@ -1344,6 +1344,22 @@ export class TimelineContainer {
       }
     }
 
+    const isPlainInboxEmpty =
+      filterState.activeTab === 'inbox' &&
+      filterState.selectedTags.size === 0 &&
+      !filterState.searchQuery.trim() &&
+      !filterState.likedOnly &&
+      !filterState.commentedOnly &&
+      !filterState.sharedOnly &&
+      !filterState.subscribedOnly;
+    if (isPlainInboxEmpty) {
+      const archivedCount = this.posts.filter((post) => post.archive === true).length;
+      if (archivedCount > 0) {
+        this.renderInboxArchivedEmptyState(archivedCount);
+        return;
+      }
+    }
+
     const wrapper = this.containerEl.createDiv({
       cls: 'flex flex-col items-center justify-center min-h-[300px] text-center text-[var(--text-muted)] gap-3 max-w-2xl mx-auto timeline-feed'
     });
@@ -1389,6 +1405,53 @@ export class TimelineContainer {
         } else {
           await this.renderPosts();
         }
+      }
+    })());
+  }
+
+  /**
+   * Render empty state when the inbox has no visible posts because everything
+   * has been archived.
+   */
+  private renderInboxArchivedEmptyState(archivedCount: number): void {
+    const wrapper = this.containerEl.createDiv({
+      cls: 'flex flex-col items-center justify-center min-h-[300px] text-center text-[var(--text-muted)] gap-3 max-w-2xl mx-auto timeline-feed'
+    });
+
+    wrapper.createEl('p', {
+      text: '📦',
+      cls: 'text-4xl mb-2'
+    });
+
+    wrapper.createEl('h3', {
+      text: 'Inbox is empty',
+      cls: 'text-lg font-semibold text-[var(--text-normal)]'
+    });
+
+    wrapper.createEl('p', {
+      text: `${archivedCount} archived post${archivedCount === 1 ? ' is' : 's are'} hidden from Inbox.`
+    });
+
+    const buttonRow = wrapper.createDiv({
+      cls: 'flex items-center gap-3 mt-2'
+    });
+
+    const archiveBtn = buttonRow.createEl('button', {
+      text: 'View archive',
+      cls: 'px-4 py-2 rounded bg-[var(--interactive-accent)] text-[var(--text-on-accent)] hover:opacity-90 transition-colors cursor-pointer'
+    });
+
+    archiveBtn.addEventListener('click', () => void (async () => {
+      this.filterSortManager.updateFilter({ activeTab: 'archive' });
+      this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
+      this.persistFilterPreferences();
+      this.updateTabButtonState?.();
+      this.updateFilterButtonState?.();
+
+      if (this.viewMode === 'gallery') {
+        await this.renderGalleryContent();
+      } else {
+        await this.renderPostsFeed();
       }
     })());
   }
@@ -4676,6 +4739,7 @@ export class TimelineContainer {
     this.bulkSelectionContainer = this.containerEl.createDiv({
       cls: 'max-w-2xl mx-auto tc-selection-row-host',
     });
+    this.exitBulkSelectionIfResultsEmpty();
     this.renderBulkSelectionControls(hasTagChipBar);
 
     // Render banners below header (search/filter/archive buttons)
@@ -4704,6 +4768,21 @@ export class TimelineContainer {
   private async renderPostsFeed(): Promise<void> {
     // Don't render posts if in subscription view
     if (this.isSubscriptionViewActive) {
+      return;
+    }
+
+    if (this.filteredPosts.length === 0) {
+      this.exitBulkSelectionIfResultsEmpty();
+      if (this.bulkSelectionContainer?.isConnected) {
+        const hasTagChipBar = this.containerEl.querySelector('.tag-chip-bar') !== null;
+        this.renderBulkSelectionControls(hasTagChipBar);
+      }
+
+      if (this.posts.length === 0) {
+        this.renderEmpty();
+      } else {
+        this.renderFilteredEmptyState();
+      }
       return;
     }
 
@@ -5816,6 +5895,13 @@ export class TimelineContainer {
 
   private renderBulkSelectionFeed(): void {
     this.syncBulkSelectionState();
+    const listPosts = this.getBulkSelectionListPosts();
+    if (listPosts.length === 0) {
+      this.exitBulkSelectionIfResultsEmpty();
+      this.renderFilteredEmptyState();
+      return;
+    }
+
     const isMobile = ObsidianPlatform.isMobile;
 
     this.removeAllTimelineFeeds();
@@ -5827,7 +5913,7 @@ export class TimelineContainer {
       cls: 'flex flex-col gap-2 max-w-2xl mx-auto timeline-feed tc-selection-feed',
     });
 
-    for (const post of this.getBulkSelectionListPosts()) {
+    for (const post of listPosts) {
       const isArchived = post.archive === true;
       const isSelected = this.selectedPostPaths.has(post.filePath);
 
@@ -5926,14 +6012,24 @@ export class TimelineContainer {
     }
 
     const hasTagChipBar = this.containerEl.querySelector('.tag-chip-bar') !== null;
-    this.renderBulkSelectionControls(hasTagChipBar);
 
     if (this.filteredPosts.length === 0) {
+      this.exitBulkSelectionIfResultsEmpty();
+      this.renderBulkSelectionControls(hasTagChipBar);
       this.renderFilteredEmptyState();
       return;
     }
 
+    this.renderBulkSelectionControls(hasTagChipBar);
     await this.renderPostsFeed();
+  }
+
+  private exitBulkSelectionIfResultsEmpty(): void {
+    if (this.filteredPosts.length > 0 || !this.selectionMode) return;
+    this.selectionMode = false;
+    this.selectedPostPaths.clear();
+    this.bulkProgress = null;
+    this.bulkProgressContainer = null;
   }
 
   private async setSelectedPostsStarred(targetState: boolean): Promise<void> {

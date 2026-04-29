@@ -238,6 +238,15 @@ export class FrontmatterGenerator {
     // X article (long-form post) marker — enables rich blog-style rendering in timeline
     if (postData.platform === 'x' && postData.content.html) frontmatter.isArticle = true;
 
+    // Recognized web publisher attribution. Only emitted when the worker
+    // resolved a known publisher from `originalUrl` (see
+    // `shared/icons/publisher-lookup.ts`). Unrecognized sites get neither
+    // key, preserving the existing generic `siWeb` fallback for renderers.
+    if (postData.publisher?.slug) {
+      frontmatter.publisher = postData.publisher.slug;
+      frontmatter.publisherName = postData.publisher.name;
+    }
+
     // Reddit community/subreddit info
     if (postData.content.community) {
       frontmatter.community = postData.content.community.name;

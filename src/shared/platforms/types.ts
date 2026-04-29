@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/types.ts
- * Generated: 2026-04-23T11:12:16.058Z
+ * Generated: 2026-04-29T23:49:46.290Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -259,6 +259,15 @@ export const MOBILE_PLATFORMS = [
   'tiktok',
   'bluesky',
   'mastodon',
+  // Added 2026-04-26: previously missing readable platforms (PRD: prd-naver-news-defuddle-and-mobile-platforms.md)
+  'naver',
+  'brunch',
+  'blog',
+  'medium',
+  'substack',
+  'velog',
+  'pinterest',
+  'tumblr',
   'web',
   'post',
 ] as const;
@@ -279,6 +288,14 @@ export const MOBILE_PLATFORM_INFO: Record<MobilePlatform, { name: string; placeh
   tiktok: { name: 'TikTok', placeholder: 'TikTok video' },
   bluesky: { name: 'Bluesky', placeholder: 'Bluesky post' },
   mastodon: { name: 'Mastodon', placeholder: 'Mastodon post' },
+  naver: { name: 'Naver', placeholder: 'Naver blog, news, or cafe URL' },
+  brunch: { name: 'Brunch', placeholder: 'Brunch story URL' },
+  blog: { name: 'Blog', placeholder: 'RSS-discoverable blog URL' },
+  medium: { name: 'Medium', placeholder: 'Medium article URL' },
+  substack: { name: 'Substack', placeholder: 'Substack post or newsletter URL' },
+  velog: { name: 'Velog', placeholder: 'Velog post URL' },
+  pinterest: { name: 'Pinterest', placeholder: 'Pinterest pin URL' },
+  tumblr: { name: 'Tumblr', placeholder: 'Tumblr post URL' },
   web: { name: 'Web Article', placeholder: 'Web page or article URL' },
   post: { name: 'My Post', placeholder: 'Your composed post' },
 };

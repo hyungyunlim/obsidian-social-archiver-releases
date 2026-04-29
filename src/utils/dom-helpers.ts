@@ -13,6 +13,9 @@ import type { PlatformIcon } from '@/services/IconService';
  *
  * @param icon - Platform icon data
  * @param styles - Optional CSS styles object
+ * @param viewBox - Optional viewBox override (defaults to "0 0 24 24"). Used by
+ *   publisher icons whose source SVG was authored in a different coordinate
+ *   space (e.g. BBC's "0 0 512 256").
  * @returns SVGSVGElement
  *
  * @example
@@ -21,11 +24,12 @@ import type { PlatformIcon } from '@/services/IconService';
  */
 export function createSVGElement(
   icon: PlatformIcon,
-  styles?: Partial<CSSStyleDeclaration>
+  styles?: Partial<CSSStyleDeclaration>,
+  viewBox?: string
 ): SVGSVGElement {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('role', 'img');
-  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('viewBox', viewBox ?? '0 0 24 24');
   svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
 
   // Apply styles

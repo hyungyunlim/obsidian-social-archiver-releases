@@ -12,6 +12,7 @@ import type { ArchiveOptions, ArchiveResult, ArchiveProgress } from '@/types/arc
 import type { SocialArchiverSettings } from '@/types/settings';
 import type { TFile } from 'obsidian';
 import { uniqueStrings } from '@/utils/array';
+import { isPaywallRequiredError } from '@/utils/billingError';
 import { normalizeUrlForDedup } from '@/utils/url';
 import { ProfileDataMapper } from './mappers/ProfileDataMapper';
 
@@ -173,6 +174,10 @@ class RetryHelper {
    * Check if error is retryable
    */
   private static isRetryable(error: Error): boolean {
+    if (isPaywallRequiredError(error)) {
+      return false;
+    }
+
     const retryableErrors = [
       'ECONNRESET',
       'ETIMEDOUT',

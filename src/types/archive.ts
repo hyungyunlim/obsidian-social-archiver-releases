@@ -91,6 +91,18 @@ export interface YamlFrontmatter {
   transcriptionLanguage?: string;    // Original transcript language ISO code
   transcriptLanguages?: string[];    // All available transcript language ISO codes (e.g., ['en', 'ko', 'ja'])
   isArticle?: boolean;               // X article (long-form) post marker
+  /**
+   * Recognized publisher attribution (web archives only).
+   * Slug from `shared/icons/publisher-lookup.ts`. Emitted only when the
+   * worker resolves a known publisher from `originalUrl`.
+   */
+  publisher?: string;
+  /**
+   * Display name paired with `publisher`. Emitted alongside the slug for
+   * surfaces that prefer to render the publisher name without re-resolving
+   * the registry.
+   */
+  publisherName?: string;
   // Mobile Annotation Sync fields
   /** Stable server archive ID used as primary lookup key for annotation sync */
   sourceArchiveId?: string;

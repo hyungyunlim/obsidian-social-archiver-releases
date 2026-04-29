@@ -107,6 +107,7 @@ function makeDeps(overrides: Partial<RealtimeEventBridgeDeps> = {}): RealtimeEve
     saveSubscriptionPost: vi.fn().mockResolvedValue(false),
     syncSubscriptionPosts: vi.fn().mockResolvedValue(undefined),
     createProfileNote: vi.fn().mockResolvedValue(undefined),
+    refreshBillingUsage: vi.fn().mockResolvedValue(true),
     refreshTimelineView: vi.fn(),
     processPendingSyncQueue: vi.fn().mockResolvedValue(undefined),
     processSyncQueueItem: vi.fn().mockResolvedValue(false),
@@ -132,6 +133,26 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('refreshes billing usage when billing status update arrives over WebSocket', async () => {
+    const events = makeEvents() as any;
+    const refreshBillingUsage = vi.fn().mockResolvedValue(true);
+    const deps = makeDeps({ events, refreshBillingUsage });
+    const bridge = new RealtimeEventBridge(deps);
+    bridge.setup();
+
+    await events.trigger('ws:billing_status_updated', {
+      type: 'billing_status_updated',
+      data: {
+        reason: 'revenuecat_webhook',
+        eventType: 'INITIAL_PURCHASE',
+        updatedAt: '2026-04-29T00:00:00.000Z',
+        timestamp: Date.UTC(2026, 3, 29),
+      },
+    });
+
+    expect(refreshBillingUsage).toHaveBeenCalledOnce();
   });
 
   // --------------------------------------------------------------------------

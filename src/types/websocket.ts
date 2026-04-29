@@ -218,6 +218,26 @@ export interface MediaPreservedEvent {
 }
 
 // ============================================================================
+// Billing Status Updated Event (private channel)
+// ============================================================================
+
+/**
+ * Sent when server-side billing status changes.
+ * The plugin should refresh `/api/user/usage`; server remains source-of-truth.
+ */
+export interface BillingStatusUpdatedEventData {
+  updatedAt: string;
+  timestamp: number;
+  reason: 'revenuecat_webhook';
+  eventType?: string;
+}
+
+export interface BillingStatusUpdatedEvent {
+  type: 'billing_status_updated';
+  data: BillingStatusUpdatedEventData;
+}
+
+// ============================================================================
 // Ping/Pong Events
 // ============================================================================
 
@@ -243,6 +263,7 @@ export type WebSocketEvent =
   | ArchiveTagsUpdatedEvent
   | AuthorProfileUpdatedEvent
   | MediaPreservedEvent
+  | BillingStatusUpdatedEvent
   | PongEvent;
 
 // ============================================================================

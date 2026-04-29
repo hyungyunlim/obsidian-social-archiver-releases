@@ -21,6 +21,7 @@ import { normalizeAuthorName, normalizeAuthorUrl } from '../../services/AuthorDe
 import { MediaPathResolver, type VideoDownloadFailure } from '../media/MediaPathResolver';
 import { ensureFolderExists } from '../utils/ensureFolderExists';
 import type { CompletedJobResponse } from '../realtime/RealtimeEventBridge';
+import { formatPaywallRequiredMessage, isPaywallRequiredError } from '../../utils/billingError';
 
 // Re-export for convenience
 export type { CompletedJobResponse };
@@ -151,6 +152,24 @@ export class ArchiveCompletionService {
 
       const MAX_RETRIES = 3;
       const currentRetryCount = currentJob.retryCount || 0;
+
+      if (isPaywallRequiredError(errorMessage)) {
+        const displayMessage = formatPaywallRequiredMessage(errorMessage);
+        await this.pendingJobsManager.updateJob(currentJob.id, {
+          status: 'failed',
+          retryCount: currentRetryCount,
+          metadata: {
+            ...currentJob.metadata,
+            lastError: displayMessage,
+            failedAt: Date.now(),
+          },
+        });
+
+        this.archiveJobTracker.failJob(currentJob.id, displayMessage);
+        await this.pendingJobsManager.removeJob(currentJob.id);
+        new Notice(displayMessage, 10000);
+        return;
+      }
 
       if (currentRetryCount < MAX_RETRIES) {
         // Retry the job

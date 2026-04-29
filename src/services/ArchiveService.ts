@@ -290,6 +290,24 @@ export class ArchiveService implements IService {
       );
       wrappedError.name = 'ArchiveServiceError';
       wrappedError.cause = error;
+
+      const source = error as Error & {
+        code?: string;
+        status?: number;
+        details?: unknown;
+        apiError?: unknown;
+      };
+      const target = wrappedError as Error & {
+        code?: string;
+        status?: number;
+        details?: unknown;
+        apiError?: unknown;
+      };
+      target.code = source.code;
+      target.status = source.status;
+      target.details = source.details;
+      target.apiError = source.apiError;
+
       return wrappedError;
     }
 

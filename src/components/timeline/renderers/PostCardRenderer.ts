@@ -5,6 +5,7 @@ import * as L from 'leaflet';
 import {
   getPlatformSimpleIcon,
   getPlatformLucideIcon,
+  getPublisherIconEntry,
 } from '../../../services/IconService';
 import { MediaGalleryRenderer } from './MediaGalleryRenderer';
 import { CommentRenderer } from './CommentRenderer';
@@ -1623,26 +1624,62 @@ export class PostCardRenderer extends Component {
     if (hasLink) {
       linkContainer.addClass('pcr-platform-link-clickable');
     }
-    linkContainer.setAttribute('title', hasLink ? `Open on ${post.platform}` : post.platform);
+
+    // Publisher attribution (web archives only): prefer persisted slug, fall
+    // back to URL-based lookup. When matched, the rendered icon and tooltip
+    // reflect the publisher rather than the generic web platform.
+    const publisherEntry = post.platform === 'web'
+      ? getPublisherIconEntry(post.publisher?.slug, post.url)
+      : null;
+
+    const tooltipLabel = publisherEntry
+      ? (hasLink ? `Open on ${publisherEntry.name}` : publisherEntry.name)
+      : (hasLink ? `Open on ${post.platform}` : post.platform);
+    linkContainer.setAttribute('title', tooltipLabel);
+    linkContainer.setAttribute('aria-label', tooltipLabel);
 
     const iconWrapper = linkContainer.createDiv();
     iconWrapper.addClass('pcr-platform-icon-wrapper');
 
-    const icon = getPlatformSimpleIcon(post.platform, post.author.url);
-    if (icon) {
-      // Use Simple Icon with Obsidian theme color
-      const svg = createSVGElement(icon, {
-        fill: 'var(--text-accent)',
-        width: '100%',
-        height: '100%'
-      });
-      iconWrapper.appendChild(svg);
+    if (publisherEntry) {
+      if (publisherEntry.icon.type === 'svg') {
+        const svg = createSVGElement(
+          publisherEntry.icon.data,
+          {
+            fill: 'var(--text-accent)',
+            width: '100%',
+            height: '100%',
+          },
+          publisherEntry.icon.viewBox
+        );
+        iconWrapper.appendChild(svg);
+      } else {
+        const img = iconWrapper.createEl('img', {
+          attr: {
+            src: publisherEntry.icon.url,
+            alt: publisherEntry.name,
+            loading: 'lazy',
+          },
+        });
+        img.classList.add('publisher-icon-img');
+      }
     } else {
-      // Use Lucide icon for platforms not in simple-icons (e.g., LinkedIn)
-      const lucideIconName = getPlatformLucideIcon(post.platform);
-      const lucideWrapper = iconWrapper.createDiv();
-      lucideWrapper.addClass('pcr-lucide-fill');
-      setIcon(lucideWrapper, lucideIconName);
+      const icon = getPlatformSimpleIcon(post.platform, post.author.url);
+      if (icon) {
+        // Use Simple Icon with Obsidian theme color
+        const svg = createSVGElement(icon, {
+          fill: 'var(--text-accent)',
+          width: '100%',
+          height: '100%'
+        });
+        iconWrapper.appendChild(svg);
+      } else {
+        // Use Lucide icon for platforms not in simple-icons (e.g., LinkedIn)
+        const lucideIconName = getPlatformLucideIcon(post.platform);
+        const lucideWrapper = iconWrapper.createDiv();
+        lucideWrapper.addClass('pcr-lucide-fill');
+        setIcon(lucideWrapper, lucideIconName);
+      }
     }
 
     const finalUrl = targetUrl || podcastFallbackUrl;

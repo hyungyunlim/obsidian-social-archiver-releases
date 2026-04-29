@@ -2,9 +2,16 @@
 import { Notice } from 'obsidian';
 import QRCode from 'qrcode';
 import type SocialArchiverPlugin from '../main';
-import type { SocialArchiverSettings, UserTier, PlatformTiming } from '../types/settings';
+import type { BillingUsageSummary, SocialArchiverSettings, UserTier, PlatformTiming } from '../types/settings';
 import { AuthService } from '../services/AuthService';
-import { completeAuthentication, showAuthSuccess, showAuthError, requestEmailChange, refreshUserEmail } from '../utils/auth';
+import {
+  completeAuthentication,
+  showAuthSuccess,
+  showAuthError,
+  requestEmailChange,
+  refreshUserBillingUsage,
+  refreshUserEmail,
+} from '../utils/auth';
 
 interface Props {
   plugin: SocialArchiverPlugin;
@@ -31,8 +38,8 @@ let crossDevicePollIntervalMs = $state(3000);
 let crossDeviceQrSvg = $state('');
 
 // Internal cross-device timer/poll handles (not reactive, managed manually)
-let _crossDeviceCountdownTimer: ReturnType<typeof setInterval> | null = null;
-let _crossDevicePollTimer: ReturnType<typeof setInterval> | null = null;
+let _crossDeviceCountdownTimer: number | null = null;
+let _crossDevicePollTimer: number | null = null;
 let _crossDeviceActive = false;
 
 function stopCrossDeviceTimers(): void {
@@ -187,14 +194,38 @@ $effect(() => {
 // Local reactive state
 let isAuthenticated = $state(plugin.settings.isVerified && plugin.settings.authToken !== '');
 let settings = $state(plugin.settings);
+let billingUsage = $state<BillingUsageSummary | undefined>(undefined);
+let isBillingUsageLoading = $state(false);
+let billingUsageError = $state('');
+
+$effect(() => {
+  const ref = plugin.events.on('settings-changed', () => {
+    settings = plugin.settings;
+    billingUsage = plugin.settings.billingUsage;
+  });
+
+  return () => {
+    plugin.events.offref(ref);
+  };
+});
 
 // Computed states
-let tierDisplay = $derived(getTierDisplay(settings.tier));
 let creditLimit = $derived(getCreditLimit(settings.tier));
 let normalizedCreditsUsed = $derived(getSafeNumber(settings.creditsUsed));
 let hasUnlimitedCredits = $derived(!Number.isFinite(creditLimit));
 let creditsRemaining = $derived(
   hasUnlimitedCredits ? Infinity : Math.max(0, creditLimit - normalizedCreditsUsed)
+);
+let archiveQuota = $derived(billingUsage?.archiveQuota ?? settings.billingUsage?.archiveQuota);
+let rawBillingPlan = $derived(billingUsage?.plan ?? settings.billingUsage?.plan ?? settings.tier);
+let billingPlanDisplay = $derived(formatBillingPlan(rawBillingPlan));
+let betaFreeSunsetLine = $derived(getBetaFreeSunsetLine(rawBillingPlan, billingUsage?.policy ?? settings.billingUsage?.policy));
+let archiveQuotaProgress = $derived(getArchiveQuotaProgress(archiveQuota));
+let archiveQuotaExhausted = $derived(
+  !!archiveQuota &&
+  archiveQuota.unlimited !== true &&
+  archiveQuota.limit !== -1 &&
+  archiveQuota.remaining <= 0
 );
 
 /**
@@ -210,12 +241,12 @@ function getSafeNumber(value: unknown): number {
  */
 function getTierDisplay(tier: UserTier): string {
   const tierNames: Record<UserTier, string> = {
-    'beta-free': 'Beta (Unlimited)',
-    'free': 'Free (Beta Unlimited)',
+    'beta-free': 'Beta Free',
+    'free': 'Free',
     'pro': 'Pro',
-    'admin': 'Admin (Unlimited)',
+    'admin': 'Admin',
   };
-  return tierNames[tier] || 'Beta (Unlimited)';
+  return tierNames[tier] || 'Free';
 }
 
 /**
@@ -224,11 +255,74 @@ function getTierDisplay(tier: UserTier): string {
 function getCreditLimit(tier: UserTier): number {
   const limits: Record<UserTier, number> = {
     'beta-free': Infinity,
-    'free': Infinity, // Beta phase: currently unlimited
+    'free': 10,
     'pro': 500,
     'admin': Infinity,
   };
   return limits[tier] ?? Infinity;
+}
+
+function formatBillingPlan(plan: string): string {
+  if (!plan) return 'Free';
+  if (plan === 'beta-free') return 'Beta Free';
+  if (plan === 'free') return 'Free';
+  if (plan === 'premium') return 'Premium';
+  if (plan === 'lifetime') return 'Lifetime';
+  if (plan === 'admin') return 'Admin';
+  return plan.charAt(0).toUpperCase() + plan.slice(1);
+}
+
+function formatDate(value?: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function getBetaFreeSunsetLine(plan: string, policy?: BillingUsageSummary['policy']): string {
+  if (plan !== 'beta-free') return '';
+
+  const sunsetDate = formatDate(policy?.betaFreeSunsetAt);
+  if (!sunsetDate) return '';
+
+  if (policy?.betaFreeSunsetActive) {
+    return 'Beta Free has ended. Free plan limits now apply.';
+  }
+
+  return `Beta Free ends ${sunsetDate}. Free plan limits apply after that.`;
+}
+
+function getArchiveQuotaProgress(quota: BillingUsageSummary['archiveQuota'] | undefined): number {
+  if (!quota || quota.limit <= 0 || quota.limit === -1 || quota.unlimited) return 0;
+  return Math.max(0, Math.min(100, (quota.used / quota.limit) * 100));
+}
+
+async function handleRefreshBillingUsage(showNotice = true): Promise<void> {
+  if (!isAuthenticated || !plugin.settings.authToken) return;
+
+  isBillingUsageLoading = true;
+  billingUsageError = '';
+  try {
+    const refreshed = await refreshUserBillingUsage(plugin);
+    if (!refreshed) {
+      billingUsageError = 'Unable to refresh archive usage.';
+      if (showNotice) new Notice('Unable to refresh archive usage');
+      return;
+    }
+
+    settings = plugin.settings;
+    billingUsage = plugin.settings.billingUsage;
+    if (showNotice) new Notice('Archive usage refreshed');
+  } catch {
+    billingUsageError = 'Unable to refresh archive usage.';
+    if (showNotice) new Notice('Unable to refresh archive usage');
+  } finally {
+    isBillingUsageLoading = false;
+  }
 }
 
 /**
@@ -499,6 +593,9 @@ function handleCancelEmailChange(): void {
 // Refresh canonical email from server when the component mounts (authenticated only)
 $effect(() => {
   if (isAuthenticated) {
+    billingUsage = plugin.settings.billingUsage;
+    void handleRefreshBillingUsage(false);
+
     refreshUserEmail(plugin).then((serverEmail) => {
       if (serverEmail && serverEmail !== settings.email) {
         // Update local reactive state to reflect the refreshed email
@@ -713,7 +810,7 @@ $effect(() => {
           </div>
         </div>
         <div class="user-tier-badge">
-          {tierDisplay}
+          {billingPlanDisplay}
         </div>
       </div>
 
@@ -757,7 +854,7 @@ $effect(() => {
           {#if hasUnlimitedCredits}
             <span class="credits-unlimited">Unlimited</span>
             {#if settings.tier === 'beta-free'}
-              <span class="credits-beta">Beta Period</span>
+              <span class="credits-beta">Beta Free</span>
             {:else if settings.tier === 'admin'}
               <span class="credits-beta">Admin</span>
             {/if}
@@ -768,6 +865,55 @@ $effect(() => {
             <span class="credits-remaining">({creditsRemaining} left)</span>
           {/if}
         </div>
+      </div>
+
+      <div class={`billing-usage-display${archiveQuotaExhausted ? ' quota-exhausted' : ''}`}>
+        <div class="billing-usage-header">
+          <div>
+            <div class="billing-usage-label">Archive quota</div>
+            <div class="billing-usage-plan">{billingPlanDisplay}</div>
+          </div>
+          <button
+            class="billing-refresh-button"
+            onclick={() => handleRefreshBillingUsage(true)}
+            disabled={isBillingUsageLoading}
+          >
+            {isBillingUsageLoading ? 'Refreshing...' : 'Refresh'}
+          </button>
+        </div>
+
+        {#if betaFreeSunsetLine}
+          <div class="billing-usage-reset beta-free-sunset">{betaFreeSunsetLine}</div>
+        {/if}
+
+        {#if archiveQuota}
+          {#if archiveQuota.unlimited || archiveQuota.limit === -1}
+            <div class="billing-usage-main">
+              <span class="billing-usage-value">No monthly limit</span>
+              <span class="billing-usage-muted">{archiveQuota.used} archived this month</span>
+            </div>
+          {:else}
+            <div class="billing-usage-main">
+              <span class="billing-usage-value">{archiveQuota.used}</span>
+              <span class="billing-usage-separator">/</span>
+              <span class="billing-usage-limit">{archiveQuota.limit}</span>
+              <span class="billing-usage-muted">({archiveQuota.remaining} left)</span>
+            </div>
+            <div class="billing-progress-track" aria-hidden="true">
+              <div class="billing-progress-bar" style={`width: ${archiveQuotaProgress}%`}></div>
+            </div>
+            {#if archiveQuota.resetAt}
+              <div class="billing-usage-reset">Monthly quota resets {formatDate(archiveQuota.resetAt)}</div>
+            {/if}
+            {#if archiveQuotaExhausted}
+              <div class="billing-usage-warning">Upgrade in the mobile app to archive more.</div>
+            {/if}
+          {/if}
+        {:else if billingUsageError}
+          <div class="billing-usage-error">{billingUsageError}</div>
+        {:else}
+          <div class="billing-usage-muted">Archive usage will appear after sync.</div>
+        {/if}
       </div>
 
       <!-- Platform Stats - Compact Grid -->
@@ -969,6 +1115,123 @@ $effect(() => {
   font-size: 12px;
   color: var(--text-muted);
   margin-left: 8px;
+}
+
+/* Billing Usage */
+.billing-usage-display {
+  padding: 14px 16px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.billing-usage-display.quota-exhausted {
+  border-color: var(--text-error);
+}
+
+.billing-usage-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.billing-usage-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.billing-usage-plan {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+.billing-refresh-button {
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.billing-refresh-button:hover:not(:disabled) {
+  color: var(--text-normal);
+  border-color: var(--text-muted);
+}
+
+.billing-refresh-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.billing-usage-main {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  margin-bottom: 8px;
+  color: var(--text-normal);
+}
+
+.billing-usage-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--interactive-accent);
+}
+
+.billing-usage-separator,
+.billing-usage-limit {
+  font-size: 14px;
+  color: var(--text-normal);
+}
+
+.billing-usage-muted,
+.billing-usage-reset,
+.billing-usage-error,
+.billing-usage-warning {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.billing-usage-muted,
+.billing-usage-reset {
+  color: var(--text-muted);
+}
+
+.beta-free-sunset {
+  margin-bottom: 8px;
+  color: var(--text-warning);
+}
+
+.billing-usage-error,
+.billing-usage-warning {
+  color: var(--text-error);
+}
+
+.billing-progress-track {
+  width: 100%;
+  height: 5px;
+  overflow: hidden;
+  background: var(--background-primary);
+  border-radius: 999px;
+  margin-bottom: 8px;
+}
+
+.billing-progress-bar {
+  height: 100%;
+  background: var(--interactive-accent);
+  border-radius: inherit;
+  transition: width 0.2s ease;
+}
+
+.quota-exhausted .billing-progress-bar {
+  background: var(--text-error);
 }
 
 /* Platform Stats - Minimal Grid */

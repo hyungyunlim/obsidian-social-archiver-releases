@@ -32,6 +32,7 @@ import type {
   ArchiveTagsUpdatedEventData,
   MediaPreservedEventData,
   AuthorProfileUpdatedEventData,
+  BillingStatusUpdatedEventData,
 } from '../../types/websocket';
 import type { IngestResult } from '../sync/RemoteArchiveIngestService';
 import { TimelineView, VIEW_TYPE_TIMELINE } from '../../views/TimelineView';
@@ -197,6 +198,7 @@ export interface RealtimeEventBridgeDeps {
   createProfileNote: (message: WsProfileMetadataMessage) => Promise<void>;
   applyAuthorProfileUpdate?: (profile: UserAuthorProfile) => Promise<void>;
   syncAuthorProfiles?: () => Promise<void>;
+  refreshBillingUsage?: () => Promise<boolean>;
   refreshTimelineView: () => void;
   processPendingSyncQueue: () => Promise<void>;
   processSyncQueueItem: (queueId: string, archiveId: string, clientId: string) => Promise<boolean>;
@@ -259,6 +261,7 @@ export class RealtimeEventBridge {
     this.setupAuthorProfileUpdatedListener();
     this.setupArchiveDeletedListener();
     this.setupMediaPreservedListener();
+    this.setupBillingStatusUpdatedListener();
   }
 
   // --------------------------------------------------------------------------
@@ -1145,6 +1148,37 @@ export class RealtimeEventBridge {
           console.error(
             '[Social Archiver] media_preserved handler failed for',
             archiveId,
+            error instanceof Error ? error.message : String(error),
+          );
+        }
+      }),
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // ws:billing_status_updated
+  // --------------------------------------------------------------------------
+
+  private setupBillingStatusUpdatedListener(): void {
+    this.eventRefs.push(
+      this.deps.events.on('ws:billing_status_updated', async (_message: unknown) => {
+        const msg = _message as { type: string; data: BillingStatusUpdatedEventData } | undefined;
+        if (!msg?.data) return;
+
+        console.debug('[Social Archiver] billing_status_updated received:', {
+          reason: msg.data.reason,
+          eventType: msg.data.eventType,
+          updatedAt: msg.data.updatedAt,
+        });
+
+        try {
+          const refreshed = await this.deps.refreshBillingUsage?.();
+          if (!refreshed) {
+            console.warn('[Social Archiver] Failed to refresh billing usage after billing_status_updated');
+          }
+        } catch (error) {
+          console.warn(
+            '[Social Archiver] Billing usage refresh after billing_status_updated failed:',
             error instanceof Error ? error.message : String(error),
           );
         }

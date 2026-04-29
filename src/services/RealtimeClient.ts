@@ -21,6 +21,7 @@ export type RealtimeMessageType =
   | 'archive_tags_updated' // From tag changes (mobile/web)
   | 'author_profile_updated' // From editable author profile changes
   | 'media_preserved' // From R2 media preservation
+  | 'billing_status_updated' // From RevenueCat/server billing status changes
   | 'pong'; // WebSocket pong response
 
 export interface RealtimeMessage {

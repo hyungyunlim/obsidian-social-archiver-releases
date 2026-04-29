@@ -19,6 +19,7 @@ import type { WorkersAPIClient } from '../../services/WorkersAPIClient';
 import type { Platform } from '../../types/post';
 import type { PendingJobArchiveOptions, ServerPendingJob } from '../../types/pending-job';
 import type { MediaDownloadMode, SocialArchiverSettings } from '../../types/settings';
+import { formatPaywallRequiredMessage, isPaywallRequiredError } from '../../utils/billingError';
 
 // ============================================================================
 // Constants
@@ -545,7 +546,10 @@ export class PendingJobOrchestrator {
 
         } catch (error) {
           console.error(`[Social Archiver] Failed to submit job ${job.id}:`, error);
-          await this.deps.processFailedJob(job, error instanceof Error ? error.message : 'Unknown error');
+          const errorMessage = isPaywallRequiredError(error)
+            ? formatPaywallRequiredMessage(error)
+            : error instanceof Error ? error.message : 'Unknown error';
+          await this.deps.processFailedJob(job, errorMessage);
         } finally {
           this.pendingJobSubmissionLocks.delete(dedupKey);
         }

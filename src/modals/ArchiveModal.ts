@@ -3745,7 +3745,7 @@ export class ArchiveModal extends Modal {
     mainMessage.addClass('am-unauth-main-message');
 
     const subMessage = messageContainer.createEl('p', {
-      text: 'Free during beta • no password needed • magic link authentication'
+      text: 'Free plan available • no password needed • magic link authentication'
     });
     subMessage.addClass('am-unauth-sub-message');
 

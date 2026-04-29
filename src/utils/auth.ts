@@ -44,13 +44,19 @@ export async function completeAuthentication(
   plugin.settings.isVerified = true;
 
   // Fetch initial credits/usage data
-  const creditsResult = await authService.getUserCredits(token);
+  const [creditsResult, usageResult] = await Promise.all([
+    authService.getUserCredits(token),
+    authService.getUserUsage(token),
+  ]);
   if (creditsResult.success && creditsResult.data) {
     plugin.settings.tier = creditsResult.data.tier;
     plugin.settings.creditsUsed = creditsResult.data.creditsUsed;
     plugin.settings.byPlatform = creditsResult.data.byPlatform;
     plugin.settings.byCountry = creditsResult.data.byCountry;
     plugin.settings.timingByPlatform = creditsResult.data.timingByPlatform;
+  }
+  if (usageResult.success && usageResult.data) {
+    plugin.settings.billingUsage = usageResult.data;
   }
 
   // Save settings
@@ -88,6 +94,7 @@ export async function clearAuthentication(plugin: SocialArchiverPlugin): Promise
   plugin.settings.byPlatform = {};
   plugin.settings.byCountry = {};
   plugin.settings.timingByPlatform = {};
+  plugin.settings.billingUsage = undefined;
 
   await plugin.saveSettings();
 }
@@ -114,7 +121,10 @@ export async function refreshUserCredits(plugin: SocialArchiverPlugin): Promise<
   }
 
   const authService = new AuthService(plugin.settings.workerUrl, plugin.manifest.version);
-  const creditsResult = await authService.getUserCredits(plugin.settings.authToken);
+  const [creditsResult, usageResult] = await Promise.all([
+    authService.getUserCredits(plugin.settings.authToken),
+    authService.getUserUsage(plugin.settings.authToken),
+  ]);
 
   if (!creditsResult.success || !creditsResult.data) {
     return false;
@@ -127,6 +137,31 @@ export async function refreshUserCredits(plugin: SocialArchiverPlugin): Promise<
     byPlatform: creditsResult.data.byPlatform,
     byCountry: creditsResult.data.byCountry,
     timingByPlatform: creditsResult.data.timingByPlatform,
+    ...(usageResult.success && usageResult.data ? { billingUsage: usageResult.data } : {}),
+  });
+
+  return true;
+}
+
+export async function refreshUserBillingUsage(
+  plugin: SocialArchiverPlugin,
+  options: { notify?: boolean } = {},
+): Promise<boolean> {
+  if (!isAuthenticated(plugin)) {
+    return false;
+  }
+
+  const authService = new AuthService(plugin.settings.workerUrl, plugin.manifest.version);
+  const usageResult = await authService.getUserUsage(plugin.settings.authToken);
+
+  if (!usageResult.success || !usageResult.data) {
+    return false;
+  }
+
+  await plugin.saveSettingsPartial({
+    billingUsage: usageResult.data,
+  }, {
+    notify: options.notify ?? false,
   });
 
   return true;

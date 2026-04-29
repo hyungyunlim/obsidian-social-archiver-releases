@@ -251,6 +251,23 @@
 }
 
 /* ========================================
+ * Publisher (web archive) icon — image variant
+ * ----------------------------------------
+ * Used by image-source publisher entries (Google favicon CDN). Sized to
+ * match the SVG-source icons rendered in `.pcr-platform-icon-wrapper` and
+ * the compact card platform badge (~14px square). `object-fit: contain`
+ * preserves brand favicon aspect ratios; `border-radius` softens hard
+ * favicon corners to match the round platform badge surfaces.
+ * ======================================== */
+.publisher-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 2px;
+  display: block;
+}
+
+/* ========================================
  * Cross-post indicator badge
  * ======================================== */
 

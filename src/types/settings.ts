@@ -88,6 +88,34 @@ export interface PlatformTiming {
   avgSuccessRate: number; // Average success rate (%)
 }
 
+export interface ArchiveQuotaSummary {
+  period: string;
+  used: number;
+  limit: number;
+  remaining: number;
+  resetAt: string;
+  unlimited?: boolean;
+}
+
+export interface BillingPolicySummary {
+  betaFreeSunsetAt?: string | null;
+  betaFreeSunsetActive?: boolean;
+}
+
+export interface BillingUsageSummary {
+  plan: string;
+  archiveQuota: ArchiveQuotaSummary;
+  billing?: {
+    entitlementActive?: boolean;
+    source?: string;
+    entitlementId?: string | null;
+    revenuecatCustomerId?: string | null;
+    currentPeriodEnd?: string | null;
+    willRenew?: boolean | null;
+  };
+  policy?: BillingPolicySummary;
+}
+
 // Whisper model types
 export type WhisperModelType = 'tiny' | 'base' | 'small' | 'medium' | 'large';
 
@@ -502,6 +530,7 @@ export interface SocialArchiverSettings {
   byPlatform: Record<string, number>; // Archive count per platform (sourced from D1 user_archives)
   byCountry: Record<string, number>; // Credits by country
   timingByPlatform: Record<string, PlatformTiming>; // Performance metrics by platform
+  billingUsage?: BillingUsageSummary; // Archive quota and billing status from /api/user/usage
   lastUsed: string; // Last archive timestamp
 
   // Timeline View Settings
@@ -663,6 +692,7 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
   byPlatform: {},
   byCountry: {},
   timingByPlatform: {},
+  billingUsage: undefined,
   lastUsed: new Date().toISOString(),
 
   // Timeline View Settings

@@ -3,6 +3,7 @@ import type SocialArchiverPlugin from '../main';
 // Use original TypeScript version of TimelineContainer (fully functional)
 import { TimelineContainer } from '../components/timeline/TimelineContainer';
 import type { ArchiveLibrarySyncRuntimeState, ArchiveLibrarySyncPhase } from '../plugin/sync/ArchiveLibrarySyncService';
+import type { SocialArchiverSettings } from '../types/settings';
 
 /**
  * Unique identifier for the Timeline View
@@ -212,6 +213,18 @@ export class TimelineView extends ItemView {
    */
   private scheduleFinalLibrarySyncRefresh(): void {
     this.debouncedRefresh();
+  }
+
+  /**
+   * Ignore settings writes that only update account metadata unrelated to
+   * timeline rendering. The event still reaches settings UI subscribers.
+   */
+  private shouldRefreshForSettingsChange(changedKeys?: Array<keyof SocialArchiverSettings>): boolean {
+    if (!changedKeys || changedKeys.length === 0) {
+      return true;
+    }
+
+    return changedKeys.some((key) => key !== 'billingUsage');
   }
 
   /**
@@ -488,9 +501,20 @@ export class TimelineView extends ItemView {
     // Listen for settings change (archive path changed)
     // This doesn't need to be in onLayoutReady since it's not a vault event
     this.registerEvent(
-      this.plugin.events.on('settings-changed', () => {
-        this.debouncedRefresh();
-      })
+      this.plugin.events.on(
+        'settings-changed',
+        (...data: unknown[]) => {
+          const changedKeys = Array.isArray(data[1])
+            ? data[1] as Array<keyof SocialArchiverSettings>
+            : undefined;
+
+          if (!this.shouldRefreshForSettingsChange(changedKeys)) {
+            return;
+          }
+
+          this.debouncedRefresh();
+        }
+      )
     );
 
     return Promise.resolve();

@@ -377,6 +377,34 @@ export interface APIResponse<T> {
   };
 }
 
+export interface ArchiveQuotaSummary {
+  period: string;
+  used: number;
+  limit: number;
+  remaining: number;
+  resetAt: string;
+  unlimited?: boolean;
+}
+
+export interface BillingPolicySummary {
+  betaFreeSunsetAt?: string | null;
+  betaFreeSunsetActive?: boolean;
+}
+
+export interface BillingUsageResponse {
+  plan: string;
+  archiveQuota: ArchiveQuotaSummary;
+  billing?: {
+    entitlementActive?: boolean;
+    source?: string;
+    entitlementId?: string | null;
+    revenuecatCustomerId?: string | null;
+    currentPeriodEnd?: string | null;
+    willRenew?: boolean | null;
+  };
+  policy?: BillingPolicySummary;
+}
+
 export interface FeedDetectionData {
   platform: PlatformType;
   feedTitle?: string;
@@ -608,6 +636,17 @@ export class WorkersAPIClient implements IService {
     });
 
     return response;
+  }
+
+  /**
+   * Get current user's billing usage and archive quota summary.
+   */
+  async getUserUsage(): Promise<BillingUsageResponse> {
+    this.ensureInitialized();
+
+    return await this.request<BillingUsageResponse>('/api/user/usage', {
+      method: 'GET',
+    });
   }
 
   /**
