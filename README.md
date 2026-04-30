@@ -18,8 +18,9 @@ Social media platforms are ephemeral. Posts disappear, accounts get deleted, pla
 
 **Why Social Archiver?**
 - 🏠 **Data Ownership**: Archived content stays in your vault - you own it forever
-- 📱 **Cross-Platform**: Works on desktop, Chrome browser, and mobile (iOS & Android)
+- 📱 **Cross-Platform**: Works across Obsidian, Chrome, web, iOS, and Android
 - ⚡ **Real-Time Processing**: Background job processing with live progress updates
+- 🔄 **Cross-Device Sync**: Keep archives and supported state changes aligned across clients
 - 🎨 **Timeline View**: Browse and search all your archives in a beautiful feed
 - 🌐 **Web Sharing**: Share archived posts to the web with public timelines
 - 🔒 **Privacy-First**: Local storage by default, optional cloud features
@@ -107,6 +108,16 @@ Share your archived posts to the web with your personal public timeline:
 - **Public Timeline**: Access all your shared posts at `/{username}`
 - **Real-Time Updates**: Timeline updates automatically as you share more posts
 
+### 🔄 Cross-Device Sync
+Use one Social Archiver account across the Obsidian plugin, mobile apps, Chrome extension, and web app:
+- **Archive Library Sync**: Import existing server archives into your Obsidian vault with **Sync Existing Archives**
+- **New Archive Sync**: Archives created from mobile, web, Chrome, or server jobs can appear in Obsidian and mobile
+- **State Sync**: Inbox/archive state, stars/likes, share state, tags, highlights, and notes sync where supported
+- **Delete Sync**: Optional bidirectional delete sync between the server and Obsidian vault
+- **Offline-Friendly**: Mobile queues changes and syncs when connectivity returns
+
+Obsidian must be open and connected when the plugin writes Markdown files into your vault. Social Archiver sync is separate from Obsidian Sync, iCloud Drive, Dropbox, and other vault sync tools.
+
 ### AI Comments (Desktop Only)
 Add AI-powered analysis to your archived posts using local CLI tools:
 - **Supported CLIs**: [Claude Code](https://claude.com/product/claude-code), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Codex](https://github.com/openai/codex)
@@ -141,6 +152,7 @@ Install the Social Archiver Chrome extension:
 - **Keyboard Shortcut**: `Ctrl+Shift+S` (`Cmd+Shift+S` on Mac) to archive the current page
 - **Right-Click Menu**: Archive any page from the context menu
 - **Web Clipping**: Select and save any web page content with the built-in editor
+- **Instagram Import**: Import selected Instagram saved-post collections from your logged-in browser session
 - **Same Account**: Use the same email/username as your Obsidian plugin or mobile app
 
 ### Mobile App
@@ -149,8 +161,20 @@ Install the Social Archiver mobile app:
 
 - **App Store (iOS)**: [Social Archiver](https://apps.apple.com/us/app/social-archiver/id6758323634)
 - **Google Play (Android)**: [Social Archiver](https://play.google.com/store/apps/details?id=com.socialarchiver.mobile)
-- **Share Extension**: Archive directly from social apps into Obsidian
-- **Same Account**: Use the same email/username as your desktop plugin
+- **Share Extension**: Archive directly from social apps and mobile browsers
+- **Offline Reading**: Browse, search, and read cached archives locally
+- **Auto Sync**: Sync archives and supported state changes with your Social Archiver account
+- **Same Account**: Use the same email as your desktop plugin, Chrome extension, and web app
+
+### Web App
+
+Use Social Archiver from the web:
+
+- **Website**: [social-archive.org](https://social-archive.org)
+- **Private Owner Views**: Browse All, Inbox, Archive, Starred, Shared, Notes, Tags, and Authors after signing in
+- **Archive from Web**: Paste supported URLs and submit archive jobs without opening Obsidian
+- **Organize**: Manage inbox/archive state, stars, tags, notes, highlights, deletes, and bulk actions
+- **Public Timeline**: Share selected posts at `https://social-archive.org/{username}`
 
 ### Community Plugins (Coming Soon)
 
@@ -229,6 +253,13 @@ Social Archiver uses server infrastructure to fetch content through web scraping
 - Search by content
 - Create your own posts with the + button
 
+### 4. Sync Across Clients
+
+- In the mobile app, Auto Sync is enabled by default
+- In Obsidian, open **Settings → Social Archiver → Sync** and click **Connect**
+- Click **Sync Existing Archives** to bring your server archive library into the vault
+- Enable Delete Sync if you want deletes to propagate between Obsidian and the server
+
 ## Example Output
 
 Archived posts look like this:
@@ -296,7 +327,7 @@ Here are my top 3 takeaways that completely changed how I work...
 
 ## Current Status
 
-**Free Beta (November 2025)**
+**Free Beta**
 - ✅ Completely free - no payment required
 - ✅ Unlimited archiving during beta period
 - ✅ Permanent web sharing (no expiration)
