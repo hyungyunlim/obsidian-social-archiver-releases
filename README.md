@@ -1,6 +1,6 @@
-# Social Archiver for Obsidian
+# Social Archiver
 
-Save what matters - Archive social media posts directly into your Obsidian vault as beautifully formatted Markdown notes.
+Save what matters - Archive social media posts, web pages, newsletters, podcasts, and other supported sources to your private Social Archiver library, with clients for web, mobile, Chrome, and Obsidian.
 
 [![release](https://img.shields.io/github/v/release/hyungyunlim/obsidian-social-archiver-releases)](https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases)
 [![license](https://img.shields.io/github/license/hyungyunlim/obsidian-social-archiver-releases)](LICENSE)
@@ -14,16 +14,16 @@ Save what matters - Archive social media posts directly into your Obsidian vault
 
 ## Overview
 
-Social media platforms are ephemeral. Posts disappear, accounts get deleted, platforms shut down. Social Archiver gives you **permanent, searchable archives** of social media content in your personal knowledge base.
+Social media platforms are ephemeral. Posts disappear, accounts get deleted, platforms shut down. Social Archiver gives you a **permanent, searchable archive library** for social media and web content.
 
 **Why Social Archiver?**
-- 🏠 **Data Ownership**: Archived content stays in your vault - you own it forever
+- 🏠 **Data Ownership**: Your archive library belongs to your account, with local copies in the clients you use
 - 📱 **Cross-Platform**: Works across Obsidian, Chrome, web, iOS, and Android
 - ⚡ **Real-Time Processing**: Background job processing with live progress updates
 - 🔄 **Cross-Device Sync**: Keep archives and supported state changes aligned across clients
 - 🎨 **Timeline View**: Browse and search all your archives in a beautiful feed
 - 🌐 **Web Sharing**: Share archived posts to the web with public timelines
-- 🔒 **Privacy-First**: Local storage by default, optional cloud features
+- 🔒 **Privacy-First**: You control what is stored locally, synced, or shared publicly
 
 ## Supported Platforms
 
@@ -60,8 +60,8 @@ YouTube, X (Twitter), Bluesky, Mastodon, Naver Blog, Naver Cafe, Brunch, Naver W
 ## Key Features
 
 ### 🗂 Archiving Process
-- **Instant Note Creation**: Note appears immediately in your vault with basic info
-- **Background Download**: Full content downloads in the background - you can close Obsidian or continue working
+- **Instant Archive Entry**: Archive appears quickly in your library; the Obsidian client can also write Markdown notes into your vault
+- **Background Download**: Full content downloads in the background - you can keep working in any client
 - **Live Progress Updates**: Real-time notifications as it downloads
 - **Automatic Retry**: If something fails, it automatically tries again (up to 3 times)
 - **Media Modes**: Choose what to save - text only, images only, or everything including videos
@@ -109,7 +109,7 @@ Share your archived posts to the web with your personal public timeline:
 - **Real-Time Updates**: Timeline updates automatically as you share more posts
 
 ### 🔄 Cross-Device Sync
-Use one Social Archiver account across the Obsidian plugin, mobile apps, Chrome extension, and web app:
+Use one Social Archiver account across the web app, mobile apps, Chrome extension, and Obsidian plugin:
 - **Archive Library Sync**: Import existing server archives into your Obsidian vault with **Sync Existing Archives**
 - **New Archive Sync**: Archives created from mobile, web, Chrome, or server jobs can appear in Obsidian and mobile
 - **State Sync**: Inbox/archive state, stars/likes, share state, tags, highlights, and notes sync where supported
@@ -153,7 +153,7 @@ Install the Social Archiver Chrome extension:
 - **Right-Click Menu**: Archive any page from the context menu
 - **Web Clipping**: Select and save any web page content with the built-in editor
 - **Instagram Import**: Import selected Instagram saved-post collections from your logged-in browser session
-- **Same Account**: Use the same email/username as your Obsidian plugin or mobile app
+- **Same Account**: Use the same email/username across web, mobile, Chrome, and Obsidian
 
 ### Mobile App
 
@@ -172,7 +172,7 @@ Use Social Archiver from the web:
 
 - **Website**: [social-archive.org](https://social-archive.org)
 - **Private Owner Views**: Browse All, Inbox, Archive, Starred, Shared, Notes, Tags, and Authors after signing in
-- **Archive from Web**: Paste supported URLs and submit archive jobs without opening Obsidian
+- **Archive from Web**: Paste supported URLs and submit archive jobs directly from a browser
 - **Organize**: Manage inbox/archive state, stars, tags, notes, highlights, deletes, and bulk actions
 - **Public Timeline**: Share selected posts at `https://social-archive.org/{username}`
 
@@ -309,13 +309,13 @@ Here are my top 3 takeaways that completely changed how I work...
 **What We Collect:**
 - Email address (authentication only)
 - Username (unique identifier)
+- Archived content you explicitly archive, sync, or share
 - Usage statistics (aggregated)
 
 **What We DON'T Collect:**
-- Archived content (stays in your vault)
 - Social media passwords
 - Browsing history
-- Vault contents
+- Local vault contents beyond files you explicitly archive, sync, or share
 
 **Security:**
 - Magic link authentication (no passwords stored)
