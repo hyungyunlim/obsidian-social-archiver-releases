@@ -94,11 +94,12 @@ export class CommentFormatter {
     const timestampPart = timestamp ? ` · ${timestamp}` : '';
     const likes = comment.likes ? ` · ${comment.likes} likes` : '';
 
+    const normalizedCommentContent = this.normalizeCommentContent(comment.content);
     const commentContent = platform === 'instagram'
-      ? this.textFormatter.linkifyInstagramMentions(comment.content, isReply)
+      ? this.textFormatter.linkifyInstagramMentions(normalizedCommentContent, isReply)
       : platform === 'x'
-      ? this.textFormatter.linkifyXMentions(comment.content)
-      : comment.content;
+      ? this.textFormatter.linkifyXMentions(normalizedCommentContent)
+      : normalizedCommentContent;
 
     const mediaBlock = this.formatCommentMedia(comment.media, indent);
     const mediaSection = mediaBlock ? `\n${mediaBlock}` : '';
@@ -146,6 +147,10 @@ export class CommentFormatter {
       return `[@${authorHandle}](https://x.com/${authorHandle})`;
     }
 
+    if (comment.author.name === '[deleted]') {
+      return '@[deleted]';
+    }
+
     return authorHandle ? `@${authorHandle}` : comment.author.name;
   }
 
@@ -178,5 +183,61 @@ export class CommentFormatter {
 
   private escapeMarkdown(text: string): string {
     return text.replace(/([\\`*_{}[\]()#+\-.!])/g, '\\$1');
+  }
+
+  private normalizeCommentContent(content: string): string {
+    const decoded = this.decodeHtmlEntities(content);
+    const withLinks = decoded.replace(
+      /<a\b[^>]*\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))[^>]*>([\s\S]*?)<\/a>/gi,
+      (_match, doubleQuotedHref, singleQuotedHref, bareHref, rawLabel) => {
+        const label = this.stripHtmlTags(rawLabel).trim();
+        if (!label) return '';
+
+        const href = this.normalizeCommentHref(doubleQuotedHref || singleQuotedHref || bareHref);
+        if (!href) return label;
+
+        return `[${this.escapeMarkdown(label)}](${href})`;
+      },
+    );
+
+    return withLinks.replace(/<[^>]*>/g, '');
+  }
+
+  private decodeHtmlEntities(text: string): string {
+    try {
+      let decoded = text.replace(/&#x([0-9A-Fa-f]+);/g, (_match, hex) =>
+        String.fromCodePoint(parseInt(hex, 16))
+      );
+      decoded = decoded.replace(/&#(\d+);/g, (_match, dec) =>
+        String.fromCodePoint(parseInt(dec, 10))
+      );
+      return decoded
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'");
+    } catch {
+      return text;
+    }
+  }
+
+  private stripHtmlTags(html: string): string {
+    return this.decodeHtmlEntities(html.replace(/<[^>]*>/g, ''));
+  }
+
+  private normalizeCommentHref(rawHref: string | undefined): string | undefined {
+    const raw = this.decodeHtmlEntities(rawHref || '').trim();
+    if (!raw || raw === '#') return undefined;
+    if (/^javascript:/i.test(raw)) return undefined;
+    if (raw.startsWith('//')) return `https:${raw}`;
+    if (/^\/(?:in|company|school|showcase)\//i.test(raw)) return `https://www.linkedin.com${raw}`;
+    if (/^(?:www\.)?(?:linkedin|instagram|threads|facebook|youtube|reddit)\.com\//i.test(raw)) {
+      return `https://${raw}`;
+    }
+    if (/^(?:x|twitter)\.com\//i.test(raw)) return `https://${raw}`;
+    if (/^bsky\.app\//i.test(raw)) return `https://${raw}`;
+    if (/^https?:\/\//i.test(raw)) return raw;
+    return undefined;
   }
 }

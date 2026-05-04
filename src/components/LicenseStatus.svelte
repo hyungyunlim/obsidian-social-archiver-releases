@@ -3,6 +3,17 @@
   import type { LicenseInfo, CreditBalance } from '../types/license';
   import type { UserPlan } from '../types/credit';
   import type { GracePeriodStatus } from '../services/licensing/GracePeriodManager';
+  import { DEFAULT_BILLING_CAMPAIGN } from '../shared/billing/campaign';
+
+  /**
+   * Billing launch campaign copy (PRD §8.4).
+   *
+   * Plugin is read-only on billing — Obsidian community policy forbids in-plugin
+   * checkout. These strings are secondary copy only; the actual purchase flow
+   * happens in the mobile app. See CLAUDE_MEMORIZE.md billingFallbacks.clientPaymentNotice.
+   */
+  const launchOfferCopy = `${DEFAULT_BILLING_CAMPAIGN.defaultLabel} is available now.`;
+  const lifetimeOfferLabel = DEFAULT_BILLING_CAMPAIGN.plans.lifetime.label;
 
   /**
    * Props
@@ -39,6 +50,7 @@
   const licenseType = $derived((license as any)?.licenseType || 'free_tier');
   const isCreditPack = $derived(licenseType === 'credit_pack');
   const isSubscription = $derived(licenseType === 'subscription');
+  const isLifetime = $derived(licenseType === 'lifetime');
   const creditsUsed = $derived(balance ? balance.used : 0);
   const creditsTotal = $derived(balance ? balance.total : 0);
   const creditsRemaining = $derived(balance ? balance.remaining : 0);
@@ -195,19 +207,25 @@
         <span class="plan-icon">{planBadge.icon}</span>
         <span class="plan-text">{planBadge.text}</span>
       </span>
+      {#if isLifetime && lifetimeOfferLabel}
+        <span class="lifetime-offer-label">{lifetimeOfferLabel}</span>
+      {/if}
       {#if license?.email}
         <span class="license-email">{license.email}</span>
       {/if}
     </div>
 
     {#if plan === 'free'}
-      <button
-        class="btn-upgrade"
-        onclick={handleUpgrade}
-        type="button"
-      >
-        Upgrade to Pro
-      </button>
+      <div class="upgrade-cta">
+        <button
+          class="btn-upgrade"
+          onclick={handleUpgrade}
+          type="button"
+        >
+          Upgrade to Pro
+        </button>
+        <span class="upgrade-secondary">{launchOfferCopy}</span>
+      </div>
     {/if}
   </div>
 
@@ -477,6 +495,29 @@
     color: var(--text-muted);
   }
 
+  .upgrade-cta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+
+  .upgrade-secondary {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.3;
+  }
+
+  .lifetime-offer-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    padding: 2px 8px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 10px;
+    background: var(--background-secondary);
+  }
+
   .btn-upgrade {
     padding: 8px 16px;
     background: var(--interactive-accent);
@@ -672,6 +713,15 @@
 
     .btn-upgrade {
       width: 100%;
+    }
+
+    .upgrade-cta {
+      align-items: stretch;
+      width: 100%;
+    }
+
+    .upgrade-secondary {
+      text-align: center;
     }
   }
 </style>

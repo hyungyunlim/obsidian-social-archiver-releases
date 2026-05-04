@@ -1,0 +1,333 @@
+/* ========================================
+ * NoticeBanner (nb-) — In-App Notice Channel
+ *
+ * Rendered above LibrarySyncBanner / CrawlStatusBanner in the timeline
+ * banner stack. Surfaces server-published notices (info / success /
+ * warning / error) with a single-line title-or-body row, an optional
+ * dismiss X, and a level-tinted background.
+ *
+ * Title-bearing notices open NoticeDetailModal on press (modal styles
+ * below, prefixed `.nb-modal-`). Title-less notices fire the CTA
+ * directly from the banner row.
+ *
+ * Conventions:
+ *   - Use Obsidian CSS variables for theme compatibility.
+ *   - Mirror banner rhythm of LibrarySyncBanner/CrawlStatusBanner
+ *     (max-w-2xl host, 10px/14px padding, font-ui-small).
+ *   - No hardcoded hex; all level tints come from --color-* vars.
+ * ======================================== */
+
+/* ----------------------------------------
+ * Banner row
+ * ---------------------------------------- */
+.nb-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  font-size: var(--font-ui-small);
+  position: relative;
+  cursor: default;
+}
+
+/* Tappable rows (title present, or titleless with CTA) get a pointer cursor. */
+.nb-banner.nb-banner-tappable {
+  cursor: pointer;
+}
+
+.nb-banner.nb-banner-tappable:hover {
+  background: var(--background-modifier-hover);
+}
+
+/* Level tints — accent the left border so content doesn't fight with
+ * Obsidian's existing banner palette. The background stays neutral so
+ * action chrome (icons, text) keeps its expected contrast. */
+.nb-banner.nb-level-info {
+  border-left: 3px solid var(--color-blue, var(--interactive-accent));
+}
+
+.nb-banner.nb-level-success {
+  border-left: 3px solid var(--color-green);
+}
+
+.nb-banner.nb-level-warning {
+  border-left: 3px solid var(--color-orange, var(--color-yellow));
+}
+
+.nb-banner.nb-level-error {
+  border-left: 3px solid var(--color-red);
+}
+
+/* Icon container — matches the lsb-/csb- pattern. */
+.nb-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  --icon-size: 16px;
+}
+
+.nb-banner.nb-level-info .nb-icon { color: var(--color-blue, var(--interactive-accent)); }
+.nb-banner.nb-level-success .nb-icon { color: var(--color-green); }
+.nb-banner.nb-level-warning .nb-icon { color: var(--color-orange, var(--color-yellow)); }
+.nb-banner.nb-level-error .nb-icon { color: var(--color-red); }
+
+/* Single-line text. We deliberately ellipsize so long bodies don't push
+ * the banner into multi-line territory — the detail modal is the
+ * canonical surface for full body text. */
+.nb-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Title-bearing rows render the title in semibold so the eye lands on it
+ * first. Titleless rows keep the default body weight. */
+.nb-text.nb-text-title {
+  font-weight: var(--font-semibold, 600);
+}
+
+/* Close (X) button — flush right, hidden when dismissPolicy === 'sticky'.
+ *
+ * Obsidian (and underlying themes) styles bare <button> elements with a
+ * background, border, and box-shadow. Selector specificity needs to beat
+ * those rules without resorting to !important, so we anchor on
+ * `.nb-banner button.nb-close` and explicitly null the chrome. */
+.nb-banner button.nb-close {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  margin-left: 4px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-radius: var(--radius-s);
+  --icon-size: 14px;
+}
+
+.nb-banner button.nb-close:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+  box-shadow: none;
+}
+
+.nb-banner button.nb-close:focus,
+.nb-banner button.nb-close:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
+/* ========================================
+ * NoticeDetailModal (.nb-modal-*)
+ * ======================================== */
+
+.nb-modal {
+  /* Tighten Obsidian's default modal padding so the eyebrow + title +
+   * body + actions read as a single information block, not four
+   * disconnected sections. */
+}
+
+/* Tone down Obsidian's built-in `.modal-close-button` (top-right ×) so
+ * themes that style it as a chrome button (border + shadow + filled
+ * background) don't fight the eyebrow chip beneath. We scope to
+ * `.nb-modal .modal-close-button` so other modals are unaffected. */
+.nb-modal .modal-close-button {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: var(--text-muted);
+}
+
+.nb-modal .modal-close-button:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+  border: none;
+  box-shadow: none;
+}
+
+.nb-modal .modal-close-button:focus,
+.nb-modal .modal-close-button:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
+.nb-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+/* Pill-shaped eyebrow: tinted background carrying the level icon and a
+ * concise label ("Notice", "Heads up", etc). */
+.nb-modal-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  --icon-size: 14px;
+}
+
+.nb-modal-eyebrow.nb-level-info {
+  background: var(--background-modifier-border);
+  color: var(--color-blue, var(--interactive-accent));
+}
+
+.nb-modal-eyebrow.nb-level-success {
+  background: var(--background-modifier-border);
+  color: var(--color-green);
+}
+
+.nb-modal-eyebrow.nb-level-warning {
+  background: var(--background-modifier-border);
+  color: var(--color-orange, var(--color-yellow));
+}
+
+.nb-modal-eyebrow.nb-level-error {
+  background: var(--background-modifier-border);
+  color: var(--color-red);
+}
+
+.nb-modal-eyebrow-label {
+  font-size: var(--font-ui-smaller, 11px);
+  font-weight: var(--font-semibold, 600);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.nb-modal-title {
+  font-size: var(--font-ui-larger, 19px);
+  font-weight: var(--font-bold, 700);
+  line-height: 1.35;
+  color: var(--text-normal);
+  margin: 0 0 10px 0;
+}
+
+/* Scrollable body region — keeps the modal bounded for very long copy. */
+.nb-modal-body {
+  max-height: 320px;
+  overflow-y: auto;
+  font-size: var(--font-ui-medium, 15px);
+  line-height: 1.6;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-bottom: 16px;
+}
+
+.nb-modal-divider {
+  height: 1px;
+  background: var(--background-modifier-border);
+  margin-bottom: 14px;
+}
+
+.nb-modal-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+}
+
+.nb-modal-button {
+  flex: 1;
+  height: 44px;
+  border-radius: var(--radius-s);
+  font-size: var(--font-ui-medium, 15px);
+  font-weight: var(--font-semibold, 600);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+}
+
+.nb-modal-button-primary {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+
+.nb-modal-button-primary:hover {
+  background: var(--interactive-accent-hover);
+  border-color: var(--interactive-accent-hover);
+}
+
+/* Ghost variant — used when the notice has no CTA. The top-right × is
+ * already a primary close affordance, so this redundant bottom button
+ * should not pretend to be a primary action. No border, no fill, just
+ * muted text with a subtle hover background for tap feedback. */
+.nb-modal-button-secondary {
+  background: transparent;
+  color: var(--text-muted);
+  border-color: transparent;
+  box-shadow: none;
+  font-weight: var(--font-medium, 500);
+}
+
+.nb-modal-button-secondary:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* ----------------------------------------
+ * Mobile compact rules — match the flat,
+ * borderless inline style applied to other
+ * timeline status banners on body.is-mobile.
+ * ---------------------------------------- */
+body.is-mobile .nb-banner {
+  margin-bottom: 4px;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+  border-left: 3px solid var(--background-modifier-border);
+  gap: 6px;
+}
+
+body.is-mobile .nb-banner.nb-level-info {
+  border-left-color: var(--color-blue, var(--interactive-accent));
+}
+
+body.is-mobile .nb-banner.nb-level-success {
+  border-left-color: var(--color-green);
+}
+
+body.is-mobile .nb-banner.nb-level-warning {
+  border-left-color: var(--color-orange, var(--color-yellow));
+}
+
+body.is-mobile .nb-banner.nb-level-error {
+  border-left-color: var(--color-red);
+}
+
+body.is-mobile .nb-banner .nb-icon {
+  --icon-size: 14px;
+}
+
+body.is-mobile .nb-banner .nb-text {
+  color: var(--text-muted);
+}
+
+body.is-mobile .nb-close {
+  min-width: 28px;
+  min-height: 28px;
+}

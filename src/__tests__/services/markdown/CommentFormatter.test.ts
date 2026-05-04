@@ -373,6 +373,40 @@ describe('CommentFormatter', () => {
       expect(result).toContain('    ↳ **[Carol Lee](https://linkedin.com/in/carol)**');
     });
 
+    it('linkedin platform: preserves mention links inside comment content as markdown links', () => {
+      const comments: Comment[] = [
+        {
+          id: '1',
+          author: { name: 'Commenter', url: 'https://linkedin.com/in/commenter' },
+          content: 'Thanks <a href="/in/main-author-123abc">Main Author</a> for the post',
+        },
+      ];
+
+      const result = formatter.formatComments(comments, 'linkedin');
+
+      expect(result).toContain(
+        'Thanks [Main Author](https://www.linkedin.com/in/main-author-123abc) for the post'
+      );
+      expect(result).not.toContain('<a href=');
+    });
+
+    it('linkedin platform: preserves encoded mention links inside comment content', () => {
+      const comments: Comment[] = [
+        {
+          id: '1',
+          author: { name: 'Commenter', url: 'https://linkedin.com/in/commenter' },
+          content:
+            'Thanks &lt;a href=&quot;www.linkedin.com/in/main-author&quot;&gt;Main Author&lt;/a&gt;',
+        },
+      ];
+
+      const result = formatter.formatComments(comments, 'linkedin');
+
+      expect(result).toContain(
+        'Thanks [Main Author](https://www.linkedin.com/in/main-author)'
+      );
+    });
+
     it('default platform branch: falls back to @handle or name at every depth', () => {
       const comments: Comment[] = [
         {

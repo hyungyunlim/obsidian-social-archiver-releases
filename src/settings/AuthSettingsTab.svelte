@@ -12,6 +12,13 @@ import {
   refreshUserBillingUsage,
   refreshUserEmail,
 } from '../utils/auth';
+import { DEFAULT_BILLING_CAMPAIGN } from '../shared/billing/campaign';
+
+/**
+ * Billing launch campaign copy (PRD §8.4).
+ * Plugin is read-only on billing — purchases happen in the mobile app.
+ */
+const lifetimeOfferLabel = DEFAULT_BILLING_CAMPAIGN.plans.lifetime.label;
 
 interface Props {
   plugin: SocialArchiverPlugin;
@@ -221,6 +228,7 @@ let rawBillingPlan = $derived(billingUsage?.plan ?? settings.billingUsage?.plan 
 let billingPlanDisplay = $derived(formatBillingPlan(rawBillingPlan));
 let betaFreeSunsetLine = $derived(getBetaFreeSunsetLine(rawBillingPlan, billingUsage?.policy ?? settings.billingUsage?.policy));
 let archiveQuotaProgress = $derived(getArchiveQuotaProgress(archiveQuota));
+let isLifetimePlan = $derived(rawBillingPlan === 'lifetime');
 let archiveQuotaExhausted = $derived(
   !!archiveQuota &&
   archiveQuota.unlimited !== true &&
@@ -809,8 +817,13 @@ $effect(() => {
             {/if}
           </div>
         </div>
-        <div class="user-tier-badge">
-          {billingPlanDisplay}
+        <div class="user-tier-info">
+          <div class="user-tier-badge">
+            {billingPlanDisplay}
+          </div>
+          {#if isLifetimePlan && lifetimeOfferLabel}
+            <div class="user-tier-offer">{lifetimeOfferLabel}</div>
+          {/if}
         </div>
       </div>
 
@@ -1054,6 +1067,14 @@ $effect(() => {
   color: var(--text-muted);
 }
 
+.user-tier-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 .user-tier-badge {
   padding: 4px 10px;
   background: var(--background-primary);
@@ -1062,6 +1083,14 @@ $effect(() => {
   font-size: 11px;
   font-weight: 500;
   color: var(--text-muted);
+}
+
+.user-tier-offer {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-faint);
+  line-height: 1.3;
+  text-align: right;
 }
 
 /* Credits Display */

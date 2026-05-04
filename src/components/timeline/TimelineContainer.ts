@@ -29,6 +29,9 @@ import { LibrarySyncBanner } from './LibrarySyncBanner';
 import { CrawlStatusBanner } from './CrawlStatusBanner';
 import { ArchiveProgressBanner } from './ArchiveProgressBanner';
 import { CrossPostStatusBanner } from './CrossPostStatusBanner';
+import { NoticeBanner } from './NoticeBanner';
+import { NoticeDetailModal } from '../../modals/NoticeDetailModal';
+import type { NoticePayloadV1 } from '../../types/notices';
 import { TagChipBar } from './filters/TagChipBar';
 import { ReaderModeOverlay, type ReaderModeContext } from './reader/ReaderModeOverlay';
 import { SeriesGroupingService, type TimelineItem, isSeriesGroup } from '../../services/SeriesGroupingService';
@@ -283,6 +286,9 @@ export class TimelineContainer {
   // Feed render generation token.
   // Prevents stale concurrent renders from appending duplicate timeline feeds.
   private feedRenderGeneration = 0;
+
+  // In-app notice banner (server-driven)
+  private noticeBanner: NoticeBanner | null = null;
 
   // Library sync banner component
   private librarySyncBanner: LibrarySyncBanner | null = null;
@@ -1801,6 +1807,50 @@ export class TimelineContainer {
         }
       }
     });
+  }
+
+  /**
+   * Render NoticeBanner component above all other status banners.
+   * Shows server-driven announcement notices (top-banner surface only).
+   *
+   * Early-returns when the plugin's NoticesService is not available
+   * (e.g. API endpoint unconfigured). The banner re-renders itself in
+   * response to NoticesService.onUpdate, so this method only owns the
+   * mount point + initial paint.
+   */
+  private renderNoticeBanner(): void {
+    this.destroyNoticeBanner();
+
+    const noticesService = this.plugin.noticesService;
+    const telemetry = this.plugin.noticeTelemetry;
+    if (!noticesService || !telemetry) {
+      return;
+    }
+
+    const bannerContainer = this.containerEl.createDiv({
+      cls: 'max-w-2xl mx-auto'
+    });
+
+    this.noticeBanner = new NoticeBanner(bannerContainer, {
+      noticesService,
+      telemetry,
+      onOpenDetail: (notice: NoticePayloadV1) => {
+        new NoticeDetailModal(this.app, notice, {
+          telemetry,
+          noticesService,
+        }).open();
+      },
+    });
+
+    // Initial paint — onUpdate listener handles subsequent renders.
+    this.noticeBanner.render();
+  }
+
+  private destroyNoticeBanner(): void {
+    if (this.noticeBanner) {
+      this.noticeBanner.destroy();
+      this.noticeBanner = null;
+    }
   }
 
   /**
@@ -4577,6 +4627,7 @@ export class TimelineContainer {
             this.renderPostComposer();
             this.renderHeader();
             this.renderTagChipBar();
+            this.renderNoticeBanner();
             this.renderLibrarySyncBanner();
             this.renderCrawlStatusBanner();
             this.renderArchiveProgressBanner();
@@ -4639,6 +4690,7 @@ export class TimelineContainer {
     this.renderHeader();
 
     // Render banners below header (search/filter/archive buttons)
+    this.renderNoticeBanner();
     this.renderLibrarySyncBanner();
     this.renderCrawlStatusBanner();
     this.renderArchiveProgressBanner();
@@ -4743,6 +4795,7 @@ export class TimelineContainer {
     this.renderBulkSelectionControls(hasTagChipBar);
 
     // Render banners below header (search/filter/archive buttons)
+    this.renderNoticeBanner();
     this.renderLibrarySyncBanner();
     this.renderCrawlStatusBanner();
     this.renderArchiveProgressBanner();
@@ -6946,6 +6999,9 @@ export class TimelineContainer {
       this.composerComponent = null;
     }
 
+    // Clean up NoticeBanner (in-app notice channel)
+    this.destroyNoticeBanner();
+
     // Clean up LibrarySyncBanner
     this.destroyLibrarySyncBanner();
 
@@ -7507,6 +7563,7 @@ export class TimelineContainer {
     this.renderTagChipBar();
 
     // Render banners below header (search/filter/archive buttons)
+    this.renderNoticeBanner();
     this.renderLibrarySyncBanner();
     this.renderCrawlStatusBanner();
     this.renderArchiveProgressBanner();

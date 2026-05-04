@@ -22,6 +22,7 @@ import { MediaPathResolver, type VideoDownloadFailure } from '../media/MediaPath
 import { ensureFolderExists } from '../utils/ensureFolderExists';
 import type { CompletedJobResponse } from '../realtime/RealtimeEventBridge';
 import { formatPaywallRequiredMessage, isPaywallRequiredError } from '../../utils/billingError';
+import { formatRateLimitMessage, isRateLimitError } from '../../utils/rateLimitError';
 
 // Re-export for convenience
 export type { CompletedJobResponse };
@@ -152,6 +153,30 @@ export class ArchiveCompletionService {
 
       const MAX_RETRIES = 3;
       const currentRetryCount = currentJob.retryCount || 0;
+
+      // Tier-Aware Rate Limits PRD § 13.2 — handle 429 RATE_LIMIT_EXCEEDED
+      // distinctly from paywall. Surface a Notice with scope/tier-aware copy,
+      // and do NOT enter the synthetic-archive billing-notice fallback path
+      // (that flow is reserved for INSUFFICIENT_CREDITS / PAYWALL_REQUIRED).
+      // Rate-limit failures are not retried here — the user can retry manually
+      // after the suggested wait.
+      if (isRateLimitError(errorMessage)) {
+        const displayMessage = formatRateLimitMessage(errorMessage);
+        await this.pendingJobsManager.updateJob(currentJob.id, {
+          status: 'failed',
+          retryCount: currentRetryCount,
+          metadata: {
+            ...currentJob.metadata,
+            lastError: displayMessage,
+            failedAt: Date.now(),
+          },
+        });
+
+        this.archiveJobTracker.failJob(currentJob.id, displayMessage);
+        await this.pendingJobsManager.removeJob(currentJob.id);
+        new Notice(displayMessage, 8000);
+        return;
+      }
 
       if (isPaywallRequiredError(errorMessage)) {
         const displayMessage = formatPaywallRequiredMessage(errorMessage);

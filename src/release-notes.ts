@@ -24,6 +24,30 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '3.5.0': {
+    title: 'Beta Wrap-Up + In-App Notices',
+    date: '2026-05-04',
+    notes: `## Beta is wrapping up
+
+Thanks for being part of the Social Archiver beta. The free beta period is **wrapping up in the next few days**, and the plan structure will look like this:
+
+- Existing beta users will **automatically transition to the Free plan** — no action needed.
+- The **Free plan includes 10 archives per month**. Earn more by completing in-app missions on the mobile app's Rewards screen.
+- Subscriptions and the lifetime offer are available **only through the mobile app**, since Obsidian community plugin policy doesn't allow in-plugin payments. To upgrade or restore an existing purchase, sign in on the mobile app with the same email — it will recognize your account.
+`,
+    isImportant: true,
+    qrCode: {
+      // QR encodes the smart-landing URL `https://social-archive.org/get-mobile?from=plugin`.
+      // The landing page sniffs the User-Agent and 302-redirects iOS scans
+      // to the App Store, Android scans to the Play Store, and shows a
+      // store-buttons fallback page on desktop. One QR works for both
+      // platforms; no separate Play Store text link needed.
+      svgBase64:
+        'PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNyAzNyIgc2hhcGUtcmVuZGVyaW5nPSJjcmlzcEVkZ2VzIj48cGF0aCBmaWxsPSIjZmZmZmZmIiBkPSJNMCAwaDM3djM3SDB6Ii8+PHBhdGggc3Ryb2tlPSIjMDAwMDAwIiBkPSJNMiAyLjVoN20yIDBoMW0xIDBoMW0yIDBoMW0xIDBoMW0xIDBoM20yIDBoMW0yIDBoN00yIDMuNWgxbTUgMGgxbTQgMGgybTIgMGgybTEgMGgxbTIgMGgybTMgMGgxbTUgMGgxTTIgNC41aDFtMSAwaDNtMSAwaDFtMSAwaDNtMSAwaDFtMSAwaDNtMiAwaDNtMiAwaDFtMSAwaDFtMSAwaDNtMSAwaDFNMiA1LjVoMW0xIDBoM20xIDBoMW0xIDBoMW0zIDBoMW0yIDBoMW0yIDBoMW0zIDBoMW0xIDBoMW0xIDBoMW0xIDBoM20xIDBoMU0yIDYuNWgxbTEgMGgzbTEgMGgxbTEgMGgxbTMgMGgxbTEgMGgzbTMgMGgxbTEgMGgybTIgMGgxbTEgMGgzbTEgMGgxTTIgNy41aDFtNSAwaDFtMSAwaDFtMSAwaDFtMSAwaDFtMSAwaDFtNCAwaDFtMSAwaDJtMSAwaDFtMSAwaDFtNSAwaDFNMiA4LjVoN20xIDBoMW0xIDBoMW0xIDBoMW0xIDBoMW0xIDBoMW0xIDBoMW0xIDBoMW0xIDBoMW0xIDBoMW0xIDBoN00xMCA5LjVoMW0xIDBoM20zIDBoMW0yIDBoM20yIDBoMU0yIDEwLjVoMW0xIDBoNW0zIDBoMm0xIDBoMW0zIDBoNG0zIDBoMW0xIDBoNU0zIDExLjVoMW0yIDBoMm0zIDBoMW0zIDBoMW0yIDBoNm0xIDBoMW0yIDBoMm0xIDBoMm0xIDBoMU0yIDEyLjVoNG0xIDBoM20yIDBoMW0xIDBoNm0yIDBoM20yIDBoMW0yIDBoMW0xIDBoMk0yIDEzLjVoNm0yIDBoMW0yIDBoM20yIDBoM20yIDBoMm0xIDBoMW0xIDBoMW0xIDBoNU0yIDE0LjVoMm00IDBoMm0xIDBoMW0xIDBoMm0xIDBoM20yIDBoMm0xIDBoMm0xIDBoMW0xIDBoM20xIDBoMk0yIDE1LjVoMW00IDBoMW0xIDBoMm0xIDBoMm0xIDBoMW0xIDBoMW0xIDBoMm00IDBoMW0xIDBoMm0zIDBoM00yIDE2LjVoMm0xIDBoMW0yIDBoMW0xIDBoM200IDBoM20yIDBoM20yIDBoMm0xIDBoMW0yIDBoMU0yIDE3LjVoMW04IDBoMm0xIDBoMm0xIDBoMW0yIDBoMW0yIDBoMm0yIDBoMm0xIDBoM00zIDE4LjVoM20yIDBoMW0xIDBoNm0xIDBoMW0xIDBoMW00IDBoNG0xIDBoMm0zIDBoMU00IDE5LjVoMW0xIDBoMW0yIDBoMW0zIDBoM20yIDBoMW0xIDBoNG0xIDBoMW0xIDBoM20xIDBoMm0xIDBoMU01IDIwLjVoNW0xIDBoMm0yIDBoMW0xIDBoMm0xIDBoMW0zIDBoMW00IDBoMm0xIDBoMk0yIDIxLjVoMm0xIDBoMW0xIDBoMW0xIDBoMW0xIDBoMW0yIDBoMW0zIDBoMW00IDBoNG0xIDBoNk0zIDIyLjVoMW00IDBoMm0xIDBoMW0xIDBoMW0xIDBoMm0zIDBoMm0yIDBoMW0yIDBoMW0yIDBoMm0xIDBoMk0yIDIzLjVoMm0yIDBoMW0yIDBoNG0yIDBoNW0yIDBoMm0xIDBoMm0xIDBoMm00IDBoMU0yIDI0LjVoMW0xIDBoMW0xIDBoNG0yIDBoMW0xIDBoMm0zIDBoMW0xIDBoMW0xIDBoMW03IDBoM00yIDI1LjVoMW0xIDBoMW0xIDBoMm0xIDBoMW0xIDBoNG0zIDBoMW0yIDBoNG0yIDBoMm0yIDBoM00yIDI2LjVoMW0xIDBoMW0yIDBoNG0xIDBoMW0xIDBoMW0xIDBoMW0yIDBoMW0xIDBoMW0yIDBoN00xMCAyNy41aDJtMSAwaDJtNCAwaDFtMSAwaDJtMSAwaDFtMSAwaDFtMyAwaDFtMSAwaDFtMSAwaDFNMiAyOC41aDdtMiAwaDFtMSAwaDFtMSAwaDVtMiAwaDJtMSAwaDJtMSAwaDFtMSAwaDFtMSAwaDJNMiAyOS41aDFtNSAwaDFtMSAwaDFtMSAwaDFtMSAwaDJtMiAwaDRtMSAwaDRtMyAwaDRNMiAzMC41aDFtMSAwaDNtMSAwaDFtMSAwaDFtMSAwaDNtMiAwaDJtNSAwaDFtMSAwaDZtMSAwaDJNMiAzMS41aDFtMSAwaDNtMSAwaDFtMSAwaDFtMSAwaDJtMyAwaDFtMiAwaDFtMiAwaDFtMSAwaDFtMSAwaDFtMiAwaDJtMSAwaDJNMiAzMi41aDFtMSAwaDNtMSAwaDFtMSAwaDFtMiAwaDFtMiAwaDVtNCAwaDFtMiAwaDJtMiAwaDFNMiAzMy41aDFtNSAwaDFtMyAwaDJtMSAwaDFtMSAwaDFtMiAwaDRtMyAwaDJtMSAwaDNNMiAzNC41aDdtMSAwaDJtMyAwaDFtMSAwaDFtMSAwaDFtMSAwaDFtMiAwaDZtMyAwaDEiLz48L3N2Zz4K',
+      url: 'https://social-archive.org/get-mobile?from=plugin',
+      label: 'Scan to get the mobile app',
+    },
+  },
   '3.0.0': {
     title: 'Full Cross-Device Sync',
     date: '2026-03-26',

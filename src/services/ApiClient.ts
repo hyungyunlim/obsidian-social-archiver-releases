@@ -367,7 +367,12 @@ export class ApiClient implements IService {
   private isRetryableError(error?: ApiError): boolean {
     if (!error) return false;
 
-    const retryableCodes = ['TIMEOUT', 'NETWORK_ERROR', 'RATE_LIMIT'];
+    // Tier-Aware Rate Limits PRD § 13.2 — 429 RATE_LIMIT_EXCEEDED is
+    // surfaced to the user via Notice with scope/tier-aware copy, not
+    // retried here. Generic timeout/network errors remain retryable.
+    if (error.code === 'RATE_LIMIT_EXCEEDED') return false;
+
+    const retryableCodes = ['TIMEOUT', 'NETWORK_ERROR'];
     return retryableCodes.includes(error.code);
   }
 

@@ -613,6 +613,23 @@ export interface SocialArchiverSettings {
    */
   largeVideoPromptThresholdMB: number;
 
+  // In-App Notice Channel Settings
+  /**
+   * Per-id local dismiss state for the in-app notice channel.
+   * Server-resolved notices whose id appears here are hidden from the
+   * timeline banner stack on this device, except `sticky` notices which
+   * ignore local dismissal entirely.
+   *
+   * Storage rules (PRD §Dismiss Persistence):
+   *   - Notice ids only — never the payload bodies.
+   *   - Capped at 200 ids; oldest entries are dropped first.
+   *   - Set-merged on dismiss to mitigate last-writer-wins loss when
+   *     multiple synced desktops dismiss different notices simultaneously.
+   *
+   * @default []
+   */
+  dismissedNoticeIds: string[];
+
   // View Location Settings
   viewLocationDefault: ViewLocation;
   timelineLocation: ViewLocationOverride;
@@ -785,6 +802,9 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
 
   // Large Media Guard Settings
   largeVideoPromptThresholdMB: 100, // Prompt before downloading top-level videos larger than 100MB
+
+  // In-App Notice Channel Settings
+  dismissedNoticeIds: [], // Per-id local dismissals for the in-app notice channel
 
   // View Location Settings
   viewLocationDefault: 'sidebar',
@@ -1099,6 +1119,27 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
   // Initialize composed post sync queue if missing (migration)
   if (!Array.isArray(migrated.pendingComposedPostSyncs)) {
     migrated.pendingComposedPostSyncs = [];
+  }
+
+  // Initialize in-app notice channel dismiss state (migration).
+  // Coerce to array of unique strings, then trim to the most recent 200
+  // (drop from the head — oldest entries — to honor PRD §Dismiss Persistence).
+  if (!Array.isArray(migrated.dismissedNoticeIds)) {
+    migrated.dismissedNoticeIds = [];
+  } else {
+    const seen = new Set<string>();
+    const normalized: string[] = [];
+    for (const raw of migrated.dismissedNoticeIds) {
+      if (typeof raw !== 'string') continue;
+      const trimmed = raw.trim();
+      if (!trimmed) continue;
+      if (seen.has(trimmed)) continue;
+      seen.add(trimmed);
+      normalized.push(trimmed);
+    }
+    migrated.dismissedNoticeIds = normalized.length > 200
+      ? normalized.slice(normalized.length - 200)
+      : normalized;
   }
 
   // Migrate legacy view location settings to unified default + override model

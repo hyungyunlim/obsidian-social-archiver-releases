@@ -9,7 +9,7 @@
   align-items: center;
   gap: 10px;
   margin: 0 0 8px;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
   color: var(--text-normal)
 }
@@ -29,14 +29,14 @@
 }
 
 .sa-release-notes-modal .sa-release-notes-content {
-  max-height: 50vh;
-  overflow-y: auto;
-  padding-right: 8px;
+  /* Drop inner scroll: let the content flow at full height. The modal's
+   * outer container handles overflow when needed, with its scrollbar
+   * flush against the right edge instead of an inset 8px in. */
   margin-bottom: 20px
 }
 
 .sa-release-notes-modal .sa-release-notes-content h2 {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
   margin: 16px 0 8px;
   color: var(--text-normal)
@@ -53,15 +53,15 @@
 
 .sa-release-notes-modal .sa-release-notes-content li {
   margin: 4px 0;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.6;
   color: var(--text-normal)
 }
 
 .sa-release-notes-modal .sa-release-notes-content p {
   margin: 8px 0;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.6;
   color: var(--text-normal)
 }
 
@@ -88,10 +88,6 @@
 }
 
 @media(max-width:480px) {
-  .sa-release-notes-modal .sa-release-notes-content {
-    max-height: 60vh
-  }
-
   .sa-release-notes-modal .sa-release-notes-footer button {
     min-height: 44px
   }

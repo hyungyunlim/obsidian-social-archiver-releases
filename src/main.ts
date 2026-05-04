@@ -83,6 +83,8 @@ import { LikeStateOutboundService } from './plugin/sync/LikeStateOutboundService
 import { BulkArchiveActionAccumulator } from './plugin/sync/BulkArchiveActionAccumulator';
 import { RemoteArchiveIngestService } from './plugin/sync/RemoteArchiveIngestService';
 import { MediaPlaceholderGenerator } from './services/MediaPlaceholderGenerator';
+import { NoticesService } from './services/NoticesService';
+import { NoticeTelemetryService } from './services/NoticeTelemetryService';
 
 // Import styles for Vite to process
 import './styles/index.css';
@@ -163,6 +165,11 @@ export default class SocialArchiverPlugin extends Plugin {
   private batchGoogleMapsArchiver?: BatchGoogleMapsArchiver;
   private postShareService?: PostShareService;
   public archiveDeleteSyncService: ArchiveDeleteSyncService | null = null;
+
+  /** In-app notice channel client (server-driven banner notifications). */
+  public noticesService?: NoticesService;
+  /** Best-effort analytics adapter for notice impression/CTA/dismiss. */
+  public noticeTelemetry?: NoticeTelemetryService;
 
   /**
    * Schedule a tracked setTimeout that will be auto-cleared on plugin unload.
@@ -271,6 +278,24 @@ export default class SocialArchiverPlugin extends Plugin {
 
     // Initialize services if API endpoint is configured
     await this.initializeServices();
+
+    // Boot in-app notice channel client. Runs while the plugin is loaded
+    // (polling is fired even when the timeline pane is closed); the
+    // banner only renders when TimelineContainer is mounted.
+    if (this.apiClient) {
+      this.noticeTelemetry = new NoticeTelemetryService({
+        apiClient: this.apiClient,
+        getSettings: () => this.settings,
+      });
+      this.noticesService = new NoticesService({
+        apiClient: this.apiClient,
+        pluginVersion: this.manifest.version,
+        getSettings: () => this.settings,
+        saveSettings: (patch) =>
+          this.saveSettingsPartial(patch, { reinitialize: false, notify: false }),
+      });
+      this.noticesService.boot();
+    }
 
     // Sync user credits and tier from server (if authenticated)
     await this.syncUserCreditsOnLoad();
@@ -553,6 +578,11 @@ export default class SocialArchiverPlugin extends Plugin {
 
     // Stop recovery polling before disposing services
     this.subscriptionSyncService?.stopRecoveryPolling();
+
+    // Stop notice channel polling and listeners
+    this.noticesService?.shutdown();
+    this.noticesService = undefined;
+    this.noticeTelemetry = undefined;
 
     // Cleanup services (fire-and-forget; onunload must be synchronous per Obsidian Plugin API)
     void this.subscriptionManager?.dispose();

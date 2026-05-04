@@ -38,5 +38,8 @@
 /* Author Detail container styles */
 @import './components/author-detail.css';
 
+/* In-app notice banner + detail modal */
+@import './components/notice-banner.css';
+
 /* Timeline and reader-mode incremental styles */
 @import '../components/timeline/managers/skeleton-card.css';

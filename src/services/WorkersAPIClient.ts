@@ -832,6 +832,13 @@ export class WorkersAPIClient implements IService {
     return this.config.authToken ?? null;
   }
 
+  /** Plugin manifest version exposed for adapters that build their own
+   * `X-Client-Version` header (e.g. `NoticesService`). Falls back to '0.0.0'
+   * when not configured, matching `getClientHeaders()` semantics. */
+  getPluginVersion(): string {
+    return this.config.pluginVersion || '0.0.0';
+  }
+
   /**
    * Standard client identity headers every request carries. Callers add
    * `Content-Type` and `Authorization` as needed. Exposed so we don't have

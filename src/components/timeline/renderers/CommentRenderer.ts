@@ -99,6 +99,44 @@ export class CommentRenderer {
     }
   }
 
+  private decodeHtmlEntities(text: string): string {
+    try {
+      let decoded = text.replace(/&#x([0-9A-Fa-f]+);/g, (_match, hex) =>
+        String.fromCodePoint(parseInt(hex, 16))
+      );
+      decoded = decoded.replace(/&#(\d+);/g, (_match, dec) =>
+        String.fromCodePoint(parseInt(dec, 10))
+      );
+      return decoded
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'");
+    } catch {
+      return text;
+    }
+  }
+
+  private stripHtmlTags(html: string): string {
+    return this.decodeHtmlEntities(html.replace(/<[^>]*>/g, ''));
+  }
+
+  private normalizeCommentHref(rawHref: string | undefined): string | undefined {
+    const raw = this.decodeHtmlEntities(rawHref || '').trim();
+    if (!raw || raw === '#') return undefined;
+    if (/^javascript:/i.test(raw)) return undefined;
+    if (raw.startsWith('//')) return `https:${raw}`;
+    if (/^\/(?:in|company|school|showcase)\//i.test(raw)) return `https://www.linkedin.com${raw}`;
+    if (/^(?:www\.)?(?:linkedin|instagram|threads|facebook|youtube|reddit)\.com\//i.test(raw)) {
+      return `https://${raw}`;
+    }
+    if (/^(?:x|twitter)\.com\//i.test(raw)) return `https://${raw}`;
+    if (/^bsky\.app\//i.test(raw)) return `https://${raw}`;
+    if (/^https?:\/\//i.test(raw)) return raw;
+    return undefined;
+  }
+
   /**
    * Render comments section (Instagram style)
    * @param container - Container element to render into
@@ -166,12 +204,14 @@ export class CommentRenderer {
    */
   private renderTextWithLinks(container: HTMLElement, text: string): void {
     // Normalize URLs with space after :// (e.g., "https:// example.com" -> "https://example.com")
-    const normalizedText = text.replace(/https?:\/\/\s+/g, (match) => match.replace(/\s+/g, ''));
+    const normalizedText = this.decodeHtmlEntities(text).replace(/https?:\/\/\s+/g, (match) => match.replace(/\s+/g, ''));
 
     // Combined regex to match:
-    // 1. Markdown links: [text](url)
-    // 2. Plain URLs: https://... or http://...
-    const combinedRegex = /\[([^\]]+)\]\(([^)]+)\)|(https?:\/\/[^\s<>[\]()]+)/g;
+    // 1. Safe HTML anchors: <a href="...">text</a>
+    // 2. Markdown links: [text](url)
+    // 3. Plain URLs: https://... or http://...
+    const combinedRegex =
+      /<a\b[^>]*\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))[^>]*>([\s\S]*?)<\/a>|\[([^\]]+)\]\(([^)]+)\)|(https?:\/\/[^\s<>[\]()]+)/gi;
 
     let lastIndex = 0;
     let match;
@@ -183,18 +223,30 @@ export class CommentRenderer {
       }
 
       let linkText: string;
-      let linkUrl: string;
+      let linkUrl: string | undefined;
 
-      if (match[1] !== undefined && match[2] !== undefined) {
+      if (match[1] !== undefined || match[2] !== undefined || match[3] !== undefined) {
+        // HTML anchor
+        linkText = this.stripHtmlTags(match[4] || '').trim();
+        linkUrl = this.normalizeCommentHref(match[1] || match[2] || match[3]);
+      } else if (match[5] !== undefined && match[6] !== undefined) {
         // Markdown link: [text](url)
-        linkText = match[1];
-        linkUrl = match[2];
-      } else if (match[3] !== undefined) {
+        linkText = match[5];
+        linkUrl = this.normalizeCommentHref(match[6]);
+      } else if (match[7] !== undefined) {
         // Plain URL
-        linkUrl = match[3];
+        linkUrl = this.normalizeCommentHref(match[7]);
         // Truncate display text for long URLs
-        linkText = linkUrl.length > 50 ? linkUrl.substring(0, 47) + '...' : linkUrl;
+        linkText = match[7].length > 50 ? match[7].substring(0, 47) + '...' : match[7];
       } else {
+        lastIndex = match.index + match[0].length;
+        continue;
+      }
+
+      if (!linkText || !linkUrl) {
+        if (linkText) {
+          container.createSpan({ text: linkText });
+        }
         lastIndex = match.index + match[0].length;
         continue;
       }

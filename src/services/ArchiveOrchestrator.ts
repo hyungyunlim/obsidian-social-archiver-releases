@@ -13,6 +13,7 @@ import type { SocialArchiverSettings } from '@/types/settings';
 import type { TFile } from 'obsidian';
 import { uniqueStrings } from '@/utils/array';
 import { isPaywallRequiredError } from '@/utils/billingError';
+import { isRateLimitError } from '@/utils/rateLimitError';
 import { normalizeUrlForDedup } from '@/utils/url';
 import { ProfileDataMapper } from './mappers/ProfileDataMapper';
 
@@ -178,13 +179,19 @@ class RetryHelper {
       return false;
     }
 
+    // Tier-Aware Rate Limits PRD § 13.2 — 429s are terminal here. The user
+    // (or higher-level orchestration) should respect Retry-After, not the
+    // generic exponential backoff path.
+    if (isRateLimitError(error)) {
+      return false;
+    }
+
     const retryableErrors = [
       'ECONNRESET',
       'ETIMEDOUT',
       'ENOTFOUND',
       'Network',
       'timeout',
-      'rate limit',
     ];
 
     const message = error.message.toLowerCase();
