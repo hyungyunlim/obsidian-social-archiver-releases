@@ -10,7 +10,7 @@ Save what matters - Archive social media posts, web pages, newsletters, podcasts
 [![App Store](https://img.shields.io/badge/App_Store-Download-0D96F6?logo=apple&logoColor=white)](https://apps.apple.com/us/app/social-archiver/id6758323634)
 [![Google Play](https://img.shields.io/badge/Google_Play-Get_it-34A853?logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.socialarchiver.mobile)
 
-> **Currently in Free Beta** - Unlimited archiving, permanent web sharing, all features completely free during beta period. [Future pricing plans →](https://docs.social-archive.org/en/guide/pricing)
+> See [pricing plans →](https://docs.social-archive.org/en/guide/pricing) for current quotas, Premium tiers, and the beta-free sunset schedule.
 
 ## Overview
 
