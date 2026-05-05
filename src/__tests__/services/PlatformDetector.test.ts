@@ -335,6 +335,40 @@ describe('PlatformDetector', () => {
     });
   });
 
+  describe('Velog URLs', () => {
+    it('should extract author-qualified post IDs', () => {
+      expect(detector.extractPostId('https://velog.io/@alice/my-post')).toBe('alice/my-post');
+      expect(detector.extractPostId('https://velog.io/@bob/my-post')).toBe('bob/my-post');
+    });
+
+    it('should decode percent-encoded Korean slugs', () => {
+      const url = 'https://velog.io/@velog/' + encodeURIComponent('개발자-블로그');
+      expect(detector.extractPostId(url)).toBe('velog/개발자-블로그');
+    });
+
+    it('should return null for profile URLs', () => {
+      expect(detector.extractPostId('https://velog.io/@velog')).toBeNull();
+    });
+  });
+
+  describe('Brunch URLs', () => {
+    it('should extract author-qualified post IDs', () => {
+      expect(detector.extractPostId('https://brunch.co.kr/@alice/123')).toBe('alice/123');
+      expect(detector.extractPostId('https://brunch.co.kr/@bob/123')).toBe('bob/123');
+    });
+
+    it('should return null for profile URLs', () => {
+      expect(detector.extractPostId('https://brunch.co.kr/@user')).toBeNull();
+    });
+  });
+
+  describe('Medium URLs', () => {
+    it('should extract globally-unique hex hash', () => {
+      expect(detector.extractPostId('https://medium.com/@user/some-title-abc1234567890')).toBe('abc1234567890');
+      expect(detector.extractPostId('https://medium.com/publication/another-title-def4567890ab')).toBe('def4567890ab');
+    });
+  });
+
   describe('URL normalization', () => {
     it('should handle URLs without protocol', () => {
       expect(detector.detectPlatform('facebook.com/user/posts/123')).toBe('facebook');

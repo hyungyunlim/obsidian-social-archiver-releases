@@ -34,6 +34,7 @@ import type {
   AuthorProfileUpdatedEventData,
   BillingStatusUpdatedEventData,
 } from '../../types/websocket';
+import type { BillingEventApiPayload } from '../../types/billing-events';
 import type { IngestResult } from '../sync/RemoteArchiveIngestService';
 import { TimelineView, VIEW_TYPE_TIMELINE } from '../../views/TimelineView';
 import type { UserAuthorProfile } from '@/types/author-profile';
@@ -199,6 +200,25 @@ export interface RealtimeEventBridgeDeps {
   applyAuthorProfileUpdate?: (profile: UserAuthorProfile) => Promise<void>;
   syncAuthorProfiles?: () => Promise<void>;
   refreshBillingUsage?: () => Promise<boolean>;
+  /**
+   * Fetch the latest active billing-events list from the server.
+   *
+   * Wired to `WorkersAPIClient.getActiveBillingEvents()` in `main.ts`. The
+   * bridge calls this after `refreshBillingUsage()` whenever a
+   * `billing_status_updated` WS event arrives. PRD
+   * `.taskmaster/docs/prd-billing-lifecycle-notifications-plugin.md` §6.4,
+   * §8.2.
+   */
+  refreshBillingEvents?: () => Promise<BillingEventApiPayload[]>;
+  /** Commit a freshly fetched billing-events list into the plugin store. */
+  commitBillingEvents?: (events: BillingEventApiPayload[]) => void;
+  /**
+   * Decide whether the given event should fire a one-shot Obsidian Notice
+   * this plugin session. Backed by `BillingEventNoticer.shouldShow`.
+   */
+  shouldShowBillingEventNotice?: (event: BillingEventApiPayload) => boolean;
+  /** Record that we've already shown a Notice for `eventId` this session. */
+  markBillingEventNoticed?: (eventId: string) => void;
   refreshTimelineView: () => void;
   processPendingSyncQueue: () => Promise<void>;
   processSyncQueueItem: (queueId: string, archiveId: string, clientId: string) => Promise<boolean>;
@@ -1171,6 +1191,7 @@ export class RealtimeEventBridge {
           updatedAt: msg.data.updatedAt,
         });
 
+        // Step 1 — refresh billing usage (existing fail-soft behavior).
         try {
           const refreshed = await this.deps.refreshBillingUsage?.();
           if (!refreshed) {
@@ -1179,6 +1200,28 @@ export class RealtimeEventBridge {
         } catch (error) {
           console.warn(
             '[Social Archiver] Billing usage refresh after billing_status_updated failed:',
+            error instanceof Error ? error.message : String(error),
+          );
+        }
+
+        // Step 2 — refresh active billing events + show high-severity Notice.
+        // PRD `.taskmaster/docs/prd-billing-lifecycle-notifications-plugin.md`
+        // §6.4, §8.2. Failure here must NOT propagate out of the WS listener.
+        try {
+          const events = (await this.deps.refreshBillingEvents?.()) ?? [];
+          this.deps.commitBillingEvents?.(events);
+
+          for (const event of events) {
+            if (this.deps.shouldShowBillingEventNotice?.(event)) {
+              new Notice(
+                'Billing update: open Social Archiver settings for details',
+              );
+              this.deps.markBillingEventNoticed?.(event.id);
+            }
+          }
+        } catch (error) {
+          console.warn(
+            '[Social Archiver] Billing events refresh after billing_status_updated failed:',
             error instanceof Error ? error.message : String(error),
           );
         }

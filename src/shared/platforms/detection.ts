@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/detection.ts
- * Generated: 2026-05-04T03:55:02.194Z
+ * Generated: 2026-05-05T23:48:37.580Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -341,6 +341,39 @@ export function extractPostIdFromUrl(platform: Platform, url: string): string | 
         if (postMatch) return postMatch[1] ?? null;
 
         return null;
+      }
+
+      case 'velog': {
+        // /@username/<slug>  →  "username/decodedSlug"
+        // Author qualifier prevents D1 dedup collision when different authors
+        // happen to use the same slug.
+        // Profile URL (/@user with no slug) → null
+        const m = pathname.match(/^\/@([A-Za-z0-9_-]+)\/([^/]+)\/?$/);
+        if (!m?.[1] || !m?.[2]) return null;
+        let slug = m[2];
+        try {
+          slug = decodeURIComponent(slug);
+        } catch {
+          /* preserve raw on malformed percent-encoding */
+        }
+        return `${m[1]}/${slug}`;
+      }
+
+      case 'medium': {
+        // /@user/title-<hash> or /<publication>/title-<hash>
+        // The trailing hex hash is globally unique on Medium, so no
+        // author qualifier is needed.
+        const m = pathname.match(/-([a-f0-9]{10,})\/?$/i);
+        return m?.[1] ?? null;
+      }
+
+      case 'brunch': {
+        // /@username/<numericPostId>
+        // Numeric IDs are scoped per-author on Brunch → qualify with author
+        // to prevent D1 dedup collision across authors.
+        const m = pathname.match(/^\/@([A-Za-z0-9_-]+)\/(\d+)\/?$/);
+        if (!m?.[1] || !m?.[2]) return null;
+        return `${m[1]}/${m[2]}`;
       }
 
       default:

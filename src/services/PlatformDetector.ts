@@ -526,6 +526,12 @@ export class PlatformDetector implements IService {
           return this.extractBlueskyPostId(urlObj);
         case 'googlemaps':
           return this.extractGoogleMapsPlaceId(urlObj);
+        case 'velog':
+          return this.extractVelogPostId(urlObj);
+        case 'medium':
+          return this.extractMediumPostId(urlObj);
+        case 'brunch':
+          return this.extractBrunchPostId(urlObj);
         default:
           return null;
       }
@@ -669,6 +675,33 @@ export class PlatformDetector implements IService {
   private extractBlueskyPostId(urlObj: URL): string | null {
     const match = urlObj.pathname.match(/\/post\/([A-Za-z0-9]+)(?:\/|$)/);
     return match ? match[1] || null : null;
+  }
+
+  private extractVelogPostId(urlObj: URL): string | null {
+    // Velog slugs are scoped per-author, so qualify with username to avoid
+    // cross-author dedup collisions in D1.
+    const m = urlObj.pathname.match(/^\/@([A-Za-z0-9_-]+)\/([^/]+)\/?$/);
+    if (!m?.[1] || !m?.[2]) return null;
+    let slug = m[2];
+    try {
+      slug = decodeURIComponent(slug);
+    } catch {
+      // Preserve raw segment on malformed percent encoding.
+    }
+    return `${m[1]}/${slug}`;
+  }
+
+  private extractMediumPostId(urlObj: URL): string | null {
+    // Medium hex hash is globally unique, so the hash alone is a stable id.
+    const m = urlObj.pathname.match(/-([a-f0-9]{10,})\/?$/i);
+    return m?.[1] ?? null;
+  }
+
+  private extractBrunchPostId(urlObj: URL): string | null {
+    // Brunch numeric ids are scoped per-author; qualify with username.
+    const m = urlObj.pathname.match(/^\/@([A-Za-z0-9_-]+)\/(\d+)\/?$/);
+    if (!m?.[1] || !m?.[2]) return null;
+    return `${m[1]}/${m[2]}`;
   }
 
   private extractGoogleMapsPlaceId(urlObj: URL): string | null {

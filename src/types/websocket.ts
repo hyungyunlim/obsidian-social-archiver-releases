@@ -225,11 +225,46 @@ export interface MediaPreservedEvent {
  * Sent when server-side billing status changes.
  * The plugin should refresh `/api/user/usage`; server remains source-of-truth.
  */
+/**
+ * Mirrored from `workers/src/types/websocket.ts`. Server is source of truth —
+ * keep this union in lockstep when the worker broadcast taxonomy evolves.
+ *
+ * PRD: `.taskmaster/docs/prd-billing-lifecycle-notifications-plugin.md` §7.2.
+ *
+ * Optional fields (`source`, `plan`, `entitlementActive`, `expiresAt`) carry
+ * the new winning materialization so the plugin can render the change
+ * optimistically while `/api/user/usage` refresh is in flight. They are
+ * STRICTLY NON-SENSITIVE — never include license keys, RC subscriber
+ * attributes, payment amounts, or coupon plaintext.
+ */
 export interface BillingStatusUpdatedEventData {
   updatedAt: string;
   timestamp: number;
-  reason: 'revenuecat_webhook';
+  reason:
+    | 'revenuecat_webhook'
+    | 'coupon_redeemed'
+    | 'premium_trial_started'
+    | 'premium_trial_expired'
+    | 'premium_trial_expiring_24h'
+    | 'premium_trial_converted'
+    | 'admin_override'
+    | 'entitlement_recomputed'
+    | 'legacy_license_validated'
+    | 'subscription_cancellation_pending'
+    | 'billing_issue'
+    | 'trial_expiring_soon'
+    | 'plan_upgraded'
+    | 'plan_revoked'
+    | 'coupon_expired'
+    | 'admin_grant_expired'
+    | 'revenuecat_cancellation_pending'
+    | 'revenuecat_billing_issue';
+  /** Original RevenueCat event type for the webhook reason; back-compat. */
   eventType?: string;
+  source?: string;
+  plan?: string;
+  entitlementActive?: boolean;
+  expiresAt?: string | null;
 }
 
 export interface BillingStatusUpdatedEvent {

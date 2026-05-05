@@ -24,6 +24,10 @@ import type {
   AuthorProfileUpsertInput,
   UserAuthorProfile,
 } from '@/types/author-profile';
+import type {
+  BillingEventApiPayload,
+  BillingEventsResponse,
+} from '@/types/billing-events';
 
 // ============================================================================
 // Multi-Client Sync Types
@@ -647,6 +651,119 @@ export class WorkersAPIClient implements IService {
     return await this.request<BillingUsageResponse>('/api/user/usage', {
       method: 'GET',
     });
+  }
+
+  /**
+   * Fetch active billing lifecycle events for the current user.
+   *
+   * PRD: `.taskmaster/docs/prd-billing-lifecycle-notifications-plugin.md`
+   * §7.3, §8.6.
+   *
+   * Sends `X-Client-Capabilities: billing-v1,app-update-v1,external_billing_handoff-v1`
+   * (NEVER `native_paywall`) so the server returns plugin-executable CTA
+   * actions (`update_and_pay_in_mobile` / `dismiss`) instead of mobile-native
+   * actions the plugin cannot execute.
+   *
+   * Fail-soft: returns `[]` on any of HTTP non-2xx, JSON parse failure,
+   * unauthenticated state, or network error. Never throws — billing fetch
+   * failure must never block plugin load, archive flow, or settings render.
+   */
+  async getActiveBillingEvents(): Promise<BillingEventApiPayload[]> {
+    if (!this.config.endpoint) {
+      return [];
+    }
+    if (!this.config.authToken) {
+      return [];
+    }
+
+    const url = `${this.config.endpoint}/api/user/billing-events`;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Client': 'obsidian-plugin',
+      'X-Client-Version': this.config.pluginVersion || '0.0.0',
+      'X-Platform': this.getPlatformIdentifier(),
+      'X-Client-Capabilities': 'billing-v1,app-update-v1,external_billing_handoff-v1',
+      Authorization: `Bearer ${this.config.authToken}`,
+    };
+    if (this.config.clientId) {
+      headers['X-Client-Id'] = this.config.clientId;
+    }
+
+    try {
+      const response = await requestUrl({
+        url,
+        method: 'GET',
+        headers,
+        throw: false,
+      });
+
+      if (response.status < 200 || response.status >= 300) {
+        return [];
+      }
+
+      const body = response.json as
+        | { success?: boolean; data?: Partial<BillingEventsResponse> }
+        | undefined;
+      if (!body || body.success !== true) {
+        return [];
+      }
+      const events = body.data?.events;
+      return Array.isArray(events) ? events : [];
+    } catch (err) {
+      console.warn('[WorkersAPIClient] getActiveBillingEvents failed:', err);
+      return [];
+    }
+  }
+
+  /**
+   * Dismiss a billing lifecycle event.
+   *
+   * PRD: `.taskmaster/docs/prd-billing-lifecycle-notifications-plugin.md`
+   * §6.3, §7.3.
+   *
+   * Returns `true` only when the response is 2xx AND the server confirms
+   * `data.dismissed === true`. Returns `false` for normal no-op responses
+   * (e.g. event already dismissed, non-dismissible row). Throws on
+   * unexpected network/server errors so the store layer can roll back the
+   * optimistic UI removal.
+   */
+  async dismissBillingEvent(eventId: string): Promise<boolean> {
+    this.ensureInitialized();
+
+    const encodedId = encodeURIComponent(eventId);
+    const url = `${this.config.endpoint}/api/user/billing-events/${encodedId}/dismiss`;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Client': 'obsidian-plugin',
+      'X-Client-Version': this.config.pluginVersion || '0.0.0',
+      'X-Platform': this.getPlatformIdentifier(),
+      'X-Client-Capabilities': 'billing-v1,app-update-v1,external_billing_handoff-v1',
+    };
+    if (this.config.authToken) {
+      headers['Authorization'] = `Bearer ${this.config.authToken}`;
+    }
+    if (this.config.clientId) {
+      headers['X-Client-Id'] = this.config.clientId;
+    }
+
+    const response = await requestUrl({
+      url,
+      method: 'POST',
+      headers,
+      throw: false,
+    });
+
+    if (response.status < 200 || response.status >= 300) {
+      return false;
+    }
+
+    const body = response.json as
+      | { success?: boolean; data?: { dismissed?: boolean } }
+      | undefined;
+    if (!body || body.success !== true) {
+      return false;
+    }
+    return body.data?.dismissed === true;
   }
 
   /**

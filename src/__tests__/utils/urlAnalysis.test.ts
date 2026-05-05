@@ -794,21 +794,17 @@ describe('urlAnalysis', () => {
         }
       });
 
-      it('should detect Brunch post URLs as brunch platform', () => {
-        // Note: Brunch post URL type detection is handled by BrunchLocalService
-        // urlAnalysis detects platform but type may be 'unknown' since extractPostId
-        // doesn't have Brunch-specific logic. This is OK since BrunchLocalService
-        // handles post URL parsing internally.
+      it('should detect Brunch post URLs as brunch posts', () => {
         const testCases = [
-          'https://brunch.co.kr/@username/1',
-          'https://brunch.co.kr/@0429bb25607f4bc/123',
+          { url: 'https://brunch.co.kr/@username/1', postId: 'username/1' },
+          { url: 'https://brunch.co.kr/@0429bb25607f4bc/123', postId: '0429bb25607f4bc/123' },
         ];
 
-        for (const url of testCases) {
+        for (const { url, postId } of testCases) {
           const result = analyzeUrl(url);
           expect(result.platform, `Platform should be brunch for ${url}`).toBe('brunch');
-          // Type may be 'unknown' or 'post' depending on implementation
-          expect(['post', 'unknown'], `Type should be post or unknown for ${url}`).toContain(result.type);
+          expect(result.type, `Type should be post for ${url}`).toBe('post');
+          expect(result.postId, `postId should be author-qualified for ${url}`).toBe(postId);
         }
       });
 
@@ -841,6 +837,55 @@ describe('urlAnalysis', () => {
         expect(extractHandle('https://brunch.co.kr/@username')).toBe('username');
         expect(extractHandle('https://brunch.co.kr/@0429bb25607f4bc')).toBe('0429bb25607f4bc');
       });
+    });
+  });
+
+  describe('Velog', () => {
+    it('should detect Velog single-post URLs as posts', () => {
+      const result = analyzeUrl('https://velog.io/@velog/test-post-slug');
+      expect(result.type).toBe('post');
+      expect(result.platform).toBe('velog');
+      expect(result.postId).toBe('velog/test-post-slug');
+    });
+
+    it('should decode percent-encoded Korean slugs', () => {
+      const koreanUrl = 'https://velog.io/@velog/' + encodeURIComponent('개발자-블로그');
+      const result = analyzeUrl(koreanUrl);
+      expect(result.type).toBe('post');
+      expect(result.platform).toBe('velog');
+      expect(result.postId).toBe('velog/개발자-블로그');
+    });
+
+    it('should classify post URLs with query strings and hashes as post', () => {
+      const withQuery = analyzeUrl('https://velog.io/@velog/test-post-slug?utm_source=x');
+      expect(withQuery.type).toBe('post');
+      expect(withQuery.platform).toBe('velog');
+
+      const withHash = analyzeUrl('https://velog.io/@velog/test-post-slug#section');
+      expect(withHash.type).toBe('post');
+      expect(withHash.platform).toBe('velog');
+    });
+
+    it('should treat profile URLs as RSS subscriptions', () => {
+      const result = analyzeUrl('https://velog.io/@velog');
+      expect(result.type).toBe('rss');
+      expect(result.platform).toBe('velog');
+      expect(result.feedUrl).toBe('https://v2.velog.io/rss/@velog');
+    });
+
+    it('should treat direct RSS feed URLs as RSS', () => {
+      const result = analyzeUrl('https://v2.velog.io/rss/@velog');
+      expect(result.type).toBe('rss');
+      expect(result.platform).toBe('velog');
+    });
+  });
+
+  describe('Medium', () => {
+    it('should detect Medium single-post URLs and extract hex hash', () => {
+      const result = analyzeUrl('https://medium.com/@user/some-title-abc1234567890');
+      expect(result.type).toBe('post');
+      expect(result.platform).toBe('medium');
+      expect(result.postId).toBe('abc1234567890');
     });
   });
 });

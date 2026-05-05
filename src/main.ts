@@ -85,6 +85,11 @@ import { RemoteArchiveIngestService } from './plugin/sync/RemoteArchiveIngestSer
 import { MediaPlaceholderGenerator } from './services/MediaPlaceholderGenerator';
 import { NoticesService } from './services/NoticesService';
 import { NoticeTelemetryService } from './services/NoticeTelemetryService';
+import { createBillingEventsStore, type BillingEventsStore } from './stores/billingEventsStore';
+import {
+  createBillingEventNoticer,
+  type BillingEventNoticer,
+} from './plugin/billing/billingEventNoticer';
 
 // Import styles for Vite to process
 import './styles/index.css';
@@ -170,6 +175,22 @@ export default class SocialArchiverPlugin extends Plugin {
   public noticesService?: NoticesService;
   /** Best-effort analytics adapter for notice impression/CTA/dismiss. */
   public noticeTelemetry?: NoticeTelemetryService;
+
+  /**
+   * Plugin-owned billing-events store, populated by Phase B+C of
+   * `.taskmaster/docs/prd-billing-lifecycle-notifications-plugin.md`.
+   * The field is declared with definite-assignment so Phase D component
+   * (BillingEventsSection.svelte) can typecheck against `BillingEventsStore`
+   * while Phase B+C wires the actual implementation in `onload()`.
+   */
+  public billingEventsStore!: BillingEventsStore;
+
+  /**
+   * Plugin-session-only Notice dedupe for high-severity billing events.
+   * Reset on logout alongside `billingEventsStore.clear()`.
+   * PRD `.taskmaster/docs/prd-billing-lifecycle-notifications-plugin.md` §6.4.
+   */
+  private billingEventNoticer?: BillingEventNoticer;
 
   /**
    * Schedule a tracked setTimeout that will be auto-cleared on plugin unload.
@@ -276,6 +297,15 @@ export default class SocialArchiverPlugin extends Plugin {
   async onload(): Promise<void> {
     await this.loadSettings();
 
+    // Phase B+C — instantiate the plugin-owned billing-events store and
+    // session Notice dedupe BEFORE settings UI / WS bridge wiring so that
+    // `BillingEventsSection.svelte` (Phase D) and `RealtimeEventBridge` can
+    // both reference them safely from any later mount or event firing.
+    // PRD `.taskmaster/docs/prd-billing-lifecycle-notifications-plugin.md`
+    // §8.3, §9.3.
+    this.billingEventsStore = createBillingEventsStore();
+    this.billingEventNoticer = createBillingEventNoticer();
+
     // Initialize services if API endpoint is configured
     await this.initializeServices();
 
@@ -299,6 +329,28 @@ export default class SocialArchiverPlugin extends Plugin {
 
     // Sync user credits and tier from server (if authenticated)
     await this.syncUserCreditsOnLoad();
+
+    // Best-effort startup billing-events refresh (fire-and-forget).
+    // PRD `.taskmaster/docs/prd-billing-lifecycle-notifications-plugin.md`
+    // §8.1, §9.3. Must not block plugin load — any failure is swallowed
+    // by the store's fail-soft `refresh()` semantics, but we wrap defensively
+    // in case anything still bubbles up.
+    if (this.settings.authToken && this.apiClient) {
+      console.debug('[Social Archiver] Startup billing-events refresh dispatched');
+      void this.billingEventsStore
+        .refresh(this.apiClient)
+        .then(() => {
+          console.debug('[Social Archiver] Startup billing-events refresh complete');
+        })
+        .catch((err) => {
+          console.warn('[Social Archiver] Startup billing-events refresh failed:', err);
+        });
+    } else {
+      console.debug(
+        '[Social Archiver] Startup billing-events refresh skipped (no authToken or apiClient)',
+        { hasAuthToken: !!this.settings.authToken, hasApiClient: !!this.apiClient },
+      );
+    }
 
     // Check for version update and show release notes if applicable
     await this.checkAndShowReleaseNotes();
@@ -1273,6 +1325,14 @@ export default class SocialArchiverPlugin extends Plugin {
           applyAuthorProfileUpdate: (profile) => this.authorProfileSyncService?.applyInboundProfile(profile) ?? Promise.resolve(),
           syncAuthorProfiles: () => this.authorProfileSyncService?.syncAllFromServer() ?? Promise.resolve(),
           refreshBillingUsage: () => refreshUserBillingUsage(this, { notify: true }),
+          refreshBillingEvents: async () => {
+            if (!this.apiClient) return [];
+            return this.apiClient.getActiveBillingEvents();
+          },
+          commitBillingEvents: (events) => this.billingEventsStore.setEvents(events),
+          shouldShowBillingEventNotice: (event) =>
+            this.billingEventNoticer?.shouldShow(event) ?? false,
+          markBillingEventNoticed: (eventId) => this.billingEventNoticer?.markShown(eventId),
           refreshTimelineView: () => this.refreshTimelineView(),
           processPendingSyncQueue: () => this.mobileSyncService?.processPendingSyncQueue() ?? Promise.resolve(),
           processSyncQueueItem: (queueId, archiveId, clientId) =>
@@ -2196,6 +2256,13 @@ export default class SocialArchiverPlugin extends Plugin {
 
     // 7. Clear runtime sync state
     this.mobileSyncService?.clearState();
+
+    // Clear billing-events state and Notice dedupe so prior account events
+    // don't leak across account swaps.
+    // PRD `.taskmaster/docs/prd-billing-lifecycle-notifications-plugin.md`
+    // §6.4, §8.3.
+    this.billingEventsStore?.clear();
+    this.billingEventNoticer?.reset();
 
     // Cancel and clear archive library sync state (auth cleared, can't resume)
     await this.archiveLibrarySyncService?.cancelAndClear();

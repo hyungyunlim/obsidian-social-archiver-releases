@@ -2,7 +2,7 @@
 import { Notice } from 'obsidian';
 import QRCode from 'qrcode';
 import type SocialArchiverPlugin from '../main';
-import type { BillingUsageSummary, SocialArchiverSettings, UserTier, PlatformTiming } from '../types/settings';
+import type { BillingUsageSummary, SocialArchiverSettings, PlatformTiming } from '../types/settings';
 import { AuthService } from '../services/AuthService';
 import {
   completeAuthentication,
@@ -13,6 +13,9 @@ import {
   refreshUserEmail,
 } from '../utils/auth';
 import { DEFAULT_BILLING_CAMPAIGN } from '../shared/billing/campaign';
+import NewsletterConsentBanner from './NewsletterConsentBanner.svelte';
+import NewsletterConsentToggle from './NewsletterConsentToggle.svelte';
+import BillingEventsSection from '../components/billing/BillingEventsSection.svelte';
 
 /**
  * Billing launch campaign copy (PRD §8.4).
@@ -217,12 +220,6 @@ $effect(() => {
 });
 
 // Computed states
-let creditLimit = $derived(getCreditLimit(settings.tier));
-let normalizedCreditsUsed = $derived(getSafeNumber(settings.creditsUsed));
-let hasUnlimitedCredits = $derived(!Number.isFinite(creditLimit));
-let creditsRemaining = $derived(
-  hasUnlimitedCredits ? Infinity : Math.max(0, creditLimit - normalizedCreditsUsed)
-);
 let archiveQuota = $derived(billingUsage?.archiveQuota ?? settings.billingUsage?.archiveQuota);
 let rawBillingPlan = $derived(billingUsage?.plan ?? settings.billingUsage?.plan ?? settings.tier);
 let billingPlanDisplay = $derived(formatBillingPlan(rawBillingPlan));
@@ -235,40 +232,6 @@ let archiveQuotaExhausted = $derived(
   archiveQuota.limit !== -1 &&
   archiveQuota.remaining <= 0
 );
-
-/**
- * Convert unknown value to safe number for display/calculation
- */
-function getSafeNumber(value: unknown): number {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : 0;
-}
-
-/**
- * Get display name for user tier
- */
-function getTierDisplay(tier: UserTier): string {
-  const tierNames: Record<UserTier, string> = {
-    'beta-free': 'Beta Free',
-    'free': 'Free',
-    'pro': 'Pro',
-    'admin': 'Admin',
-  };
-  return tierNames[tier] || 'Free';
-}
-
-/**
- * Get credit limit for user tier
- */
-function getCreditLimit(tier: UserTier): number {
-  const limits: Record<UserTier, number> = {
-    'beta-free': Infinity,
-    'free': 10,
-    'pro': 500,
-    'admin': Infinity,
-  };
-  return limits[tier] ?? Infinity;
-}
 
 function formatBillingPlan(plan: string): string {
   if (!plan) return 'Free';
@@ -800,6 +763,9 @@ $effect(() => {
   {:else}
     <!-- Authenticated State -->
     <div class="auth-section">
+      <!-- Newsletter Consent Banner (shown only when server says modalShouldShow) -->
+      <NewsletterConsentBanner {plugin} />
+
       <!-- User Info - Simple and Clean -->
       <div class="user-info-minimal">
         <div class="user-avatar">
@@ -860,26 +826,6 @@ $effect(() => {
         </div>
       {/if}
 
-      <!-- Credits Display - Minimal -->
-      <div class="credits-display">
-        <div class="credits-label">Credits</div>
-        <div class="credits-info">
-          {#if hasUnlimitedCredits}
-            <span class="credits-unlimited">Unlimited</span>
-            {#if settings.tier === 'beta-free'}
-              <span class="credits-beta">Beta Free</span>
-            {:else if settings.tier === 'admin'}
-              <span class="credits-beta">Admin</span>
-            {/if}
-          {:else}
-            <span class="credits-used">{normalizedCreditsUsed}</span>
-            <span class="credits-separator">/</span>
-            <span class="credits-limit">{creditLimit}</span>
-            <span class="credits-remaining">({creditsRemaining} left)</span>
-          {/if}
-        </div>
-      </div>
-
       <div class={`billing-usage-display${archiveQuotaExhausted ? ' quota-exhausted' : ''}`}>
         <div class="billing-usage-header">
           <div>
@@ -929,6 +875,9 @@ $effect(() => {
         {/if}
       </div>
 
+      <!-- Billing lifecycle events (server-driven; renders nothing when empty) -->
+      <BillingEventsSection {plugin} />
+
       <!-- Platform Stats - Compact Grid -->
       {#if Object.keys(settings.byPlatform).length > 0}
         <div class="platform-minimal-header">Platform Activity</div>
@@ -941,6 +890,9 @@ $effect(() => {
           {/each}
         </div>
       {/if}
+
+      <!-- Newsletter Settings Toggle -->
+      <NewsletterConsentToggle {plugin} />
 
       <!-- Sign Out - Simple Button -->
       <div class="sign-out-section">
@@ -1091,59 +1043,6 @@ $effect(() => {
   color: var(--text-faint);
   line-height: 1.3;
   text-align: right;
-}
-
-/* Credits Display */
-.credits-display {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  background: var(--background-secondary);
-  border-radius: 8px;
-  margin-bottom: 20px;
-}
-
-.credits-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-.credits-info {
-  font-size: 14px;
-  color: var(--text-normal);
-}
-
-.credits-used {
-  font-weight: 600;
-  color: var(--interactive-accent);
-}
-
-.credits-separator {
-  margin: 0 2px;
-  color: var(--text-faint);
-}
-
-.credits-limit {
-  font-weight: 500;
-}
-
-.credits-remaining {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-left: 6px;
-}
-
-.credits-unlimited {
-  font-weight: 600;
-  color: var(--interactive-accent);
-}
-
-.credits-beta {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-left: 8px;
 }
 
 /* Billing Usage */
