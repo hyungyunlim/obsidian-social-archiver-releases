@@ -111,7 +111,10 @@ export class RealtimeClient {
    * Attempts private channel first (if ticketFetcher provided), falls back to public.
    */
   async connect(): Promise<void> {
-    if (this.ws?.readyState === WebSocket.OPEN) {
+    if (
+      this.ws?.readyState === WebSocket.OPEN ||
+      this.ws?.readyState === WebSocket.CONNECTING
+    ) {
       return;
     }
 

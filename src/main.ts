@@ -94,6 +94,9 @@ import {
 // Import styles for Vite to process
 import './styles/index.css';
 
+const FOREGROUND_SYNC_CATCH_UP_DEBOUNCE_MS = 750;
+const FOREGROUND_SYNC_CATCH_UP_MIN_INTERVAL_MS = 30_000;
+
 export default class SocialArchiverPlugin extends Plugin {
   settings: SocialArchiverSettings = DEFAULT_SETTINGS;
   private apiClient?: WorkersAPIClient;
@@ -132,6 +135,9 @@ export default class SocialArchiverPlugin extends Plugin {
   private wsPostBatchTimer?: number; // Timer for batching WebSocket posts
   private recentlyArchivedUrls = new Set<string>(); // Dedup guard for ws:client_sync (tracks URLs archived locally)
   private pendingTimeouts = new Set<number>(); // Track setTimeout IDs for cleanup on unload
+  private foregroundSyncCatchUpTimer?: number; // Debounced app foreground/resume catch-up timer
+  private foregroundSyncCatchUpInFlight = false; // Single-flight guard for foreground catch-up
+  private lastForegroundSyncCatchUpAt = 0; // Throttle frequent focus/visibility events
   private archiveQueueLocks = new Set<string>(); // Dedup guard for archive submission race conditions
   private wsPostBatchCount = 0; // Count of posts in current batch
   private currentCrawlWorkerJobId?: string; // Track workerJobId for current profile crawl batch
@@ -203,6 +209,91 @@ export default class SocialArchiverPlugin extends Plugin {
     }, delay);
     this.pendingTimeouts.add(id);
     return id;
+  }
+
+  private registerForegroundSyncCatchUpHandlers(): void {
+    if (typeof window !== 'undefined') {
+      this.registerDomEvent(window, 'focus', () => {
+        this.scheduleForegroundSyncCatchUp('focus');
+      });
+
+      this.registerDomEvent(window, 'online', () => {
+        this.scheduleForegroundSyncCatchUp('online');
+      });
+    }
+
+    if (typeof document !== 'undefined') {
+      this.registerDomEvent(document, 'visibilitychange', () => {
+        if (!document.hidden) {
+          this.scheduleForegroundSyncCatchUp('visibilitychange');
+        }
+      });
+    }
+  }
+
+  private scheduleForegroundSyncCatchUp(trigger: 'focus' | 'visibilitychange' | 'online'): void {
+    if (!this.settings.authToken || !this.settings.syncClientId) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
+    if (this.foregroundSyncCatchUpTimer !== undefined) return;
+
+    this.foregroundSyncCatchUpTimer = this.scheduleTrackedTimeout(() => {
+      this.foregroundSyncCatchUpTimer = undefined;
+      void this.runForegroundSyncCatchUp(trigger);
+    }, FOREGROUND_SYNC_CATCH_UP_DEBOUNCE_MS);
+  }
+
+  private async runForegroundSyncCatchUp(trigger: string): Promise<void> {
+    if (this.foregroundSyncCatchUpInFlight) return;
+
+    const now = Date.now();
+    if (now - this.lastForegroundSyncCatchUpAt < FOREGROUND_SYNC_CATCH_UP_MIN_INTERVAL_MS) {
+      return;
+    }
+
+    if (!this.settings.authToken || !this.settings.syncClientId) return;
+
+    this.lastForegroundSyncCatchUpAt = now;
+    this.foregroundSyncCatchUpInFlight = true;
+
+    try {
+      console.debug('[Social Archiver] Foreground sync catch-up starting', { trigger });
+
+      if (this.realtimeClient && !this.realtimeClient.isConnected()) {
+        void this.realtimeClient.connect().catch((error) => {
+          console.debug('[Social Archiver] Foreground WebSocket reconnect failed:', error);
+        });
+      }
+
+      await this.runForegroundSyncStep('pending mobile sync queue', () =>
+        this.mobileSyncService?.processPendingSyncQueue() ?? Promise.resolve()
+      );
+
+      await this.runForegroundSyncStep('subscription pending posts', () =>
+        this.syncSubscriptionPosts(`foreground-${trigger}`)
+      );
+
+      await this.runForegroundSyncStep('author profile sync', async () => {
+        await this.authorProfileSyncService?.syncAllFromServer();
+        this.refreshTimelineView();
+      });
+
+      await this.runForegroundSyncStep('archive library delta catch-up', () =>
+        this.archiveLibrarySyncService?.startDeltaSync('delta-catch-up') ?? Promise.resolve()
+      );
+    } finally {
+      this.foregroundSyncCatchUpInFlight = false;
+    }
+  }
+
+  private async runForegroundSyncStep(label: string, action: () => Promise<void>): Promise<void> {
+    try {
+      await action();
+    } catch (error) {
+      console.warn(
+        `[Social Archiver] Foreground catch-up step failed: ${label}`,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
   }
 
   private buildArchiveQueueLockKey(url: string, platform?: Platform): string {
@@ -505,6 +596,9 @@ export default class SocialArchiverPlugin extends Plugin {
 
     // Register protocol handler for mobile share
     this.registerProtocolHandler();
+
+    // Catch up changes missed while Obsidian was backgrounded/suspended.
+    this.registerForegroundSyncCatchUpHandlers();
 
     // Startup job recovery - check for incomplete jobs from previous session
     this.pendingJobOrchestrator?.checkPendingJobs().catch(error => {

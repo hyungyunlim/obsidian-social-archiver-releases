@@ -156,4 +156,18 @@ describe('RealtimeClient (channel mode + logging)', () => {
     // Exactly one structured log across two degraded reconnects
     expect(logLines).toHaveLength(1);
   });
+
+  it('does not create a second socket while a connection attempt is still pending', async () => {
+    const client = new RealtimeClient(
+      'https://api.example.com',
+      'alice',
+      events,
+      async () => 'valid-ticket',
+    );
+
+    await client.connect();
+    await client.connect();
+
+    expect(FakeWebSocket.instances).toHaveLength(1);
+  });
 });

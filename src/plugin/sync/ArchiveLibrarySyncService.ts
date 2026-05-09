@@ -57,7 +57,7 @@ export interface SavePendingPostResult {
 // ============================================================================
 
 /** What triggered this sync run. */
-export type ArchiveLibrarySyncMode = 'bootstrap' | 'resume' | 'manual-reconcile';
+export type ArchiveLibrarySyncMode = 'bootstrap' | 'resume' | 'manual-reconcile' | 'delta-catch-up';
 
 /** Phase within a sync run. */
 export type ArchiveLibrarySyncPhase = 'idle' | 'scanning' | 'delta-sweep' | 'completed' | 'error';
@@ -297,6 +297,120 @@ export class ArchiveLibrarySyncService {
   }
 
   /**
+   * Run a lightweight delta catch-up from the last persisted server high-water
+   * mark. This is used when Obsidian returns to the foreground: WebSocket covers
+   * the online path, but a focused catch-up closes gaps from suspended sockets,
+   * missed private events, or maxed-out reconnect attempts.
+   */
+  async startDeltaSync(mode: ArchiveLibrarySyncMode = 'delta-catch-up'): Promise<void> {
+    if (this.isSyncing) {
+      console.debug('[Social Archiver] [LibrarySync] startDeltaSync called while already running — ignored');
+      return;
+    }
+
+    const apiClient = this.deps.apiClient();
+    const settings = this.deps.settings();
+
+    if (!apiClient) {
+      console.warn('[Social Archiver] [LibrarySync] Cannot start delta sync: API client not initialised');
+      return;
+    }
+
+    if (!settings.authToken) {
+      console.warn('[Social Archiver] [LibrarySync] Cannot start delta sync: not authenticated');
+      return;
+    }
+
+    if (!settings.syncClientId) {
+      console.warn('[Social Archiver] [LibrarySync] Cannot start delta sync: no syncClientId — register sync client first');
+      return;
+    }
+
+    const updatedAfter =
+      settings.archiveLibrarySync?.lastServerTime ||
+      settings.archiveLibrarySync?.completedAt ||
+      '';
+
+    if (!updatedAfter) {
+      await this.startSync('bootstrap');
+      return;
+    }
+
+    this.isSyncing = true;
+    this.abortController = new AbortController();
+
+    this.updateState({
+      mode,
+      phase: 'delta-sweep',
+      totalServerArchives: null,
+      scannedCount: 0,
+      savedCount: 0,
+      skippedCount: 0,
+      ambiguousCount: 0,
+      failedCount: 0,
+      currentOffset: 0,
+      startedAt: new Date().toISOString(),
+      lastError: null,
+    });
+
+    await this.persistStatus('running');
+
+    console.debug('[Social Archiver] [LibrarySync] Starting delta catch-up', {
+      mode,
+      updatedAfter,
+    });
+
+    try {
+      const nextServerTime = await this.runDeltaSweep(updatedAfter, this.abortController.signal);
+      const completedAt = new Date().toISOString();
+
+      if (settings.archiveLibrarySync) {
+        settings.archiveLibrarySync.completedAt = completedAt;
+        settings.archiveLibrarySync.lastServerTime = nextServerTime ?? completedAt;
+        settings.archiveLibrarySync.runAnchorTime = '';
+        settings.archiveLibrarySync.resumeOffset = 0;
+        settings.archiveLibrarySync.lastError = '';
+      }
+
+      await this.deps.saveSettings();
+      await this.persistStatus('completed');
+      this.updateState({ phase: 'completed' });
+
+      const { savedCount, skippedCount, ambiguousCount, failedCount, scannedCount } = this.runtimeState;
+      console.debug('[Social Archiver] [LibrarySync] Delta catch-up completed', {
+        scannedCount,
+        savedCount,
+        skippedCount,
+        ambiguousCount,
+        failedCount,
+        completedAt,
+        nextServerTime,
+      });
+
+      if (savedCount > 0) {
+        this.deps.notify(
+          `Library sync complete: ${savedCount} new archive${savedCount === 1 ? '' : 's'} saved.`,
+          5000
+        );
+      }
+    } catch (error) {
+      if (this.isAbortError(error)) {
+        console.debug('[Social Archiver] [LibrarySync] Delta catch-up cancelled');
+        this.updateState({ phase: 'idle', lastError: 'Cancelled' });
+        await this.persistStatus('idle');
+      } else {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[Social Archiver] [LibrarySync] Delta catch-up failed:', error);
+        this.updateState({ phase: 'error', lastError: message });
+        await this.persistStatus('error', message);
+      }
+    } finally {
+      this.isSyncing = false;
+      this.abortController = null;
+    }
+  }
+
+  /**
    * Cancel the current sync run, if running.
    * The checkpoint (resumeOffset) is preserved so the run can be resumed later.
    */
@@ -437,10 +551,11 @@ export class ArchiveLibrarySyncService {
    * When includeDeleted is supported, also collects deletedIds from the server
    * and applies inbound deletes for any archives deleted during the sweep window.
    */
-  private async runDeltaSweep(updatedAfter: string, signal: AbortSignal): Promise<void> {
+  private async runDeltaSweep(updatedAfter: string, signal: AbortSignal): Promise<string | null> {
     let offset = 0;
     let hasMore = true;
     const allDeletedIds: string[] = [];
+    let nextServerTime: string | null = null;
 
     while (hasMore) {
       this.throwIfAborted(signal);
@@ -453,6 +568,10 @@ export class ArchiveLibrarySyncService {
       };
 
       const response = await this.fetchPageWithRetry(params, signal);
+      nextServerTime ??= response.serverTime;
+      this.updateState({
+        totalServerArchives: response.total,
+      });
 
       // Collect deletedIds from each page
       if (response.deletedIds && response.deletedIds.length > 0) {
@@ -476,6 +595,7 @@ export class ArchiveLibrarySyncService {
       }
 
       offset += response.archives.length;
+      this.updateState({ currentOffset: offset });
       hasMore = response.hasMore && response.archives.length > 0;
 
       if (hasMore) {
@@ -495,6 +615,8 @@ export class ArchiveLibrarySyncService {
         console.error('[Social Archiver] [LibrarySync] Delta sweep: applyInboundDeletedIds failed', error);
       }
     }
+
+    return nextServerTime;
   }
 
   // -- Per-archive processing ------------------------------------------------
