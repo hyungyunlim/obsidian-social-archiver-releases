@@ -544,10 +544,13 @@ export class LinkPreviewRenderer {
   private evictOldestIfNeeded(): void {
     if (this.previewCache.size <= LinkPreviewRenderer.MAX_CACHE_SIZE) return;
     const excess = this.previewCache.size - LinkPreviewRenderer.MAX_CACHE_SIZE;
-    const iterator = this.previewCache.keys();
-    for (let i = 0; i < excess; i++) {
-      const key = iterator.next().value;
-      if (key !== undefined) this.previewCache.delete(key);
+    const keysToDelete: string[] = [];
+    for (const key of this.previewCache.keys()) {
+      if (keysToDelete.length >= excess) break;
+      keysToDelete.push(key);
+    }
+    for (const key of keysToDelete) {
+      this.previewCache.delete(key);
     }
   }
 

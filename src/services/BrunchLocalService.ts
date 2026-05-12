@@ -2455,9 +2455,9 @@ export class BrunchLocalService {
 
     // Evict oldest entries if over limit
     if (BrunchLocalService.authorCache.size > BrunchLocalService.AUTHOR_CACHE_MAX_SIZE) {
-      const firstKey = BrunchLocalService.authorCache.keys().next().value;
-      if (firstKey !== undefined) {
+      for (const firstKey of BrunchLocalService.authorCache.keys()) {
         BrunchLocalService.authorCache.delete(firstKey);
+        break;
       }
     }
   }

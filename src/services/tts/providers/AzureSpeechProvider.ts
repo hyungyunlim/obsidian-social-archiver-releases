@@ -307,38 +307,48 @@ export class AzureSpeechProvider implements PluginTTSProvider {
   }): Promise<ArrayBuffer> {
     const url = `${this.apiEndpoint}/api/tts/synthesize`;
 
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    // Manual timeout via Promise.race since Obsidian's requestUrl doesn't accept AbortSignal.
+    const responsePromise = requestUrl({
+      url,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.authToken}`,
+        'X-Client': 'obsidian-plugin',
+        'X-Client-Version': this.pluginVersion,
+      },
+      body: JSON.stringify({
+        text: params.text,
+        voice: params.voice,
+        rate: params.rate,
+        lang: params.lang,
+        format: params.format,
+        responseMode: 'stream',
+      }),
+      throw: false,
+    });
+
+    let timeoutHandle: number | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutHandle = window.setTimeout(
+        () => reject(new Error(`Stream TTS timed out after ${REQUEST_TIMEOUT_MS}ms`)),
+        REQUEST_TIMEOUT_MS,
+      );
+    });
 
     try {
-      // eslint-disable-next-line obsidianmd/no-fetch -- abort signal not supported by requestUrl
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.authToken}`,
-          'X-Client': 'obsidian-plugin',
-          'X-Client-Version': this.pluginVersion,
-        },
-        body: JSON.stringify({
-          text: params.text,
-          voice: params.voice,
-          rate: params.rate,
-          lang: params.lang,
-          format: params.format,
-          responseMode: 'stream',
-        }),
-        signal: controller.signal,
-      });
+      const response = await Promise.race([responsePromise, timeoutPromise]);
 
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => '');
-        throw new Error(`Stream TTS failed (${response.status}): ${errorText.slice(0, 200)}`);
+      if (response.status < 200 || response.status >= 300) {
+        const errorText = (response.text ?? '').slice(0, 200);
+        throw new Error(`Stream TTS failed (${response.status}): ${errorText}`);
       }
 
-      return await response.arrayBuffer();
+      return response.arrayBuffer;
     } finally {
-      window.clearTimeout(timer);
+      if (timeoutHandle !== undefined) {
+        window.clearTimeout(timeoutHandle);
+      }
     }
   }
 

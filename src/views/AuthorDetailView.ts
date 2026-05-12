@@ -129,7 +129,7 @@ export class AuthorDetailView extends ItemView {
         this.authorUrl = s.authorUrl;
       }
       if (typeof s.platform === 'string' && s.platform) {
-        this.authorPlatform = s.platform as Platform;
+        this.authorPlatform = s.platform;
       }
       if (typeof s.authorName === 'string' && s.authorName) {
         this.authorDisplayName = s.authorName;

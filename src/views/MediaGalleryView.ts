@@ -224,9 +224,9 @@ export class MediaGalleryView extends BasesView implements HoverParent {
 
         // Limit cache size to 200 entries
         if (MediaGalleryView.parseCache.size > 200) {
-          const firstKey = MediaGalleryView.parseCache.keys().next().value;
-          if (firstKey) {
+          for (const firstKey of MediaGalleryView.parseCache.keys()) {
             MediaGalleryView.parseCache.delete(firstKey);
+            break;
           }
         }
       }

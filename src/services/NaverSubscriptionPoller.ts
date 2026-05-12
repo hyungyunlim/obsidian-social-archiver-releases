@@ -1266,12 +1266,13 @@ export class NaverSubscriptionPoller {
     this.rssCache.set(key, entry);
     // Evict oldest entries if exceeding limit
     while (this.rssCache.size > RSS_CACHE_MAX_ENTRIES) {
-      const firstKey = this.rssCache.keys().next().value;
-      if (firstKey !== undefined) {
+      let evicted = false;
+      for (const firstKey of this.rssCache.keys()) {
         this.rssCache.delete(firstKey);
-      } else {
+        evicted = true;
         break;
       }
+      if (!evicted) break;
     }
   }
 

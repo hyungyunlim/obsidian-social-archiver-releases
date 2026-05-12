@@ -189,7 +189,13 @@ export class CommentFormatter {
     const decoded = this.decodeHtmlEntities(content);
     const withLinks = decoded.replace(
       /<a\b[^>]*\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))[^>]*>([\s\S]*?)<\/a>/gi,
-      (_match, doubleQuotedHref, singleQuotedHref, bareHref, rawLabel) => {
+      (
+        _match: string,
+        doubleQuotedHref: string | undefined,
+        singleQuotedHref: string | undefined,
+        bareHref: string | undefined,
+        rawLabel: string,
+      ) => {
         const label = this.stripHtmlTags(rawLabel).trim();
         if (!label) return '';
 
@@ -205,10 +211,10 @@ export class CommentFormatter {
 
   private decodeHtmlEntities(text: string): string {
     try {
-      let decoded = text.replace(/&#x([0-9A-Fa-f]+);/g, (_match, hex) =>
+      let decoded = text.replace(/&#x([0-9A-Fa-f]+);/g, (_match: string, hex: string) =>
         String.fromCodePoint(parseInt(hex, 16))
       );
-      decoded = decoded.replace(/&#(\d+);/g, (_match, dec) =>
+      decoded = decoded.replace(/&#(\d+);/g, (_match: string, dec: string) =>
         String.fromCodePoint(parseInt(dec, 10))
       );
       return decoded

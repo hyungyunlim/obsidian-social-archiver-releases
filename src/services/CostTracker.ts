@@ -234,8 +234,10 @@ export class CostTracker implements IService {
 
     // Evict oldest entries if cache is too large
     if (this.dailyUsageCache.size > CostTracker.MAX_USAGE_CACHE_SIZE) {
-      const firstKey = this.dailyUsageCache.keys().next().value;
-      if (firstKey !== undefined) this.dailyUsageCache.delete(firstKey);
+      for (const firstKey of this.dailyUsageCache.keys()) {
+        this.dailyUsageCache.delete(firstKey);
+        break;
+      }
     }
 
     return dailyUsage;
@@ -282,8 +284,10 @@ export class CostTracker implements IService {
 
     // Evict oldest entries if cache is too large
     if (this.monthlyUsageCache.size > CostTracker.MAX_USAGE_CACHE_SIZE) {
-      const firstKey = this.monthlyUsageCache.keys().next().value;
-      if (firstKey !== undefined) this.monthlyUsageCache.delete(firstKey);
+      for (const firstKey of this.monthlyUsageCache.keys()) {
+        this.monthlyUsageCache.delete(firstKey);
+        break;
+      }
     }
 
     return monthlyUsage;

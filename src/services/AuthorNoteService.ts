@@ -670,7 +670,7 @@ export class AuthorNoteService {
       const fm = cache?.frontmatter;
       if (!fm || fm.type !== AUTHOR_NOTE_TYPE) continue;
 
-      const authorKey = fm.authorKey as string;
+      const authorKey = typeof fm.authorKey === 'string' ? fm.authorKey : '';
       if (authorKey) {
         index.set(authorKey, file.path);
       }

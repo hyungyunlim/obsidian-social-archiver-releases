@@ -500,7 +500,7 @@ export class VaultStorageService {
       return {
         originalUrl: media.url,
         localPath: media.url,
-        type: media.type as MediaResult['type'],
+        type: media.type,
         size: media.size || 0,
         file: file as import('obsidian').TFile,
         sourceIndex: index,

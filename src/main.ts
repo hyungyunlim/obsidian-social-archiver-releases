@@ -222,8 +222,8 @@ export default class SocialArchiverPlugin extends Plugin {
       });
     }
 
-    if (typeof document !== 'undefined') {
-      this.registerDomEvent(document, 'visibilitychange', () => {
+    if (typeof activeDocument !== 'undefined') {
+      this.registerDomEvent(activeDocument, 'visibilitychange', () => {
         if (!activeDocument.hidden) {
           this.scheduleForegroundSyncCatchUp('visibilitychange');
         }

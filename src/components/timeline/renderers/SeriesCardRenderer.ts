@@ -142,10 +142,13 @@ export class SeriesCardRenderer extends Component {
   private evictIfNeeded<K, V>(map: Map<K, V>, maxSize: number = SeriesCardRenderer.MAX_CACHE_SIZE): void {
     if (map.size <= maxSize) return;
     const excess = map.size - maxSize;
-    const iterator = map.keys();
-    for (let i = 0; i < excess; i++) {
-      const key = iterator.next().value;
-      if (key !== undefined) map.delete(key);
+    const keysToDelete: K[] = [];
+    for (const key of map.keys()) {
+      if (keysToDelete.length >= excess) break;
+      keysToDelete.push(key);
+    }
+    for (const key of keysToDelete) {
+      map.delete(key);
     }
   }
 
