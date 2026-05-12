@@ -26,7 +26,7 @@
   --tw-numeric-fraction: ;
   --tw-ring-inset: ;
   --tw-ring-offset-width: 0px;
-  --tw-ring-offset-color: #fff;
+  --tw-ring-offset-color: #ffffff;
   --tw-ring-color: rgb(59 130 246 / .5);
   --tw-ring-offset-shadow: 0 0 #0000;
   --tw-ring-shadow: 0 0 #0000;
@@ -80,7 +80,7 @@
   --tw-numeric-fraction: ;
   --tw-ring-inset: ;
   --tw-ring-offset-width: 0px;
-  --tw-ring-offset-color: #fff;
+  --tw-ring-offset-color: #ffffff;
   --tw-ring-color: rgb(59 130 246 / .5);
   --tw-ring-offset-shadow: 0 0 #0000;
   --tw-ring-shadow: 0 0 #0000;
@@ -500,29 +500,29 @@
 
 .timeline-platform-badge[data-platform=facebook] {
   background: #1877f2;
-  color: #fff
+  color: #ffffff
 }
 
 .timeline-platform-badge[data-platform=linkedin] {
   background: #0077b5;
-  color: #fff
+  color: #ffffff
 }
 
 .timeline-platform-badge[data-platform=instagram] {
   background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
-  color: #fff
+  color: #ffffff
 }
 
 .timeline-platform-badge[data-platform=tiktok],
 .timeline-platform-badge[data-platform=x],
 .timeline-platform-badge[data-platform=threads] {
-  background: #000;
-  color: #fff
+  background: #000000;
+  color: #ffffff
 }
 
 .timeline-platform-badge[data-platform=youtube] {
   background: red;
-  color: #fff
+  color: #ffffff
 }
 
 .line-clamp-4 {
@@ -586,34 +586,34 @@
 
 .timeline-avatar[data-platform=facebook].timeline-avatar[data-platform=facebook] {
   background: #1877f2;
-  color: #fff
+  color: #ffffff
 }
 
 .timeline-avatar[data-platform=linkedin].timeline-avatar[data-platform=linkedin] {
   background: #0077b5;
-  color: #fff
+  color: #ffffff
 }
 
 .timeline-avatar[data-platform=instagram].timeline-avatar[data-platform=instagram] {
   background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
-  color: #fff
+  color: #ffffff
 }
 
 .timeline-avatar[data-platform=tiktok].timeline-avatar[data-platform=tiktok],
 .timeline-avatar[data-platform=x].timeline-avatar[data-platform=x],
 .timeline-avatar[data-platform=twitter].timeline-avatar[data-platform=twitter],
 .timeline-avatar[data-platform=threads].timeline-avatar[data-platform=threads] {
-  background: #000;
-  color: #fff
+  background: #000000;
+  color: #ffffff
 }
 
 .timeline-avatar[data-platform=youtube].timeline-avatar[data-platform=youtube] {
   background: red;
-  color: #fff
+  color: #ffffff
 }
 
 .timeline-avatar.timeline-avatar svg {
-  color: #fff;
+  color: #ffffff;
   stroke: currentColor;
   fill: currentColor
 }

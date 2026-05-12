@@ -2,7 +2,7 @@
 
 video::cue {
   background-color: rgba(0, 0, 0, .6);
-  color: #fff;
+  color: #ffffff;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: clamp(0.75em, 2.2vw, 1em);
   line-height: 1.4;

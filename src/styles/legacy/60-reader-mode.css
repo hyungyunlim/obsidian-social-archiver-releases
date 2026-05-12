@@ -19,7 +19,6 @@
   top: 0;
   left: 0;
   width: 100vw;
-  height: 100vh;
   height: 100dvh;
   z-index: 1000;
   background: var(--background-primary);
@@ -718,7 +717,6 @@ body.is-tablet .sa-reader-mode-action-btn svg {
   position: fixed;
   top: var(--sa-toolbar-top, 0);
   left: var(--sa-toolbar-left, 0);
-  transform: translateX(-50%);
   z-index: 1010;
   display: flex;
   align-items: center;
@@ -841,7 +839,6 @@ body.is-tablet .sa-reader-mode-action-btn svg {
   border-radius: 12px 12px 0 0;
   justify-content: center;
   padding: 10px 16px;
-  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   /* Android WebView fallback: env() may resolve to 0 — read from documentElement */
   padding-bottom: calc(10px + max(env(safe-area-inset-bottom, 0px), var(--reader-safe-area-bottom-fallback, 0px)));
   gap: 10px;

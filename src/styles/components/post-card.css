@@ -1998,8 +1998,8 @@
   line-height: 22px;
   text-align: center;
   text-decoration: none;
-  color: #333;
-  background: #fff;
+  color: #333333;
+  background: #ffffff;
   cursor: pointer;
   font-size: 14px;
   font-weight: bold;
@@ -2011,7 +2011,7 @@
 
 .leaflet-control-zoom-in {
   border-radius: 3px 3px 0 0;
-  border-bottom: 1px solid #ccc;
+  border-bottom: 1px solid #cccccc;
 }
 
 .leaflet-control-zoom-out {

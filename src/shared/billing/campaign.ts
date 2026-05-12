@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/billing/campaign.ts
- * Generated: 2026-05-12T21:27:40.643Z
+ * Generated: 2026-05-12T23:46:12.507Z
  *
  * To modify, edit the source file in shared/billing/ and run:
  *   npm run sync:shared

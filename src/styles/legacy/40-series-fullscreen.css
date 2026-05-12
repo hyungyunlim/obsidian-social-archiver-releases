@@ -121,8 +121,6 @@
   }
 
   .series-card.sa-series-fullscreen.sa-series-fullscreen {
-    height: 100vh;
-    max-height: 100vh;
     height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
     max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
     padding-top: env(safe-area-inset-top, 0px);
@@ -197,9 +195,7 @@
     left: 0;
     transform: none;
     border-radius: 0;
-    height: 100vh;
     height: 100dvh;
-    max-height: 100vh;
     max-height: 100dvh;
     padding: 0
   }
@@ -261,9 +257,7 @@
 }
 
 .series-card.series-immersive .webtoon-scroll-container.webtoon-scroll-container {
-  max-height: 100vh;
   max-height: 100dvh;
-  height: 100vh;
   height: 100dvh;
   border-radius: 0
 }
@@ -367,9 +361,7 @@
     left: 0;
     transform: none;
     border-radius: 0;
-    height: 100vh;
     height: 100dvh;
-    max-height: 100vh;
     max-height: 100dvh;
     padding: 0
   }
@@ -394,7 +386,6 @@
 }
 
 .series-card.sa-series-fullscreen .series-episode-list-wrapper.series-episode-list-wrapper {
-  max-height: 200px;
   display: flex;
   flex-direction: column;
   max-height: min(30vh, 300px);
@@ -648,7 +639,6 @@
   top: 0;
   left: 0;
   width: 100vw;
-  height: 100vh;
   height: 100dvh;
   z-index: 1000;
   background: var(--background-primary);

@@ -1050,9 +1050,7 @@ body:not(.theme-dark) .post-card-skeleton {
     transform: none !important;
     border-radius: 0 !important;
     /* Height with safe area calculation */
-    height: 100vh !important;
     height: 100dvh !important;
-    max-height: 100vh !important;
     max-height: 100dvh !important;
     /* No padding - safe area handled by children */
     padding: 0 !important;
@@ -1518,7 +1516,6 @@ body.is-tablet .social-archiver-timeline-view {
   top: 0;
   left: 0;
   width: 100vw;
-  height: 100vh;
   height: 100dvh;
   z-index: 1000;
   background: var(--background-primary);

@@ -1427,7 +1427,7 @@ body.is-mobile .sa-reader-mode-metric-icon svg {
 .sa-media-author {
   font-size: 13px;
   font-weight: 500;
-  color: #fff;
+  color: #ffffff;
   margin-bottom: 4px;
   white-space: nowrap;
   overflow: hidden;
@@ -1449,7 +1449,7 @@ body.is-mobile .sa-reader-mode-metric-icon svg {
   width: 32px;
   height: 32px;
   background: #0000004d;
-  color: #fff;
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1493,7 +1493,7 @@ body.is-mobile .sa-reader-mode-metric-icon svg {
   left: 50%;
   transform: translate(-50%);
   background: #000000b3;
-  color: #fff;
+  color: #ffffff;
   padding: 8px 16px;
   border-radius: 20px;
   font-size: 14px;
@@ -1854,9 +1854,7 @@ body.is-mobile .sa-reader-mode-metric-icon svg {
     left: 0;
     transform: none;
     border-radius: 0;
-    height: 100vh;
     height: 100dvh;
-    max-height: 100vh;
     max-height: 100dvh;
     padding: 0;
     contain: layout style

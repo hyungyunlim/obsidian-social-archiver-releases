@@ -176,9 +176,13 @@ Use Social Archiver from the web:
 - **Organize**: Manage inbox/archive state, stars, tags, notes, highlights, deletes, and bulk actions
 - **Public Timeline**: Share selected posts at `https://social-archive.org/{username}`
 
-### Community Plugins (Coming Soon)
+### Community Plugins
 
-> **Note**: Social Archiver is currently under review for the Obsidian Community Plugin store. Once approved, you'll be able to install it directly through the plugin browser.
+Install Social Archiver directly through Obsidian's plugin browser:
+
+1. Open **Settings** → **Community Plugins** → **Browse**
+2. Search for "Social Archiver"
+3. Click **Install**, then **Enable**
 
 ### Manual Installation
 
