@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -51,6 +53,13 @@ jobs:
             exit 1
           fi
           echo "All required files are present"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist-plugin/main.js
+            dist-plugin/styles.css
 
       - name: Create release
         env:
