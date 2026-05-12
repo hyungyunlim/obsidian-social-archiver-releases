@@ -1005,6 +1005,7 @@ export class SupertonicInstaller {
   private getNodeModules(): NodeModules {
     return {
       os: this.nodeRequire('os') as typeof import('os'),
+      path: this.nodeRequire('path') as typeof import('path'),
       child_process: this.nodeRequire('child_process') as typeof import('child_process'),
       fs: this.nodeRequire('fs') as typeof import('fs'),
     };

@@ -101,6 +101,10 @@ describe('rateLimitError utilities', () => {
       expect(formatRetryAfter(3600)).toBe('1 hour');
     });
 
+    it('formats long waits in days instead of large hour counts', () => {
+      expect(formatRetryAfter(103 * 60 * 60)).toBe('4 days');
+    });
+
     it('falls back when retryAfter is missing or invalid', () => {
       expect(formatRetryAfter(undefined)).toBe('a moment');
       expect(formatRetryAfter(0)).toBe('a moment');
@@ -152,6 +156,22 @@ describe('rateLimitError utilities', () => {
       });
       const msg = formatRateLimitMessage(error);
       expect(msg).not.toContain('Pro license');
+    });
+
+    it('explains daily/weekly guard as a Social Archiver limit', () => {
+      const error = Object.assign(new Error('Weekly archive limit reached'), {
+        code: 'RATE_LIMIT_EXCEEDED',
+        details: {
+          retryAfter: 103 * 60 * 60,
+          scope: 'archive_daily_weekly_guard',
+          reason: 'weekly',
+        },
+      });
+      const msg = formatRateLimitMessage(error);
+      expect(msg).toContain('Weekly archive limit reached');
+      expect(msg).toContain('Social Archiver safety limit');
+      expect(msg).toContain('not an upstream platform limit');
+      expect(msg).toContain('4 days');
     });
   });
 

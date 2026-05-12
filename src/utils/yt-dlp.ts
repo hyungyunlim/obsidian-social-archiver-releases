@@ -26,9 +26,11 @@ export class YtDlpDetector {
       const execAsync = promisify(exec);
       const os = nodeRequire('os') as typeof import('os');
 
-      // Build platform-specific paths
+      // Build platform-specific paths. We derive user-scoped Windows paths
+      // from os.homedir() (which is the same value Node uses for HOME/USERPROFILE)
+      // so we never need to inspect the user's identity.
       const isWindows = os.platform() === 'win32';
-      const username = os.userInfo().username;
+      const home = os.homedir();
 
       const commonPaths = [
         // Try PATH first (works on all platforms)
@@ -58,9 +60,9 @@ export class YtDlpDetector {
         // Windows - Chocolatey
         'C:\\ProgramData\\chocolatey\\bin\\ffmpeg.exe',
 
-        // Windows - Scoop (user-specific)
-        `C:\\Users\\${username}\\scoop\\apps\\ffmpeg\\current\\bin\\ffmpeg.exe`,
-        `C:\\Users\\${username}\\scoop\\shims\\ffmpeg.exe`,
+        // Windows - Scoop (user-scoped, derived from homedir)
+        `${home}\\scoop\\apps\\ffmpeg\\current\\bin\\ffmpeg.exe`,
+        `${home}\\scoop\\shims\\ffmpeg.exe`,
       ];
 
       for (const path of commonPaths) {
@@ -101,9 +103,10 @@ export class YtDlpDetector {
       const execAsync = promisify(exec);
       const os = nodeRequire('os') as typeof import('os');
 
-      // Build platform-specific paths
+      // Build platform-specific paths. User-scoped Windows paths are derived
+      // from os.homedir() so we never need to query the user's identity.
       const isWindows = os.platform() === 'win32';
-      const username = os.userInfo().username;
+      const home = os.homedir();
 
       // Common paths where yt-dlp might be installed
       const commonPaths = [
@@ -125,18 +128,18 @@ export class YtDlpDetector {
         '/snap/bin/yt-dlp',
 
         // Linux - pipx
-        `${os.homedir()}/.local/bin/yt-dlp`,
+        `${home}/.local/bin/yt-dlp`,
 
-        // Windows - pip install (user)
-        `C:\\Users\\${username}\\AppData\\Local\\Programs\\Python\\Python*\\Scripts\\yt-dlp.exe`,
-        `C:\\Users\\${username}\\AppData\\Roaming\\Python\\Python*\\Scripts\\yt-dlp.exe`,
+        // Windows - pip install (user, derived from homedir)
+        `${home}\\AppData\\Local\\Programs\\Python\\Python*\\Scripts\\yt-dlp.exe`,
+        `${home}\\AppData\\Roaming\\Python\\Python*\\Scripts\\yt-dlp.exe`,
 
         // Windows - Chocolatey
         'C:\\ProgramData\\chocolatey\\bin\\yt-dlp.exe',
 
-        // Windows - Scoop
-        `C:\\Users\\${username}\\scoop\\apps\\yt-dlp\\current\\yt-dlp.exe`,
-        `C:\\Users\\${username}\\scoop\\shims\\yt-dlp.exe`,
+        // Windows - Scoop (derived from homedir)
+        `${home}\\scoop\\apps\\yt-dlp\\current\\yt-dlp.exe`,
+        `${home}\\scoop\\shims\\yt-dlp.exe`,
 
         // Windows - winget (common location)
         'C:\\Program Files\\yt-dlp\\yt-dlp.exe',
@@ -168,8 +171,8 @@ export class YtDlpDetector {
         '/opt/local/bin/youtube-dl',
         '/usr/bin/youtube-dl',
         '/bin/youtube-dl',
-        `${os.homedir()}/.local/bin/youtube-dl`,
-        `C:\\Users\\${username}\\scoop\\shims\\youtube-dl.exe`,
+        `${home}/.local/bin/youtube-dl`,
+        `${home}\\scoop\\shims\\youtube-dl.exe`,
         'C:\\ProgramData\\chocolatey\\bin\\youtube-dl.exe',
       ];
 

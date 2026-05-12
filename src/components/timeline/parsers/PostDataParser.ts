@@ -743,6 +743,10 @@ export class PostDataParser {
     // Match from "---\n\n**Platform:**" to end of file
     content = content.replace(/\n---\n\n\*\*Platform:\*\*[\s\S]*$/, '');
 
+    // Remove raw HTML document fallback that older Naver archives could append
+    // after the converted markdown body.
+    content = this.stripTrailingHtmlDocumentFallback(content);
+
     // Remove comments section to avoid duplicate rendering
     content = content.replace(/\n*## 💬 Comments[\s\S]*$/, '');
 
@@ -766,6 +770,17 @@ export class PostDataParser {
     content = content.trim();
 
     return content;
+  }
+
+  private stripTrailingHtmlDocumentFallback(markdown: string): string {
+    const normalized = markdown.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const fallbackStart = normalized.search(
+      /\n---\n\s*(?:<!DOCTYPE\b|<html\b|<head\b|<meta\b|<style\b|<link\b|<!--\[if\b)/i,
+    );
+
+    if (fallbackStart < 0) return markdown;
+
+    return normalized.slice(0, fallbackStart).trimEnd();
   }
 
   /**

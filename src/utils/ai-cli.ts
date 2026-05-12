@@ -1,5 +1,19 @@
 /**
- * AICliDetector - Detects locally installed AI CLI tools for AI-powered comment generation
+ * AICliDetector — discovers AI CLI tools that the user has already installed
+ * on their own desktop so the plugin can shell out to them for the optional
+ * "AI comment" feature.
+ *
+ * SECURITY NOTE:
+ *   - This module is desktop-only. It is a no-op on iOS/Android.
+ *   - It reads `process.env.PATH` solely to spawn `<cli> --version` via
+ *     `child_process.exec`. The PATH value never leaves the user's machine.
+ *   - It reads a small allow-list of authentication env vars (ANTHROPIC_API_KEY,
+ *     GOOGLE_API_KEY / GEMINI_API_KEY, OPENAI_API_KEY) to detect whether the
+ *     user's installed CLI is authenticated. The *presence* of the variable is
+ *     all that is checked; the value is never read, logged, transmitted, or
+ *     persisted.
+ *   - No `os.hostname()`, `os.userInfo()`, MAC address, or other identity
+ *     metadata is read.
  *
  * Supports:
  * - Claude Code (Anthropic CLI)
@@ -321,10 +335,12 @@ export class AICliDetector {
       try {
         const versionCommand = this.getVersionCommand(cli, cliPath);
 
-        // Use extended PATH for command execution
+        // Use extended PATH for command execution. We pass only PATH (and
+        // HOME, which some shells require to resolve `~`) — not the full
+        // env — so the spawned CLI cannot see unrelated environment data.
         const { stdout, stderr } = await execAsync(versionCommand, {
           timeout: 10000,
-          env: { ...process.env, PATH: extendedPath }
+          env: { PATH: extendedPath, HOME: homedir },
         });
         const output = stdout || stderr;
 
@@ -446,26 +462,31 @@ export class AICliDetector {
         });
       };
 
+      // Presence-only check for a specific env var name. The value is never
+      // read into memory beyond the boolean — see file header for rationale.
+      const hasEnvKey = (name: string): boolean => {
+        return Object.prototype.hasOwnProperty.call(process.env, name)
+          && typeof process.env[name] === 'string'
+          && process.env[name]!.length > 0;
+      };
+
       switch (cli) {
         case 'claude': {
-          // Claude Code: check env var or OAuth credentials
-          if (process.env.ANTHROPIC_API_KEY) return true;
+          if (hasEnvKey('ANTHROPIC_API_KEY')) return true;
           return anyPathExists([
             path.join(homeDir, '.claude'),
             path.join(homeDir, '.config', 'claude'),
           ]);
         }
         case 'gemini': {
-          // Gemini CLI: check env vars or config files
-          if (process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY) return true;
+          if (hasEnvKey('GOOGLE_API_KEY') || hasEnvKey('GEMINI_API_KEY')) return true;
           return anyPathExists([
             path.join(homeDir, '.gemini'),
             path.join(homeDir, '.config', 'gemini'),
           ]);
         }
         case 'codex': {
-          // Codex CLI: check env var or config files
-          if (process.env.OPENAI_API_KEY) return true;
+          if (hasEnvKey('OPENAI_API_KEY')) return true;
           return anyPathExists([
             path.join(homeDir, '.codex'),
             path.join(homeDir, '.config', 'codex'),

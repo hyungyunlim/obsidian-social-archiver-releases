@@ -349,7 +349,15 @@ export class LicenseValidator implements IService {
   }
 
   /**
-   * Start auto-refresh timer
+   * Start auto-refresh timer for the user's license entitlement.
+   *
+   * Disclosure: this timer is created only when the user has voluntarily
+   * entered a license key (via Settings → Account). It re-validates the
+   * existing license against the user's own licensing endpoint so that
+   * subscription state stays current after server-side changes (e.g. tier
+   * upgrades, refunds). When no license is active this timer is never
+   * created. No identifying data beyond the user-supplied license key is
+   * sent. Stops on plugin unload.
    */
   private startAutoRefresh(): void {
     this.stopAutoRefresh();

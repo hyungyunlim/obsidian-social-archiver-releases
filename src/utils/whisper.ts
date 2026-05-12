@@ -691,17 +691,24 @@ export class WhisperDetector {
   }
 
   /**
-   * Expand path variables like ~ and %USERPROFILE%
-   * Uses actual environment variables on Windows for correct paths
+   * Expand path variables like ~ and %USERPROFILE% in a user-configured
+   * whisper binary path. Used only to locate a pre-installed CLI tool.
+   *
+   * We derive the username from the home directory's basename rather than
+   * calling `os.userInfo()` so we never read OS-level identity metadata.
+   * Standard Windows env vars (%LOCALAPPDATA%, %APPDATA%) are constructed
+   * from the home directory when not present — we never enumerate process.env.
    */
   private static expandPath(pathStr: string, os: typeof import('os')): string {
+    const path = nodeRequire('path') as typeof import('path');
     const homedir = os.homedir();
-    const username = os.userInfo().username;
     const isWindows = os.platform() === 'win32';
+    // Derived from the home dir basename to avoid os.userInfo() identity reads.
+    const username = path.basename(homedir);
 
-    // Use actual environment variables on Windows, fallback to constructed paths
-    const localAppData = process.env.LOCALAPPDATA || (isWindows ? `${homedir}\\AppData\\Local` : `${homedir}/.local`);
-    const appData = process.env.APPDATA || (isWindows ? `${homedir}\\AppData\\Roaming` : `${homedir}/.config`);
+    // Construct standard Windows app-data locations from the home directory.
+    const localAppData = isWindows ? `${homedir}\\AppData\\Local` : `${homedir}/.local`;
+    const appData = isWindows ? `${homedir}\\AppData\\Roaming` : `${homedir}/.config`;
 
     let expanded = pathStr
       .replace(/^~/, homedir)

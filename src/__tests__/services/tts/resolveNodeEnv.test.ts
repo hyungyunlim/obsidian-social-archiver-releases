@@ -19,7 +19,7 @@ function createMockModules(platform: 'darwin' | 'win32' | 'linux' = 'darwin'): {
     readdirSync: ReturnType<typeof vi.fn>;
     homedir: ReturnType<typeof vi.fn>;
     platform: ReturnType<typeof vi.fn>;
-    userInfo: ReturnType<typeof vi.fn>;
+    basename: ReturnType<typeof vi.fn>;
   };
 } {
   const execSync = vi.fn();
@@ -27,11 +27,15 @@ function createMockModules(platform: 'darwin' | 'win32' | 'linux' = 'darwin'): {
   const readdirSync = vi.fn(() => [] as string[]);
   const homedir = vi.fn(() => platform === 'win32' ? 'C:\\Users\\test' : '/home/test');
   const platformFn = vi.fn(() => platform);
-  const userInfo = vi.fn(() => ({ username: 'test' }));
+  const basename = vi.fn((p: string) => {
+    const parts = p.split(/[\\/]/);
+    return parts[parts.length - 1] ?? '';
+  });
 
   return {
     modules: {
-      os: { homedir, platform: platformFn, userInfo } as unknown as typeof import('os'),
+      os: { homedir, platform: platformFn } as unknown as typeof import('os'),
+      path: { basename } as unknown as typeof import('path'),
       child_process: { execSync } as unknown as typeof import('child_process'),
       fs: { existsSync, readdirSync } as unknown as typeof import('fs'),
     },
@@ -41,7 +45,7 @@ function createMockModules(platform: 'darwin' | 'win32' | 'linux' = 'darwin'): {
       readdirSync,
       homedir,
       platform: platformFn,
-      userInfo,
+      basename,
     },
   };
 }

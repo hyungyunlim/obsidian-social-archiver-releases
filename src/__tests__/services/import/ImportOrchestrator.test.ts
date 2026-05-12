@@ -145,7 +145,7 @@ async function makePartZip(args: {
     mediaFailed: 0,
   };
   zip.file(
-    'manifest.json',
+    'import-manifest.json',
     JSON.stringify({
       $schema: 'social-archiver/instagram-saved-export-v2',
       schemaVersion: 2,

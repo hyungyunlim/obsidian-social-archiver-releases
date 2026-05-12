@@ -15,6 +15,7 @@
 /** Abstraction over Node.js built-in modules for testability. */
 export interface NodeModules {
   os: typeof import('os');
+  path: typeof import('path');
   child_process: typeof import('child_process');
   fs: typeof import('fs');
 }
@@ -143,7 +144,11 @@ function resolvePosixPath(modules: NodeModules): string {
     const result = modules.child_process.execSync(`${shell} -lic 'echo $PATH'`, {
       encoding: 'utf-8',
       timeout: 5000,
-      env: { HOME: modules.os.homedir(), USER: modules.os.userInfo().username },
+      // Derive USER from the home dir basename to avoid os.userInfo() identity reads.
+      env: {
+        HOME: modules.os.homedir(),
+        USER: modules.path.basename(modules.os.homedir()),
+      },
     });
 
     const lines = result.trim().split('\n');

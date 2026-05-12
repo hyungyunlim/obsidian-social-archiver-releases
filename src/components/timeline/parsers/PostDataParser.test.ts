@@ -204,6 +204,56 @@ Shared post text.
   });
 });
 
+describe('PostDataParser - Naver raw HTML fallback cleanup', () => {
+  it('removes trailing Naver HTML document fallback from raw markdown previews', async () => {
+    const markdown = `---
+platform: naver
+author: Aikon Vero
+authorUrl: https://m.blog.naver.com/aikonvero
+published: 2026-05-10 17:10
+originalUrl: https://m.blog.naver.com/aikonvero/224280828549
+title: 카카오는 팔고 &mdash; 네이버는 물러서고
+---
+
+# 카카오는 팔고 &mdash; 네이버는 물러서고
+
+첫 문단입니다.
+
+![[naver-1.webp]]
+
+둘째 문단입니다.
+
+---
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html lang="ko">
+<head><style>body { color: red; }</style></head>
+<body>blog chrome</body>
+</html>
+`;
+
+    const vault = {
+      cachedRead: vi.fn().mockResolvedValue(markdown),
+    } as any;
+    const parser = new PostDataParser(vault);
+    const file = {
+      basename: 'naver-post',
+      path: 'Social Archives/Naver/2026/05/naver-post.md',
+      stat: { ctime: Date.now() },
+    } as any;
+
+    const post = await parser.parseFile(file);
+
+    expect(post).toBeTruthy();
+    expect(post!.content.rawMarkdown).toContain('첫 문단입니다.');
+    expect(post!.content.rawMarkdown).toContain('둘째 문단입니다.');
+    expect(post!.content.rawMarkdown).toContain('![[naver-1.webp]]');
+    expect(post!.content.rawMarkdown).not.toContain('<!DOCTYPE');
+    expect(post!.content.rawMarkdown).not.toContain('<html');
+    expect(post!.content.rawMarkdown).not.toContain('blog chrome');
+  });
+});
+
 describe('PostDataParser - extractContentText excludes media-only sections', () => {
   const parser = new PostDataParser({} as any);
 

@@ -119,7 +119,7 @@ async function makePartZip(opts: MakePartOptions): Promise<Blob> {
   // manifest.json
   if (!opts.omitManifest) {
     if (opts.invalidManifest) {
-      zip.file('manifest.json', JSON.stringify({ schemaVersion: 1, garbage: true }));
+      zip.file('import-manifest.json', JSON.stringify({ schemaVersion: 1, garbage: true }));
     } else {
       const counts = {
         postsInPart: opts.posts.length,
@@ -148,7 +148,7 @@ async function makePartZip(opts: MakePartOptions): Promise<Blob> {
         counts,
         integrity: { algorithm: 'sha256', checksumsFile: '_checksums.txt' },
       };
-      zip.file('manifest.json', JSON.stringify(manifest));
+      zip.file('import-manifest.json', JSON.stringify(manifest));
     }
   }
 
@@ -402,7 +402,7 @@ describe('loadGallery', () => {
     const jsonl = JSON.stringify(post) + '\n';
     zip.file('posts.jsonl', jsonl);
     zip.file(
-      'manifest.json',
+      'import-manifest.json',
       JSON.stringify({
         $schema: 'social-archiver/instagram-saved-export-v2',
         schemaVersion: 2,
@@ -452,7 +452,7 @@ describe('loadGallery', () => {
       [goodLine, malformedLine, noIdLine, noMediaLine].join('\n') + '\n',
     );
     zip.file(
-      'manifest.json',
+      'import-manifest.json',
       JSON.stringify({
         $schema: 'social-archiver/instagram-saved-export-v2',
         schemaVersion: 2,

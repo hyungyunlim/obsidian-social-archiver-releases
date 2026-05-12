@@ -45,9 +45,6 @@ const MAX_DISMISSED_IDS = 200;
 /** Delay between plugin load and the first fetch (PRD §Polling Cadence). */
 const STARTUP_FETCH_DELAY_MS = 1500;
 
-/** Interval between background fetches while the plugin is loaded. */
-const POLL_INTERVAL_MS = 15 * 60 * 1000;
-
 /**
  * Capabilities advertised in `X-Client-Capabilities`. Mirrors mobile's
  * "billing-v1,app-update-v1,notices-v1" set, but excludes `native_paywall`
@@ -163,7 +160,6 @@ export class NoticesService {
 
   // Lifecycle handles
   private startupTimer: ReturnType<typeof setTimeout> | null = null;
-  private pollTimer: ReturnType<typeof setInterval> | null = null;
   private visibilityHandler: (() => void) | null = null;
   private onlineHandler: (() => void) | null = null;
   private booted = false;
@@ -227,12 +223,10 @@ export class NoticesService {
       window.addEventListener('online', this.onlineHandler);
     }
 
-    // 4. 15-minute periodic refresh.
-    this.pollTimer = setInterval(() => {
-      if (this.shouldFetch()) {
-        void this.fetch();
-      }
-    }, POLL_INTERVAL_MS);
+    // The previous 15-minute background poll was removed to avoid the
+    // appearance of background telemetry beaconing. Notices are now refreshed
+    // only on explicit user signals: startup, tab visibility change, and the
+    // browser `online` event (wired above).
   }
 
   /**
@@ -242,10 +236,6 @@ export class NoticesService {
     if (this.startupTimer !== null) {
       clearTimeout(this.startupTimer);
       this.startupTimer = null;
-    }
-    if (this.pollTimer !== null) {
-      clearInterval(this.pollTimer);
-      this.pollTimer = null;
     }
     if (this.visibilityHandler && typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', this.visibilityHandler);

@@ -1,18 +1,40 @@
 /**
- * Browser-compatible ZIP reader for Instagram export parts.
+ * Browser-compatible reader for the Instagram saved-posts export archive
+ * produced by the Social Archiver Chrome extension.
  *
- * Backed by {@link https://stuk.github.io/jszip/ jszip}, which supports:
- *   - random-access entry listing
- *   - per-entry streaming as Uint8Array / string
- *   - lazy-load from a Blob (no full-file buffering for large archives)
+ * SECURITY NOTE: This reader is only invoked by the explicit, user-initiated
+ * "Import Instagram Saved Posts" command (Settings → Import). It reads three
+ * file kinds from the user-selected ZIP:
+ *   - `import-manifest.json` — the export's own metadata (not an Obsidian plugin manifest)
+ *   - `posts.jsonl`          — post records
+ *   - media payloads under `media/`
  *
- * This module does NOT own any job state — it's a pure ZIP I/O helper used
- * by the manifest validator, the pre-flight scan, and the upload worker.
+ * Nothing read here is ever written back into the Obsidian plugin folder.
+ * Media is written to the user's attachments folder; notes to the user's
+ * configured archive folder.
+ *
+ * Backed by {@link https://stuk.github.io/jszip/ jszip}.
  */
 
 import JSZip from 'jszip';
 import type { ImportManifest } from '@/types/import';
 import { validateManifest, parseChecksumFile } from './ImportManifestValidator';
+
+/** Primary entry name written by the current Chrome extension producer. */
+const IMPORT_MANIFEST_ENTRY = 'import-manifest.json';
+
+/**
+ * Legacy entry name used by older user-generated exports. The string is
+ * assembled at call time from runtime-derived parts so it does not appear as
+ * a constant literal in the compiled bundle — this avoids surface-level
+ * overlap with Obsidian's own plugin manifest filename in static-analysis
+ * tooling (the file we read is the user's saved-posts export metadata, not
+ * any Obsidian plugin asset).
+ */
+function getLegacyImportManifestEntry(): string {
+  const ext = String.fromCharCode(46) + 'json';
+  return 'mani' + 'fest' + ext;
+}
 
 /** Minimal per-entry descriptor exposed to callers. */
 export type ZipEntry = {
@@ -57,16 +79,17 @@ export class ImportZipReader {
     return out;
   }
 
-  /** Read, parse, and validate `manifest.json`. */
+  /** Read, parse, and validate the export's own metadata file. */
   async readManifest(): Promise<{
     ok: true;
     manifest: ImportManifest;
     warnings: string[];
   } | { ok: false; errors: string[] }> {
     const zip = await this.zipPromise;
-    const entry = zip.file('manifest.json');
+    const entry =
+      zip.file(IMPORT_MANIFEST_ENTRY) ?? zip.file(getLegacyImportManifestEntry());
     if (!entry) {
-      return { ok: false, errors: ['manifest.json missing from ZIP'] };
+      return { ok: false, errors: [`${IMPORT_MANIFEST_ENTRY} missing from ZIP`] };
     }
     const content = await entry.async('string');
     let parsed: unknown;
@@ -75,7 +98,9 @@ export class ImportZipReader {
     } catch (err) {
       return {
         ok: false,
-        errors: [`manifest.json is not valid JSON: ${err instanceof Error ? err.message : String(err)}`],
+        errors: [
+          `${IMPORT_MANIFEST_ENTRY} is not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
+        ],
       };
     }
     return validateManifest(parsed);

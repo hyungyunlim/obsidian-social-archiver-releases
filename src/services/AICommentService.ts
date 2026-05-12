@@ -149,7 +149,9 @@ export class AICommentService {
           timeout: 5000,
           env: {
             HOME: os.homedir(),
-            USER: os.userInfo().username,
+            // Derive USER from the home dir basename to avoid os.userInfo()
+            // identity reads. Required by some shells to source rc files.
+            USER: (nodeRequire('path') as typeof import('path')).basename(os.homedir()),
           },
         });
 
@@ -873,7 +875,9 @@ Content:
         env.HOME = os.homedir();
       }
       if (!env.USER && !isWindows) {
-        env.USER = os.userInfo().username;
+        // Derive USER from the home dir basename to avoid os.userInfo()
+        // identity reads. Required by some shells to source rc files.
+        env.USER = (nodeRequire('path') as typeof import('path')).basename(os.homedir());
       }
 
       // Spawn options - Windows needs shell:true for proper executable resolution

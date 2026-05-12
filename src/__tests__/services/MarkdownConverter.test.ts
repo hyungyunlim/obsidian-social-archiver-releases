@@ -643,6 +643,66 @@ describe('MarkdownConverter', () => {
     });
   });
 
+  describe('naver platform', () => {
+    it('strips trailing raw HTML document fallback from archived blog notes', async () => {
+      const naverPost: PostData = {
+        ...mockPostData,
+        platform: 'naver' as Platform,
+        id: 'blog-aikonvero-224280828549',
+        url: 'https://m.blog.naver.com/aikonvero/224280828549',
+        title: '카카오는 팔고 &mdash; 네이버는 물러서고',
+        author: {
+          name: 'Aikon Vero',
+          url: 'https://m.blog.naver.com/aikonvero',
+        },
+        content: {
+          text: [
+            '첫 문단입니다.',
+            '',
+            '{{IMAGE_0}}',
+            '',
+            '둘째 문단입니다.',
+            '',
+            '---',
+            '',
+            '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">',
+            '<html lang="ko">',
+            '<head><style>body { color: red; }</style></head>',
+            '<body>blog chrome</body>',
+            '</html>',
+          ].join('\n'),
+        },
+        media: [
+          {
+            type: 'image',
+            url: 'https://example.com/naver.webp',
+          },
+        ],
+      };
+
+      const result = await converter.convert(naverPost, undefined, [
+        {
+          originalUrl: 'https://example.com/naver.webp',
+          localPath: 'attachments/social-archives/naver/naver-1.webp',
+          type: 'image',
+          size: 123,
+          file: {} as any,
+          sourceIndex: 0,
+        },
+      ]);
+
+      expect(result.frontmatter.title).toBe('카카오는 팔고 — 네이버는 물러서고');
+      expect(result.content).toContain('# 카카오는 팔고 — 네이버는 물러서고');
+      expect(result.content).toContain('첫 문단입니다.');
+      expect(result.content).toContain('둘째 문단입니다.');
+      expect(result.content).toContain('![[naver-1.webp]]');
+      expect(result.content).not.toContain('<!DOCTYPE');
+      expect(result.content).not.toContain('<html');
+      expect(result.content).not.toContain('<style>');
+      expect(result.content).not.toContain('blog chrome');
+    });
+  });
+
   describe('naver-webtoon platform', () => {
     const mockWebtoonPostData: PostData = {
       platform: 'naver-webtoon' as Platform,

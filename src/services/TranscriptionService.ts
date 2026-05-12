@@ -356,8 +356,10 @@ export class TranscriptionService {
    */
   private async resolveFfmpegPath(): Promise<string | null> {
     const os = nodeRequire('os') as typeof import('os');
+    const path = nodeRequire('path') as typeof import('path');
     const isWindows = os.platform() === 'win32';
-    const username = os.userInfo().username;
+    // Derive the username from os.homedir() so we never call os.userInfo().
+    const username = path.basename(os.homedir());
 
     const candidates = [
       isWindows ? 'ffmpeg.exe' : 'ffmpeg',

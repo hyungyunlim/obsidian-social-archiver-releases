@@ -612,12 +612,27 @@ export default class SocialArchiverPlugin extends Plugin {
       });
     }
 
-    // Start periodic job checker (interval from settings)
-    this.jobCheckInterval = window.setInterval(() => {
-      this.pendingJobOrchestrator?.checkPendingJobs().catch(error => {
-        console.error('[Social Archiver] Periodic job check failed:', error);
-      });
-    }, this.settings.jobCheckInterval);
+    // Periodic pending-job checker.
+    //
+    // What it does: every `jobCheckInterval` ms, asks the local pending-jobs
+    // store whether any user-submitted archive requests are still in flight.
+    // If none are pending, it returns early without any network traffic. If
+    // any exist, it polls the user's own archive worker once for that job's
+    // status — this is the same endpoint the foreground archive modal uses.
+    //
+    // Why a timer is required: archive jobs run server-side and can complete
+    // while the user has Obsidian closed or backgrounded. Without this catch-
+    // up check, completed jobs would never write themselves to the user's
+    // vault until they re-opened the archive modal. The interval is fully
+    // user-configurable (Settings → Advanced → "Job check interval"); setting
+    // it to 0 disables background polling entirely.
+    if (this.settings.jobCheckInterval > 0) {
+      this.jobCheckInterval = window.setInterval(() => {
+        this.pendingJobOrchestrator?.checkPendingJobs().catch(error => {
+          console.error('[Social Archiver] Periodic job check failed:', error);
+        });
+      }, this.settings.jobCheckInterval);
+    }
   }
 
   onunload(): void {

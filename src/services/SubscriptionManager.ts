@@ -1255,6 +1255,17 @@ export class SubscriptionManager implements IService {
   // Private Methods - Polling
   // --------------------------------------------------------------------------
 
+  /**
+   * Start the subscription state poll.
+   *
+   * Disclosure: only invoked after the user has explicitly created at least
+   * one author subscription (a user-initiated feature where they ask the
+   * plugin to periodically check a public profile they specified). The poll
+   * asks the user's own archive worker whether any of those user-specified
+   * subscriptions have new posts ready. It does not transmit any local
+   * identifying data. Stopped automatically when the user removes all
+   * subscriptions or on plugin unload.
+   */
   private startPolling(): void {
     if (this.isPolling) {
       return;

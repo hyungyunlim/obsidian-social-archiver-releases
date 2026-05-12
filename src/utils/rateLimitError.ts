@@ -31,6 +31,8 @@ export type RateLimitScope =
   | 'archive_create_burst'
   | 'archive_concurrent_jobs'
   | 'archive_polling_rpm'
+  | 'archive_daily_weekly_guard'
+  | 'bulk_import_rpm'
   | 'ip_hourly_floor'
   | 'target_hourly_floor'
   | 'platform_global_floor';
@@ -43,6 +45,7 @@ export interface RateLimitDetails {
   remaining?: number;
   resetAt?: number;
   retryAfter?: number;
+  reason?: string;
   [key: string]: unknown;
 }
 
@@ -138,6 +141,7 @@ export function getRateLimitDetails(error: unknown): RateLimitDetails | undefine
       remaining: readNumber(direct, 'remaining'),
       resetAt: readNumber(direct, 'resetAt'),
       retryAfter: readNumber(direct, 'retryAfter'),
+      reason: readString(direct, 'reason'),
     };
   }
 
@@ -166,6 +170,10 @@ export function formatRetryAfter(retryAfter: number | undefined): string {
   const mins = Math.round(secs / 60);
   if (mins < 60) return mins === 1 ? '1 minute' : `${mins} minutes`;
   const hrs = Math.round(mins / 60);
+  if (hrs >= 24) {
+    const days = Math.round(hrs / 24);
+    return days === 1 ? '1 day' : `${days} days`;
+  }
   return hrs === 1 ? '1 hour' : `${hrs} hours`;
 }
 
@@ -180,6 +188,16 @@ export function formatRateLimitMessage(error: unknown): string {
   const details = getRateLimitDetails(error) ?? {};
   const wait = formatRetryAfter(details.retryAfter);
   const tier = details.effectiveTier ?? details.tier;
+
+  if (details.scope === 'archive_daily_weekly_guard') {
+    const period =
+      details.reason === 'weekly'
+        ? 'Weekly'
+        : details.reason === 'daily'
+          ? 'Daily'
+          : 'Archive';
+    return `${period} archive limit reached. This is a Social Archiver safety limit, not an upstream platform limit. Try again in ${wait}.`;
+  }
 
   if (tier === 'free' && isUpgradePromptScope(details.scope)) {
     return `Rate limit reached. Upgrade to a Pro license for higher limits, or try again in ${wait}.`;

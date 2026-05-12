@@ -49,7 +49,7 @@ export function validateManifest(raw: unknown): ManifestValidationResult {
   const warnings: string[] = [];
 
   if (!isObject(raw)) {
-    return { ok: false, errors: ['manifest.json must be a JSON object'] };
+    return { ok: false, errors: ['import manifest must be a JSON object'] };
   }
 
   // schemaVersion — hard gate

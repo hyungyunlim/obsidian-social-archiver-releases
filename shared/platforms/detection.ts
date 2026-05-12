@@ -8,6 +8,19 @@
 import type { Platform } from './types';
 import { PLATFORM_DEFINITIONS, type PlatformDefinition } from './definitions';
 
+function extractRedditCommentIdFromPathname(pathname: string): string | null {
+  const segments = pathname.split('/').filter(Boolean);
+  const commentsIndex = segments.findIndex(segment => segment.toLowerCase() === 'comments');
+  if (commentsIndex === -1) return null;
+
+  const firstSegmentAfterPostId = segments[commentsIndex + 2];
+  const secondSegmentAfterPostId = segments[commentsIndex + 3];
+  if (!firstSegmentAfterPostId || !secondSegmentAfterPostId) return null;
+
+  const commentId = secondSegmentAfterPostId.replace(/\.json$/i, '');
+  return /^[A-Za-z0-9_]+$/.test(commentId) ? commentId : null;
+}
+
 /**
  * Detection order for platforms
  *
@@ -285,6 +298,12 @@ export function extractPostIdFromUrl(platform: Platform, url: string): string | 
       }
 
       case 'reddit': {
+        // Reddit comment permalinks are independently archiveable content.
+        // Treat /comments/{postId}/{title-or-comment}/{commentId} as commentId,
+        // while plain post URLs keep using postId for dedup.
+        const commentId = extractRedditCommentIdFromPathname(pathname);
+        if (commentId) return commentId;
+
         // /r/{sub}/comments/{id}/
         const m = pathname.match(/\/comments\/([A-Za-z0-9_]+)/);
         return m?.[1] ?? null;

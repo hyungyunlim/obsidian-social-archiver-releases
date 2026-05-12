@@ -1433,17 +1433,18 @@ export class MarkdownConverter implements IService {
     options?: ConvertOptions
   ): MarkdownResult {
     const outputFilePath = options?.outputFilePath;
+    const normalizedPostData = this.normalizePostDataForMarkdown(postData);
 
     // Generate frontmatter with options
-    const frontmatter = this.frontmatterGenerator.generateFrontmatter(postData, {
+    const frontmatter = this.frontmatterGenerator.generateFrontmatter(normalizedPostData, {
       customization: this.frontmatterSettings,
     });
 
     // Get template
-    const template = customTemplate || this.templates.get(postData.platform) || DEFAULT_TEMPLATES[postData.platform];
+    const template = customTemplate || this.templates.get(normalizedPostData.platform) || DEFAULT_TEMPLATES[normalizedPostData.platform];
 
     // Prepare template data
-    const templateData = this.prepareTemplateData(postData, mediaResults, outputFilePath);
+    const templateData = this.prepareTemplateData(normalizedPostData, mediaResults, outputFilePath);
 
     // Process template
     const content = TemplateEngine.process(template, templateData);
@@ -2159,6 +2160,74 @@ export class MarkdownConverter implements IService {
         factCheck: this.factCheckFormatter.formatFactChecks(postData.ai.factCheck),
       } : undefined,
     };
+  }
+
+  private normalizePostDataForMarkdown(postData: PostData): PostData {
+    let title = postData.title;
+    let text = postData.content.text;
+    let changed = false;
+
+    if (title) {
+      const decodedTitle = this.decodeHtmlEntities(title);
+      if (decodedTitle !== title) {
+        title = decodedTitle;
+        changed = true;
+      }
+    }
+
+    if (postData.platform === 'naver' && text) {
+      const strippedText = this.stripTrailingHtmlDocumentFallback(text);
+      if (strippedText !== text) {
+        text = strippedText;
+        changed = true;
+      }
+    }
+
+    if (!changed) return postData;
+
+    return {
+      ...postData,
+      title,
+      content: {
+        ...postData.content,
+        text,
+      },
+    };
+  }
+
+  private stripTrailingHtmlDocumentFallback(text: string): string {
+    const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const fallbackStart = normalized.search(
+      /\n---\n\s*(?:<!DOCTYPE\b|<html\b|<head\b|<meta\b|<style\b|<link\b|<!--\[if\b)/i,
+    );
+
+    if (fallbackStart < 0) return text;
+
+    return normalized.slice(0, fallbackStart).trimEnd();
+  }
+
+  private decodeHtmlEntities(text: string): string {
+    try {
+      let decoded = text.replace(/&#x([0-9A-Fa-f]+);/g, (_match, hex: string) =>
+        String.fromCodePoint(parseInt(hex, 16)),
+      );
+      decoded = decoded.replace(/&#(\d+);/g, (_match, dec: string) =>
+        String.fromCodePoint(parseInt(dec, 10)),
+      );
+      return decoded
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'")
+        .replace(/&apos;/gi, "'")
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&mdash;/gi, '—')
+        .replace(/&ndash;/gi, '–')
+        .replace(/&hellip;/gi, '…');
+    } catch {
+      return text;
+    }
   }
 
   /**
