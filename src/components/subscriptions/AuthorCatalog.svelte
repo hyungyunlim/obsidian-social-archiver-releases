@@ -911,7 +911,7 @@ function buildSubscriptionMapFromApi(subscriptions: any[]): SubscriptionMap {
 async function loadAuthors(forceRefresh = false): Promise<void> {
   const loadStart = nowMs();
   let stage = 'init';
-  let watchdogIntervalId: ReturnType<typeof setInterval> | null = null;
+  let watchdogIntervalId: number | null = null;
   let watchdogTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   // Concurrent guard — prevents duplicate scans when TimelineContainer remounts AuthorCatalog rapidly
@@ -949,14 +949,20 @@ async function loadAuthors(forceRefresh = false): Promise<void> {
   });
 
   if (AUTHOR_CATALOG_DEBUG) {
-    watchdogIntervalId = window.setInterval(() => {
-      debugLog('watchdog', {
-        stage,
-        elapsedMs: Math.round(nowMs() - loadStart),
-        generation: myGeneration,
-        inProgress: isAuthorLoadInProgress(),
-      });
-    }, 5000);
+    const scheduleNextWatchdog = (): void => {
+      watchdogIntervalId = window.setTimeout(() => {
+        debugLog('watchdog', {
+          stage,
+          elapsedMs: Math.round(nowMs() - loadStart),
+          generation: myGeneration,
+          inProgress: isAuthorLoadInProgress(),
+        });
+        if (watchdogIntervalId !== null) {
+          scheduleNextWatchdog();
+        }
+      }, 5000);
+    };
+    scheduleNextWatchdog();
     watchdogTimeoutId = window.setTimeout(() => {
       debugWarn('watchdog timeout (still running)', {
         stage,
@@ -1234,7 +1240,10 @@ async function loadAuthors(forceRefresh = false): Promise<void> {
     store.setError(error);
     console.error('[AuthorCatalog] Error loading authors:', err);
   } finally {
-    if (watchdogIntervalId) window.clearInterval(watchdogIntervalId);
+    if (watchdogIntervalId !== null) {
+      window.clearTimeout(watchdogIntervalId);
+      watchdogIntervalId = null;
+    }
     if (watchdogTimeoutId) window.clearTimeout(watchdogTimeoutId);
     finishAuthorLoad(myGeneration);
   }

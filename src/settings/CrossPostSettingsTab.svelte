@@ -28,7 +28,7 @@ let isLoadingStatus = $state(true);
 let error = $state('');
 
 // Polling handles
-let pollingInterval: ReturnType<typeof setInterval> | null = null;
+let pollingInterval: number | null = null;
 let pollingTimeout: ReturnType<typeof setTimeout> | null = null;
 
 // ============================================================================
@@ -231,14 +231,24 @@ function confirmDisconnect(): Promise<boolean> {
 function startPolling(): void {
   isPolling = true;
 
-  pollingInterval = window.setInterval(async () => {
-    const status = await checkConnectionStatus();
-    if (status.connected) {
-      stopPolling();
-      plugin.app.workspace.trigger('social-archiver:threads-connection-changed');
-      new Notice('Threads account connected successfully!');
-    }
-  }, 3000); // poll every 3 seconds
+  const scheduleNextPoll = (): void => {
+    pollingInterval = window.setTimeout(() => {
+      void (async () => {
+        const status = await checkConnectionStatus();
+        if (status.connected) {
+          stopPolling();
+          plugin.app.workspace.trigger('social-archiver:threads-connection-changed');
+          new Notice('Threads account connected successfully!');
+          return;
+        }
+      })().finally(() => {
+        if (pollingInterval !== null && isPolling) {
+          scheduleNextPoll();
+        }
+      });
+    }, 3000); // poll every 3 seconds
+  };
+  scheduleNextPoll();
 
   pollingTimeout = window.setTimeout(() => {
     if (isPolling) {
@@ -251,7 +261,7 @@ function startPolling(): void {
 
 function stopPolling(): void {
   if (pollingInterval !== null) {
-    window.clearInterval(pollingInterval);
+    window.clearTimeout(pollingInterval);
     pollingInterval = null;
   }
   if (pollingTimeout !== null) {

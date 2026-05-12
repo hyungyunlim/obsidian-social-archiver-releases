@@ -41,7 +41,7 @@
    */
   let expanded = $state(false);
   let timeUntilReset = $state('');
-  let updateInterval: NodeJS.Timeout | undefined;
+  let updateInterval: number | null = null;
 
   /**
    * Computed values
@@ -147,17 +147,27 @@
   /**
    * Lifecycle: Start timer on mount
    */
+  function scheduleNextResetUpdate(): void {
+    updateInterval = window.setTimeout(() => {
+      updateTimeUntilReset();
+      if (updateInterval !== null) {
+        scheduleNextResetUpdate();
+      }
+    }, 60000); // Update every minute
+  }
+
   onMount(() => {
     updateTimeUntilReset();
-    updateInterval = window.setInterval(updateTimeUntilReset, 60000); // Update every minute
+    scheduleNextResetUpdate();
   });
 
   /**
    * Lifecycle: Clean up on destroy
    */
   onDestroy(() => {
-    if (updateInterval) {
-      window.clearInterval(updateInterval);
+    if (updateInterval !== null) {
+      window.clearTimeout(updateInterval);
+      updateInterval = null;
     }
   });
 </script>

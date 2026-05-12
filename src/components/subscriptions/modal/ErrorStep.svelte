@@ -23,7 +23,7 @@ let {
 }: ErrorStepProps = $props();
 
 let retryCountdown = $state(error.retryDelay || 0);
-let countdownInterval: ReturnType<typeof setInterval> | null = null;
+let countdownInterval: number | null = null;
 
 /**
  * Derived: Can retry now
@@ -51,15 +51,23 @@ function getErrorIcon(code: string): string {
 /**
  * Start countdown for retry delay
  */
+function scheduleNextCountdownTick(): void {
+  countdownInterval = window.setTimeout(() => {
+    retryCountdown--;
+    if (retryCountdown <= 0) {
+      stopCountdown();
+      return;
+    }
+    if (countdownInterval !== null) {
+      scheduleNextCountdownTick();
+    }
+  }, 1000);
+}
+
 function startCountdown(): void {
   if (error.retryDelay && error.retryDelay > 0) {
     retryCountdown = error.retryDelay;
-    countdownInterval = window.setInterval(() => {
-      retryCountdown--;
-      if (retryCountdown <= 0) {
-        stopCountdown();
-      }
-    }, 1000);
+    scheduleNextCountdownTick();
   }
 }
 
@@ -67,8 +75,8 @@ function startCountdown(): void {
  * Stop countdown
  */
 function stopCountdown(): void {
-  if (countdownInterval) {
-    window.clearInterval(countdownInterval);
+  if (countdownInterval !== null) {
+    window.clearTimeout(countdownInterval);
     countdownInterval = null;
   }
 }

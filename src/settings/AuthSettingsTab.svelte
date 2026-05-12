@@ -55,11 +55,11 @@ let _crossDeviceActive = false;
 function stopCrossDeviceTimers(): void {
   _crossDeviceActive = false;
   if (_crossDeviceCountdownTimer !== null) {
-    window.clearInterval(_crossDeviceCountdownTimer);
+    window.clearTimeout(_crossDeviceCountdownTimer);
     _crossDeviceCountdownTimer = null;
   }
   if (_crossDevicePollTimer !== null) {
-    window.clearInterval(_crossDevicePollTimer);
+    window.clearTimeout(_crossDevicePollTimer);
     _crossDevicePollTimer = null;
   }
 }
@@ -80,7 +80,15 @@ function startCrossDeviceTimers(sessionId: string, expiresAt: string, pollMs: nu
     }
   };
   updateCountdown();
-  _crossDeviceCountdownTimer = window.setInterval(updateCountdown, 1000);
+  const scheduleNextCountdown = (): void => {
+    _crossDeviceCountdownTimer = window.setTimeout(() => {
+      updateCountdown();
+      if (_crossDeviceCountdownTimer !== null && _crossDeviceActive) {
+        scheduleNextCountdown();
+      }
+    }, 1000);
+  };
+  scheduleNextCountdown();
 
   // Poll timer
   const authService = new AuthService(plugin.settings.workerUrl, plugin.manifest.version);
@@ -138,7 +146,16 @@ function startCrossDeviceTimers(sessionId: string, expiresAt: string, pollMs: nu
     }
   };
 
-  _crossDevicePollTimer = window.setInterval(poll, pollMs);
+  const scheduleNextPoll = (): void => {
+    _crossDevicePollTimer = window.setTimeout(() => {
+      void poll().finally(() => {
+        if (_crossDevicePollTimer !== null && _crossDeviceActive) {
+          scheduleNextPoll();
+        }
+      });
+    }, pollMs);
+  };
+  scheduleNextPoll();
 }
 
 /**
