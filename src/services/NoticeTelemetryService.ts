@@ -47,7 +47,6 @@ type NoticeTelemetryType = 'impressed' | 'cta_clicked' | 'dismissed';
 // ============================================================================
 
 function logDefault(message: string, ...args: unknown[]): void {
-  // eslint-disable-next-line no-console
   console.debug(`[NoticeTelemetry] ${message}`, ...args);
 }
 

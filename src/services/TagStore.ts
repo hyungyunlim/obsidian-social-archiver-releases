@@ -3,7 +3,7 @@ import type { TagDefinition, TagWithCount } from '@/types/tag';
 import { TAG_COLORS } from '@/types/tag';
 import { normalizeTagName, validateTagName } from '@/utils/tags';
 import type SocialArchiverPlugin from '@/main';
-import type { WorkersAPIClient, UserTag } from './WorkersAPIClient';
+import type { WorkersAPIClient } from './WorkersAPIClient';
 
 /**
  * TagStore - Manages user-defined tag definitions and tag-post assignments

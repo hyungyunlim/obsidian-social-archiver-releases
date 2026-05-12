@@ -127,7 +127,7 @@ export class ImportJobStore {
   private snapshot: ImportJobStoreSnapshot = emptySnapshot();
   private loaded = false;
   private dirty = false;
-  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  private saveTimer: number | null = null;
   private readonly filePath: string;
 
   constructor(
@@ -186,7 +186,7 @@ export class ImportJobStore {
   /** Flush any pending debounced write, then stop timers. */
   async flush(): Promise<void> {
     if (this.saveTimer) {
-      clearTimeout(this.saveTimer);
+      window.clearTimeout(this.saveTimer);
       this.saveTimer = null;
     }
     if (this.dirty) {
@@ -294,7 +294,7 @@ export class ImportJobStore {
   private scheduleSave(): void {
     this.dirty = true;
     if (this.saveTimer) return;
-    this.saveTimer = setTimeout(() => {
+    this.saveTimer = window.setTimeout(() => {
       this.saveTimer = null;
       void this.saveNow();
     }, SAVE_DEBOUNCE_MS);

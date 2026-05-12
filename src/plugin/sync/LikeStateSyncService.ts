@@ -81,7 +81,7 @@ export class LikeStateSyncService {
     if (!file) return;
 
     const cache = this.app.metadataCache.getFileCache(file);
-    const currentLike = cache?.frontmatter?.['like'];
+    const currentLike: unknown = cache?.frontmatter?.['like'];
     if (currentLike === newLikeState) return;
 
     this.onBeforeInboundWrite?.(archiveId);
@@ -114,7 +114,7 @@ export class LikeStateSyncService {
     if (this.isSuppressed(archiveId)) return;
 
     const cache = this.app.metadataCache.getFileCache(file);
-    const currentLike = cache?.frontmatter?.['like'];
+    const currentLike: unknown = cache?.frontmatter?.['like'];
     const currentBool = currentLike === true;
     if (currentBool === isLiked) return;
 

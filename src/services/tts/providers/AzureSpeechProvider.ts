@@ -311,6 +311,7 @@ export class AzureSpeechProvider implements PluginTTSProvider {
     const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
+      // eslint-disable-next-line obsidianmd/no-fetch -- abort signal not supported by requestUrl
       const response = await fetch(url, {
         method: 'POST',
         headers: {

@@ -588,11 +588,23 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
   private startQueueProcessing(): void {
     this.stopQueueProcessing();
 
-    this.processingInterval = window.setInterval(() => {
-      void this.processQueuedEvents();
-    }, 60000); // Check every minute
+    this.scheduleNextQueueProcessing();
 
     this.logger?.debug('Queue processing started');
+  }
+
+  /**
+   * Schedule next queue processing tick (self-rescheduling setTimeout chain).
+   * Re-arms only after the async work completes to avoid overlapping invocations.
+   */
+  private scheduleNextQueueProcessing(): void {
+    this.processingInterval = window.setTimeout(() => {
+      void Promise.resolve(this.processQueuedEvents()).finally(() => {
+        if (this.processingInterval !== undefined) {
+          this.scheduleNextQueueProcessing();
+        }
+      });
+    }, 60000); // Check every minute
   }
 
   /**
@@ -600,7 +612,7 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
    */
   private stopQueueProcessing(): void {
     if (this.processingInterval) {
-      window.clearInterval(this.processingInterval);
+      window.clearTimeout(this.processingInterval);
       this.processingInterval = undefined;
       this.logger?.debug('Queue processing stopped');
     }

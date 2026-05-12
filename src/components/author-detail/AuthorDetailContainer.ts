@@ -439,7 +439,7 @@ export class AuthorDetailContainer {
   private unmountProfileHeader(): void {
     if (this.headerComponent) {
       try {
-        unmount(this.headerComponent);
+        void unmount(this.headerComponent);
       } catch {
         // Ignore unmount errors
       }
@@ -492,8 +492,8 @@ export class AuthorDetailContainer {
           el.removeClass('sa-bg-hover');
           el.addClass('sa-bg-transparent');
         });
-        if (document.activeElement instanceof HTMLElement && document.activeElement !== this.searchInput) {
-          document.activeElement.blur();
+        if (activeDocument.activeElement instanceof HTMLElement && activeDocument.activeElement !== this.searchInput) {
+          activeDocument.activeElement.blur();
         }
       }, 150);
     };
@@ -545,7 +545,7 @@ export class AuthorDetailContainer {
     // We need to insert before the feed wrapper, not at the end
     if (toolbarParent && toolbarNextSibling) {
       // Create a temporary container to hold the new toolbar
-      const tempDiv = document.createElement('div');
+      const tempDiv = activeDocument.createElement('div');
       toolbarParent.insertBefore(tempDiv, toolbarNextSibling);
 
       // Now render toolbar into the target, which will place it at the end
@@ -800,16 +800,20 @@ export class AuthorDetailContainer {
 
     // Mobile: inline styles to override Obsidian defaults
     if (ObsidianPlatform.isMobile) {
-      searchWrapper.style.border = 'none';
-      searchWrapper.style.background = 'transparent';
-      searchWrapper.style.boxShadow = 'none';
-      searchWrapper.style.padding = '2px 0';
+      searchWrapper.setCssStyles({
+        border: 'none',
+        background: 'transparent',
+        boxShadow: 'none',
+        padding: '2px 0',
+      });
 
-      searchInner.style.background = 'var(--background-modifier-form-field)';
-      searchInner.style.border = 'none';
-      searchInner.style.borderRadius = '8px';
-      searchInner.style.padding = '0 10px';
-      searchInner.style.height = '36px';
+      searchInner.setCssStyles({
+        background: 'var(--background-modifier-form-field)',
+        border: 'none',
+        borderRadius: '8px',
+        padding: '0 10px',
+        height: '36px',
+      });
     }
 
     this.searchInput = searchInner.createEl('input', {
@@ -820,13 +824,15 @@ export class AuthorDetailContainer {
     this.searchInput.addClass('sa-flex-1', 'sa-w-full', 'sa-bg-transparent', 'sa-text-normal', 'sa-text-md', 'tc-search-input');
 
     if (ObsidianPlatform.isMobile) {
-      this.searchInput.style.fontSize = '15px';
-      this.searchInput.style.padding = '0 4px';
-      this.searchInput.style.lineHeight = '36px';
-      this.searchInput.style.height = '36px';
-      this.searchInput.style.background = 'transparent';
-      this.searchInput.style.border = 'none';
-      this.searchInput.style.boxShadow = 'none';
+      this.searchInput.setCssStyles({
+        fontSize: '15px',
+        padding: '0 4px',
+        lineHeight: '36px',
+        height: '36px',
+        background: 'transparent',
+        border: 'none',
+        boxShadow: 'none',
+      });
     }
 
     // Clear button
@@ -1026,18 +1032,18 @@ export class AuthorDetailContainer {
         const file = this.vault.getAbstractFileByPath(post.filePath);
         if (!(file instanceof TFile)) continue;
         const cache = this.app.metadataCache.getFileCache(file);
-        const fm = cache?.frontmatter;
+        const fm = cache?.frontmatter as Record<string, unknown> | undefined;
         if (!fm) continue;
 
         if (!author.bio) {
-          const bio = fm.authorBio ?? fm.bio ?? fm.synopsis;
+          const bio: unknown = fm.authorBio ?? fm.bio ?? fm.synopsis;
           if (typeof bio === 'string' && bio.trim()) {
             author.bio = bio.trim().slice(0, 2000);
             enriched = true;
           }
         }
         if (!author.avatar && !author.localAvatar) {
-          const avatar = fm.authorAvatar;
+          const avatar: unknown = fm.authorAvatar;
           if (typeof avatar === 'string' && avatar.trim()) {
             // Wikilink format: [[path/to/avatar.jpg]]
             const wikiMatch = avatar.match(/^\[\[(.+?)]]$/);
@@ -1050,14 +1056,14 @@ export class AuthorDetailContainer {
           }
         }
         if (author.followers == null) {
-          const followers = fm.authorFollowers;
+          const followers: unknown = fm.authorFollowers;
           if (typeof followers === 'number') {
             author.followers = followers;
             enriched = true;
           }
         }
         if (author.postsCount == null) {
-          const postsCount = fm.authorPostsCount;
+          const postsCount: unknown = fm.authorPostsCount;
           if (typeof postsCount === 'number') {
             author.postsCount = postsCount;
             enriched = true;
@@ -1263,7 +1269,7 @@ export class AuthorDetailContainer {
       this.galleryRenderer.renderGallery(galleryContainer, mediaItems, 'none');
 
       // Fade in
-      requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
         galleryContainer.addClass('tc-gallery-visible');
       });
     } catch (error) {

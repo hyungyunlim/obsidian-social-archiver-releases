@@ -172,7 +172,7 @@ export class ArchiveStateSyncService {
 
     // Guard 4: no-op if frontmatter already matches the incoming value
     const cache = this.app.metadataCache.getFileCache(file);
-    const currentArchive = cache?.frontmatter?.['archive'];
+    const currentArchive: unknown = cache?.frontmatter?.['archive'];
     if (currentArchive === newArchiveState) {
       console.debug(
         LOG_PREFIX,
@@ -256,7 +256,7 @@ export class ArchiveStateSyncService {
 
     // Guard 2: no-op if frontmatter already matches
     const cache = this.app.metadataCache.getFileCache(file);
-    const currentArchive = cache?.frontmatter?.['archive'];
+    const currentArchive: unknown = cache?.frontmatter?.['archive'];
     const currentBool: boolean = currentArchive === true;
 
     if (currentBool === isBookmarked) {

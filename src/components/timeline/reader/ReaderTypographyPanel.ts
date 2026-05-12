@@ -127,11 +127,11 @@ export class ReaderTypographyPanel {
 
   private buildDOM(): void {
     // Wrapper for positioning (positioned relative to anchorEl parent)
-    this.wrapperEl = document.createElement('div');
+    this.wrapperEl = activeDocument.createElement('div');
     this.wrapperEl.className = 'sa-reader-typography-anchor';
 
     // Panel
-    this.panelEl = document.createElement('div');
+    this.panelEl = activeDocument.createElement('div');
     this.panelEl.className = 'sa-reader-typography-panel';
     this.panelEl.setAttribute('role', 'dialog');
     this.panelEl.setAttribute('aria-label', 'Typography');
@@ -243,17 +243,17 @@ export class ReaderTypographyPanel {
     this.panelEl.appendChild(this.buildSeparator());
 
     // Font Family grid
-    const fontsGrid = document.createElement('div');
+    const fontsGrid = activeDocument.createElement('div');
     fontsGrid.className = 'sa-reader-typography-fonts';
     for (const ff of FONT_FAMILIES) {
-      const btn = document.createElement('button');
+      const btn = activeDocument.createElement('button');
       btn.type = 'button';
       btn.className = 'sa-reader-typography-font-button';
       if (this.state.fontFamily === ff.key) {
         btn.classList.add('sa-reader-typography-font-button-active');
       }
       btn.textContent = ff.label;
-      btn.style.fontFamily = ff.stack;
+      btn.setCssStyles({ fontFamily: ff.stack });
       btn.setAttribute('aria-label', `Font: ${ff.label}`);
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -268,7 +268,7 @@ export class ReaderTypographyPanel {
     this.panelEl.appendChild(this.buildSeparator());
 
     // Reset button
-    const resetBtn = document.createElement('button');
+    const resetBtn = activeDocument.createElement('button');
     resetBtn.type = 'button';
     resetBtn.className = 'sa-reader-typography-reset';
     resetBtn.textContent = 'Reset';
@@ -286,17 +286,17 @@ export class ReaderTypographyPanel {
   }
 
   private buildRow(label: string, value: string): { rowEl: HTMLElement; valueEl: HTMLElement } {
-    const rowEl = document.createElement('div');
+    const rowEl = activeDocument.createElement('div');
     rowEl.className = 'sa-reader-typography-row';
 
-    const topEl = document.createElement('div');
+    const topEl = activeDocument.createElement('div');
     topEl.className = 'sa-reader-typography-row-top';
 
-    const labelEl = document.createElement('span');
+    const labelEl = activeDocument.createElement('span');
     labelEl.className = 'sa-reader-typography-label';
     labelEl.textContent = label;
 
-    const valueEl = document.createElement('span');
+    const valueEl = activeDocument.createElement('span');
     valueEl.className = 'sa-reader-typography-value';
     valueEl.textContent = value;
 
@@ -320,10 +320,10 @@ export class ReaderTypographyPanel {
     isMinDisabled: () => boolean;
     isMaxDisabled: () => boolean;
   }): { ctrlEl: HTMLElement; range: HTMLInputElement; decBtn: HTMLButtonElement; incBtn: HTMLButtonElement } {
-    const ctrlEl = document.createElement('div');
+    const ctrlEl = activeDocument.createElement('div');
     ctrlEl.className = 'sa-reader-typography-row-control';
 
-    const decBtn = document.createElement('button');
+    const decBtn = activeDocument.createElement('button');
     decBtn.type = 'button';
     decBtn.className = 'sa-reader-typography-step-button';
     decBtn.textContent = '\u2212'; // minus sign
@@ -334,7 +334,7 @@ export class ReaderTypographyPanel {
       opts.onDec();
     });
 
-    const range = document.createElement('input');
+    const range = activeDocument.createElement('input');
     range.type = 'range';
     range.className = 'sa-reader-typography-range';
     range.min = String(opts.min);
@@ -352,7 +352,7 @@ export class ReaderTypographyPanel {
       }
     });
 
-    const incBtn = document.createElement('button');
+    const incBtn = activeDocument.createElement('button');
     incBtn.type = 'button';
     incBtn.className = 'sa-reader-typography-step-button';
     incBtn.textContent = '+';
@@ -371,7 +371,7 @@ export class ReaderTypographyPanel {
   }
 
   private buildSeparator(): HTMLElement {
-    const sep = document.createElement('div');
+    const sep = activeDocument.createElement('div');
     sep.className = 'sa-reader-typography-separator';
     return sep;
   }
@@ -380,7 +380,7 @@ export class ReaderTypographyPanel {
 
   private addListeners(): void {
     // Outside click (deferred one tick to avoid catching the opening click)
-    setTimeout(() => {
+    window.setTimeout(() => {
       this.boundOutsideClick = (e: MouseEvent) => {
         if (!this.isOpen || !this.panelEl) return;
         const target = e.target as Node;
@@ -388,7 +388,7 @@ export class ReaderTypographyPanel {
         if (this.panelEl.contains(target) || this.anchorEl.contains(target)) return;
         this.onClose();
       };
-      document.addEventListener('click', this.boundOutsideClick, true);
+      activeDocument.addEventListener('click', this.boundOutsideClick, true);
     }, 0);
 
     this.boundKeydown = (e: KeyboardEvent) => {
@@ -398,16 +398,16 @@ export class ReaderTypographyPanel {
         this.onClose();
       }
     };
-    document.addEventListener('keydown', this.boundKeydown, true);
+    activeDocument.addEventListener('keydown', this.boundKeydown, true);
   }
 
   private removeListeners(): void {
     if (this.boundOutsideClick) {
-      document.removeEventListener('click', this.boundOutsideClick, true);
+      activeDocument.removeEventListener('click', this.boundOutsideClick, true);
       this.boundOutsideClick = null;
     }
     if (this.boundKeydown) {
-      document.removeEventListener('keydown', this.boundKeydown, true);
+      activeDocument.removeEventListener('keydown', this.boundKeydown, true);
       this.boundKeydown = null;
     }
   }

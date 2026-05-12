@@ -658,14 +658,14 @@ export class GalleryViewRenderer {
   private renderVideo(container: HTMLElement, item: MediaItemData, allMediaItems: MediaItemData[]): void {
     // Add play icon overlay to indicate it's a video
     const playIconOverlay = container.createDiv('video-play-icon gvr-play-icon sa-absolute sa-flex-center sa-rounded-full sa-pointer-none sa-z-1 sa-opacity-80');
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const svg = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('width', '24');
     svg.setAttribute('height', '24');
     svg.setAttribute('viewBox', '0 0 24 24');
     svg.setAttribute('fill', 'none');
     svg.setAttribute('stroke', 'white');
     svg.setAttribute('stroke-width', '2');
-    const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    const polygon = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'polygon');
     polygon.setAttribute('points', '5 3 19 12 5 21 5 3');
     svg.appendChild(polygon);
     playIconOverlay.appendChild(svg);
@@ -774,7 +774,7 @@ export class GalleryViewRenderer {
     let currentIndex = startIndex;
 
     // Create modal
-    const modal = document.createElement('div');
+    const modal = activeDocument.createElement('div');
     modal.className = 'sa-fixed sa-inset-0 sa-flex-center gvr-lightbox';
 
     // Close on backdrop click
@@ -856,20 +856,20 @@ export class GalleryViewRenderer {
       if (cleaned) return;
       cleaned = true;
       modal.remove();
-      document.removeEventListener('keydown', onKeyDown);
+      activeDocument.removeEventListener('keydown', onKeyDown);
     };
 
     // Also cleanup if modal is removed from DOM externally
     const observer = new MutationObserver(() => {
-      if (!document.body.contains(modal)) {
+      if (!activeDocument.body.contains(modal)) {
         observer.disconnect();
         cleanup();
       }
     });
-    observer.observe(document.body, { childList: true });
+    observer.observe(activeDocument.body, { childList: true });
 
-    document.addEventListener('keydown', onKeyDown);
-    document.body.appendChild(modal);
+    activeDocument.addEventListener('keydown', onKeyDown);
+    activeDocument.body.appendChild(modal);
     renderMedia();
   }
 }

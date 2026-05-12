@@ -332,14 +332,20 @@ export class RealtimeClient {
    */
   private startPing(): void {
     this.stopPing();
+    this.scheduleNextPing();
+  }
 
-    this.pingInterval = window.setInterval(() => {
+  private scheduleNextPing(): void {
+    this.pingInterval = window.setTimeout(() => {
       if (this.ws?.readyState === WebSocket.OPEN) {
         try {
           this.ws.send(JSON.stringify({ type: 'ping' }));
         } catch (error) {
           console.error('[RealtimeClient] Failed to send ping:', error);
         }
+      }
+      if (this.pingInterval !== null) {
+        this.scheduleNextPing();
       }
     }, 30000); // 30 seconds
   }
@@ -349,7 +355,7 @@ export class RealtimeClient {
    */
   private stopPing(): void {
     if (this.pingInterval !== null) {
-      window.clearInterval(this.pingInterval);
+      window.clearTimeout(this.pingInterval);
       this.pingInterval = null;
     }
   }

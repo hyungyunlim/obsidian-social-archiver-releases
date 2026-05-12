@@ -106,7 +106,7 @@ const COUNT_ICON_FALLBACKS: Record<CountKind, string> = {
  * be reused across many posts.
  */
 export class PreviewableInteractionsRenderer {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- accepted for parity with sibling sub-renderers; not yet used here
   constructor(private readonly context: PreviewContext) {}
 
   /**
@@ -195,16 +195,12 @@ export class PreviewableInteractionsRenderer {
     kind: CountKind,
     value: number,
   ): HTMLElement {
-    const btn = document.createElement('div');
+    const btn = activeDocument.createElement('div');
     btn.classList.add('pcr-action-btn');
     btn.setAttribute('data-count-kind', kind);
-    // Source uses `setCssProps({'--pcr-meta-gap': '6px'})` which is just an
-    // Obsidian wrapper around `style.setProperty`. We use the public DOM
-    // API directly so the sub-renderer works in jsdom unit tests where
-    // the Obsidian element enrichments aren't installed.
-    btn.style.setProperty('--pcr-meta-gap', '6px');
+    btn.setCssProps({ '--pcr-meta-gap': '6px' });
 
-    const iconSlot = document.createElement('div');
+    const iconSlot = activeDocument.createElement('div');
     iconSlot.classList.add('pcr-action-icon');
     // Prefer the lucide SVG (matches vault timeline). Fall back to the
     // unicode glyph when `setIcon` is absent — jsdom unit tests, the
@@ -217,7 +213,7 @@ export class PreviewableInteractionsRenderer {
     }
     btn.appendChild(iconSlot);
 
-    const countEl = document.createElement('span');
+    const countEl = activeDocument.createElement('span');
     countEl.classList.add('pcr-action-count');
     countEl.textContent = formatNumber(value);
     btn.appendChild(countEl);

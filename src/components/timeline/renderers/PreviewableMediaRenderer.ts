@@ -50,9 +50,7 @@
 
 import * as L from 'leaflet';
 import type { PostData } from '../../../types/post';
-// Imported for parity with sibling renderers / future-proofing of the
-// PreviewContext shape — not currently consumed by the media renderer.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- imported for parity with sibling renderers / future-proofing of the PreviewContext shape; not currently consumed by the media renderer
 import { extractYouTubeVideoId as _extractYouTubeVideoId } from './PreviewableHelpers';
 import type { PreviewContext } from './PreviewableContext';
 
@@ -107,14 +105,16 @@ export class PreviewableMediaRenderer {
    */
   public renderHeroImage(parent: HTMLElement, post: PostData): HTMLElement {
     const wrapper = this.makeDiv(parent, 'pcr-media-hero');
-    wrapper.style.position = 'relative';
-    wrapper.style.aspectRatio = '1 / 1';
-    wrapper.style.overflow = 'hidden';
     // Neutral wrapper background so when portrait (9:16) or landscape (16:9)
     // media gets letterboxed inside the 1:1 frame (object-fit: contain), the
     // empty strips read as a deliberate thumbnail frame rather than a styling
     // gap. `--background-secondary` adapts to Obsidian light/dark themes.
-    wrapper.style.background = 'var(--background-secondary)';
+    wrapper.setCssStyles({
+      position: 'relative',
+      aspectRatio: '1 / 1',
+      overflow: 'hidden',
+      background: 'var(--background-secondary)',
+    });
 
     const media = post.media ?? [];
 
@@ -127,9 +127,11 @@ export class PreviewableMediaRenderer {
     if (media.length === 1) {
       // Single item: bare hero, no carousel chrome.
       const frame = this.makeDiv(wrapper, 'pcr-media-carousel-frame');
-      frame.style.width = '100%';
-      frame.style.height = '100%';
-      frame.style.position = 'relative';
+      frame.setCssStyles({
+        width: '100%',
+        height: '100%',
+        position: 'relative',
+      });
       this.populateFrame(frame, media[0]!, /* isCurrent */ true);
       return wrapper;
     }
@@ -156,19 +158,23 @@ export class PreviewableMediaRenderer {
 
     // Track holds all frames; only the current one is visible (display:block).
     const track = this.makeDiv(wrapper, 'pcr-media-carousel-track');
-    track.style.position = 'relative';
-    track.style.width = '100%';
-    track.style.height = '100%';
+    track.setCssStyles({
+      position: 'relative',
+      width: '100%',
+      height: '100%',
+    });
 
     const frames: HTMLElement[] = [];
     media.forEach((item, idx) => {
       const frame = this.makeDiv(track, 'pcr-media-carousel-frame');
       frame.setAttribute('data-frame-index', String(idx));
-      frame.style.position = 'absolute';
-      frame.style.inset = '0';
-      frame.style.width = '100%';
-      frame.style.height = '100%';
-      frame.style.display = idx === 0 ? 'block' : 'none';
+      frame.setCssStyles({
+        position: 'absolute',
+        inset: '0',
+        width: '100%',
+        height: '100%',
+        display: idx === 0 ? 'block' : 'none',
+      });
       this.populateFrame(frame, item, /* isCurrent */ idx === 0);
       frames.push(frame);
     });
@@ -177,27 +183,29 @@ export class PreviewableMediaRenderer {
     const counter = this.makeDiv(wrapper, 'pcr-media-carousel-counter');
     counter.textContent = `1 / ${total}`;
     counter.setAttribute('aria-label', `${total} media items`);
-    counter.style.position = 'absolute';
-    counter.style.top = '8px';
-    counter.style.right = '8px';
-    counter.style.padding = '2px 8px';
-    counter.style.background = 'rgba(0, 0, 0, 0.55)';
-    counter.style.color = '#fff';
-    counter.style.borderRadius = '999px';
-    counter.style.fontSize = 'var(--font-ui-smaller, 0.75rem)';
-    counter.style.fontWeight = '600';
-    counter.style.pointerEvents = 'none';
-    counter.style.zIndex = '2';
+    counter.setCssStyles({
+      position: 'absolute',
+      top: '8px',
+      right: '8px',
+      padding: '2px 8px',
+      background: 'rgba(0, 0, 0, 0.55)',
+      color: '#fff',
+      borderRadius: '999px',
+      fontSize: 'var(--font-ui-smaller, 0.75rem)',
+      fontWeight: '600',
+      pointerEvents: 'none',
+      zIndex: '2',
+    });
 
     // Prev / Next chevron buttons — 44px hit area minimum (mobile target).
-    const prevBtn = document.createElement('button');
+    const prevBtn = activeDocument.createElement('button');
     prevBtn.classList.add('pcr-media-carousel-nav', 'pcr-media-carousel-nav-prev');
     prevBtn.type = 'button';
     prevBtn.setAttribute('aria-label', 'Previous media');
     prevBtn.textContent = '‹';
     this.styleNavButton(prevBtn, 'left');
 
-    const nextBtn = document.createElement('button');
+    const nextBtn = activeDocument.createElement('button');
     nextBtn.classList.add('pcr-media-carousel-nav', 'pcr-media-carousel-nav-next');
     nextBtn.type = 'button';
     nextBtn.setAttribute('aria-label', 'Next media');
@@ -209,27 +217,31 @@ export class PreviewableMediaRenderer {
 
     // Dot indicators (bottom).
     const dots = this.makeDiv(wrapper, 'pcr-media-carousel-dots');
-    dots.style.position = 'absolute';
-    dots.style.left = '0';
-    dots.style.right = '0';
-    dots.style.bottom = '8px';
-    dots.style.display = 'flex';
-    dots.style.justifyContent = 'center';
-    dots.style.gap = '4px';
-    dots.style.pointerEvents = 'none';
-    dots.style.zIndex = '2';
+    dots.setCssStyles({
+      position: 'absolute',
+      left: '0',
+      right: '0',
+      bottom: '8px',
+      display: 'flex',
+      justifyContent: 'center',
+      gap: '4px',
+      pointerEvents: 'none',
+      zIndex: '2',
+    });
 
     const dotEls: HTMLElement[] = [];
     for (let i = 0; i < total; i++) {
-      const dot = document.createElement('span');
+      const dot = activeDocument.createElement('span');
       dot.classList.add('pcr-media-carousel-dot');
       if (i === 0) dot.classList.add('pcr-media-carousel-dot-active');
-      dot.style.width = '6px';
-      dot.style.height = '6px';
-      dot.style.borderRadius = '999px';
-      dot.style.background =
-        i === 0 ? 'var(--interactive-accent, #fff)' : 'rgba(255, 255, 255, 0.55)';
-      dot.style.transition = 'background-color 120ms ease';
+      dot.setCssStyles({
+        width: '6px',
+        height: '6px',
+        borderRadius: '999px',
+        background:
+          i === 0 ? 'var(--interactive-accent, #fff)' : 'rgba(255, 255, 255, 0.55)',
+        transition: 'background-color 120ms ease',
+      });
       dots.appendChild(dot);
       dotEls.push(dot);
     }
@@ -252,7 +264,7 @@ export class PreviewableMediaRenderer {
             // Best-effort — never let a pause failure break navigation.
           }
         }
-        outgoing.style.display = 'none';
+        outgoing.setCssStyles({ display: 'none' });
       }
 
       // Show incoming frame. If it was rendered as a poster <img> (because
@@ -264,7 +276,7 @@ export class PreviewableMediaRenderer {
         if (item) {
           this.upgradeFrameToCurrent(incoming, item);
         }
-        incoming.style.display = 'block';
+        incoming.setCssStyles({ display: 'block' });
       }
 
       currentIndex = target;
@@ -273,10 +285,10 @@ export class PreviewableMediaRenderer {
       dotEls.forEach((d, i) => {
         if (i === currentIndex) {
           d.classList.add('pcr-media-carousel-dot-active');
-          d.style.background = 'var(--interactive-accent, #fff)';
+          d.setCssStyles({ background: 'var(--interactive-accent, #fff)' });
         } else {
           d.classList.remove('pcr-media-carousel-dot-active');
-          d.style.background = 'rgba(255, 255, 255, 0.55)';
+          d.setCssStyles({ background: 'rgba(255, 255, 255, 0.55)' });
         }
       });
     };
@@ -426,20 +438,22 @@ export class PreviewableMediaRenderer {
     src: string,
     lazy: boolean,
   ): void {
-    const img = document.createElement('img');
+    const img = activeDocument.createElement('img');
     img.src = src;
     img.alt = item.altText ?? item.alt ?? '';
     if (lazy) img.loading = 'lazy';
     img.classList.add('pcr-media-carousel-img', 'pcr-media-hero-img');
-    img.style.width = '100%';
-    img.style.height = '100%';
     // `contain` (not `cover`): preserves the media's intrinsic aspect ratio
     // inside the fixed 1:1 wrapper. For portrait (9:16) Reels and landscape
     // (16:9) clips, `cover` would crop ~50% of the visible content — bad for
     // a "preview before importing" surface. The wrapper background fills the
     // letterbox strips so the layout still reads as a uniform tile.
-    img.style.objectFit = 'contain';
-    img.style.display = 'block';
+    img.setCssStyles({
+      width: '100%',
+      height: '100%',
+      objectFit: 'contain',
+      display: 'block',
+    });
     frame.appendChild(img);
   }
 
@@ -448,7 +462,7 @@ export class PreviewableMediaRenderer {
     item: PostData['media'][number],
     src: string,
   ): void {
-    const video = document.createElement('video');
+    const video = activeDocument.createElement('video');
     video.classList.add('pcr-media-carousel-video');
     video.setAttribute('controls', 'true');
     // playsinline is required on iOS Safari — without it iOS forces
@@ -461,15 +475,17 @@ export class PreviewableMediaRenderer {
       this.context.resolveMediaUrl(item.thumbnailUrl);
     if (poster) video.setAttribute('poster', poster);
     video.src = src;
-    video.style.width = '100%';
-    video.style.height = '100%';
     // `contain` (not `cover`): same rationale as the image path — Reels/
     // portrait videos must show their full frame in the import preview, not
     // a center-cropped square. The `#000` background fills the letterbox
     // strips with the conventional video-frame look.
-    video.style.objectFit = 'contain';
-    video.style.display = 'block';
-    video.style.background = '#000';
+    video.setCssStyles({
+      width: '100%',
+      height: '100%',
+      objectFit: 'contain',
+      display: 'block',
+      background: '#000',
+    });
     // Stop click bubbling so tapping a video control doesn't re-trigger
     // gallery-level handlers (selection, etc.).
     video.addEventListener('click', (e) => e.stopPropagation());
@@ -481,44 +497,44 @@ export class PreviewableMediaRenderer {
       frame,
       'pcr-media-carousel-placeholder pcr-media-hero-placeholder',
     );
-    placeholder.style.width = '100%';
-    placeholder.style.height = '100%';
-    placeholder.style.display = 'flex';
-    placeholder.style.alignItems = 'center';
-    placeholder.style.justifyContent = 'center';
-    placeholder.style.color = 'var(--text-muted)';
-    placeholder.style.fontSize = 'var(--font-ui-smaller, 0.8rem)';
-    const label = document.createElement('span');
+    placeholder.setCssStyles({
+      width: '100%',
+      height: '100%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: 'var(--text-muted)',
+      fontSize: 'var(--font-ui-smaller, 0.8rem)',
+    });
+    const label = activeDocument.createElement('span');
     label.textContent = 'Preview loading…';
     placeholder.appendChild(label);
   }
 
   private styleNavButton(btn: HTMLButtonElement, side: 'left' | 'right'): void {
-    btn.style.position = 'absolute';
-    btn.style.top = '50%';
-    btn.style.transform = 'translateY(-50%)';
-    if (side === 'left') {
-      btn.style.left = '4px';
-    } else {
-      btn.style.right = '4px';
-    }
     // 44px hit area minimum per iOS HIG / Polish A1 spec.
-    btn.style.width = '44px';
-    btn.style.height = '44px';
-    btn.style.minWidth = '44px';
-    btn.style.minHeight = '44px';
-    btn.style.display = 'flex';
-    btn.style.alignItems = 'center';
-    btn.style.justifyContent = 'center';
-    btn.style.padding = '0';
-    btn.style.border = 'none';
-    btn.style.borderRadius = '999px';
-    btn.style.background = 'rgba(0, 0, 0, 0.45)';
-    btn.style.color = '#fff';
-    btn.style.fontSize = '24px';
-    btn.style.lineHeight = '1';
-    btn.style.cursor = 'pointer';
-    btn.style.zIndex = '2';
+    btn.setCssStyles({
+      position: 'absolute',
+      top: '50%',
+      transform: 'translateY(-50%)',
+      ...(side === 'left' ? { left: '4px' } : { right: '4px' }),
+      width: '44px',
+      height: '44px',
+      minWidth: '44px',
+      minHeight: '44px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '0',
+      border: 'none',
+      borderRadius: '999px',
+      background: 'rgba(0, 0, 0, 0.45)',
+      color: '#fff',
+      fontSize: '24px',
+      lineHeight: '1',
+      cursor: 'pointer',
+      zIndex: '2',
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -537,24 +553,24 @@ export class PreviewableMediaRenderer {
    * `gallery-*`) match the source.
    */
   public createInlineImageGallery(mediaItems: HTMLElement[]): HTMLElement {
-    const gallery = document.createElement('div');
+    const gallery = activeDocument.createElement('div');
     gallery.className = 'inline-image-gallery pcr-gallery';
 
     const count = mediaItems.length;
 
     // Main display area
-    const mainDisplay = document.createElement('div');
+    const mainDisplay = activeDocument.createElement('div');
     mainDisplay.className = 'gallery-main-display pcr-gallery-main';
 
     // Create main image container
-    const mainImageContainer = document.createElement('div');
+    const mainImageContainer = activeDocument.createElement('div');
     mainImageContainer.className = 'pcr-gallery-main-container';
 
     const firstMedia = mediaItems[0];
     if (!firstMedia) return gallery;
     const mainMedia = firstMedia.cloneNode(true) as HTMLElement;
     mainMedia.className = 'gallery-image gallery-main-image pcr-gallery-main-image';
-    if (mainMedia instanceof HTMLVideoElement) {
+    if (mainMedia.instanceOf(HTMLVideoElement)) {
       mainMedia.setAttribute('controls', 'true');
       mainMedia.setAttribute('preload', 'metadata');
     }
@@ -563,17 +579,17 @@ export class PreviewableMediaRenderer {
 
     // Add counter badge if more than 1 image
     if (count > 1) {
-      const counter = document.createElement('div');
+      const counter = activeDocument.createElement('div');
       counter.className = 'gallery-counter pcr-gallery-counter';
       counter.textContent = `1/${count}`;
       mainDisplay.appendChild(counter);
 
       // Navigation arrows (hover handled by CSS .pcr-gallery-main:hover .pcr-gallery-nav)
-      const prevBtn = document.createElement('button');
+      const prevBtn = activeDocument.createElement('button');
       prevBtn.className = 'gallery-nav gallery-prev pcr-gallery-nav pcr-gallery-nav-prev';
       prevBtn.textContent = '‹';
 
-      const nextBtn = document.createElement('button');
+      const nextBtn = activeDocument.createElement('button');
       nextBtn.className = 'gallery-nav gallery-next pcr-gallery-nav pcr-gallery-nav-next';
       nextBtn.textContent = '›';
 
@@ -587,7 +603,7 @@ export class PreviewableMediaRenderer {
         if (!currentMedia) return;
         const newImg = currentMedia.cloneNode(true) as HTMLElement;
         newImg.className = 'gallery-image gallery-main-image pcr-gallery-main-image';
-        if (newImg instanceof HTMLVideoElement) {
+        if (newImg.instanceOf(HTMLVideoElement)) {
           newImg.setAttribute('controls', 'true');
           newImg.setAttribute('preload', 'metadata');
         }
@@ -595,11 +611,11 @@ export class PreviewableMediaRenderer {
         mainImageContainer.appendChild(newImg);
         counter.textContent = `${currentIndex + 1}/${count}`;
 
-        if (newImg instanceof HTMLImageElement) {
+        if (newImg.instanceOf(HTMLImageElement)) {
           newImg.addEventListener('click', (e) => {
             e.stopPropagation();
             const imageUrls = mediaItems
-              .filter((item): item is HTMLImageElement => item instanceof HTMLImageElement)
+              .filter((item): item is HTMLImageElement => item.instanceOf(HTMLImageElement))
               .map((item) => item.src);
             const imageIndex = imageUrls.indexOf(newImg.src);
             if (imageIndex >= 0) {
@@ -621,11 +637,11 @@ export class PreviewableMediaRenderer {
         updateDisplay();
       });
 
-      if (mainMedia instanceof HTMLImageElement) {
+      if (mainMedia.instanceOf(HTMLImageElement)) {
         mainMedia.addEventListener('click', (e) => {
           e.stopPropagation();
           const imageUrls = mediaItems
-            .filter((item): item is HTMLImageElement => item instanceof HTMLImageElement)
+            .filter((item): item is HTMLImageElement => item.instanceOf(HTMLImageElement))
             .map((item) => item.src);
           const imageIndex = imageUrls.indexOf(mainMedia.src);
           if (imageIndex >= 0) {
@@ -635,7 +651,7 @@ export class PreviewableMediaRenderer {
       }
     } else {
       // Single image - just add click handler
-      if (mainMedia instanceof HTMLImageElement) {
+      if (mainMedia.instanceOf(HTMLImageElement)) {
         mainMedia.addEventListener('click', (e) => {
           e.stopPropagation();
           this.openImageLightbox([mainMedia.src], 0);
@@ -647,11 +663,11 @@ export class PreviewableMediaRenderer {
 
     // Thumbnail strip for 3+ images
     if (count >= 3) {
-      const thumbnailStrip = document.createElement('div');
+      const thumbnailStrip = activeDocument.createElement('div');
       thumbnailStrip.className = 'gallery-thumbnails pcr-gallery-thumbnails';
 
       mediaItems.forEach((media, index) => {
-        const thumb = document.createElement('div');
+        const thumb = activeDocument.createElement('div');
         thumb.className =
           index === 0
             ? 'pcr-gallery-thumb pcr-gallery-thumb-active'
@@ -659,7 +675,7 @@ export class PreviewableMediaRenderer {
 
         const thumbImg = media.cloneNode(true) as HTMLElement;
         thumbImg.className = 'gallery-image pcr-gallery-thumb-img';
-        if (thumbImg instanceof HTMLVideoElement) {
+        if (thumbImg.instanceOf(HTMLVideoElement)) {
           thumbImg.removeAttribute('controls');
           thumbImg.muted = true;
           thumbImg.preload = 'metadata';
@@ -673,7 +689,7 @@ export class PreviewableMediaRenderer {
           if (!clickedImage) return;
           const newImg = clickedImage.cloneNode(true) as HTMLElement;
           newImg.className = 'gallery-image gallery-main-image pcr-gallery-main-image';
-          if (newImg instanceof HTMLVideoElement) {
+          if (newImg.instanceOf(HTMLVideoElement)) {
             newImg.setAttribute('controls', 'true');
             newImg.setAttribute('preload', 'metadata');
           }
@@ -684,11 +700,11 @@ export class PreviewableMediaRenderer {
           const counterEl = mainDisplay.querySelector('.gallery-counter');
           if (counterEl) counterEl.textContent = `${index + 1}/${count}`;
 
-          if (newImg instanceof HTMLImageElement) {
+          if (newImg.instanceOf(HTMLImageElement)) {
             newImg.addEventListener('click', (event) => {
               event.stopPropagation();
               const imageUrls = mediaItems
-                .filter((item): item is HTMLImageElement => item instanceof HTMLImageElement)
+                .filter((item): item is HTMLImageElement => item.instanceOf(HTMLImageElement))
                 .map((item) => item.src);
               const imageIndex = imageUrls.indexOf(newImg.src);
               if (imageIndex >= 0) {
@@ -734,33 +750,33 @@ export class PreviewableMediaRenderer {
   public openImageLightbox(imageSrcs: string[], startIndex: number): void {
     if (imageSrcs.length === 0) return;
 
-    const overlay = document.createElement('div');
+    const overlay = activeDocument.createElement('div');
     overlay.className = 'image-lightbox-overlay pcr-lightbox-overlay';
 
     let currentIndex = startIndex;
     const count = imageSrcs.length;
 
-    const imgContainer = document.createElement('div');
+    const imgContainer = activeDocument.createElement('div');
     imgContainer.className = 'pcr-lightbox-container';
 
-    const img = document.createElement('img');
+    const img = activeDocument.createElement('img');
     img.src = imageSrcs[currentIndex] ?? '';
     img.className = 'pcr-lightbox-image';
     imgContainer.appendChild(img);
 
     let counter: HTMLDivElement | null = null;
     if (count > 1) {
-      counter = document.createElement('div');
+      counter = activeDocument.createElement('div');
       counter.className = 'pcr-lightbox-counter';
       counter.textContent = `${currentIndex + 1} / ${count}`;
       imgContainer.appendChild(counter);
 
       // Navigation
-      const prevBtn = document.createElement('button');
+      const prevBtn = activeDocument.createElement('button');
       prevBtn.textContent = '‹';
       prevBtn.className = 'pcr-lightbox-nav pcr-lightbox-prev';
 
-      const nextBtn = document.createElement('button');
+      const nextBtn = activeDocument.createElement('button');
       nextBtn.textContent = '›';
       nextBtn.className = 'pcr-lightbox-nav pcr-lightbox-next';
 
@@ -786,7 +802,7 @@ export class PreviewableMediaRenderer {
     }
 
     // Close button
-    const closeBtn = document.createElement('button');
+    const closeBtn = activeDocument.createElement('button');
     closeBtn.textContent = '×';
     closeBtn.className = 'pcr-lightbox-close';
     closeBtn.addEventListener('click', () => overlay.remove());
@@ -803,7 +819,7 @@ export class PreviewableMediaRenderer {
     const handleKeydown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         overlay.remove();
-        document.removeEventListener('keydown', handleKeydown);
+        activeDocument.removeEventListener('keydown', handleKeydown);
       } else if (e.key === 'ArrowLeft' && count > 1) {
         currentIndex = (currentIndex - 1 + count) % count;
         img.src = imageSrcs[currentIndex] ?? '';
@@ -814,9 +830,9 @@ export class PreviewableMediaRenderer {
         if (counter) counter.textContent = `${currentIndex + 1} / ${count}`;
       }
     };
-    document.addEventListener('keydown', handleKeydown);
+    activeDocument.addEventListener('keydown', handleKeydown);
 
-    document.body.appendChild(overlay);
+    activeDocument.body.appendChild(overlay);
   }
 
   // -------------------------------------------------------------------------
@@ -836,7 +852,7 @@ export class PreviewableMediaRenderer {
    */
   public renderLocalVideo(parent: HTMLElement, src: string): HTMLVideoElement {
     const wrapper = this.makeDiv(parent, 'local-video-container pcr-video-container');
-    const video = document.createElement('video');
+    const video = activeDocument.createElement('video');
     video.classList.add('pcr-video-element');
     // PRD requires playsinline for iOS Safari compat — without this iOS
     // forces fullscreen playback which breaks the timeline UX.
@@ -868,7 +884,7 @@ export class PreviewableMediaRenderer {
       return this.renderLocalVideo(parent, src);
     }
     const wrapper = this.makeDiv(parent, 'local-video-container pcr-video-container');
-    const video = document.createElement('video');
+    const video = activeDocument.createElement('video');
     video.classList.add('pcr-video-element');
     for (const [k, v] of Object.entries(opts.attrs)) {
       video.setAttribute(k, v);
@@ -1048,10 +1064,10 @@ export class PreviewableMediaRenderer {
         }).addTo(map);
 
         // Custom attribution — top-left corner, low z-index.
-        const attr = document.createElement('div');
+        const attr = activeDocument.createElement('div');
         attr.classList.add('pcr-gmaps-map-attr');
         attr.textContent = '© ';
-        const link = document.createElement('a');
+        const link = activeDocument.createElement('a');
         link.textContent = 'OSM';
         link.href = 'https://www.openstreetmap.org/copyright';
         link.target = '_blank';
@@ -1108,7 +1124,7 @@ export class PreviewableMediaRenderer {
     const linkContainer = this.makeDiv(wrapper, 'pcr-map-link-container');
 
     if (post.metadata.location) {
-      const locationText = document.createElement('span');
+      const locationText = activeDocument.createElement('span');
       locationText.textContent = post.metadata.location;
       locationText.classList.add('pcr-map-location-text');
       linkContainer.appendChild(locationText);
@@ -1123,7 +1139,7 @@ export class PreviewableMediaRenderer {
       post.metadata.location,
       post.author.name,
     );
-    const directionsLink = document.createElement('a');
+    const directionsLink = activeDocument.createElement('a');
     directionsLink.textContent = 'Directions';
     directionsLink.classList.add('pcr-map-link');
     directionsLink.href = directionsUrl;
@@ -1132,7 +1148,7 @@ export class PreviewableMediaRenderer {
     linksDiv.appendChild(directionsLink);
 
     // Google Maps link.
-    const gmapLink = document.createElement('a');
+    const gmapLink = activeDocument.createElement('a');
     gmapLink.textContent = 'Open in maps';
     gmapLink.classList.add('pcr-map-link');
     gmapLink.href = post.url || `https://www.google.com/maps?q=${lat},${lng}`;
@@ -1180,7 +1196,7 @@ export class PreviewableMediaRenderer {
   }
 
   private makeDiv(parent: HTMLElement, classes?: string): HTMLDivElement {
-    const div = document.createElement('div');
+    const div = activeDocument.createElement('div');
     if (classes) {
       for (const c of classes.split(/\s+/).filter(Boolean)) {
         div.classList.add(c);

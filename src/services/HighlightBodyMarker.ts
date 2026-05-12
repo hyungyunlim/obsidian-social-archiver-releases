@@ -161,7 +161,6 @@ export class HighlightBodyMarker {
     // wired yet; this is `console.debug` so it stays out of production logs.
     for (const h of rendered) {
       if (h.coordinateState === 'wrong-canonical-v2') {
-        // eslint-disable-next-line no-console
         console.debug(
           '[HighlightBodyMarker] wrong-canonical-v2 detected',
           JSON.stringify({
@@ -295,7 +294,6 @@ export class HighlightBodyMarker {
     if (resolve && resolve.shift > 0) {
       // Degraded mapping — surface in console for field diagnostics; keep
       // mark in place since the resolver believes the span is correct.
-      // eslint-disable-next-line no-console
       console.debug(
         '[HighlightBodyMarker] drift detected',
         JSON.stringify({

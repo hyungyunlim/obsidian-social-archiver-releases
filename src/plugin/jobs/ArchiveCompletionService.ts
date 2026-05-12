@@ -756,7 +756,7 @@ export class ArchiveCompletionService {
             // Check if it's a blob URL (TikTok videos)
             if (mediaUrl.startsWith('blob:')) {
               // blob: URLs are not network requests; requestUrl() does not support the blob: protocol
-              const response = await globalThis.fetch(mediaUrl);
+              const response = await window.fetch(mediaUrl);
               if (!response.ok) {
                 throw new Error(`Blob fetch failed: ${response.status} ${response.statusText}`);
               }

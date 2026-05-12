@@ -232,7 +232,7 @@ export class IntersectionObserverManager {
     this.renderedCards.delete(realCard);
 
     // Create placeholder
-    const placeholder = document.createElement('div');
+    const placeholder = activeDocument.createElement('div');
     placeholder.className = 'post-card-recycled-placeholder';
     placeholder.addClass('sa-dynamic-height', 'sa-dynamic-min-height');
     placeholder.setCssProps({ '--sa-height': `${height}px`, '--sa-min-height': `${height}px` });

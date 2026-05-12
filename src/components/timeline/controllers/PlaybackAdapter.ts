@@ -31,7 +31,7 @@ export class HtmlMediaPlaybackAdapter implements PlaybackAdapter {
   private listeners: Array<{ event: string; handler: EventListener }> = [];
 
   constructor(private readonly element: HTMLMediaElement) {
-    this.type = element instanceof HTMLVideoElement ? 'local-video' : 'audio';
+    this.type = element.instanceOf(HTMLVideoElement) ? 'local-video' : 'audio';
   }
 
   play(): Promise<void> {
@@ -159,7 +159,7 @@ export class YouTubeIframePlaybackAdapter implements PlaybackAdapter {
 
     // Fallback: polling-based time estimation
     this.usePollingFallback = true;
-    this.pollingInterval = window.setInterval(() => {
+    const tick = () => {
       if (this.playing) {
         this.estimatedTime += 0.25;
         if (this.duration > 0 && this.estimatedTime > this.duration) {
@@ -168,11 +168,15 @@ export class YouTubeIframePlaybackAdapter implements PlaybackAdapter {
         }
         callback(this.estimatedTime);
       }
-    }, 250);
+      if (this.pollingInterval !== null) {
+        this.pollingInterval = window.setTimeout(tick, 250);
+      }
+    };
+    this.pollingInterval = window.setTimeout(tick, 250);
 
     return () => {
       if (this.pollingInterval) {
-        window.clearInterval(this.pollingInterval);
+        window.clearTimeout(this.pollingInterval);
         this.pollingInterval = null;
       }
     };
@@ -182,7 +186,7 @@ export class YouTubeIframePlaybackAdapter implements PlaybackAdapter {
     this.unsubscribeTimeUpdate?.();
     this.unsubscribeTimeUpdate = null;
     if (this.pollingInterval) {
-      window.clearInterval(this.pollingInterval);
+      window.clearTimeout(this.pollingInterval);
       this.pollingInterval = null;
     }
   }

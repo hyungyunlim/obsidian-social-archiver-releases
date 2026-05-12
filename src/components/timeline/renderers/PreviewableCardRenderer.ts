@@ -145,7 +145,7 @@ export class PreviewableCardRenderer {
     // detail behavior; vault timeline opts out — long-press handles reader
     // mode separately).
     if (this.context.onCardClick) {
-      card.style.cursor = 'pointer';
+      card.setCssStyles({ cursor: 'pointer' });
       card.addEventListener('click', () => this.context.onCardClick?.(post));
     }
 
@@ -166,19 +166,23 @@ export class PreviewableCardRenderer {
       parent,
       'pcr-media-hero pcr-preview-media pcr-preview-media--text',
     );
-    empty.style.position = 'relative';
-    empty.style.aspectRatio = '1 / 1';
-    empty.style.background = 'var(--background-secondary, #f5f5f5)';
-    empty.style.display = 'flex';
-    empty.style.alignItems = 'center';
-    empty.style.justifyContent = 'center';
-    empty.style.borderRadius = '4px';
-    empty.style.overflow = 'hidden';
+    empty.setCssStyles({
+      position: 'relative',
+      aspectRatio: '1 / 1',
+      background: 'var(--background-secondary, #f5f5f5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: '4px',
+      overflow: 'hidden',
+    });
 
-    const label = document.createElement('span');
+    const label = activeDocument.createElement('span');
     label.textContent = 'Text-only post';
-    label.style.color = 'var(--text-muted)';
-    label.style.fontSize = 'var(--font-ui-smaller, 0.8rem)';
+    label.setCssStyles({
+      color: 'var(--text-muted)',
+      fontSize: 'var(--font-ui-smaller, 0.8rem)',
+    });
     empty.appendChild(label);
   }
 
@@ -198,7 +202,7 @@ export class PreviewableCardRenderer {
    * (no Obsidian element enrichments) and the Obsidian runtime.
    */
   private makeDiv(parent: HTMLElement, classes?: string): HTMLDivElement {
-    const div = document.createElement('div');
+    const div = activeDocument.createElement('div');
     if (classes) {
       for (const c of classes.split(/\s+/).filter(Boolean)) {
         div.classList.add(c);

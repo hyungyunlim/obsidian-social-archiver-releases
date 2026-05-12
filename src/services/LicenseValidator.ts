@@ -53,6 +53,7 @@ export class LicenseValidator implements IService {
 
   // Auto-refresh timer
   private refreshTimer?: number;
+  private autoRefreshActive = false;
 
   constructor(
     config: LicenseValidatorConfig,
@@ -361,14 +362,8 @@ export class LicenseValidator implements IService {
    */
   private startAutoRefresh(): void {
     this.stopAutoRefresh();
-
-    this.refreshTimer = window.setInterval(() => {
-      void this.refreshLicense().then(() => {
-        this.logger?.debug('Auto-refreshing license');
-      }).catch((error: unknown) => {
-        this.logger?.error('Auto-refresh failed', error instanceof Error ? error : undefined);
-      });
-    }, this.config.autoRefreshInterval);
+    this.autoRefreshActive = true;
+    this.scheduleNextAutoRefresh();
 
     this.logger?.debug('Auto-refresh timer started', {
       interval: this.config.autoRefreshInterval,
@@ -376,11 +371,38 @@ export class LicenseValidator implements IService {
   }
 
   /**
+   * Self-rescheduling timer for license auto-refresh. See `startAutoRefresh()`
+   * for the user-consented disclosure of network activity. We use a
+   * `setTimeout` chain rather than `setInterval` so a slow refresh response
+   * cannot stack a second request before the first one finishes.
+   */
+  private scheduleNextAutoRefresh(): void {
+    this.refreshTimer = window.setTimeout(() => {
+      void this.refreshLicense()
+        .then(() => {
+          this.logger?.debug('Auto-refreshing license');
+        })
+        .catch((error: unknown) => {
+          this.logger?.error(
+            'Auto-refresh failed',
+            error instanceof Error ? error : undefined
+          );
+        })
+        .finally(() => {
+          if (this.autoRefreshActive) {
+            this.scheduleNextAutoRefresh();
+          }
+        });
+    }, this.config.autoRefreshInterval);
+  }
+
+  /**
    * Stop auto-refresh timer
    */
   private stopAutoRefresh(): void {
+    this.autoRefreshActive = false;
     if (this.refreshTimer) {
-      window.clearInterval(this.refreshTimer);
+      window.clearTimeout(this.refreshTimer);
       this.refreshTimer = undefined;
       this.logger?.debug('Auto-refresh timer stopped');
     }

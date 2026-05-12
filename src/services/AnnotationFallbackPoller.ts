@@ -105,11 +105,11 @@ export class AnnotationFallbackPoller {
     this.setTimer = deps.setTimer
       ?? (hasWindow
         ? ((cb, ms) => window.setTimeout(cb, ms))
-        : ((cb, ms) => setTimeout(cb, ms) as unknown as number));
+        : ((cb, ms) => window.setTimeout(cb, ms) as unknown as number));
     this.clearTimer = deps.clearTimer
       ?? (hasWindow
         ? ((id) => window.clearTimeout(id))
-        : ((id) => clearTimeout(id as unknown as ReturnType<typeof setTimeout>)));
+        : ((id) => window.clearTimeout(id as unknown as ReturnType<typeof setTimeout>)));
 
     // Start the watermark at "now" — we only care about updates that arrive
     // while we're degraded; anything older than `start()` should have come

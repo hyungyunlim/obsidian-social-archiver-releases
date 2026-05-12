@@ -258,7 +258,7 @@ export class NoticeBanner {
     const tappable = hasTitle || hasCta;
 
     // Outer row
-    const banner = document.createElement('div');
+    const banner = activeDocument.createElement('div');
     banner.classList.add('nb-banner', `nb-level-${notice.level}`);
     if (tappable) {
       banner.classList.add('nb-banner-tappable');
@@ -267,7 +267,7 @@ export class NoticeBanner {
     banner.setAttribute('aria-live', 'polite');
 
     // Icon
-    const iconEl = document.createElement('span');
+    const iconEl = activeDocument.createElement('span');
     iconEl.classList.add('nb-icon');
     setIcon(iconEl, noticeLevelIcon(notice.level));
     banner.appendChild(iconEl);
@@ -277,10 +277,10 @@ export class NoticeBanner {
     // execute as markup. This is the same effect as Obsidian's
     // `el.setText(...)`, but works on a plain `document.createElement`
     // node without depending on the Obsidian element-prototype patches.
-    const textEl = document.createElement('span');
+    const textEl = activeDocument.createElement('span');
     textEl.classList.add('nb-text');
     if (hasTitle) textEl.classList.add('nb-text-title');
-    textEl.textContent = hasTitle ? title! : notice.body;
+    textEl.textContent = hasTitle ? title : notice.body;
     banner.appendChild(textEl);
 
     // Title or body region click handling.
@@ -301,7 +301,7 @@ export class NoticeBanner {
 
     // X dismiss
     if (!isSticky) {
-      const closeBtn = document.createElement('button');
+      const closeBtn = activeDocument.createElement('button');
       closeBtn.classList.add('nb-close');
       closeBtn.setAttribute('aria-label', 'Dismiss notice');
       setIcon(closeBtn, 'x');

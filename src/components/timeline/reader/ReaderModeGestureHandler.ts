@@ -55,9 +55,9 @@ export class ReaderModeGestureHandler {
 
   destroy(): void {
     this.el.removeEventListener('pointerdown', this.onPointerDown);
-    document.removeEventListener('pointermove', this.onPointerMove);
-    document.removeEventListener('pointerup', this.onPointerUp);
-    document.removeEventListener('pointercancel', this.onPointerUp);
+    activeDocument.removeEventListener('pointermove', this.onPointerMove);
+    activeDocument.removeEventListener('pointerup', this.onPointerUp);
+    activeDocument.removeEventListener('pointercancel', this.onPointerUp);
   }
 
   private handlePointerDown(e: PointerEvent): void {
@@ -80,9 +80,9 @@ export class ReaderModeGestureHandler {
     this.startTime = Date.now();
     this.currentDeltaX = 0;
 
-    document.addEventListener('pointermove', this.onPointerMove);
-    document.addEventListener('pointerup', this.onPointerUp);
-    document.addEventListener('pointercancel', this.onPointerUp);
+    activeDocument.addEventListener('pointermove', this.onPointerMove);
+    activeDocument.addEventListener('pointerup', this.onPointerUp);
+    activeDocument.addEventListener('pointercancel', this.onPointerUp);
   }
 
   private handlePointerMove(e: PointerEvent): void {
@@ -133,9 +133,9 @@ export class ReaderModeGestureHandler {
   }
 
   private handlePointerUp(_e: PointerEvent): void {
-    document.removeEventListener('pointermove', this.onPointerMove);
-    document.removeEventListener('pointerup', this.onPointerUp);
-    document.removeEventListener('pointercancel', this.onPointerUp);
+    activeDocument.removeEventListener('pointermove', this.onPointerMove);
+    activeDocument.removeEventListener('pointerup', this.onPointerUp);
+    activeDocument.removeEventListener('pointercancel', this.onPointerUp);
 
     if (!this.tracking || !this.dragMode) {
       this.tracking = false;

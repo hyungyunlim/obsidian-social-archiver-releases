@@ -108,7 +108,7 @@ export class ArchiveDeleteSyncService {
   private isFlushing = false;
 
   // -- Deferred flush retry --------------------------------------------------
-  private deferredFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  private deferredFlushTimer: number | null = null;
 
   // -- Inbound-delete loop prevention ---------------------------------------
   /**
@@ -154,7 +154,7 @@ export class ArchiveDeleteSyncService {
       this.unsubscribeFileDeleted = null;
     }
     if (this.deferredFlushTimer !== null) {
-      clearTimeout(this.deferredFlushTimer);
+      window.clearTimeout(this.deferredFlushTimer);
       this.deferredFlushTimer = null;
     }
     this.suppressedInboundDeleteIds.clear();
@@ -192,7 +192,7 @@ export class ArchiveDeleteSyncService {
     const settings = this.deps.settings();
     this.setQueue(settings, []);
     if (this.deferredFlushTimer !== null) {
-      clearTimeout(this.deferredFlushTimer);
+      window.clearTimeout(this.deferredFlushTimer);
       this.deferredFlushTimer = null;
     }
     this.suppressedInboundDeleteIds.clear();
@@ -664,8 +664,7 @@ export class ArchiveDeleteSyncService {
     if (idx === -1) return;
 
     const updated: PendingArchiveDeleteEntry = {
-      // Non-null assertion safe: idx !== -1 guarantees element exists
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- idx !== -1 guarantees element exists
       ...queue[idx]!,
       retryCount: entry.retryCount + 1,
       lastAttemptAt: new Date().toISOString(),
@@ -766,7 +765,7 @@ export class ArchiveDeleteSyncService {
       return;
     }
 
-    this.deferredFlushTimer = setTimeout(() => {
+    this.deferredFlushTimer = window.setTimeout(() => {
       this.deferredFlushTimer = null;
       void this.flushPendingDeletes();
     }, DEFERRED_FLUSH_RETRY_MS);
@@ -790,8 +789,7 @@ export class ArchiveDeleteSyncService {
     if (originalUrl) {
       const byUrl = this.deps.findByOriginalUrl(originalUrl);
       if (byUrl.length === 1) {
-        // byUrl[0] is defined when length === 1
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- byUrl[0] is defined when length === 1
         return byUrl[0]!;
       }
       if (byUrl.length > 1) {

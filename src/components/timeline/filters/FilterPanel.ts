@@ -62,7 +62,7 @@ export class FilterPanel {
    */
   close(): void {
     if (this.closeHandler) {
-      document.removeEventListener('click', this.closeHandler);
+      activeDocument.removeEventListener('click', this.closeHandler);
       this.closeHandler = null;
     }
     this.panelEl?.remove();
@@ -501,7 +501,7 @@ export class FilterPanel {
     window.setTimeout(() => {
       // Guard: panel may have been closed during the timeout delay
       if (this.closeHandler && this.isOpen) {
-        document.addEventListener('click', this.closeHandler);
+        activeDocument.addEventListener('click', this.closeHandler);
       }
     }, 0);
   }

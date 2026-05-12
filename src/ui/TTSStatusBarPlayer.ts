@@ -154,7 +154,7 @@ export class TTSStatusBarPlayer {
     const prevBtn = this.createNoticeButton(controls, 'skip-back', 'Previous');
     prevBtn.addEventListener('click', () => this.callbacks.onPreviousSentence());
 
-    this.noticePlayPauseBtn = this.createNoticeButton(controls, 'play', 'Play/Pause');
+    this.noticePlayPauseBtn = this.createNoticeButton(controls, 'play', 'Play or pause');
     this.noticePlayPauseBtn.addEventListener('click', () => this.callbacks.onTogglePause());
 
     const nextBtn = this.createNoticeButton(controls, 'skip-forward', 'Next');

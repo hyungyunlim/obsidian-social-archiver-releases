@@ -99,17 +99,18 @@ export class PreviewableHeaderRenderer {
 
     // Author name
     const displayName = post.author?.name ?? '';
-    const authorName = document.createElement('strong');
+    const authorName = activeDocument.createElement('strong');
     authorName.textContent = displayName;
     authorName.classList.add('pcr-author-name');
-    // Use plain style.setProperty (Obsidian's setCssProps is not in the mock).
-    authorName.style.setProperty('--pcr-author-font-size', '14px');
-    authorName.style.setProperty('--pcr-author-max-width', '320px');
+    authorName.setCssProps({
+      '--pcr-author-font-size': '14px',
+      '--pcr-author-max-width': '320px',
+    });
     authorNameRow.appendChild(authorName);
 
     if (post.author?.url && this.context.onAuthorClick) {
       authorName.setAttribute('title', `View ${displayName}'s detail`);
-      authorName.style.cursor = 'pointer';
+      authorName.setCssStyles({ cursor: 'pointer' });
       authorName.addEventListener('click', (e) => {
         e.stopPropagation();
         this.context.onAuthorClick?.(post);
@@ -125,7 +126,7 @@ export class PreviewableHeaderRenderer {
         // Visible affordance: a small dot indicator next to the name so
         // users notice the note exists. The tooltip body lives on the
         // strong element via the data attribute.
-        const noteDot = document.createElement('span');
+        const noteDot = activeDocument.createElement('span');
         noteDot.classList.add('pcr-author-note-indicator');
         noteDot.setAttribute('aria-label', 'Has author note');
         noteDot.setAttribute('title', snippet);
@@ -145,10 +146,10 @@ export class PreviewableHeaderRenderer {
     const timestamp = post.metadata?.timestamp ?? null;
     const relative = formatRelativeTime(timestamp);
     if (relative) {
-      const timeSpan = document.createElement('span');
+      const timeSpan = activeDocument.createElement('span');
       timeSpan.classList.add('pcr-nowrap');
       timeSpan.classList.add('text-xs');
-      timeSpan.style.color = 'var(--text-muted)';
+      timeSpan.setCssStyles({ color: 'var(--text-muted)' });
       timeSpan.textContent = relative;
       timeRow.appendChild(timeSpan);
     }
@@ -156,10 +157,10 @@ export class PreviewableHeaderRenderer {
     // Podcast: episode author next to timestamp
     if (post.platform === 'podcast' && post.author?.handle) {
       this.appendSeparator(timeRow);
-      const episodeAuthorSpan = document.createElement('span');
+      const episodeAuthorSpan = activeDocument.createElement('span');
       episodeAuthorSpan.classList.add('pcr-episode-author');
       episodeAuthorSpan.classList.add('text-xs');
-      episodeAuthorSpan.style.color = 'var(--text-muted)';
+      episodeAuthorSpan.setCssStyles({ color: 'var(--text-muted)' });
       episodeAuthorSpan.textContent = `by ${post.author.handle}`;
       timeRow.appendChild(episodeAuthorSpan);
     }
@@ -167,7 +168,7 @@ export class PreviewableHeaderRenderer {
     // Reddit: subreddit link
     if (post.platform === 'reddit' && post.content?.community) {
       this.appendSeparator(timeRow);
-      const subredditLink = document.createElement('a');
+      const subredditLink = activeDocument.createElement('a');
       subredditLink.classList.add('pcr-community-link');
       subredditLink.classList.add('text-xs');
       subredditLink.textContent = `r/${post.content.community.name}`;
@@ -182,7 +183,7 @@ export class PreviewableHeaderRenderer {
     // Naver: cafe link
     if (post.platform === 'naver' && post.content?.community) {
       this.appendSeparator(timeRow);
-      const cafeLink = document.createElement('a');
+      const cafeLink = activeDocument.createElement('a');
       cafeLink.classList.add('pcr-cafe-link');
       cafeLink.classList.add('text-xs');
       cafeLink.textContent = post.content.community.name;
@@ -227,7 +228,7 @@ export class PreviewableHeaderRenderer {
     const avatarSrc = this.context.resolveMediaUrl(post.author?.avatar);
 
     if (avatarSrc) {
-      const avatarImg = document.createElement('img');
+      const avatarImg = activeDocument.createElement('img');
       avatarImg.loading = 'lazy';
       avatarImg.classList.add('sa-icon-40', 'sa-rounded-full', 'sa-object-cover', 'pcr-avatar-img');
       avatarImg.src = avatarSrc;
@@ -300,7 +301,7 @@ export class PreviewableHeaderRenderer {
           // SVG creation failed in degraded environments; iconWrapper stays empty.
         }
       } else {
-        const img = document.createElement('img');
+        const img = activeDocument.createElement('img');
         img.setAttribute('src', publisherEntry.icon.url);
         img.setAttribute('alt', publisherEntry.name);
         img.setAttribute('loading', 'lazy');
@@ -383,16 +384,16 @@ export class PreviewableHeaderRenderer {
    * Pure visual.
    */
   public renderHighlightBadge(parent: HTMLElement, count = 0): HTMLElement {
-    const badge = document.createElement('span');
+    const badge = activeDocument.createElement('span');
     badge.classList.add('pcr-highlight-badge');
     parent.appendChild(badge);
 
-    const icon = document.createElement('span');
+    const icon = activeDocument.createElement('span');
     icon.classList.add('pcr-highlight-badge-icon');
     badge.appendChild(icon);
     this.safeSetIcon(icon, 'highlighter');
 
-    const text = document.createElement('span');
+    const text = activeDocument.createElement('span');
     text.textContent = ` ${count}`;
     badge.appendChild(text);
 
@@ -506,7 +507,7 @@ export class PreviewableHeaderRenderer {
   }
 
   private appendInitialsFallback(container: HTMLElement, name: string | undefined | null): void {
-    const fallback = document.createElement('div');
+    const fallback = activeDocument.createElement('div');
     fallback.classList.add(
       'sa-icon-40',
       'sa-rounded-full',
@@ -519,11 +520,11 @@ export class PreviewableHeaderRenderer {
   }
 
   private appendSeparator(parent: HTMLElement): void {
-    const sep = document.createElement('span');
+    const sep = activeDocument.createElement('span');
     sep.textContent = '·';
     sep.classList.add('pcr-separator');
     sep.classList.add('text-xs');
-    sep.style.color = 'var(--text-muted)';
+    sep.setCssStyles({ color: 'var(--text-muted)' });
     parent.appendChild(sep);
   }
 
@@ -548,7 +549,7 @@ export class PreviewableHeaderRenderer {
    * vitest (no Obsidian element enrichments) and the Obsidian runtime.
    */
   private makeDiv(parent: HTMLElement, classes: string): HTMLDivElement {
-    const div = document.createElement('div');
+    const div = activeDocument.createElement('div');
     if (classes) {
       for (const cls of classes.split(/\s+/).filter(Boolean)) {
         div.classList.add(cls);

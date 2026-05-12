@@ -112,11 +112,11 @@ export class TTSHighlight {
     try {
       if (startInfo.node === endInfo.node) {
         // Single text node — wrap directly
-        const range = document.createRange();
+        const range = activeDocument.createRange();
         range.setStart(startInfo.node, startInfo.offset);
         range.setEnd(endInfo.node, endInfo.offset);
 
-        const mark = document.createElement('mark');
+        const mark = activeDocument.createElement('mark');
         mark.className = HIGHLIGHT_CLASS;
         range.surroundContents(mark);
         this.activeMarks.push(mark);
@@ -130,11 +130,11 @@ export class TTSHighlight {
         );
 
         for (const { node, startOffset, endOffset } of nodesInRange) {
-          const range = document.createRange();
+          const range = activeDocument.createRange();
           range.setStart(node, startOffset);
           range.setEnd(node, endOffset);
 
-          const mark = document.createElement('mark');
+          const mark = activeDocument.createElement('mark');
           mark.className = HIGHLIGHT_CLASS;
           range.surroundContents(mark);
           this.activeMarks.push(mark);
@@ -267,7 +267,7 @@ export class TTSHighlight {
     if (!this.container) return [];
 
     const nodes: Text[] = [];
-    const walker = document.createTreeWalker(
+    const walker = activeDocument.createTreeWalker(
       this.container,
       NodeFilter.SHOW_TEXT,
       {

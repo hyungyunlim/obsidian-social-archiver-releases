@@ -54,9 +54,9 @@ export class ReaderModeLongPress {
     this.startY = e.clientY;
     this.active = true;
 
-    document.addEventListener('pointermove', this.onPointerMove);
-    document.addEventListener('pointerup', this.onPointerUp);
-    document.addEventListener('pointercancel', this.onPointerUp);
+    activeDocument.addEventListener('pointermove', this.onPointerMove);
+    activeDocument.addEventListener('pointerup', this.onPointerUp);
+    activeDocument.addEventListener('pointercancel', this.onPointerUp);
 
     this.timer = window.setTimeout(() => {
       if (this.active) {
@@ -86,8 +86,8 @@ export class ReaderModeLongPress {
   }
 
   private cleanup(): void {
-    document.removeEventListener('pointermove', this.onPointerMove);
-    document.removeEventListener('pointerup', this.onPointerUp);
-    document.removeEventListener('pointercancel', this.onPointerUp);
+    activeDocument.removeEventListener('pointermove', this.onPointerMove);
+    activeDocument.removeEventListener('pointerup', this.onPointerUp);
+    activeDocument.removeEventListener('pointercancel', this.onPointerUp);
   }
 }

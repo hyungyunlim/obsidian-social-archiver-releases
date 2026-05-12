@@ -84,7 +84,7 @@ export class TranscriptRenderer {
     this.segments = options.segments;
     this.onTimestampClick = options.onTimestampClick;
     this.isCollapsed = options.startCollapsed ?? true;
-    this.isMobile = document.body.classList.contains('is-mobile');
+    this.isMobile = activeDocument.body.classList.contains('is-mobile');
     this.showSpeakerDividers = options.showSpeakerDividers ?? false;
     this.onCaptionToggle = options.onCaptionToggle;
     this.captionActive = options.captionActive ?? false;
@@ -250,7 +250,7 @@ export class TranscriptRenderer {
     tabsContainer.addEventListener('scroll', updateFade);
 
     // Check after render
-    requestAnimationFrame(updateFade);
+    window.requestAnimationFrame(updateFade);
 
     for (const langCode of this.languages) {
       const isActive = langCode === this.currentLanguage;
@@ -493,8 +493,7 @@ export class TranscriptRenderer {
     const iconSvg = searchIcon.querySelector('svg');
     if (iconSvg) {
       const iconSize = this.isMobile ? '12px' : '14px';
-      iconSvg.style.width = iconSize;
-      iconSvg.style.height = iconSize;
+      iconSvg.setCssStyles({ width: iconSize, height: iconSize });
     }
 
     const input = inputWrapper.createEl('input', {
@@ -503,7 +502,7 @@ export class TranscriptRenderer {
       cls: 'transcript-search-input sa-w-full sa-border sa-rounded-4 sa-bg-primary tr-search-input'
     });
     // Inline padding-left to beat Obsidian's input[type="text"] specificity
-    input.style.paddingLeft = this.isMobile ? '28px' : '34px';
+    input.setCssStyles({ paddingLeft: this.isMobile ? '28px' : '34px' });
     if (this.isMobile) {
       input.addClass('tr-search-input-mobile');
     }
@@ -761,11 +760,11 @@ export class TranscriptRenderer {
     while (index !== -1) {
       // Add text before match
       if (index > lastIndex) {
-        element.appendChild(document.createTextNode(text.substring(lastIndex, index)));
+        element.appendChild(activeDocument.createTextNode(text.substring(lastIndex, index)));
       }
 
       // Add highlighted match
-      const mark = document.createElement('mark');
+      const mark = activeDocument.createElement('mark');
       mark.classList.add('tr-highlight');
       mark.textContent = text.substring(index, index + query.length);
       element.appendChild(mark);
@@ -776,7 +775,7 @@ export class TranscriptRenderer {
 
     // Add remaining text
     if (lastIndex < text.length) {
-      element.appendChild(document.createTextNode(text.substring(lastIndex)));
+      element.appendChild(activeDocument.createTextNode(text.substring(lastIndex)));
     }
   }
 

@@ -2356,7 +2356,7 @@ export class MarkdownConverter implements IService {
   }
 
   private escapeInlineMediaAlt(text: string): string {
-    return text.replace(/([\\\[\]])/g, '\\$1');
+    return text.replace(/([\\[\]])/g, '\\$1');
   }
 
   private insertThreadsSnippetIntoInlineMarkdown(markdown: string, snippetCallout: string): string {

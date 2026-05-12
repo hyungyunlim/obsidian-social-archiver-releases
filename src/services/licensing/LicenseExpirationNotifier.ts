@@ -206,9 +206,7 @@ export class LicenseExpirationNotifier implements IService {
   private startChecking(): void {
     this.stopChecking();
 
-    this.checkTimer = window.setInterval(() => {
-      this.checkExpiration();
-    }, this.config.checkInterval);
+    this.scheduleNextCheck();
 
     this.logger?.debug('Expiration checking started', {
       interval: this.config.checkInterval,
@@ -216,11 +214,23 @@ export class LicenseExpirationNotifier implements IService {
   }
 
   /**
+   * Schedule next expiration check tick (self-rescheduling setTimeout chain).
+   */
+  private scheduleNextCheck(): void {
+    this.checkTimer = window.setTimeout(() => {
+      this.checkExpiration();
+      if (this.checkTimer !== undefined) {
+        this.scheduleNextCheck();
+      }
+    }, this.config.checkInterval);
+  }
+
+  /**
    * Stop periodic checking
    */
   private stopChecking(): void {
     if (this.checkTimer) {
-      window.clearInterval(this.checkTimer);
+      window.clearTimeout(this.checkTimer);
       this.checkTimer = undefined;
       this.logger?.debug('Expiration checking stopped');
     }

@@ -1071,7 +1071,10 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
   } else {
     // Clean up deprecated Azure key/region fields from older settings
     const ttsRaw = migrated.tts as unknown as Record<string, unknown>;
-    const { azureApiKey: _ak, azureRegion: _ar, azureVoiceByLang: _av, ...cleanTts } = ttsRaw;
+    const cleanTts = { ...ttsRaw };
+    delete cleanTts.azureApiKey;
+    delete cleanTts.azureRegion;
+    delete cleanTts.azureVoiceByLang;
     migrated.tts = {
       ...DEFAULT_TTS_SETTINGS,
       ...cleanTts,

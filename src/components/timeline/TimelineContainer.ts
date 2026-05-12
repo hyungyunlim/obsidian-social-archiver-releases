@@ -1159,7 +1159,7 @@ export class TimelineContainer {
     this.removeLoadingBar();
 
     // Create loading bar container
-    this.loadingBarEl = document.createElement('div');
+    this.loadingBarEl = activeDocument.createElement('div');
     this.loadingBarEl.className = 'timeline-inline-loading';
     this.loadingBarEl.addClass('sa-sticky');
     this.loadingBarEl.addClass('sa-top-0');
@@ -1174,7 +1174,7 @@ export class TimelineContainer {
     this.loadingBarEl.addClass('sa-text-muted');
 
     // Spinner
-    const spinner = document.createElement('div');
+    const spinner = activeDocument.createElement('div');
     spinner.className = 'timeline-loading-spinner-small';
     spinner.addClass('sa-icon-16');
     spinner.addClass('sa-rounded-full');
@@ -1182,7 +1182,7 @@ export class TimelineContainer {
     this.loadingBarEl.appendChild(spinner);
 
     // Text
-    const text = document.createElement('span');
+    const text = activeDocument.createElement('span');
     text.textContent = 'Syncing new posts...';
     this.loadingBarEl.appendChild(text);
 
@@ -2049,8 +2049,8 @@ export class TimelineContainer {
           el.removeClass('sa-bg-hover');
           el.addClass('sa-bg-transparent');
         });
-        if (document.activeElement instanceof HTMLElement && document.activeElement !== this.searchInput) {
-          document.activeElement.blur();
+        if (activeDocument.activeElement instanceof HTMLElement && activeDocument.activeElement !== this.searchInput) {
+          activeDocument.activeElement.blur();
         }
       }, 150);
     };
@@ -2203,16 +2203,20 @@ export class TimelineContainer {
     // Mobile: apply inline styles to guarantee override of any utility/Obsidian defaults
     if (ObsidianPlatform.isMobile) {
       searchWrapper.setCssProps({});
-      searchWrapper.style.border = 'none';
-      searchWrapper.style.background = 'transparent';
-      searchWrapper.style.boxShadow = 'none';
-      searchWrapper.style.padding = '2px 0';
+      searchWrapper.setCssStyles({
+        border: 'none',
+        background: 'transparent',
+        boxShadow: 'none',
+        padding: '2px 0',
+      });
 
-      searchInner.style.background = 'var(--background-modifier-form-field)';
-      searchInner.style.border = 'none';
-      searchInner.style.borderRadius = '8px';
-      searchInner.style.padding = '0 10px';
-      searchInner.style.height = '36px';
+      searchInner.setCssStyles({
+        background: 'var(--background-modifier-form-field)',
+        border: 'none',
+        borderRadius: '8px',
+        padding: '0 10px',
+        height: '36px',
+      });
     }
 
     // Search input (no icon, just placeholder)
@@ -2237,13 +2241,15 @@ export class TimelineContainer {
 
     // Mobile: inline style the input to override Obsidian defaults
     if (ObsidianPlatform.isMobile) {
-      this.searchInput.style.fontSize = '15px';
-      this.searchInput.style.padding = '0 4px';
-      this.searchInput.style.lineHeight = '36px';
-      this.searchInput.style.height = '36px';
-      this.searchInput.style.background = 'transparent';
-      this.searchInput.style.border = 'none';
-      this.searchInput.style.boxShadow = 'none';
+      this.searchInput.setCssStyles({
+        fontSize: '15px',
+        padding: '0 4px',
+        lineHeight: '36px',
+        height: '36px',
+        background: 'transparent',
+        border: 'none',
+        boxShadow: 'none',
+      });
     }
 
     // Get current search query
@@ -2649,14 +2655,14 @@ export class TimelineContainer {
    */
   private showAuthorSortDropdown(anchor: HTMLElement, updateButtonText: () => void): void {
     // Check if dropdown already exists
-    const existingDropdown = document.querySelector('.author-sort-dropdown');
+    const existingDropdown = activeDocument.querySelector('.author-sort-dropdown');
     if (existingDropdown) {
       existingDropdown.remove();
       return;
     }
 
     // Create dropdown
-    const dropdown = document.createElement('div');
+    const dropdown = activeDocument.createElement('div');
     dropdown.className = 'author-sort-dropdown';
     dropdown.addClass('sa-absolute');
     dropdown.addClass('sa-bg-secondary');
@@ -2726,19 +2732,19 @@ export class TimelineContainer {
     });
 
     // Add to body
-    document.body.appendChild(dropdown);
+    activeDocument.body.appendChild(dropdown);
 
     // Close on outside click
     const closeDropdown = (e: MouseEvent) => {
       if (!dropdown.contains(e.target as Node) && e.target !== anchor) {
         dropdown.remove();
-        document.removeEventListener('click', closeDropdown);
+        activeDocument.removeEventListener('click', closeDropdown);
       }
     };
 
     // Delay to avoid immediate close
     window.setTimeout(() => {
-      document.addEventListener('click', closeDropdown);
+      activeDocument.addEventListener('click', closeDropdown);
     }, 100);
   }
 
@@ -3012,13 +3018,13 @@ export class TimelineContainer {
     const closePanel = (e: MouseEvent) => {
       if (!panel.contains(e.target as Node)) {
         panel.remove();
-        document.removeEventListener('click', closePanel);
+        activeDocument.removeEventListener('click', closePanel);
       }
     };
 
     // Delay to avoid immediate close
     window.setTimeout(() => {
-      document.addEventListener('click', closePanel);
+      activeDocument.addEventListener('click', closePanel);
     }, 100);
   }
 
@@ -3313,7 +3319,7 @@ export class TimelineContainer {
 
       // Let the overlay paint before heavy render work starts.
       await new Promise<void>((resolve) => {
-        requestAnimationFrame(() => resolve());
+        window.requestAnimationFrame(() => resolve());
       });
 
       if (nextMode === 'gallery') {
@@ -4504,7 +4510,7 @@ export class TimelineContainer {
               const { default: CrawlHistoryPanel } = await import('../subscriptions/CrawlHistoryPanel.svelte');
 
               // Create container for the panel with higher z-index
-              const modalContainer = document.body.createDiv({
+              const modalContainer = activeDocument.body.createDiv({
                 cls: 'crawl-history-modal-container'
               });
 
@@ -5074,7 +5080,7 @@ export class TimelineContainer {
   ): Promise<void> {
     try {
       // Create temporary container for rendering
-      const tempContainer = document.createElement('div');
+      const tempContainer = activeDocument.createElement('div');
 
       // Render real post card
       await this.postCardRenderer.render(tempContainer, post);
@@ -5127,7 +5133,7 @@ export class TimelineContainer {
       }
 
       // Create temporary container for rendering
-      const tempContainer = document.createElement('div');
+      const tempContainer = activeDocument.createElement('div');
       await this.postCardRenderer.render(tempContainer, post);
       const realCard = tempContainer.firstElementChild as HTMLElement;
 
@@ -5161,7 +5167,7 @@ export class TimelineContainer {
       const existingCard = feed.querySelector<HTMLElement>(`[data-file-path="${CSS.escape(filePath)}"]`);
       if (!existingCard || !existingCard.parentElement) return;
 
-      const tempContainer = document.createElement('div');
+      const tempContainer = activeDocument.createElement('div');
       await this.postCardRenderer.render(tempContainer, post);
       const newCard = tempContainer.firstElementChild as HTMLElement;
       if (!newCard) return;
@@ -5922,7 +5928,7 @@ export class TimelineContainer {
 
     const barOuter = container.createDiv({ cls: 'tc-bulk-progress-bar-outer' });
     const barInner = barOuter.createDiv({ cls: 'tc-bulk-progress-bar-inner' });
-    barInner.style.width = `${pct}%`;
+    barInner.setCssStyles({ width: `${pct}%` });
   }
 
   /**
@@ -5942,7 +5948,7 @@ export class TimelineContainer {
 
     const barInner = this.bulkProgressContainer.querySelector<HTMLElement>('.tc-bulk-progress-bar-inner');
     if (barInner) {
-      barInner.style.width = `${pct}%`;
+      barInner.setCssStyles({ width: `${pct}%` });
     }
   }
 
@@ -6925,7 +6931,7 @@ export class TimelineContainer {
 
     // Hide all existing timeline children
     for (const child of Array.from(this.containerEl.children)) {
-      (child as HTMLElement).style.display = 'none';
+      (child as HTMLElement).setCssStyles({ display: 'none' });
     }
 
     // Create wrapper for author detail
@@ -6965,7 +6971,7 @@ export class TimelineContainer {
 
     // Restore timeline children
     for (const child of Array.from(this.containerEl.children)) {
-      (child as HTMLElement).style.display = '';
+      (child as HTMLElement).setCssStyles({ display: '' });
     }
   }
 
@@ -7056,7 +7062,7 @@ export class TimelineContainer {
 
     // Restore scroll position after rendering
     // Use requestAnimationFrame to ensure DOM is updated
-    requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
       this.containerEl.scrollTop = this.savedScrollPosition;
     });
   }
@@ -7605,7 +7611,7 @@ export class TimelineContainer {
       span1.addClass('tc-group-label-dim');
       const span2 = dropdownBtn.createSpan({ text: getGroupLabel(this.galleryGroupBy) });
       span2.addClass('tc-group-value');
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      const svg = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
       svg.setAttribute('width', '12');
       svg.setAttribute('height', '12');
       svg.setAttribute('viewBox', '0 0 24 24');
@@ -7615,7 +7621,7 @@ export class TimelineContainer {
       svg.setAttribute('stroke-linecap', 'round');
       svg.setAttribute('stroke-linejoin', 'round');
       svg.classList.add('tc-group-chevron');
-      const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      const polyline = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'polyline');
       polyline.setAttribute('points', '6 9 12 15 18 9');
       svg.appendChild(polyline);
       dropdownBtn.appendChild(svg);
@@ -7644,17 +7650,17 @@ export class TimelineContainer {
         const isActive = this.galleryGroupBy === option.type;
 
         // Create option container with checkmark
-        const optionContent = document.createElement('div');
+        const optionContent = activeDocument.createElement('div');
         optionContent.className = 'tc-option-content';
 
-        const labelSpan = document.createElement('span');
+        const labelSpan = activeDocument.createElement('span');
         labelSpan.textContent = option.label;
         labelSpan.className = isActive ? 'tc-option-label-active' : 'tc-option-label';
         optionContent.appendChild(labelSpan);
 
         if (isActive) {
-          const checkmark = document.createElement('span');
-          const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          const checkmark = activeDocument.createElement('span');
+          const svg = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
           svg.setAttribute('width', '14');
           svg.setAttribute('height', '14');
           svg.setAttribute('viewBox', '0 0 24 24');
@@ -7663,7 +7669,7 @@ export class TimelineContainer {
           svg.setAttribute('stroke-width', '2');
           svg.setAttribute('stroke-linecap', 'round');
           svg.setAttribute('stroke-linejoin', 'round');
-          const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+          const polyline = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'polyline');
           polyline.setAttribute('points', '20 6 9 17 4 12');
           svg.appendChild(polyline);
           checkmark.appendChild(svg);
@@ -7723,11 +7729,11 @@ export class TimelineContainer {
     };
 
     // Use capture phase to handle clicks outside
-    document.addEventListener('click', closeDropdown, true);
+    activeDocument.addEventListener('click', closeDropdown, true);
 
     // Store cleanup function to remove listener when container is destroyed
     this.cleanupFunctions.push(() => {
-      document.removeEventListener('click', closeDropdown, true);
+      activeDocument.removeEventListener('click', closeDropdown, true);
     });
 
     // Hover handled by CSS :hover rule on .gallery-group-controls > button
@@ -7813,7 +7819,7 @@ export class TimelineContainer {
         });
 
         // Fade in new gallery
-        requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
           galleryContainer.addClass('tc-gallery-visible');
           // Remove old gallery after fade
           if (existingGallery) {
@@ -7827,7 +7833,7 @@ export class TimelineContainer {
       this.galleryRenderer.renderGallery(galleryContainer, mediaItems, this.galleryGroupBy);
 
       // Fade in new gallery, fade out old
-      requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
         galleryContainer.addClass('tc-gallery-visible');
 
         // Remove old gallery after fade completes
@@ -7845,7 +7851,7 @@ export class TimelineContainer {
       });
 
       // Fade in error state
-      requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
         galleryContainer.addClass('tc-gallery-visible');
         if (existingGallery) {
           window.setTimeout(() => existingGallery.remove(), 200);

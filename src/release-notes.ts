@@ -24,20 +24,6 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
-  '3.5.2': {
-    title: 'Background Sync Catch-Up',
-    date: '2026-05-09',
-    notes: `## Background Sync Catch-Up
-
-- Obsidian now runs a lightweight catch-up sync when it returns to the foreground, reconnects, or comes back online, so archives created from mobile or web while Obsidian was suspended are pulled in more reliably.
-- Delta sync resumes from the last server high-water mark instead of forcing a full library scan.
-
-## Chrome Extension
-
-- Chrome extension v1.3.1 is now released, and Instagram saved posts can now be imported through the extension.
-`,
-    isImportant: false,
-  },
   '3.5.0': {
     title: 'Beta Wrap-Up + In-App Notices',
     date: '2026-05-04',

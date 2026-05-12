@@ -1,27 +1,27 @@
 /**
  * nodeRequire - Provides access to Node.js require in Obsidian's Electron environment
  *
- * Obsidian plugins run in Electron which provides Node.js require as a global.
- * Using the literal `require(` syntax is flagged by the Obsidian community plugin
- * review bot. This module uses the Function constructor to obtain the require
- * reference without triggering that check.
- *
- * IMPORTANT: This module uses lazy evaluation — the Function constructor runs
- * only when nodeRequire() is first called, NOT at import time. This prevents
- * ReferenceError on mobile where Node.js require does not exist.
- *
- * Callers must still guard with Platform.isDesktop or equivalent checks.
+ * Obsidian plugins run in Electron which provides Node.js require as a global on
+ * `window`. This module reads it lazily so importing this file on mobile (where
+ * Node.js require does not exist) does not crash — as long as callers guard the
+ * actual invocation with Platform.isDesktop or equivalent.
  */
 
+import { Platform } from 'obsidian';
+
 // Lazy wrapper: resolves Node.js require on first call only.
-// This allows mobile code to safely import this module without crashing,
-// as long as the actual nodeRequire() call is guarded by Platform.isDesktop.
 let _cached: NodeJS.Require | undefined;
 
-// eslint-disable-next-line @typescript-eslint/no-implied-eval -- intentional runtime access to Node.js require in Electron
 function nodeRequire(id: string): unknown {
   if (!_cached) {
-    _cached = (new Function('return require') as () => NodeJS.Require)();
+    if (!Platform.isDesktopApp) {
+      throw new Error('nodeRequire is desktop-only');
+    }
+    const electronRequire = (window as unknown as { require?: NodeJS.Require }).require;
+    if (!electronRequire) {
+      throw new Error('Node require not available');
+    }
+    _cached = electronRequire;
   }
   return _cached(id);
 }

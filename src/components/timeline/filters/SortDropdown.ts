@@ -237,7 +237,7 @@ export class SortDropdown {
    */
   close(): void {
     if (this.closeHandler) {
-      document.removeEventListener('click', this.closeHandler);
+      activeDocument.removeEventListener('click', this.closeHandler);
       this.closeHandler = null;
     }
     this.dropdownEl?.remove();
@@ -257,7 +257,7 @@ export class SortDropdown {
     window.setTimeout(() => {
       // Guard: dropdown may have been closed during the timeout delay
       if (this.closeHandler && this.isOpen) {
-        document.addEventListener('click', this.closeHandler);
+        activeDocument.addEventListener('click', this.closeHandler);
       }
     }, 0);
   }

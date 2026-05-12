@@ -42,7 +42,7 @@ export class ArchiveTagOutboundService {
   private readonly lastKnownArchiveTags = new Map<string, string[]>();
 
   /** filePath → active debounce timer ID */
-  private readonly debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly debounceTimers = new Map<string, number>();
 
   /** archiveId → timestamp of last outbound sync (for echo suppression) */
   private readonly suppressionMap = new Map<string, number>();
@@ -96,7 +96,7 @@ export class ArchiveTagOutboundService {
     }
 
     for (const timer of this.debounceTimers.values()) {
-      clearTimeout(timer);
+      window.clearTimeout(timer);
     }
     this.debounceTimers.clear();
 
@@ -145,10 +145,10 @@ export class ArchiveTagOutboundService {
     const cache = this.app.metadataCache.getFileCache(file);
     if (!cache?.frontmatter) return;
 
-    const fm = cache.frontmatter;
+    const fm = cache.frontmatter as Record<string, unknown>;
 
     // Only process archive notes (must have sourceArchiveId)
-    const archiveId = fm.sourceArchiveId;
+    const archiveId: unknown = fm.sourceArchiveId;
     if (typeof archiveId !== 'string' || !archiveId) return;
 
     // Skip if this archiveId is currently suppressed (inbound write or just sent)
@@ -168,10 +168,10 @@ export class ArchiveTagOutboundService {
     // Debounce: cancel existing timer, start a new one
     const existing = this.debounceTimers.get(file.path);
     if (existing !== undefined) {
-      clearTimeout(existing);
+      window.clearTimeout(existing);
     }
 
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       this.debounceTimers.delete(file.path);
 
       const snapshot = this.lastKnownArchiveTags.get(file.path) ?? [];
@@ -180,7 +180,7 @@ export class ArchiveTagOutboundService {
       const latestCache = this.app.metadataCache.getFileCache(file);
       const latestFm = latestCache?.frontmatter;
       const latestTags: string[] = Array.isArray(latestFm?.archiveTags)
-        ? (latestFm!.archiveTags as unknown[]).filter((t): t is string => typeof t === 'string')
+        ? (latestFm.archiveTags as unknown[]).filter((t): t is string => typeof t === 'string')
         : [];
 
       if (arraysEqual(latestTags, snapshot)) return;

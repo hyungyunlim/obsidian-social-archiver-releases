@@ -43,7 +43,7 @@ const LOG_PREFIX = '[Social Archiver] [BulkAccumulator]';
 
 export class BulkArchiveActionAccumulator {
   private pending = new Map<string, PendingAction>();
-  private flushTimer: ReturnType<typeof setTimeout> | null = null;
+  private flushTimer: number | null = null;
 
   constructor(private readonly apiClient: WorkersAPIClient) {}
 
@@ -72,7 +72,7 @@ export class BulkArchiveActionAccumulator {
    */
   destroy(): void {
     if (this.flushTimer) {
-      clearTimeout(this.flushTimer);
+      window.clearTimeout(this.flushTimer);
       this.flushTimer = null;
     }
     // Fire-and-forget flush of remaining items
@@ -91,8 +91,8 @@ export class BulkArchiveActionAccumulator {
   // --------------------------------------------------------------------------
 
   private scheduleFlush(): void {
-    if (this.flushTimer) clearTimeout(this.flushTimer);
-    this.flushTimer = setTimeout(() => {
+    if (this.flushTimer) window.clearTimeout(this.flushTimer);
+    this.flushTimer = window.setTimeout(() => {
       void this.flush();
     }, FLUSH_DELAY_MS);
   }

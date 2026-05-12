@@ -224,7 +224,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
     if (typeof document !== 'undefined') {
       this.registerDomEvent(document, 'visibilitychange', () => {
-        if (!document.hidden) {
+        if (!activeDocument.hidden) {
           this.scheduleForegroundSyncCatchUp('visibilitychange');
         }
       });
@@ -233,7 +233,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
   private scheduleForegroundSyncCatchUp(trigger: 'focus' | 'visibilitychange' | 'online'): void {
     if (!this.settings.authToken || !this.settings.syncClientId) return;
-    if (typeof document !== 'undefined' && document.hidden) return;
+    if (typeof document !== 'undefined' && activeDocument.hidden) return;
     if (this.foregroundSyncCatchUpTimer !== undefined) return;
 
     this.foregroundSyncCatchUpTimer = this.scheduleTrackedTimeout(() => {
@@ -627,12 +627,33 @@ export default class SocialArchiverPlugin extends Plugin {
     // user-configurable (Settings → Advanced → "Job check interval"); setting
     // it to 0 disables background polling entirely.
     if (this.settings.jobCheckInterval > 0) {
-      this.jobCheckInterval = window.setInterval(() => {
-        this.pendingJobOrchestrator?.checkPendingJobs().catch(error => {
-          console.error('[Social Archiver] Periodic job check failed:', error);
-        });
-      }, this.settings.jobCheckInterval);
+      this.scheduleNextJobCheck();
     }
+  }
+
+  /**
+   * Self-rescheduling timer for pending-job catch-up checks. See the JSDoc on
+   * `startPeriodicJobCheck()` for the user-consented disclosure of network
+   * activity. We use a `setTimeout` chain (rather than `setInterval`) so each
+   * iteration finishes before the next one is queued, which means we never
+   * stack up overlapping network calls if the previous check is slow.
+   */
+  private scheduleNextJobCheck(): void {
+    this.jobCheckInterval = window.setTimeout(() => {
+      const promise = this.pendingJobOrchestrator?.checkPendingJobs();
+      const next = promise ?? Promise.resolve();
+      next
+        .catch((error: unknown) => {
+          console.error('[Social Archiver] Periodic job check failed:', error);
+        })
+        .finally(() => {
+          // Re-arm only if the plugin is still active and the interval setting
+          // remains positive (clearTimeout in onunload sets it to undefined).
+          if (this.jobCheckInterval !== undefined && this.settings.jobCheckInterval > 0) {
+            this.scheduleNextJobCheck();
+          }
+        });
+    }, this.settings.jobCheckInterval);
   }
 
   onunload(): void {
@@ -654,7 +675,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
     // Stop periodic job checker
     if (this.jobCheckInterval) {
-      window.clearInterval(this.jobCheckInterval);
+      window.clearTimeout(this.jobCheckInterval);
       this.jobCheckInterval = undefined;
     }
 
@@ -1302,10 +1323,11 @@ export default class SocialArchiverPlugin extends Plugin {
 
       // Create PendingJobOrchestrator
       // Services below are guaranteed initialized above in this method.
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- initialized above
-      const completionService = this.archiveCompletionService!;
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- initialized above
-      const localCoordinator = this.localArchiveCoordinator!;
+      const completionService = this.archiveCompletionService;
+      const localCoordinator = this.localArchiveCoordinator;
+      if (!completionService || !localCoordinator) {
+        throw new Error('Required services not initialized');
+      }
 
       this.pendingJobOrchestrator = new PendingJobOrchestrator({
         pendingJobsManager: this.pendingJobsManager,
@@ -1315,8 +1337,12 @@ export default class SocialArchiverPlugin extends Plugin {
         processingJobs: this.processingJobs,
         processCompletedJob: (job, payload) => completionService.processCompletedJob(job, payload),
         processFailedJob: (job, msg) => completionService.processFailedJob(job, msg),
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- batch result shape is loosely typed
-        processBatchArchiveResult: (result, id, path) => this.processBatchArchiveResult(result, id, path),
+        processBatchArchiveResult: (result, id, path) =>
+          this.processBatchArchiveResult(
+            result as import('./services/WorkersAPIClient').BatchArchiveJobStatusResponse,
+            id,
+            path
+          ),
         fetchNaverCafeLocally: (...args) => localCoordinator.fetchNaverCafeLocally(...args),
         fetchNaverBlogLocally: (...args) => localCoordinator.fetchNaverBlogLocally(...args),
         fetchBrunchLocally: (...args) => localCoordinator.fetchBrunchLocally(...args),
@@ -1402,7 +1428,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
         // Set up RealtimeEventBridge
         // Need a reference to `this` for the reactive accessors below
-        // eslint-disable-next-line @typescript-eslint/no-this-alias
+        // eslint-disable-next-line @typescript-eslint/no-this-alias -- captured for use inside reactive getter accessors below
         const self = this;
 
         if (this.realtimeEventBridge) {
@@ -1991,7 +2017,7 @@ export default class SocialArchiverPlugin extends Plugin {
   private updateInstagramImportRibbonVisibility(): void {
     const el = this.instagramImportRibbonEl;
     if (!el) return;
-    el.style.display = this.settings.instagramImportEnabled ? '' : 'none';
+    el.setCssStyles({ display: this.settings.instagramImportEnabled ? '' : 'none' });
   }
 
   /**

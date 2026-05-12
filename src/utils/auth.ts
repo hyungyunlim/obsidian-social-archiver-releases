@@ -1,4 +1,4 @@
-import { Notice } from 'obsidian';
+import { Notice, requestUrl } from 'obsidian';
 import type SocialArchiverPlugin from '../main';
 import { AuthService } from '../services/AuthService';
 
@@ -197,7 +197,8 @@ export async function requestEmailChange(
   }
 
   try {
-    const response = await fetch(`${plugin.settings.workerUrl}/api/user/change-email/request`, {
+    const response = await requestUrl({
+      url: `${plugin.settings.workerUrl}/api/user/change-email/request`,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -206,9 +207,10 @@ export async function requestEmailChange(
         'X-Client-Version': plugin.manifest.version,
       },
       body: JSON.stringify({ newEmail }),
+      throw: false,
     });
 
-    const data = await response.json() as {
+    const data = response.json as {
       success: boolean;
       data?: { newEmailMasked: string; expiresIn: number };
       error?: { code: string; message: string };

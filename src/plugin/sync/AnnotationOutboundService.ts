@@ -35,7 +35,7 @@ export class AnnotationOutboundService {
   private readonly getSettings: () => SocialArchiverSettings;
 
   /** Debounce timers per file path */
-  private readonly debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly debounceTimers = new Map<string, number>();
 
   /**
    * Suppression map: archiveId → timestamp of last outbound write.
@@ -94,7 +94,7 @@ export class AnnotationOutboundService {
       this.changedEventRef = null;
     }
 
-    this.debounceTimers.forEach((t) => clearTimeout(t));
+    this.debounceTimers.forEach((t) => window.clearTimeout(t));
     this.debounceTimers.clear();
   }
 
@@ -197,11 +197,11 @@ export class AnnotationOutboundService {
 
     // Debounce per file
     const existing = this.debounceTimers.get(file.path);
-    if (existing !== undefined) clearTimeout(existing);
+    if (existing !== undefined) window.clearTimeout(existing);
 
     this.debounceTimers.set(
       file.path,
-      setTimeout(() => {
+      window.setTimeout(() => {
         this.debounceTimers.delete(file.path);
         void this.syncComment(archiveId, originalUrl, currentComment, file);
       }, AnnotationOutboundService.DEBOUNCE_MS)

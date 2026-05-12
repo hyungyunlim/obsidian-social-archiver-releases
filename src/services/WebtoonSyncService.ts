@@ -115,11 +115,18 @@ export class WebtoonSyncService {
     // Initial sync after short delay (10 seconds)
     window.setTimeout(() => { void this.sync(); }, 10000);
 
-    // Set up interval for periodic polling
-    this.intervalId = window.setInterval(
-      () => { void this.sync(); },
-      this.pollingInterval
-    );
+    // Set up self-rescheduling timer for periodic polling
+    this.scheduleNextPoll();
+  }
+
+  private scheduleNextPoll(): void {
+    this.intervalId = window.setTimeout(() => {
+      void this.sync().finally(() => {
+        if (this.intervalId !== null) {
+          this.scheduleNextPoll();
+        }
+      });
+    }, this.pollingInterval);
   }
 
   /**
@@ -127,7 +134,7 @@ export class WebtoonSyncService {
    */
   stop(): void {
     if (this.intervalId !== null) {
-      window.clearInterval(this.intervalId);
+      window.clearTimeout(this.intervalId);
       this.intervalId = null;
     }
   }

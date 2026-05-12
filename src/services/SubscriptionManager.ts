@@ -1273,9 +1273,29 @@ export class SubscriptionManager implements IService {
 
     this.logger?.debug('Starting subscription polling');
     this.isPolling = true;
+    this.scheduleNextPoll();
+  }
 
-    this.pollingIntervalId = window.setInterval(() => {
-      void this.pollForUpdates();
+  /**
+   * Self-rescheduling timer for subscription polling. See `startPolling()` for
+   * the user-consented disclosure of network activity. Using a `setTimeout`
+   * chain instead of `setInterval` ensures we never stack overlapping
+   * `pollForUpdates()` calls if a poll runs longer than the interval.
+   */
+  private scheduleNextPoll(): void {
+    this.pollingIntervalId = window.setTimeout(() => {
+      void Promise.resolve(this.pollForUpdates())
+        .catch((error: unknown) => {
+          this.logger?.error(
+            'Subscription poll failed',
+            error instanceof Error ? error : undefined
+          );
+        })
+        .finally(() => {
+          if (this.isPolling) {
+            this.scheduleNextPoll();
+          }
+        });
     }, this.config.pollingInterval);
   }
 
@@ -1288,7 +1308,7 @@ export class SubscriptionManager implements IService {
     this.isPolling = false;
 
     if (this.pollingIntervalId) {
-      window.clearInterval(this.pollingIntervalId);
+      window.clearTimeout(this.pollingIntervalId);
       this.pollingIntervalId = undefined;
     }
   }

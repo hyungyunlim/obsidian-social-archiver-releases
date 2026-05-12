@@ -186,10 +186,10 @@ export class ReaderHighlightManager {
   private mouseUpHandler: ((e: MouseEvent) => void) | null = null;
   private touchEndHandler: ((e: TouchEvent) => void) | null = null;
   private markTapHandler: ((e: Event) => void) | null = null;
-  private pendingToolbarTimeout: ReturnType<typeof setTimeout> | null = null;
-  private selectionDismissTimeout: ReturnType<typeof setTimeout> | null = null;
+  private pendingToolbarTimeout: number | null = null;
+  private selectionDismissTimeout: number | null = null;
   /** Debounce timer for selectionchange-based toolbar show on mobile */
-  private selectionShowTimeout: ReturnType<typeof setTimeout> | null = null;
+  private selectionShowTimeout: number | null = null;
   /** When true, selectionchange dismiss is suppressed (mark-tap toolbar active) */
   private markTapToolbarActive = false;
 
@@ -229,27 +229,28 @@ export class ReaderHighlightManager {
     };
 
     // Listen on document so drag-selections ending outside the body still trigger
-    document.addEventListener('mouseup', this.mouseUpHandler);
-    document.addEventListener('touchend', this.touchEndHandler);
+    activeDocument.addEventListener('mouseup', this.mouseUpHandler);
+    activeDocument.addEventListener('touchend', this.touchEndHandler);
 
     // Tap/click on a <mark> → show remove toolbar
     this.markTapHandler = (e: Event) => {
       const target = e.target as HTMLElement;
       // Try tagged mark first, then any <mark> in the reader body
-      let mark = target.closest('mark[data-highlight-id]') as HTMLElement | null;
+      let mark = target.closest<HTMLElement>('mark[data-highlight-id]');
       if (!mark) {
-        mark = target.closest('mark') as HTMLElement | null;
+        mark = target.closest<HTMLElement>('mark');
       }
       if (!mark || !this.bodyEl?.contains(mark)) return;
 
       // If user is selecting text (drag), don't intercept
-      const sel = document.getSelection();
+      const sel = activeDocument.getSelection();
       if (sel && sel.toString().trim().length > 0) return;
 
       // Find matching highlight: by ID if tagged, or by text content
       let highlight: TextHighlight | undefined;
-      if (mark.dataset.highlightId) {
-        highlight = this.highlights.find(h => h.id === mark!.dataset.highlightId);
+      const markEl = mark;
+      if (markEl.dataset.highlightId) {
+        highlight = this.highlights.find(h => h.id === markEl.dataset.highlightId);
       }
       if (!highlight) {
         const markText = this.normalizeText(mark.textContent || '');
@@ -266,7 +267,7 @@ export class ReaderHighlightManager {
 
       // Cancel any pending selection-based toolbar check — it would hide our toolbar
       if (this.pendingToolbarTimeout) {
-        clearTimeout(this.pendingToolbarTimeout);
+        window.clearTimeout(this.pendingToolbarTimeout);
         this.pendingToolbarTimeout = null;
       }
 
@@ -281,18 +282,18 @@ export class ReaderHighlightManager {
       // Don't dismiss when mark-tap toolbar is active (no selection expected)
       if (this.markTapToolbarActive) return;
 
-      const sel = document.getSelection();
+      const sel = activeDocument.getSelection();
       if (!sel || sel.isCollapsed || sel.toString().trim().length === 0) {
         // Cancel any pending show
         if (this.selectionShowTimeout) {
-          clearTimeout(this.selectionShowTimeout);
+          window.clearTimeout(this.selectionShowTimeout);
           this.selectionShowTimeout = null;
         }
         if (Platform.isMobile) {
-          if (this.selectionDismissTimeout) clearTimeout(this.selectionDismissTimeout);
-          this.selectionDismissTimeout = setTimeout(() => {
+          if (this.selectionDismissTimeout) window.clearTimeout(this.selectionDismissTimeout);
+          this.selectionDismissTimeout = window.setTimeout(() => {
             // Re-check: selection may have been restored by native menu interaction
-            const recheck = document.getSelection();
+            const recheck = activeDocument.getSelection();
             if (!recheck || recheck.isCollapsed || recheck.toString().trim().length === 0) {
               this.hideToolbar();
             }
@@ -303,21 +304,21 @@ export class ReaderHighlightManager {
       } else {
         if (this.selectionDismissTimeout) {
           // Selection was restored before timeout — cancel dismiss
-          clearTimeout(this.selectionDismissTimeout);
+          window.clearTimeout(this.selectionDismissTimeout);
           this.selectionDismissTimeout = null;
         }
         // On mobile: also use selectionchange to show/update toolbar.
         // This catches selections that stabilize after touchend (common on Android).
         if (Platform.isMobile && !this.toolbar) {
-          if (this.selectionShowTimeout) clearTimeout(this.selectionShowTimeout);
-          this.selectionShowTimeout = setTimeout(() => {
+          if (this.selectionShowTimeout) window.clearTimeout(this.selectionShowTimeout);
+          this.selectionShowTimeout = window.setTimeout(() => {
             this.selectionShowTimeout = null;
             this.checkSelection();
           }, 150);
         }
       }
     };
-    document.addEventListener('selectionchange', this.selectionHandler);
+    activeDocument.addEventListener('selectionchange', this.selectionHandler);
   }
 
   /**
@@ -325,28 +326,28 @@ export class ReaderHighlightManager {
    */
   detach(): void {
     if (this.pendingToolbarTimeout) {
-      clearTimeout(this.pendingToolbarTimeout);
+      window.clearTimeout(this.pendingToolbarTimeout);
       this.pendingToolbarTimeout = null;
     }
     if (this.selectionDismissTimeout) {
-      clearTimeout(this.selectionDismissTimeout);
+      window.clearTimeout(this.selectionDismissTimeout);
       this.selectionDismissTimeout = null;
     }
     if (this.selectionShowTimeout) {
-      clearTimeout(this.selectionShowTimeout);
+      window.clearTimeout(this.selectionShowTimeout);
       this.selectionShowTimeout = null;
     }
     if (this.mouseUpHandler) {
-      document.removeEventListener('mouseup', this.mouseUpHandler);
+      activeDocument.removeEventListener('mouseup', this.mouseUpHandler);
     }
     if (this.touchEndHandler) {
-      document.removeEventListener('touchend', this.touchEndHandler);
+      activeDocument.removeEventListener('touchend', this.touchEndHandler);
     }
     if (this.markTapHandler && this.bodyEl) {
       this.bodyEl.removeEventListener('click', this.markTapHandler);
     }
     if (this.selectionHandler) {
-      document.removeEventListener('selectionchange', this.selectionHandler);
+      activeDocument.removeEventListener('selectionchange', this.selectionHandler);
     }
     this.hideToolbar();
     this.bodyEl = null;
@@ -367,9 +368,9 @@ export class ReaderHighlightManager {
 
   private scheduleToolbarCheck(delayMs = 50): void {
     if (this.pendingToolbarTimeout) {
-      clearTimeout(this.pendingToolbarTimeout);
+      window.clearTimeout(this.pendingToolbarTimeout);
     }
-    this.pendingToolbarTimeout = setTimeout(() => {
+    this.pendingToolbarTimeout = window.setTimeout(() => {
       this.pendingToolbarTimeout = null;
       this.checkSelection();
     }, delayMs);
@@ -379,7 +380,7 @@ export class ReaderHighlightManager {
     // Don't dismiss mark-tap toolbar via selection check
     if (this.markTapToolbarActive) return;
 
-    const sel = document.getSelection();
+    const sel = activeDocument.getSelection();
     if (!sel || sel.isCollapsed) {
       this.hideToolbar();
       return;
@@ -418,7 +419,7 @@ export class ReaderHighlightManager {
     const rect = range.getBoundingClientRect();
     if (rect.width === 0 && rect.height === 0) return;
 
-    this.toolbar = document.createElement('div');
+    this.toolbar = activeDocument.createElement('div');
     this.toolbar.addClass('sa-highlight-toolbar');
 
     // Mobile: use bottom-fixed bar to avoid conflict with iOS/Android native selection menus
@@ -434,7 +435,7 @@ export class ReaderHighlightManager {
       this.renderColorButtons(text, sel);
     }
 
-    document.body.appendChild(this.toolbar);
+    activeDocument.body.appendChild(this.toolbar);
 
     // Desktop: position near selection. Mobile: CSS handles fixed bottom positioning.
     if (!Platform.isMobile) {
@@ -442,7 +443,7 @@ export class ReaderHighlightManager {
     }
 
     // Animate in
-    requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
       this.toolbar?.addClass('sa-highlight-toolbar-visible');
     });
   }
@@ -520,20 +521,20 @@ export class ReaderHighlightManager {
     const rect = mark.getBoundingClientRect();
     if (rect.width === 0 && rect.height === 0) return;
 
-    this.toolbar = document.createElement('div');
+    this.toolbar = activeDocument.createElement('div');
     this.toolbar.addClass('sa-highlight-toolbar');
     if (Platform.isMobile) {
       this.toolbar.addClass('sa-highlight-toolbar-mobile');
     }
 
     this.renderRemoveButton(highlight);
-    document.body.appendChild(this.toolbar);
+    activeDocument.body.appendChild(this.toolbar);
 
     if (!Platform.isMobile) {
       this.positionToolbar(rect);
     }
 
-    requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
       this.toolbar?.addClass('sa-highlight-toolbar-visible');
     });
 
@@ -541,11 +542,11 @@ export class ReaderHighlightManager {
     const dismissOnOutsideTap = (e: Event) => {
       if (this.toolbar?.contains(e.target as Node)) return;
       this.hideToolbar();
-      document.removeEventListener('pointerdown', dismissOnOutsideTap, true);
+      activeDocument.removeEventListener('pointerdown', dismissOnOutsideTap, true);
     };
     // Use setTimeout to avoid the current tap from immediately dismissing
-    setTimeout(() => {
-      document.addEventListener('pointerdown', dismissOnOutsideTap, true);
+    window.setTimeout(() => {
+      activeDocument.addEventListener('pointerdown', dismissOnOutsideTap, true);
     }, 0);
   }
 
@@ -618,7 +619,7 @@ export class ReaderHighlightManager {
     this.hideToolbar();
 
     // Clear selection
-    document.getSelection()?.removeAllRanges();
+    activeDocument.getSelection()?.removeAllRanges();
 
     // Unwrap the specific <mark> from DOM (both our class and Obsidian-rendered)
     this.unwrapMarkById(highlightId);
@@ -692,7 +693,7 @@ export class ReaderHighlightManager {
       });
       if (match) {
         (mark as HTMLElement).dataset.highlightId = match.id;
-        (mark as HTMLElement).style.cursor = 'pointer';
+        (mark as HTMLElement).setCssStyles({ cursor: 'pointer' });
         taggedIds.add(match.id);
       }
     }
@@ -836,11 +837,11 @@ export class ReaderHighlightManager {
   }
 
   private wrapTextInNode(node: Text, start: number, end: number, highlight: TextHighlight): void {
-    const range = document.createRange();
+    const range = activeDocument.createRange();
     range.setStart(node, start);
     range.setEnd(node, end);
 
-    const mark = document.createElement('mark');
+    const mark = activeDocument.createElement('mark');
     mark.addClass('sa-reader-highlight');
     mark.dataset.highlightId = highlight.id;
 
@@ -949,7 +950,7 @@ export class ReaderHighlightManager {
 
   private collectTextNodes(root: HTMLElement): Text[] {
     const nodes: Text[] = [];
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+    const walker = activeDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
     let node: Node | null;
     while ((node = walker.nextNode())) {
       nodes.push(node as Text);

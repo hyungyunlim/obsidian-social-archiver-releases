@@ -66,13 +66,13 @@ export class ComposedPostSyncService {
    * Debounce timers for update operations keyed by clientPostId.
    * Cleared when the timer fires or when the file is deleted.
    */
-  private updateDebounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private updateDebounceTimers = new Map<string, number>();
 
   /**
    * Debounce timers for the background MetadataCache watcher, keyed by file path.
    * Separate from updateDebounceTimers so background and composer paths don't collide.
    */
-  private bgEditDebounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private bgEditDebounceTimers = new Map<string, number>();
 
   /**
    * Suppression set: clientPostIds that should not trigger background edit detection.
@@ -175,10 +175,10 @@ export class ComposedPostSyncService {
     // Cancel any previous debounce timer for this post
     const existing = this.updateDebounceTimers.get(clientPostId);
     if (existing !== undefined) {
-      clearTimeout(existing);
+      window.clearTimeout(existing);
     }
 
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       this.updateDebounceTimers.delete(clientPostId);
       void this.maybeEnqueueUpdate(filePath, clientPostId, sourceArchiveId);
     }, UPDATE_DEBOUNCE_MS);
@@ -551,13 +551,13 @@ export class ComposedPostSyncService {
 
     // Cancel all pending debounce timers (composer path)
     for (const timer of this.updateDebounceTimers.values()) {
-      clearTimeout(timer);
+      window.clearTimeout(timer);
     }
     this.updateDebounceTimers.clear();
 
     // Cancel all pending background edit debounce timers
     for (const timer of this.bgEditDebounceTimers.values()) {
-      clearTimeout(timer);
+      window.clearTimeout(timer);
     }
     this.bgEditDebounceTimers.clear();
   }
@@ -598,10 +598,10 @@ export class ComposedPostSyncService {
     // Debounce: cancel any existing background timer for this file
     const existing = this.bgEditDebounceTimers.get(file.path);
     if (existing !== undefined) {
-      clearTimeout(existing);
+      window.clearTimeout(existing);
     }
 
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       this.bgEditDebounceTimers.delete(file.path);
       // maybeEnqueueUpdate will re-read file, compute fingerprint, and enqueue only if changed
       void this.maybeEnqueueUpdate(file.path, clientPostId, sourceArchiveId);
@@ -643,7 +643,7 @@ export class ComposedPostSyncService {
     // Cancel background edit debounce timer for this path (keyed by filePath)
     const bgTimer = this.bgEditDebounceTimers.get(filePath);
     if (bgTimer !== undefined) {
-      clearTimeout(bgTimer);
+      window.clearTimeout(bgTimer);
       this.bgEditDebounceTimers.delete(filePath);
     }
 
@@ -653,7 +653,7 @@ export class ComposedPostSyncService {
       // Cancel any pending composer-path debounce timer for this post
       const timer = this.updateDebounceTimers.get(match.clientPostId);
       if (timer !== undefined) {
-        clearTimeout(timer);
+        window.clearTimeout(timer);
         this.updateDebounceTimers.delete(match.clientPostId);
       }
       this.contentFingerprints.delete(match.clientPostId);

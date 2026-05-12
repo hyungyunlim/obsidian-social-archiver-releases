@@ -247,7 +247,9 @@ export class AuthorDetailView extends ItemView {
       plugin: this.plugin,
       archivePath: this.plugin.settings.archivePath || 'Social Archives',
       author: this.currentAuthor,
-      onGoBack: () => this.plugin.activateTimelineView('sidebar'),
+      onGoBack: () => {
+        void this.plugin.activateTimelineView('sidebar');
+      },
       onViewAuthor: (author: AuthorCatalogEntry) => {
         void this.plugin.activateAuthorDetailView(author);
       },
@@ -455,7 +457,7 @@ export class AuthorDetailView extends ItemView {
       const androidMinBottomInset = ObsidianPlatform.isAndroidApp ? 24 : 0;
       let bottomInset = 0;
       if (viewport) {
-        const layoutHeight = window.innerHeight || document.documentElement.clientHeight;
+        const layoutHeight = window.innerHeight || activeDocument.documentElement.clientHeight;
         const viewportBottom = viewport.offsetTop + viewport.height;
         bottomInset = Math.max(0, Math.round(layoutHeight - viewportBottom));
         if (bottomInset > 120) bottomInset = 0;

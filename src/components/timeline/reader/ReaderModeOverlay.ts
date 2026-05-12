@@ -131,15 +131,15 @@ export class ReaderModeOverlay {
     this._isActive = true;
 
     // Create backdrop
-    this.backdrop = document.createElement('div');
+    this.backdrop = activeDocument.createElement('div');
     this.backdrop.className = 'sa-reader-mode-backdrop';
     this.backdrop.addEventListener('click', () => this.close());
-    document.body.appendChild(this.backdrop);
+    activeDocument.body.appendChild(this.backdrop);
 
     // Create container
-    this.container = document.createElement('div');
+    this.container = activeDocument.createElement('div');
     this.container.className = 'sa-reader-mode-container';
-    document.body.appendChild(this.container);
+    activeDocument.body.appendChild(this.container);
     this.setupSafeAreaFallback();
 
     // Apply persisted typography (CSS variables)
@@ -210,10 +210,10 @@ export class ReaderModeOverlay {
         if (post) void this.deletePost(post);
       }
     };
-    document.addEventListener('keydown', this.keyHandler);
+    activeDocument.addEventListener('keydown', this.keyHandler);
 
     // Show overlay immediately
-    requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
       this.backdrop?.addClass('sa-reader-mode-backdrop-visible');
       this.container?.addClass('sa-reader-mode-container-visible');
     });
@@ -247,7 +247,7 @@ export class ReaderModeOverlay {
 
     // Cleanup keyboard
     if (this.keyHandler) {
-      document.removeEventListener('keydown', this.keyHandler);
+      activeDocument.removeEventListener('keydown', this.keyHandler);
       this.keyHandler = null;
     }
 
@@ -331,7 +331,7 @@ export class ReaderModeOverlay {
 
       let bottomInset = 0;
       if (viewport) {
-        const layoutHeight = window.innerHeight || document.documentElement.clientHeight;
+        const layoutHeight = window.innerHeight || activeDocument.documentElement.clientHeight;
         const viewportBottom = viewport.offsetTop + viewport.height;
         bottomInset = Math.max(0, Math.round(layoutHeight - viewportBottom));
 
@@ -346,8 +346,10 @@ export class ReaderModeOverlay {
       });
       // Also set on documentElement so elements outside the container (e.g.
       // highlight toolbar on document.body) can read the fallback values.
-      document.documentElement.style.setProperty('--reader-safe-area-bottom-fallback', `${bottomInset}px`);
-      document.documentElement.style.setProperty('--reader-safe-area-top-fallback', `${topInset}px`);
+      activeDocument.documentElement.setCssProps({
+        '--reader-safe-area-bottom-fallback': `${bottomInset}px`,
+        '--reader-safe-area-top-fallback': `${topInset}px`,
+      });
     };
 
     this.viewportSafeAreaListener = applyInsets;
@@ -367,8 +369,8 @@ export class ReaderModeOverlay {
     window.removeEventListener('resize', this.viewportSafeAreaListener);
 
     // Clean up global CSS vars
-    document.documentElement.style.removeProperty('--reader-safe-area-bottom-fallback');
-    document.documentElement.style.removeProperty('--reader-safe-area-top-fallback');
+    activeDocument.documentElement.style.removeProperty('--reader-safe-area-bottom-fallback');
+    activeDocument.documentElement.style.removeProperty('--reader-safe-area-top-fallback');
 
     this.viewportSafeAreaListener = null;
     this.attachedVisualViewport = null;
@@ -632,7 +634,7 @@ export class ReaderModeOverlay {
       modal.open();
 
       // Ensure modal appears above reader mode overlay (z-index 1000)
-      requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
         const containerEl = modal.containerEl;
         if (containerEl) {
           containerEl.addClass('sa-z-1001');
@@ -714,7 +716,7 @@ export class ReaderModeOverlay {
     const filePath = post.filePath;
 
     // Backdrop
-    const overlay = document.createElement('div');
+    const overlay = activeDocument.createElement('div');
     overlay.addClass('sa-fixed');
     overlay.addClass('sa-inset-0');
     overlay.addClass('sa-z-1001');
@@ -723,7 +725,7 @@ export class ReaderModeOverlay {
     overlay.addClass('sa-dynamic-bg');
 
     // Modal container
-    const modal = document.createElement('div');
+    const modal = activeDocument.createElement('div');
     modal.addClass('sa-bg-primary');
     modal.addClass('sa-border');
     modal.addClass('sa-rounded-12');
@@ -731,25 +733,25 @@ export class ReaderModeOverlay {
     modal.addClass('rmo-note-modal');
 
     // Header
-    const header = document.createElement('div');
+    const header = activeDocument.createElement('div');
     header.addClass('sa-flex-between');
     header.addClass('sa-px-16');
     header.addClass('sa-border-b');
     header.addClass('rmo-note-header');
 
-    const title = document.createElement('div');
+    const title = activeDocument.createElement('div');
     title.addClass('sa-font-semibold');
     title.addClass('sa-text-md');
     title.addClass('sa-flex-row');
     title.addClass('sa-gap-6');
-    const titleIcon = document.createElement('span');
+    const titleIcon = activeDocument.createElement('span');
     titleIcon.addClass('sa-icon-16');
     setIcon(titleIcon, 'message-square-text');
     title.appendChild(titleIcon);
-    title.appendChild(document.createTextNode(post.comment ? 'Edit Note' : 'Add Note'));
+    title.appendChild(activeDocument.createTextNode(post.comment ? 'Edit Note' : 'Add Note'));
     header.appendChild(title);
 
-    const closeBtn = document.createElement('div');
+    const closeBtn = activeDocument.createElement('div');
     closeBtn.addClass('sa-clickable');
     closeBtn.addClass('sa-icon-24');
     closeBtn.addClass('sa-rounded-4');
@@ -766,12 +768,12 @@ export class ReaderModeOverlay {
     header.appendChild(closeBtn);
 
     // Textarea
-    const body = document.createElement('div');
+    const body = activeDocument.createElement('div');
     body.addClass('sa-p-12');
     body.addClass('sa-flex-1');
     body.addClass('rmo-note-body');
 
-    const textarea = document.createElement('textarea');
+    const textarea = activeDocument.createElement('textarea');
     textarea.value = post.comment || '';
     textarea.placeholder = 'Write a personal note about this post...';
     textarea.addClass('sa-w-full');
@@ -784,24 +786,24 @@ export class ReaderModeOverlay {
     body.appendChild(textarea);
 
     // Footer
-    const footer = document.createElement('div');
+    const footer = activeDocument.createElement('div');
     footer.addClass('sa-flex-between');
     footer.addClass('sa-px-16');
     footer.addClass('rmo-note-footer');
 
-    const hint = document.createElement('span');
+    const hint = activeDocument.createElement('span');
     hint.addClass('sa-text-xs');
     hint.addClass('sa-text-muted');
     hint.textContent = 'Cmd/Ctrl+Enter to save';
     footer.appendChild(hint);
 
-    const btnGroup = document.createElement('div');
+    const btnGroup = activeDocument.createElement('div');
     btnGroup.addClass('sa-flex');
     btnGroup.addClass('sa-gap-8');
 
     // Delete button (only if comment exists)
     if (post.comment) {
-      const deleteBtn = document.createElement('button');
+      const deleteBtn = activeDocument.createElement('button');
       deleteBtn.textContent = 'Delete';
       deleteBtn.addClass('sa-px-12');
       deleteBtn.addClass('sa-py-6');
@@ -816,7 +818,7 @@ export class ReaderModeOverlay {
       btnGroup.appendChild(deleteBtn);
     }
 
-    const cancelBtn = document.createElement('button');
+    const cancelBtn = activeDocument.createElement('button');
     cancelBtn.textContent = 'Cancel';
     cancelBtn.addClass('sa-px-12');
     cancelBtn.addClass('sa-py-6');
@@ -828,7 +830,7 @@ export class ReaderModeOverlay {
     cancelBtn.addClass('sa-text-normal');
     cancelBtn.addClass('rmo-note-btn');
 
-    const saveBtn = document.createElement('button');
+    const saveBtn = activeDocument.createElement('button');
     saveBtn.textContent = 'Save';
     saveBtn.addClass('sa-px-12');
     saveBtn.addClass('sa-py-6');
@@ -846,10 +848,10 @@ export class ReaderModeOverlay {
     modal.appendChild(body);
     modal.appendChild(footer);
     overlay.appendChild(modal);
-    document.body.appendChild(overlay);
+    activeDocument.body.appendChild(overlay);
 
     // Focus textarea after render
-    requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
       textarea.focus();
       // Place cursor at end
       textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
@@ -905,15 +907,15 @@ export class ReaderModeOverlay {
         e.preventDefault();
         e.stopPropagation();
         closeModal();
-        document.removeEventListener('keydown', modalKeyHandler, true);
+        activeDocument.removeEventListener('keydown', modalKeyHandler, true);
       } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         e.stopPropagation();
         void handleSave();
-        document.removeEventListener('keydown', modalKeyHandler, true);
+        activeDocument.removeEventListener('keydown', modalKeyHandler, true);
       }
     };
-    document.addEventListener('keydown', modalKeyHandler, true);
+    activeDocument.addEventListener('keydown', modalKeyHandler, true);
   }
 
   // ---------- Highlight Handlers ----------
@@ -1149,7 +1151,7 @@ export class ReaderModeOverlay {
       }
 
       try {
-        await this.context.app.fileManager.processFrontMatter(file, (fm) => {
+        await this.context.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
           if (!fm.sourceArchiveId) fm.sourceArchiveId = found;
         });
       } catch (err) {

@@ -27,7 +27,7 @@ export function createSVGElement(
   styles?: Partial<CSSStyleDeclaration>,
   viewBox?: string
 ): SVGSVGElement {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const svg = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('role', 'img');
   svg.setAttribute('viewBox', viewBox ?? '0 0 24 24');
   svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
@@ -37,7 +37,7 @@ export function createSVGElement(
     Object.assign(svg.style, styles);
   }
 
-  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  const path = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
   path.setAttribute('d', icon.path);
 
   svg.appendChild(path);
@@ -57,14 +57,14 @@ export function createCustomSVG(
   pathData: string,
   styles?: Partial<CSSStyleDeclaration>
 ): SVGSVGElement {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const svg = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', viewBox);
 
   if (styles) {
     Object.assign(svg.style, styles);
   }
 
-  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  const path = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
   path.setAttribute('d', pathData);
 
   svg.appendChild(path);

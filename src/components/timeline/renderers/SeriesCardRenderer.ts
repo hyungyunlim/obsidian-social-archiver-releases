@@ -966,7 +966,7 @@ export class SeriesCardRenderer extends Component {
     messageDiv.addClass('sa-flex-col', 'sa-flex-center', 'sa-gap-12', 'sa-p-20', 'sa-bg-secondary', 'sa-rounded-8', 'sa-text-muted', 'sa-text-center', 'scr-offline-message');
 
     const icon = messageDiv.createDiv();
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const svg = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('width', '32');
     svg.setAttribute('height', '32');
     svg.setAttribute('viewBox', '0 0 24 24');
@@ -976,34 +976,34 @@ export class SeriesCardRenderer extends Component {
     svg.setAttribute('stroke-linecap', 'round');
     svg.setAttribute('stroke-linejoin', 'round');
 
-    const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    const line1 = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'line');
     line1.setAttribute('x1', '1');
     line1.setAttribute('y1', '1');
     line1.setAttribute('x2', '23');
     line1.setAttribute('y2', '23');
     svg.appendChild(line1);
 
-    const path1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const path1 = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
     path1.setAttribute('d', 'M16.72 11.06A10.94 10.94 0 0 1 19 12.55');
     svg.appendChild(path1);
 
-    const path2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const path2 = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
     path2.setAttribute('d', 'M5 12.55a10.94 10.94 0 0 1 5.17-2.39');
     svg.appendChild(path2);
 
-    const path3 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const path3 = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
     path3.setAttribute('d', 'M10.71 5.05A16 16 0 0 1 22.58 9');
     svg.appendChild(path3);
 
-    const path4 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const path4 = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
     path4.setAttribute('d', 'M1.42 9a15.91 15.91 0 0 1 4.7-2.88');
     svg.appendChild(path4);
 
-    const path5 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const path5 = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
     path5.setAttribute('d', 'M8.53 16.11a6 6 0 0 1 6.95 0');
     svg.appendChild(path5);
 
-    const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    const line2 = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'line');
     line2.setAttribute('x1', '12');
     line2.setAttribute('y1', '20');
     line2.setAttribute('x2', '12.01');
@@ -1620,13 +1620,13 @@ export class SeriesCardRenderer extends Component {
     header.addClass('scr-header');
 
     // Row 1: [icon] [title] [badge] ----spacer---- [controls]
-    const row1 = document.createElement('div');
+    const row1 = activeDocument.createElement('div');
     row1.className = 'series-header-row1';
     row1.addClass('scr-header-row');
     header.appendChild(row1);
 
     // Platform icon (left)
-    const platformIcon = document.createElement('div');
+    const platformIcon = activeDocument.createElement('div');
     platformIcon.className = 'series-platform-icon';
     platformIcon.addClass('scr-platform-icon');
     const icon = getPlatformSimpleIcon(series.platform);
@@ -1640,7 +1640,7 @@ export class SeriesCardRenderer extends Component {
     row1.appendChild(platformIcon);
 
     // Title (clickable)
-    const titleEl = document.createElement('span');
+    const titleEl = activeDocument.createElement('span');
     titleEl.className = 'series-title';
     titleEl.textContent = series.seriesTitle;
     titleEl.addClass('scr-title');
@@ -1663,13 +1663,13 @@ export class SeriesCardRenderer extends Component {
     // Note: Unread badge removed - read status shown via subtle episode styling instead
 
     // Spacer to push controls to the right
-    const spacer = document.createElement('div');
+    const spacer = activeDocument.createElement('div');
     spacer.addClass('scr-spacer');
     row1.appendChild(spacer);
 
     // Controls section (right side, fixed at the end)
     const isMobile = window.innerWidth <= 768 || 'ontouchstart' in window;
-    const controlsSection = document.createElement('div');
+    const controlsSection = activeDocument.createElement('div');
     controlsSection.className = 'series-controls';
     controlsSection.addClass('scr-controls', isMobile ? 'scr-controls--mobile' : 'scr-controls--desktop');
     row1.appendChild(controlsSection);
@@ -1757,7 +1757,7 @@ export class SeriesCardRenderer extends Component {
 
     // Remove previous keyboard handler if exists
     if (this.escKeyHandler) {
-      document.removeEventListener('keydown', this.escKeyHandler);
+      activeDocument.removeEventListener('keydown', this.escKeyHandler);
       this.escKeyHandler = null;
     }
 
@@ -1777,13 +1777,13 @@ export class SeriesCardRenderer extends Component {
     this.fullscreenNextSibling = card.nextSibling;
 
     // Create backdrop first (lower z-index)
-    const backdrop = document.createElement('div');
+    const backdrop = activeDocument.createElement('div');
     backdrop.className = 'sa-series-fullscreen-backdrop';
     backdrop.addEventListener('click', () => this.exitFullscreen(series));
-    document.body.appendChild(backdrop);
+    activeDocument.body.appendChild(backdrop);
 
     // Move card to document.body to escape stacking context
-    document.body.appendChild(card);
+    activeDocument.body.appendChild(card);
     card.classList.add('sa-series-fullscreen');
 
     // Apply safe-area padding to header for notch/dynamic island
@@ -1794,7 +1794,7 @@ export class SeriesCardRenderer extends Component {
 
     // Restore scroll position after layout settles
     if (scrollContainer && scrollPercent > 0) {
-      requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
         const newMaxScroll = scrollContainer.scrollHeight - scrollContainer.clientHeight;
         if (newMaxScroll > 0) {
           scrollContainer.scrollTop = newMaxScroll * scrollPercent;
@@ -1882,7 +1882,7 @@ export class SeriesCardRenderer extends Component {
           break;
       }
     };
-    document.addEventListener('keydown', this.escKeyHandler);
+    activeDocument.addEventListener('keydown', this.escKeyHandler);
 
     // Add immersive mode toggle for webtoons (tap to hide/show UI)
     if (this.isWebtoon(series) && scrollContainer) {
@@ -1923,7 +1923,7 @@ export class SeriesCardRenderer extends Component {
     card.classList.add('series-immersive');
 
     // Hide backdrop in immersive mode for true full-screen feel
-    const backdrop = document.querySelector('.sa-series-fullscreen-backdrop') as HTMLElement;
+    const backdrop = activeDocument.querySelector('.sa-series-fullscreen-backdrop') as HTMLElement;
     if (backdrop) {
       backdrop.addClass('sa-opacity-0');
     }
@@ -1937,7 +1937,7 @@ export class SeriesCardRenderer extends Component {
     card.classList.remove('series-immersive');
 
     // Restore backdrop
-    const backdrop = document.querySelector('.sa-series-fullscreen-backdrop') as HTMLElement;
+    const backdrop = activeDocument.querySelector('.sa-series-fullscreen-backdrop') as HTMLElement;
     if (backdrop) {
       backdrop.removeClass('sa-opacity-0');
     }
@@ -1954,12 +1954,12 @@ export class SeriesCardRenderer extends Component {
 
     // Remove ESC handler
     if (this.escKeyHandler) {
-      document.removeEventListener('keydown', this.escKeyHandler);
+      activeDocument.removeEventListener('keydown', this.escKeyHandler);
       this.escKeyHandler = null;
     }
 
     // Remove backdrop
-    const backdrop = document.querySelector('.sa-series-fullscreen-backdrop');
+    const backdrop = activeDocument.querySelector('.sa-series-fullscreen-backdrop');
     if (backdrop) {
       backdrop.remove();
     }
@@ -2048,7 +2048,7 @@ export class SeriesCardRenderer extends Component {
 
       // Restore scroll position
       if (scrollContainer && scrollPercent > 0) {
-        requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
           const newMaxScroll = scrollContainer.scrollHeight - scrollContainer.clientHeight;
           if (newMaxScroll > 0) {
             scrollContainer.scrollTop = newMaxScroll * scrollPercent;
@@ -2420,7 +2420,7 @@ export class SeriesCardRenderer extends Component {
 
           // Enter fullscreen + immersive directly
           this.enterFullscreen(series, card);
-          requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
             this.enterImmersiveMode(card);
           });
         });
@@ -2819,7 +2819,7 @@ export class SeriesCardRenderer extends Component {
       const row1 = card.querySelector('.series-header-row1');
       if (row1) {
         const subscriptionBadge = row1.querySelector('[title*="subscribe"], [title*="Subscribe"]');
-        badge = document.createElement('div');
+        badge = activeDocument.createElement('div');
         badge.className = 'series-unread-badge';
         badge.addClass('sa-inline-flex', 'sa-rounded-8', 'sa-font-bold', 'sa-flex-shrink-0', 'sa-bg-accent', 'scr-unread-badge');
         badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
@@ -2870,7 +2870,7 @@ export class SeriesCardRenderer extends Component {
 
       if (isRead && !readIndicator) {
         // Add read indicator
-        readIndicator = document.createElement('span');
+        readIndicator = activeDocument.createElement('span');
         readIndicator.className = 'read-indicator';
         readIndicator.addClass('sa-flex-row', 'sa-text-faint', 'sa-flex-shrink-0');
         setIcon(readIndicator, 'eye');
@@ -3034,7 +3034,7 @@ export class SeriesCardRenderer extends Component {
             // Insert after star score (if exists) or at the beginning
             const starScore = metaRow.querySelector('.episode-star-score');
 
-            commentBadge = document.createElement('span');
+            commentBadge = activeDocument.createElement('span');
             commentBadge.className = 'episode-comment-badge';
             commentBadge.addClass('scr-comment-badge');
 
@@ -3572,7 +3572,7 @@ export class SeriesCardRenderer extends Component {
 
         const btnRect = moreBtn.getBoundingClientRect();
         menuEl.setCssStyles({ position: 'fixed', zIndex: '999999', visibility: 'hidden' });
-        document.body.appendChild(menuEl);
+        activeDocument.body.appendChild(menuEl);
         const menuHeight = menuEl.offsetHeight;
         const menuWidth = menuEl.offsetWidth;
 
@@ -3611,14 +3611,14 @@ export class SeriesCardRenderer extends Component {
             menuEl.remove();
             menuEl = null;
             menuOpen = false;
-            document.removeEventListener('click', closeHandler);
+            activeDocument.removeEventListener('click', closeHandler);
           }
         };
         // Store cleanup so we can remove on component destroy even if menu is never clicked outside
-        const addListenerTimeout = window.setTimeout(() => document.addEventListener('click', closeHandler), 0);
+        const addListenerTimeout = window.setTimeout(() => activeDocument.addEventListener('click', closeHandler), 0);
         this.cleanupFunctions.push(() => {
           window.clearTimeout(addListenerTimeout);
-          document.removeEventListener('click', closeHandler);
+          activeDocument.removeEventListener('click', closeHandler);
           if (menuEl) {
             menuEl.remove();
             menuEl = null;
@@ -3735,26 +3735,26 @@ export class SeriesCardRenderer extends Component {
     episode: SeriesEpisode,
     onClose: () => void
   ): HTMLElement {
-    const menu = document.createElement('div');
+    const menu = activeDocument.createElement('div');
     menu.className = 'episode-action-menu';
     menu.addClass('scr-action-menu');
 
     const createMenuItem = (icon: string, label: string, onClick: () => void, isActive?: boolean) => {
-      const item = document.createElement('div');
+      const item = activeDocument.createElement('div');
       item.className = 'episode-action-item';
       item.addClass('scr-action-menu-item');
       if (isActive) {
         item.addClass('scr-action-menu-item--active');
       }
 
-      const iconEl = document.createElement('span');
+      const iconEl = activeDocument.createElement('span');
       iconEl.addClass('scr-action-menu-icon');
       setIcon(iconEl, icon);
       if (isActive) {
         iconEl.addClass('scr-svg-filled');
       }
 
-      const labelEl = document.createElement('span');
+      const labelEl = activeDocument.createElement('span');
       labelEl.textContent = label;
 
       item.appendChild(iconEl);
@@ -4179,7 +4179,7 @@ export class SeriesCardRenderer extends Component {
       this.episodeLists.delete(series.seriesId);
 
       // Create temporary container to render new list
-      const tempContainer = document.createElement('div');
+      const tempContainer = activeDocument.createElement('div');
       const newList = this.renderEpisodeList(tempContainer, series, state);
 
       // Insert at original position
@@ -4232,12 +4232,12 @@ export class SeriesCardRenderer extends Component {
 
       // Remove ESC handler
       if (this.escKeyHandler) {
-        document.removeEventListener('keydown', this.escKeyHandler);
+        activeDocument.removeEventListener('keydown', this.escKeyHandler);
         this.escKeyHandler = null;
       }
 
       // Remove backdrop
-      const backdrop = document.querySelector('.sa-series-fullscreen-backdrop');
+      const backdrop = activeDocument.querySelector('.sa-series-fullscreen-backdrop');
       if (backdrop) {
         backdrop.remove();
       }
@@ -4377,7 +4377,7 @@ export class SeriesCardRenderer extends Component {
     }
 
     // Remove backdrop
-    const backdrop = document.querySelector('.sa-series-fullscreen-backdrop');
+    const backdrop = activeDocument.querySelector('.sa-series-fullscreen-backdrop');
     if (backdrop) {
       backdrop.remove();
     }
@@ -4389,7 +4389,7 @@ export class SeriesCardRenderer extends Component {
 
     // Remove ESC handler
     if (this.escKeyHandler) {
-      document.removeEventListener('keydown', this.escKeyHandler);
+      activeDocument.removeEventListener('keydown', this.escKeyHandler);
       this.escKeyHandler = null;
     }
   }

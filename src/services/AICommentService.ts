@@ -985,7 +985,7 @@ Content:
 
           // Gradually increase progress every 5 seconds to show activity
           let thinkingProgress = 20;
-          geminiThinkingInterval = window.setInterval(() => {
+          const tickThinking = () => {
             if (this.lastReportedPercentage < 30 && thinkingProgress < 30) {
               thinkingProgress += 2;
               this.lastReportedPercentage = thinkingProgress;
@@ -996,7 +996,11 @@ Content:
                 phase: 'generating',
               });
             }
-          }, 5000);
+            if (geminiThinkingInterval !== null) {
+              geminiThinkingInterval = window.setTimeout(tickThinking, 5000);
+            }
+          };
+          geminiThinkingInterval = window.setTimeout(tickThinking, 5000);
         }, 3000);
       };
 
@@ -1006,7 +1010,7 @@ Content:
           geminiThinkingTimer = null;
         }
         if (geminiThinkingInterval) {
-          window.clearInterval(geminiThinkingInterval);
+          window.clearTimeout(geminiThinkingInterval);
           geminiThinkingInterval = null;
         }
       };

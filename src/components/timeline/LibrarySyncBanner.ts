@@ -55,7 +55,7 @@ export class LibrarySyncBanner {
   private sawRunningState = false;
 
   /** Auto-dismiss timer handle for completed state. */
-  private autoDismissTimer: ReturnType<typeof setTimeout> | null = null;
+  private autoDismissTimer: number | null = null;
 
   private onCancelCallback?: CancelCallback;
   private onRetryCallback?: RetryCallback;
@@ -318,14 +318,14 @@ export class LibrarySyncBanner {
   // =========================================================================
 
   private scheduleAutoDismiss(): void {
-    this.autoDismissTimer = setTimeout(() => {
+    this.autoDismissTimer = window.setTimeout(() => {
       this.hide();
     }, 5000);
   }
 
   private clearAutoDismiss(): void {
     if (this.autoDismissTimer !== null) {
-      clearTimeout(this.autoDismissTimer);
+      window.clearTimeout(this.autoDismissTimer);
       this.autoDismissTimer = null;
     }
   }

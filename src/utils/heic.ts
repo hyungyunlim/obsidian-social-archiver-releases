@@ -109,7 +109,7 @@ async function tryLibheifJsConversion(
     const height = image.get_height();
 
     // Create canvas and draw the image
-    const canvas = document.createElement('canvas');
+    const canvas = activeDocument.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext('2d');
@@ -168,7 +168,7 @@ async function tryNativeHEICConversion(
 
     img.onload = () => {
       try {
-        const canvas = document.createElement('canvas');
+        const canvas = activeDocument.createElement('canvas');
         canvas.width = img.naturalWidth;
         canvas.height = img.naturalHeight;
 

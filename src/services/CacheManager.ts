@@ -177,7 +177,7 @@ export class CacheManager implements IService, ICacheService {
 
     // Stop cache warming
     if (this.warmingInterval) {
-      window.clearInterval(this.warmingInterval);
+      window.clearTimeout(this.warmingInterval);
       this.warmingInterval = undefined;
     }
 
@@ -674,9 +674,23 @@ export class CacheManager implements IService, ICacheService {
     // Warm immediately
     this.warm(this.config.warming.urls);
 
-    // Set up interval for continuous warming
-    this.warmingInterval = window.setInterval(() => {
+    // Set up self-rescheduling timer for continuous warming
+    this.scheduleNextWarming();
+  }
+
+  /**
+   * Schedule next cache warming tick (self-rescheduling setTimeout chain).
+   */
+  private scheduleNextWarming(): void {
+    const interval = this.config.warming?.interval;
+    if (!interval) {
+      return;
+    }
+    this.warmingInterval = window.setTimeout(() => {
       this.warm(this.config.warming?.urls ?? []);
-    }, this.config.warming.interval);
+      if (this.warmingInterval !== undefined) {
+        this.scheduleNextWarming();
+      }
+    }, interval);
   }
 }

@@ -287,7 +287,7 @@ function detectLatinLanguage(sample: string, total: number): string {
 function detectByStopWords(sample: string): string {
   const lower = sample.toLowerCase();
   // Split on whitespace and common punctuation
-  const words = new Set(lower.split(/[\s,.;:!?'"()\[\]{}<>\/\\|]+/).filter(Boolean));
+  const words = new Set(lower.split(/[\s,.;:!?'"()[\]{}<>/\\|]+/).filter(Boolean));
 
   let bestLang = 'en-US';
   let bestScore = 0;

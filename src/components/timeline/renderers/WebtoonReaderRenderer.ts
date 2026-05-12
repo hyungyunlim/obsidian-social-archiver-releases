@@ -386,7 +386,7 @@ export class WebtoonReaderRenderer {
     scrollContainer.addEventListener('scroll', () => {
       if (scrollRafPending) return;
       scrollRafPending = true;
-      requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
         scrollRafPending = false;
         const scrollTop = scrollContainer.scrollTop;
         const scrollHeight = scrollContainer.scrollHeight - scrollContainer.clientHeight;
@@ -439,7 +439,7 @@ export class WebtoonReaderRenderer {
     icon.addClass('sa-inline-flex');
     if (hasNextEpisode) {
       // "Next episode" icon (skip forward)
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      const svg = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
       svg.setAttribute('width', '14');
       svg.setAttribute('height', '14');
       svg.setAttribute('viewBox', '0 0 24 24');
@@ -448,10 +448,10 @@ export class WebtoonReaderRenderer {
       svg.setAttribute('stroke-width', '2.5');
       svg.setAttribute('stroke-linecap', 'round');
       svg.setAttribute('stroke-linejoin', 'round');
-      const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      const polygon = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'polygon');
       polygon.setAttribute('points', '5 4 15 12 5 20 5 4');
       svg.appendChild(polygon);
-      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      const line = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'line');
       line.setAttribute('x1', '19');
       line.setAttribute('y1', '5');
       line.setAttribute('x2', '19');
@@ -460,7 +460,7 @@ export class WebtoonReaderRenderer {
       icon.appendChild(svg);
     } else {
       // "Check for updates" icon (refresh)
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      const svg = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
       svg.setAttribute('width', '14');
       svg.setAttribute('height', '14');
       svg.setAttribute('viewBox', '0 0 24 24');
@@ -476,7 +476,7 @@ export class WebtoonReaderRenderer {
         'M16 16h5v5',
       ];
       for (const d of paths) {
-        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        const path = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.setAttribute('d', d);
         svg.appendChild(path);
       }

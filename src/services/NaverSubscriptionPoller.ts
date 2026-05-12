@@ -196,13 +196,20 @@ export class NaverSubscriptionPoller {
       void this.processPendingNotifications().then(() => this.pollAll());
     }, 5000);
 
-    // Set up interval for periodic polling
-    this.intervalId = window.setInterval(
-      () => {
-        void this.processPendingNotifications().then(() => this.pollAll());
-      },
-      this.pollingInterval
-    );
+    // Set up self-rescheduling timer for periodic polling
+    this.scheduleNextPoll();
+  }
+
+  private scheduleNextPoll(): void {
+    this.intervalId = window.setTimeout(() => {
+      void this.processPendingNotifications()
+        .then(() => this.pollAll())
+        .finally(() => {
+          if (this.intervalId !== null) {
+            this.scheduleNextPoll();
+          }
+        });
+    }, this.pollingInterval);
   }
 
   /**
@@ -215,7 +222,7 @@ export class NaverSubscriptionPoller {
     }
 
     if (this.intervalId !== null) {
-      window.clearInterval(this.intervalId);
+      window.clearTimeout(this.intervalId);
       this.intervalId = null;
     }
 

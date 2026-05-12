@@ -51,7 +51,7 @@ export class MediaGalleryRenderer {
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
         for (const node of mutation.removedNodes) {
-          if (node === audio || (node instanceof Element && node.contains(audio))) {
+          if (node === audio || (node.instanceOf(Element) && node.contains(audio))) {
             MediaGalleryRenderer.activeAudioElements.delete(audio);
             audio.removeEventListener('play', playHandler);
             observer.disconnect();
@@ -63,7 +63,7 @@ export class MediaGalleryRenderer {
 
     // Observe parent for removal
     if (audio.parentElement) {
-      observer.observe(audio.parentElement.parentElement || document.body, {
+      observer.observe(audio.parentElement.parentElement || activeDocument.body, {
         childList: true,
         subtree: true
       });
@@ -96,7 +96,7 @@ export class MediaGalleryRenderer {
     post?: PostData
   ): { wrapper: HTMLElement; audio: HTMLAudioElement } {
     // Detect mobile for responsive sizing
-    const isMobile = document.body.classList.contains('is-mobile');
+    const isMobile = activeDocument.body.classList.contains('is-mobile');
 
     const playerWrapper = container.createDiv();
     playerWrapper.addClass('social-audio-player');
@@ -567,7 +567,7 @@ export class MediaGalleryRenderer {
 
     const updateContainerHeight = (element?: HTMLElement) => {
       if (!element) return;
-      requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
         const renderedHeight = element.clientHeight || element.offsetHeight;
         if (renderedHeight > 0) {
           maxRenderedHeight = Math.max(maxRenderedHeight, renderedHeight);
@@ -602,7 +602,7 @@ export class MediaGalleryRenderer {
           renderedAudioElement = audio;
         }
 
-        requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
           updateContainerHeight(audioWrapper);
         });
 
@@ -716,7 +716,7 @@ export class MediaGalleryRenderer {
           element.addClass('sa-hidden');
         }
         // Pause videos and audio when hidden
-        if (element instanceof HTMLVideoElement) {
+        if (element.instanceOf(HTMLVideoElement)) {
           if (i !== index) {
             element.pause();
           }

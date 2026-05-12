@@ -59,7 +59,7 @@ export class ArchiveStateOutboundService {
   private readonly lastKnownArchiveState = new Map<string, boolean>();
 
   /** filePath → active debounce timer ID */
-  private readonly debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly debounceTimers = new Map<string, number>();
 
   /**
    * Suppression map: archiveId → timestamp of last outbound write.
@@ -132,7 +132,7 @@ export class ArchiveStateOutboundService {
     }
 
     for (const timer of this.debounceTimers.values()) {
-      clearTimeout(timer);
+      window.clearTimeout(timer);
     }
     this.debounceTimers.clear();
 
@@ -187,7 +187,7 @@ export class ArchiveStateOutboundService {
 
     // Resolve archiveId: prefer sourceArchiveId in frontmatter, then path index
     let archiveId = typeof fm['sourceArchiveId'] === 'string' && fm['sourceArchiveId']
-      ? fm['sourceArchiveId'] as string
+      ? fm['sourceArchiveId']
       : undefined;
 
     if (!archiveId) {
@@ -241,11 +241,11 @@ export class ArchiveStateOutboundService {
 
     // Debounce per file
     const existing = this.debounceTimers.get(file.path);
-    if (existing !== undefined) clearTimeout(existing);
+    if (existing !== undefined) window.clearTimeout(existing);
 
     this.debounceTimers.set(
       file.path,
-      setTimeout(() => {
+      window.setTimeout(() => {
         this.debounceTimers.delete(file.path);
         void this.syncArchiveState(archiveId, originalUrl, currentArchiveState, file);
       }, DEBOUNCE_MS),

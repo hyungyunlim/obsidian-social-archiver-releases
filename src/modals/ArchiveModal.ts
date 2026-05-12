@@ -2510,7 +2510,7 @@ export class ArchiveModal extends Modal {
         if (tag.color) {
           const dot = row.createSpan();
           dot.addClass('am-tag-color-dot');
-          dot.style.backgroundColor = tag.color;
+          dot.setCssStyles({ backgroundColor: tag.color });
         }
 
         row.createSpan({ text: tag.name });
@@ -2637,7 +2637,7 @@ export class ArchiveModal extends Modal {
       if (tagDef?.color) {
         const dot = chip.createSpan();
         dot.addClass('am-tag-chip-dot');
-        dot.style.backgroundColor = tagDef.color;
+        dot.setCssStyles({ backgroundColor: tagDef.color });
       }
 
       chip.createSpan({ text: tagName });
@@ -3862,13 +3862,13 @@ export class ArchiveModal extends Modal {
     button.setAttribute('data-original-text', originalText);
 
     // Create loading spinner
-    const spinner = document.createElement('span');
+    const spinner = activeDocument.createElement('span');
     spinner.className = 'loading-spinner am-spinner';
     spinner.setAttribute('aria-hidden', 'true');
 
     button.textContent = '';
     button.appendChild(spinner);
-    button.appendChild(document.createTextNode(loadingText));
+    button.appendChild(activeDocument.createTextNode(loadingText));
   }
 
   /**

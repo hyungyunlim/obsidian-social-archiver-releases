@@ -314,11 +314,7 @@ export class CreditResetScheduler implements IService {
   private startPeriodicCheck(): void {
     this.stopPeriodicCheck();
 
-    this.checkInterval = window.setInterval(() => {
-      void this.checkAndResetCredits().catch(error => {
-        this.logger?.error('Periodic reset check failed', error instanceof Error ? error : undefined);
-      });
-    }, this.config.checkInterval);
+    this.scheduleNextPeriodicCheck();
 
     this.logger?.debug('Periodic reset check started', {
       intervalMs: this.config.checkInterval,
@@ -326,11 +322,26 @@ export class CreditResetScheduler implements IService {
   }
 
   /**
+   * Schedule next periodic check tick (self-rescheduling setTimeout chain).
+   * Callback uses `void`/`.catch()` for fire-and-forget; re-arm happens immediately.
+   */
+  private scheduleNextPeriodicCheck(): void {
+    this.checkInterval = window.setTimeout(() => {
+      void this.checkAndResetCredits().catch(error => {
+        this.logger?.error('Periodic reset check failed', error instanceof Error ? error : undefined);
+      });
+      if (this.checkInterval !== undefined) {
+        this.scheduleNextPeriodicCheck();
+      }
+    }, this.config.checkInterval);
+  }
+
+  /**
    * Stop periodic check
    */
   private stopPeriodicCheck(): void {
     if (this.checkInterval) {
-      window.clearInterval(this.checkInterval);
+      window.clearTimeout(this.checkInterval);
       this.checkInterval = undefined;
       this.logger?.debug('Periodic reset check stopped');
     }

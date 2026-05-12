@@ -96,7 +96,6 @@ export interface NoticesServiceDeps {
 function logDefault(message: string, ...args: unknown[]): void {
   // Use console.debug so production builds stay quiet without users
   // having to wire in a real Logger instance.
-  // eslint-disable-next-line no-console
   console.debug(`[NoticesService] ${message}`, ...args);
 }
 
@@ -159,7 +158,7 @@ export class NoticesService {
   private readonly listeners = new Set<NoticesServiceListener>();
 
   // Lifecycle handles
-  private startupTimer: ReturnType<typeof setTimeout> | null = null;
+  private startupTimer: number | null = null;
   private visibilityHandler: (() => void) | null = null;
   private onlineHandler: (() => void) | null = null;
   private booted = false;
@@ -195,7 +194,7 @@ export class NoticesService {
     this.hydrateDismissed();
 
     // 2. Schedule the staggered startup fetch.
-    this.startupTimer = setTimeout(() => {
+    this.startupTimer = window.setTimeout(() => {
       this.startupTimer = null;
       void this.fetch();
     }, STARTUP_FETCH_DELAY_MS);
@@ -205,13 +204,13 @@ export class NoticesService {
     //    also some test setups). Obsidian renders inside Electron so
     //    `document` and `window` are always available at runtime — these
     //    guards exist purely for safety.
-    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    if (typeof document !== 'undefined' && typeof activeDocument.addEventListener === 'function') {
       this.visibilityHandler = () => {
-        if (document.visibilityState === 'visible' && this.shouldFetch()) {
+        if (activeDocument.visibilityState === 'visible' && this.shouldFetch()) {
           void this.fetch();
         }
       };
-      document.addEventListener('visibilitychange', this.visibilityHandler);
+      activeDocument.addEventListener('visibilitychange', this.visibilityHandler);
     }
 
     if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
@@ -234,11 +233,11 @@ export class NoticesService {
    */
   shutdown(): void {
     if (this.startupTimer !== null) {
-      clearTimeout(this.startupTimer);
+      window.clearTimeout(this.startupTimer);
       this.startupTimer = null;
     }
     if (this.visibilityHandler && typeof document !== 'undefined') {
-      document.removeEventListener('visibilitychange', this.visibilityHandler);
+      activeDocument.removeEventListener('visibilitychange', this.visibilityHandler);
       this.visibilityHandler = null;
     }
     if (this.onlineHandler && typeof window !== 'undefined') {

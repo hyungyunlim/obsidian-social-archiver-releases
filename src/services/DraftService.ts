@@ -109,10 +109,21 @@ export class DraftService implements IService {
     this._currentDraftId = draftId;
     this.stopAutoSave();
 
-    this.autoSaveTimer = window.setInterval(() => {
+    this.scheduleNextAutoSave(draftId, getContent);
+  }
+
+  /**
+   * Schedule next auto-save tick (self-rescheduling setTimeout chain).
+   * Callback uses `void` for fire-and-forget; re-arm happens immediately.
+   */
+  private scheduleNextAutoSave(draftId: string, getContent: () => string): void {
+    this.autoSaveTimer = window.setTimeout(() => {
       const content = getContent();
       if (content.trim()) {
         void this.saveDraft(draftId, content, { immediate: true });
+      }
+      if (this.autoSaveTimer !== null) {
+        this.scheduleNextAutoSave(draftId, getContent);
       }
     }, this.AUTO_SAVE_INTERVAL);
   }
@@ -122,7 +133,7 @@ export class DraftService implements IService {
    */
   stopAutoSave(): void {
     if (this.autoSaveTimer !== null) {
-      window.clearInterval(this.autoSaveTimer);
+      window.clearTimeout(this.autoSaveTimer);
       this.autoSaveTimer = null;
     }
   }

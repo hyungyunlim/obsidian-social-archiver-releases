@@ -242,7 +242,8 @@ export class ImportOrchestrator implements ImportOrchestratorContract {
     try {
       const current = this.deps.jobStore.getJob(jobId);
       if (current && current.gallerySelection !== undefined) {
-        const { gallerySelection: _drop, ...rest } = current;
+        const rest = { ...current };
+        delete rest.gallerySelection;
         this.deps.jobStore.updateJob(rest);
       }
     } catch (err) {
@@ -597,7 +598,7 @@ function normalizeImportTags(raw: string[] | undefined): string[] {
 function defaultGenerateId(): string {
   // crypto.randomUUID is available in Obsidian's Electron renderer and
   // every modern browser, but fall back just in case.
-  const c = (globalThis as { crypto?: Crypto }).crypto;
+  const c = (window as unknown as { crypto?: Crypto }).crypto;
   if (c && typeof c.randomUUID === 'function') return c.randomUUID();
   return `import-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }

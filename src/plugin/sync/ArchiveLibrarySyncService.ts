@@ -672,8 +672,7 @@ export class ArchiveLibrarySyncService {
       const existingByUrl = this.deps.findByOriginalUrl(archive.originalUrl);
 
       if (existingByUrl.length === 1) {
-        // existingByUrl[0] is always defined when length === 1
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- existingByUrl[0] is always defined when length === 1
         const matched = existingByUrl[0]!;
         // Tier-1 already confirmed this file does NOT have archive.id as its sourceArchiveId.
         // Backfill the stable server ID so future lookups use the fast O(1) path.

@@ -89,8 +89,8 @@ export class ShareStateSyncService {
     if (!file) return;
 
     const cache = this.app.metadataCache.getFileCache(file);
-    const currentShareUrl = cache?.frontmatter?.['shareUrl'];
-    const currentShare = cache?.frontmatter?.['share'];
+    const currentShareUrl: unknown = cache?.frontmatter?.['shareUrl'];
+    const currentShare: unknown = cache?.frontmatter?.['share'];
 
     if (enabling) {
       if (currentShareUrl === nextShareUrl && currentShare === true) return;

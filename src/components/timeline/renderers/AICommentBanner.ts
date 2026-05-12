@@ -199,12 +199,12 @@ export class AICommentBanner {
 
     // Adjust width helper
     const adjustWidth = (select: HTMLSelectElement) => {
-      const tempSpan = document.createElement('span');
+      const tempSpan = activeDocument.createElement('span');
       tempSpan.classList.add('acb-measure-span');
       tempSpan.textContent = select.options[select.selectedIndex]?.text || '';
-      document.body.appendChild(tempSpan);
+      activeDocument.body.appendChild(tempSpan);
       select.setCssStyles({ width: `${tempSpan.offsetWidth + 2}px` });
-      document.body.removeChild(tempSpan);
+      activeDocument.body.removeChild(tempSpan);
     };
 
     adjustWidth(typeSelect);
@@ -440,13 +440,19 @@ export class AICommentBanner {
     // Initial update
     updateDisplay();
 
-    // Clear any existing interval
+    // Clear any existing timer
     if (this.elapsedTimerInterval) {
-      window.clearInterval(this.elapsedTimerInterval);
+      window.clearTimeout(this.elapsedTimerInterval);
     }
 
-    // Update every second
-    this.elapsedTimerInterval = window.setInterval(updateDisplay, 1000);
+    // Update every second (self-rescheduling timeout chain)
+    const tick = () => {
+      updateDisplay();
+      if (this.elapsedTimerInterval !== null) {
+        this.elapsedTimerInterval = window.setTimeout(tick, 1000);
+      }
+    };
+    this.elapsedTimerInterval = window.setTimeout(tick, 1000);
 
     // Cancel button
     const cancelBtn = this.createIconButton(parent, 'x', 'Cancel');
@@ -469,7 +475,7 @@ export class AICommentBanner {
    */
   private stopElapsedTimer(): void {
     if (this.elapsedTimerInterval) {
-      window.clearInterval(this.elapsedTimerInterval);
+      window.clearTimeout(this.elapsedTimerInterval);
       this.elapsedTimerInterval = null;
     }
     this.generatingStartTime = 0;

@@ -101,10 +101,10 @@ export class CommentRenderer {
 
   private decodeHtmlEntities(text: string): string {
     try {
-      let decoded = text.replace(/&#x([0-9A-Fa-f]+);/g, (_match, hex) =>
+      let decoded = text.replace(/&#x([0-9A-Fa-f]+);/g, (_match: string, hex: string) =>
         String.fromCodePoint(parseInt(hex, 16))
       );
-      decoded = decoded.replace(/&#(\d+);/g, (_match, dec) =>
+      decoded = decoded.replace(/&#(\d+);/g, (_match: string, dec: string) =>
         String.fromCodePoint(parseInt(dec, 10))
       );
       return decoded

@@ -149,7 +149,7 @@ export class BatchTranscriptionNotice {
       case 'paused': return 'Paused';
       case 'completed': return 'Complete';
       case 'cancelled': return 'Cancelled';
-      default: return 'Batch Transcription';
+      default: return 'Batch transcription';
     }
   }
 

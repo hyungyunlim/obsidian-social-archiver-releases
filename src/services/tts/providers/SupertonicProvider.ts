@@ -403,12 +403,16 @@ export class SupertonicProvider implements PluginTTSProvider {
 
       // Store readyTimer cleanup (cleared when ready is received)
       const originalIsReady = this.isReady;
-      const checkReady = window.setInterval(() => {
+      let checkReadyTimer: number | null = null;
+      const tickCheckReady = () => {
         if (this.isReady !== originalIsReady || !this.process) {
-          window.clearInterval(checkReady);
+          checkReadyTimer = null;
           window.clearTimeout(readyTimer);
+          return;
         }
-      }, 100);
+        checkReadyTimer = window.setTimeout(tickCheckReady, 100);
+      };
+      checkReadyTimer = window.setTimeout(tickCheckReady, 100);
 
       this.resetIdleTimer();
       return true;
@@ -588,10 +592,12 @@ export class SupertonicProvider implements PluginTTSProvider {
     return this.installPath;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private nodeRequire(module: string): any {
+  private nodeRequire(module: string): unknown {
     // Obsidian desktop provides Node.js require on window
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
-    return (window as any).require(module);
+    const electronRequire = (window as unknown as { require?: NodeJS.Require }).require;
+    if (!electronRequire) {
+      throw new Error('Node require not available');
+    }
+    return electronRequire(module);
   }
 }

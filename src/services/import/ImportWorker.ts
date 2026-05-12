@@ -117,7 +117,7 @@ type ControlFlag = { paused: boolean; cancelled: boolean };
  */
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
-    setTimeout(resolve, ms);
+    window.setTimeout(resolve, ms);
   });
 }
 
@@ -128,6 +128,7 @@ function delay(ms: number): Promise<void> {
  */
 function sanitizePathSegment(segment: string): string {
   const cleaned = segment
+    // eslint-disable-next-line no-control-regex -- intentional U+0000–U+001F scan to reject invalid manifest entries
     .replace(/[\\/:*?"<>|\x00-\x1f]/g, '_')
     .replace(/^\.+/, '')
     .trim();
@@ -430,7 +431,7 @@ export class ImportWorker {
   // ---------------------------------------------------------------------------
 
   private async processItem(index: number): Promise<void> {
-    const { jobStore, progressBus, logger, apiClient, postDataFor, zipReaderFor, onArchiveCreated } =
+    const { jobStore, logger, apiClient, postDataFor, zipReaderFor, onArchiveCreated } =
       this.deps;
     if (this.inFlight) return;
     this.inFlight = true;

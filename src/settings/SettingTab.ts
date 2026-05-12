@@ -1863,7 +1863,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     small.addClass('sa-text-muted');
     small.textContent = '💡 ';
     small.createEl('strong', { text: 'Tip:' });
-    small.appendChild(document.createTextNode(' Leave empty for public blogs and cafes. Only needed for private cafes that require login.'));
+    small.appendChild(activeDocument.createTextNode(' Leave empty for public blogs and cafes. Only needed for private cafes that require login.'));
   }
 
   /**
@@ -2065,7 +2065,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     const infoDiv = containerEl.createDiv({ cls: 'setting-info' });
     infoDiv.addClass('sa-settings-info-box');
     infoDiv.createEl('strong', { text: 'Streaming mode' });
-    infoDiv.appendChild(document.createTextNode(' loads webtoon episodes instantly without waiting for downloads.'));
+    infoDiv.appendChild(activeDocument.createTextNode(' loads webtoon episodes instantly without waiting for downloads.'));
     const ul = infoDiv.createEl('ul');
     ul.addClass('sa-settings-info-list');
     ul.createEl('li', { text: 'Images are proxied through our server to bypass CORS restrictions' });
@@ -2577,7 +2577,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setName('Exclude folders')
       .setDesc('Select folders to exclude from context scanning');
 
-    const inputEl = document.createElement('input');
+    const inputEl = activeDocument.createElement('input');
     inputEl.type = 'text';
     inputEl.placeholder = 'Select folder...';
     inputEl.classList.add('sa-input-w-150');
@@ -2590,15 +2590,15 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     folderListEl.classList.add('sa-settings-tag-list');
 
     const createFolderItem = (folderPath: string): HTMLElement => {
-      const itemEl = document.createElement('div');
+      const itemEl = activeDocument.createElement('div');
       itemEl.className = 'exclude-folder-item';
       itemEl.classList.add('sa-settings-tag-item');
 
-      const pathSpan = document.createElement('span');
+      const pathSpan = activeDocument.createElement('span');
       pathSpan.textContent = folderPath;
       itemEl.appendChild(pathSpan);
 
-      const removeBtn = document.createElement('button');
+      const removeBtn = activeDocument.createElement('button');
       removeBtn.textContent = '×';
       removeBtn.classList.add('sa-settings-tag-remove');
       removeBtn.onclick = () => {

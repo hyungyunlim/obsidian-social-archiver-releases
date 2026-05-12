@@ -156,7 +156,7 @@ export class RemoteArchiveIngestService {
       } catch (error: unknown) {
         // Transient 404: archive may not be propagated yet
         if (attempt < INGEST_FETCH_MAX_RETRIES && this.isNotFoundError(error)) {
-          await new Promise<void>(resolve => setTimeout(resolve, INGEST_FETCH_RETRY_DELAY));
+          await new Promise<void>(resolve => window.setTimeout(resolve, INGEST_FETCH_RETRY_DELAY));
           continue;
         }
         // Non-404 or final attempt — rethrow

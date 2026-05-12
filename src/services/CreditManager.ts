@@ -149,7 +149,7 @@ export class CreditManager implements IService {
 
     // Stop reservation cleanup
     if (this.reservationCleanupInterval) {
-      window.clearInterval(this.reservationCleanupInterval);
+      window.clearTimeout(this.reservationCleanupInterval);
       this.reservationCleanupInterval = undefined;
     }
 
@@ -965,8 +965,18 @@ export class CreditManager implements IService {
   }
 
   private startReservationCleanup(): void {
-    this.reservationCleanupInterval = window.setInterval(() => {
+    this.scheduleNextReservationCleanup();
+  }
+
+  /**
+   * Schedule next reservation cleanup tick (self-rescheduling setTimeout chain).
+   */
+  private scheduleNextReservationCleanup(): void {
+    this.reservationCleanupInterval = window.setTimeout(() => {
       this.cleanupExpiredReservations();
+      if (this.reservationCleanupInterval !== undefined) {
+        this.scheduleNextReservationCleanup();
+      }
     }, 60000); // Clean up every minute
   }
 

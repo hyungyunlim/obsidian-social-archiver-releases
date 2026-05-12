@@ -156,7 +156,7 @@ export class ReaderTTSController {
    */
   renderMiniController(parent: HTMLElement): void {
     this.miniController = parent.createDiv({ cls: 'sa-reader-tts-mini-controller' });
-    this.miniController.style.display = 'none';
+    this.miniController.setCssStyles({ display: 'none' });
 
     // Previous sentence
     this.prevBtn = this.miniController.createDiv({ cls: 'sa-reader-tts-ctrl-btn' });
@@ -208,13 +208,13 @@ export class ReaderTTSController {
 
     // Follow along button (hidden by default)
     this.followBtn = parent.createDiv({ cls: 'sa-reader-tts-follow-btn' });
-    this.followBtn.style.display = 'none';
+    this.followBtn.setCssStyles({ display: 'none' });
     this.followBtn.textContent = 'Follow along';
     this.followBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this.scrollSync.refollow();
       if (this.followBtn) {
-        this.followBtn.style.display = 'none';
+        this.followBtn.setCssStyles({ display: 'none' });
       }
     });
   }
@@ -461,7 +461,7 @@ export class ReaderTTSController {
       this.hideMiniController();
       this.highlight.clearHighlights();
       this.scrollSync.stopFollowing();
-      if (this.followBtn) this.followBtn.style.display = 'none';
+      if (this.followBtn) this.followBtn.setCssStyles({ display: 'none' });
 
       if (!suppressAutoAdvance && completedNaturally) {
         void this.handlePlaybackCompletedAutoplay();
@@ -531,7 +531,7 @@ export class ReaderTTSController {
 
   private onScrollSyncStateChange(state: 'idle' | 'following' | 'detached'): void {
     if (this.followBtn) {
-      this.followBtn.style.display = state === 'detached' ? 'block' : 'none';
+      this.followBtn.setCssStyles({ display: state === 'detached' ? 'block' : 'none' });
     }
   }
 
@@ -578,13 +578,13 @@ export class ReaderTTSController {
 
   private showMiniController(): void {
     if (this.miniController) {
-      this.miniController.style.display = 'flex';
+      this.miniController.setCssStyles({ display: 'flex' });
     }
   }
 
   private hideMiniController(): void {
     if (this.miniController) {
-      this.miniController.style.display = 'none';
+      this.miniController.setCssStyles({ display: 'none' });
     }
   }
 

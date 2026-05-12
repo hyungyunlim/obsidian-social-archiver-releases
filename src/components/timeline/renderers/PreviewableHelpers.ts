@@ -189,7 +189,7 @@ export function parseGoogleMapsBusinessData(post: PostData): GoogleMapsBusinessD
   // Rating: raw.rating > metadata.likes (stored as rating * 20) > content scan.
   let rating: number | undefined;
   if (typeof raw?.rating === 'number') {
-    rating = raw.rating as number;
+    rating = raw.rating;
   } else if (
     typeof post.metadata?.likes === 'number' &&
     post.metadata.likes > 0 &&
@@ -229,7 +229,7 @@ export function parseGoogleMapsBusinessData(post: PostData): GoogleMapsBusinessD
   // Phone: raw.phone_number > content scan ("📞 +84946874615").
   let phone: string | undefined;
   if (typeof raw?.phone_number === 'string') {
-    phone = raw.phone_number as string;
+    phone = raw.phone_number;
   } else {
     const phoneMatch = contentText.match(/📞\s*(\+?[\d\s-]+)/);
     if (phoneMatch?.[1]) phone = phoneMatch[1].trim();
@@ -238,7 +238,7 @@ export function parseGoogleMapsBusinessData(post: PostData): GoogleMapsBusinessD
   // Website: raw.open_website > content scan ("🌐 https://…").
   let website: string | undefined;
   if (typeof raw?.open_website === 'string') {
-    website = raw.open_website as string;
+    website = raw.open_website;
   } else {
     const webMatch = contentText.match(/🌐\s*(https?:\/\/[^\s\n]+)/);
     if (webMatch?.[1]) website = webMatch[1].trim();
@@ -253,7 +253,7 @@ export function parseGoogleMapsBusinessData(post: PostData): GoogleMapsBusinessD
     website,
     address: post.metadata?.location,
     hours,
-    priceLevel: typeof raw?.price_level === 'string' ? (raw.price_level as string) : undefined,
+    priceLevel: typeof raw?.price_level === 'string' ? raw.price_level : undefined,
     isVerified: post.author?.verified,
     lat: post.metadata?.latitude,
     lng: post.metadata?.longitude,

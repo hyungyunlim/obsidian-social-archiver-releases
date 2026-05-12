@@ -160,26 +160,22 @@ export class ProfileValidationPoller {
         ));
       }, this.timeout);
 
-      // Start polling
-      this.intervalId = window.setInterval(() => {
-        void (async () => {
+      // Self-rescheduling poll
+      const pollOnce = async (): Promise<boolean> => {
         try {
           const elapsed = Date.now() - startTime;
           const response = await this.fetchStatus(snapshotId);
 
           if (!response.success || !response.data) {
-            // API error
             this.cleanup();
             reject(new ProfileValidationError(
               response.error?.code ?? 'UNKNOWN_ERROR',
               response.error?.message ?? 'Unknown error occurred'
             ));
-            return;
+            return false;
           }
 
           const { status, result, error } = response.data;
-
-          // Report progress
           this.onProgress?.(status, elapsed);
 
           switch (status) {
@@ -198,7 +194,7 @@ export class ProfileValidationPoller {
                   'Validation completed but no result data'
                 ));
               }
-              break;
+              return false;
 
             case 'failed':
               this.cleanup();
@@ -206,20 +202,31 @@ export class ProfileValidationPoller {
                 error?.code ?? 'VALIDATION_FAILED',
                 error?.message ?? 'Profile validation failed'
               ));
-              break;
+              return false;
 
             case 'pending':
             case 'processing':
-              // Continue polling
-              break;
+              return true;
           }
+          return true;
         } catch (err) {
           // Network error - continue polling if within retry limit
           console.error('[ProfileValidationPoller] Polling error:', err);
-          // Don't reject immediately, let timeout handle it
+          return true;
         }
-        })();
-      }, this.pollingInterval);
+      };
+
+      const scheduleNext = (): void => {
+        this.intervalId = window.setTimeout(() => {
+          void pollOnce().then((keepPolling) => {
+            if (keepPolling && this.intervalId !== null) {
+              scheduleNext();
+            }
+          });
+        }, this.pollingInterval);
+      };
+
+      scheduleNext();
     });
   }
 
@@ -291,7 +298,7 @@ export class ProfileValidationPoller {
    */
   private cleanup(): void {
     if (this.intervalId) {
-      window.clearInterval(this.intervalId);
+      window.clearTimeout(this.intervalId);
       this.intervalId = null;
     }
     if (this.timeoutId) {

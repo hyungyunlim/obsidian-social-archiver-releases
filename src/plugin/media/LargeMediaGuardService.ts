@@ -145,17 +145,17 @@ class LargeVideoPromptModal extends Modal {
     contentEl.empty();
 
     modalEl.addClass('social-archiver-modal', 'sa-large-video-prompt-modal');
-    modalEl.style.maxWidth = '440px';
+    modalEl.setCssStyles({ maxWidth: '440px' });
 
     // Title
     const title = contentEl.createEl('h3', { text: 'Large video detected' });
-    title.style.marginBottom = '8px';
+    title.setCssStyles({ marginBottom: '8px' });
 
     // Body
     const body = contentEl.createEl('p', {
       text: 'This archive contains a video larger than your threshold. Choose whether to keep local media or keep the note only.',
     });
-    body.style.marginBottom = '8px';
+    body.setCssStyles({ marginBottom: '8px' });
 
     // Size / count detail row (best effort — largestBytes may be 0 if unknown)
     const detailParts: string[] = [];
@@ -172,29 +172,35 @@ class LargeVideoPromptModal extends Modal {
     const detail = contentEl.createEl('p', {
       text: detailParts.join(' · '),
     });
-    detail.style.fontSize = '0.85em';
-    detail.style.color = 'var(--text-muted)';
-    detail.style.marginBottom = '14px';
+    detail.setCssStyles({
+      fontSize: '0.85em',
+      color: 'var(--text-muted)',
+      marginBottom: '14px',
+    });
 
     // "Don't ask again" checkbox
     const checkboxRow = contentEl.createDiv();
-    checkboxRow.style.display = 'flex';
-    checkboxRow.style.alignItems = 'center';
-    checkboxRow.style.gap = '6px';
-    checkboxRow.style.marginBottom = '16px';
+    checkboxRow.setCssStyles({
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+      marginBottom: '16px',
+    });
     const checkbox = checkboxRow.createEl('input', { type: 'checkbox' });
     checkbox.id = 'sa-large-video-dont-ask-again';
     const label = checkboxRow.createEl('label', {
       text: "Don't ask again for this archive",
       attr: { for: 'sa-large-video-dont-ask-again' },
     });
-    label.style.fontSize = '0.9em';
+    label.setCssStyles({ fontSize: '0.9em' });
 
     // Buttons
     const buttonRow = contentEl.createDiv();
-    buttonRow.style.display = 'flex';
-    buttonRow.style.justifyContent = 'flex-end';
-    buttonRow.style.gap = '8px';
+    buttonRow.setCssStyles({
+      display: 'flex',
+      justifyContent: 'flex-end',
+      gap: '8px',
+    });
 
     const detachBtn = buttonRow.createEl('button', { text: 'Keep note only' });
     detachBtn.addEventListener('click', () => {

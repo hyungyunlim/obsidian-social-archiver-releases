@@ -684,7 +684,7 @@ export class TimelineView extends ItemView {
       const androidMinBottomInset = ObsidianPlatform.isAndroidApp ? 24 : 0;
       let bottomInset = 0;
       if (viewport) {
-        const layoutHeight = window.innerHeight || document.documentElement.clientHeight;
+        const layoutHeight = window.innerHeight || activeDocument.documentElement.clientHeight;
         const viewportBottom = viewport.offsetTop + viewport.height;
         bottomInset = Math.max(0, Math.round(layoutHeight - viewportBottom));
 

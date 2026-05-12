@@ -965,7 +965,7 @@ export class WebtoonArchiveModal extends Modal {
 
     if (!isDisabled) {
       row.addEventListener('click', (e) => {
-        (document.activeElement as HTMLElement)?.blur?.();
+        (activeDocument.activeElement as HTMLElement)?.blur?.();
         if ((e.target as HTMLElement).tagName !== 'INPUT') {
           this.toggleWebtoonsEpisodeSelection(episode.episodeNo, !isSelected);
         }
@@ -1065,7 +1065,7 @@ export class WebtoonArchiveModal extends Modal {
 
     this.selectAllCb.addEventListener('change', () => {
       // Blur any focused input to hide keyboard on mobile
-      (document.activeElement as HTMLElement)?.blur?.();
+      (activeDocument.activeElement as HTMLElement)?.blur?.();
 
       const isChecked = this.selectAllCb?.checked ?? false;
 
@@ -1120,7 +1120,7 @@ export class WebtoonArchiveModal extends Modal {
 
     sortBtn.addEventListener('click', () => {
       // Blur to hide keyboard on mobile
-      (document.activeElement as HTMLElement)?.blur?.();
+      (activeDocument.activeElement as HTMLElement)?.blur?.();
 
       this.sortOrder = this.sortOrder === 'newest' ? 'oldest' : 'newest';
 
@@ -1154,7 +1154,7 @@ export class WebtoonArchiveModal extends Modal {
     const firstBtn = this.createPaginationButton(controls, 'chevrons-left', 'First');
     firstBtn.disabled = currentPage === 1 || this.isLoadingPage;
     firstBtn.addEventListener('click', () => {
-      (document.activeElement as HTMLElement)?.blur?.();
+      (activeDocument.activeElement as HTMLElement)?.blur?.();
       void this.loadPage(1);
     });
 
@@ -1162,7 +1162,7 @@ export class WebtoonArchiveModal extends Modal {
     const prevBtn = this.createPaginationButton(controls, 'chevron-left', 'Previous');
     prevBtn.disabled = currentPage === 1 || this.isLoadingPage;
     prevBtn.addEventListener('click', () => {
-      (document.activeElement as HTMLElement)?.blur?.();
+      (activeDocument.activeElement as HTMLElement)?.blur?.();
       void this.loadPage(currentPage - 1);
     });
 
@@ -1188,7 +1188,7 @@ export class WebtoonArchiveModal extends Modal {
     const nextBtn = this.createPaginationButton(controls, 'chevron-right', 'Next');
     nextBtn.disabled = currentPage === totalPages || this.isLoadingPage;
     nextBtn.addEventListener('click', () => {
-      (document.activeElement as HTMLElement)?.blur?.();
+      (activeDocument.activeElement as HTMLElement)?.blur?.();
       void this.loadPage(currentPage + 1);
     });
 
@@ -1196,7 +1196,7 @@ export class WebtoonArchiveModal extends Modal {
     const lastBtn = this.createPaginationButton(controls, 'chevrons-right', 'Last');
     lastBtn.disabled = currentPage === totalPages || this.isLoadingPage;
     lastBtn.addEventListener('click', () => {
-      (document.activeElement as HTMLElement)?.blur?.();
+      (activeDocument.activeElement as HTMLElement)?.blur?.();
       void this.loadPage(totalPages);
     });
   }
@@ -1217,7 +1217,7 @@ export class WebtoonArchiveModal extends Modal {
     const firstBtn = this.createPaginationButton(controls, 'chevrons-left', 'First');
     firstBtn.disabled = currentPage === 1 || this.isLoadingWebtoonsPage;
     firstBtn.addEventListener('click', () => {
-      (document.activeElement as HTMLElement)?.blur?.();
+      (activeDocument.activeElement as HTMLElement)?.blur?.();
       void this.loadWebtoonsPage(1);
     });
 
@@ -1225,7 +1225,7 @@ export class WebtoonArchiveModal extends Modal {
     const prevBtn = this.createPaginationButton(controls, 'chevron-left', 'Previous');
     prevBtn.disabled = currentPage === 1 || this.isLoadingWebtoonsPage;
     prevBtn.addEventListener('click', () => {
-      (document.activeElement as HTMLElement)?.blur?.();
+      (activeDocument.activeElement as HTMLElement)?.blur?.();
       void this.loadWebtoonsPage(currentPage - 1);
     });
 
@@ -1251,7 +1251,7 @@ export class WebtoonArchiveModal extends Modal {
     const nextBtn = this.createPaginationButton(controls, 'chevron-right', 'Next');
     nextBtn.disabled = currentPage === totalPages || this.isLoadingWebtoonsPage;
     nextBtn.addEventListener('click', () => {
-      (document.activeElement as HTMLElement)?.blur?.();
+      (activeDocument.activeElement as HTMLElement)?.blur?.();
       void this.loadWebtoonsPage(currentPage + 1);
     });
 
@@ -1259,7 +1259,7 @@ export class WebtoonArchiveModal extends Modal {
     const lastBtn = this.createPaginationButton(controls, 'chevrons-right', 'Last');
     lastBtn.disabled = currentPage === totalPages || this.isLoadingWebtoonsPage;
     lastBtn.addEventListener('click', () => {
-      (document.activeElement as HTMLElement)?.blur?.();
+      (activeDocument.activeElement as HTMLElement)?.blur?.();
       void this.loadWebtoonsPage(totalPages);
     });
   }
@@ -1289,7 +1289,7 @@ export class WebtoonArchiveModal extends Modal {
     if (!isDisabled) {
       row.addEventListener('click', (e) => {
         // Blur to hide keyboard on mobile
-        (document.activeElement as HTMLElement)?.blur?.();
+        (activeDocument.activeElement as HTMLElement)?.blur?.();
 
         if ((e.target as HTMLElement).tagName !== 'INPUT') {
           this.toggleEpisodeSelection(episode.no, !isSelected);
@@ -1942,7 +1942,7 @@ export class WebtoonArchiveModal extends Modal {
       this.render();
 
       // Restore scroll position after render
-      requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
         const newListEl = this.contentContainer.querySelector('.sa-webtoon-episode-list');
         if (newListEl) {
           newListEl.scrollTop = scrollTop;

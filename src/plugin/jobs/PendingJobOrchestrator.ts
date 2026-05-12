@@ -62,8 +62,7 @@ export interface PendingJobOrchestratorDeps {
   processingJobs: Set<string>;
   processCompletedJob: (job: PendingJob, payload: CompletedJobResponse) => Promise<void>;
   processFailedJob: (job: PendingJob, message: string) => Promise<void>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- batch result shape is loosely typed from WorkersAPIClient
-  processBatchArchiveResult: (result: any, pendingJobId?: string, sourceNotePath?: string) => Promise<void>;
+  processBatchArchiveResult: (result: unknown, pendingJobId?: string, sourceNotePath?: string) => Promise<void>;
   fetchNaverCafeLocally: (url: string, filePath: string | undefined, downloadMode: MediaDownloadMode, options?: { comment?: string }) => Promise<void>;
   fetchNaverBlogLocally: (url: string, filePath: string | undefined, downloadMode: MediaDownloadMode, options?: { comment?: string }) => Promise<void>;
   fetchBrunchLocally: (url: string, filePath: string | undefined, downloadMode: MediaDownloadMode, options?: { comment?: string }) => Promise<void>;

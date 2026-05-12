@@ -161,7 +161,7 @@ class TagEditModal extends Modal {
       btn.type = 'button';
       btn.setAttribute('aria-label', `Select color ${paletteColor}`);
       btn.addClass('tm-edit-swatch');
-      btn.style.background = paletteColor;
+      btn.setCssStyles({ background: paletteColor });
       btn.addEventListener('click', () => {
         this.setColor(paletteColor);
       });
@@ -210,7 +210,7 @@ class TagEditModal extends Modal {
 
   private refreshColorPreview(): void {
     if (this.previewDot) {
-      this.previewDot.style.background = this.currentColor || 'var(--background-modifier-border)';
+      this.previewDot.setCssStyles({ background: this.currentColor || 'var(--background-modifier-border)' });
     }
     if (this.nativeColorInput && this.nativeColorInput.value !== this.pickerColor) {
       this.nativeColorInput.value = this.pickerColor;
@@ -219,8 +219,10 @@ class TagEditModal extends Modal {
     const selected = this.currentColor?.toLowerCase() || '';
     for (const [paletteColor, button] of this.paletteButtons) {
       const isSelected = paletteColor === selected;
-      button.style.boxShadow = isSelected ? '0 0 0 2px var(--interactive-accent)' : 'none';
-      button.style.borderColor = isSelected ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+      button.setCssStyles({
+        boxShadow: isSelected ? '0 0 0 2px var(--interactive-accent)' : 'none',
+        borderColor: isSelected ? 'var(--interactive-accent)' : 'var(--background-modifier-border)',
+      });
     }
   }
 

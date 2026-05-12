@@ -31,7 +31,7 @@ function snapshotsEqual(a: EditableSnapshot, b: EditableSnapshot): boolean {
 export class AuthorProfileOutboundService {
   private metadataCacheRef: EventRef | null = null;
   private readonly lastKnownSnapshots = new Map<string, EditableSnapshot>();
-  private readonly debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly debounceTimers = new Map<string, number>();
   private readonly suppressionMap = new Map<string, number>();
 
   constructor(
@@ -66,7 +66,7 @@ export class AuthorProfileOutboundService {
     }
 
     for (const timer of this.debounceTimers.values()) {
-      clearTimeout(timer);
+      window.clearTimeout(timer);
     }
     this.debounceTimers.clear();
   }
@@ -111,10 +111,10 @@ export class AuthorProfileOutboundService {
 
     const existingTimer = this.debounceTimers.get(file.path);
     if (existingTimer) {
-      clearTimeout(existingTimer);
+      window.clearTimeout(existingTimer);
     }
 
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       this.debounceTimers.delete(file.path);
       void this.syncFile(file).catch((error) => {
         console.error(`${LOG_PREFIX} Sync failed for ${file.path}:`, error instanceof Error ? error.message : String(error));

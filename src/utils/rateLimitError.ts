@@ -38,7 +38,7 @@ export type RateLimitScope =
   | 'platform_global_floor';
 
 export interface RateLimitDetails {
-  scope?: RateLimitScope | string;
+  scope?: RateLimitScope;
   tier?: string;
   effectiveTier?: string;
   limit?: number;
@@ -90,18 +90,6 @@ function getErrorCode(error: unknown): string | undefined {
   return readString(readRecord(error, 'apiError'), 'code');
 }
 
-function getErrorMessage(error: unknown): string {
-  if (typeof error === 'string') return error;
-  if (error instanceof Error) return error.message;
-  if (isRecord(error)) {
-    const message =
-      readString(error, 'message') ??
-      readString(readRecord(error, 'apiError'), 'message');
-    if (message) return message;
-  }
-  return '';
-}
-
 /**
  * Detect a rate-limit error.
  *
@@ -134,7 +122,7 @@ export function getRateLimitDetails(error: unknown): RateLimitDetails | undefine
     readRecord(readRecord(error, 'apiError'), 'details');
   if (direct) {
     return {
-      scope: readString(direct, 'scope'),
+      scope: readString(direct, 'scope') as RateLimitScope | undefined,
       tier: readString(direct, 'tier'),
       effectiveTier: readString(direct, 'effectiveTier'),
       limit: readNumber(direct, 'limit'),

@@ -454,14 +454,39 @@ export class CompactPostCardRenderer extends Component {
     });
 
     // Inline RSS/broadcast icon (10×10px) — consistent with subscription semantics
-    indicator.innerHTML = `<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="currentColor" stroke="none"/></svg>`;
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = activeDocument.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', '11');
+    svg.setAttribute('height', '11');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2.5');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    const p1 = activeDocument.createElementNS(NS, 'path');
+    p1.setAttribute('d', 'M4 11a9 9 0 0 1 9 9');
+    const p2 = activeDocument.createElementNS(NS, 'path');
+    p2.setAttribute('d', 'M4 4a16 16 0 0 1 16 16');
+    const c = activeDocument.createElementNS(NS, 'circle');
+    c.setAttribute('cx', '5');
+    c.setAttribute('cy', '19');
+    c.setAttribute('r', '1');
+    c.setAttribute('fill', 'currentColor');
+    c.setAttribute('stroke', 'none');
+    svg.appendChild(p1);
+    svg.appendChild(p2);
+    svg.appendChild(c);
+    indicator.empty();
+    indicator.appendChild(svg);
   }
 
   /**
    * Render platform icon (Simple Icons SVG)
    * @unused - Reserved for future use
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- reserved for future platform icon rendering
    */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- reserved for future platform icon rendering
   private _renderPlatformIcon(container: HTMLElement, platform: Platform): void {
     // For user posts, render user initial avatar
     if (platform === 'post') {

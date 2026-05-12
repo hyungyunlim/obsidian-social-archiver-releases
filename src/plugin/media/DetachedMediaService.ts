@@ -1,5 +1,5 @@
 import { App, Notice, TFile } from 'obsidian';
-import type { MediaHandler, MediaResult } from '../../services/MediaHandler';
+import type { MediaHandler } from '../../services/MediaHandler';
 import type { MarkdownConverter } from '../../services/MarkdownConverter';
 import type { Logger } from '../../services/Logger';
 import type { Media, Platform, PostData } from '../../types/post';
@@ -154,7 +154,7 @@ export class DetachedMediaService {
     const { deletedCount, failedCount } = await this.deleteLocalAttachments(originalBody, file.path);
 
     // Step 3: update frontmatter markers
-    await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+    await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
       frontmatter.mediaDetached = true;
       frontmatter.downloadedUrls = this.swapMarkers(
         this.normalizeStringArray(frontmatter.downloadedUrls),
@@ -238,7 +238,7 @@ export class DetachedMediaService {
             });
             // Optionally persist suppression so next re-download skips the prompt.
             if (decision.suppressPromptForArchive) {
-              await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+              await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
                 frontmatter.mediaPromptSuppressed = true;
               });
             }
@@ -246,7 +246,7 @@ export class DetachedMediaService {
           }
           // decision === 'download' (or null) → fall through to the download loop.
           if (decision && decision.suppressPromptForArchive) {
-            await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+            await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
               frontmatter.mediaPromptSuppressed = true;
             });
           }
@@ -302,7 +302,7 @@ export class DetachedMediaService {
 
     // Step 3: update frontmatter markers
     const successUrls = new Set(successful.map(r => r.url));
-    await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+    await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
       // Partial success: if at least one URL failed, we keep mediaDetached: true
       // so the user can retry redownload. Already-succeeded local embeds stay in
       // the body (self-consistent). This trades "clean all-or-nothing semantics"
@@ -364,7 +364,14 @@ export class DetachedMediaService {
     // Single combined regex: either ![[...]] or ![alt](...)
     const pattern = /(!\[\[([^\]]+)\]\])|(!\[([^\]]*)\]\(([^)]+)\))/g;
 
-    const rewritten = body.replace(pattern, (match, _wiki, wikiPath, _md, mdAlt, mdPath) => {
+    const rewritten = body.replace(pattern, (
+      match: string,
+      _wiki: string | undefined,
+      wikiPath: string | undefined,
+      _md: string | undefined,
+      mdAlt: string | undefined,
+      mdPath: string | undefined,
+    ) => {
       const targetPath: string | undefined = wikiPath ?? mdPath;
       if (!targetPath) return match;
 
@@ -673,7 +680,8 @@ export class DetachedMediaService {
     }
     const up = noteDir.length - common;
     const down = mediaParts.slice(common);
-    const rel = [...Array(up).fill('..'), ...down].join('/');
+    const upSegments: string[] = new Array<string>(up).fill('..');
+    const rel = [...upSegments, ...down].join('/');
     return rel || mediaPath;
   }
 

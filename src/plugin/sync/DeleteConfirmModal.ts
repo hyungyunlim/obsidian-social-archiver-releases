@@ -40,12 +40,12 @@ export class DeleteConfirmModal extends Modal {
     contentEl.empty();
 
     modalEl.addClass('social-archiver-modal', 'sa-delete-confirm-modal');
-    modalEl.style.maxWidth = '420px';
+    modalEl.setCssStyles({ maxWidth: '420px' });
 
     // Title
     contentEl.createEl('h3', {
       text: 'Delete from server too?',
-    }).style.marginBottom = '8px';
+    }).setCssStyles({ marginBottom: '8px' });
 
     // Explanation with count
     const countText = this.pendingCount === 1
@@ -53,34 +53,40 @@ export class DeleteConfirmModal extends Modal {
       : `${this.pendingCount} archived notes were`;
     contentEl.createEl('p', {
       text: `${countText} deleted from the vault. Do you also want to delete the server copies?`,
-    }).style.marginBottom = '8px';
+    }).setCssStyles({ marginBottom: '8px' });
 
     // Warning
     const warning = contentEl.createEl('p', {
       text: 'If you keep them on the server, they may appear again during Library Sync.',
     });
-    warning.style.color = 'var(--text-error)';
-    warning.style.fontSize = '0.85em';
-    warning.style.marginBottom = '16px';
+    warning.setCssStyles({
+      color: 'var(--text-error)',
+      fontSize: '0.85em',
+      marginBottom: '16px',
+    });
 
     // "Don't ask again" checkbox
     const checkboxRow = contentEl.createDiv();
-    checkboxRow.style.display = 'flex';
-    checkboxRow.style.alignItems = 'center';
-    checkboxRow.style.gap = '6px';
-    checkboxRow.style.marginBottom = '16px';
+    checkboxRow.setCssStyles({
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+      marginBottom: '16px',
+    });
     const checkbox = checkboxRow.createEl('input', { type: 'checkbox' });
     checkbox.id = 'sa-delete-dont-ask-again';
     checkboxRow.createEl('label', {
       text: "Don't ask again",
       attr: { for: 'sa-delete-dont-ask-again' },
-    }).style.fontSize = '0.9em';
+    }).setCssStyles({ fontSize: '0.9em' });
 
     // Buttons
     const buttonRow = contentEl.createDiv();
-    buttonRow.style.display = 'flex';
-    buttonRow.style.justifyContent = 'flex-end';
-    buttonRow.style.gap = '8px';
+    buttonRow.setCssStyles({
+      display: 'flex',
+      justifyContent: 'flex-end',
+      gap: '8px',
+    });
 
     const keepBtn = buttonRow.createEl('button', { text: 'Keep on Server' });
     keepBtn.addEventListener('click', () => {

@@ -476,7 +476,7 @@ export class MediaGalleryView extends BasesView implements HoverParent {
 
     if (currentIndex === -1) currentIndex = 0;
 
-    const modal = document.createElement('div');
+    const modal = activeDocument.createElement('div');
     modal.addClass('sa-media-lightbox');
 
     // Create backdrop
@@ -581,13 +581,13 @@ export class MediaGalleryView extends BasesView implements HoverParent {
 
     const cleanup = () => {
       modal.remove();
-      document.removeEventListener('keydown', onKeyDown);
+      activeDocument.removeEventListener('keydown', onKeyDown);
     };
 
-    document.addEventListener('keydown', onKeyDown);
+    activeDocument.addEventListener('keydown', onKeyDown);
 
     // Add to body and render initial media
-    document.body.appendChild(modal);
+    activeDocument.body.appendChild(modal);
     try {
       renderMedia(currentIndex);
     } catch (err) {

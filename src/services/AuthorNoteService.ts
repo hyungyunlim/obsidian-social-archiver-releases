@@ -404,7 +404,7 @@ export class AuthorNoteService {
       noteVersion: AUTHOR_NOTE_VERSION,
       authorKey: profile.authorKey,
       legacyKeys: [],
-      platform: profile.platform as Platform,
+      platform: profile.platform,
       authorName: profile.authorName,
       authorUrl: profile.authorUrl || undefined,
       authorHandle: profile.authorHandle || undefined,
@@ -428,7 +428,7 @@ export class AuthorNoteService {
   async upsertFromArchive(postData: PostData): Promise<TFile | null> {
     if (!this.isEnabled()) return null;
 
-    const platform = postData.platform as Platform;
+    const platform = postData.platform;
     const authorUrl = postData.author.url;
     const authorName = postData.author.name;
     const authorHandle = postData.author.handle || postData.author.username;
@@ -862,25 +862,25 @@ export class AuthorNoteService {
     return {
       type: AUTHOR_NOTE_TYPE,
       noteVersion: typeof fm.noteVersion === 'number' ? fm.noteVersion : AUTHOR_NOTE_VERSION,
-      authorKey: String(fm.authorKey || ''),
+      authorKey: typeof fm.authorKey === 'string' ? fm.authorKey : '',
       legacyKeys: Array.isArray(fm.legacyKeys)
         ? fm.legacyKeys.filter((k): k is string => typeof k === 'string')
         : [],
-      platform: String(fm.platform || '') as Platform,
-      authorName: String(fm.authorName || ''),
-      authorUrl: fm.authorUrl ? String(fm.authorUrl) : undefined,
-      authorHandle: fm.authorHandle ? String(fm.authorHandle) : undefined,
-      avatar: fm.avatar ? String(fm.avatar) : undefined,
-      localAvatar: fm.localAvatar ? String(fm.localAvatar) : undefined,
+      platform: (typeof fm.platform === 'string' ? fm.platform : '') as Platform,
+      authorName: typeof fm.authorName === 'string' ? fm.authorName : '',
+      authorUrl: typeof fm.authorUrl === 'string' ? fm.authorUrl : undefined,
+      authorHandle: typeof fm.authorHandle === 'string' ? fm.authorHandle : undefined,
+      avatar: typeof fm.avatar === 'string' ? fm.avatar : undefined,
+      localAvatar: typeof fm.localAvatar === 'string' ? fm.localAvatar : undefined,
       followers: typeof fm.followers === 'number' ? fm.followers : undefined,
       postsCount: typeof fm.postsCount === 'number' ? fm.postsCount : undefined,
-      bio: fm.bio ? String(fm.bio) : undefined,
+      bio: typeof fm.bio === 'string' ? fm.bio : undefined,
       verified: typeof fm.verified === 'boolean' ? fm.verified : undefined,
       archiveCount: typeof fm.archiveCount === 'number' ? fm.archiveCount : 0,
-      lastSeenAt: fm.lastSeenAt ? String(fm.lastSeenAt) : undefined,
-      lastMetadataUpdate: fm.lastMetadataUpdate ? String(fm.lastMetadataUpdate) : undefined,
-      displayNameOverride: fm.displayNameOverride ? String(fm.displayNameOverride) : undefined,
-      bioOverride: fm.bioOverride ? String(fm.bioOverride) : undefined,
+      lastSeenAt: typeof fm.lastSeenAt === 'string' ? fm.lastSeenAt : undefined,
+      lastMetadataUpdate: typeof fm.lastMetadataUpdate === 'string' ? fm.lastMetadataUpdate : undefined,
+      displayNameOverride: typeof fm.displayNameOverride === 'string' ? fm.displayNameOverride : undefined,
+      bioOverride: typeof fm.bioOverride === 'string' ? fm.bioOverride : undefined,
       aliases: Array.isArray(fm.aliases)
         ? fm.aliases.filter((a): a is string => typeof a === 'string')
         : undefined,

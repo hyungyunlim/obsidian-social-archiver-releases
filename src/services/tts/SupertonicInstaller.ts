@@ -1017,10 +1017,12 @@ export class SupertonicInstaller {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private nodeRequire(module: string): any {
+  private nodeRequire(module: string): unknown {
     // Obsidian desktop provides Node.js require on window
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
-    return (window as any).require(module);
+    const electronRequire = (window as unknown as { require?: NodeJS.Require }).require;
+    if (!electronRequire) {
+      throw new Error('Node require not available');
+    }
+    return electronRequire(module);
   }
 }

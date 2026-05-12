@@ -165,12 +165,19 @@ export class BrunchSubscriptionPoller {
       void this.processPendingNotifications().then(() => this.pollAll());
     }, 5000);
 
-    this.intervalId = window.setInterval(
-      () => {
-        void this.processPendingNotifications().then(() => this.pollAll());
-      },
-      this.pollingInterval
-    );
+    this.scheduleNextPoll();
+  }
+
+  private scheduleNextPoll(): void {
+    this.intervalId = window.setTimeout(() => {
+      void this.processPendingNotifications()
+        .then(() => this.pollAll())
+        .finally(() => {
+          if (this.intervalId !== null) {
+            this.scheduleNextPoll();
+          }
+        });
+    }, this.pollingInterval);
   }
 
   async stop(): Promise<void> {
@@ -180,7 +187,7 @@ export class BrunchSubscriptionPoller {
     }
 
     if (this.intervalId !== null) {
-      window.clearInterval(this.intervalId);
+      window.clearTimeout(this.intervalId);
       this.intervalId = null;
     }
 

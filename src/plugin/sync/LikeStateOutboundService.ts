@@ -18,7 +18,7 @@ const LOG_PREFIX = '[Social Archiver] [LikeStateOutbound]';
 
 export class LikeStateOutboundService {
   private readonly lastKnownLikeState = new Map<string, boolean>();
-  private readonly debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly debounceTimers = new Map<string, number>();
   private readonly suppressionMap = new Map<string, number>();
   private changedEventRef: EventRef | null = null;
   private startedAt = 0;
@@ -61,7 +61,7 @@ export class LikeStateOutboundService {
     }
 
     for (const timer of this.debounceTimers.values()) {
-      clearTimeout(timer);
+      window.clearTimeout(timer);
     }
     this.debounceTimers.clear();
   }
@@ -91,7 +91,7 @@ export class LikeStateOutboundService {
     if (!fm) return;
 
     let archiveId = typeof fm['sourceArchiveId'] === 'string' && fm['sourceArchiveId']
-      ? fm['sourceArchiveId'] as string
+      ? fm['sourceArchiveId']
       : undefined;
 
     if (!archiveId) {
@@ -127,11 +127,11 @@ export class LikeStateOutboundService {
     }
 
     const existing = this.debounceTimers.get(file.path);
-    if (existing !== undefined) clearTimeout(existing);
+    if (existing !== undefined) window.clearTimeout(existing);
 
     this.debounceTimers.set(
       file.path,
-      setTimeout(() => {
+      window.setTimeout(() => {
         this.debounceTimers.delete(file.path);
         void this.syncLikeState(archiveId, originalUrl, currentLikeState, file);
       }, DEBOUNCE_MS),

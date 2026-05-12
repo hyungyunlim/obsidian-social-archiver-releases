@@ -459,17 +459,17 @@ export class PostDataParser {
         transcribedUrls: transcribedUrls.length > 0 ? transcribedUrls : undefined,
         // Archive-backed identity (also used for share-media reuse resolve path)
         sourceArchiveId: typeof frontmatter['sourceArchiveId'] === 'string'
-          ? (frontmatter['sourceArchiveId'] as string)
+          ? frontmatter['sourceArchiveId']
           : undefined,
         // Large Media Guard fields (prd-large-media-guard.md)
         mediaSourceUrls: Array.isArray(frontmatter['mediaSourceUrls'])
-          ? (frontmatter['mediaSourceUrls'] as string[])
+          ? frontmatter['mediaSourceUrls']
           : undefined,
         mediaDetached: typeof frontmatter['mediaDetached'] === 'boolean'
-          ? (frontmatter['mediaDetached'] as boolean)
+          ? frontmatter['mediaDetached']
           : undefined,
         mediaPromptSuppressed: typeof frontmatter['mediaPromptSuppressed'] === 'boolean'
-          ? (frontmatter['mediaPromptSuppressed'] as boolean)
+          ? frontmatter['mediaPromptSuppressed']
           : undefined,
         videoTranscribed: frontmatter['videoTranscribed'] as boolean | undefined,
         videoTranscriptionRequestedAt: frontmatter['videoTranscriptionRequestedAt'] as string | undefined,

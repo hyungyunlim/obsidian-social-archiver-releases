@@ -115,7 +115,7 @@ export interface WsArchiveAddedMessage {
     platform?: string;
     url?: string;
     title?: string | null;
-    source?: 'subscription' | string;
+    source?: 'subscription';
     subscriptionId?: string;
     updatedAt?: string;
     timestamp?: number;
