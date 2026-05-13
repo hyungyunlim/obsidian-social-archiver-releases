@@ -189,7 +189,7 @@ export class PreviewableMediaRenderer {
       right: '8px',
       padding: '2px 8px',
       background: 'rgba(0, 0, 0, 0.55)',
-      color: '#fff',
+      color: '#ffffff',
       borderRadius: '999px',
       fontSize: 'var(--font-ui-smaller, 0.75rem)',
       fontWeight: '600',
@@ -239,7 +239,7 @@ export class PreviewableMediaRenderer {
         height: '6px',
         borderRadius: '999px',
         background:
-          i === 0 ? 'var(--interactive-accent, #fff)' : 'rgba(255, 255, 255, 0.55)',
+          i === 0 ? 'var(--interactive-accent, #ffffff)' : 'rgba(255, 255, 255, 0.55)',
         transition: 'background-color 120ms ease',
       });
       dots.appendChild(dot);
@@ -285,7 +285,7 @@ export class PreviewableMediaRenderer {
       dotEls.forEach((d, i) => {
         if (i === currentIndex) {
           d.classList.add('pcr-media-carousel-dot-active');
-          d.setCssStyles({ background: 'var(--interactive-accent, #fff)' });
+          d.setCssStyles({ background: 'var(--interactive-accent, #ffffff)' });
         } else {
           d.classList.remove('pcr-media-carousel-dot-active');
           d.setCssStyles({ background: 'rgba(255, 255, 255, 0.55)' });
@@ -477,14 +477,14 @@ export class PreviewableMediaRenderer {
     video.src = src;
     // `contain` (not `cover`): same rationale as the image path — Reels/
     // portrait videos must show their full frame in the import preview, not
-    // a center-cropped square. The `#000` background fills the letterbox
+    // a center-cropped square. The `#000000` background fills the letterbox
     // strips with the conventional video-frame look.
     video.setCssStyles({
       width: '100%',
       height: '100%',
       objectFit: 'contain',
       display: 'block',
-      background: '#000',
+      background: '#000000',
     });
     // Stop click bubbling so tapping a video control doesn't re-trigger
     // gallery-level handlers (selection, etc.).
@@ -529,7 +529,7 @@ export class PreviewableMediaRenderer {
       border: 'none',
       borderRadius: '999px',
       background: 'rgba(0, 0, 0, 0.45)',
-      color: '#fff',
+      color: '#ffffff',
       fontSize: '24px',
       lineHeight: '1',
       cursor: 'pointer',

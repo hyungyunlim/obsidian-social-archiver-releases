@@ -430,9 +430,9 @@ function handleConnect(e: MouseEvent) {
     background: var(--color-yellow, #fbbf24);
   }
 
-  .char-bar-fill.bar-over {
+  .char-bar-fill.char-bar-fill.bar-over {
     background: var(--text-error);
-    width: 100% !important; /* always full-width when over limit */
+    width: 100%;
   }
 
   /* ── Reduced motion ────────────────────────────────────────── */

@@ -739,7 +739,7 @@
     height: 32px;
     border-radius: 50%;
     background: var(--background-modifier-hover, rgba(0, 0, 0, 0.08));
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
     font-size: var(--font-ui-smaller, 0.78rem);
     font-weight: var(--font-semibold, 600);
     letter-spacing: 0.02em;
@@ -756,7 +756,7 @@
   .sa-ig-group__name {
     font-size: 0.95rem;
     font-weight: var(--font-semibold, 600);
-    color: var(--text-normal, #222);
+    color: var(--text-normal, #222222);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -765,7 +765,7 @@
 
   .sa-ig-group__handle {
     font-size: 0.825rem;
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
     font-weight: var(--font-normal, 400);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -783,7 +783,7 @@
 
   .sa-ig-group__count {
     font-size: 0.825rem;
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
   }
 
   /* Borderless ghost button — Obsidian-idiomatic. The full-bleed CTA chrome
@@ -794,7 +794,7 @@
     border: none;
     background: transparent;
     box-shadow: none;
-    color: var(--text-normal, #222);
+    color: var(--text-normal, #222222);
     font-size: 0.85rem;
     font-weight: 500;
     padding: 8px 14px;
@@ -874,7 +874,7 @@
   .sa-ig-gc__empty {
     padding: 2rem 1rem;
     text-align: center;
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
     font-size: var(--font-ui, 0.9rem);
   }
 
@@ -1055,7 +1055,7 @@
   .sa-ig-pc__foot {
     padding: 8px 14px 10px;
     font-size: var(--font-ui-smaller, 0.75rem);
-    color: var(--text-faint, var(--text-muted, #777));
+    color: var(--text-faint, var(--text-muted, #777777));
     font-family: var(--font-monospace, monospace);
     flex: 0 0 auto;
     overflow: hidden;

@@ -102,7 +102,7 @@
     justify-content: center;
     gap: 0.5rem;
     padding: 1.5rem 1rem;
-    border: 2px dashed var(--background-modifier-border, #ccc);
+    border: 2px dashed var(--background-modifier-border, #cccccc);
     border-radius: var(--radius-m, 8px);
     background: var(--background-secondary, transparent);
     cursor: pointer;
@@ -138,7 +138,7 @@
   }
 
   .sa-ig-picker__text span {
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
     font-size: var(--font-ui-smaller, 0.85rem);
   }
 

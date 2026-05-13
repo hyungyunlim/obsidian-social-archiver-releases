@@ -24,6 +24,16 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '3.6.0': {
+    title: 'Obsidian Review Cleanup',
+    date: '2026-05-13',
+    notes: `## Obsidian Review Cleanup
+
+- Removed remaining community-review CSS warnings, including unsupported \`:has()\`, multicolumn layout, short hex colors, \`!important\`, and legacy text properties.
+- Kept the 3.5.9 review fixes: Obsidian 1.10.0 metadata, popout-safe DOM globals, \`requestUrl\` networking, safer timers, and inline-style cleanup.
+- No intended feature or workflow changes.
+`,
+  },
   '3.5.0': {
     title: 'Beta Wrap-Up + In-App Notices',
     date: '2026-05-04',

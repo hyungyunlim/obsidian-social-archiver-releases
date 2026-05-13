@@ -141,7 +141,7 @@
           <polyline
             points="6.5 12.5 10.5 16 17.5 8.5"
             fill="none"
-            stroke="var(--text-on-accent, #fff)"
+            stroke="var(--text-on-accent, #ffffff)"
             stroke-width="2.4"
           />
         </svg>
@@ -174,7 +174,7 @@
     display: block;
     border-radius: var(--radius-m, 6px);
     background: var(--background-primary, transparent);
-    border: 1px solid var(--background-modifier-border, #ccc);
+    border: 1px solid var(--background-modifier-border, #cccccc);
     overflow: hidden;
     transition: border-color 120ms ease, box-shadow 120ms ease;
   }
@@ -243,7 +243,7 @@
 
   .sa-ig-card__checkbox:disabled {
     cursor: not-allowed;
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
   }
 
   /* ---- Indicator: 24 px circle ------------------------------------- */

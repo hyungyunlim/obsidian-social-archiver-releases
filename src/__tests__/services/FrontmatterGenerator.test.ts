@@ -448,7 +448,7 @@ describe('FrontmatterGenerator', () => {
 
     it('should quote values starting with YAML special indicators', () => {
       const testCases = [
-        { bio: '!important person', desc: 'exclamation (YAML tag)' },
+        { bio: '!yaml-tag person', desc: 'exclamation (YAML tag)' },
         { bio: '&anchor ref', desc: 'ampersand (YAML anchor)' },
         { bio: '*star developer', desc: 'asterisk (YAML alias)' },
         { bio: '| pipe character bio', desc: 'pipe (YAML block scalar)' },

@@ -583,20 +583,20 @@
   .sa-ig-gallery__title {
     font-size: 1rem;
     font-weight: 500;
-    color: var(--text-normal, #222);
+    color: var(--text-normal, #222222);
   }
 
   .sa-ig-gallery__title strong {
     /* Use --text-normal so the counts read as plain emphasis, not as a
        coral/pink accent. The previous styling pulled focus away from the
        footer CTA. */
-    color: var(--text-normal, #222);
+    color: var(--text-normal, #222222);
     font-weight: var(--font-semibold, 600);
   }
 
   .sa-ig-gallery__subtitle {
     font-size: 0.825rem;
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
   }
 
   .sa-ig-gallery__context {
@@ -617,11 +617,11 @@
     display: inline-flex;
     flex-wrap: wrap;
     gap: 0.25rem 0.5rem;
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
   }
 
   .sa-ig-gallery__context-text strong {
-    color: var(--text-normal, #222);
+    color: var(--text-normal, #222222);
     font-weight: var(--font-semibold, 600);
   }
 
@@ -666,7 +666,7 @@
     justify-content: space-between;
     gap: 0.75rem;
     padding-top: 0.75rem;
-    border-top: 1px solid var(--background-modifier-border, #ccc);
+    border-top: 1px solid var(--background-modifier-border, #cccccc);
   }
 
   .sa-ig-gallery__footer-left {
@@ -679,9 +679,9 @@
     appearance: none;
     min-height: 44px;
     padding: 0 1rem;
-    border: 1px solid var(--background-modifier-border, #ccc);
+    border: 1px solid var(--background-modifier-border, #cccccc);
     background: var(--background-primary, transparent);
-    color: var(--text-normal, #222);
+    color: var(--text-normal, #222222);
     border-radius: var(--radius-s, 4px);
     cursor: pointer;
     font-size: var(--font-ui, 0.9rem);
@@ -701,12 +701,12 @@
     border: none;
     background: transparent;
     box-shadow: none;
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
   }
 
   .sa-ig-gallery__btn--ghost.sa-ig-gallery__btn--ghost:hover:not(:disabled) {
     background: var(--background-modifier-hover, rgba(0, 0, 0, 0.06));
-    color: var(--text-normal, #222);
+    color: var(--text-normal, #222222);
     border: none;
     box-shadow: none;
   }
@@ -720,7 +720,7 @@
   .sa-ig-gallery__btn--cta {
     background: var(--interactive-accent, #3b82f6);
     border-color: var(--interactive-accent, #3b82f6);
-    color: var(--text-on-accent, #fff);
+    color: var(--text-on-accent, #ffffff);
     padding: 0 1.25rem;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
   }
@@ -731,7 +731,7 @@
   }
 
   .sa-ig-gallery__btn--cta:focus-visible {
-    outline: 2px solid var(--text-on-accent, #fff);
+    outline: 2px solid var(--text-on-accent, #ffffff);
     outline-offset: -4px;
   }
 </style>

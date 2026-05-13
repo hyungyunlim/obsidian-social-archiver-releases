@@ -132,7 +132,7 @@
 
   .sa-ig-progress__count {
     font-size: var(--font-ui-smaller, 0.85rem);
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
   }
 
   .sa-ig-progress__throughput {
@@ -155,7 +155,7 @@
 
   .sa-ig-progress__counter-label {
     font-size: var(--font-ui-smaller, 0.75rem);
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
   }
 
   .sa-ig-progress__counter-value {
@@ -169,7 +169,7 @@
 
   .sa-ig-progress__status {
     font-size: var(--font-ui-smaller, 0.85rem);
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
     font-family: var(--font-monospace, monospace);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -186,9 +186,9 @@
   .sa-ig-progress__btn {
     min-height: 44px;
     padding: 0 1rem;
-    border: 1px solid var(--background-modifier-border, #ccc);
+    border: 1px solid var(--background-modifier-border, #cccccc);
     background: var(--background-primary, transparent);
-    color: var(--text-normal, #222);
+    color: var(--text-normal, #222222);
     border-radius: var(--radius-s, 4px);
     cursor: pointer;
     font-size: var(--font-ui, 0.9rem);
@@ -206,6 +206,6 @@
   .sa-ig-progress__note {
     margin: 0;
     font-size: var(--font-ui-smaller, 0.8rem);
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
   }
 </style>

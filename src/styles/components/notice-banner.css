@@ -95,10 +95,10 @@
 
 /* Close (X) button — flush right, hidden when dismissPolicy === 'sticky'.
  *
- * Obsidian (and underlying themes) styles bare <button> elements with a
- * background, border, and box-shadow. Selector specificity needs to beat
- * those rules without resorting to !important, so we anchor on
- * `.nb-banner button.nb-close` and explicitly null the chrome. */
+	 * Obsidian (and underlying themes) styles bare <button> elements with a
+	 * background, border, and box-shadow. Selector specificity needs to beat
+	 * those rules, so we anchor on
+	 * `.nb-banner button.nb-close` and explicitly null the chrome. */
 .nb-banner button.nb-close {
   flex-shrink: 0;
   display: flex;

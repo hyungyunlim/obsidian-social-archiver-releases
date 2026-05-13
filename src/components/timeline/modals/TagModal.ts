@@ -51,12 +51,14 @@ class TagEditModal extends Modal {
   }
 
   onOpen(): void {
-    const { contentEl } = this;
+    const { contentEl, modalEl } = this;
     contentEl.empty();
     contentEl.addClass('social-archiver-tag-modal', 'tm-edit-modal');
+    modalEl.addClass('social-archiver-tag-modal');
+    modalEl.closest('.modal-container')?.classList.add('social-archiver-modal-container');
 
     if (Platform.isMobile) {
-      this.modalEl.addClass('tm-mobile');
+      modalEl.addClass('tm-mobile');
       contentEl.addClass('tm-mobile-content');
     }
 
@@ -313,13 +315,14 @@ export class TagModal extends Modal {
   }
 
   onOpen(): void {
-    const { contentEl } = this;
+    const { contentEl, modalEl } = this;
     contentEl.empty();
     contentEl.addClass('social-archiver-tag-modal');
+    modalEl.addClass('social-archiver-tag-modal');
+    modalEl.closest('.modal-container')?.classList.add('social-archiver-modal-container');
 
     // Mobile: standard form modal pattern (consistent with ArchiveModal, Subscribe modals)
     if (Platform.isMobile) {
-      const { modalEl } = this;
       modalEl.addClass('tm-mobile');
       contentEl.addClass('tm-mobile-content');
 

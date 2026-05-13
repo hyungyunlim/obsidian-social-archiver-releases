@@ -4,7 +4,7 @@
   position: fixed;
   inset: 0;
   z-index: 999;
-  background: #0009;
+  background: rgb(0 0 0 / 0.6);
   opacity: 0;
   transition: opacity .25s ease;
   contain: strict
@@ -442,12 +442,12 @@
   font-size: 14px
 }
 
-.modal-container:has(.social-archiver-tag-modal),
-.modal-container:has(.social-archiver-confirm-modal) {
+.modal-container.social-archiver-modal-container {
   z-index: 1001
 }
 
-body:has(.sa-reader-mode-container-visible) .modal-container {
+body.reader-mode-active .modal-container,
+body.sa-reader-mode-active .modal-container {
   z-index: 1001
 }
 

@@ -4048,6 +4048,7 @@ export class PostCardRenderer extends Component {
       });
 
       modal.open();
+      modal.modalEl.closest('.modal-container')?.classList.add('social-archiver-modal-container');
     });
   }
 

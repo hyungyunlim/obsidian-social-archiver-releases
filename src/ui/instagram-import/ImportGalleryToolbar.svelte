@@ -203,24 +203,24 @@
     align-items: baseline;
     gap: 0.25rem;
     font-size: var(--font-ui, 0.9rem);
-    color: var(--text-normal, #222);
+    color: var(--text-normal, #222222);
   }
 
   .sa-ig-toolbar__counts strong {
     /* Plain emphasis — no accent color. The accent stays reserved for the
        footer "Import N selected" CTA. */
-    color: var(--text-normal, #222);
+    color: var(--text-normal, #222222);
     font-weight: var(--font-semibold, 600);
   }
 
   .sa-ig-toolbar__counts-sep,
   .sa-ig-toolbar__counts-label {
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
     font-weight: var(--font-normal, 400);
   }
 
   .sa-ig-toolbar__counts-dup {
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
     font-size: 0.825rem;
     margin-left: 0.25rem;
   }
@@ -260,7 +260,7 @@
     border: none;
     background: transparent;
     box-shadow: none;
-    color: var(--text-normal, #222);
+    color: var(--text-normal, #222222);
     border-radius: var(--radius-s, 4px);
     cursor: pointer;
     font-weight: 500;
@@ -300,14 +300,14 @@
     flex: 0 1 200px;
     max-width: 260px;
     padding: 0 0.5rem;
-    border-bottom: 1px solid var(--background-modifier-border, #ccc);
-    color: var(--text-muted, #777);
+    border-bottom: 1px solid var(--background-modifier-border, #cccccc);
+    color: var(--text-muted, #777777);
     transition: border-color 100ms ease;
   }
 
   .sa-ig-toolbar__search:focus-within {
     border-bottom-color: var(--interactive-accent, #3b82f6);
-    color: var(--text-normal, #222);
+    color: var(--text-normal, #222222);
   }
 
   .sa-ig-toolbar__search-icon {
@@ -327,7 +327,7 @@
     border: none;
     box-shadow: none;
     outline: none;
-    color: var(--text-normal, #222);
+    color: var(--text-normal, #222222);
     font-size: 0.825rem;
     font-family: inherit;
     line-height: 1.4;
@@ -353,7 +353,7 @@
   }
 
   .sa-ig-toolbar__search-input.sa-ig-toolbar__search-input::placeholder {
-    color: var(--text-faint, var(--text-muted, #777));
+    color: var(--text-faint, var(--text-muted, #777777));
     opacity: 1;
   }
 
@@ -368,7 +368,7 @@
     border: none;
     background: transparent;
     box-shadow: none;
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
     font-size: 1.1rem;
     line-height: 1;
     cursor: pointer;
@@ -381,7 +381,7 @@
 
   .sa-ig-toolbar__search-clear.sa-ig-toolbar__search-clear:hover {
     background: var(--background-modifier-hover, rgba(0, 0, 0, 0.06));
-    color: var(--text-normal, #222);
+    color: var(--text-normal, #222222);
     border: none;
     box-shadow: none;
   }
@@ -397,7 +397,7 @@
     align-items: center;
     gap: 0.5rem;
     font-size: 0.825rem;
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
     padding-left: 0.5rem;
   }
 
@@ -415,15 +415,15 @@
     min-height: 32px;
     padding: 4px 22px 4px 4px;
     border: none;
-    border-bottom: 1px solid var(--background-modifier-border, #ccc);
+    border-bottom: 1px solid var(--background-modifier-border, #cccccc);
     background: transparent;
-    color: var(--text-normal, #222);
+    color: var(--text-normal, #222222);
     border-radius: 0;
     font-size: 0.825rem;
     cursor: pointer;
     background-image:
-      linear-gradient(45deg, transparent 50%, var(--text-muted, #777) 50%),
-      linear-gradient(135deg, var(--text-muted, #777) 50%, transparent 50%);
+      linear-gradient(45deg, transparent 50%, var(--text-muted, #777777) 50%),
+      linear-gradient(135deg, var(--text-muted, #777777) 50%, transparent 50%);
     background-position:
       calc(100% - 12px) 50%,
       calc(100% - 7px) 50%;

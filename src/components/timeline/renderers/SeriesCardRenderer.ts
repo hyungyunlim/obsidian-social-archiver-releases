@@ -1519,6 +1519,19 @@ export class SeriesCardRenderer extends Component {
     return state;
   }
 
+  private syncSeriesPanelStateClasses(seriesId: string): void {
+    const card = this.cardElements.get(seriesId);
+    if (!card) return;
+
+    const state = this.viewStates.get(seriesId);
+    const episodesOpen = state?.expandedTOC ?? false;
+    const commentsOpen = this.commentsExpanded.get(seriesId) ?? false;
+
+    card.classList.toggle('series-card-has-open-comments-and-episodes', commentsOpen && episodesOpen);
+    const episodeWrapper = card.querySelector('.series-episode-list-wrapper');
+    episodeWrapper?.classList.toggle('series-episode-list-wrapper-expanded', episodesOpen);
+  }
+
   /**
    * Render a series card
    */
@@ -1605,6 +1618,8 @@ export class SeriesCardRenderer extends Component {
       this.episodeLists.set(series.seriesId, episodeList);
     }
 
+    this.syncSeriesPanelStateClasses(series.seriesId);
+
     return card;
   }
 
@@ -1616,7 +1631,7 @@ export class SeriesCardRenderer extends Component {
     const currentIndex = this.getEpisodeIndex(series, state.currentEpisode);
     const hasMultipleEpisodes = series.episodes.length > 1;
 
-    // Header container - use inline styles with setProperty for !important
+    // Header container
     const header = container.createDiv({
       cls: isWebtoon ? 'series-header webtoon-header' : 'series-header'
     });
@@ -2072,6 +2087,7 @@ export class SeriesCardRenderer extends Component {
       if (commentsRefs) {
         const isExpanded = this.commentsExpanded.get(series.seriesId) ?? false;
         commentsRefs.container.classList.toggle('sa-hidden', !isExpanded);
+        this.syncSeriesPanelStateClasses(series.seriesId);
 
         // Also sync chevron rotation
         const chevron = card.querySelector('.comments-list-chevron') as HTMLElement;
@@ -2503,6 +2519,7 @@ export class SeriesCardRenderer extends Component {
 
       // Toggle container visibility
       commentsContainer.classList.toggle('sa-hidden', !newExpanded);
+      this.syncSeriesPanelStateClasses(seriesId);
 
       // Load comments on first expand (from local PostData, not API)
       // Use current episode from viewState, not the captured closure value
@@ -3145,6 +3162,7 @@ export class SeriesCardRenderer extends Component {
     const listWrapper = container.createDiv({
       cls: isWebtoon ? 'series-episode-list-wrapper webtoon-episode-list' : 'series-episode-list-wrapper'
     });
+    listWrapper.classList.toggle('series-episode-list-wrapper-expanded', state.expandedTOC);
 
     // Toggle header (styles from skeleton-card.css)
     const toggleHeader = listWrapper.createDiv({ cls: 'sa-episode-list-toggle' });
@@ -3289,6 +3307,8 @@ export class SeriesCardRenderer extends Component {
       state.expandedTOC = !state.expandedTOC;
       chevron.classList.toggle('expanded', state.expandedTOC);
       listContainer.classList.toggle('sa-hidden', !state.expandedTOC);
+      listWrapper.classList.toggle('series-episode-list-wrapper-expanded', state.expandedTOC);
+      this.syncSeriesPanelStateClasses(series.seriesId);
 
       // Load comment counts when expanding webtoon episode list
       if (state.expandedTOC && isWebtoon) {

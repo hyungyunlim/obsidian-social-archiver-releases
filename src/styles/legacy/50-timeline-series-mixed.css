@@ -94,7 +94,7 @@
     max-height: min(65vh, 640px)
   }
 
-  .series-card:has(.comments-list-container[style*=block]):has(.sa-episode-list-container[style*=block]) .sa-episode-list-container {
+  .series-card.series-card-has-open-comments-and-episodes .sa-episode-list-container {
     max-height: min(65vh, 600px)
   }
 
@@ -183,7 +183,7 @@
     max-height: min(65vh, 640px)
   }
 
-  .series-card:has(.comments-list-container[style*=block]):has(.sa-episode-list-container[style*=block]) .sa-episode-list-container {
+  .series-card.series-card-has-open-comments-and-episodes .sa-episode-list-container {
     max-height: min(65vh, 600px)
   }
 
@@ -274,7 +274,7 @@
     max-height: min(65vh, 640px)
   }
 
-  .series-card:has(.comments-list-container[style*=block]):has(.sa-episode-list-container[style*=block]) .sa-episode-list-container {
+  .series-card.series-card-has-open-comments-and-episodes .sa-episode-list-container {
     max-height: min(65vh, 600px)
   }
 
@@ -393,7 +393,7 @@
     max-height: min(65vh, 640px)
   }
 
-  .series-card:has(.comments-list-container[style*=block]):has(.sa-episode-list-container[style*=block]) .sa-episode-list-container {
+  .series-card.series-card-has-open-comments-and-episodes .sa-episode-list-container {
     max-height: min(65vh, 600px)
   }
 
@@ -546,7 +546,7 @@ body.is-mobile .sa-reader-mode-action-bar-spacer {
     max-height: min(65vh, 640px)
   }
 
-  .series-card:has(.comments-list-container[style*=block]):has(.sa-episode-list-container[style*=block]) .sa-episode-list-container {
+  .series-card.series-card-has-open-comments-and-episodes .sa-episode-list-container {
     max-height: min(65vh, 600px)
   }
 
@@ -637,7 +637,7 @@ body.is-mobile .sa-reader-mode-action-bar-spacer {
     max-height: min(65vh, 640px)
   }
 
-  .series-card:has(.comments-list-container[style*=block]):has(.sa-episode-list-container[style*=block]) .sa-episode-list-container {
+  .series-card.series-card-has-open-comments-and-episodes .sa-episode-list-container {
     max-height: min(65vh, 600px)
   }
 
@@ -681,7 +681,7 @@ body.is-mobile .sa-reader-mode-action-bar-spacer {
     max-height: min(65vh, 640px)
   }
 
-  .series-card:has(.comments-list-container[style*=block]):has(.sa-episode-list-container[style*=block]) .sa-episode-list-container {
+  .series-card.series-card-has-open-comments-and-episodes .sa-episode-list-container {
     max-height: min(65vh, 600px)
   }
 
@@ -1020,31 +1020,17 @@ body.is-mobile .sa-reader-mode-action-bar-spacer {
 }
 
 .sa-media-gallery-masonry.sa-media-gallery-masonry {
-  display: block
-}
-
-@supports (column-count: 1) {
-  .sa-media-gallery-masonry.sa-media-gallery-masonry {
-    -moz-column-count: 3;
-    column-count: 3;
-    -moz-column-gap: 16px;
-    column-gap: 16px
-  }
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  grid-auto-flow: dense
 }
 
 .sa-media-gallery-masonry .sa-media-card {
-  display: inline-block;
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  margin-bottom: 16px;
-  page-break-inside: avoid
-}
-
-@supports (column-count: 1) {
-  .sa-media-gallery-masonry .sa-media-card {
-    -moz-column-break-inside: avoid;
-    break-inside: avoid;
-    -webkit-column-break-inside: avoid
-  }
+  margin-bottom: 0
 }
 
 .sa-media-gallery-masonry .sa-media-image,
@@ -1054,51 +1040,40 @@ body.is-mobile .sa-reader-mode-action-bar-spacer {
   display: block
 }
 
-@supports (column-count: 1) {
-  .sa-media-gallery-cols-2.sa-media-gallery-masonry {
-    -moz-column-count: 2;
-    column-count: 2
-  }
+.sa-media-gallery-cols-2.sa-media-gallery-masonry {
+  grid-template-columns: repeat(2, 1fr)
+}
 
-  .sa-media-gallery-cols-3.sa-media-gallery-masonry {
-    -moz-column-count: 3;
-    column-count: 3
-  }
+.sa-media-gallery-cols-3.sa-media-gallery-masonry {
+  grid-template-columns: repeat(3, 1fr)
+}
 
-  .sa-media-gallery-cols-4.sa-media-gallery-masonry {
-    -moz-column-count: 4;
-    column-count: 4
-  }
+.sa-media-gallery-cols-4.sa-media-gallery-masonry {
+  grid-template-columns: repeat(4, 1fr)
+}
 
-  .sa-media-gallery-cols-5.sa-media-gallery-masonry {
-    -moz-column-count: 5;
-    column-count: 5
-  }
+.sa-media-gallery-cols-5.sa-media-gallery-masonry {
+  grid-template-columns: repeat(5, 1fr)
+}
 
-  .sa-media-gallery-cols-6.sa-media-gallery-masonry {
-    -moz-column-count: 6;
-    column-count: 6
-  }
+.sa-media-gallery-cols-6.sa-media-gallery-masonry {
+  grid-template-columns: repeat(6, 1fr)
+}
 
-  .sa-media-gallery-cols-7.sa-media-gallery-masonry {
-    -moz-column-count: 7;
-    column-count: 7
-  }
+.sa-media-gallery-cols-7.sa-media-gallery-masonry {
+  grid-template-columns: repeat(7, 1fr)
+}
 
-  .sa-media-gallery-cols-8.sa-media-gallery-masonry {
-    -moz-column-count: 8;
-    column-count: 8
-  }
+.sa-media-gallery-cols-8.sa-media-gallery-masonry {
+  grid-template-columns: repeat(8, 1fr)
+}
 
-  .sa-media-gallery-cols-9.sa-media-gallery-masonry {
-    -moz-column-count: 9;
-    column-count: 9
-  }
+.sa-media-gallery-cols-9.sa-media-gallery-masonry {
+  grid-template-columns: repeat(9, 1fr)
+}
 
-  .sa-media-gallery-cols-10.sa-media-gallery-masonry {
-    -moz-column-count: 10;
-    column-count: 10
-  }
+.sa-media-gallery-cols-10.sa-media-gallery-masonry {
+  grid-template-columns: repeat(10, 1fr)
 }
 
 .sa-media-gallery-cols-2.sa-media-gallery-grid {
@@ -1159,32 +1134,25 @@ body.is-mobile .sa-reader-mode-action-bar-spacer {
     grid-template-columns: repeat(4, 1fr)
   }
 
-  @supports (column-count: 1) {
-    .sa-media-gallery-cols-10.sa-media-gallery-masonry {
-      -moz-column-count: 8;
-      column-count: 8
-    }
+  .sa-media-gallery-cols-10.sa-media-gallery-masonry {
+    grid-template-columns: repeat(8, 1fr)
+  }
 
-    .sa-media-gallery-cols-9.sa-media-gallery-masonry {
-      -moz-column-count: 7;
-      column-count: 7
-    }
+  .sa-media-gallery-cols-9.sa-media-gallery-masonry {
+    grid-template-columns: repeat(7, 1fr)
+  }
 
-    .sa-media-gallery-cols-8.sa-media-gallery-masonry {
-      -moz-column-count: 6;
-      column-count: 6
-    }
+  .sa-media-gallery-cols-8.sa-media-gallery-masonry {
+    grid-template-columns: repeat(6, 1fr)
+  }
 
-    .sa-media-gallery-cols-7.sa-media-gallery-masonry {
-      -moz-column-count: 5;
-      column-count: 5
-    }
+  .sa-media-gallery-cols-7.sa-media-gallery-masonry {
+    grid-template-columns: repeat(5, 1fr)
+  }
 
-    .sa-media-gallery-cols-6.sa-media-gallery-masonry,
-    .sa-media-gallery-cols-5.sa-media-gallery-masonry {
-      -moz-column-count: 4;
-      column-count: 4
-    }
+  .sa-media-gallery-cols-6.sa-media-gallery-masonry,
+  .sa-media-gallery-cols-5.sa-media-gallery-masonry {
+    grid-template-columns: repeat(4, 1fr)
   }
 }
 
@@ -1203,21 +1171,17 @@ body.is-mobile .sa-reader-mode-action-bar-spacer {
     grid-template-columns: repeat(3, 1fr)
   }
 
-  @supports (column-count: 1) {
-    .sa-media-gallery-cols-10.sa-media-gallery-masonry,
-    .sa-media-gallery-cols-9.sa-media-gallery-masonry,
-    .sa-media-gallery-cols-8.sa-media-gallery-masonry,
-    .sa-media-gallery-cols-7.sa-media-gallery-masonry,
-    .sa-media-gallery-cols-6.sa-media-gallery-masonry,
-    .sa-media-gallery-cols-5.sa-media-gallery-masonry {
-      -moz-column-count: 4;
-      column-count: 4
-    }
+  .sa-media-gallery-cols-10.sa-media-gallery-masonry,
+  .sa-media-gallery-cols-9.sa-media-gallery-masonry,
+  .sa-media-gallery-cols-8.sa-media-gallery-masonry,
+  .sa-media-gallery-cols-7.sa-media-gallery-masonry,
+  .sa-media-gallery-cols-6.sa-media-gallery-masonry,
+  .sa-media-gallery-cols-5.sa-media-gallery-masonry {
+    grid-template-columns: repeat(4, 1fr)
+  }
 
-    .sa-media-gallery-cols-4.sa-media-gallery-masonry {
-      -moz-column-count: 3;
-      column-count: 3
-    }
+  .sa-media-gallery-cols-4.sa-media-gallery-masonry {
+    grid-template-columns: repeat(3, 1fr)
   }
 }
 
@@ -1226,11 +1190,8 @@ body.is-mobile .sa-reader-mode-action-bar-spacer {
     grid-template-columns: repeat(2, 1fr)
   }
 
-  @supports (column-count: 1) {
-    .bases-media-gallery-container .sa-media-gallery-masonry {
-      -moz-column-count: 2;
-      column-count: 2
-    }
+  .bases-media-gallery-container .sa-media-gallery-masonry {
+    grid-template-columns: repeat(2, 1fr)
   }
 }
 
@@ -1239,11 +1200,8 @@ body.is-mobile .sa-reader-mode-action-bar-spacer {
     grid-template-columns: repeat(1, 1fr)
   }
 
-  @supports (column-count: 1) {
-    .bases-media-gallery-container .sa-media-gallery-masonry {
-      -moz-column-count: 1;
-      column-count: 1
-    }
+  .bases-media-gallery-container .sa-media-gallery-masonry {
+    grid-template-columns: repeat(1, 1fr)
   }
 }
 
@@ -1277,7 +1235,7 @@ body.is-mobile .sa-reader-mode-action-bar-spacer {
 
 .sa-media-date {
   font-size: 12px;
-  color: #fffc;
+  color: rgb(255 255 255 / 0.8);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis
@@ -1371,8 +1329,7 @@ body.is-mobile .sa-reader-mode-action-bar-spacer {
 .sa-blog-content-inline.sa-blog-content-inline ol+p,
 .sa-blog-content-inline.sa-blog-content-inline li+p {
   margin-left: 0;
-  padding-left: 0;
-  text-indent: 0px
+  padding-left: 0
 }
 
 .sa-blog-content-inline p {
@@ -1798,8 +1755,8 @@ body.is-mobile .sa-reader-mode-action-bar-spacer {
   border-top: none
 }
 
-.series-episode-list-wrapper .sa-episode-list-container[style*=block]+.sa-episode-list-toggle,
-.sa-episode-list-toggle:has(+.sa-episode-list-container[style*=block]) {
+.series-episode-list-wrapper.series-episode-list-wrapper-expanded .sa-episode-list-toggle,
+.series-episode-list-wrapper.series-episode-list-wrapper-expanded .episode-list-toggle {
   border-radius: 0
 }
 
@@ -1920,19 +1877,19 @@ body.is-mobile .sa-reader-mode-action-bar-spacer {
   max-height: min(35vh, 450px)
 }
 
-.series-card:has(.comments-list-container[style*=block]):has(.sa-episode-list-container[style*=block]) .sa-episode-list-container {
+.series-card.series-card-has-open-comments-and-episodes .sa-episode-list-container {
   max-height: min(50vh, 560px)
 }
 
-.series-card:has(.comments-list-container[style*=block]):has(.sa-episode-list-container[style*=block]) .comments-list-container.comments-list-container {
+.series-card.series-card-has-open-comments-and-episodes .comments-list-container.comments-list-container {
   max-height: min(30vh, 320px)
 }
 
-.series-card.sa-series-fullscreen:has(.comments-list-container[style*=block]):has(.sa-episode-list-container[style*=block]) .series-episode-list-wrapper {
+.series-card.sa-series-fullscreen.series-card-has-open-comments-and-episodes .series-episode-list-wrapper {
   max-height: min(60vh, 620px)
 }
 
-.series-card.sa-series-fullscreen:has(.comments-list-container[style*=block]):has(.sa-episode-list-container[style*=block]) .comments-list-container.comments-list-container {
+.series-card.sa-series-fullscreen.series-card-has-open-comments-and-episodes .comments-list-container.comments-list-container {
   max-height: min(25vh, 300px)
 }
 
@@ -1945,7 +1902,7 @@ body.is-mobile .sa-reader-mode-action-bar-spacer {
     max-height: min(65vh, 640px)
   }
 
-  .series-card:has(.comments-list-container[style*=block]):has(.sa-episode-list-container[style*=block]) .sa-episode-list-container {
+  .series-card.series-card-has-open-comments-and-episodes .sa-episode-list-container {
     max-height: min(65vh, 600px)
   }
 }
@@ -2036,4 +1993,3 @@ body.is-tablet .social-archiver-timeline-view {
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px)
 }
-

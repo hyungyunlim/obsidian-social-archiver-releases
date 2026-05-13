@@ -300,7 +300,7 @@
     flex-direction: column;
     gap: 0.25rem;
     padding: 0.5rem 0.75rem;
-    border: 1px solid var(--background-modifier-border, #ccc);
+    border: 1px solid var(--background-modifier-border, #cccccc);
     border-radius: var(--radius-s, 4px);
     background: var(--background-primary, transparent);
   }
@@ -331,7 +331,7 @@
     border: none;
     box-shadow: none;
     border-radius: var(--radius-s, 4px);
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
     cursor: pointer;
     font-weight: 500;
     transition: background 100ms ease, color 100ms ease;
@@ -355,7 +355,7 @@
     flex-wrap: wrap;
     gap: 0.25rem 0.5rem;
     font-size: var(--font-ui-smaller, 0.85rem);
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
   }
 
   .sa-ig-preflight__warn {
@@ -375,7 +375,7 @@
     margin: 0;
     padding-left: 1rem;
     font-size: var(--font-ui-smaller, 0.85rem);
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
   }
 
   .sa-ig-preflight__file-error {
@@ -410,7 +410,7 @@
   }
 
   .sa-ig-preflight__group-hint {
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
     font-weight: var(--font-normal, 400);
   }
 
@@ -427,7 +427,7 @@
     flex: 1 1 200px;
     min-height: 44px;
     padding: 0.5rem 0.75rem;
-    border: 1px solid var(--background-modifier-border, #ccc);
+    border: 1px solid var(--background-modifier-border, #cccccc);
     border-radius: var(--radius-s, 4px);
     background: var(--background-primary, transparent);
     cursor: pointer;
@@ -440,7 +440,7 @@
 
   .sa-ig-preflight__radio-hint {
     display: block;
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
     font-weight: var(--font-normal, 400);
     margin-top: 0.125rem;
   }
@@ -449,10 +449,10 @@
     width: 100%;
     min-height: 40px;
     padding: 0 0.625rem;
-    border: 1px solid var(--background-modifier-border, #ccc);
+    border: 1px solid var(--background-modifier-border, #cccccc);
     border-radius: var(--radius-s, 4px);
     background: var(--background-primary, transparent);
-    color: var(--text-normal, #222);
+    color: var(--text-normal, #222222);
     font-size: var(--font-ui, 0.9rem);
   }
 
@@ -466,7 +466,7 @@
     padding: 0.125rem 0.5rem;
     border-radius: 999px;
     background: var(--background-modifier-hover, rgba(0, 0, 0, 0.05));
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
     font-size: var(--font-ui-smaller, 0.8rem);
     font-family: var(--font-monospace, monospace);
   }
@@ -474,7 +474,7 @@
   .sa-ig-preflight__disclaimer {
     margin: 0;
     font-size: var(--font-ui-smaller, 0.8rem);
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
   }
 
   .sa-ig-preflight__actions {
@@ -497,9 +497,9 @@
     appearance: none;
     min-height: 44px;
     padding: 0 1rem;
-    border: 1px solid var(--background-modifier-border, #ccc);
+    border: 1px solid var(--background-modifier-border, #cccccc);
     background: var(--background-primary, transparent);
-    color: var(--text-normal, #222);
+    color: var(--text-normal, #222222);
     border-radius: var(--radius-s, 4px);
     cursor: pointer;
     font-size: var(--font-ui, 0.9rem);
@@ -519,12 +519,12 @@
     border: none;
     background: transparent;
     box-shadow: none;
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
   }
 
   .sa-ig-preflight__btn--ghost.sa-ig-preflight__btn--ghost:hover:not(:disabled) {
     background: var(--background-modifier-hover, rgba(0, 0, 0, 0.06));
-    color: var(--text-normal, #222);
+    color: var(--text-normal, #222222);
     border: none;
     box-shadow: none;
   }
@@ -538,7 +538,7 @@
   .sa-ig-preflight__btn--cta {
     background: var(--interactive-accent, #3b82f6);
     border-color: var(--interactive-accent, #3b82f6);
-    color: var(--text-on-accent, #fff);
+    color: var(--text-on-accent, #ffffff);
     padding: 0 1.25rem;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
   }
@@ -549,7 +549,7 @@
   }
 
   .sa-ig-preflight__btn--cta:focus-visible {
-    outline: 2px solid var(--text-on-accent, #fff);
+    outline: 2px solid var(--text-on-accent, #ffffff);
     outline-offset: -4px;
   }
 </style>

@@ -605,17 +605,17 @@ $effect(() => {
     gap: 4px;
   }
 
-  .header-run-btn,
-  .close-btn {
+  .header-run-btn.header-run-btn,
+  .close-btn.close-btn {
     display: flex;
     align-items: center;
     justify-content: center;
     width: 36px;
     height: 36px;
     padding: 0;
-    border: none !important;
-    outline: none !important;
-    box-shadow: none !important;
+    border: none;
+    outline: none;
+    box-shadow: none;
     border-radius: 8px;
     background: transparent;
     color: var(--text-muted);
@@ -627,27 +627,27 @@ $effect(() => {
     appearance: none;
   }
 
-  .header-run-btn:hover,
-  .close-btn:hover {
+  .header-run-btn.header-run-btn:hover,
+  .close-btn.close-btn:hover {
     background: var(--background-modifier-hover);
     color: var(--text-normal);
-    border: none !important;
-    outline: none !important;
-    box-shadow: none !important;
+    border: none;
+    outline: none;
+    box-shadow: none;
   }
 
-  .header-run-btn:focus,
-  .close-btn:focus,
-  .header-run-btn:active,
-  .close-btn:active {
-    border: none !important;
-    outline: none !important;
-    box-shadow: none !important;
+  .header-run-btn.header-run-btn:focus,
+  .close-btn.close-btn:focus,
+  .header-run-btn.header-run-btn:active,
+  .close-btn.close-btn:active {
+    border: none;
+    outline: none;
+    box-shadow: none;
   }
 
-  .header-run-btn:focus-visible,
-  .close-btn:focus-visible {
-    outline: 2px solid var(--interactive-accent) !important;
+  .header-run-btn.header-run-btn:focus-visible,
+  .close-btn.close-btn:focus-visible {
+    outline: 2px solid var(--interactive-accent);
     outline-offset: 2px;
   }
 

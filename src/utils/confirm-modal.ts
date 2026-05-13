@@ -81,6 +81,7 @@ class ConfirmModal extends Modal {
 
     // Add modal class for styling
     modalEl.addClass('social-archiver-modal', 'social-archiver-confirm-modal');
+    modalEl.closest('.modal-container')?.classList.add('social-archiver-modal-container');
 
     // Modal size
     if (Platform.isMobile) {
@@ -186,6 +187,7 @@ class InputConfirmModal extends Modal {
 
     // Add modal class for styling
     modalEl.addClass('social-archiver-modal', 'social-archiver-confirm-modal');
+    modalEl.closest('.modal-container')?.classList.add('social-archiver-modal-container');
 
     // Modal size
     if (Platform.isMobile) {

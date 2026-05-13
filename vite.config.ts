@@ -2,6 +2,12 @@ import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import path from 'path';
 
+function expandShortHexColors(source: string): string {
+  return source.replace(/#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])\b/g, (_, r: string, g: string, b: string) =>
+    `#${r}${r}${g}${g}${b}${b}`.toLowerCase()
+  );
+}
+
 export default defineConfig(({ mode }) => ({
   define: {
     // Inject environment variables at build time
@@ -29,12 +35,14 @@ export default defineConfig(({ mode }) => ({
       // Electron/Obsidian but trips the Obsidian community plugin
       // "Code obfuscation" lint heuristic. Strip the dead branches from the
       // final bundle so the literal `createElement("script")` does not appear.
-      name: 'strip-jszip-script-polyfill',
+      name: 'community-review-bundle-cleanup',
       enforce: 'post',
       generateBundle(_, bundle) {
         for (const file of Object.values(bundle)) {
           if (file.type === 'chunk' && typeof file.code === 'string') {
             file.code = file.code.replace(/createElement\(["']script["']\)/g, 'createElement("noscript")');
+          } else if (file.type === 'asset' && typeof file.source === 'string' && file.fileName.endsWith('.css')) {
+            file.source = expandShortHexColors(file.source);
           }
         }
       }

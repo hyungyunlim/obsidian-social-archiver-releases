@@ -205,7 +205,7 @@ describe('PreviewableMediaRenderer.renderHeroImage — single item', () => {
     ) as HTMLVideoElement | null;
     expect(video).toBeTruthy();
     expect(video?.style.objectFit).toBe('contain');
-    // Video keeps its #000 backdrop — fills letterbox strips with the
+    // Video keeps its #000000 backdrop — fills letterbox strips with the
     // conventional video-frame look (kept distinct from the wrapper bg).
     expect(video?.style.background).toContain('rgb(0, 0, 0)');
   });

@@ -615,7 +615,7 @@
   .sa-ig-import__loading {
     padding: 2rem 0.5rem;
     text-align: center;
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
     font-size: var(--font-ui, 0.9rem);
   }
 </style>

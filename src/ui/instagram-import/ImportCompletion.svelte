@@ -132,7 +132,7 @@
 
   .sa-ig-completion__stat-label {
     font-size: var(--font-ui-smaller, 0.75rem);
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
   }
 
   .sa-ig-completion__stat-value {
@@ -145,7 +145,7 @@
   }
 
   .sa-ig-completion__empty {
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
   }
 
   .sa-ig-completion__excluded {
@@ -153,7 +153,7 @@
     padding: 0.5rem 0.75rem;
     background: var(--background-secondary, transparent);
     border-radius: var(--radius-s, 4px);
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
     font-size: var(--font-ui-smaller, 0.85rem);
   }
 
@@ -162,7 +162,7 @@
     align-items: center;
     gap: 0.375rem;
     font-size: var(--font-ui-smaller, 0.85rem);
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
   }
 
   .sa-ig-completion__actions {
@@ -175,9 +175,9 @@
   .sa-ig-completion__btn {
     min-height: 44px;
     padding: 0 1rem;
-    border: 1px solid var(--background-modifier-border, #ccc);
+    border: 1px solid var(--background-modifier-border, #cccccc);
     background: var(--background-primary, transparent);
-    color: var(--text-normal, #222);
+    color: var(--text-normal, #222222);
     border-radius: var(--radius-s, 4px);
     cursor: pointer;
     font-size: var(--font-ui, 0.9rem);
@@ -186,6 +186,6 @@
   .sa-ig-completion__btn--cta {
     background: var(--interactive-accent, #3b82f6);
     border-color: var(--interactive-accent, #3b82f6);
-    color: var(--text-on-accent, #fff);
+    color: var(--text-on-accent, #ffffff);
   }
 </style>

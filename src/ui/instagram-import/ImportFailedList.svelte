@@ -85,7 +85,7 @@
     min-height: 36px;
     padding: 0 0.5rem;
     background: transparent;
-    border: 1px solid var(--background-modifier-border, #ccc);
+    border: 1px solid var(--background-modifier-border, #cccccc);
     border-radius: var(--radius-s, 4px);
     cursor: pointer;
     font-size: var(--font-ui-smaller, 0.85rem);
@@ -101,7 +101,7 @@
   .sa-ig-failed__empty {
     padding: 1rem;
     text-align: center;
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
   }
 
   .sa-ig-failed__list {
@@ -117,7 +117,7 @@
 
   .sa-ig-failed__item {
     padding: 0.5rem 0.75rem;
-    border: 1px solid var(--background-modifier-border, #ccc);
+    border: 1px solid var(--background-modifier-border, #cccccc);
     border-radius: var(--radius-s, 4px);
   }
 
@@ -142,7 +142,7 @@
     padding: 0 0.375rem;
     border-radius: 999px;
     font-size: var(--font-ui-smaller, 0.75rem);
-    background: var(--background-modifier-border, #eee);
+    background: var(--background-modifier-border, #eeeeee);
   }
 
   .sa-ig-failed__item-badge--fail {
@@ -159,7 +159,7 @@
     min-height: 32px;
     padding: 0 0.5rem;
     background: var(--background-primary, transparent);
-    border: 1px solid var(--background-modifier-border, #ccc);
+    border: 1px solid var(--background-modifier-border, #cccccc);
     border-radius: var(--radius-s, 4px);
     cursor: pointer;
     font-size: var(--font-ui-smaller, 0.85rem);
@@ -176,7 +176,7 @@
     flex-wrap: wrap;
     gap: 0.25rem 0.5rem;
     margin-top: 0.25rem;
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #777777);
     font-size: var(--font-ui-smaller, 0.8rem);
   }
 </style>

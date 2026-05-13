@@ -1264,23 +1264,23 @@
   gap: 6px;
   min-height: 32px;
   padding: 0 10px;
-  border: none !important;
+  border: none;
   border-radius: 8px;
-  background: transparent !important;
+  background: transparent;
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 500;
   line-height: 1;
   cursor: pointer;
-  box-shadow: none !important;
-  outline: none !important;
+  box-shadow: none;
+  outline: none;
   appearance: none;
   -webkit-appearance: none;
   transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
 }
 
 .tc-selection-toggle:hover:not(:disabled) {
-  background: var(--background-modifier-hover) !important;
+  background: var(--background-modifier-hover);
   color: var(--text-normal);
 }
 
@@ -1327,35 +1327,35 @@
   gap: 6px;
   min-height: 32px;
   padding: 0 10px;
-  border: 1px solid transparent !important;
+  border: 1px solid transparent;
   border-radius: 8px;
-  background: transparent !important;
+  background: transparent;
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 500;
   line-height: 1;
   cursor: pointer;
-  box-shadow: none !important;
-  outline: none !important;
+  box-shadow: none;
+  outline: none;
   appearance: none;
   -webkit-appearance: none;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 .tc-quick-filter-btn:hover {
-  background: var(--background-modifier-hover) !important;
+  background: var(--background-modifier-hover);
   color: var(--text-normal);
 }
 
 .tc-quick-filter-btn.is-active {
-  color: var(--text-on-accent) !important;
-  background: var(--interactive-accent) !important;
-  border-color: var(--interactive-accent) !important;
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+  border-color: var(--interactive-accent);
 }
 
 .tc-quick-filter-btn.is-active:hover {
-  background: var(--interactive-accent-hover) !important;
-  border-color: var(--interactive-accent-hover) !important;
+  background: var(--interactive-accent-hover);
+  border-color: var(--interactive-accent-hover);
 }
 
 .tc-quick-filter-icon {
@@ -1637,10 +1637,10 @@
   }
 
   .tc-selection-toggle-mobile {
-    background: transparent !important;
-    border: none !important;
-    outline: none !important;
-    box-shadow: none !important;
+    background: transparent;
+    border: none;
+    outline: none;
+    box-shadow: none;
     appearance: none;
     -webkit-appearance: none;
     -webkit-tap-highlight-color: transparent;
@@ -1653,9 +1653,9 @@
   .tc-selection-toggle-mobile:focus,
   .tc-selection-toggle-mobile:active,
   .tc-selection-toggle-mobile:hover:not(:disabled) {
-    background: transparent !important;
-    border-color: transparent !important;
-    box-shadow: none !important;
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
     color: var(--text-faint);
   }
 
@@ -1677,22 +1677,22 @@
     min-width: 32px;
     min-height: 32px;
     justify-content: center;
-    background: transparent !important;
-    border: 1px solid transparent !important;
-    box-shadow: none !important;
+    background: transparent;
+    border: 1px solid transparent;
+    box-shadow: none;
     border-radius: 6px;
     color: var(--text-faint);
   }
 
   .tc-quick-filter-btn:hover:not(:disabled) {
-    background: transparent !important;
+    background: transparent;
     color: var(--text-muted);
   }
 
   .tc-quick-filter-btn.is-active {
-    color: var(--text-on-accent) !important;
-    background: var(--interactive-accent) !important;
-    border-color: var(--interactive-accent) !important;
+    color: var(--text-on-accent);
+    background: var(--interactive-accent);
+    border-color: var(--interactive-accent);
   }
 
   .tc-selection-actions {

@@ -448,13 +448,13 @@ onDestroy(() => {
 }
 
 .threads-icon {
-  background: #000;
-  color: #fff;
+  background: #000000;
+  color: #ffffff;
 }
 
 .x-icon {
-  background: #000;
-  color: #fff;
+  background: #000000;
+  color: #ffffff;
 }
 
 .crosspost-platform-name {
@@ -503,7 +503,7 @@ onDestroy(() => {
 }
 
 .status-dot.disconnected {
-  background: var(--text-faint, #888);
+  background: var(--text-faint, #888888);
 }
 
 .status-dot.warning {

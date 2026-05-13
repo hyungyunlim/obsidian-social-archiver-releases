@@ -634,7 +634,7 @@
     max-height: min(65vh, 640px)
   }
 
-  .series-card:has(.comments-list-container[style*=block]):has(.sa-episode-list-container[style*=block]) .sa-episode-list-container {
+  .series-card.series-card-has-open-comments-and-episodes .sa-episode-list-container {
     max-height: min(65vh, 600px)
   }
 
@@ -716,7 +716,7 @@
     max-height: min(65vh, 640px)
   }
 
-  .series-card:has(.comments-list-container[style*=block]):has(.sa-episode-list-container[style*=block]) .sa-episode-list-container {
+  .series-card.series-card-has-open-comments-and-episodes .sa-episode-list-container {
     max-height: min(65vh, 600px)
   }
 

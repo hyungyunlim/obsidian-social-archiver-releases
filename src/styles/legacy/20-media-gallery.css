@@ -21,13 +21,11 @@
   grid-auto-flow: dense
 }
 
-@supports (column-count: 1) {
-  .sa-media-gallery-masonry {
-    -moz-column-count: 3;
-    column-count: 3;
-    -moz-column-gap: 16px;
-    column-gap: 16px
-  }
+.sa-media-gallery-masonry {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  grid-auto-flow: dense
 }
 
 .sa-media-card {
@@ -40,11 +38,8 @@
   margin-bottom: 16px
 }
 
-@supports (column-count: 1) {
-  .sa-media-card {
-    -moz-column-break-inside: avoid;
-    break-inside: avoid
-  }
+.sa-media-gallery-masonry .sa-media-card {
+  margin-bottom: 0
 }
 
 .sa-media-gallery-grid .sa-media-card {
@@ -53,7 +48,7 @@
 
 .sa-media-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 8px 16px #0003
+  box-shadow: 0 8px 16px rgb(0 0 0 / 0.2)
 }
 
 .sa-platform-badge {
@@ -255,11 +250,8 @@
     grid-template-columns: repeat(2, 1fr)
   }
 
-  @supports (column-count: 1) {
-    .bases-media-gallery-container .sa-media-gallery-masonry {
-      -moz-column-count: 2;
-      column-count: 2
-    }
+  .bases-media-gallery-container .sa-media-gallery-masonry {
+    grid-template-columns: repeat(2, minmax(0, 1fr))
   }
 
   .sa-media-container {
@@ -277,11 +269,8 @@
     grid-template-columns: 1fr
   }
 
-  @supports (column-count: 1) {
-    .bases-media-gallery-container .sa-media-gallery-masonry {
-      -moz-column-count: 1;
-      column-count: 1
-    }
+  .bases-media-gallery-container .sa-media-gallery-masonry {
+    grid-template-columns: 1fr
   }
 }
 
@@ -469,4 +458,3 @@
   background: var(--background-modifier-hover);
   color: var(--text-normal)
 }
-

@@ -1420,10 +1420,10 @@
  * modal to near-full-screen on desktop so the grid is actually browsable.
  * ======================================== */
 
-.sa-ig-import-modal.sa-ig-import-modal {
-  /* `.sa-ig-import-modal.sa-ig-import-modal` doubles specificity so this
-     beats Obsidian's default `.modal { width: 700px; }` without !important. */
-  width: 92vw;
+	.sa-ig-import-modal.sa-ig-import-modal {
+	  /* `.sa-ig-import-modal.sa-ig-import-modal` doubles specificity so this
+	     beats Obsidian's default `.modal { width: 700px; }`. */
+	  width: 92vw;
   max-width: 1280px;
   height: auto;
   max-height: 90vh;

@@ -285,7 +285,7 @@ body:not(.theme-dark) .post-card-skeleton {
 .media-gallery .file-embed-title,
 .media-gallery .markdown-embed-title,
 .media-card > div:first-child:not(.platform-badge):not(.media-container):not(.media-metadata) {
-  display: none !important;
+  display: none;
 }
 
 .media-gallery-loading {
@@ -401,31 +401,19 @@ body:not(.theme-dark) .post-card-skeleton {
   grid-column: span 1;
 }
 
-/* For masonry layout, natural flow */
+/* For masonry layout, use grid to avoid unsupported CSS multicolumn rules */
 .media-gallery-masonry.media-gallery-masonry {
-  /* Remove the grid display */
-  display: block;
-}
-
-@supports (column-count: 1) {
-  .media-gallery-masonry {
-    column-count: 3;
-    column-gap: 16px;
-  }
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  grid-auto-flow: dense;
 }
 
 .media-gallery-masonry .media-card {
-  display: inline-block;
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  margin-bottom: 16px;
-  page-break-inside: avoid;
-}
-
-@supports (column-count: 1) {
-  .media-gallery-masonry .media-card {
-    break-inside: avoid;
-    -webkit-column-break-inside: avoid;
-  }
+  margin-bottom: 0;
 }
 
 /* Ensure images load before calculating layout */
@@ -437,42 +425,40 @@ body:not(.theme-dark) .post-card-skeleton {
 }
 
 /* Column counts for different sizes */
-@supports (column-count: 1) {
-  .media-gallery-cols-2.media-gallery-masonry {
-    column-count: 2;
-  }
+.media-gallery-cols-2.media-gallery-masonry {
+  grid-template-columns: repeat(2, 1fr);
+}
 
-  .media-gallery-cols-3.media-gallery-masonry {
-    column-count: 3;
-  }
+.media-gallery-cols-3.media-gallery-masonry {
+  grid-template-columns: repeat(3, 1fr);
+}
 
-  .media-gallery-cols-4.media-gallery-masonry {
-    column-count: 4;
-  }
+.media-gallery-cols-4.media-gallery-masonry {
+  grid-template-columns: repeat(4, 1fr);
+}
 
-  .media-gallery-cols-5.media-gallery-masonry {
-    column-count: 5;
-  }
+.media-gallery-cols-5.media-gallery-masonry {
+  grid-template-columns: repeat(5, 1fr);
+}
 
-  .media-gallery-cols-6.media-gallery-masonry {
-    column-count: 6;
-  }
+.media-gallery-cols-6.media-gallery-masonry {
+  grid-template-columns: repeat(6, 1fr);
+}
 
-  .media-gallery-cols-7.media-gallery-masonry {
-    column-count: 7;
-  }
+.media-gallery-cols-7.media-gallery-masonry {
+  grid-template-columns: repeat(7, 1fr);
+}
 
-  .media-gallery-cols-8.media-gallery-masonry {
-    column-count: 8;
-  }
+.media-gallery-cols-8.media-gallery-masonry {
+  grid-template-columns: repeat(8, 1fr);
+}
 
-  .media-gallery-cols-9.media-gallery-masonry {
-    column-count: 9;
-  }
+.media-gallery-cols-9.media-gallery-masonry {
+  grid-template-columns: repeat(9, 1fr);
+}
 
-  .media-gallery-cols-10.media-gallery-masonry {
-    column-count: 10;
-  }
+.media-gallery-cols-10.media-gallery-masonry {
+  grid-template-columns: repeat(10, 1fr);
 }
 
 /* Grid layout column counts */
@@ -526,14 +512,12 @@ body:not(.theme-dark) .post-card-skeleton {
   .media-gallery-cols-6.media-gallery-grid { grid-template-columns: repeat(4, 1fr); }
   .media-gallery-cols-5.media-gallery-grid { grid-template-columns: repeat(4, 1fr); }
 
-  @supports (column-count: 1) {
-    .media-gallery-cols-10.media-gallery-masonry { column-count: 8; }
-    .media-gallery-cols-9.media-gallery-masonry { column-count: 7; }
-    .media-gallery-cols-8.media-gallery-masonry { column-count: 6; }
-    .media-gallery-cols-7.media-gallery-masonry { column-count: 5; }
-    .media-gallery-cols-6.media-gallery-masonry { column-count: 4; }
-    .media-gallery-cols-5.media-gallery-masonry { column-count: 4; }
-  }
+  .media-gallery-cols-10.media-gallery-masonry { grid-template-columns: repeat(8, 1fr); }
+  .media-gallery-cols-9.media-gallery-masonry { grid-template-columns: repeat(7, 1fr); }
+  .media-gallery-cols-8.media-gallery-masonry { grid-template-columns: repeat(6, 1fr); }
+  .media-gallery-cols-7.media-gallery-masonry { grid-template-columns: repeat(5, 1fr); }
+  .media-gallery-cols-6.media-gallery-masonry { grid-template-columns: repeat(4, 1fr); }
+  .media-gallery-cols-5.media-gallery-masonry { grid-template-columns: repeat(4, 1fr); }
 }
 
 /* Medium screens (768px - 1200px) - Reduce to max 4 columns */
@@ -547,32 +531,26 @@ body:not(.theme-dark) .post-card-skeleton {
 
   .media-gallery-cols-4.media-gallery-grid { grid-template-columns: repeat(3, 1fr); }
 
-  @supports (column-count: 1) {
-    .media-gallery-cols-10.media-gallery-masonry,
-    .media-gallery-cols-9.media-gallery-masonry,
-    .media-gallery-cols-8.media-gallery-masonry,
-    .media-gallery-cols-7.media-gallery-masonry,
-    .media-gallery-cols-6.media-gallery-masonry,
-    .media-gallery-cols-5.media-gallery-masonry { column-count: 4; }
+  .media-gallery-cols-10.media-gallery-masonry,
+  .media-gallery-cols-9.media-gallery-masonry,
+  .media-gallery-cols-8.media-gallery-masonry,
+  .media-gallery-cols-7.media-gallery-masonry,
+  .media-gallery-cols-6.media-gallery-masonry,
+  .media-gallery-cols-5.media-gallery-masonry { grid-template-columns: repeat(4, 1fr); }
 
-    .media-gallery-cols-4.media-gallery-masonry { column-count: 3; }
-  }
+  .media-gallery-cols-4.media-gallery-masonry { grid-template-columns: repeat(3, 1fr); }
 }
 
 /* Small screens (480px - 768px) - 2 columns */
 @media (max-width: 768px) {
   .media-gallery-grid.media-gallery-grid { grid-template-columns: repeat(2, 1fr); }
-  @supports (column-count: 1) {
-    .media-gallery-masonry.media-gallery-masonry { column-count: 2; }
-  }
+  .media-gallery-masonry.media-gallery-masonry { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* Mobile (< 480px) - 1 column */
 @media (max-width: 480px) {
   .media-gallery-grid.media-gallery-grid { grid-template-columns: repeat(1, 1fr); }
-  @supports (column-count: 1) {
-    .media-gallery-masonry.media-gallery-masonry { column-count: 1; }
-  }
+  .media-gallery-masonry.media-gallery-masonry { grid-template-columns: repeat(1, 1fr); }
 }
 
 /* ==================== Hover-only Platform Badge & Metadata ==================== */
@@ -708,7 +686,6 @@ body:not(.theme-dark) .post-card-skeleton {
 .blog-content-inline.blog-content-inline li + p {
   margin-left: 0;
   padding-left: 0;
-  text-indent: 0px;
 }
 
 /* Ensure paragraphs have no inherited list indentation */
@@ -1188,8 +1165,8 @@ body:not(.theme-dark) .post-card-skeleton {
 /* ==================== Episode List Fixes ==================== */
 
 /* When list is expanded, toggle doesn't need bottom radius */
-.series-episode-list-wrapper .episode-list-container[style*="block"] + .episode-list-toggle,
-.episode-list-toggle:has(+ .episode-list-container[style*="block"]) {
+.series-episode-list-wrapper.series-episode-list-wrapper-expanded .episode-list-toggle,
+.series-episode-list-wrapper.series-episode-list-wrapper-expanded .sa-episode-list-toggle {
   border-radius: 0;
 }
 
@@ -1332,19 +1309,22 @@ body:not(.theme-dark) .post-card-skeleton {
 }
 
 /* Expand episode list further, especially when comments are also open */
-.series-card:has(.comments-list-container[style*="block"]):has(.episode-list-container[style*="block"]) .episode-list-container {
+.series-card.series-card-has-open-comments-and-episodes .episode-list-container,
+.series-card.series-card-has-open-comments-and-episodes .sa-episode-list-container {
   max-height: min(50vh, 560px);
 }
 
-.series-card:has(.comments-list-container[style*="block"]):has(.episode-list-container[style*="block"]) .comments-list-container.comments-list-container {
+.series-card.series-card-has-open-comments-and-episodes .comments-list-container.comments-list-container {
   max-height: min(30vh, 320px);
 }
 
-.series-card.series-fullscreen:has(.comments-list-container[style*="block"]):has(.episode-list-container[style*="block"]) .series-episode-list-wrapper {
+.series-card.series-fullscreen.series-card-has-open-comments-and-episodes .series-episode-list-wrapper,
+.series-card.sa-series-fullscreen.series-card-has-open-comments-and-episodes .series-episode-list-wrapper {
   max-height: min(60vh, 620px);
 }
 
-.series-card.series-fullscreen:has(.comments-list-container[style*="block"]):has(.episode-list-container[style*="block"]) .comments-list-container.comments-list-container {
+.series-card.series-fullscreen.series-card-has-open-comments-and-episodes .comments-list-container.comments-list-container,
+.series-card.sa-series-fullscreen.series-card-has-open-comments-and-episodes .comments-list-container.comments-list-container {
   max-height: min(25vh, 300px);
 }
 
@@ -1357,7 +1337,8 @@ body:not(.theme-dark) .post-card-skeleton {
     max-height: min(65vh, 640px);
   }
 
-  .series-card:has(.comments-list-container[style*="block"]):has(.episode-list-container[style*="block"]) .episode-list-container {
+  .series-card.series-card-has-open-comments-and-episodes .episode-list-container,
+  .series-card.series-card-has-open-comments-and-episodes .sa-episode-list-container {
     max-height: min(65vh, 600px);
   }
 }
@@ -1433,7 +1414,7 @@ body.is-mobile .social-archiver-timeline-view.sa-timeline-safe-area {
       var(--safe-area-inset-top, 0px),
       var(--timeline-safe-area-top-fallback, 0px)
     ) + var(--timeline-safe-area-top-extra, 0px)
-  ) !important;
+  );
 }
 
 body.is-mobile .social-archiver-timeline-view {
@@ -1451,7 +1432,7 @@ body.is-mobile .social-archiver-timeline-view.sa-timeline-safe-area .view-conten
       var(--safe-area-inset-top, 0px),
       var(--timeline-safe-area-top-fallback, 0px)
     ) + var(--timeline-safe-area-top-extra, 0px)
-  ) !important;
+  );
 }
 
 body.is-mobile .social-archiver-timeline-view .view-content {
@@ -1893,15 +1874,15 @@ body.is-tablet .social-archiver-timeline-view {
 
 /* ---------- Modal z-index override ---------- */
 /* Obsidian Modals (TagModal, confirm, etc.) must appear above reader mode (z-index 1000) */
-.modal-container:has(.social-archiver-tag-modal),
-.modal-container:has(.social-archiver-confirm-modal) {
+.modal-container.social-archiver-modal-container {
   z-index: 1001;
 }
 
 /* Fallback: any modal opened while reader is active should be on top.
    Obsidian's .modal-container is normally z-index ~var(--layer-modal).
    We raise ALL modal-containers when reader is present to avoid stacking issues. */
-body:has(.reader-mode-container-visible) .modal-container {
+body.reader-mode-active .modal-container,
+body.sa-reader-mode-active .modal-container {
   z-index: 1001;
 }
 

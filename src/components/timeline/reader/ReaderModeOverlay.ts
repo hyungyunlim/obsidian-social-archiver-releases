@@ -129,6 +129,7 @@ export class ReaderModeOverlay {
   async open(): Promise<void> {
     if (this._isActive) return;
     this._isActive = true;
+    activeDocument.body.addClass('sa-reader-mode-active', 'reader-mode-active');
 
     // Create backdrop
     this.backdrop = activeDocument.createElement('div');
@@ -241,6 +242,7 @@ export class ReaderModeOverlay {
   close(): void {
     if (!this._isActive) return;
     this._isActive = false;
+    activeDocument.body.removeClass('sa-reader-mode-active', 'reader-mode-active');
 
     const wasDirty = this.dirty;
     const dirtyPathsSnapshot = [...this.dirtyPaths];

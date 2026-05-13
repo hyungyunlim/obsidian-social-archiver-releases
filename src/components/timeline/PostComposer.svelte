@@ -1012,7 +1012,7 @@ function openPostModeMenu(e: MouseEvent): void {
     menu.className = 'pm-portal';
     menu.style.cssText = `
       position:fixed; top:${rect.bottom + 4}px; right:${window.innerWidth - rect.right}px;
-      width:220px; background:#1e1e1e; border:1px solid #444; border-radius:8px;
+      width:220px; background:#1e1e1e; border:1px solid #444444; border-radius:8px;
       box-shadow:0 8px 28px rgba(0,0,0,0.6); z-index:99999; overflow:hidden;
       font-family:var(--font-interface,-apple-system,BlinkMacSystemFont,sans-serif);
     `;
@@ -1036,7 +1036,7 @@ function openPostModeMenu(e: MouseEvent): void {
         display:flex; align-items:center; width:100%; padding:11px 12px;
         border:none; background:${bgDefault}; cursor:pointer;
         text-align:left; font-family:inherit;
-        ${i > 0 ? 'border-top:1px solid #333;' : ''}
+        ${i > 0 ? 'border-top:1px solid #333333;' : ''}
       `;
       btn.addEventListener('mouseenter', () => { btn.style.background = '#2a2a2a'; });
       btn.addEventListener('mouseleave', () => { btn.style.background = bgDefault; });
@@ -1049,7 +1049,7 @@ function openPostModeMenu(e: MouseEvent): void {
       labelSpan.textContent = m.label;
 
       const descSpan = document.createElement('span');
-      descSpan.style.cssText = 'display:block; font-size:10px; color:#666; line-height:1.2; margin-top:1px;';
+      descSpan.style.cssText = 'display:block; font-size:10px; color:#666666; line-height:1.2; margin-top:1px;';
       descSpan.textContent = m.desc;
 
       textDiv.appendChild(labelSpan);
@@ -1983,42 +1983,42 @@ onDestroy(() => {
   }
 
   /* Post mode dropdown menu — NO css variables, NO pseudo-elements */
-  .post-mode-menu {
+  .post-mode-menu.post-mode-menu {
     position: absolute;
     top: calc(100% + 4px);
     right: 0;
     width: 220px;
-    background-color: #1e1e1e !important;
+    background-color: #1e1e1e;
     border: 1px solid #3a3a3a;
     border-radius: 8px;
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
     z-index: 9999;
     overflow: hidden;
-    opacity: 1 !important;
+    opacity: 1;
   }
 
-  .pm-item {
+  .pm-item.pm-item {
     display: flex;
     align-items: center;
     width: 100%;
     padding: 10px 12px;
     border: none;
-    background-color: #1e1e1e !important;
+    background-color: #1e1e1e;
     cursor: pointer;
     text-align: left;
-    opacity: 1 !important;
+    opacity: 1;
   }
 
-  .pm-item:hover {
-    background-color: #2a2a2a !important;
+  .pm-item.pm-item:hover {
+    background-color: #2a2a2a;
   }
 
-  .pm-item.active {
-    background-color: #252535 !important;
+  .pm-item.pm-item.active {
+    background-color: #252535;
   }
 
   .pm-item + .pm-item {
-    border-top: 1px solid #333;
+    border-top: 1px solid #333333;
   }
 
   .pm-text {
@@ -2042,7 +2042,7 @@ onDestroy(() => {
 
   .pm-desc {
     font-size: 11px;
-    color: #777;
+    color: #777777;
     line-height: 1.3;
     margin-top: 2px;
   }
