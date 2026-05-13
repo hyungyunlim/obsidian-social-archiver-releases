@@ -676,7 +676,7 @@ export class AuthorNoteService {
       }
 
       // Index legacy keys
-      const legacyKeys = fm.legacyKeys;
+      const legacyKeys: unknown = fm.legacyKeys;
       if (Array.isArray(legacyKeys)) {
         for (const key of legacyKeys) {
           if (typeof key === 'string' && !index.has(key)) {
@@ -705,7 +705,7 @@ export class AuthorNoteService {
 
     const candidateMatch = await this.findMatchingNoteAtCandidatePaths(
       profile.authorKey,
-      profile.platform as Platform,
+      profile.platform,
       profile.authorHandle || undefined,
       profile.authorName,
     );
