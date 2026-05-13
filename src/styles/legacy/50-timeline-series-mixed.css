@@ -213,7 +213,7 @@
 
 .sa-reader-mode-header-wrapper {
   flex-shrink: 0;
-  padding: 12px 24px;
+  padding: 6px 24px;
   border-bottom: 1px solid var(--background-modifier-border);
   background: var(--background-primary)
 }
@@ -302,13 +302,6 @@
   }
 }
 
-.sa-reader-mode-header-wrapper {
-  border-bottom: 1px solid var(--background-modifier-border);
-  flex-shrink: 0;
-  padding: 6px 24px;
-  background: var(--background-primary)
-}
-
 .sa-reader-mode-scroll {
   flex: 1;
   overflow-y: auto;
@@ -320,83 +313,42 @@
 
 @media(max-width:768px) {
   .sa-reader-mode-scroll {
-    padding: 16px
+    padding: 0 16px
   }
 
   .sa-reader-mode-action-bar {
-    gap: 10px;
-    flex-wrap: wrap
-  }
-
-  .sa-reader-mode-action-bar-metrics {
-    gap: 12px
-  }
-
-  .sa-reader-mode-action-bar-actions {
-    gap: 2px
-  }
-
-  .sa-reader-mode-action-btn {
-    min-width: 44px;
-    min-height: 44px
-  }
-
-  .sa-reader-mode-action-bar {
-    gap: 8px
-  }
-
-  .sa-reader-mode-action-bar-metrics {
-    gap: 10px
-  }
-
-  .sa-reader-mode-action-btn {
-    width: 32px;
-    height: 32px
-  }
-
-  .sa-reader-mode-action-bar {
-    gap: 4px;
+    gap: 2px;
+    flex-wrap: wrap;
     font-size: 13px
   }
 
   .sa-reader-mode-action-bar-metrics {
-    gap: 8px
+    gap: 6px
+  }
+
+  .sa-reader-mode-action-bar-actions {
+    gap: 0;
+    flex-shrink: 0
+  }
+
+  .sa-reader-mode-action-btn {
+    min-width: 44px;
+    min-height: 44px;
+    width: auto;
+    height: auto;
+    border-radius: 4px;
+    flex-shrink: 0;
+    padding: 2px
   }
 
   .sa-reader-mode-action-bar-spacer {
     flex: 1;
-    min-width: 4px
-  }
-
-  .sa-reader-mode-action-bar-actions {
-    gap: 0
-  }
-
-  .sa-reader-mode-action-btn {
-    width: 28px;
-    height: 28px;
-    border-radius: 4px
+    min-width: 0
   }
 
   .sa-reader-mode-action-btn svg {
-    width: 15px;
-    height: 15px
-  }
-
-  .sa-reader-mode-action-btn {
-    width: 22px;
-    height: 22px;
-    border-radius: 4px;
-    flex-shrink: 0
-  }
-
-  .sa-reader-mode-action-btn svg {
-    width: 14px;
-    height: 14px
-  }
-
-  .sa-reader-mode-scroll {
-    padding: 0 16px
+    width: 16px;
+    height: 16px
   }
 
   .sa-reader-mode-body {
@@ -422,38 +374,6 @@
 
   .sa-reader-mode-header-wrapper {
     padding: 6px 16px
-  }
-
-  .sa-reader-mode-action-bar {
-    gap: 2px;
-    font-size: 13px
-  }
-
-  .sa-reader-mode-action-bar-metrics {
-    gap: 6px
-  }
-
-  .sa-reader-mode-action-bar-spacer {
-    flex: 1;
-    min-width: 0
-  }
-
-  .sa-reader-mode-action-bar-actions {
-    gap: 0;
-    flex-shrink: 0
-  }
-
-  .sa-reader-mode-action-btn {
-    width: auto;
-    height: auto;
-    padding: 2px;
-    border-radius: 4px;
-    flex-shrink: 0
-  }
-
-  .sa-reader-mode-action-btn svg {
-    width: 16px;
-    height: 16px
   }
 
   .sa-reader-mode-metric {
@@ -532,95 +452,10 @@ body.is-phone .sa-reader-mode-metric-icon svg {
 }
 
 body.is-mobile .sa-reader-mode-action-bar {
-  gap: 4px;
-  font-size: 13px;
-  flex-wrap: nowrap;
-  justify-content: space-between
-}
-
-body.is-mobile .sa-reader-mode-action-bar-metrics {
-  gap: 6px;
-  flex-shrink: 1;
-  min-width: 0
-}
-
-body.is-mobile .sa-reader-mode-action-bar-actions {
-  gap: 0;
-  flex-shrink: 0
-}
-
-body.is-mobile .sa-reader-mode-action-btn {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border-radius: 4px;
-  flex-shrink: 0
-}
-
-body.is-mobile .sa-reader-mode-action-btn svg {
-  width: 16px;
-  height: 16px
-}
-
-body.is-mobile .sa-reader-mode-metric {
-  gap: 2px
-}
-
-body.is-mobile .sa-reader-mode-metric-icon svg {
-  width: 13px;
-  height: 13px
-}
-
-body.is-mobile .sa-reader-mode-action-bar {
-  gap: 10px;
-  font-size: 13px;
-  flex-wrap: nowrap;
-  justify-content: space-between
-}
-
-body.is-mobile .sa-reader-mode-action-bar-metrics {
-  gap: 10px
-}
-
-body.is-mobile .sa-reader-mode-action-bar-actions {
-  gap: 2px
-}
-
-body.is-mobile .sa-reader-mode-action-btn {
-  width: auto;
-  height: auto;
-  padding: 4px;
-  border-radius: 4px
-}
-
-body.is-mobile .sa-reader-mode-action-btn svg,
-body.is-mobile .sa-reader-mode-metric-icon svg {
-  width: 15px;
-  height: 15px
-}
-
-body.is-mobile .sa-reader-mode-action-bar {
   gap: 12px;
   font-size: 13px;
-  flex-wrap: wrap
-}
-
-body.is-mobile .sa-reader-mode-action-bar-metrics {
-  gap: 12px
-}
-
-body.is-mobile .sa-reader-mode-metric {
-  gap: 4px
-}
-
-body.is-mobile .sa-reader-mode-action-bar-actions {
-  gap: 6px
-}
-
-.sa-reader-mode-content {
-  max-width: 680px;
-  margin: 0 auto;
-  width: 100%
+  flex-wrap: wrap;
+  justify-content: space-between
 }
 
 body.is-mobile .sa-reader-mode-action-bar-metrics {
@@ -630,24 +465,18 @@ body.is-mobile .sa-reader-mode-action-bar-metrics {
   overflow: hidden
 }
 
-body.is-mobile .sa-reader-mode-action-bar-spacer {
-  display: none
-}
-
-body.is-mobile .sa-reader-mode-action-bar-actions {
-  gap: 6px;
-  flex-shrink: 0
-}
-
-body.is-mobile .sa-reader-mode-metric {
-  gap: 4px;
-  white-space: nowrap;
-  flex-shrink: 0
-}
-
 body.is-mobile .sa-reader-mode-action-bar-actions {
   gap: 2px;
+  flex-shrink: 0;
   margin-left: auto
+}
+
+body.is-mobile .sa-reader-mode-action-btn {
+  width: auto;
+  height: auto;
+  padding: 4px;
+  border-radius: 4px;
+  flex-shrink: 0
 }
 
 body.is-mobile .sa-reader-mode-action-btn svg,
@@ -656,10 +485,21 @@ body.is-mobile .sa-reader-mode-metric-icon svg {
   height: 16px
 }
 
-.sa-reader-mode-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between
+body.is-mobile .sa-reader-mode-metric {
+  gap: 4px;
+  white-space: nowrap;
+  flex-shrink: 0
+}
+
+body.is-mobile .sa-reader-mode-action-bar-spacer {
+  display: none
+}
+
+.sa-reader-mode-content {
+  max-width: 680px;
+  margin: 0 auto;
+  width: 100%;
+  padding-bottom: 32px
 }
 
 .sa-reader-mode-header-right {
@@ -734,13 +574,6 @@ body.is-mobile .sa-reader-mode-metric-icon svg {
   }
 }
 
-.sa-reader-mode-content {
-  max-width: 680px;
-  margin: 0 auto;
-  width: 100%;
-  padding-bottom: 32px
-}
-
 .sa-reader-mode-tag {
   font-size: 13px;
   color: var(--interactive-accent);
@@ -754,12 +587,13 @@ body.is-mobile .sa-reader-mode-metric-icon svg {
   content: "";
   position: absolute;
   top: 0;
-  left: -100%;
+  left: 0;
   width: 100%;
   height: 100%;
   background: linear-gradient(90deg, transparent 0%, var(--background-modifier-border-hover) 50%, transparent 100%);
   animation: skeleton-shimmer 1.5s ease-in-out infinite;
-  pointer-events: none
+  pointer-events: none;
+  will-change: transform
 }
 
 @keyframes skeleton-shimmer {
@@ -900,19 +734,6 @@ body.is-mobile .sa-reader-mode-metric-icon svg {
   contain: layout style paint;
   content-visibility: auto;
   contain-intrinsic-size: auto 300px
-}
-
-.post-card-skeleton:before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent 0%, var(--background-modifier-border-hover) 50%, transparent 100%);
-  animation: skeleton-shimmer 1.5s ease-in-out infinite;
-  pointer-events: none;
-  will-change: transform
 }
 
 @keyframes skeleton-shimmer {
@@ -1199,21 +1020,31 @@ body.is-mobile .sa-reader-mode-metric-icon svg {
 }
 
 .sa-media-gallery-masonry.sa-media-gallery-masonry {
-  -moz-column-count: 3;
-  column-count: 3;
-  -moz-column-gap: 16px;
-  column-gap: 16px;
   display: block
+}
+
+@supports (column-count: 1) {
+  .sa-media-gallery-masonry.sa-media-gallery-masonry {
+    -moz-column-count: 3;
+    column-count: 3;
+    -moz-column-gap: 16px;
+    column-gap: 16px
+  }
 }
 
 .sa-media-gallery-masonry .sa-media-card {
   display: inline-block;
   width: 100%;
   margin-bottom: 16px;
-  -moz-column-break-inside: avoid;
-  break-inside: avoid;
-  page-break-inside: avoid;
-  -webkit-column-break-inside: avoid
+  page-break-inside: avoid
+}
+
+@supports (column-count: 1) {
+  .sa-media-gallery-masonry .sa-media-card {
+    -moz-column-break-inside: avoid;
+    break-inside: avoid;
+    -webkit-column-break-inside: avoid
+  }
 }
 
 .sa-media-gallery-masonry .sa-media-image,
@@ -1223,49 +1054,51 @@ body.is-mobile .sa-reader-mode-metric-icon svg {
   display: block
 }
 
-.sa-media-gallery-cols-2.sa-media-gallery-masonry {
-  -moz-column-count: 2;
-  column-count: 2
-}
+@supports (column-count: 1) {
+  .sa-media-gallery-cols-2.sa-media-gallery-masonry {
+    -moz-column-count: 2;
+    column-count: 2
+  }
 
-.sa-media-gallery-cols-3.sa-media-gallery-masonry {
-  -moz-column-count: 3;
-  column-count: 3
-}
+  .sa-media-gallery-cols-3.sa-media-gallery-masonry {
+    -moz-column-count: 3;
+    column-count: 3
+  }
 
-.sa-media-gallery-cols-4.sa-media-gallery-masonry {
-  -moz-column-count: 4;
-  column-count: 4
-}
+  .sa-media-gallery-cols-4.sa-media-gallery-masonry {
+    -moz-column-count: 4;
+    column-count: 4
+  }
 
-.sa-media-gallery-cols-5.sa-media-gallery-masonry {
-  -moz-column-count: 5;
-  column-count: 5
-}
+  .sa-media-gallery-cols-5.sa-media-gallery-masonry {
+    -moz-column-count: 5;
+    column-count: 5
+  }
 
-.sa-media-gallery-cols-6.sa-media-gallery-masonry {
-  -moz-column-count: 6;
-  column-count: 6
-}
+  .sa-media-gallery-cols-6.sa-media-gallery-masonry {
+    -moz-column-count: 6;
+    column-count: 6
+  }
 
-.sa-media-gallery-cols-7.sa-media-gallery-masonry {
-  -moz-column-count: 7;
-  column-count: 7
-}
+  .sa-media-gallery-cols-7.sa-media-gallery-masonry {
+    -moz-column-count: 7;
+    column-count: 7
+  }
 
-.sa-media-gallery-cols-8.sa-media-gallery-masonry {
-  -moz-column-count: 8;
-  column-count: 8
-}
+  .sa-media-gallery-cols-8.sa-media-gallery-masonry {
+    -moz-column-count: 8;
+    column-count: 8
+  }
 
-.sa-media-gallery-cols-9.sa-media-gallery-masonry {
-  -moz-column-count: 9;
-  column-count: 9
-}
+  .sa-media-gallery-cols-9.sa-media-gallery-masonry {
+    -moz-column-count: 9;
+    column-count: 9
+  }
 
-.sa-media-gallery-cols-10.sa-media-gallery-masonry {
-  -moz-column-count: 10;
-  column-count: 10
+  .sa-media-gallery-cols-10.sa-media-gallery-masonry {
+    -moz-column-count: 10;
+    column-count: 10
+  }
 }
 
 .sa-media-gallery-cols-2.sa-media-gallery-grid {
@@ -1326,30 +1159,32 @@ body.is-mobile .sa-reader-mode-metric-icon svg {
     grid-template-columns: repeat(4, 1fr)
   }
 
-  .sa-media-gallery-cols-10.sa-media-gallery-masonry {
-    -moz-column-count: 8;
-    column-count: 8
-  }
+  @supports (column-count: 1) {
+    .sa-media-gallery-cols-10.sa-media-gallery-masonry {
+      -moz-column-count: 8;
+      column-count: 8
+    }
 
-  .sa-media-gallery-cols-9.sa-media-gallery-masonry {
-    -moz-column-count: 7;
-    column-count: 7
-  }
+    .sa-media-gallery-cols-9.sa-media-gallery-masonry {
+      -moz-column-count: 7;
+      column-count: 7
+    }
 
-  .sa-media-gallery-cols-8.sa-media-gallery-masonry {
-    -moz-column-count: 6;
-    column-count: 6
-  }
+    .sa-media-gallery-cols-8.sa-media-gallery-masonry {
+      -moz-column-count: 6;
+      column-count: 6
+    }
 
-  .sa-media-gallery-cols-7.sa-media-gallery-masonry {
-    -moz-column-count: 5;
-    column-count: 5
-  }
+    .sa-media-gallery-cols-7.sa-media-gallery-masonry {
+      -moz-column-count: 5;
+      column-count: 5
+    }
 
-  .sa-media-gallery-cols-6.sa-media-gallery-masonry,
-  .sa-media-gallery-cols-5.sa-media-gallery-masonry {
-    -moz-column-count: 4;
-    column-count: 4
+    .sa-media-gallery-cols-6.sa-media-gallery-masonry,
+    .sa-media-gallery-cols-5.sa-media-gallery-masonry {
+      -moz-column-count: 4;
+      column-count: 4
+    }
   }
 }
 
@@ -1368,19 +1203,21 @@ body.is-mobile .sa-reader-mode-metric-icon svg {
     grid-template-columns: repeat(3, 1fr)
   }
 
-  .sa-media-gallery-cols-10.sa-media-gallery-masonry,
-  .sa-media-gallery-cols-9.sa-media-gallery-masonry,
-  .sa-media-gallery-cols-8.sa-media-gallery-masonry,
-  .sa-media-gallery-cols-7.sa-media-gallery-masonry,
-  .sa-media-gallery-cols-6.sa-media-gallery-masonry,
-  .sa-media-gallery-cols-5.sa-media-gallery-masonry {
-    -moz-column-count: 4;
-    column-count: 4
-  }
+  @supports (column-count: 1) {
+    .sa-media-gallery-cols-10.sa-media-gallery-masonry,
+    .sa-media-gallery-cols-9.sa-media-gallery-masonry,
+    .sa-media-gallery-cols-8.sa-media-gallery-masonry,
+    .sa-media-gallery-cols-7.sa-media-gallery-masonry,
+    .sa-media-gallery-cols-6.sa-media-gallery-masonry,
+    .sa-media-gallery-cols-5.sa-media-gallery-masonry {
+      -moz-column-count: 4;
+      column-count: 4
+    }
 
-  .sa-media-gallery-cols-4.sa-media-gallery-masonry {
-    -moz-column-count: 3;
-    column-count: 3
+    .sa-media-gallery-cols-4.sa-media-gallery-masonry {
+      -moz-column-count: 3;
+      column-count: 3
+    }
   }
 }
 
@@ -1389,9 +1226,11 @@ body.is-mobile .sa-reader-mode-metric-icon svg {
     grid-template-columns: repeat(2, 1fr)
   }
 
-  .bases-media-gallery-container .sa-media-gallery-masonry {
-    -moz-column-count: 2;
-    column-count: 2
+  @supports (column-count: 1) {
+    .bases-media-gallery-container .sa-media-gallery-masonry {
+      -moz-column-count: 2;
+      column-count: 2
+    }
   }
 }
 
@@ -1400,9 +1239,11 @@ body.is-mobile .sa-reader-mode-metric-icon svg {
     grid-template-columns: repeat(1, 1fr)
   }
 
-  .bases-media-gallery-container .sa-media-gallery-masonry {
-    -moz-column-count: 1;
-    column-count: 1
+  @supports (column-count: 1) {
+    .bases-media-gallery-container .sa-media-gallery-masonry {
+      -moz-column-count: 1;
+      column-count: 1
+    }
   }
 }
 
@@ -1531,7 +1372,7 @@ body.is-mobile .sa-reader-mode-metric-icon svg {
 .sa-blog-content-inline.sa-blog-content-inline li+p {
   margin-left: 0;
   padding-left: 0;
-  text-indent: 0
+  text-indent: 0px
 }
 
 .sa-blog-content-inline p {
@@ -1674,7 +1515,8 @@ body.is-mobile .sa-reader-mode-metric-icon svg {
   padding: 12px 16px;
   cursor: pointer;
   background: var(--background-secondary);
-  transition: background .15s ease
+  transition: background .15s ease;
+  border-radius: 0 0 12px 12px
 }
 
 .sa-episode-list-chevron {
@@ -1689,7 +1531,8 @@ body.is-mobile .sa-reader-mode-metric-icon svg {
 
 .sa-episode-list-container {
   max-height: min(45vh, 520px);
-  overflow-y: auto
+  overflow-y: auto;
+  border-radius: 0 0 12px 12px
 }
 
 .sa-episode-item {
@@ -1955,10 +1798,6 @@ body.is-mobile .sa-reader-mode-metric-icon svg {
   border-top: none
 }
 
-.sa-episode-list-toggle {
-  border-radius: 0 0 12px 12px
-}
-
 .series-episode-list-wrapper .sa-episode-list-container[style*=block]+.sa-episode-list-toggle,
 .sa-episode-list-toggle:has(+.sa-episode-list-container[style*=block]) {
   border-radius: 0
@@ -1967,10 +1806,6 @@ body.is-mobile .sa-reader-mode-metric-icon svg {
 .sa-webtoon-episode-list .sa-episode-list-toggle {
   border-top: 1px solid var(--background-modifier-border);
   border-bottom: none
-}
-
-.sa-episode-list-container {
-  border-radius: 0 0 12px 12px
 }
 
 .sa-episode-list-container[style*=none][style*=none] {

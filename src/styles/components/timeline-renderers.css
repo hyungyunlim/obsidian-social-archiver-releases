@@ -687,18 +687,25 @@
 }
 
 /* -- Masonry grid --------------------------------------------------------- */
-.gvr-masonry-grid {
-  column-count: var(--gvr-columns, 4);
-  column-gap: 16px;
-  column-fill: balance;
+@supports (column-count: 1) {
+  .gvr-masonry-grid {
+    column-count: var(--gvr-columns, 4);
+    column-gap: 16px;
+    column-fill: balance;
+  }
 }
 
 /* -- Media card ----------------------------------------------------------- */
 .gvr-media-card {
   border: none;
   transition: transform 0.2s, box-shadow 0.2s;
-  break-inside: avoid;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+@supports (column-count: 1) {
+  .gvr-media-card {
+    break-inside: avoid;
+  }
 }
 
 .gvr-media-card:hover {

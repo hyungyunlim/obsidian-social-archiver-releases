@@ -109,8 +109,15 @@
   }
 
   .series-card.sa-series-fullscreen.sa-series-fullscreen {
-    height: 90vh;
-    max-height: 90vh
+    width: 100vw;
+    max-width: none;
+    top: 0;
+    left: 0;
+    transform: none;
+    border-radius: 0;
+    height: 100dvh;
+    max-height: 100dvh;
+    padding: 0
   }
 
   .series-nav-btn {
@@ -118,13 +125,6 @@
     height: 32px;
     min-height: 44px;
     min-width: 44px
-  }
-
-  .series-card.sa-series-fullscreen.sa-series-fullscreen {
-    height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
-    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
-    padding-top: env(safe-area-inset-top, 0px);
-    padding-bottom: env(safe-area-inset-bottom, 0px)
   }
 
   .series-header.series-header {
@@ -186,18 +186,6 @@
   .sa-episode-list-toggle,
   .sa-episode-item {
     padding: 10px 12px
-  }
-
-  .series-card.sa-series-fullscreen.sa-series-fullscreen {
-    width: 100vw;
-    max-width: none;
-    top: 0;
-    left: 0;
-    transform: none;
-    border-radius: 0;
-    height: 100dvh;
-    max-height: 100dvh;
-    padding: 0
   }
 
   .series-card.sa-series-fullscreen .series-header {
@@ -388,7 +376,7 @@
 .series-card.sa-series-fullscreen .series-episode-list-wrapper.series-episode-list-wrapper {
   display: flex;
   flex-direction: column;
-  max-height: min(30vh, 300px);
+  max-height: min(40vh, 400px);
   overflow: hidden
 }
 
@@ -401,30 +389,28 @@
   overflow-y: auto
 }
 
-.series-card.sa-series-fullscreen .series-episode-list-wrapper.series-episode-list-wrapper {
-  display: flex;
-  flex-direction: column;
-  max-height: min(40vh, 400px);
-  overflow: hidden
-}
-
 .sa-reader-mode-container {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100dvh;
   z-index: 1000;
   background: var(--background-primary);
   opacity: 0;
   transition: opacity .25s ease;
   overflow: hidden;
   padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px)
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box
 }
 
 .sa-reader-mode-slider {
+  margin-left: -100vw;
   display: flex;
   width: 300vw;
   height: 100%;
-  transform: translate(0);
+  transform: translate(-100vw);
   will-change: transform
 }
 
@@ -440,20 +426,12 @@
   order: 2
 }
 
-.sa-reader-mode-slider {
-  margin-left: -100vw;
-  display: flex;
-  width: 300vw;
-  height: 100%;
-  transform: translate(-100vw);
-  will-change: transform
-}
-
 .sa-reader-mode-panel-wrapper {
   width: 100vw;
   height: 100%;
   flex-shrink: 0;
-  overflow: hidden
+  overflow: hidden;
+  touch-action: pan-y
 }
 
 .sa-reader-mode-scroll {
@@ -461,7 +439,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  padding: 16px
+  padding: 20px 24px
 }
 
 .sa-reader-mode-header {
@@ -499,13 +477,13 @@
 .sa-reader-mode-author {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 16px
+  gap: 14px;
+  margin-bottom: 20px
 }
 
 .sa-reader-mode-avatar {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   flex-shrink: 0;
   border-radius: 50%;
   overflow: hidden
@@ -558,10 +536,10 @@
 }
 
 .sa-reader-mode-body {
-  font-size: 17px;
-  line-height: 1.65;
+  font-size: 19px;
+  line-height: 1.75;
   color: var(--text-normal);
-  margin-bottom: 20px;
+  margin-bottom: 24px;
   word-wrap: break-word;
   overflow-wrap: break-word
 }
@@ -630,43 +608,6 @@
   }
 }
 
-.sa-reader-mode-panel-wrapper {
-  touch-action: pan-y
-}
-
-.sa-reader-mode-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100dvh;
-  z-index: 1000;
-  background: var(--background-primary);
-  opacity: 0;
-  transition: opacity .25s ease;
-  overflow: hidden;
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  box-sizing: border-box
-}
-
-.sa-reader-mode-scroll {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  padding: 20px 24px
-}
-
-.sa-reader-mode-body {
-  font-size: 19px;
-  line-height: 1.75;
-  color: var(--text-normal);
-  margin-bottom: 24px;
-  word-wrap: break-word;
-  overflow-wrap: break-word
-}
-
 @media(max-width:768px) {
   .sa-reader-mode-scroll {
     padding: 16px
@@ -730,21 +671,6 @@
   -moz-user-select: none;
   user-select: none;
   -webkit-user-select: none
-}
-
-.sa-reader-mode-author {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 20px
-}
-
-.sa-reader-mode-avatar {
-  width: 48px;
-  height: 48px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  overflow: hidden
 }
 
 .sa-reader-mode-author-name {

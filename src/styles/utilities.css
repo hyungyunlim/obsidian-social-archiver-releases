@@ -447,8 +447,10 @@ body.is-mobile .sa-action-btn {
 }
 
 /* Column layout for masonry grids */
-.sa-columns-auto {
-  column-count: auto;
+@supports (column-count: 1) {
+  .sa-columns-auto {
+    column-count: auto;
+  }
 }
 
 /* ========================================
@@ -464,8 +466,10 @@ body.is-mobile .sa-action-btn {
   transition: width 0.3s;
 }
 
-.sa-dynamic-columns {
-  column-count: var(--sa-columns, 3);
+@supports (column-count: 1) {
+  .sa-dynamic-columns {
+    column-count: var(--sa-columns, 3);
+  }
 }
 
 .sa-dynamic-height {
@@ -939,7 +943,6 @@ body.is-mobile .sa-action-btn {
 }
 
 /* Additional spacing utilities */
-.sa-mt-2 { margin-top: 2px; }
 .sa-mt-28 { margin-top: 28px; }
 .sa-mb-2 { margin-bottom: 2px; }
 
@@ -969,10 +972,6 @@ body.is-mobile .sa-action-btn {
 
 .sa-dynamic-min-height {
   min-height: var(--sa-min-height);
-}
-
-.sa-dynamic-height {
-  height: var(--sa-height);
 }
 
 /* Timeline safe area padding */

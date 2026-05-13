@@ -525,13 +525,6 @@
   color: #ffffff
 }
 
-.line-clamp-4 {
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden
-}
-
 @media(max-width:768px) {
   .timeline-post-card {
     min-height: 44px
