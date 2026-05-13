@@ -154,11 +154,14 @@ async function handleToggle(event: Event): Promise<void> {
     flex-shrink: 0;
   }
 
+  /* Match Obsidian's native toggle dimensions via --toggle-* variables so
+     the newsletter switch stays consistent with SyncSettingsTab's
+     .toggle-slider and Obsidian's own checkbox-container across platforms. */
   .sa-newsletter-switch {
     position: relative;
     display: inline-block;
-    width: 38px;
-    height: 22px;
+    width: var(--toggle-width, 38px);
+    height: calc(var(--toggle-thumb-height, 16px) + 4px);
   }
 
   .sa-newsletter-switch input {
@@ -172,19 +175,20 @@ async function handleToggle(event: Event): Promise<void> {
     cursor: pointer;
     inset: 0;
     background: var(--background-modifier-border);
-    border-radius: 22px;
+    border-radius: var(--toggle-radius, 22px);
     transition: background 0.2s ease;
   }
 
   .sa-newsletter-switch-slider::before {
     content: '';
     position: absolute;
-    height: 16px;
-    width: 16px;
-    left: 3px;
-    top: 3px;
-    background: var(--background-primary);
-    border-radius: 50%;
+    top: 50%;
+    left: 2px;
+    height: var(--toggle-thumb-height, 16px);
+    width: var(--toggle-thumb-width, 16px);
+    background: var(--toggle-thumb-color, var(--background-primary));
+    border-radius: var(--toggle-thumb-radius, 50%);
+    transform: translateY(-50%);
     transition: transform 0.2s ease;
   }
 
@@ -193,7 +197,7 @@ async function handleToggle(event: Event): Promise<void> {
   }
 
   .sa-newsletter-switch input:checked + .sa-newsletter-switch-slider::before {
-    transform: translateX(16px);
+    transform: translate(calc(var(--toggle-width, 38px) - var(--toggle-thumb-width, 16px) - 4px), -50%);
   }
 
   .sa-newsletter-switch input:disabled + .sa-newsletter-switch-slider {

@@ -831,6 +831,41 @@ body.is-mobile .sa-action-btn {
   background: var(--interactive-hover);
 }
 
+/* Mobile compact button — applies to inline/action <button>s across the
+   settings panels (Auth, Sync, Cross-Post, Danger Zone, Reddit, Author
+   tools, Support). Obsidian mobile gives <button> a generous touch
+   target (~44px min-height + larger padding) which inflates compact
+   panel buttons. This class neutralizes those defaults so panel buttons
+   keep a consistent, pill-shaped silhouette on iPhone and iPad while
+   still meeting touch ergonomics. Colors stay on the existing modifier
+   classes (.mod-cta, .mod-warning, custom variants). */
+body.is-mobile .sa-mobile-compact-btn {
+  padding: 6px 14px;
+  font-size: 12px;
+  line-height: 1.3;
+  min-height: 0;
+  height: auto;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+/* Mobile compact dropdown — applies to <select> elements created by
+   new Setting().addDropdown(...) across the settings panels. Obsidian
+   mobile renders native <select> with a generous touch target
+   (~44px min-height + larger padding/font) that makes dropdowns look
+   oversized next to the compact buttons and toggles. This class
+   normalizes padding/font/height so dropdowns match the compact button
+   silhouette on iPhone and iPad while still using Obsidian's own
+   colors and focus styles. */
+body.is-mobile .sa-mobile-compact-dropdown {
+  padding: 5px 10px;
+  font-size: 12px;
+  line-height: 1.3;
+  min-height: 0;
+  height: auto;
+  border-radius: 8px;
+}
+
 /* Full width */
 .sa-w-100 {
   width: 100%;

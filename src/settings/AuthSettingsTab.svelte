@@ -612,10 +612,10 @@ $effect(() => {
         </div>
 
         <div class="waiting-actions">
-          <button class="mod-cta" onclick={handleResend} disabled={isSubmitting}>
+          <button class="mod-cta sa-mobile-compact-btn" onclick={handleResend} disabled={isSubmitting}>
             {isSubmitting ? 'Resending...' : 'Resend Link'}
           </button>
-          <button onclick={handleCancelWaiting}>
+          <button class="sa-mobile-compact-btn" onclick={handleCancelWaiting}>
             Cancel
           </button>
         </div>
@@ -671,13 +671,14 @@ $effect(() => {
             <div class="auth-buttons">
               {#if authMode === 'signup'}
                 <button
-                  class="mod-cta"
+                  class="mod-cta sa-mobile-compact-btn"
                   onclick={handleCreateAccount}
                   disabled={isSubmitting || !email || !username}
                 >
                   {isSubmitting ? 'Creating Account...' : 'Create Account'}
                 </button>
                 <button
+                  class="sa-mobile-compact-btn"
                   onclick={() => { authMode = 'login'; username = ''; }}
                   disabled={isSubmitting}
                 >
@@ -685,13 +686,14 @@ $effect(() => {
                 </button>
               {:else}
                 <button
-                  class="mod-cta"
+                  class="mod-cta sa-mobile-compact-btn"
                   onclick={handleLogin}
                   disabled={isSubmitting || !email}
                 >
                   {isSubmitting ? 'Sending Link...' : 'Send Magic Link'}
                 </button>
                 <button
+                  class="sa-mobile-compact-btn"
                   onclick={() => { authMode = 'signup'; }}
                   disabled={isSubmitting}
                 >
@@ -712,7 +714,7 @@ $effect(() => {
           <div class="setting-item">
             <div class="setting-item-control" style="width: 100%;">
               <button
-                class="xdev-start-button"
+                class="xdev-start-button sa-mobile-compact-btn"
                 onclick={handleStartCrossDeviceAuth}
                 disabled={isSubmitting}
               >
@@ -743,7 +745,7 @@ $effect(() => {
               {/if}
             </p>
             <div class="xdev-actions">
-              <button onclick={handleCancelCrossDevice}>Cancel</button>
+              <button class="sa-mobile-compact-btn" onclick={handleCancelCrossDevice}>Cancel</button>
             </div>
           </div>
         {:else if crossDeviceState === 'approved'}
@@ -754,24 +756,24 @@ $effect(() => {
           <div class="xdev-section xdev-error">
             <p>Rejected from mobile</p>
             <div class="xdev-actions">
-              <button onclick={handleStartCrossDeviceAuth}>Try again</button>
-              <button onclick={handleCancelCrossDevice}>Cancel</button>
+              <button class="sa-mobile-compact-btn" onclick={handleStartCrossDeviceAuth}>Try again</button>
+              <button class="sa-mobile-compact-btn" onclick={handleCancelCrossDevice}>Cancel</button>
             </div>
           </div>
         {:else if crossDeviceState === 'expired'}
           <div class="xdev-section xdev-error">
             <p>Code has expired</p>
             <div class="xdev-actions">
-              <button onclick={handleStartCrossDeviceAuth}>Generate new code</button>
-              <button onclick={handleCancelCrossDevice}>Cancel</button>
+              <button class="sa-mobile-compact-btn" onclick={handleStartCrossDeviceAuth}>Generate new code</button>
+              <button class="sa-mobile-compact-btn" onclick={handleCancelCrossDevice}>Cancel</button>
             </div>
           </div>
         {:else if crossDeviceState === 'error'}
           <div class="xdev-section xdev-error">
             <p>{crossDeviceError || 'An error occurred.'}</p>
             <div class="xdev-actions">
-              <button onclick={handleStartCrossDeviceAuth}>Try again</button>
-              <button onclick={handleCancelCrossDevice}>Cancel</button>
+              <button class="sa-mobile-compact-btn" onclick={handleStartCrossDeviceAuth}>Try again</button>
+              <button class="sa-mobile-compact-btn" onclick={handleCancelCrossDevice}>Cancel</button>
             </div>
           </div>
         {/if}
@@ -794,7 +796,7 @@ $effect(() => {
             <span class="user-email">{settings.email}</span>
             {#if !showEmailChangeForm}
               <button
-                class="email-change-trigger"
+                class="email-change-trigger sa-mobile-compact-btn"
                 onclick={() => { showEmailChangeForm = true; newEmailInput = ''; }}
               >Change</button>
             {/if}
@@ -825,14 +827,14 @@ $effect(() => {
           </div>
           <div class="email-change-actions">
             <button
-              class="mod-cta email-change-submit"
+              class="mod-cta email-change-submit sa-mobile-compact-btn"
               onclick={handleRequestEmailChange}
               disabled={isRequestingEmailChange || !newEmailInput.trim()}
             >
               {isRequestingEmailChange ? 'Sending...' : 'Send Verification'}
             </button>
             <button
-              class="email-change-cancel"
+              class="email-change-cancel sa-mobile-compact-btn"
               onclick={handleCancelEmailChange}
               disabled={isRequestingEmailChange}
             >
@@ -850,7 +852,7 @@ $effect(() => {
             <div class="billing-usage-plan">{billingPlanDisplay}</div>
           </div>
           <button
-            class="billing-refresh-button"
+            class="billing-refresh-button sa-mobile-compact-btn"
             onclick={() => handleRefreshBillingUsage(true)}
             disabled={isBillingUsageLoading}
           >
@@ -914,7 +916,7 @@ $effect(() => {
       <!-- Sign Out - Simple Button -->
       <div class="sign-out-section">
         <button
-          class="sign-out-button"
+          class="sign-out-button sa-mobile-compact-btn"
           onclick={handleSignOut}
         >
           Sign Out

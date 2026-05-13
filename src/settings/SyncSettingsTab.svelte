@@ -179,7 +179,7 @@ async function handleRetryPendingDeletes() {
         <div class="status-detail">Client ID: {clientIdDisplay}</div>
       </div>
       <button
-        class="mod-warning disconnect-button"
+        class="mod-warning disconnect-button sa-mobile-compact-btn"
         onclick={handleDisconnect}
         disabled={unregistering}
       >
@@ -195,7 +195,7 @@ async function handleRetryPendingDeletes() {
         <div class="status-detail">Register this vault to receive archives from mobile.</div>
       </div>
       <button
-        class="mod-cta connect-button"
+        class="mod-cta connect-button sa-mobile-compact-btn"
         onclick={handleConnect}
         disabled={registering}
       >
@@ -334,7 +334,7 @@ async function handleRetryPendingDeletes() {
       <!-- Action button -->
       <div class="library-sync-action-row">
         <button
-          class="library-sync-button {librarySyncRunning ? '' : 'mod-cta'}"
+          class="library-sync-button sa-mobile-compact-btn {librarySyncRunning ? '' : 'mod-cta'}"
           onclick={handleLibrarySync}
           disabled={librarySyncRunning || !isConnected}
         >
@@ -408,14 +408,14 @@ async function handleRetryPendingDeletes() {
             Pending server deletes: {pendingDeleteCount}
           </span>
           <button
-            class="delete-sync-retry-button"
+            class="delete-sync-retry-button sa-mobile-compact-btn"
             onclick={handleRetryPendingDeletes}
             disabled={flushingDeletes}
           >
             {flushingDeletes ? 'Retrying…' : 'Retry Pending Deletes'}
           </button>
           <button
-            class="delete-sync-retry-button"
+            class="delete-sync-retry-button sa-mobile-compact-btn"
             onclick={async () => {
               plugin.settings.pendingArchiveDeletes = [];
               plugin.archiveDeleteSyncService?.cancelAndClear();
@@ -589,10 +589,10 @@ async function handleRetryPendingDeletes() {
 }
 
 .toggle-slider {
-  width: 36px;
-  height: 20px;
+  width: var(--toggle-width, 36px);
+  height: calc(var(--toggle-thumb-height, 16px) + 4px);
   background: var(--background-modifier-border);
-  border-radius: 10px;
+  border-radius: var(--toggle-radius, 10px);
   transition: background 0.2s ease;
   position: relative;
 }
@@ -600,12 +600,13 @@ async function handleRetryPendingDeletes() {
 .toggle-slider::before {
   content: '';
   position: absolute;
-  top: 2px;
+  top: 50%;
   left: 2px;
-  width: 16px;
-  height: 16px;
-  background: white;
-  border-radius: 50%;
+  width: var(--toggle-thumb-width, 16px);
+  height: var(--toggle-thumb-height, 16px);
+  background: var(--toggle-thumb-color, white);
+  border-radius: var(--toggle-thumb-radius, 50%);
+  transform: translateY(-50%);
   transition: transform 0.2s ease;
 }
 
@@ -614,7 +615,7 @@ async function handleRetryPendingDeletes() {
 }
 
 .annotation-toggle-switch input:checked + .toggle-slider::before {
-  transform: translateX(16px);
+  transform: translate(calc(var(--toggle-width, 36px) - var(--toggle-thumb-width, 16px) - 4px), -50%);
 }
 
 /* Info Callout */

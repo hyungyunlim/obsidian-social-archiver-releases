@@ -232,40 +232,49 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Default view location')
       .setDesc('Where views open by default. Individual views below can override this.')
-      .addDropdown(dropdown => dropdown
-        .addOption('sidebar', 'Right sidebar')
-        .addOption('main', 'Main tab')
-        .setValue(this.plugin.settings.viewLocationDefault)
-        .onChange((value) => {
-          this.plugin.settings.viewLocationDefault = value as 'sidebar' | 'main';
-          this.markDirty();
-        }));
+      .addDropdown(dropdown => {
+        dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
+        return dropdown
+          .addOption('sidebar', 'Right sidebar')
+          .addOption('main', 'Main tab')
+          .setValue(this.plugin.settings.viewLocationDefault)
+          .onChange((value) => {
+            this.plugin.settings.viewLocationDefault = value as 'sidebar' | 'main';
+            this.markDirty();
+          });
+      });
 
     new Setting(containerEl)
       .setName('Timeline view')
       .setDesc('Override the default location for the timeline view.')
-      .addDropdown(dropdown => dropdown
-        .addOption('default', 'Use default')
-        .addOption('sidebar', 'Right sidebar')
-        .addOption('main', 'Main tab')
-        .setValue(this.plugin.settings.timelineLocation)
-        .onChange((value) => {
-          this.plugin.settings.timelineLocation = value as 'default' | 'sidebar' | 'main';
-          this.markDirty();
-        }));
+      .addDropdown(dropdown => {
+        dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
+        return dropdown
+          .addOption('default', 'Use default')
+          .addOption('sidebar', 'Right sidebar')
+          .addOption('main', 'Main tab')
+          .setValue(this.plugin.settings.timelineLocation)
+          .onChange((value) => {
+            this.plugin.settings.timelineLocation = value as 'default' | 'sidebar' | 'main';
+            this.markDirty();
+          });
+      });
 
     new Setting(containerEl)
       .setName('Author detail')
       .setDesc('Override the default location for the author detail view.')
-      .addDropdown(dropdown => dropdown
-        .addOption('default', 'Use default')
-        .addOption('sidebar', 'Right sidebar')
-        .addOption('main', 'Main tab')
-        .setValue(this.plugin.settings.authorDetailLocation)
-        .onChange((value) => {
-          this.plugin.settings.authorDetailLocation = value as 'default' | 'sidebar' | 'main';
-          this.markDirty();
-        }));
+      .addDropdown(dropdown => {
+        dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
+        return dropdown
+          .addOption('default', 'Use default')
+          .addOption('sidebar', 'Right sidebar')
+          .addOption('main', 'Main tab')
+          .setValue(this.plugin.settings.authorDetailLocation)
+          .onChange((value) => {
+            this.plugin.settings.authorDetailLocation = value as 'default' | 'sidebar' | 'main';
+            this.markDirty();
+          });
+      });
 
     // Author Settings Section (profile management + notes)
     new Setting(containerEl).setName('Author').setHeading()
@@ -336,7 +345,9 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     const scanSetting = new Setting(authorNotesContainer)
       .setName('Generate author notes')
       .setDesc('Scan your vault and create author note files for all discovered authors. Safe to run multiple times.')
-      .addButton((button) => button
+      .addButton((button) => {
+        button.buttonEl.addClass('sa-mobile-compact-btn');
+        return button
         .setButtonText('Scan & Generate')
         .setCta()
         .onClick(async () => {
@@ -398,7 +409,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             button.setButtonText('Scan & Generate');
             button.setDisabled(false);
           }
-        }));
+        });
+      });
 
     // Instagram Saved Import Section (Experimental — PRD §5.3, §12.1)
     // Mobile gating (PRD §11 / F6.1): the section still renders on mobile for
@@ -452,15 +464,18 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Archive folder structure')
       .setDesc('Choose how notes are organized under archive folder')
-      .addDropdown(dropdown => dropdown
-        .addOption('platform-year-month', 'Archive folder/platform/year/month')
-        .addOption('platform-only', 'Archive folder/platform')
-        .addOption('flat', 'Archive folder only')
-        .setValue(this.plugin.settings.archiveOrganization)
-        .onChange((value: string) => {
-          this.plugin.settings.archiveOrganization = value as ArchiveOrganizationMode;
-          this.markDirty();
-        }));
+      .addDropdown(dropdown => {
+        dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
+        return dropdown
+          .addOption('platform-year-month', 'Archive folder/platform/year/month')
+          .addOption('platform-only', 'Archive folder/platform')
+          .addOption('flat', 'Archive folder only')
+          .setValue(this.plugin.settings.archiveOrganization)
+          .onChange((value: string) => {
+            this.plugin.settings.archiveOrganization = value as ArchiveOrganizationMode;
+            this.markDirty();
+          });
+      });
 
     new Setting(containerEl)
       .setName('Media folder')
@@ -590,15 +605,18 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Download media')
       .setDesc('Choose what media to download with posts. This setting serves as the default for the archive modal.')
-      .addDropdown(dropdown => dropdown
-        .addOption('text-only', 'Text only')
-        .addOption('images-only', 'Images only')
-        .addOption('images-and-videos', 'Images and videos')
-        .setValue(this.plugin.settings.downloadMedia)
-        .onChange((value: string) => {
-          this.plugin.settings.downloadMedia = value as MediaDownloadMode;
-          this.markDirty();
-        }));
+      .addDropdown(dropdown => {
+        dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
+        return dropdown
+          .addOption('text-only', 'Text only')
+          .addOption('images-only', 'Images only')
+          .addOption('images-and-videos', 'Images and videos')
+          .setValue(this.plugin.settings.downloadMedia)
+          .onChange((value: string) => {
+            this.plugin.settings.downloadMedia = value as MediaDownloadMode;
+            this.markDirty();
+          });
+      });
 
     // Large Media Guard — prompt before downloading oversized top-level videos.
     // See prd-large-media-guard.md (Flow A / Prevention).
@@ -645,15 +663,18 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Share mode')
       .setDesc('Choose how shared posts appear on the web. "preview" mode protects copyright by showing only excerpts without media.')
-      .addDropdown(dropdown => dropdown
-        .addOption('preview', 'Preview (copyright-safe)')
-        .addOption('full', 'Full content (original)')
-        .setValue(this.plugin.settings.shareMode)
-        .onChange((value: string) => {
-          this.plugin.settings.shareMode = value as ShareMode;
-          this.markDirty();
-          updatePreviewLengthVisibility(); // Update visibility when mode changes
-        }));
+      .addDropdown(dropdown => {
+        dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
+        return dropdown
+          .addOption('preview', 'Preview (copyright-safe)')
+          .addOption('full', 'Full content (original)')
+          .setValue(this.plugin.settings.shareMode)
+          .onChange((value: string) => {
+            this.plugin.settings.shareMode = value as ShareMode;
+            this.markDirty();
+            updatePreviewLengthVisibility(); // Update visibility when mode changes
+          });
+      });
 
     new Setting(containerEl)
       .setName('Copy reader mode link by default')
@@ -728,57 +749,66 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setDesc(isAppleSilicon
         ? 'Choose which Whisper implementation to use. "Auto-detect" tries whisper.cpp first on Apple Silicon (Metal GPU).'
         : 'Choose which Whisper implementation to use. "Auto-detect" tries faster-whisper first.')
-      .addDropdown(dropdown => dropdown
-        .addOption('auto', 'Auto-detect')
-        .addOption('faster-whisper', isAppleSilicon ? 'faster-whisper' : 'faster-whisper (recommended)')
-        .addOption('openai-whisper', 'openai-whisper')
-        .addOption('whisper.cpp', isAppleSilicon ? 'whisper.cpp (recommended)' : 'whisper.cpp')
-        .setValue(this.plugin.settings.transcription.preferredVariant || 'auto')
-        .onChange(async (value) => {
-          this.plugin.settings.transcription.preferredVariant = value as WhisperVariantType;
-          this.markDirty();
-          // Re-detect with new preference and update status display
-          await this.renderWhisperStatus(statusContainer);
-        }));
+      .addDropdown(dropdown => {
+        dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
+        return dropdown
+          .addOption('auto', 'Auto-detect')
+          .addOption('faster-whisper', isAppleSilicon ? 'faster-whisper' : 'faster-whisper (recommended)')
+          .addOption('openai-whisper', 'openai-whisper')
+          .addOption('whisper.cpp', isAppleSilicon ? 'whisper.cpp (recommended)' : 'whisper.cpp')
+          .setValue(this.plugin.settings.transcription.preferredVariant || 'auto')
+          .onChange(async (value) => {
+            this.plugin.settings.transcription.preferredVariant = value as WhisperVariantType;
+            this.markDirty();
+            // Re-detect with new preference and update status display
+            await this.renderWhisperStatus(statusContainer);
+          });
+      });
 
     // Model dropdown
     new Setting(containerEl)
       .setName('Preferred model')
       .setDesc('Larger models are more accurate but slower. Requires more VRAM.')
-      .addDropdown(dropdown => dropdown
-        .addOption('tiny', 'Tiny (~1GB VRAM, fastest)')
-        .addOption('base', 'Base (~1GB VRAM)')
-        .addOption('small', 'Small (~2GB VRAM) - recommended')
-        .addOption('medium', 'Medium (~5GB VRAM)')
-        .addOption('large', 'Large (~10GB VRAM, most accurate)')
-        .setValue(this.plugin.settings.transcription.preferredModel)
-        .onChange((value) => {
-          this.plugin.settings.transcription.preferredModel = value as 'tiny' | 'base' | 'small' | 'medium' | 'large';
-          this.markDirty();
-        }));
+      .addDropdown(dropdown => {
+        dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
+        return dropdown
+          .addOption('tiny', 'Tiny (~1GB VRAM, fastest)')
+          .addOption('base', 'Base (~1GB VRAM)')
+          .addOption('small', 'Small (~2GB VRAM) - recommended')
+          .addOption('medium', 'Medium (~5GB VRAM)')
+          .addOption('large', 'Large (~10GB VRAM, most accurate)')
+          .setValue(this.plugin.settings.transcription.preferredModel)
+          .onChange((value) => {
+            this.plugin.settings.transcription.preferredModel = value as 'tiny' | 'base' | 'small' | 'medium' | 'large';
+            this.markDirty();
+          });
+      });
 
     // Language dropdown
     new Setting(containerEl)
       .setName('Default language')
       .setDesc('Auto-detect or select specific language for transcription')
-      .addDropdown(dropdown => dropdown
-        .addOption('auto', 'Auto-detect')
-        .addOption('en', 'English')
-        .addOption('es', 'Spanish')
-        .addOption('fr', 'French')
-        .addOption('de', 'German')
-        .addOption('it', 'Italian')
-        .addOption('pt', 'Portuguese')
-        .addOption('ja', 'Japanese')
-        .addOption('ko', 'Korean')
-        .addOption('zh', 'Chinese')
-        .addOption('ru', 'Russian')
-        .addOption('ar', 'Arabic')
-        .setValue(this.plugin.settings.transcription.language)
-        .onChange((value) => {
-          this.plugin.settings.transcription.language = value;
-          this.markDirty();
-        }));
+      .addDropdown(dropdown => {
+        dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
+        return dropdown
+          .addOption('auto', 'Auto-detect')
+          .addOption('en', 'English')
+          .addOption('es', 'Spanish')
+          .addOption('fr', 'French')
+          .addOption('de', 'German')
+          .addOption('it', 'Italian')
+          .addOption('pt', 'Portuguese')
+          .addOption('ja', 'Japanese')
+          .addOption('ko', 'Korean')
+          .addOption('zh', 'Chinese')
+          .addOption('ru', 'Russian')
+          .addOption('ar', 'Arabic')
+          .setValue(this.plugin.settings.transcription.language)
+          .onChange((value) => {
+            this.plugin.settings.transcription.language = value;
+            this.markDirty();
+          });
+      });
 
     // Custom Whisper path
     new Setting(containerEl)
@@ -827,6 +857,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setName('Batch transcription mode')
       .setDesc('Transcribe-only: transcribe existing local videos. Download-and-transcribe: also download videos from URLs before transcribing.')
       .addDropdown((dropdown) => {
+        dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
         dropdown
           .addOption('transcribe-only', 'Transcribe only')
           .addOption('download-and-transcribe', 'Download & transcribe')
@@ -966,12 +997,15 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('About the creator')
       .setDesc('Hey, I’m Hyungyun Jun Lim. I’m a startup founder and builder, and I build Social Archiver as a solo side project. I created it for people like me who want local archives because posts get deleted, platforms change, and content disappears. Feel free to reach out on GitHub for feedback or business inquiries.')
-      .addButton((button) => button
-        .setIcon('github')
-        .setButtonText('GitHub profile')
-        .onClick(() => {
-          window.open(PERSONAL_GITHUB_URL, '_blank');
-        }));
+      .addButton((button) => {
+        button.buttonEl.addClass('sa-mobile-compact-btn');
+        return button
+          .setIcon('github')
+          .setButtonText('GitHub profile')
+          .onClick(() => {
+            window.open(PERSONAL_GITHUB_URL, '_blank');
+          });
+      });
     } catch (err) {
       console.error('[Social Archiver] Settings display error:', err);
     }
@@ -1503,6 +1537,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         const propertySetting = new Setting(orderListContainer)
           .setName(labelKey)
           .addDropdown((dropdown) => {
+            dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
             dropdown.addOption('', 'Select existing key...');
             dropdown.addOption(customKeyOptionValue, 'New key...');
             for (const key of vaultFrontmatterKeys) {
@@ -1540,6 +1575,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
         propertySetting
           .addDropdown((dropdown) => {
+            dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
             dropdown
               .addOption('text', 'Text')
               .addOption('number', 'Number')
@@ -1641,15 +1677,18 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     new Setting(bodyContainer)
       .setName('Tag structure')
       .setDesc('Choose how the auto tag is generated from the main tag.')
-      .addDropdown((dropdown) => dropdown
-        .addOption('flat', '#maintag')
-        .addOption('platform-only', '#maintag/socialnetwork')
-        .addOption('platform-year-month', '#maintag/socialnetwork/year/month')
-        .setValue(frontmatterSettings.tagOrganization || 'flat')
-        .onChange((value: string) => {
-          frontmatterSettings.tagOrganization = value as ArchiveOrganizationMode;
-          this.markDirty();
-        }));
+      .addDropdown((dropdown) => {
+        dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
+        return dropdown
+          .addOption('flat', '#maintag')
+          .addOption('platform-only', '#maintag/socialnetwork')
+          .addOption('platform-year-month', '#maintag/socialnetwork/year/month')
+          .setValue(frontmatterSettings.tagOrganization || 'flat')
+          .onChange((value: string) => {
+            frontmatterSettings.tagOrganization = value as ArchiveOrganizationMode;
+            this.markDirty();
+          });
+      });
 
     new Setting(bodyContainer)
       .setName('Reset frontmatter settings')
@@ -1893,21 +1932,27 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         : 'Connect your Reddit account to enable sync');
 
     if (this.plugin.settings.redditConnected) {
-      connectSetting.addButton(button => button
-        .setButtonText('Disconnect')
-        .setWarning()
-        .onClick(async () => {
-          await this.disconnectReddit();
-          // Refresh the settings display
-          this.display();
-        }));
+      connectSetting.addButton(button => {
+        button.buttonEl.addClass('sa-mobile-compact-btn');
+        return button
+          .setButtonText('Disconnect')
+          .setWarning()
+          .onClick(async () => {
+            await this.disconnectReddit();
+            // Refresh the settings display
+            this.display();
+          });
+      });
     } else {
-      connectSetting.addButton(button => button
-        .setButtonText('Connect Reddit')
-        .setCta()
-        .onClick(async () => {
-          await this.connectReddit();
-        }));
+      connectSetting.addButton(button => {
+        button.buttonEl.addClass('sa-mobile-compact-btn');
+        return button
+          .setButtonText('Connect Reddit')
+          .setCta()
+          .onClick(async () => {
+            await this.connectReddit();
+          });
+      });
     }
 
     // Sync settings (only shown when connected)
@@ -1944,24 +1989,27 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       new Setting(containerEl)
         .setName('Sync now')
         .setDesc('Manually trigger a sync of your Reddit saved posts')
-        .addButton(button => button
-          .setButtonText('Sync now')
-          .onClick(async () => {
-            button.setDisabled(true);
-            button.setButtonText('Syncing...');
-            try {
-              // TODO: Implement actual sync trigger when Reddit API is approved
-              // For now, show a notice
-              const { Notice } = await import('obsidian');
-              new Notice('Reddit sync coming soon! Waiting for API approval.');
-            } catch (error) {
-              const { Notice } = await import('obsidian');
-              new Notice(`Sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            } finally {
-              button.setDisabled(false);
-              button.setButtonText('Sync now');
-            }
-          }));
+        .addButton(button => {
+          button.buttonEl.addClass('sa-mobile-compact-btn');
+          return button
+            .setButtonText('Sync now')
+            .onClick(async () => {
+              button.setDisabled(true);
+              button.setButtonText('Syncing...');
+              try {
+                // TODO: Implement actual sync trigger when Reddit API is approved
+                // For now, show a notice
+                const { Notice } = await import('obsidian');
+                new Notice('Reddit sync coming soon! Waiting for API approval.');
+              } catch (error) {
+                const { Notice } = await import('obsidian');
+                new Notice(`Sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+              } finally {
+                button.setDisabled(false);
+                button.setButtonText('Sync now');
+              }
+            });
+        });
     }
 
     // Info callout
@@ -2076,24 +2124,27 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Episode loading mode')
       .setDesc('Stream-first: load immediately via proxy (faster). Download-first: wait for full download (offline ready).')
-      .addDropdown(dropdown => dropdown
-        .addOption('stream-first', 'Stream first (recommended)')
-        .addOption('download-first', 'Download first')
-        .setValue(this.plugin.settings.webtoonStreaming?.viewMode || 'stream-first')
-        .onChange((value) => {
-          const viewMode = value as 'stream-first' | 'download-first';
-          if (!this.plugin.settings.webtoonStreaming) {
-            this.plugin.settings.webtoonStreaming = {
-              viewMode,
-              backgroundDownload: true,
-              prefetchNextEpisode: true,
-              mobileDataSaver: false
-            };
-          } else {
-            this.plugin.settings.webtoonStreaming.viewMode = viewMode;
-          }
-          this.markDirty();
-        }));
+      .addDropdown(dropdown => {
+        dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
+        return dropdown
+          .addOption('stream-first', 'Stream first (recommended)')
+          .addOption('download-first', 'Download first')
+          .setValue(this.plugin.settings.webtoonStreaming?.viewMode || 'stream-first')
+          .onChange((value) => {
+            const viewMode = value as 'stream-first' | 'download-first';
+            if (!this.plugin.settings.webtoonStreaming) {
+              this.plugin.settings.webtoonStreaming = {
+                viewMode,
+                backgroundDownload: true,
+                prefetchNextEpisode: true,
+                mobileDataSaver: false
+              };
+            } else {
+              this.plugin.settings.webtoonStreaming.viewMode = viewMode;
+            }
+            this.markDirty();
+          });
+      });
 
     // Background Download toggle - 44px touch target ensured on mobile
     const bgDownloadSetting = new Setting(containerEl)
@@ -2264,6 +2315,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     // Build CLI options dynamically based on detection
     const detectedClis = await this.getDetectedClis();
     cliSetting.addDropdown(dropdown => {
+      dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
       for (const cli of (['claude', 'gemini', 'codex'] as AICli[])) {
         const info = AI_CLI_INFO[cli];
         const isDetected = detectedClis.has(cli);
@@ -2282,6 +2334,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setName('Default comment type')
       .setDesc('Type of analysis to generate by default')
       .addDropdown(dropdown => {
+        dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
         const types: AICommentType[] = ['summary', 'factcheck', 'critique', 'keypoints', 'sentiment', 'connections', 'glossary'];
         for (const type of types) {
           dropdown.addOption(type, COMMENT_TYPE_DISPLAY_NAMES[type]);
@@ -2298,6 +2351,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setName('Output language')
       .setDesc('Language for AI responses. "auto" matches the content language (e.g., Korean content → Korean summary)')
       .addDropdown(dropdown => {
+        dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
         // Add all language options
         for (const [lang, displayName] of Object.entries(OUTPUT_LANGUAGE_NAMES)) {
           dropdown.addOption(lang, displayName);
@@ -2649,6 +2703,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setName('TTS Provider')
       .setDesc('Choose between cloud (Azure) or on-device (Supertonic) speech synthesis')
       .addDropdown((dropdown) => {
+        dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
         dropdown
           .addOption('azure', 'Azure Cloud')
           .addOption('supertonic', 'Supertonic (on-device, desktop only)')
@@ -2794,6 +2849,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         .setName('Synthesis quality')
         .setDesc('Higher quality = slower synthesis. "Balanced" is recommended.')
         .addDropdown((dropdown) => {
+          dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
           dropdown
             .addOption('fast', 'Fast (lower quality)')
             .addOption('balanced', 'Balanced (recommended)')
@@ -2821,6 +2877,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setName('Language')
       .setDesc('Auto-detect or override the speech language')
       .addDropdown((dropdown) => {
+        dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
         dropdown
           .addOption('', 'Auto-detect')
           .addOption('en-US', 'English (US)')

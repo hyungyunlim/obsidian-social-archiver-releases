@@ -1022,7 +1022,10 @@ body.is-tablet .sa-reader-mode-action-btn svg {
 .sa-reader-typography-range {
   flex: 1;
   min-width: 0;
-  height: 20px;
+  /* Match input height to track height so WebKit (iOS Safari) centers
+     the thumb consistently via margin-top instead of relying on the
+     UA-specific vertical placement of the runnable track. */
+  height: 2px;
   -webkit-appearance: none;
   appearance: none;
   background: transparent;

@@ -1634,152 +1634,155 @@
   background: var(--background-modifier-form-field);
 }
 
-@media (max-width: 768px) {
-  .tc-selection-row-with-tags {
-    margin-top: -12px;
-  }
+/* Mobile bulk-selection layout (gated on Obsidian's Platform.isMobile flag so
+   tablets like iPad — which are wider than 768px — pick up the compact icon
+   design alongside phones). The TS layer adds the mobile-specific classes via
+   ObsidianPlatform.isMobile, so the CSS scope is intentionally aligned with
+   the same source of truth. */
+body.is-mobile .tc-selection-row-with-tags {
+  margin-top: -12px;
+}
 
-  .tc-selection-mode-bar {
-    align-items: stretch;
-  }
+body.is-mobile .tc-selection-mode-bar {
+  align-items: stretch;
+}
 
-  .tc-selection-row-idle {
-    align-items: center;
-  }
+body.is-mobile .tc-selection-row-idle {
+  align-items: center;
+}
 
-  .tc-selection-toggle.tc-selection-toggle-mobile {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 32px;
-    width: 32px;
-    height: 32px;
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 6px;
-    outline: none;
-    box-shadow: none;
-    appearance: none;
-    -webkit-appearance: none;
-    -webkit-tap-highlight-color: transparent;
-    min-height: 32px;
-    min-width: 32px;
-    padding: 0;
-    color: var(--text-faint);
-  }
+body.is-mobile .tc-selection-toggle.tc-selection-toggle-mobile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  outline: none;
+  box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 32px;
+  min-width: 32px;
+  padding: 0;
+  color: var(--text-faint);
+}
 
-  .tc-selection-toggle.tc-selection-toggle-mobile:focus,
-  .tc-selection-toggle.tc-selection-toggle-mobile:active,
-  .tc-selection-toggle.tc-selection-toggle-mobile:hover:not(:disabled) {
-    background: transparent;
-    border-color: transparent;
-    box-shadow: none;
-    color: var(--text-faint);
-  }
+body.is-mobile .tc-selection-toggle.tc-selection-toggle-mobile:focus,
+body.is-mobile .tc-selection-toggle.tc-selection-toggle-mobile:active,
+body.is-mobile .tc-selection-toggle.tc-selection-toggle-mobile:hover:not(:disabled) {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--text-faint);
+}
 
-  .tc-selection-count-pill {
-    min-width: 26px;
-    padding: 3px 8px;
-    font-size: 11px;
-  }
+body.is-mobile .tc-selection-count-pill {
+  min-width: 26px;
+  padding: 3px 8px;
+  font-size: 11px;
+}
 
-  .tc-quick-filter-divider {
-    height: 14px;
-    margin: 0 6px 0 10px;
-  }
+body.is-mobile .tc-quick-filter-divider {
+  height: 14px;
+  margin: 0 6px 0 10px;
+}
 
-  .tc-quick-filter-btn.tc-quick-filter-btn {
-    padding: 0;
-    width: 32px;
-    height: 32px;
-    flex: 0 0 32px;
-    min-width: 32px;
-    min-height: 32px;
-    justify-content: center;
-    background: transparent;
-    border: 1px solid transparent;
-    box-shadow: none;
-    border-radius: 6px;
-    color: var(--text-faint);
-  }
+body.is-mobile .tc-quick-filter-btn.tc-quick-filter-btn {
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  min-width: 32px;
+  min-height: 32px;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  box-shadow: none;
+  border-radius: 6px;
+  color: var(--text-faint);
+}
 
-  .tc-quick-filter-btn.tc-quick-filter-btn:hover:not(:disabled) {
-    background: transparent;
-    color: var(--text-muted);
-  }
+body.is-mobile .tc-quick-filter-btn.tc-quick-filter-btn:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text-muted);
+}
 
-  .tc-quick-filter-btn.tc-quick-filter-btn.is-active {
-    color: var(--text-on-accent);
-    background: var(--interactive-accent);
-    border-color: var(--interactive-accent);
-  }
+body.is-mobile .tc-quick-filter-btn.tc-quick-filter-btn.is-active {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+  border-color: var(--interactive-accent);
+}
 
-  .tc-selection-actions {
-    width: 100%;
-  }
+body.is-mobile .tc-selection-actions {
+  width: 100%;
+}
 
-  .tc-selection-action-btn {
-    flex: 1 1 calc(50% - 4px);
-    justify-content: center;
-  }
+body.is-mobile .tc-selection-action-btn {
+  flex: 1 1 calc(50% - 4px);
+  justify-content: center;
+}
 
-  .tc-selection-item {
-    gap: 10px;
-    padding: 8px 10px;
-    border-radius: 6px;
-  }
+body.is-mobile .tc-selection-item {
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
 
-  .tc-selection-side {
-    width: auto;
-    justify-content: flex-start;
-    padding-left: 0;
-    margin-left: 26px;
-    min-height: 0;
-    gap: 6px;
-  }
+body.is-mobile .tc-selection-side {
+  width: auto;
+  justify-content: flex-start;
+  padding-left: 0;
+  margin-left: 26px;
+  min-height: 0;
+  gap: 6px;
+}
 
-  .tc-selection-check {
-    width: 16px;
-    height: 16px;
-    margin-top: 1px;
-  }
+body.is-mobile .tc-selection-check {
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+}
 
-  .tc-selection-meta {
-    gap: 6px;
-    margin-bottom: 2px;
-  }
+body.is-mobile .tc-selection-meta {
+  gap: 6px;
+  margin-bottom: 2px;
+}
 
-  .tc-selection-platform-icon-mobile {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 11px;
-    height: 11px;
-    color: var(--text-faint);
-    line-height: 0;
-    flex-shrink: 0;
-    align-self: center;
-  }
+body.is-mobile .tc-selection-platform-icon-mobile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 11px;
+  height: 11px;
+  color: var(--text-faint);
+  line-height: 0;
+  flex-shrink: 0;
+  align-self: center;
+}
 
-  .tc-selection-author {
-    font-size: 12px;
-    font-weight: 600;
-  }
+body.is-mobile .tc-selection-author {
+  font-size: 12px;
+  font-weight: 600;
+}
 
-  .tc-selection-time {
-    font-size: 11px;
-  }
+body.is-mobile .tc-selection-time {
+  font-size: 11px;
+}
 
-  .tc-selection-preview {
-    font-size: 12px;
-    line-height: 1.35;
-    -webkit-line-clamp: 1;
-  }
+body.is-mobile .tc-selection-preview {
+  font-size: 12px;
+  line-height: 1.35;
+  -webkit-line-clamp: 1;
+}
 
-  .tc-selection-pill {
-    padding: 2px 6px;
-    font-size: 10px;
-  }
+body.is-mobile .tc-selection-pill {
+  padding: 2px 6px;
+  font-size: 10px;
 }
 
 /* Crawl history modal container */

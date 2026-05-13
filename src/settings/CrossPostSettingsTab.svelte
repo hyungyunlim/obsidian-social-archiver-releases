@@ -334,7 +334,7 @@ onDestroy(() => {
         <div class="crosspost-action-row">
           {#if tokenExpiryWarning}
             <button
-              class="mod-cta crosspost-btn"
+              class="mod-cta crosspost-btn sa-mobile-compact-btn"
               onclick={handleRefreshToken}
               disabled={isRefreshingToken}
               aria-label="Refresh Threads token"
@@ -343,7 +343,7 @@ onDestroy(() => {
             </button>
           {/if}
           <button
-            class="mod-warning crosspost-btn"
+            class="mod-warning crosspost-btn sa-mobile-compact-btn"
             onclick={handleDisconnect}
             disabled={isDisconnecting}
             aria-label="Disconnect Threads account"
@@ -373,7 +373,7 @@ onDestroy(() => {
           </div>
         {:else}
           <button
-            class="mod-cta crosspost-btn crosspost-connect-btn"
+            class="mod-cta crosspost-btn crosspost-connect-btn sa-mobile-compact-btn"
             onclick={handleConnect}
             disabled={isConnecting}
             aria-label="Connect Threads account"

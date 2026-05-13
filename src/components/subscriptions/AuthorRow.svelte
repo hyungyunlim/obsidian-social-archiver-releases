@@ -999,6 +999,7 @@ function renderNoteBody(node: HTMLElement, body: string) {
             onclick={handleUnsubscribe}
             disabled={isUnsubscribing}
             title="Click to unsubscribe"
+            aria-label="Subscribed (click to unsubscribe)"
           >
             {#if isUnsubscribing}
               <span class="loading-spinner"></span>
@@ -1904,5 +1905,37 @@ function renderNoteBody(node: HTMLElement, body: string) {
     height: 12px;
     stroke: var(--text-muted);
     flex-shrink: 0;
+  }
+
+  /* ============================================
+   * Mobile (iPad/iPhone) overrides
+   * Obsidian's mobile agent CSS adds extra padding/min-height to all <button>
+   * elements; scope these overrides under .author-row.is-mobile so they only
+   * affect this component on mobile and don't touch desktop layout.
+   * ============================================ */
+
+  /* Bug 2: author name button left-aligned with handle below */
+  .author-row.is-mobile .author-name-btn,
+  .author-row.is-mobile .author-name-btn.webtoon-title {
+    padding: 0;
+    min-height: 0;
+    height: auto;
+    line-height: 1.3;
+    text-indent: 0;
+  }
+
+  /* Bug 1: compact subscribed split-button on mobile */
+  .author-row.is-mobile .subscribed-btn {
+    padding: 4px 8px;
+    min-height: 28px;
+    height: 28px;
+    font-size: 11px;
+  }
+
+  .author-row.is-mobile .action-menu-btn {
+    padding: 4px 6px;
+    min-height: 28px;
+    height: 28px;
+    font-size: 11px;
   }
 </style>

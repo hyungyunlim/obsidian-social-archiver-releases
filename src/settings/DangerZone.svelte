@@ -197,7 +197,7 @@ function removeShareMetadata(content: string): { updated: boolean; output: strin
       </div>
       <div class="setting-item-control">
         <button
-          class="reset-shares-button"
+          class="reset-shares-button sa-mobile-compact-btn"
           onclick={handleResetSharedPosts}
         >
           Remove Shared Posts
@@ -215,7 +215,7 @@ function removeShareMetadata(content: string): { updated: boolean; output: strin
       </div>
       <div class="setting-item-control">
         <button
-          class="delete-account-button"
+          class="delete-account-button sa-mobile-compact-btn"
           onclick={handleDeleteAccount}
         >
           Delete Account

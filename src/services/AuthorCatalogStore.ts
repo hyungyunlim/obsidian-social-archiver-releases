@@ -32,6 +32,12 @@ export interface AuthorCatalogState {
    * Subscription-only optimistic updates should not flip this to true.
    */
   hasVaultSnapshot: boolean;
+  /**
+   * Current human-readable loading message. Stored on the shared store so
+   * remounted components observe live progress instead of reverting to a
+   * stale initial value.
+   */
+  loadingMessage: string;
 }
 
 export interface SubscriptionStats {
@@ -68,6 +74,7 @@ const DEFAULT_STATE: AuthorCatalogState = {
   isLoading: true,
   error: null,
   hasVaultSnapshot: false,
+  loadingMessage: 'Scanning vault for authors...',
 };
 
 // ============================================================================
@@ -90,6 +97,7 @@ export interface AuthorCatalogStoreAPI {
   setAuthors: (authors: AuthorCatalogEntry[]) => void;
   setAuthorsFromVault: (authors: AuthorCatalogEntry[]) => void;
   setLoading: (isLoading: boolean) => void;
+  setLoadingMessage: (message: string) => void;
   setError: (error: Error | null) => void;
   updateAuthorStatus: (authorUrl: string, platform: Platform, status: AuthorCatalogEntry['status'], subscriptionId?: string, authorName?: string) => void;
   updateAuthorMetadata: (authorUrl: string, platform: Platform, metadata: AuthorMetadataUpdate, localAvatarPath?: string | null) => void;
@@ -214,6 +222,10 @@ export function createAuthorCatalogStore(): AuthorCatalogStoreAPI {
 
   function setLoading(isLoading: boolean): void {
     state.update((s) => ({ ...s, isLoading }));
+  }
+
+  function setLoadingMessage(message: string): void {
+    state.update((s) => ({ ...s, loadingMessage: message }));
   }
 
   function setError(error: Error | null): void {
@@ -430,6 +442,7 @@ export function createAuthorCatalogStore(): AuthorCatalogStoreAPI {
     setAuthors,
     setAuthorsFromVault,
     setLoading,
+    setLoadingMessage,
     setError,
     updateAuthorStatus,
     updateAuthorMetadata,
@@ -453,6 +466,9 @@ let lastKnownFileCount = 0;
 // Prevents concurrent vault scans when phantom mounts create multiple instances.
 let _isLoadingInProgress = false;
 let _loadingGeneration = 0;
+// Wall-clock timestamp (ms since epoch) for when the current load began.
+// Used by recoverStuckAuthorLoad() to clear flags abandoned by suspended mobile WebViews.
+let _loadingStartedAt: number | null = null;
 
 export function getAuthorCatalogStore(): AuthorCatalogStoreAPI {
   if (!storeInstance) {
@@ -469,6 +485,7 @@ export function resetAuthorCatalogStore(): void {
   lastKnownFileCount = 0;
   _isLoadingInProgress = false;
   _loadingGeneration = 0;
+  _loadingStartedAt = null;
 }
 
 /**
@@ -499,6 +516,7 @@ export function isAuthorLoadInProgress(): boolean {
 export function startAuthorLoad(): number {
   _isLoadingInProgress = true;
   _loadingGeneration++;
+  _loadingStartedAt = Date.now();
   return _loadingGeneration;
 }
 
@@ -509,6 +527,7 @@ export function startAuthorLoad(): number {
 export function finishAuthorLoad(generation: number): void {
   if (generation === _loadingGeneration) {
     _isLoadingInProgress = false;
+    _loadingStartedAt = null;
   }
 }
 
@@ -517,6 +536,36 @@ export function finishAuthorLoad(generation: number): void {
  */
 export function getAuthorLoadGeneration(): number {
   return _loadingGeneration;
+}
+
+/**
+ * Diagnostic: returns the wall-clock timestamp (ms since epoch) of the
+ * current in-progress load, or null if no load is running.
+ */
+export function getAuthorLoadStartedAt(): number | null {
+  return _loadingStartedAt;
+}
+
+/**
+ * Force-clear the loading-in-progress flag if a load has been running
+ * longer than maxAgeMs. Returns true if a stuck load was cleared.
+ *
+ * Used as a recovery path for mobile where a prior load may have been
+ * suspended by the OS (iOS WebView background) and never reached its
+ * finally block to call finishAuthorLoad.
+ *
+ * Note: we deliberately do NOT reset _loadingGeneration — any still-running
+ * stale load that eventually wakes up will see a mismatched generation
+ * and discard its results in its own stale check.
+ */
+export function recoverStuckAuthorLoad(maxAgeMs: number): boolean {
+  if (!_isLoadingInProgress) return false;
+  if (_loadingStartedAt === null) return false;
+  const ageMs = Date.now() - _loadingStartedAt;
+  if (ageMs < maxAgeMs) return false;
+  _isLoadingInProgress = false;
+  _loadingStartedAt = null;
+  return true;
 }
 
 /**

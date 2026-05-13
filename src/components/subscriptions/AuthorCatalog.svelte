@@ -7,6 +7,7 @@
  */
 
 import type { App } from 'obsidian';
+import { Notice } from 'obsidian';
 import type { Platform } from '@/types/post';
 import type {
   AuthorCatalogEntry,
@@ -22,6 +23,7 @@ import {
   startAuthorLoad,
   finishAuthorLoad,
   getAuthorLoadGeneration,
+  recoverStuckAuthorLoad,
   type AuthorCatalogStoreAPI,
 } from '@/services/AuthorCatalogStore';
 import { get } from 'svelte/store';
@@ -56,8 +58,18 @@ function debugWarn(...args: unknown[]): void {
   console.warn('[AuthorCatalog]', ...args);
 }
 
-const AUTHOR_CATALOG_BUILD_ID = '2026-02-09.2';
+/**
+ * Always-on info logger. Mobile users can't easily enable the localStorage
+ * debug flag, so these breadcrumbs are critical for diagnosing the iPad
+ * "Scanning vault for authors..." stuck state via Safari remote inspector.
+ */
+function infoLog(...args: unknown[]): void {
+  console.info('[Social Archiver][AuthorCatalog]', ...args);
+}
+
+const AUTHOR_CATALOG_BUILD_ID = '2026-05-13.recovery-1';
 debugLog('build', { id: AUTHOR_CATALOG_BUILD_ID });
+infoLog('module-load', { build: AUTHOR_CATALOG_BUILD_ID });
 
 const AUTHOR_CATALOG_MINIMAL_RENDER = (() => {
   try {
@@ -316,6 +328,7 @@ $effect(() => {
     authors = $state.authors;
     isLoading = $state.isLoading;
     error = $state.error;
+    loadingMessage = $state.loadingMessage;
     debugLog('store.state update', {
       isLoading: $state.isLoading,
       authors: $state.authors.length,
@@ -914,12 +927,37 @@ async function loadAuthors(forceRefresh = false): Promise<void> {
   let watchdogIntervalId: number | null = null;
   let watchdogTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
+  infoLog('loadAuthors:enter', { forceRefresh, build: AUTHOR_CATALOG_BUILD_ID });
+
+  // Recover from stuck loads first (mobile iOS WebView can suspend mid-scan and
+  // never reach the finally block, leaving the module-level flag stuck `true`).
+  // 45s is well above normal desktop scan time but below the 60s scan/dedupe
+  // timeouts, so a healthy in-flight scan is never wrongly cleared.
+  if (recoverStuckAuthorLoad(45_000)) {
+    infoLog('loadAuthors:recovered-stuck-load', { forceRefresh });
+  }
+
   // Concurrent guard — prevents duplicate scans when TimelineContainer remounts AuthorCatalog rapidly
   if (isAuthorLoadInProgress()) {
     debugWarn('loadAuthors skipped (concurrent load in progress)', { forceRefresh });
     const cached = get(store.state);
     if (cached.hasVaultSnapshot) {
+      infoLog('loadAuthors:concurrent-but-has-snapshot', { authors: cached.authors.length });
       store.setLoading(false);
+    } else {
+      // No cached snapshot AND another load is supposedly running. Surface a
+      // clearer message to the user and schedule a single retry so the UI is
+      // not permanently frozen on "Scanning vault for authors...".
+      infoLog('loadAuthors:concurrent-no-snapshot-will-retry');
+      store.setLoadingMessage('Loading authors... (in progress)');
+      store.setLoading(true);
+      window.setTimeout(() => {
+        const latest = get(store.state);
+        if (!latest.hasVaultSnapshot) {
+          infoLog('loadAuthors:retry-after-concurrent-guard');
+          void loadAuthors(forceRefresh);
+        }
+      }, 1500);
     }
     return;
   }
@@ -941,6 +979,13 @@ async function loadAuthors(forceRefresh = false): Promise<void> {
   const myGeneration = startAuthorLoad();
   stage = 'scan:init';
   debugLog('loadAuthors start', {
+    generation: myGeneration,
+    forceRefresh,
+    archivePath,
+    cachedAuthors: cachedState.authors.length,
+    hasVaultSnapshot: cachedState.hasVaultSnapshot,
+  });
+  infoLog('loadAuthors:start', {
     generation: myGeneration,
     forceRefresh,
     archivePath,
@@ -973,12 +1018,13 @@ async function loadAuthors(forceRefresh = false): Promise<void> {
     }, 60000);
   }
 
-  loadingMessage = 'Scanning vault for authors...';
+  store.setLoadingMessage('Scanning vault for authors...');
   store.setLoading(true);
 
   try {
     const scanStart = nowMs();
     stage = 'scan:running';
+    infoLog('loadAuthors:scan:start', { generation: myGeneration });
     const scanner = new AuthorVaultScanner({
       app,
       archivePath,
@@ -997,13 +1043,34 @@ async function loadAuthors(forceRefresh = false): Promise<void> {
         ])
       : Promise.resolve([]);
 
-    const [scanResult, subscriptions] = await Promise.all([scanner.scanVault(), fetchWithTimeout]);
+    // Hard timeout for the vault scan so a true hang surfaces an error
+    // instead of leaving the user staring at "Scanning vault for authors..."
+    const SCAN_TIMEOUT_MS = 60_000;
+    let scanTimeoutId: number | null = null;
+    const scanWithTimeout = Promise.race([
+      scanner.scanVault(),
+      new Promise<never>((_, reject) => {
+        scanTimeoutId = window.setTimeout(() => {
+          reject(new Error('Vault scan timed out after 60s. Please reload and try again.'));
+        }, SCAN_TIMEOUT_MS);
+      })
+    ]).finally(() => {
+      if (scanTimeoutId !== null) window.clearTimeout(scanTimeoutId);
+    });
+
+    const [scanResult, subscriptions] = await Promise.all([scanWithTimeout, fetchWithTimeout]);
     stage = 'scan:done';
     debugLog('scanVault complete', {
       durationMs: Math.round(nowMs() - scanStart),
       rawAuthors: scanResult.authors.length,
       errors: scanResult.errors.length,
       subscriptions: Array.isArray(subscriptions) ? subscriptions.length : 0
+    });
+    infoLog('loadAuthors:scan:done', {
+      generation: myGeneration,
+      durationMs: Math.round(nowMs() - scanStart),
+      rawAuthors: scanResult.authors.length,
+      subscriptions: Array.isArray(subscriptions) ? subscriptions.length : 0,
     });
 
     // Stale check — don't overwrite newer results if a newer scan started
@@ -1042,48 +1109,70 @@ async function loadAuthors(forceRefresh = false): Promise<void> {
     // Deduplicate authors with subscription info
     const deduplicator = new AuthorDeduplicator();
     stage = 'dedupe:start';
-    loadingMessage = 'Building author index...';
+    store.setLoadingMessage('Building author index...');
     const dedupeStart = nowMs();
-    const dedupeResult = await deduplicator.deduplicateAsync(scanResult.authors, subscriptionMap, {
-      yieldToUi: true,
-      chunkSize: 2000,
-      skipFinalSort: true,
-      onStage: (dedupeStage) => {
-        stage = `dedupe:${dedupeStage}`;
-        debugLog('dedupe stage', { stage: dedupeStage });
-        switch (dedupeStage) {
-          case 'accumulate':
-            loadingMessage = 'Building author index...';
-            break;
-          case 'finalize':
-            loadingMessage = 'Finalizing author index...';
-            break;
-          case 'subscriptions':
-            loadingMessage = 'Merging subscriptions...';
-            break;
-          case 'merge':
-            loadingMessage = 'Merging author entries...';
-            break;
-          case 'sort':
-            loadingMessage = 'Sorting authors...';
-            break;
-          default:
-            loadingMessage = 'Building author index...';
-        }
-      },
-      onProgress: (processed, total) => {
-        // Keep the UI informative during large scans.
-        // Update only at chunk boundaries (controlled by chunkSize).
-        loadingMessage = `Building author index... (${processed}/${total})`;
-        debugLog('dedupe progress', { processed, total });
-      }
+    infoLog('loadAuthors:dedupe:start', {
+      generation: myGeneration,
+      inputAuthors: scanResult.authors.length,
+      subscriptions: subscriptionMap.size,
     });
+    const DEDUPE_TIMEOUT_MS = 60_000;
+    let dedupeTimeoutId: number | null = null;
+    const dedupeWithTimeout = Promise.race([
+      deduplicator.deduplicateAsync(scanResult.authors, subscriptionMap, {
+        yieldToUi: true,
+        chunkSize: 2000,
+        skipFinalSort: true,
+        onStage: (dedupeStage) => {
+          stage = `dedupe:${dedupeStage}`;
+          debugLog('dedupe stage', { stage: dedupeStage });
+          switch (dedupeStage) {
+            case 'accumulate':
+              store.setLoadingMessage('Building author index...');
+              break;
+            case 'finalize':
+              store.setLoadingMessage('Finalizing author index...');
+              break;
+            case 'subscriptions':
+              store.setLoadingMessage('Merging subscriptions...');
+              break;
+            case 'merge':
+              store.setLoadingMessage('Merging author entries...');
+              break;
+            case 'sort':
+              store.setLoadingMessage('Sorting authors...');
+              break;
+            default:
+              store.setLoadingMessage('Building author index...');
+          }
+        },
+        onProgress: (processed, total) => {
+          // Keep the UI informative during large scans.
+          // Update only at chunk boundaries (controlled by chunkSize).
+          store.setLoadingMessage(`Building author index... (${processed}/${total})`);
+          debugLog('dedupe progress', { processed, total });
+        }
+      }),
+      new Promise<never>((_, reject) => {
+        dedupeTimeoutId = window.setTimeout(() => {
+          reject(new Error('Author deduplication timed out after 60s. Please reload and try again.'));
+        }, DEDUPE_TIMEOUT_MS);
+      })
+    ]).finally(() => {
+      if (dedupeTimeoutId !== null) window.clearTimeout(dedupeTimeoutId);
+    });
+    const dedupeResult = await dedupeWithTimeout;
     stage = 'dedupe:done';
     debugLog('dedupe complete', {
       durationMs: Math.round(nowMs() - dedupeStart),
       resultAuthors: dedupeResult.authors.length,
       duplicatesMerged: dedupeResult.duplicatesMerged,
       totalProcessed: dedupeResult.totalProcessed,
+    });
+    infoLog('loadAuthors:dedupe:done', {
+      generation: myGeneration,
+      durationMs: Math.round(nowMs() - dedupeStart),
+      resultAuthors: dedupeResult.authors.length,
     });
 
     // Merge author note data into dedup results
@@ -1130,11 +1219,20 @@ async function loadAuthors(forceRefresh = false): Promise<void> {
 
     // Render first, then do any optional slow enrichments in the background
     stage = 'store:setAuthors';
+    infoLog('loadAuthors:store:setAuthors', {
+      generation: myGeneration,
+      authors: dedupeResult.authors.length,
+    });
     store.setAuthorsFromVault(dedupeResult.authors);
     stage = 'store:setLoading(false)';
     store.setLoading(false);
     stage = 'done';
     debugLog('loadAuthors done', { durationMs: Math.round(nowMs() - loadStart) });
+    infoLog('loadAuthors:done', {
+      generation: myGeneration,
+      durationMs: Math.round(nowMs() - loadStart),
+      authors: dedupeResult.authors.length,
+    });
 
     if (AUTHOR_CATALOG_DEBUG) {
       // If the app "freezes" on the spinner, these timers won't fire.
@@ -1239,6 +1337,17 @@ async function loadAuthors(forceRefresh = false): Promise<void> {
     const error = err instanceof Error ? err : new Error('Failed to load authors');
     store.setError(error);
     console.error('[AuthorCatalog] Error loading authors:', err);
+    infoLog('loadAuthors:error', {
+      generation: myGeneration,
+      stage,
+      message: error.message,
+      elapsedMs: Math.round(nowMs() - loadStart),
+    });
+    try {
+      new Notice('Author scan failed: ' + error.message);
+    } catch {
+      // Notice can throw in some test/mobile contexts — never let it mask the original error.
+    }
   } finally {
     if (watchdogIntervalId !== null) {
       window.clearTimeout(watchdogIntervalId);
