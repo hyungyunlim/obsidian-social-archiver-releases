@@ -24,13 +24,14 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
-  '3.6.0': {
-    title: 'Obsidian Review Cleanup',
+  '3.6.1': {
+    title: 'Obsidian Review Polish',
     date: '2026-05-13',
-    notes: `## Obsidian Review Cleanup
+    notes: `## Obsidian Review Polish
 
-- Removed remaining community-review CSS warnings, including unsupported \`:has()\`, multicolumn layout, short hex colors, \`!important\`, and legacy text properties.
-- Kept the 3.5.9 review fixes: Obsidian 1.10.0 metadata, popout-safe DOM globals, \`requestUrl\` networking, safer timers, and inline-style cleanup.
+- Fixed the mobile bulk toolbar select button so it matches the other icon buttons.
+- Removed the duplicate media-gallery selector warning.
+- Includes the 3.6.0 review cleanup: Obsidian 1.10.0 metadata, popout-safe DOM globals, \`requestUrl\` networking, safer timers, inline-style cleanup, and CSS review-warning cleanup.
 - No intended feature or workflow changes.
 `,
   },

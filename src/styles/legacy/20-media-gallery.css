@@ -39,6 +39,8 @@
 }
 
 .sa-media-gallery-masonry .sa-media-card {
+  display: inline-block;
+  width: 100%;
   margin-bottom: 0
 }
 
@@ -286,11 +288,6 @@
 .sa-media-card .bases-entry-title,
 .sa-media-card .file-embed-title {
   display: none
-}
-
-.sa-media-gallery-masonry .sa-media-card {
-  display: inline-block;
-  width: 100%
 }
 
 .sa-media-card-wide .sa-media-image,
