@@ -905,8 +905,8 @@ body.is-tablet .sa-reader-mode-action-btn svg {
 }
 
 /* Active state for the "Aa" button */
-.sa-reader-typography-button-active {
-  color: var(--interactive-accent) !important;
+.sa-reader-mode-header-btn.sa-reader-typography-button-active {
+  color: var(--interactive-accent);
   background: none
 }
 

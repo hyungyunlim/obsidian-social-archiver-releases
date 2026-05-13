@@ -2414,9 +2414,9 @@ body.is-mobile .sa-flex-between > .sa-flex-row.sa-gap-4 {
 /* Shrink search/filter toggle buttons on mobile
    (they use --sa-height/--sa-width: 40px via setCssProps) */
 body.is-mobile .sa-flex-between .sa-dynamic-height {
-  height: 32px !important;
+  height: 32px;
 }
 
 body.is-mobile .sa-flex-between .sa-dynamic-width {
-  width: 32px !important;
+  width: 32px;
 }

@@ -13,9 +13,9 @@
  */
 
 /* Post body content — user's text/reading font */
-.post-body-text,
-.reader-mode-body {
-  font-family: var(--font-text) !important;
+.post-body-text.post-body-text,
+.reader-mode-body.reader-mode-body {
+  font-family: var(--font-text);
 }
 
 /* ==================== Scroll Performance Optimizations ==================== */
@@ -402,9 +402,9 @@ body:not(.theme-dark) .post-card-skeleton {
 }
 
 /* For masonry layout, natural flow */
-.media-gallery-masonry {
+.media-gallery-masonry.media-gallery-masonry {
   /* Remove the grid display */
-  display: block !important;
+  display: block;
 }
 
 @supports (column-count: 1) {
@@ -561,17 +561,17 @@ body:not(.theme-dark) .post-card-skeleton {
 
 /* Small screens (480px - 768px) - 2 columns */
 @media (max-width: 768px) {
-  .media-gallery-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .media-gallery-grid.media-gallery-grid { grid-template-columns: repeat(2, 1fr); }
   @supports (column-count: 1) {
-    .media-gallery-masonry { column-count: 2 !important; }
+    .media-gallery-masonry.media-gallery-masonry { column-count: 2; }
   }
 }
 
 /* Mobile (< 480px) - 1 column */
 @media (max-width: 480px) {
-  .media-gallery-grid { grid-template-columns: repeat(1, 1fr) !important; }
+  .media-gallery-grid.media-gallery-grid { grid-template-columns: repeat(1, 1fr); }
   @supports (column-count: 1) {
-    .media-gallery-masonry { column-count: 1 !important; }
+    .media-gallery-masonry.media-gallery-masonry { column-count: 1; }
   }
 }
 
@@ -643,8 +643,8 @@ body:not(.theme-dark) .post-card-skeleton {
     opacity: 0.6;
   }
 
-  .lightbox-nav:hover {
-    opacity: 1 !important;
+  .lightbox-content:hover .lightbox-nav:hover {
+    opacity: 1;
     background: rgba(0, 0, 0, 0.5);
   }
 }
@@ -703,12 +703,12 @@ body:not(.theme-dark) .post-card-skeleton {
   padding-left: 1.5em;
 }
 
-.blog-content-inline ul + p,
-.blog-content-inline ol + p,
-.blog-content-inline li + p {
-  margin-left: 0 !important;
-  padding-left: 0 !important;
-  text-indent: 0px !important;
+.blog-content-inline.blog-content-inline ul + p,
+.blog-content-inline.blog-content-inline ol + p,
+.blog-content-inline.blog-content-inline li + p {
+  margin-left: 0;
+  padding-left: 0;
+  text-indent: 0px;
 }
 
 /* Ensure paragraphs have no inherited list indentation */
@@ -992,26 +992,26 @@ body:not(.theme-dark) .post-card-skeleton {
 
 /* Mobile optimizations for series cards */
 @media (max-width: 768px) {
-  .series-header {
+  .series-header.series-header {
     padding: 8px 12px;
     gap: 8px;
     /* Keep single line layout, never wrap */
-    flex-wrap: nowrap !important;
+    flex-wrap: nowrap;
   }
 
-  .series-title-section {
+  .series-title-section.series-title-section {
     flex: 1;
     min-width: 0; /* Allow shrinking */
-    order: 0 !important; /* Always first */
+    order: 0; /* Always first */
   }
 
-  .series-controls {
+  .series-controls.series-controls {
     flex-shrink: 0;
-    order: 1 !important; /* Always after title */
+    order: 1; /* Always after title */
   }
 
-  .series-title-wrapper {
-    gap: 0 !important;
+  .series-title-wrapper.series-title-wrapper {
+    gap: 0;
   }
 
   .series-title {
@@ -1064,19 +1064,19 @@ body:not(.theme-dark) .post-card-skeleton {
   }
 
   /* Fullscreen on mobile - safe area aware */
-  .series-card.series-fullscreen {
+  .series-card.series-fullscreen.series-fullscreen {
     /* Position: full screen */
-    width: 100vw !important;
-    max-width: none !important;
-    top: 0 !important;
-    left: 0 !important;
-    transform: none !important;
-    border-radius: 0 !important;
+    width: 100vw;
+    max-width: none;
+    top: 0;
+    left: 0;
+    transform: none;
+    border-radius: 0;
     /* Height with safe area calculation */
-    height: 100dvh !important;
-    max-height: 100dvh !important;
+    height: 100dvh;
+    max-height: 100dvh;
     /* No padding - safe area handled by children */
-    padding: 0 !important;
+    padding: 0;
     /* Contain layout changes to prevent backdrop flicker during image loading */
     contain: layout style;
   }
@@ -1199,8 +1199,8 @@ body:not(.theme-dark) .post-card-skeleton {
   border-bottom: none;
 }
 
-.episode-list-container[style*="none"] {
-  display: none !important;
+.episode-list-container[style*="none"].episode-list-container {
+  display: none;
   height: 0;
   padding: 0;
   margin: 0;
@@ -1212,9 +1212,9 @@ body:not(.theme-dark) .post-card-skeleton {
 /* Like Naver Webtoon app - hides all UI, shows only images */
 
 /* Fullscreen card - flex layout for proper expansion */
-.series-card.series-fullscreen {
-  display: flex !important;
-  flex-direction: column !important;
+.series-card.series-fullscreen.series-fullscreen {
+  display: flex;
+  flex-direction: column;
 }
 
 /* Base transitions for smooth show/hide */
@@ -1233,10 +1233,10 @@ body:not(.theme-dark) .post-card-skeleton {
 }
 
 /* Fullscreen mode - webtoon scroll container fills available space */
-.series-card.series-fullscreen .webtoon-scroll-container {
+.series-card.series-fullscreen .webtoon-scroll-container.webtoon-scroll-container {
   flex: 1;
-  max-height: none !important;
-  height: auto !important;
+  max-height: none;
+  height: auto;
 }
 
 /* Fullscreen mode - add bottom padding for last image visibility */
@@ -1256,13 +1256,13 @@ body:not(.theme-dark) .post-card-skeleton {
 }
 
 /* Immersive mode - hide episode header inside content */
-.series-card.series-immersive .webtoon-episode-header {
+.series-card.series-immersive .webtoon-episode-header.webtoon-episode-header {
   opacity: 0;
   pointer-events: none;
   height: 0;
   overflow: hidden;
-  padding: 0 !important;
-  border: none !important;
+  padding: 0;
+  border: none;
 }
 
 /* Immersive mode - fade out episode list */
@@ -1277,15 +1277,15 @@ body:not(.theme-dark) .post-card-skeleton {
 }
 
 /* Immersive mode - content fills entire card */
-.series-card.series-immersive .series-content {
-  padding: 0 !important;
+.series-card.series-immersive .series-content.series-content {
+  padding: 0;
 }
 
 /* Immersive mode - webtoon scroll container fills space */
-.series-card.series-immersive .webtoon-scroll-container {
+.series-card.series-immersive .webtoon-scroll-container.webtoon-scroll-container {
   flex: 1;
-  max-height: none !important;
-  height: auto !important;
+  max-height: none;
+  height: auto;
   border-radius: 0;
 }
 
@@ -1304,11 +1304,11 @@ body:not(.theme-dark) .post-card-skeleton {
 /* ==================== Fullscreen Episode List Scroll Fix ==================== */
 /* Toggle header stays fixed, only episode list scrolls */
 
-.series-card.series-fullscreen .series-episode-list-wrapper {
+.series-card.series-fullscreen .series-episode-list-wrapper.series-episode-list-wrapper {
   display: flex;
   flex-direction: column;
   max-height: min(55vh, 560px); /* Dynamic height based on viewport */
-  overflow: hidden !important; /* Override overflow-y:auto on wrapper */
+  overflow: hidden; /* Override overflow-y:auto on wrapper */
 }
 
 .series-card.series-fullscreen .episode-list-toggle {
@@ -1327,8 +1327,8 @@ body:not(.theme-dark) .post-card-skeleton {
   flex-direction: column;
 }
 
-.series-card.series-fullscreen .comments-list-container {
-  max-height: min(35vh, 450px) !important; /* Dynamic height based on viewport */
+.series-card.series-fullscreen .comments-list-container.comments-list-container {
+  max-height: min(35vh, 450px); /* Dynamic height based on viewport */
 }
 
 /* Expand episode list further, especially when comments are also open */
@@ -1336,16 +1336,16 @@ body:not(.theme-dark) .post-card-skeleton {
   max-height: min(50vh, 560px);
 }
 
-.series-card:has(.comments-list-container[style*="block"]):has(.episode-list-container[style*="block"]) .comments-list-container {
-  max-height: min(30vh, 320px) !important;
+.series-card:has(.comments-list-container[style*="block"]):has(.episode-list-container[style*="block"]) .comments-list-container.comments-list-container {
+  max-height: min(30vh, 320px);
 }
 
 .series-card.series-fullscreen:has(.comments-list-container[style*="block"]):has(.episode-list-container[style*="block"]) .series-episode-list-wrapper {
   max-height: min(60vh, 620px);
 }
 
-.series-card.series-fullscreen:has(.comments-list-container[style*="block"]):has(.episode-list-container[style*="block"]) .comments-list-container {
-  max-height: min(25vh, 300px) !important;
+.series-card.series-fullscreen:has(.comments-list-container[style*="block"]):has(.episode-list-container[style*="block"]) .comments-list-container.comments-list-container {
+  max-height: min(25vh, 300px);
 }
 
 @media (max-width: 768px) {
@@ -1364,10 +1364,10 @@ body:not(.theme-dark) .post-card-skeleton {
 
 /* Mobile immersive mode - edge-to-edge with safe area consideration */
 @media (max-width: 768px) {
-  .series-card.series-immersive .webtoon-scroll-container {
+  .series-card.series-immersive .webtoon-scroll-container.webtoon-scroll-container {
     /* No horizontal padding - true full screen width */
-    padding-left: 0 !important;
-    padding-right: 0 !important;
+    padding-left: 0;
+    padding-right: 0;
   }
 
   /* Image wrapper in immersive - full width */
@@ -1387,8 +1387,8 @@ body:not(.theme-dark) .post-card-skeleton {
   }
 
   /* Next Episode button needs bottom safe area padding */
-  .series-card.series-immersive .webtoon-next-episode-btn {
-    bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+  .series-card.series-immersive .webtoon-next-episode-btn.webtoon-next-episode-btn {
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   }
 }
 
