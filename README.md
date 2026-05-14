@@ -178,7 +178,7 @@ Use Social Archiver from the web:
 
 ### Community Plugins
 
-Install Social Archiver directly through Obsidian's plugin browser:
+Social Archiver is officially listed in the Obsidian Community Plugin Store. Install it directly through Obsidian's plugin browser, or open the [Social Archiver plugin page](https://community.obsidian.md/plugins/social-archiver):
 
 1. Open **Settings** → **Community Plugins** → **Browse**
 2. Search for "Social Archiver"
@@ -186,7 +186,9 @@ Install Social Archiver directly through Obsidian's plugin browser:
 
 ### Manual Installation
 
-#### Option 1: BRAT Plugin (Recommended - Auto Updates)
+Manual installation remains available as a fallback for troubleshooting or development.
+
+#### Option 1: BRAT Plugin
 
 Using [BRAT](https://github.com/TfTHacker/obsidian42-brat) allows you to receive automatic updates:
 
