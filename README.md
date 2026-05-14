@@ -331,16 +331,6 @@ Here are my top 3 takeaways that completely changed how I work...
 
 **[Read Full Privacy Policy →](https://docs.social-archive.org/en/privacy)**
 
-## Current Status
-
-**Free Beta**
-- ✅ Completely free - no payment required
-- ✅ Unlimited archiving during beta period
-- ✅ Permanent web sharing (no expiration)
-- ✅ All features available
-
-**[Learn More About Pricing →](https://docs.social-archive.org/en/guide/pricing)**
-
 ## Known Limitations
 
 - **Platform Changes**: Social media platforms may update their structure, temporarily affecting archiving
