@@ -584,7 +584,7 @@ export class MediaGalleryRenderer {
       const mediaItem = media[i];
       if (!mediaItem) return null;
 
-      const resourcePath = this.getResourcePath(mediaItem.url);
+      const resourcePath = maybeProxyCdnUrl(this.getResourcePath(mediaItem.url));
       const isVideo = mediaItem.type === 'video' || isVideoUrl(mediaItem.url);
       const isAudioMedia = mediaItem.type === 'audio' || isAudioUrl(mediaItem.url);
 
@@ -853,8 +853,8 @@ export class MediaGalleryRenderer {
         const mediaItem = media[i];
         if (!mediaItem) continue; // Skip if undefined
 
-        const resourcePath = this.getResourcePath(mediaItem.url);
-        const isVideo = mediaItem.type === 'video' || mediaItem.url.endsWith('.mp4');
+        const resourcePath = maybeProxyCdnUrl(this.getResourcePath(mediaItem.url));
+        const isVideo = mediaItem.type === 'video' || isVideoUrl(mediaItem.url);
 
         const thumbnail = thumbnailsContainer.createDiv();
         thumbnail.addClass('media-thumbnail');

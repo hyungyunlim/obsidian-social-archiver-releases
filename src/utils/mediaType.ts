@@ -6,9 +6,9 @@
 export type MediaType = 'image' | 'video' | 'audio' | 'document';
 
 // File extension patterns
-const VIDEO_EXTENSIONS = /\.(mp4|webm|mov|avi|mkv|m4v)$/i;
-const AUDIO_EXTENSIONS = /\.(mp3|m4a|wav|ogg|flac|aac)$/i;
-const IMAGE_EXTENSIONS = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i;
+const VIDEO_EXTENSIONS = /\.(mp4|webm|mov|avi|mkv|m4v)(?:[?#].*)?$/i;
+const AUDIO_EXTENSIONS = /\.(mp3|m4a|wav|ogg|flac|aac)(?:[?#].*)?$/i;
+const IMAGE_EXTENSIONS = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(?:[?#].*)?$/i;
 
 /**
  * Detect media type from URL or file path

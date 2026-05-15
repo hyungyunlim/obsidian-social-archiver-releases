@@ -10,6 +10,7 @@ import {
 import { MediaGalleryRenderer } from './MediaGalleryRenderer';
 import { CommentRenderer } from './CommentRenderer';
 import { YouTubeEmbedRenderer } from './YouTubeEmbedRenderer';
+import { hasDirectTikTokVideoMedia } from './tiktokMedia';
 import { LinkPreviewRenderer } from './LinkPreviewRenderer';
 import { CompactPostCardRenderer } from './CompactPostCardRenderer';
 import { YouTubePlayerController } from '../controllers/YouTubePlayerController';
@@ -684,6 +685,8 @@ export class PostCardRenderer extends Component {
       await this.renderContent(contentArea, post);
     }
 
+    const hasRenderableTikTokVideo = post.platform === 'tiktok' && hasDirectTikTokVideoMedia(post.media);
+
     // YouTube embed (if YouTube platform)
     if (post.platform === 'youtube') {
       // Extract video ID first - this takes priority
@@ -739,23 +742,10 @@ export class PostCardRenderer extends Component {
       }
     }
     // TikTok embed (if TikTok platform)
-    else if (post.platform === 'tiktok' && post.url) {
-      // Check if we have local video in media (excluding CDN URLs)
-      const hasLocalVideo = post.media && post.media.length > 0 &&
-        post.media.some(m =>
-          m.type === 'video' &&
-          !m.url.startsWith('http') &&
-          !m.url.includes('tiktok.com/video/')
-        );
-
-      if (hasLocalVideo) {
-        // Render local video instead of iframe
-        this.mediaGalleryRenderer.render(contentArea, post.media, post);
-      } else {
-        // Use original URL (not CDN URL) for TikTok embed
-        // Pass both URL and ID - ID will be used for short URLs like vt.tiktok.com
-        this.youtubeEmbedRenderer.renderTikTok(contentArea, post.url, post.id);
-      }
+    else if (post.platform === 'tiktok' && !hasRenderableTikTokVideo && (post.url || post.videoId || post.id)) {
+      // Use original URL (not CDN URL) for TikTok embed. The stored id is used
+      // when the URL is a short TikTok link that does not expose /video/{id}.
+      this.youtubeEmbedRenderer.renderTikTok(contentArea, post.url || '', post.videoId || post.id);
     }
     // Google Maps embed (show location map)
     else if (post.platform === 'googlemaps') {
@@ -770,8 +760,10 @@ export class PostCardRenderer extends Component {
     // For reblogs, media will be shown in the quotedPost card instead
     const isReblogWithQuote = post.isReblog && post.quotedPost;
 
-    // Check if TikTok/YouTube has local media (if so, it was already rendered above)
-    const isVideoEmbed = post.platform === 'youtube' || post.platform === 'tiktok';
+    // Check if TikTok/YouTube has media already handled by the platform branch.
+    // TikTok archives with preserved direct video media should render through the
+    // normal media gallery, matching share-web behavior.
+    const isVideoEmbed = post.platform === 'youtube' || (post.platform === 'tiktok' && !hasRenderableTikTokVideo);
     const hasLocalVideoForEmbed = isVideoEmbed && post.media && post.media.length > 0 &&
       post.media.some(m => m.type === 'video' && !m.url.startsWith('http'));
 
@@ -816,9 +808,9 @@ export class PostCardRenderer extends Component {
     }
 
     // Show transcription intent banner for notes with local video attachments.
-    // For YouTube/TikTok, render it inside renderArchiveSuggestions so it appears
+    // For YouTube/TikTok embeds, render it inside renderArchiveSuggestions so it appears
     // where the download banner was shown.
-    if (!isEmbedded && post.platform !== 'podcast' && post.platform !== 'youtube' && post.platform !== 'tiktok') {
+    if (!isEmbedded && post.platform !== 'podcast' && post.platform !== 'youtube' && !(post.platform === 'tiktok' && !hasRenderableTikTokVideo)) {
       await this.renderVideoTranscriptionSuggestion(contentArea, post, rootElement);
     }
 
@@ -5379,6 +5371,9 @@ export class PostCardRenderer extends Component {
       const hasLocalVideo = post.media.some((mediaItem) =>
         mediaItem.type === 'video' && mediaItem.url && !mediaItem.url.startsWith('http')
       );
+      const hasRenderableVideo = post.platform === 'tiktok'
+        ? hasDirectTikTokVideoMedia(post.media)
+        : hasLocalVideo;
       const urlMarkerMatches = (markerPrefix: 'downloaded:' | 'declined:'): boolean =>
         downloadedUrls.some((entry) => {
           if (!entry.startsWith(markerPrefix)) return false;
@@ -5390,7 +5385,7 @@ export class PostCardRenderer extends Component {
       const isDownloaded = urlMarkerMatches('downloaded:');
       const isDownloadDeclined = urlMarkerMatches('declined:');
 
-      if (hasLocalVideo || isDownloaded) {
+      if (hasRenderableVideo || isDownloaded) {
         await this.renderVideoTranscriptionSuggestion(contentArea, post, rootElement);
       } else if (!isDownloadDeclined) {
         // Check if yt-dlp is available

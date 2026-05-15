@@ -1,3 +1,5 @@
+import { extractTikTokVideoId } from './tiktokMedia';
+
 /**
  * YouTubeEmbedRenderer - Renders YouTube and TikTok embeds
  * Single Responsibility: Video embed rendering
@@ -54,14 +56,8 @@ export class YouTubeEmbedRenderer {
   /**
    * Render TikTok embed iframe (direct method)
    */
-  renderTikTok(container: HTMLElement, url: string, _videoId?: string): void {
-    // Always extract video ID from URL (don't trust the passed videoId parameter)
-    // URL patterns:
-    // - https://www.tiktok.com/@username/video/1234567890
-    // - https://vm.tiktok.com/ZMabcdefg/ (short URL - cannot extract ID)
-    // - https://vt.tiktok.com/ZSyUa2Y4q/ (short URL - cannot extract ID)
-    const videoIdMatch = url.match(/\/video\/(\d+)/);
-    const finalVideoId = videoIdMatch ? videoIdMatch[1] : null;
+  renderTikTok(container: HTMLElement, url: string, videoId?: string): void {
+    const finalVideoId = extractTikTokVideoId(url, videoId);
 
     if (!finalVideoId) {
       // Fallback: show link
