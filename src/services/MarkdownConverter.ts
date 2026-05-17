@@ -1810,7 +1810,7 @@ export class MarkdownConverter implements IService {
     section += `### ${platformName} - ${authorName}\n\n`;
 
     // Content as plain text (hashtags are already included in text)
-    const contentText = quotedPost.content.text.trim();
+    const contentText = (quotedPost.content.text || quotedPost.content.markdown || '').trim();
     if (contentText) {
       section += `${contentText}\n\n`;
     }

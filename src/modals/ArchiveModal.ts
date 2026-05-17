@@ -45,6 +45,23 @@ import type { CreateSubscriptionInput } from '@/services/SubscriptionManager';
 import {
   getPlatformSimpleIcon,
 } from '@/services/IconService';
+import type { CliMediaMode } from '@/plugin/cli/ArchiveCliService';
+
+/**
+ * Map the modal's MediaDownloadMode to the CLI service's CliMediaMode.
+ * Kept module-local to avoid leaking modal-specific naming into the service.
+ */
+function mapDownloadModeToCliMediaMode(mode: MediaDownloadMode): CliMediaMode {
+  switch (mode) {
+    case 'text-only':
+      return 'none';
+    case 'images-only':
+      return 'images';
+    case 'images-and-videos':
+    default:
+      return 'all';
+  }
+}
 
 /**
  * Archive Modal - Minimal Obsidian Native Style
@@ -2372,26 +2389,28 @@ export class ArchiveModal extends Modal {
       // Step 1: Close modal immediately (no preliminary doc - banner shows progress)
       this.close();
 
-      // Step 2: Create pending job (no filePath - single-write on completion)
-      const jobId = `job-${Date.now()}`;
-      const pendingJob = {
-        id: jobId,
-        url: archiveUrl,
-        platform: this.detectedPlatform,
-        status: 'pending' as const,
-        timestamp: Date.now(),
-        retryCount: 0,
-          metadata: {
-            notes: this.comment && this.comment.trim() ? this.comment.trim() : undefined,
-            downloadMedia: this.downloadMedia,
-            includeComments: this.includeComments,
-            includeTranscript: this.detectedPlatform === 'youtube' ? this.includeTranscript : undefined,
-            includeFormattedTranscript: this.detectedPlatform === 'youtube' ? this.includeFormattedTranscript : undefined,
-            isPinterestBoard: this.detectedPlatform === 'pinterest' ? this.isPinterestBoard : undefined,
-            originalUrl: this.url,
-            selectedTags: this.selectedTags.length > 0 ? sanitizeTagNames(this.selectedTags) : undefined,
-          }
-        };
+      // Step 2: Build pending job via shared CLI service (single source of
+      // truth for queue-mode construction). The modal owns lock + tracker +
+      // notice; the service is a pure builder here.
+      const pendingJob = this.plugin.archiveCliService.buildPendingJob(
+        archiveUrl,
+        this.detectedPlatform,
+        this.url,
+        {
+          platform: this.detectedPlatform,
+          mediaMode: mapDownloadModeToCliMediaMode(this.downloadMedia),
+          includeComments: this.includeComments,
+          includeTranscript:
+            this.detectedPlatform === 'youtube' ? this.includeTranscript : undefined,
+          includeFormattedTranscript:
+            this.detectedPlatform === 'youtube' ? this.includeFormattedTranscript : undefined,
+          comment: this.comment,
+          tags: this.selectedTags,
+          pinterestBoard:
+            this.detectedPlatform === 'pinterest' ? this.isPinterestBoard : undefined,
+        },
+      );
+      const jobId = pendingJob.id;
 
       // Step 3: Add job to PendingJobsManager
       await this.plugin.pendingJobsManager.addJob(pendingJob);

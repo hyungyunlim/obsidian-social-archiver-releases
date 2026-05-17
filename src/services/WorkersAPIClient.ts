@@ -19,15 +19,9 @@ import type {
   CancelPendingJobResponse,
 } from '@/types/pending-job';
 import type { TextHighlight, UserNote } from '@/types/annotations';
-import type {
-  AuthorProfileSystemUpsertInput,
-  AuthorProfileUpsertInput,
-  UserAuthorProfile,
-} from '@/types/author-profile';
-import type {
-  BillingEventApiPayload,
-  BillingEventsResponse,
-} from '@/types/billing-events';
+import type { AuthorProfileSystemUpsertInput, AuthorProfileUpsertInput, UserAuthorProfile } from '@/types/author-profile';
+import type { BillingEventApiPayload, BillingEventsResponse } from '@/types/billing-events';
+import type { AICommentType } from '@/types/ai-comment';
 
 // ============================================================================
 // Multi-Client Sync Types
@@ -68,6 +62,110 @@ export interface UpdateSyncClientRequest {
   clientName?: string;
   enabled?: boolean;
   settings?: Record<string, unknown>;
+}
+
+// ============================================================================
+// AI Comment Job Types
+// ============================================================================
+
+export type AICommentProviderId = 'claude' | 'gemini' | 'codex';
+export type AICommentJobStatus =
+  | 'queued'
+  | 'dispatched'
+  | 'claimed'
+  | 'preparing'
+  | 'running'
+  | 'uploading'
+  | 'retry_scheduled'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'expired';
+
+export interface AICommentExecutorJob {
+  jobId: string;
+  archiveId: string;
+  targetClientId: string;
+  status: AICommentJobStatus;
+  progressPercentage?: number;
+  progressMessage?: string;
+  type: string;
+  provider: AICommentProviderId;
+  model?: string | null;
+  outputLanguage: string;
+  customPrompt?: string | null;
+  archiveUpdatedAt?: string;
+  archiveContentHash?: string;
+  archiveSnapshot?: unknown;
+  nextAttemptAt?: string;
+  cancelRequestedAt?: string;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export interface AICommentJobSummary {
+  jobId: string;
+  archiveId: string;
+  targetClientId: string;
+  status: AICommentJobStatus;
+  uiStatus: 'waiting' | 'preparing' | 'running' | 'done' | 'needs_action';
+  progressPercentage?: number;
+  progressMessage?: string;
+  nextAttemptAt?: string;
+  lastHeartbeatAt?: string;
+  errorCode?: string;
+  errorMessagePublic?: string;
+  updatedAt: string;
+}
+
+export interface AICommentClaimResponse {
+  jobId: string;
+  lockToken: string;
+  lockTokenVersion: number;
+  leaseExpiresAt: string;
+  archiveId: string;
+  archiveUpdatedAt?: string;
+  archiveContentHash?: string;
+  type: string;
+  provider: AICommentProviderId;
+  model?: string | null;
+  outputLanguage: string;
+}
+
+export interface AICommentLeaseResponse {
+  job: AICommentJobSummary;
+  lockToken: string;
+  lockTokenVersion: number;
+  leaseExpiresAt: string;
+}
+
+export interface AICommentProviderCapability {
+  id: AICommentProviderId;
+  available: boolean;
+  authenticated: boolean;
+  version?: string;
+  errorCode?: string;
+  models?: AICommentModelOption[];
+  defaultModel?: string;
+}
+
+export interface AICommentModelOption {
+  id: string;
+  label: string;
+  description?: string;
+  recommended?: boolean;
+}
+
+export interface AICommentExecutorCapabilityPayload {
+  enabled: boolean;
+  status: 'ready' | 'settings_disabled' | 'unsupported_runtime' | 'provider_missing' | 'provider_auth_required' | 'error';
+  providers: AICommentProviderCapability[];
+  defaultProvider?: AICommentProviderId;
+  supportedTypes: string[];
+  outputLanguage: string;
+  platformVisibilityHash: string;
+  pluginVersion: string;
+  updatedAt: string;
 }
 
 export interface SyncQueueItem {
@@ -201,6 +299,23 @@ export interface UserArchive {
   userNoteCount?: number;
   userHighlights?: TextHighlight[];
   userHighlightCount?: number;
+  aiComments?: AICommentPayload[];
+}
+
+export interface AICommentPayload {
+  meta: {
+    id: string;
+    cli: 'claude' | 'gemini' | 'codex';
+    model?: string;
+    type: AICommentType;
+    generatedAt: string;
+    processingTime?: number;
+    contentHash?: string;
+    customPrompt?: string;
+    sourceLanguage?: string;
+    targetLanguage?: string;
+  };
+  content: string;
 }
 
 export interface GetUserArchiveResponse {
@@ -561,7 +676,7 @@ export class WorkersAPIClient implements IService {
       const response = await requestUrl({
         url: `${this.config.endpoint}/health`,
         method: 'GET',
-        throw: false
+        throw: false,
       });
       return response.status === 200;
     } catch {
@@ -626,7 +741,7 @@ export class WorkersAPIClient implements IService {
     if (jobIds.length === 0) {
       return {
         success: true,
-        results: []
+        results: [],
       };
     }
 
@@ -701,9 +816,7 @@ export class WorkersAPIClient implements IService {
         return [];
       }
 
-      const body = response.json as
-        | { success?: boolean; data?: Partial<BillingEventsResponse> }
-        | undefined;
+      const body = response.json as { success?: boolean; data?: Partial<BillingEventsResponse> } | undefined;
       if (!body || body.success !== true) {
         return [];
       }
@@ -757,9 +870,7 @@ export class WorkersAPIClient implements IService {
       return false;
     }
 
-    const body = response.json as
-      | { success?: boolean; data?: { dismissed?: boolean } }
-      | undefined;
+    const body = response.json as { success?: boolean; data?: { dismissed?: boolean } } | undefined;
     if (!body || body.success !== true) {
       return false;
     }
@@ -770,10 +881,7 @@ export class WorkersAPIClient implements IService {
    * Poll job until completed
    * Returns PostData to match ApiClient interface
    */
-  async waitForJob(
-    jobId: string,
-    onProgress?: (progress: number) => void
-  ): Promise<unknown> {
+  async waitForJob(jobId: string, onProgress?: (progress: number) => void): Promise<unknown> {
     const timeout = 300000; // 5 minutes (TikTok can take up to 4 minutes)
     const pollInterval = 2000; // 2 seconds default
     const startTime = Date.now();
@@ -841,18 +949,13 @@ export class WorkersAPIClient implements IService {
   /**
    * Trigger batch archive for multiple URLs (Google Maps only)
    */
-  async triggerBatchArchive(
-    request: BatchArchiveTriggerRequest
-  ): Promise<BatchArchiveTriggerResponse> {
+  async triggerBatchArchive(request: BatchArchiveTriggerRequest): Promise<BatchArchiveTriggerResponse> {
     this.ensureInitialized();
 
-    const response = await this.request<BatchArchiveTriggerResponse>(
-      '/api/archive/batch-trigger',
-      {
-        method: 'POST',
-        body: JSON.stringify(request),
-      }
-    );
+    const response = await this.request<BatchArchiveTriggerResponse>('/api/archive/batch-trigger', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
 
     return response;
   }
@@ -863,12 +966,9 @@ export class WorkersAPIClient implements IService {
   async getBatchJobStatus(batchJobId: string): Promise<BatchArchiveJobStatusResponse> {
     this.ensureInitialized();
 
-    const response = await this.request<BatchArchiveJobStatusResponse>(
-      `/api/archive/${batchJobId}`,
-      {
-        method: 'GET',
-      }
-    );
+    const response = await this.request<BatchArchiveJobStatusResponse>(`/api/archive/${batchJobId}`, {
+      method: 'GET',
+    });
 
     return response;
   }
@@ -878,7 +978,7 @@ export class WorkersAPIClient implements IService {
    */
   async waitForBatchJob(
     batchJobId: string,
-    onProgress?: (completed: number, total: number) => void
+    onProgress?: (completed: number, total: number) => void,
   ): Promise<BatchArchiveJobStatusResponse> {
     const pollInterval = 3000; // 3 seconds for batch jobs
     const maxAttempts = 60; // 3 minutes max
@@ -896,10 +996,7 @@ export class WorkersAPIClient implements IService {
 
       // Report progress
       if (onProgress && status.batchMetadata) {
-        onProgress(
-          status.batchMetadata.completedCount,
-          status.batchMetadata.urlCount
-        );
+        onProgress(status.batchMetadata.completedCount, status.batchMetadata.urlCount);
       }
 
       // Wait before next poll
@@ -988,10 +1085,7 @@ export class WorkersAPIClient implements IService {
   /**
    * Make HTTP request
    */
-  private async request<T>(
-    path: string,
-    options: Partial<RequestUrlParam> = {}
-  ): Promise<T> {
+  private async request<T>(path: string, options: Partial<RequestUrlParam> = {}): Promise<T> {
     const url = `${this.config.endpoint}${path}`;
 
     // Build headers with optional Authorization
@@ -1002,6 +1096,9 @@ export class WorkersAPIClient implements IService {
       'X-Platform': this.getPlatformIdentifier(),
       ...options.headers,
     };
+    if (this.config.clientId && !headers['X-Client-Id']) {
+      headers['X-Client-Id'] = this.config.clientId;
+    }
 
     // Add Bearer token if available
     if (this.config.authToken) {
@@ -1023,7 +1120,11 @@ export class WorkersAPIClient implements IService {
       // Handle errors
       if (!data.success) {
         const error = new Error(data.error?.message || 'Unknown API error');
-        const extError = error as Error & { code?: string; details?: unknown; status?: number };
+        const extError = error as Error & {
+          code?: string;
+          details?: unknown;
+          status?: number;
+        };
         extError.code = data.error?.code;
         extError.details = data.error?.details;
         extError.status = response.status;
@@ -1031,12 +1132,11 @@ export class WorkersAPIClient implements IService {
       }
 
       return data.data as T;
-
     } catch (error) {
       console.error('[WorkersAPIClient] Request failed:', {
         url,
         error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined
+        stack: error instanceof Error ? error.stack : undefined,
       });
       throw error;
     }
@@ -1068,9 +1168,7 @@ export class WorkersAPIClient implements IService {
           url: urlString.length > 100 ? urlString.substring(0, 100) + '...' : urlString,
           error: error instanceof Error ? error.message : String(error),
         });
-        throw new Error(
-          `Failed to fetch media: ${error instanceof Error ? error.message : String(error)}`
-        );
+        throw new Error(`Failed to fetch media: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
 
@@ -1091,15 +1189,12 @@ export class WorkersAPIClient implements IService {
 
       // Return binary data
       return response.arrayBuffer;
-
     } catch (error) {
       console.error('[WorkersAPIClient] Media proxy failed:', {
         url: urlString.length > 100 ? urlString.substring(0, 100) + '...' : urlString,
         error: error instanceof Error ? error.message : String(error),
       });
-      throw new Error(
-        `Failed to proxy media: ${error instanceof Error ? error.message : String(error)}`
-      );
+      throw new Error(`Failed to proxy media: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -1137,10 +1232,7 @@ export class WorkersAPIClient implements IService {
       this.ensureInitialized();
 
       const encodedUrl = encodeURIComponent(feedUrl);
-      const response = await this.request<FeedDetectionData>(
-        `/api/detect-feed?url=${encodedUrl}`,
-        { method: 'GET' }
-      );
+      const response = await this.request<FeedDetectionData>(`/api/detect-feed?url=${encodedUrl}`, { method: 'GET' });
 
       return response;
     } catch (error) {
@@ -1388,6 +1480,8 @@ export class WorkersAPIClient implements IService {
       isLiked?: boolean;
       isBookmarked?: boolean;
       shareUrl?: string | null;
+      aiComments?: AICommentPayload[];
+      clearAIComments?: boolean;
       userNotes?: UserNote[];
       userHighlights?: TextHighlight[];
     },
@@ -1421,7 +1515,11 @@ export class WorkersAPIClient implements IService {
    * @returns Updated IDs and per-item failures
    */
   async bulkUpdateArchiveActions(
-    actions: Array<{ archiveId: string; isLiked?: boolean; isBookmarked?: boolean }>,
+    actions: Array<{
+      archiveId: string;
+      isLiked?: boolean;
+      isBookmarked?: boolean;
+    }>,
   ): Promise<{
     updatedIds: string[];
     failed: Array<{ archiveId: string; code: string; message: string }>;
@@ -1474,6 +1572,123 @@ export class WorkersAPIClient implements IService {
 
     return await this.request<{ ticket: string; expiresAt: string }>('/api/user/ws-ticket', {
       method: 'POST',
+      body: JSON.stringify({ clientId: this.config.clientId }),
+    });
+  }
+
+  async refreshSyncClientCapability(
+    clientId: string,
+    capability: AICommentExecutorCapabilityPayload | null,
+    runtime: 'desktop' | 'mobile' | 'unknown',
+  ): Promise<{ client: SyncClient }> {
+    this.ensureInitialized();
+    return this.request<{ client: SyncClient }>(`/api/sync/clients/${clientId}/capability/refresh`, {
+      method: 'POST',
+      body: JSON.stringify({
+        runtime,
+        capabilities: capability ? { aiCommentExecutor: capability } : undefined,
+      }),
+    });
+  }
+
+  async getAvailableAICommentJobs(targetClientId: string): Promise<{ jobs: AICommentExecutorJob[] }> {
+    this.ensureInitialized();
+    return this.request<{ jobs: AICommentExecutorJob[] }>(
+      `/api/ai-comments/jobs?targetClientId=${encodeURIComponent(targetClientId)}&state=available`,
+      { method: 'GET' },
+    );
+  }
+
+  async getAICommentJob(jobId: string): Promise<{ job: AICommentExecutorJob }> {
+    this.ensureInitialized();
+    return this.request<{ job: AICommentExecutorJob }>(`/api/ai-comments/jobs/${jobId}`, {
+      method: 'GET',
+    });
+  }
+
+  async claimAICommentJob(
+    jobId: string,
+    request: {
+      clientId: string;
+      capabilityStatus: string;
+      provider: AICommentProviderId;
+    },
+  ): Promise<AICommentClaimResponse> {
+    this.ensureInitialized();
+    return this.request<AICommentClaimResponse>(`/api/ai-comments/jobs/${jobId}/claim`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async updateAICommentJobProgress(
+    jobId: string,
+    request: {
+      clientId: string;
+      lockToken: string;
+      lockTokenVersion: number;
+      status: AICommentJobStatus;
+      progressPercentage?: number;
+      progressMessage?: string;
+    },
+  ): Promise<AICommentLeaseResponse> {
+    this.ensureInitialized();
+    return this.request<AICommentLeaseResponse>(`/api/ai-comments/jobs/${jobId}/progress`, {
+      method: 'PATCH',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async uploadAICommentJobResult(
+    jobId: string,
+    request: {
+      clientId: string;
+      lockToken: string;
+      lockTokenVersion: number;
+      comment: {
+        meta: Record<string, unknown>;
+        content: string;
+      };
+    },
+  ): Promise<{ job: AICommentJobSummary; comment: unknown }> {
+    this.ensureInitialized();
+    return this.request<{ job: AICommentJobSummary; comment: unknown }>(`/api/ai-comments/jobs/${jobId}/result`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async failAICommentJob(
+    jobId: string,
+    request: {
+      clientId: string;
+      lockToken?: string;
+      lockTokenVersion?: number;
+      errorCode: string;
+      retryable: boolean;
+    },
+  ): Promise<{ job: AICommentJobSummary }> {
+    this.ensureInitialized();
+    return this.request<{ job: AICommentJobSummary }>(`/api/ai-comments/jobs/${jobId}/fail`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async cancelAICommentJob(
+    jobId: string,
+    request: {
+      clientId: string;
+      reason?: string;
+      confirm?: boolean;
+      lockToken?: string;
+      lockTokenVersion?: number;
+    },
+  ): Promise<{ job: AICommentJobSummary }> {
+    this.ensureInitialized();
+    return this.request<{ job: AICommentJobSummary }>(`/api/ai-comments/jobs/${jobId}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify(request),
     });
   }
 
@@ -1505,10 +1720,7 @@ export class WorkersAPIClient implements IService {
    * @param clientId - Source client ID for echo suppression (sent as X-Client-Id header)
    * @returns Upserted count and server time
    */
-  async upsertTags(
-    tags: TagUpsertInput[],
-    clientId: string,
-  ): Promise<UpsertTagsResult> {
+  async upsertTags(tags: TagUpsertInput[], clientId: string): Promise<UpsertTagsResult> {
     this.ensureInitialized();
 
     const extraHeaders: Record<string, string> = {};
@@ -1532,10 +1744,7 @@ export class WorkersAPIClient implements IService {
    * @param clientId - Source client ID for echo suppression (sent as X-Client-Id header)
    * @returns Upserted count and server time
    */
-  async upsertArchiveTags(
-    mappings: ArchiveTagMappingInput[],
-    clientId: string,
-  ): Promise<UpsertArchiveTagsResult> {
+  async upsertArchiveTags(mappings: ArchiveTagMappingInput[], clientId: string): Promise<UpsertArchiveTagsResult> {
     this.ensureInitialized();
 
     const extraHeaders: Record<string, string> = {};
@@ -1553,10 +1762,12 @@ export class WorkersAPIClient implements IService {
   /**
    * Get editable author profiles stored on the server.
    */
-  async getUserAuthorProfiles(params: {
-    updatedAfter?: string;
-    authorKey?: string;
-  } = {}): Promise<UserAuthorProfilesResponse> {
+  async getUserAuthorProfiles(
+    params: {
+      updatedAfter?: string;
+      authorKey?: string;
+    } = {},
+  ): Promise<UserAuthorProfilesResponse> {
     this.ensureInitialized();
 
     const query = new URLSearchParams();
@@ -1564,19 +1775,13 @@ export class WorkersAPIClient implements IService {
     if (params.authorKey) query.set('authorKey', params.authorKey);
 
     const suffix = query.toString();
-    return await this.request<UserAuthorProfilesResponse>(
-      `/api/user/author-profiles${suffix ? `?${suffix}` : ''}`,
-      { method: 'GET' },
-    );
+    return await this.request<UserAuthorProfilesResponse>(`/api/user/author-profiles${suffix ? `?${suffix}` : ''}`, { method: 'GET' });
   }
 
   /**
    * Upsert editable author profiles on the server.
    */
-  async upsertUserAuthorProfiles(
-    profiles: AuthorProfileUpsertInput[],
-    clientId: string,
-  ): Promise<UpsertAuthorProfilesResult> {
+  async upsertUserAuthorProfiles(profiles: AuthorProfileUpsertInput[], clientId: string): Promise<UpsertAuthorProfilesResult> {
     this.ensureInitialized();
 
     const extraHeaders: Record<string, string> = {};
@@ -1594,10 +1799,7 @@ export class WorkersAPIClient implements IService {
   /**
    * Upsert system-fetched author profile metadata on the server.
    */
-  async upsertUserAuthorProfilesSystem(
-    profiles: AuthorProfileSystemUpsertInput[],
-    clientId: string,
-  ): Promise<UpsertAuthorProfilesResult> {
+  async upsertUserAuthorProfilesSystem(profiles: AuthorProfileSystemUpsertInput[], clientId: string): Promise<UpsertAuthorProfilesResult> {
     this.ensureInitialized();
 
     const extraHeaders: Record<string, string> = {};
@@ -1621,10 +1823,7 @@ export class WorkersAPIClient implements IService {
    * @param clientId - Source client ID for echo suppression (sent as X-Client-Id header)
    * @returns Deleted count
    */
-  async deleteArchiveTags(
-    pairs: ArchiveTagMappingInput[],
-    clientId: string,
-  ): Promise<{ deleted: number }> {
+  async deleteArchiveTags(pairs: ArchiveTagMappingInput[], clientId: string): Promise<{ deleted: number }> {
     this.ensureInitialized();
 
     const extraHeaders: Record<string, string> = {};
@@ -1653,7 +1852,7 @@ export class WorkersAPIClient implements IService {
     file: ArrayBuffer,
     filename: string,
     contentType: string,
-    index: number
+    index: number,
   ): Promise<ComposedMediaUploadResult> {
     this.ensureInitialized();
 
@@ -1666,7 +1865,13 @@ export class WorkersAPIClient implements IService {
     return await this.request<ComposedMediaUploadResult>('/api/user/posts/media', {
       method: 'POST',
       headers: extraHeaders,
-      body: JSON.stringify({ clientPostId, filename, contentType, index, data: base64 }),
+      body: JSON.stringify({
+        clientPostId,
+        filename,
+        contentType,
+        index,
+        data: base64,
+      }),
     });
   }
 
@@ -1675,9 +1880,7 @@ export class WorkersAPIClient implements IService {
    *
    * POST /api/user/posts
    */
-  async createComposedPost(
-    request: CreateComposedPostRequest
-  ): Promise<{ archiveId: string; createdAt: string }> {
+  async createComposedPost(request: CreateComposedPostRequest): Promise<{ archiveId: string; createdAt: string }> {
     this.ensureInitialized();
 
     const extraHeaders: Record<string, string> = {};
@@ -1697,10 +1900,7 @@ export class WorkersAPIClient implements IService {
    *
    * PUT /api/user/posts/:archiveId
    */
-  async updateComposedPost(
-    archiveId: string,
-    request: UpdateComposedPostRequest
-  ): Promise<{ success: boolean; updatedAt: string }> {
+  async updateComposedPost(archiveId: string, request: UpdateComposedPostRequest): Promise<{ success: boolean; updatedAt: string }> {
     this.ensureInitialized();
 
     const extraHeaders: Record<string, string> = {};
@@ -1708,14 +1908,11 @@ export class WorkersAPIClient implements IService {
       extraHeaders['X-Client-Id'] = this.config.clientId;
     }
 
-    return await this.request<{ success: boolean; updatedAt: string }>(
-      `/api/user/posts/${encodeURIComponent(archiveId)}`,
-      {
-        method: 'PUT',
-        headers: extraHeaders,
-        body: JSON.stringify(request),
-      }
-    );
+    return await this.request<{ success: boolean; updatedAt: string }>(`/api/user/posts/${encodeURIComponent(archiveId)}`, {
+      method: 'PUT',
+      headers: extraHeaders,
+      body: JSON.stringify(request),
+    });
   }
 
   // ============================================================================
@@ -1728,10 +1925,7 @@ export class WorkersAPIClient implements IService {
    * Fire-and-forget — callers should not depend on the result for the
    * main re-download flow.  The server will re-fetch & store media in R2.
    */
-  async represerveMedia(
-    archiveId: string,
-    reason: string = 'client_redownload_command'
-  ): Promise<{ success: boolean; error?: string }> {
+  async represerveMedia(archiveId: string, reason: string = 'client_redownload_command'): Promise<{ success: boolean; error?: string }> {
     try {
       this.ensureInitialized();
 
@@ -1740,7 +1934,7 @@ export class WorkersAPIClient implements IService {
         {
           method: 'POST',
           body: JSON.stringify({ reason }),
-        }
+        },
       );
     } catch (error) {
       console.error(`[WorkersAPIClient] represerveMedia failed for ${archiveId}:`, error);

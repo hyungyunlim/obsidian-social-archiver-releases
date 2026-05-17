@@ -29,6 +29,7 @@ import { LibrarySyncBanner } from './LibrarySyncBanner';
 import { CrawlStatusBanner } from './CrawlStatusBanner';
 import { ArchiveProgressBanner } from './ArchiveProgressBanner';
 import { CrossPostStatusBanner } from './CrossPostStatusBanner';
+import { AICommentJobStatusBanner } from './AICommentJobStatusBanner';
 import { NoticeBanner } from './NoticeBanner';
 import { NoticeDetailModal } from '../../modals/NoticeDetailModal';
 import type { NoticePayloadV1 } from '../../types/notices';
@@ -304,6 +305,10 @@ export class TimelineContainer {
 
   // Cross-post status banner component (ephemeral, no tracker)
   private crossPostBanner: CrossPostStatusBanner | null = null;
+
+  // AI comment job banner component
+  private aiCommentJobStatusBanner: AICommentJobStatusBanner | null = null;
+  private aiCommentJobStatusBannerUnsubscribe: (() => void) | null = null;
 
   // Tag chip bar for filtering by user-defined tags
   private tagChipBar: TagChipBar;
@@ -2005,6 +2010,38 @@ export class TimelineContainer {
     if (this.archiveProgressBanner) {
       this.archiveProgressBanner.destroy();
       this.archiveProgressBanner = null;
+    }
+  }
+
+  private renderAICommentJobStatusBanner(): void {
+    this.destroyAICommentJobStatusBanner();
+    const processor = this.plugin.aiCommentJobProcessor;
+    if (!processor) return;
+
+    const bannerContainer = this.containerEl.createDiv({
+      cls: 'max-w-2xl mx-auto'
+    });
+
+    this.aiCommentJobStatusBanner = new AICommentJobStatusBanner(bannerContainer);
+    this.aiCommentJobStatusBanner.onCancel((jobId) => {
+      void processor.cancelJob(jobId);
+    });
+    this.aiCommentJobStatusBanner.onDismiss((jobId) => {
+      processor.dismissJob(jobId);
+    });
+    this.aiCommentJobStatusBannerUnsubscribe = processor.onUpdate((state) => {
+      this.aiCommentJobStatusBanner?.update(state);
+    });
+  }
+
+  private destroyAICommentJobStatusBanner(): void {
+    if (this.aiCommentJobStatusBannerUnsubscribe) {
+      this.aiCommentJobStatusBannerUnsubscribe();
+      this.aiCommentJobStatusBannerUnsubscribe = null;
+    }
+    if (this.aiCommentJobStatusBanner) {
+      this.aiCommentJobStatusBanner.destroy();
+      this.aiCommentJobStatusBanner = null;
     }
   }
 
@@ -4637,6 +4674,7 @@ export class TimelineContainer {
             this.renderLibrarySyncBanner();
             this.renderCrawlStatusBanner();
             this.renderArchiveProgressBanner();
+            this.renderAICommentJobStatusBanner();
             this.renderCrossPostStatusBanner();
 
             void this.loadPosts();
@@ -4700,6 +4738,7 @@ export class TimelineContainer {
     this.renderLibrarySyncBanner();
     this.renderCrawlStatusBanner();
     this.renderArchiveProgressBanner();
+    this.renderAICommentJobStatusBanner();
     this.renderCrossPostStatusBanner();
 
     // Add Subscriptions header
@@ -4805,6 +4844,7 @@ export class TimelineContainer {
     this.renderLibrarySyncBanner();
     this.renderCrawlStatusBanner();
     this.renderArchiveProgressBanner();
+    this.renderAICommentJobStatusBanner();
     this.renderCrossPostStatusBanner();
 
     // Mark that posts have been rendered (for subsequent reloads)
@@ -5165,18 +5205,22 @@ export class TimelineContainer {
       if (!feed) return;
 
       const existingCard = feed.querySelector<HTMLElement>(`[data-file-path="${CSS.escape(filePath)}"]`);
-      if (!existingCard || !existingCard.parentElement) return;
+      const parent = existingCard?.parentElement;
+      if (!existingCard || !parent || !existingCard.isConnected) return;
 
       const tempContainer = activeDocument.createElement('div');
       await this.postCardRenderer.render(tempContainer, post);
       const newCard = tempContainer.firstElementChild as HTMLElement;
       if (!newCard) return;
 
+      // Rendering can yield while the virtualized timeline recycles/removes the old card.
+      if (!existingCard.isConnected || existingCard.parentElement !== parent) return;
+
       newCard.setAttribute('data-post-id', post.id);
       newCard.setAttribute('data-platform', post.platform);
       newCard.setAttribute('data-file-path', filePath);
 
-      existingCard.parentElement.replaceChild(newCard, existingCard);
+      parent.replaceChild(newCard, existingCard);
       this.observerManager.trackRenderedCard(newCard, post);
     } catch (error) {
       console.error('[TimelineContainer] Failed to re-render card in place:', filePath, error);
@@ -7017,6 +7061,9 @@ export class TimelineContainer {
     // Clean up ArchiveProgressBanner
     this.destroyArchiveProgressBanner();
 
+    // Clean up AI comment job banner
+    this.destroyAICommentJobStatusBanner();
+
     // Clean up CrossPostStatusBanner
     this.destroyCrossPostStatusBanner();
 
@@ -7573,6 +7620,7 @@ export class TimelineContainer {
     this.renderLibrarySyncBanner();
     this.renderCrawlStatusBanner();
     this.renderArchiveProgressBanner();
+    this.renderAICommentJobStatusBanner();
     this.renderCrossPostStatusBanner();
 
     // Render gallery group controls (below header)

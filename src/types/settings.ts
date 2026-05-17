@@ -1,6 +1,7 @@
 import { Platform } from 'obsidian';
 import { TIMELINE_PLATFORM_IDS } from '../constants/timelinePlatforms';
 import type { AICommentSettings } from './ai-comment';
+import type { LocalAICommentPendingUpload } from './ai-comment-job';
 import { DEFAULT_AI_COMMENT_SETTINGS } from './ai-comment';
 import type { PluginTTSProviderId } from '../services/tts/types';
 import type { SeriesCurrentEpisodeState } from './series';
@@ -547,6 +548,7 @@ export interface SocialArchiverSettings {
 
   // AI Comment Settings
   aiComment: AICommentSettings;
+  aiCommentPendingUploads: Record<string, LocalAICommentPendingUpload>;
 
   // Text-to-Speech Settings
   tts: PluginTTSSettings;
@@ -733,6 +735,7 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
 
   // AI Comment Settings
   aiComment: DEFAULT_AI_COMMENT_SETTINGS,
+  aiCommentPendingUploads: {},
 
   // Text-to-Speech Settings
   tts: DEFAULT_TTS_SETTINGS,
@@ -1089,6 +1092,9 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
   // Initialize multi-client sync settings if missing (migration)
   if (migrated.syncClientId === undefined) {
     migrated.syncClientId = '';
+  }
+  if (!migrated.aiCommentPendingUploads || typeof migrated.aiCommentPendingUploads !== 'object') {
+    migrated.aiCommentPendingUploads = {};
   }
 
   // Phase 3 migration: enableMobileAnnotationSync default ON.

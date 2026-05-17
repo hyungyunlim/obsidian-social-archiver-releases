@@ -24,6 +24,7 @@ export default defineConfig(
       'scripts/**',
       'reference/**',
       'docs/**',
+      'src/vendor/**',
     ],
   },
 

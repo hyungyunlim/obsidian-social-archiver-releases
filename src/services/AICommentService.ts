@@ -172,7 +172,7 @@ export class AICommentService {
           // Filter PATH to essential directories to avoid ENAMETOOLONG error
           // Keep: system paths, homebrew, npm global, and common CLI tool locations
           const pathParts = fullShellPath.split(':');
-          const filteredPaths = pathParts.filter(p => {
+          const filteredPaths = pathParts.filter((p) => {
             // Always include system paths
             if (p.startsWith('/usr/') || p === '/bin' || p === '/sbin') return true;
             // Include homebrew
@@ -219,10 +219,7 @@ export class AICommentService {
    * @param options - Generation options
    * @returns Generated comment result
    */
-  async generateComment(
-    content: string,
-    options: AICommentOptions
-  ): Promise<AICommentResult> {
+  async generateComment(content: string, options: AICommentOptions): Promise<AICommentResult> {
     this.isCancelled = false;
     this.lastReportedPercentage = 0;
 
@@ -234,20 +231,12 @@ export class AICommentService {
     // 2. Validate CLI is available
     const cliResult = await AICliDetector.detect(options.cli);
     if (!cliResult.available || !cliResult.path) {
-      throw new AICommentError(
-        'CLI_NOT_INSTALLED',
-        `${options.cli} CLI not found`,
-        { cli: options.cli }
-      );
+      throw new AICommentError('CLI_NOT_INSTALLED', `${options.cli} CLI not found`, { cli: options.cli });
     }
 
     // 3. Check authentication
     if (!cliResult.authenticated) {
-      throw new AICommentError(
-        'CLI_NOT_AUTHENTICATED',
-        `${options.cli} CLI not authenticated`,
-        { cli: options.cli }
-      );
+      throw new AICommentError('CLI_NOT_AUTHENTICATED', `${options.cli} CLI not authenticated`, { cli: options.cli });
     }
 
     // 4. Build prompt
@@ -266,31 +255,21 @@ export class AICommentService {
 
     try {
       // 7. Build command
-      const { command, args, stdinPrompt } = this.buildCommand(
-        options.cli,
-        cliResult.path,
-        prompt,
-        tempFile,
-        options
-      );
+      const { command, args, stdinPrompt } = this.buildCommand(options.cli, cliResult.path, prompt, tempFile, options);
 
       // 8. Execute command
-      const output = await this.executeCommand(
-        command,
-        args,
-        options,
-        DEFAULT_TIMEOUT,
-        stdinPrompt
-      );
+      const output = await this.executeCommand(command, args, options, DEFAULT_TIMEOUT, stdinPrompt);
 
       // 9. Parse result
       const processingTime = Date.now() - startTime;
       const contentHash = createContentHash(content);
       const commentId = generateCommentId(options.cli, options.type);
+      const selectedModel = this.normalizeModel(options.model);
 
       const meta: AICommentMeta = {
         id: commentId,
         cli: options.cli,
+        ...(selectedModel ? { model: selectedModel } : {}),
         type: options.type,
         generatedAt: new Date().toISOString(),
         processingTime,
@@ -307,7 +286,7 @@ export class AICommentService {
       });
 
       return {
-        content: output.trim(),
+        content: this.cleanCommentContent(output, options),
         meta,
         rawResponse: output,
       };
@@ -350,7 +329,7 @@ export class AICommentService {
   async generateMultiAIComments(
     content: string,
     clis: AICli[],
-    options: Omit<AICommentOptions, 'cli'>
+    options: Omit<AICommentOptions, 'cli'>,
   ): Promise<MultiAIGenerationResult[]> {
     if (clis.length === 0) {
       return [];
@@ -386,13 +365,10 @@ export class AICommentService {
           return {
             status: 'rejected' as const,
             cli,
-            error: error instanceof AICommentError
-              ? error
-              : new AICommentError(
-                  'UNKNOWN',
-                  error instanceof Error ? error.message : String(error),
-                  { cli }
-                ),
+            error:
+              error instanceof AICommentError
+                ? error
+                : new AICommentError('UNKNOWN', error instanceof Error ? error.message : String(error), { cli }),
           };
         }
       });
@@ -427,10 +403,7 @@ export class AICommentService {
     }
 
     if (content.length > MAX_CONTENT_LENGTH) {
-      throw new AICommentError(
-        'CONTENT_TOO_LONG',
-        `Content exceeds maximum length of ${MAX_CONTENT_LENGTH} characters`
-      );
+      throw new AICommentError('CONTENT_TOO_LONG', `Content exceeds maximum length of ${MAX_CONTENT_LENGTH} characters`);
     }
   }
 
@@ -607,6 +580,11 @@ Content:
   // Private Methods - Command Building
   // ============================================================================
 
+  private normalizeModel(model: string | undefined): string | undefined {
+    const trimmed = model?.trim();
+    return trimmed ? trimmed : undefined;
+  }
+
   /**
    * Build CLI-specific command
    * Returns command, args, and optionally stdinPrompt for Windows compatibility
@@ -616,12 +594,10 @@ Content:
     cliPath: string,
     prompt: string,
     contentFile: string | null,
-    options: AICommentOptions
+    options: AICommentOptions,
   ): { command: string; args: string[]; stdinPrompt?: string } {
     // For file-based content, modify the prompt
-    const finalPrompt = contentFile
-      ? `${prompt}\n\n[Content is in file: ${contentFile}]`
-      : prompt;
+    const finalPrompt = contentFile ? `${prompt}\n\n[Content is in file: ${contentFile}]` : prompt;
 
     // Check if we're on Windows - use stdin for prompts to avoid shell escaping issues
     const os = nodeRequire('os') as typeof import('os');
@@ -629,13 +605,13 @@ Content:
 
     switch (cli) {
       case 'claude':
-        return this.buildClaudeCommand(cliPath, finalPrompt, options.type, isWindows);
+        return this.buildClaudeCommand(cliPath, finalPrompt, options.type, isWindows, options.model);
 
       case 'gemini':
-        return this.buildGeminiCommand(cliPath, finalPrompt, isWindows);
+        return this.buildGeminiCommand(cliPath, finalPrompt, isWindows, options.model);
 
       case 'codex':
-        return this.buildCodexCommand(cliPath, finalPrompt, options.type, isWindows);
+        return this.buildCodexCommand(cliPath, finalPrompt, options.type, isWindows, options.model);
 
       default:
         throw new AICommentError('CLI_NOT_INSTALLED', `Unknown CLI: ${String(cli)}`);
@@ -654,7 +630,8 @@ Content:
     cliPath: string,
     prompt: string,
     commentType: AICommentType,
-    isWindows: boolean
+    isWindows: boolean,
+    model?: string,
   ): { command: string; args: string[]; stdinPrompt?: string } {
     // Set max-turns based on comment type and content length
     // - factcheck: needs web searches + response generation, allow 10 turns
@@ -686,16 +663,14 @@ Content:
       }
     }
 
+    const selectedModel = this.normalizeModel(model);
+    const modelArgs = selectedModel ? ['--model', selectedModel] : [];
+
     // On Windows, pass prompt via stdin to avoid shell escaping issues
     if (isWindows) {
       return {
         command: cliPath,
-        args: [
-          '--output-format', 'stream-json',
-          '--verbose',
-          '--max-turns', maxTurns,
-          '--dangerously-skip-permissions',
-        ],
+        args: [...modelArgs, '--output-format', 'stream-json', '--verbose', '--max-turns', maxTurns, '--dangerously-skip-permissions'],
         stdinPrompt: prompt,
       };
     }
@@ -703,10 +678,14 @@ Content:
     return {
       command: cliPath,
       args: [
-        '-p', prompt,
-        '--output-format', 'stream-json',
+        '-p',
+        prompt,
+        ...modelArgs,
+        '--output-format',
+        'stream-json',
         '--verbose',
-        '--max-turns', maxTurns,
+        '--max-turns',
+        maxTurns,
         '--dangerously-skip-permissions',
       ],
     };
@@ -722,34 +701,32 @@ Content:
   private buildGeminiCommand(
     cliPath: string,
     prompt: string,
-    isWindows: boolean
+    isWindows: boolean,
+    model?: string,
   ): { command: string; args: string[]; stdinPrompt?: string } {
+    const selectedModel = this.normalizeModel(model);
+    const modelArgs = selectedModel ? ['--model', selectedModel] : [];
+
     // On Windows, pass prompt via stdin to avoid shell escaping issues
     if (isWindows) {
       return {
         command: cliPath,
-        args: [
-          '--output-format', 'stream-json',
-          '--yolo',
-        ],
+        args: [...modelArgs, '--output-format', 'stream-json', '--yolo'],
         stdinPrompt: prompt,
       };
     }
 
     return {
       command: cliPath,
-      args: [
-        '-p', prompt,
-        '--output-format', 'stream-json',
-        '--yolo',
-      ],
+      args: ['-p', prompt, ...modelArgs, '--output-format', 'stream-json', '--yolo'],
     };
   }
 
   /**
    * Build Codex CLI command
-   * Codex: codex exec --json -s <sandbox> --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox "prompt"
+   * Codex: codex exec --json -m <model> -s <sandbox> ... "prompt"
    * Uses exec mode for non-interactive execution with JSON streaming output
+   * The model flag is included only when the requester explicitly selected one.
    * -s/--sandbox sets access level: read-only | workspace-write | danger-full-access
    * --skip-git-repo-check allows running outside of git repositories (e.g., Obsidian vaults)
    * --dangerously-bypass-approvals-and-sandbox (or --yolo) skips approvals for faster execution
@@ -760,11 +737,14 @@ Content:
     cliPath: string,
     prompt: string,
     commentType: AICommentType,
-    isWindows: boolean
+    isWindows: boolean,
+    model?: string,
   ): { command: string; args: string[]; stdinPrompt?: string } {
     // factcheck and glossary need network access for curl-based web searches
     // danger-full-access allows shell commands including network requests
-    const sandboxMode = (commentType === 'factcheck' || commentType === 'glossary') ? 'danger-full-access' : 'read-only';
+    const sandboxMode = commentType === 'factcheck' || commentType === 'glossary' ? 'danger-full-access' : 'read-only';
+    const selectedModel = this.normalizeModel(model);
+    const modelArgs = selectedModel ? ['-m', selectedModel] : [];
 
     // On Windows, pass prompt via stdin to avoid shell escaping issues
     // Note: Codex exec may need the prompt as positional arg, so we still include it
@@ -775,8 +755,11 @@ Content:
         args: [
           'exec',
           '--json',
-          '-s', sandboxMode,
+          ...modelArgs,
+          '-s',
+          sandboxMode,
           '--skip-git-repo-check',
+          '--ephemeral',
           '--dangerously-bypass-approvals-and-sandbox',
         ],
         stdinPrompt: prompt,
@@ -788,8 +771,11 @@ Content:
       args: [
         'exec',
         '--json',
-        '-s', sandboxMode,
+        ...modelArgs,
+        '-s',
+        sandboxMode,
         '--skip-git-repo-check',
+        '--ephemeral',
         '--dangerously-bypass-approvals-and-sandbox',
         prompt,
       ],
@@ -809,7 +795,7 @@ Content:
     args: string[],
     options: AICommentOptions,
     timeout: number,
-    stdinPrompt?: string
+    stdinPrompt?: string,
   ): Promise<string> {
     const { spawn } = nodeRequire('child_process') as typeof import('child_process');
 
@@ -826,7 +812,6 @@ Content:
     const shellPath = await AICommentService.getShellPath();
 
     return new Promise((resolve, reject) => {
-
       // Build environment with shell PATH
       const os = nodeRequire('os') as typeof import('os');
       const isWindows = os.platform() === 'win32';
@@ -849,21 +834,21 @@ Content:
             'C:\\Program Files (x86)\\nodejs',
           ].filter(Boolean) as string[];
 
-          const pathsToAdd = additionalPaths.filter(p => !currentPath.toLowerCase().includes(p.toLowerCase()));
+          const pathsToAdd = additionalPaths.filter((p) => !currentPath.toLowerCase().includes(p.toLowerCase()));
           if (pathsToAdd.length > 0) {
             env.PATH = [...pathsToAdd, currentPath].join(pathSeparator);
           }
         } else {
           // Unix: Common binary locations
           const additionalPaths = [
-            '/opt/homebrew/bin',  // Homebrew on Apple Silicon
-            '/usr/local/bin',     // Homebrew on Intel / local binaries
-            '/usr/bin',           // System binaries (curl, grep, etc.)
-            '/bin',               // Core system binaries
-            '/usr/sbin',          // System admin binaries
-            '/sbin',              // Core system admin binaries
+            '/opt/homebrew/bin', // Homebrew on Apple Silicon
+            '/usr/local/bin', // Homebrew on Intel / local binaries
+            '/usr/bin', // System binaries (curl, grep, etc.)
+            '/bin', // Core system binaries
+            '/usr/sbin', // System admin binaries
+            '/sbin', // Core system admin binaries
           ];
-          const pathsToAdd = additionalPaths.filter(p => !currentPath.includes(p));
+          const pathsToAdd = additionalPaths.filter((p) => !currentPath.includes(p));
           if (pathsToAdd.length > 0) {
             env.PATH = [...pathsToAdd, currentPath].join(pathSeparator);
           }
@@ -881,7 +866,11 @@ Content:
       }
 
       // Spawn options - Windows needs shell:true for proper executable resolution
-      const spawnOptions: { stdio: ['pipe', 'pipe', 'pipe']; env: typeof env; shell?: boolean } = {
+      const spawnOptions: {
+        stdio: ['pipe', 'pipe', 'pipe'];
+        env: typeof env;
+        shell?: boolean;
+      } = {
         stdio: ['pipe', 'pipe', 'pipe'],
         env,
       };
@@ -897,7 +886,7 @@ Content:
           processedCommand = `"${command}"`;
         }
         // Quote arguments that contain spaces
-        processedArgs = args.map(arg => {
+        processedArgs = args.map((arg) => {
           if (arg.includes(' ') && !arg.startsWith('"') && !arg.startsWith("'")) {
             return `"${arg}"`;
           }
@@ -919,11 +908,7 @@ Content:
       this.currentProcess = childProcess;
 
       // Register with ProcessManager for cleanup
-      ProcessManager.register(
-        childProcess,
-        'ai-comment',
-        `${options.cli} ${options.type} comment`
-      );
+      ProcessManager.register(childProcess, 'ai-comment', `${options.cli} ${options.type} comment`);
 
       // Setup timeout
       let timeoutId: number | null = null;
@@ -931,11 +916,11 @@ Content:
         timeoutId = window.setTimeout(() => {
           this.isCancelled = true;
           childProcess.kill('SIGTERM');
-          reject(new AICommentError(
-            'TIMEOUT',
-            `AI comment generation timed out after ${Math.round(timeout / 1000 / 60)} minutes`,
-            { cli: options.cli }
-          ));
+          reject(
+            new AICommentError('TIMEOUT', `AI comment generation timed out after ${Math.round(timeout / 1000 / 60)} minutes`, {
+              cli: options.cli,
+            }),
+          );
         }, timeout);
       }
 
@@ -1058,8 +1043,12 @@ Content:
               // Start timer after init, stop when actual activity happens
               if (parsed.eventType === 'init') {
                 startGeminiThinkingProgress();
-              } else if (parsed.eventType === 'tool_use' || parsed.eventType === 'tool_result' ||
-                         parsed.eventType === 'message' || parsed.eventType === 'result') {
+              } else if (
+                parsed.eventType === 'tool_use' ||
+                parsed.eventType === 'tool_result' ||
+                parsed.eventType === 'message' ||
+                parsed.eventType === 'result'
+              ) {
                 stopGeminiThinkingProgress();
               }
             }
@@ -1076,7 +1065,8 @@ Content:
             if (trimmed) {
               const parsed = this.parseCodexJsonEvent(trimmed, options);
               if (parsed.text) {
-                accumulatedText += parsed.text;
+                // Codex may emit intermediate agent messages before the final answer.
+                accumulatedText = parsed.text;
               }
             }
           }
@@ -1137,7 +1127,7 @@ Content:
         if (isCodexJson && streamJsonBuffer.trim()) {
           const parsed = this.parseCodexJsonEvent(streamJsonBuffer.trim(), options);
           if (parsed.text) {
-            accumulatedText += parsed.text;
+            accumulatedText = parsed.text;
           }
         }
 
@@ -1164,11 +1154,13 @@ Content:
               output = stdoutData.trim();
             } else {
               // No result found - likely hit max turns before generating response
-              reject(new AICommentError(
-                'TIMEOUT',
-                'AI generation incomplete - reached maximum turns limit. Try again or use a simpler analysis type.',
-                { cli: options.cli }
-              ));
+              reject(
+                new AICommentError(
+                  'TIMEOUT',
+                  'AI generation incomplete - reached maximum turns limit. Try again or use a simpler analysis type.',
+                  { cli: options.cli },
+                ),
+              );
               return;
             }
           } else if (isGeminiStreamJson || isCodexJson) {
@@ -1187,17 +1179,15 @@ Content:
           if (output) {
             resolve(this.cleanOutput(output, options.cli));
           } else {
-            reject(new AICommentError(
-              'PARSE_ERROR',
-              'No output from AI CLI',
-              { cli: options.cli }
-            ));
+            reject(
+              new AICommentError('PARSE_ERROR', 'No output from AI CLI', {
+                cli: options.cli,
+              }),
+            );
           }
         } else {
           // Error - parse stderr
-          console.error(
-            `[AICommentService] Process failed. Exit code: ${code}, stderr: ${stderrData.slice(0, 500)}`
-          );
+          console.error(`[AICommentService] Process failed. Exit code: ${code}, stderr: ${stderrData.slice(0, 500)}`);
           reject(this.parseError(stderrData, code, options.cli));
         }
       });
@@ -1205,11 +1195,7 @@ Content:
       childProcess.on('error', (error: Error) => {
         console.error('[AICommentService] Process spawn error:', error);
         this.currentProcess = null;
-        reject(new AICommentError(
-          'CLI_NOT_INSTALLED',
-          `Failed to start ${options.cli} CLI: ${error.message}`,
-          { cli: options.cli }
-        ));
+        reject(new AICommentError('CLI_NOT_INSTALLED', `Failed to start ${options.cli} CLI: ${error.message}`, { cli: options.cli }));
       });
     });
   }
@@ -1222,10 +1208,7 @@ Content:
    * Parse Claude stream-json event and extract progress/result/text
    * Returns { result, text } if found, empty object otherwise
    */
-  private parseStreamJsonEvent(
-    jsonLine: string,
-    options: AICommentOptions
-  ): { result?: string; text?: string } {
+  private parseStreamJsonEvent(jsonLine: string, options: AICommentOptions): { result?: string; text?: string } {
     try {
       const event = JSON.parse(jsonLine) as ClaudeStreamEvent;
 
@@ -1290,10 +1273,7 @@ Content:
    * Event types: init, message, tool_use, tool_result, error, result
    * Returns { text, eventType } - eventType used for thinking timer control
    */
-  private parseGeminiStreamJsonEvent(
-    jsonLine: string,
-    options: AICommentOptions
-  ): { text?: string; eventType?: string } {
+  private parseGeminiStreamJsonEvent(jsonLine: string, options: AICommentOptions): { text?: string; eventType?: string } {
     try {
       const event = JSON.parse(jsonLine) as Record<string, unknown>;
 
@@ -1326,7 +1306,10 @@ Content:
 
         // Extract text content from assistant messages
         if (event.role === 'assistant' && event.content) {
-          return { text: typeof event.content === 'string' ? event.content : undefined, eventType: 'message' };
+          return {
+            text: typeof event.content === 'string' ? event.content : undefined,
+            eventType: 'message',
+          };
         }
         return { eventType: 'message' };
       }
@@ -1411,10 +1394,7 @@ Content:
    * item.completed contains: { item: { type: "agent_message", text: "..." } }
    * Returns { text } if message content found
    */
-  private parseCodexJsonEvent(
-    jsonLine: string,
-    options: AICommentOptions
-  ): { text?: string } {
+  private parseCodexJsonEvent(jsonLine: string, options: AICommentOptions): { text?: string } {
     try {
       const event = JSON.parse(jsonLine) as Record<string, unknown>;
 
@@ -1601,7 +1581,9 @@ Content:
               phase: 'generating',
             });
           }
-          return { text: typeof itemCompleted.text === 'string' ? itemCompleted.text : undefined };
+          return {
+            text: typeof itemCompleted.text === 'string' ? itemCompleted.text : undefined,
+          };
         }
 
         // Handle other item types with content
@@ -1775,11 +1757,14 @@ Content:
     const lowerOutput = output.toLowerCase();
 
     // Claude CLI specific patterns (web search, tool use)
-    if (lowerOutput.includes('websearch') || lowerOutput.includes('web_search') ||
-        lowerOutput.includes('searching the web') || lowerOutput.includes('search:')) {
+    if (
+      lowerOutput.includes('websearch') ||
+      lowerOutput.includes('web_search') ||
+      lowerOutput.includes('searching the web') ||
+      lowerOutput.includes('search:')
+    ) {
       reportProgress(35, 'Searching the web...', true);
-    } else if (lowerOutput.includes('reading') || lowerOutput.includes('fetching') ||
-               lowerOutput.includes('loading')) {
+    } else if (lowerOutput.includes('reading') || lowerOutput.includes('fetching') || lowerOutput.includes('loading')) {
       reportProgress(45, 'Reading search results...', true);
     } else if (lowerOutput.includes('tool') && lowerOutput.includes('result')) {
       reportProgress(55, 'Processing tool results...', true);
@@ -1835,6 +1820,14 @@ Content:
     return cleaned.trim();
   }
 
+  private cleanCommentContent(output: string, options: AICommentOptions): string {
+    let cleaned = output.trim();
+    if (options.type === 'summary') {
+      cleaned = cleaned.replace(/^#{1,6}\s*(summary|요약|要約)\s*\n+/i, '').trim();
+    }
+    return cleaned;
+  }
+
   /**
    * Extract text content from raw stream-json output
    * Useful as fallback when regular parsing fails
@@ -1887,15 +1880,9 @@ Content:
     // If we hit an error result without any text, throw an error
     if (errorResult) {
       if (errorResult.subtype === 'error_max_turns') {
-        throw new AICommentError(
-          'TIMEOUT',
-          'AI exceeded maximum turns. Try a simpler request or increase max-turns.'
-        );
+        throw new AICommentError('TIMEOUT', 'AI exceeded maximum turns. Try a simpler request or increase max-turns.');
       }
-      throw new AICommentError(
-        'UNKNOWN',
-        'AI generation failed with an error result'
-      );
+      throw new AICommentError('UNKNOWN', 'AI generation failed with an error result');
     }
 
     return null;
@@ -1906,7 +1893,7 @@ Content:
    */
   private removeMetadataLines(output: string): string {
     const lines = output.split('\n');
-    const contentLines = lines.filter(line => {
+    const contentLines = lines.filter((line) => {
       const trimmed = line.trim();
       // Skip empty lines at start/end, metadata markers, etc.
       if (trimmed.startsWith('---') || trimmed.startsWith('===')) return false;
@@ -1968,24 +1955,12 @@ Content:
       lowerStderr.includes('authentication') ||
       lowerStderr.includes('not logged in')
     ) {
-      return new AICommentError(
-        'CLI_NOT_AUTHENTICATED',
-        `${cli} authentication failed: ${stderr.slice(0, 200)}`,
-        { cli }
-      );
+      return new AICommentError('CLI_NOT_AUTHENTICATED', `${cli} authentication failed: ${stderr.slice(0, 200)}`, { cli });
     }
 
     // Rate limiting
-    if (
-      lowerStderr.includes('rate limit') ||
-      lowerStderr.includes('too many requests') ||
-      lowerStderr.includes('quota')
-    ) {
-      return new AICommentError(
-        'RATE_LIMITED',
-        `${cli} rate limited: ${stderr.slice(0, 200)}`,
-        { cli }
-      );
+    if (lowerStderr.includes('rate limit') || lowerStderr.includes('too many requests') || lowerStderr.includes('quota')) {
+      return new AICommentError('RATE_LIMITED', `${cli} rate limited: ${stderr.slice(0, 200)}`, { cli });
     }
 
     // Network errors
@@ -1995,43 +1970,20 @@ Content:
       lowerStderr.includes('timeout') ||
       lowerStderr.includes('econnrefused')
     ) {
-      return new AICommentError(
-        'NETWORK_ERROR',
-        `Network error with ${cli}: ${stderr.slice(0, 200)}`,
-        { cli }
-      );
+      return new AICommentError('NETWORK_ERROR', `Network error with ${cli}: ${stderr.slice(0, 200)}`, { cli });
     }
 
     // Model not found
-    if (
-      lowerStderr.includes('model') &&
-      (lowerStderr.includes('not found') || lowerStderr.includes('does not exist'))
-    ) {
-      return new AICommentError(
-        'MODEL_NOT_FOUND',
-        `Model not found: ${stderr.slice(0, 200)}`,
-        { cli }
-      );
+    if (lowerStderr.includes('model') && (lowerStderr.includes('not found') || lowerStderr.includes('does not exist'))) {
+      return new AICommentError('MODEL_NOT_FOUND', `Model not found: ${stderr.slice(0, 200)}`, { cli });
     }
 
     // Content too long
-    if (
-      lowerStderr.includes('too long') ||
-      lowerStderr.includes('exceeds') ||
-      lowerStderr.includes('context length')
-    ) {
-      return new AICommentError(
-        'CONTENT_TOO_LONG',
-        `Content too long for ${cli}: ${stderr.slice(0, 200)}`,
-        { cli }
-      );
+    if (lowerStderr.includes('too long') || lowerStderr.includes('exceeds') || lowerStderr.includes('context length')) {
+      return new AICommentError('CONTENT_TOO_LONG', `Content too long for ${cli}: ${stderr.slice(0, 200)}`, { cli });
     }
 
     // Generic error
-    return new AICommentError(
-      'UNKNOWN',
-      `${cli} failed with exit code ${exitCode}: ${stderr.slice(0, 200)}`,
-      { cli }
-    );
+    return new AICommentError('UNKNOWN', `${cli} failed with exit code ${exitCode}: ${stderr.slice(0, 200)}`, { cli });
   }
 }

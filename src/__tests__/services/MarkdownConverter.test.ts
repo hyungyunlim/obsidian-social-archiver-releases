@@ -93,6 +93,32 @@ describe('MarkdownConverter', () => {
       expect(result.content).toContain('This is a test post with **markdown**.');
     });
 
+    it('should render quoted post markdown when quoted text is empty', async () => {
+      const result = await converter.convert({
+        ...mockPostData,
+        quotedPost: {
+          platform: 'facebook' as Platform,
+          id: 'quoted-123',
+          url: 'https://facebook.com/post/quoted-123',
+          author: {
+            name: 'Quoted User',
+            url: 'https://facebook.com/quoted-user',
+          },
+          content: {
+            text: '',
+            markdown: 'Quoted post body from markdown fallback.',
+          },
+          media: [],
+          metadata: {
+            timestamp: new Date('2024-01-01T10:00:00Z'),
+          },
+        },
+      });
+
+      expect(result.content).toContain('## 🔗 Shared Post');
+      expect(result.content).toContain('Quoted post body from markdown fallback.');
+    });
+
     it('should format media correctly', async () => {
       const result = await converter.convert(mockPostData);
 

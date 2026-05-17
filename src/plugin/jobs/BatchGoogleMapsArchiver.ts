@@ -19,6 +19,7 @@ import type { SocialArchiverSettings } from '../../types/settings';
 import { getVaultOrganizationStrategy } from '../../types/settings';
 import type { WorkersAPIClient, BatchArchiveJobStatusResponse } from '../../services/WorkersAPIClient';
 import type { PendingJobsManager } from '../../services/PendingJobsManager';
+import { extractGoogleMapsLinks } from '../../utils/googleMapsLinks';
 
 // ============================================================================
 // Types
@@ -62,7 +63,7 @@ export class BatchGoogleMapsArchiver {
       return;
     }
 
-    const links = this.extractGoogleMapsLinks(content);
+    const links = extractGoogleMapsLinks(content);
 
     if (links.length === 0) {
       new Notice('No Google Maps links found in current note');
@@ -81,8 +82,68 @@ export class BatchGoogleMapsArchiver {
 
     new Notice(`\uD83D\uDE80 Starting batch archive of ${links.length} Google Maps locations...`);
 
+    try {
+      const result = await this.runBatch({
+        links,
+        sourceNotePath,
+        skipConfirmation: true,
+      });
+
+      new Notice(
+        `\u2705 Batch archive complete!\n` +
+        `\uD83D\uDCCD Created: ${result.createdDocCount} documents\n` +
+        `\u274C Failed: ${result.failedCount} locations`,
+        8000
+      );
+    } catch (error) {
+      new Notice(
+        `\u274C Batch archive failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        8000
+      );
+    }
+  }
+
+  /**
+   * Headless batch archive entry point. Used by the CLI (and any other
+   * non-modal caller) so it can drive the same pipeline without spawning
+   * the confirmation modal or Notice spam.
+   *
+   * Throws on terminal failure (e.g. API client unavailable, batch trigger
+   * failed). The pending-job ledger is still updated on failure so the
+   * timeline banner reflects reality.
+   */
+  async runBatch(opts: {
+    links: string[];
+    sourceNotePath?: string;
+    /**
+     * Required for CLI callers \u2014 must be `true`. The modal path passes
+     * `true` after the user accepts; bare callers cannot accidentally
+     * trigger a batch by omitting it (caught at the type level).
+     */
+    skipConfirmation: true;
+  }): Promise<BatchRunResult> {
+    const apiClient = this.deps.apiClient();
+    if (!apiClient) {
+      throw new Error('API client is not initialized; configure the API endpoint in settings first.');
+    }
+
+    const links = opts.links.filter((l) => typeof l === 'string' && l.length > 0);
+    if (links.length === 0) {
+      return {
+        batchJobId: '',
+        urlCount: 0,
+        createdDocCount: 0,
+        failedCount: 0,
+        createdPaths: [],
+      };
+    }
+    if (links.length > 20) {
+      throw new Error(`Too many links (${links.length}). Maximum is 20 per batch.`);
+    }
+
     const pendingJobId = `batch-googlemaps-${Date.now()}`;
     const settings = this.deps.settings();
+    const sourceNotePath = opts.sourceNotePath;
 
     try {
       const response = await apiClient.triggerBatchArchive({
@@ -111,17 +172,16 @@ export class BatchGoogleMapsArchiver {
         },
       });
 
-      new Notice(`\u23F3 Batch job started (${response.urlCount} locations). Please wait...`);
+      const result = await apiClient.waitForBatchJob(response.batchJobId);
+      const aggregate = await this.processBatchArchiveResultInternal(result, pendingJobId, sourceNotePath);
 
-      const result = await apiClient.waitForBatchJob(
-        response.batchJobId,
-        (_completed, _total) => {
-          // Progress updates (optional)
-        }
-      );
-
-      await this.processBatchArchiveResult(result, pendingJobId, sourceNotePath);
-
+      return {
+        batchJobId: response.batchJobId,
+        urlCount: response.urlCount,
+        createdDocCount: aggregate.created,
+        failedCount: aggregate.failed,
+        createdPaths: aggregate.createdPaths,
+      };
     } catch (error) {
       try {
         const job = await this.deps.pendingJobsManager.getJob(pendingJobId);
@@ -138,16 +198,16 @@ export class BatchGoogleMapsArchiver {
       } catch (updateError) {
         console.error('[Social Archiver] Failed to update pending job:', updateError);
       }
-
-      new Notice(
-        `\u274C Batch archive failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        8000
-      );
+      throw error;
     }
   }
 
   /**
-   * Process batch archive result and create documents.
+   * Process batch archive result and create documents (modal/legacy path).
+   *
+   * Surfaces a user-visible Notice on completion. The headless `runBatch()`
+   * code path uses {@link processBatchArchiveResultInternal} so the CLI
+   * doesn't trigger a stray Notice when running from `obsidian://` URIs.
    */
   async processBatchArchiveResult(
     result: BatchArchiveJobStatusResponse,
@@ -155,75 +215,71 @@ export class BatchGoogleMapsArchiver {
     sourceNotePath?: string
   ): Promise<void> {
     const failCount = result.batchMetadata?.failedCount || 0;
-
-    if (result.results && result.results.length > 0) {
-      let created = 0;
-      for (const item of result.results) {
-        if (item.status === 'completed' && item.postData) {
-          try {
-            await this.createDocumentFromPostData(item.postData as PostData, item.url, sourceNotePath);
-            created++;
-          } catch (err) {
-            console.error(`Failed to create document for ${item.url}:`, err);
-          }
-        }
-      }
-
-      this.deps.refreshTimelineView();
-
-      if (pendingJobId) {
-        try {
-          await this.deps.pendingJobsManager.updateJob(pendingJobId, {
-            status: 'completed',
-            metadata: {
-              batchCompletedCount: created,
-              batchFailedCount: failCount,
-              completedAt: Date.now(),
-            },
-          });
-        } catch (updateError) {
-          console.error('[Social Archiver] Failed to update pending job:', updateError);
-        }
-      }
-
-      new Notice(
-        `\u2705 Batch archive complete!\n` +
-        `\uD83D\uDCCD Created: ${created} documents\n` +
-        `\u274C Failed: ${failCount} locations`,
-        8000
-      );
-    } else {
+    if (!result.results || result.results.length === 0) {
       new Notice(`\u26A0\uFE0F batch completed but no results received`);
+      return;
     }
+    const aggregate = await this.processBatchArchiveResultInternal(result, pendingJobId, sourceNotePath);
+    new Notice(
+      `\u2705 Batch archive complete!\n` +
+      `\uD83D\uDCCD Created: ${aggregate.created} documents\n` +
+      `\u274C Failed: ${failCount} locations`,
+      8000
+    );
+  }
+
+  /**
+   * Notice-free variant used by the CLI `runBatch()` flow. Same logic as
+   * {@link processBatchArchiveResult} minus the toast; returns aggregate
+   * counts + the vault paths that were created so callers can render
+   * their own response payload.
+   */
+  private async processBatchArchiveResultInternal(
+    result: BatchArchiveJobStatusResponse,
+    pendingJobId?: string,
+    sourceNotePath?: string
+  ): Promise<{ created: number; failed: number; createdPaths: string[] }> {
+    const failCount = result.batchMetadata?.failedCount || 0;
+    const createdPaths: string[] = [];
+    let created = 0;
+
+    if (!result.results || result.results.length === 0) {
+      return { created: 0, failed: failCount, createdPaths };
+    }
+
+    for (const item of result.results) {
+      if (item.status === 'completed' && item.postData) {
+        try {
+          const path = await this.createDocumentFromPostData(item.postData as PostData, item.url, sourceNotePath);
+          if (path) createdPaths.push(path);
+          created++;
+        } catch (err) {
+          console.error(`Failed to create document for ${item.url}:`, err);
+        }
+      }
+    }
+
+    this.deps.refreshTimelineView();
+
+    if (pendingJobId) {
+      try {
+        await this.deps.pendingJobsManager.updateJob(pendingJobId, {
+          status: 'completed',
+          metadata: {
+            batchCompletedCount: created,
+            batchFailedCount: failCount,
+            completedAt: Date.now(),
+          },
+        });
+      } catch (updateError) {
+        console.error('[Social Archiver] Failed to update pending job:', updateError);
+      }
+    }
+
+    return { created, failed: failCount, createdPaths };
   }
 
   // ─── Private helpers ─────────────────────────────────────────────────
-
-  /**
-   * Extract Google Maps links from text content.
-   */
-  private extractGoogleMapsLinks(content: string): string[] {
-    const patterns = [
-      /https?:\/\/maps\.app\.goo\.gl\/[A-Za-z0-9_-]+(\?[^\s)"\]<>]*)?/gi,
-      /https?:\/\/goo\.gl\/maps\/[A-Za-z0-9]+/gi,
-      /https?:\/\/(www\.)?google\.[a-z.]+\/maps\/place\/[^\s)"\]<>]+/gi,
-      /https?:\/\/maps\.google\.[a-z.]+\/[^\s)"\]<>]+/gi,
-    ];
-
-    const links: string[] = [];
-    for (const pattern of patterns) {
-      const matches = content.match(pattern);
-      if (matches) {
-        links.push(...matches);
-      }
-    }
-
-    const uniqueLinks = Array.from(new Set(links)).map(url => {
-      return url.replace(/[)"\]<>]+$/, '');
-    });
-
-    return uniqueLinks;
-  }
 
   /**
    * Show confirmation modal for batch archive.
@@ -304,12 +360,13 @@ export class BatchGoogleMapsArchiver {
   /**
    * Create a document from PostData (used by batch archive).
    * Dynamically imports MediaHandler to avoid circular dependencies.
+   * Returns the created vault path so the CLI runner can report it.
    */
   private async createDocumentFromPostData(
     postData: PostData,
     originalUrl: string,
     sourceNotePath?: string
-  ): Promise<void> {
+  ): Promise<string> {
     const { MediaHandler } = await import('../../services/MediaHandler');
 
     const settings = this.deps.settings();
@@ -376,5 +433,24 @@ export class BatchGoogleMapsArchiver {
     await this.deps.ensureFolderExists(folderPath);
 
     await this.deps.app.vault.create(filePath, result.fullDocument);
+    return filePath;
   }
+}
+
+/**
+ * Aggregate result returned by {@link BatchGoogleMapsArchiver.runBatch}.
+ * Mirrors the CLI response shape so the registry can pass it through with
+ * minimal reshaping.
+ */
+export interface BatchRunResult {
+  /** Worker-assigned batch job id (empty when no links were supplied). */
+  batchJobId: string;
+  /** Number of URLs that were submitted to the Worker. */
+  urlCount: number;
+  /** Number of vault documents that were created. */
+  createdDocCount: number;
+  /** Number of locations that failed to archive. */
+  failedCount: number;
+  /** Vault-relative paths of every document created during the batch. */
+  createdPaths: string[];
 }

@@ -23,11 +23,13 @@
 import type { App, TFile } from 'obsidian';
 import type { ActionUpdatedEventData } from '@/types/websocket';
 import type { SocialArchiverSettings } from '@/types/settings';
-import type { WorkersAPIClient, UserArchive } from './WorkersAPIClient';
+import type { AICommentPayload, WorkersAPIClient, UserArchive } from './WorkersAPIClient';
+import type { AICommentMeta } from '@/types/ai-comment';
 import type { ArchiveLookupService } from './ArchiveLookupService';
 import type { AnnotationRenderer } from './AnnotationRenderer';
 import type { AnnotationSectionManager } from './AnnotationSectionManager';
 import { HighlightBodyMarker } from './HighlightBodyMarker';
+import { removeAICommentSection, replaceAICommentSection } from './ai-comment/markdown-handler';
 
 // ============================================================================
 // Coalescing state per archiveId
@@ -95,11 +97,18 @@ export class AnnotationSyncService {
    * Otherwise, delegates to the internal sync pipeline with coalescing.
    */
   async handleActionUpdated(data: ActionUpdatedEventData): Promise<void> {
-    if (data.changes.hasAnnotationUpdate !== true) return;
+    const shouldSyncAnnotations = data.changes.hasAnnotationUpdate === true;
+    const shouldClearAIComments = data.changes.clearAIComments === true;
+    if (!shouldSyncAnnotations && !shouldClearAIComments) return;
     if (!this.getSettings().enableMobileAnnotationSync) return;
 
     const { archiveId } = data;
-    await this.coalesce(archiveId);
+    if (shouldSyncAnnotations) {
+      await this.coalesce(archiveId);
+    }
+    if (shouldClearAIComments) {
+      await this.clearAIComments(archiveId);
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -199,6 +208,10 @@ export class AnnotationSyncService {
     const noteCount = notes.length;
     const highlightCount = highlights.length;
     const hasAnnotations = noteCount > 0 || highlightCount > 0;
+    const hasAICommentSnapshot = Array.isArray(archive.aiComments);
+    const aiCommentEntries = hasAICommentSnapshot
+      ? toAICommentMarkdownEntries(archive.aiComments ?? [])
+      : [];
 
     // Determine comment from synthetic primary note only. See runSync for
     // the full semantics of this rule.
@@ -225,6 +238,14 @@ export class AnnotationSyncService {
         fm.userNoteCount = noteCount;
         fm.userHighlightCount = highlightCount;
         fm.hasAnnotations = hasAnnotations;
+
+        if (hasAICommentSnapshot) {
+          if (aiCommentEntries.length > 0) {
+            fm.aiComments = aiCommentEntries.map((entry) => entry.meta.id);
+          } else {
+            delete fm.aiComments;
+          }
+        }
       });
     } catch (err) {
       console.error(
@@ -251,7 +272,10 @@ export class AnnotationSyncService {
         id: archiveId,
         userHighlights: highlights,
       });
-      const updatedContent = this.annotationSectionManager.upsert(reconciledBody, annotationBlock);
+      let updatedContent = this.annotationSectionManager.upsert(reconciledBody, annotationBlock);
+      if (hasAICommentSnapshot) {
+        updatedContent = replaceAICommentSection(updatedContent, aiCommentEntries);
+      }
       if (updatedContent !== content) {
         await this.app.vault.modify(file, updatedContent);
       }
@@ -278,6 +302,51 @@ export class AnnotationSyncService {
    */
   async reconcileFromLibrarySync(file: TFile, archive: UserArchive): Promise<void> {
     await this.applyAnnotationState(file, archive);
+  }
+
+  /**
+   * Remove locally-rendered AI comments after a remote explicit clear.
+   *
+   * AI comments are stored in the vault note body, not in the managed mobile
+   * annotation block, so they need a separate body/frontmatter cleanup step.
+   */
+  async clearAIComments(archiveId: string): Promise<void> {
+    const file = await this.resolveFileByArchiveId(archiveId);
+    if (!file) {
+      console.debug('[AnnotationSyncService] No matching vault file found for AI comment clear:', archiveId);
+      return;
+    }
+
+    this.onBeforeInboundWrite?.(archiveId);
+
+    try {
+      await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+        if (!fm.sourceArchiveId) {
+          fm.sourceArchiveId = archiveId;
+        }
+        delete fm.aiComments;
+      });
+    } catch (err) {
+      console.error(
+        '[AnnotationSyncService] Failed to clear AI comment frontmatter:',
+        file.path,
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+
+    try {
+      const content = await this.app.vault.read(file);
+      const updatedContent = removeAICommentSection(content);
+      if (updatedContent !== content) {
+        await this.app.vault.modify(file, updatedContent);
+      }
+    } catch (err) {
+      console.error(
+        '[AnnotationSyncService] Failed to clear AI comment body:',
+        file.path,
+        err instanceof Error ? err.message : String(err)
+      );
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -320,4 +389,46 @@ export class AnnotationSyncService {
 
     return byUrl[0] ?? null;
   }
+
+  private async resolveFileByArchiveId(archiveId: string): Promise<TFile | null> {
+    const byId = this.archiveLookup.findBySourceArchiveId(archiveId);
+    if (byId) return byId;
+
+    try {
+      const response = await this.workersApiClient.getUserArchive(archiveId);
+      return this.resolveFile(archiveId, response.archive.originalUrl);
+    } catch (err) {
+      console.warn(
+        '[AnnotationSyncService] Failed to fetch archive for AI comment clear:',
+        archiveId,
+        err instanceof Error ? err.message : String(err)
+      );
+      return null;
+    }
+  }
+}
+
+function toAICommentMarkdownEntries(
+  comments: AICommentPayload[]
+): Array<{ meta: AICommentMeta; content: string }> {
+  return comments
+    .filter((comment) => comment.meta.id && comment.content.trim().length > 0)
+    .map((comment) => {
+      const meta: AICommentMeta = {
+        id: comment.meta.id,
+        cli: comment.meta.cli,
+        ...(comment.meta.model ? { model: comment.meta.model } : {}),
+        type: comment.meta.type,
+        generatedAt: comment.meta.generatedAt,
+        processingTime: comment.meta.processingTime ?? 0,
+        contentHash: comment.meta.contentHash ?? '',
+        ...(comment.meta.customPrompt ? { customPrompt: comment.meta.customPrompt } : {}),
+        ...(comment.meta.sourceLanguage ? { sourceLanguage: comment.meta.sourceLanguage } : {}),
+        ...(comment.meta.targetLanguage ? { targetLanguage: comment.meta.targetLanguage } : {}),
+      };
+      return {
+        meta,
+        content: comment.content,
+      };
+    });
 }

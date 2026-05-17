@@ -14,17 +14,17 @@ export type { AICli } from '../utils/ai-cli';
  * Types of AI-generated comments
  */
 export type AICommentType =
-  | 'summary'      // Concise summary of the content
-  | 'factcheck'    // Fact-checking analysis
-  | 'critique'     // Critical analysis
-  | 'keypoints'    // Key points extraction
-  | 'sentiment'    // Sentiment analysis
-  | 'connections'  // Connections to other notes (vault context)
-  | 'translation'  // Translation to another language
+  | 'summary' // Concise summary of the content
+  | 'factcheck' // Fact-checking analysis
+  | 'critique' // Critical analysis
+  | 'keypoints' // Key points extraction
+  | 'sentiment' // Sentiment analysis
+  | 'connections' // Connections to other notes (vault context)
+  | 'translation' // Translation to another language
   | 'translate-transcript' // Translate transcript to another language (preserving timestamps)
-  | 'glossary'     // Explain technical/specialized terms
-  | 'reformat'     // Reformat markdown layout without changing content
-  | 'custom';      // User-defined prompt
+  | 'glossary' // Explain technical/specialized terms
+  | 'reformat' // Reformat markdown layout without changing content
+  | 'custom'; // User-defined prompt
 
 /**
  * AI comment metadata stored in YAML frontmatter
@@ -34,6 +34,8 @@ export interface AICommentMeta {
   id: string;
   /** CLI tool used for generation */
   cli: AICli;
+  /** Model selected for generation, if explicitly requested */
+  model?: string;
   /** Type of comment generated */
   type: AICommentType;
   /** ISO timestamp of generation */
@@ -572,13 +574,12 @@ export function getSummaryLengthGuideline(contentLength: number): string {
  * @param contentLength - Optional content length for dynamic summary length
  * @returns Format section string to include in the summary prompt
  */
-export function getSummaryFormatSection(outputLanguage: AIOutputLanguage, contentLength?: number): string {
-  const labels = outputLanguage === 'auto' ? FORMAT_LABELS.en : FORMAT_LABELS[outputLanguage];
+export function getSummaryFormatSection(_outputLanguage: AIOutputLanguage, contentLength?: number): string {
   const lengthGuideline = contentLength ? getSummaryLengthGuideline(contentLength) : '2-3 sentence';
 
   return `Format:
-## ${labels.summary}
-[${lengthGuideline} summary]`;
+[${lengthGuideline} summary only]
+Do not include a heading such as "## Summary" or "## 요약".`;
 }
 
 /**
@@ -695,11 +696,7 @@ export class AICommentError extends Error {
   /** CLI that was being used (if applicable) */
   readonly cli?: AICli;
 
-  constructor(
-    code: AICommentErrorCode,
-    message: string,
-    options?: { userMessage?: string; cli?: AICli }
-  ) {
+  constructor(code: AICommentErrorCode, message: string, options?: { userMessage?: string; cli?: AICli }) {
     super(message);
     this.name = 'AICommentError';
     this.code = code;
@@ -733,6 +730,8 @@ export interface AICommentProgress {
 export interface AICommentOptions {
   /** CLI to use */
   cli: AICli;
+  /** Provider model to use. Undefined means use the CLI's configured default. */
+  model?: string;
   /** Comment type */
   type: AICommentType;
   /** Custom prompt (for 'custom' type) */
@@ -819,7 +818,7 @@ CRITICAL: Start your response DIRECTLY with the analysis content.
 - Do NOT include preamble like "Here's the summary...", "I'll analyze...", "Based on the content..."
 - Do NOT acknowledge the request or explain what you're going to do
 - Do NOT start with "Sure", "Certainly", "Okay", "Let me...", "The content was..."
-- Just output the formatted result immediately, starting with the header (e.g., ## Summary)`;
+- Just output the requested result immediately, using only the headings required by that format`;
 
 /**
  * Default prompts for each comment type
@@ -1079,9 +1078,17 @@ export function isAICli(value: string): value is AICli {
  */
 export function isAICommentType(value: string): value is AICommentType {
   return [
-    'summary', 'factcheck', 'critique', 'keypoints',
-    'sentiment', 'connections', 'translation', 'translate-transcript',
-    'glossary', 'reformat', 'custom'
+    'summary',
+    'factcheck',
+    'critique',
+    'keypoints',
+    'sentiment',
+    'connections',
+    'translation',
+    'translate-transcript',
+    'glossary',
+    'reformat',
+    'custom',
   ].includes(value);
 }
 
@@ -1118,7 +1125,7 @@ export function createContentHash(content: string): string {
   let hash = 0;
   for (let i = 0; i < content.length; i++) {
     const char = content.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash = hash & hash; // Convert to 32-bit integer
   }
   return Math.abs(hash).toString(16).padStart(8, '0');

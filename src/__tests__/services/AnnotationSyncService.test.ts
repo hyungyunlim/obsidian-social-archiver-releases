@@ -442,6 +442,57 @@ describe('AnnotationSyncService', () => {
     });
   });
 
+  describe('AI comment clear', () => {
+    it('removes AI comment frontmatter and body section on explicit clear event', async () => {
+      const file = makeFile('Social Archives/test.md');
+      const capturedFm: Record<string, unknown> = {
+        aiComments: ['claude-summary-20241214T103000Z'],
+      };
+      const content = `# Test Post
+
+Content here.
+
+## AI Comments
+
+### 🤖 Claude · Summary · Dec 14, 2024
+<!-- id: claude-summary-20241214T103000Z -->
+
+AI summary`;
+
+      const app = {
+        vault: {
+          read: vi.fn().mockResolvedValue(content),
+          modify: vi.fn(),
+        },
+        fileManager: {
+          processFrontMatter: vi.fn().mockImplementation(async (_file: TFile, updater: (fm: Record<string, unknown>) => void) => {
+            updater(capturedFm);
+          }),
+        },
+      };
+
+      const service = new AnnotationSyncService(
+        app as any,
+        makeWorkersApiClient() as any,
+        makeArchiveLookup({ byId: file }) as any,
+        makeAnnotationRenderer('') as any,
+        makeSectionManager('body') as any,
+        makeSettings()
+      );
+
+      await service.handleActionUpdated(
+        makeActionUpdatedData({ changes: { clearAIComments: true } })
+      );
+
+      expect(capturedFm.aiComments).toBeUndefined();
+      expect(capturedFm.sourceArchiveId).toBe('archive-123');
+      expect(app.vault.modify).toHaveBeenCalledWith(
+        file,
+        expect.not.stringContaining('## AI Comments')
+      );
+    });
+  });
+
   // ── Error handling ──
 
   describe('error handling', () => {

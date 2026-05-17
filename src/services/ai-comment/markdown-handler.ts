@@ -19,6 +19,7 @@ const AI_COMMENT_SECTION_TITLE = '## AI Comments';
 /** Legacy markers for backwards compatibility (parsing only) */
 const LEGACY_SECTION_START = '<!-- AI_COMMENT_SECTION_START -->';
 const LEGACY_SECTION_END = '<!-- AI_COMMENT_SECTION_END -->';
+const MOBILE_ANNOTATIONS_START = '<!-- social-archiver:annotations:start -->';
 
 /** CLI display icons */
 const CLI_ICONS: Record<AICli, string> = {
@@ -58,6 +59,15 @@ interface ParsedHeader {
   date: string;
 }
 
+type AICommentMetadataExtras = Partial<
+  Pick<
+    AICommentMeta,
+    'model' | 'processingTime' | 'contentHash' | 'customPrompt' | 'sourceLanguage' | 'targetLanguage'
+  >
+>;
+
+const AI_COMMENT_METADATA_REGEX = /<!-- ai-comment-meta: ([^>]+) -->/;
+
 // ============================================================================
 // Parsing Functions
 // ============================================================================
@@ -90,11 +100,10 @@ export function parseAIComments(markdown: string): ParsedAIComments {
     // Try new format (just ## AI Comments header)
     const titleIdx = markdown.indexOf(AI_COMMENT_SECTION_TITLE);
     if (titleIdx !== -1) {
-      // Find the end - either next ## header (not part of comment content) or end of file
-      // We need to be careful: comment content may contain ## headers
-      // So we look for ## headers that are NOT followed by typical comment content patterns
-      const afterTitle = markdown.substring(titleIdx + AI_COMMENT_SECTION_TITLE.length);
-      // For now, take until end of file - the section is typically at the end
+      // AI output can contain ## headings, so only a managed annotation marker
+      // is treated as a reliable boundary.
+      const sectionEndIdx = findAICommentSectionEnd(markdown, titleIdx);
+      const afterTitle = markdown.substring(titleIdx + AI_COMMENT_SECTION_TITLE.length, sectionEndIdx);
       sectionContent = afterTitle;
     }
   }
@@ -146,17 +155,26 @@ export function parseAIComments(markdown: string): ParsedAIComments {
     const idMatch = textContent.match(/<!-- id: ([^\s]+) -->/);
     const commentId = idMatch?.[1] ?? parsedHeader.id;
 
-    // Remove ID comment from displayed text
-    const displayText = textContent.replace(/<!-- id: [^>]+ -->\s*/, '').trim();
+    const metadata = parseHiddenMetadata(textContent);
+
+    // Remove hidden comments from displayed text
+    const displayText = textContent
+      .replace(/<!-- id: [^>]+ -->\s*/g, '')
+      .replace(/<!-- ai-comment-meta: [^>]+ -->\s*/g, '')
+      .trim();
 
     // Create metadata
     const meta: AICommentMeta = {
       id: commentId,
       cli: parsedHeader.cli,
+      ...(metadata.model ? { model: metadata.model } : {}),
       type: parsedHeader.type,
       generatedAt: parsedHeader.date,
-      processingTime: 0, // Not stored in markdown
-      contentHash: '', // Not stored in markdown
+      processingTime: metadata.processingTime ?? 0,
+      contentHash: metadata.contentHash ?? '',
+      ...(metadata.customPrompt ? { customPrompt: metadata.customPrompt } : {}),
+      ...(metadata.sourceLanguage ? { sourceLanguage: metadata.sourceLanguage } : {}),
+      ...(metadata.targetLanguage ? { targetLanguage: metadata.targetLanguage } : {}),
     };
 
     comments.push(meta);
@@ -279,6 +297,39 @@ function parseDisplayDate(dateStr: string): string {
   return new Date().toISOString();
 }
 
+function parseHiddenMetadata(textContent: string): AICommentMetadataExtras {
+  const encoded = textContent.match(AI_COMMENT_METADATA_REGEX)?.[1];
+  if (!encoded) return {};
+
+  try {
+    const raw = JSON.parse(decodeURIComponent(encoded)) as Record<string, unknown>;
+    const metadata: AICommentMetadataExtras = {};
+
+    if (typeof raw.model === 'string' && raw.model.trim()) {
+      metadata.model = raw.model.trim();
+    }
+    if (typeof raw.processingTime === 'number' && Number.isFinite(raw.processingTime) && raw.processingTime >= 0) {
+      metadata.processingTime = raw.processingTime;
+    }
+    if (typeof raw.contentHash === 'string' && raw.contentHash.trim()) {
+      metadata.contentHash = raw.contentHash.trim();
+    }
+    if (typeof raw.customPrompt === 'string' && raw.customPrompt.trim()) {
+      metadata.customPrompt = raw.customPrompt.trim();
+    }
+    if (typeof raw.sourceLanguage === 'string' && raw.sourceLanguage.trim()) {
+      metadata.sourceLanguage = raw.sourceLanguage.trim();
+    }
+    if (typeof raw.targetLanguage === 'string' && raw.targetLanguage.trim()) {
+      metadata.targetLanguage = raw.targetLanguage.trim();
+    }
+
+    return metadata;
+  } catch {
+    return {};
+  }
+}
+
 // ============================================================================
 // Formatting Functions
 // ============================================================================
@@ -327,12 +378,30 @@ function formatDisplayDate(isoDate: string): string {
  */
 function formatComment(meta: AICommentMeta, commentText: string): string {
   const header = formatCommentHeader(meta);
+  const metadataComment = formatHiddenMetadata(meta);
 
   // Include ID as hidden comment for reliable parsing (header date is only day-level)
   return `### ${header}
 <!-- id: ${meta.id} -->
+${metadataComment ? `${metadataComment}\n` : ''}
 
 ${commentText.trim()}`;
+}
+
+function formatHiddenMetadata(meta: AICommentMeta): string | null {
+  const metadata: Record<string, string | number> = {};
+
+  if (meta.model?.trim()) metadata.model = meta.model.trim();
+  if (typeof meta.processingTime === 'number' && Number.isFinite(meta.processingTime) && meta.processingTime > 0) {
+    metadata.processingTime = meta.processingTime;
+  }
+  if (meta.contentHash?.trim()) metadata.contentHash = meta.contentHash.trim();
+  if (meta.customPrompt?.trim()) metadata.customPrompt = meta.customPrompt.trim();
+  if (meta.sourceLanguage?.trim()) metadata.sourceLanguage = meta.sourceLanguage.trim();
+  if (meta.targetLanguage?.trim()) metadata.targetLanguage = meta.targetLanguage.trim();
+
+  if (Object.keys(metadata).length === 0) return null;
+  return `<!-- ai-comment-meta: ${encodeURIComponent(JSON.stringify(metadata))} -->`;
 }
 
 // ============================================================================
@@ -425,9 +494,9 @@ export function removeAIComment(markdown: string, commentId: string): string {
     sectionEndIdx = legacyEndIdx + LEGACY_SECTION_END.length;
   } else {
     sectionStartIdx = titleIdx;
-    // AI Comments section is typically at the end of the file
-    // Take everything until end of file to avoid cutting off content with ## headers inside
-    sectionEndIdx = markdown.length;
+    // AI output can contain ## headings, so only a managed annotation marker
+    // is treated as a reliable boundary.
+    sectionEndIdx = findAICommentSectionEnd(markdown, titleIdx);
   }
 
   // If no comments left, remove the entire section
@@ -460,6 +529,49 @@ export function removeAIComment(markdown: string, commentId: string): string {
 }
 
 /**
+ * Remove the entire AI comment section from markdown content.
+ * Supports both legacy marker-wrapped sections and the current `## AI Comments`
+ * section format.
+ */
+export function removeAICommentSection(markdown: string): string {
+  const legacyStartIdx = markdown.indexOf(LEGACY_SECTION_START);
+  const legacyEndIdx = markdown.indexOf(LEGACY_SECTION_END);
+  const hasLegacySection = legacyStartIdx !== -1 && legacyEndIdx !== -1 && legacyStartIdx < legacyEndIdx;
+
+  const sectionStartIdx = hasLegacySection ? legacyStartIdx : markdown.indexOf(AI_COMMENT_SECTION_TITLE);
+  if (sectionStartIdx === -1) return markdown;
+
+  const sectionEndIdx = hasLegacySection
+    ? legacyEndIdx + LEGACY_SECTION_END.length
+    : findAICommentSectionEnd(markdown, sectionStartIdx);
+
+  const beforeSection = markdown.substring(0, sectionStartIdx).trimEnd();
+  const afterSection = markdown.substring(sectionEndIdx).trimStart();
+
+  if (beforeSection && afterSection) {
+    return `${beforeSection}\n\n${afterSection}`;
+  }
+  return beforeSection || afterSection;
+}
+
+/**
+ * Replace the entire AI comment section with a server-authoritative snapshot.
+ */
+export function replaceAICommentSection(
+  markdown: string,
+  entries: Array<{ meta: AICommentMeta; content: string }>
+): string {
+  const markdownWithoutSection = removeAICommentSection(markdown);
+  if (entries.length === 0) return markdownWithoutSection;
+
+  const formattedComments = entries.map((entry) => formatComment(entry.meta, entry.content));
+  const newSection = createAICommentSection(formattedComments);
+  const trimmedMarkdown = markdownWithoutSection.trimEnd();
+
+  return trimmedMarkdown ? `${trimmedMarkdown}\n\n${newSection}` : newSection;
+}
+
+/**
  * Create AI comment section with formatted comments
  * Uses clean format without HTML markers
  *
@@ -472,6 +584,15 @@ function createAICommentSection(formattedComments: string[]): string {
   return `${AI_COMMENT_SECTION_TITLE}
 
 ${commentsContent}`;
+}
+
+function findAICommentSectionEnd(markdown: string, sectionStartIdx: number): number {
+  const annotationStartIdx = markdown.indexOf(
+    MOBILE_ANNOTATIONS_START,
+    sectionStartIdx + AI_COMMENT_SECTION_TITLE.length
+  );
+
+  return annotationStartIdx === -1 ? markdown.length : annotationStartIdx;
 }
 
 // ============================================================================

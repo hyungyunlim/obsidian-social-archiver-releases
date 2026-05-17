@@ -16,6 +16,7 @@ import { CompactPostCardRenderer } from './CompactPostCardRenderer';
 import { YouTubePlayerController } from '../controllers/YouTubePlayerController';
 import { VideoTranscriptPlayer } from './VideoTranscriptPlayer';
 import { ShareAPIClient } from '../../../services/ShareAPIClient';
+import type { AICommentPayload } from '../../../services/WorkersAPIClient';
 import { TextFormatter } from '../../../services/markdown/formatters/TextFormatter';
 import { TranscriptFormatter } from '../../../services/markdown/formatters/TranscriptFormatter';
 import { getAuthorCatalogStore } from '../../../services/AuthorCatalogStore';
@@ -8411,6 +8412,7 @@ export class PostCardRenderer extends Component {
           // Update frontmatter
           const { comments, commentTexts } = parseAIComments(newContent);
           await updateFrontmatterAIComments(this.app, file, comments);
+          await this.updateArchiveAICommentsSnapshot(post, file, comments, commentTexts);
 
           // Update shared post if already shared
           let shareUrl = post.shareUrl;
@@ -8590,6 +8592,7 @@ export class PostCardRenderer extends Component {
         // Update frontmatter
         const { comments, commentTexts } = parseAIComments(finalContent);
         await updateFrontmatterAIComments(this.app, file, comments);
+        await this.updateArchiveAICommentsSnapshot(post, file, comments, commentTexts);
 
         // Update shared post if already shared
         // Check both post object and frontmatter for shareUrl
@@ -8802,6 +8805,7 @@ export class PostCardRenderer extends Component {
       // Update frontmatter
       const { comments, commentTexts } = parseAIComments(newContent);
       await updateFrontmatterAIComments(this.app, file, comments);
+      await this.updateArchiveAICommentsSnapshot(post, file, comments, commentTexts);
 
       // Update shared post if already shared
       // Check both post object and frontmatter for shareUrl
@@ -8925,15 +8929,7 @@ export class PostCardRenderer extends Component {
       const username = this.plugin.settings.username;
 
       // Prepare aiComments data in the same format as share creation
-      const aiComments = comments.map(meta => ({
-        meta: {
-          id: meta.id,
-          cli: meta.cli,
-          type: meta.type,
-          generatedAt: meta.generatedAt,
-        },
-        content: commentTexts.get(meta.id) || '',
-      }));
+      const aiComments = this.buildAICommentPayload(comments, commentTexts);
 
       // Create ShareAPIClient and update share
       const shareClient = new ShareAPIClient({
@@ -8962,6 +8958,101 @@ export class PostCardRenderer extends Component {
       console.error('[PostCardRenderer] Failed to update shared post AI comments:', error);
       // Don't throw - this is a background operation, don't block the main flow
     }
+  }
+
+  private async updateArchiveAICommentsSnapshot(
+    post: PostData,
+    file: TFile,
+    comments: AICommentMeta[],
+    commentTexts: Map<string, string>
+  ): Promise<void> {
+    const archiveId = this.resolveSourceArchiveId(post, file)
+      ?? await this.resolveSourceArchiveIdByOriginalUrl(post, file);
+    if (!archiveId) return;
+
+    try {
+      await this.plugin.workersApiClient.updateArchiveActions(archiveId, {
+        aiComments: this.buildAICommentPayload(comments, commentTexts),
+      });
+    } catch (error) {
+      console.error('[PostCardRenderer] Failed to sync AI comments to archive:', error);
+    }
+  }
+
+  private buildAICommentPayload(
+    comments: AICommentMeta[],
+    commentTexts: Map<string, string>
+  ): AICommentPayload[] {
+    return comments.map(meta => ({
+      meta: {
+        id: meta.id,
+        cli: meta.cli,
+        ...(meta.model ? { model: meta.model } : {}),
+        type: meta.type,
+        generatedAt: meta.generatedAt,
+        ...(typeof meta.processingTime === 'number' ? { processingTime: meta.processingTime } : {}),
+        ...(meta.contentHash ? { contentHash: meta.contentHash } : {}),
+        ...(meta.customPrompt ? { customPrompt: meta.customPrompt } : {}),
+        ...(meta.sourceLanguage ? { sourceLanguage: meta.sourceLanguage } : {}),
+        ...(meta.targetLanguage ? { targetLanguage: meta.targetLanguage } : {}),
+      },
+      content: commentTexts.get(meta.id) || '',
+    }));
+  }
+
+  private resolveSourceArchiveId(post: PostData, file: TFile): string | undefined {
+    if (typeof post.sourceArchiveId === 'string' && post.sourceArchiveId.length > 0) {
+      return post.sourceArchiveId;
+    }
+
+    const cache = this.app.metadataCache.getFileCache(file);
+    const sourceArchiveId = cache?.frontmatter?.sourceArchiveId;
+    return typeof sourceArchiveId === 'string' && sourceArchiveId.length > 0
+      ? sourceArchiveId
+      : undefined;
+  }
+
+  private async resolveSourceArchiveIdByOriginalUrl(post: PostData, file: TFile): Promise<string | undefined> {
+    const originalUrl = this.resolveOriginalUrl(post, file);
+    if (!originalUrl) return undefined;
+
+    try {
+      const response = await this.plugin.workersApiClient.getUserArchives({ originalUrl, limit: 2 });
+      if (response.archives.length !== 1) return undefined;
+
+      const archive = response.archives[0];
+      if (!archive) return undefined;
+
+      const archiveId = archive.id;
+      await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+        if (!fm.sourceArchiveId) {
+          fm.sourceArchiveId = archiveId;
+        }
+      });
+      return archiveId;
+    } catch (error) {
+      console.warn('[PostCardRenderer] Failed to resolve archive by original URL:', error);
+      return undefined;
+    }
+  }
+
+  private resolveOriginalUrl(post: PostData, file: TFile): string | undefined {
+    if (typeof post.originalUrl === 'string' && post.originalUrl.length > 0) {
+      return post.originalUrl;
+    }
+    if (typeof post.url === 'string' && post.url.length > 0) {
+      return post.url;
+    }
+
+    const cache = this.app.metadataCache.getFileCache(file);
+    const frontmatter = cache?.frontmatter;
+    for (const key of ['originalUrl', 'url']) {
+      const value = frontmatter?.[key];
+      if (typeof value === 'string' && value.length > 0) {
+        return value;
+      }
+    }
+    return undefined;
   }
 
   /**

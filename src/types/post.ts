@@ -284,8 +284,14 @@ export interface PostData {
     meta: {
       id: string;
       cli: 'claude' | 'gemini' | 'codex';
+      model?: string;
       type: 'summary' | 'factcheck' | 'critique' | 'keypoints' | 'sentiment' | 'connections' | 'translation' | 'translate-transcript' | 'glossary' | 'reformat' | 'custom';
       generatedAt: string;
+      processingTime?: number;
+      contentHash?: string;
+      customPrompt?: string;
+      sourceLanguage?: string;
+      targetLanguage?: string;
     };
     content: string;
   }>;

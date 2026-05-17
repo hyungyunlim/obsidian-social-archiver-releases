@@ -7,6 +7,8 @@ import {
   parseAIComments,
   appendAIComment,
   removeAIComment,
+  removeAICommentSection,
+  replaceAICommentSection,
   formatCommentHeader,
   hasAICommentSection,
   countAIComments,
@@ -103,6 +105,17 @@ describe('parseAIComments', () => {
 
     const secondText = result.commentTexts.get('gemini-factcheck-20241213T150000Z');
     expect(secondText).toBe('The facts appear to be accurate.');
+  });
+
+  it('should preserve hidden model metadata', () => {
+    const meta = createMockMeta({ model: 'gpt-5.4-mini' });
+    const markdown = appendAIComment(SAMPLE_MARKDOWN_NO_COMMENTS, meta, 'Model-specific output');
+    const result = parseAIComments(markdown);
+
+    expect(result.comments[0]?.model).toBe('gpt-5.4-mini');
+    expect(result.comments[0]?.processingTime).toBe(1500);
+    expect(result.comments[0]?.contentHash).toBe('abc12345');
+    expect(result.commentTexts.get(meta.id)).toBe('Model-specific output');
   });
 
   it('should return empty results when no section exists', () => {
@@ -394,6 +407,69 @@ describe('removeAIComment', () => {
     expect(result).toContain('claude-summary-20241214T103000Z');
     expect(result).not.toContain('gemini-factcheck-20241213T150000Z');
     expect(result).not.toContain('Gemini');
+  });
+});
+
+describe('removeAICommentSection', () => {
+  it('should remove the entire AI comment section', () => {
+    const result = removeAICommentSection(SAMPLE_MARKDOWN_WITH_COMMENTS);
+
+    expect(result).toContain('# Test Post');
+    expect(result).toContain('Some content here.');
+    expect(result).not.toContain('## AI Comments');
+    expect(result).not.toContain('claude-summary-20241214T103000Z');
+    expect(result).not.toContain('gemini-factcheck-20241213T150000Z');
+  });
+
+  it('should return unchanged markdown when no AI comment section exists', () => {
+    expect(removeAICommentSection(SAMPLE_MARKDOWN_NO_COMMENTS)).toBe(SAMPLE_MARKDOWN_NO_COMMENTS);
+  });
+});
+
+describe('replaceAICommentSection', () => {
+  it('should replace the section with the provided snapshot', () => {
+    const meta = createMockMeta({
+      id: 'codex-factcheck-20241215T120000Z',
+      cli: 'codex',
+      model: 'gpt-5.4-mini',
+      type: 'factcheck',
+      generatedAt: '2024-12-15T12:00:00.000Z',
+    });
+
+    const result = replaceAICommentSection(SAMPLE_MARKDOWN_WITH_COMMENTS, [
+      { meta, content: 'Only the server snapshot remains.' },
+    ]);
+    const parsed = parseAIComments(result);
+
+    expect(result).toContain('# Test Post');
+    expect(result).not.toContain('claude-summary-20241214T103000Z');
+    expect(parsed.comments).toHaveLength(1);
+    expect(parsed.comments[0]?.id).toBe(meta.id);
+    expect(parsed.comments[0]?.model).toBe('gpt-5.4-mini');
+    expect(parsed.commentTexts.get(meta.id)).toBe('Only the server snapshot remains.');
+  });
+
+  it('should remove the section for an empty snapshot', () => {
+    const result = replaceAICommentSection(SAMPLE_MARKDOWN_WITH_COMMENTS, []);
+
+    expect(result).toContain('# Test Post');
+    expect(result).not.toContain('## AI Comments');
+  });
+
+  it('should preserve the managed mobile annotations block after AI comments', () => {
+    const markdown = `${SAMPLE_MARKDOWN_WITH_COMMENTS}
+<!-- social-archiver:annotations:start -->
+## Mobile Annotations
+
+- Note
+<!-- social-archiver:annotations:end -->`;
+    const meta = createMockMeta({ id: 'claude-summary-new' });
+    const result = replaceAICommentSection(markdown, [{ meta, content: 'Updated summary.' }]);
+
+    expect(result).toContain('claude-summary-new');
+    expect(result).not.toContain('gemini-factcheck-20241213T150000Z');
+    expect(result).toContain('<!-- social-archiver:annotations:start -->');
+    expect(result).toContain('## Mobile Annotations');
   });
 });
 

@@ -83,7 +83,7 @@ export class RemoteArchiveIngestService {
    */
   async ingestArchiveById(
     archiveId: string,
-    source: 'client_sync' | 'archive_complete',
+    source: 'client_sync' | 'archive_complete' | 'ai_comment_job',
   ): Promise<IngestResult> {
     // 1. Check if already exists by sourceArchiveId
     const existing = this.deps.archiveLookupService?.findBySourceArchiveId(archiveId) ?? null;
@@ -121,7 +121,11 @@ export class RemoteArchiveIngestService {
     const pendingPost: PendingPost = {
       id: `ingest-${source}-${archiveId}`,
       subscriptionId: `realtime-${source}`,
-      subscriptionName: source === 'client_sync' ? 'Mobile Sync' : 'Realtime Sync',
+      subscriptionName: source === 'client_sync'
+        ? 'Mobile Sync'
+        : source === 'ai_comment_job'
+          ? 'AI Comment Job'
+          : 'Realtime Sync',
       post: postData,
       destinationFolder: this.deps.settings().archivePath,
       archivedAt: new Date().toISOString(),

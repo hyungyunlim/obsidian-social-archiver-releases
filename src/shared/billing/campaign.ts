@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/billing/campaign.ts
- * Generated: 2026-05-13T09:40:57.671Z
+ * Generated: 2026-05-17T06:09:49.119Z
  *
  * To modify, edit the source file in shared/billing/ and run:
  *   npm run sync:shared
@@ -19,7 +19,7 @@
 
 export type BillingPlanKey = 'monthly' | 'annual' | 'lifetime';
 
-export type LocalizedText = string | Partial<Record<'en' | 'ko', string>>;
+export type LocalizedText = string | Partial<Record<'en' | 'ko' | 'ja', string>>;
 
 export type BillingPlanCampaign = {
   label: string | null;

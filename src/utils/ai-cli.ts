@@ -173,6 +173,18 @@ export class AICliDetector {
   }
 
   /**
+   * Snapshot of the currently cached detection results, keyed by CLI.
+   *
+   * Callers that must return synchronously (e.g. Obsidian CLI handlers
+   * constrained to the current microtask drain) read this; first invocation
+   * returns an empty Map until {@link detectAll} populates the cache. Any
+   * subsequent {@link detect} / {@link detectAll} call refreshes the snapshot.
+   */
+  static getCachedResults(): Map<AICli, AICliDetectionResult> {
+    return new Map(this.detectedClis);
+  }
+
+  /**
    * Detect first available AI CLI with full details.
    * Results are cached for 5 minutes
    * @param preferredCli - If specified, detect only that CLI

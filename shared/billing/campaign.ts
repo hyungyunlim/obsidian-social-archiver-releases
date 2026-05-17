@@ -9,7 +9,7 @@
 
 export type BillingPlanKey = 'monthly' | 'annual' | 'lifetime';
 
-export type LocalizedText = string | Partial<Record<'en' | 'ko', string>>;
+export type LocalizedText = string | Partial<Record<'en' | 'ko' | 'ja', string>>;
 
 export type BillingPlanCampaign = {
   label: string | null;

@@ -577,13 +577,18 @@ export class MediaHandler implements IService {
       let processedData = selectedData;
       let outputExtension: string | null = null; // Track output extension for optimized images
 
-      // Skip optimization for vector formats (SVG) and tiny icons (ICO)
+      // Skip optimization for formats where Canvas would destroy semantics
+      // (animated GIF becomes a single still frame).
       const urlExtension = this.pathGenerator.getExtensionFromUrl(selectedUrl) || this.pathGenerator.getExtensionFromUrl(media.url);
-      const skipOptimization = urlExtension === 'svg' || urlExtension === 'ico';
 
       // First, detect the ACTUAL format from binary data (not URL extension)
       // This handles cases where Cloudflare already converted HEIC to JPEG
       const actualFormat = this.detectImageExtension(selectedData);
+      const skipOptimization =
+        urlExtension === 'svg' ||
+        urlExtension === 'ico' ||
+        urlExtension === 'gif' ||
+        actualFormat === 'gif';
 
       if (selectedType === 'image' && this.optimizeImages && !skipOptimization) {
         try {
@@ -1063,6 +1068,14 @@ export class MediaHandler implements IService {
     // JPEG: FF D8 FF
     if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
       return 'jpg';
+    }
+
+    // GIF: "GIF87a" or "GIF89a"
+    if (
+      bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 &&
+      bytes[3] === 0x38 && (bytes[4] === 0x37 || bytes[4] === 0x39) && bytes[5] === 0x61
+    ) {
+      return 'gif';
     }
 
     // WebP: "RIFF" .... "WEBP" at bytes 8-11

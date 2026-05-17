@@ -220,6 +220,10 @@ export interface RealtimeEventBridgeDeps {
   /** Record that we've already shown a Notice for `eventId` this session. */
   markBillingEventNoticed?: (eventId: string) => void;
   refreshTimelineView: () => void;
+  aiCommentJobProcessor?: {
+    handleRequestedJob: (jobId: string, targetClientId: string) => Promise<void>;
+    handleStatusEvent: (event: { jobId?: string; targetClientId?: string; status?: string }) => Promise<void>;
+  };
   processPendingSyncQueue: () => Promise<void>;
   processSyncQueueItem: (queueId: string, archiveId: string, clientId: string) => Promise<boolean>;
   getReadableErrorMessage: (code: string | undefined, msg: string | undefined) => string;
@@ -282,6 +286,23 @@ export class RealtimeEventBridge {
     this.setupArchiveDeletedListener();
     this.setupMediaPreservedListener();
     this.setupBillingStatusUpdatedListener();
+    this.setupAICommentJobListeners();
+  }
+
+  private setupAICommentJobListeners(): void {
+    this.eventRefs.push(
+      this.deps.events.on('ws:ai_comment_requested', (payload: unknown) => {
+        const message = payload as { data?: { jobId?: string; targetClientId?: string }; jobId?: string; targetClientId?: string };
+        const data = message.data ?? message;
+        if (!data.jobId || !data.targetClientId) return;
+        void this.deps.aiCommentJobProcessor?.handleRequestedJob(data.jobId, data.targetClientId);
+      }),
+      this.deps.events.on('ws:ai_comment_status_updated', (payload: unknown) => {
+        const message = payload as { data?: { jobId?: string; targetClientId?: string; status?: string }; jobId?: string; targetClientId?: string; status?: string };
+        const data = message.data ?? message;
+        void this.deps.aiCommentJobProcessor?.handleStatusEvent(data);
+      }),
+    );
   }
 
   // --------------------------------------------------------------------------
@@ -905,7 +926,7 @@ export class RealtimeEventBridge {
 
         // Annotation sync: patch managed block and frontmatter in the local vault note
         const settings = this.deps.settings();
-        if (msg.data.changes.hasAnnotationUpdate) {
+        if (msg.data.changes.hasAnnotationUpdate || msg.data.changes.clearAIComments) {
           if (!settings.enableMobileAnnotationSync) {
             console.debug('[Social Archiver] Annotation update received but Mobile Annotation Sync is disabled. Enable it in Settings → Mobile sync.');
           } else {

@@ -100,6 +100,8 @@ export interface ActionUpdatedEventData {
     shareUrl?: string | null;
     /** True when userNotes or userHighlights were modified on the archive */
     hasAnnotationUpdate?: boolean;
+    /** True when AI-generated comments were explicitly cleared remotely */
+    clearAIComments?: boolean;
   };
   updatedAt: string;
   timestamp: number;

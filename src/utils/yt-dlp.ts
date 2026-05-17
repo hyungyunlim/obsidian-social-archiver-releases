@@ -1,4 +1,5 @@
 import { ProcessManager } from '../services/ProcessManager';
+import { MediaToolDetector } from './media-tool-detector';
 import nodeRequire from './nodeRequire';
 
 /**
@@ -8,83 +9,12 @@ import nodeRequire from './nodeRequire';
 export class YtDlpDetector {
   private static ytDlpAvailable: boolean | null = null;
   private static ytDlpPath: string | null = null;
-  private static ffmpegAvailable: boolean | null = null;
-  private static ffmpegPath: string | null = null;
 
   /**
    * Check if ffmpeg is installed on the system
    */
   static async isFfmpegAvailable(): Promise<boolean> {
-    // Return cached result if available
-    if (this.ffmpegAvailable !== null) {
-      return this.ffmpegAvailable;
-    }
-
-    try {
-      const { exec } = nodeRequire('child_process') as typeof import('child_process');
-      const { promisify } = nodeRequire('util') as typeof import('util');
-      const execAsync = promisify(exec);
-      const os = nodeRequire('os') as typeof import('os');
-
-      // Build platform-specific paths. We derive user-scoped Windows paths
-      // from os.homedir() (which is the same value Node uses for HOME/USERPROFILE)
-      // so we never need to inspect the user's identity.
-      const isWindows = os.platform() === 'win32';
-      const home = os.homedir();
-
-      const commonPaths = [
-        // Try PATH first (works on all platforms)
-        isWindows ? 'ffmpeg.exe' : 'ffmpeg',
-
-        // macOS - Homebrew
-        '/opt/homebrew/bin/ffmpeg',     // Apple Silicon
-        '/usr/local/bin/ffmpeg',        // Intel Mac
-
-        // macOS - MacPorts
-        '/opt/local/bin/ffmpeg',
-
-        // Linux - System packages
-        '/usr/bin/ffmpeg',
-        '/bin/ffmpeg',
-
-        // Linux - Snap
-        '/snap/bin/ffmpeg',
-
-        // Linux - Flatpak
-        '/var/lib/flatpak/exports/bin/ffmpeg',
-
-        // Windows - Common install locations
-        'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe',
-        'C:\\Program Files (x86)\\ffmpeg\\bin\\ffmpeg.exe',
-
-        // Windows - Chocolatey
-        'C:\\ProgramData\\chocolatey\\bin\\ffmpeg.exe',
-
-        // Windows - Scoop (user-scoped, derived from homedir)
-        `${home}\\scoop\\apps\\ffmpeg\\current\\bin\\ffmpeg.exe`,
-        `${home}\\scoop\\shims\\ffmpeg.exe`,
-      ];
-
-      for (const path of commonPaths) {
-        try {
-          const { stdout } = await execAsync(`"${path}" -version`);
-          if (stdout.includes('ffmpeg version')) {
-            this.ffmpegAvailable = true;
-            this.ffmpegPath = path;
-            return true;
-          }
-        } catch {
-          // Continue to next path
-        }
-      }
-
-      this.ffmpegAvailable = false;
-      this.ffmpegPath = null;
-      return false;
-    } catch {
-      this.ffmpegAvailable = false;
-      return false;
-    }
+    return await MediaToolDetector.isFfmpegAvailable();
   }
 
   /**
@@ -221,6 +151,7 @@ export class YtDlpDetector {
     }
 
     const ytDlpPath = this.ytDlpPath;
+    const ffmpeg = await MediaToolDetector.detectFfmpeg();
 
     // Check if already aborted
     if (signal?.aborted) {
@@ -249,18 +180,16 @@ export class YtDlpDetector {
       // Build yt-dlp command arguments (download to temp folder)
       const tempOutputTemplate = path.join(tempDir, `${sanitizedFilename}.%(ext)s`);
 
-      // Choose format based on ffmpeg availability
-      const hasFFmpeg = this.ffmpegAvailable;
       const args = [];
 
-      if (hasFFmpeg && this.ffmpegPath) {
+      if (ffmpeg.available && ffmpeg.path) {
         // With ffmpeg: Request best quality video+audio and merge to MP4
         // yt-dlp automatically uses stream copy (-c copy) and web optimization (-movflags +faststart)
 
         // Only pass --ffmpeg-location for absolute paths
         // If ffmpeg is in PATH (just 'ffmpeg' or 'ffmpeg.exe'), let yt-dlp find it itself
-        if (path.isAbsolute(this.ffmpegPath)) {
-          args.push('--ffmpeg-location', this.ffmpegPath);
+        if (path.isAbsolute(ffmpeg.path)) {
+          args.push('--ffmpeg-location', ffmpeg.path);
         }
 
         args.push(
@@ -510,7 +439,6 @@ export class YtDlpDetector {
   static resetCache(): void {
     this.ytDlpAvailable = null;
     this.ytDlpPath = null;
-    this.ffmpegAvailable = null;
-    this.ffmpegPath = null;
+    MediaToolDetector.resetCache();
   }
 }

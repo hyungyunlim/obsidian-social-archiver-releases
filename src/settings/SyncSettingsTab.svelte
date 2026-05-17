@@ -285,7 +285,7 @@ async function handleRetryPendingDeletes() {
             <span class="library-sync-status-text">{librarySyncProgress}</span>
           </div>
           <!-- Progress bar -->
-          {#if librarySyncProgressPercent() > 0}
+          {#if librarySyncProgressPercent > 0}
             <div class="library-sync-progress-bar-track">
               <div
                 class="library-sync-progress-bar-fill"

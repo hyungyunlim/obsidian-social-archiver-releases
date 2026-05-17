@@ -54,6 +54,8 @@ import { AnnotationFallbackPoller } from './services/AnnotationFallbackPoller';
 
 // Extracted modules
 import { registerCommands, registerEditorTTSMenu } from './plugin/commands/CommandRegistry';
+import { CliRegistry } from './plugin/cli/CliRegistry';
+import { ArchiveCliService } from './plugin/cli/ArchiveCliService';
 import { RealtimeEventBridge, type WsProfileMetadataMessage } from './plugin/realtime/RealtimeEventBridge';
 import { MobileSyncService } from './plugin/mobile/MobileSyncService';
 import { LocalArchiveCoordinator } from './plugin/local-archive/LocalArchiveCoordinator';
@@ -90,6 +92,8 @@ import {
   createBillingEventNoticer,
   type BillingEventNoticer,
 } from './plugin/billing/billingEventNoticer';
+import { DesktopCapabilityReporter } from './plugin/ai-comment/DesktopCapabilityReporter';
+import { AICommentJobProcessor } from './plugin/ai-comment/AICommentJobProcessor';
 
 // Import styles for Vite to process
 import './styles/index.css';
@@ -146,6 +150,23 @@ export default class SocialArchiverPlugin extends Plugin {
   public tagStore!: TagStore; // User-defined tag management
   public batchTranscriptionManager: BatchTranscriptionManager | null = null;
   private batchTranscriptionNotice: BatchTranscriptionNotice | null = null;
+  /**
+   * Obsidian CLI registry (initialized in `onload()` after `initializeServices()`).
+   * `undefined` when the host runtime predates Obsidian 1.12.2 — plugin still loads.
+   */
+  public cliRegistry?: CliRegistry;
+  /**
+   * Lazily-constructed CLI archive service. Single source of truth for
+   * queue-mode PendingJob construction; also used by ArchiveModal so the
+   * UI and the CLI build identical payloads. Created on first access.
+   */
+  private _archiveCliService?: ArchiveCliService;
+  get archiveCliService(): ArchiveCliService {
+    if (!this._archiveCliService) {
+      this._archiveCliService = new ArchiveCliService(this);
+    }
+    return this._archiveCliService;
+  }
   private readonly transcriptFormatter = new TranscriptFormatter();
   private editorTTSController?: EditorTTSController;
   private archiveLookupService?: ArchiveLookupService; // File lookup by sourceArchiveId / originalUrl
@@ -176,6 +197,8 @@ export default class SocialArchiverPlugin extends Plugin {
   private batchGoogleMapsArchiver?: BatchGoogleMapsArchiver;
   private postShareService?: PostShareService;
   public archiveDeleteSyncService: ArchiveDeleteSyncService | null = null;
+  private aiCommentCapabilityReporter?: DesktopCapabilityReporter;
+  public aiCommentJobProcessor?: AICommentJobProcessor;
 
   /** In-app notice channel client (server-driven banner notifications). */
   public noticesService?: NoticesService;
@@ -557,6 +580,30 @@ export default class SocialArchiverPlugin extends Plugin {
       );
     }
 
+    this.registerEvent(
+      this.events.on('settings-changed', (...data: unknown[]) => {
+        const changedKeys = data[1] as Array<keyof SocialArchiverSettings> | undefined;
+        if (changedKeys?.some(key => key.startsWith('aiComment'))) {
+          void this.aiCommentCapabilityReporter?.refreshNow();
+          return;
+        }
+        if (!changedKeys || changedKeys.length === 0) {
+          this.aiCommentCapabilityReporter?.refreshSoon();
+        }
+      }),
+    );
+
+    // Register Obsidian CLI handlers (Obsidian 1.12.2+). Must run AFTER
+    // `initializeServices()` so handlers can resolve services lazily, but
+    // BEFORE command-palette registration so CLI help is available even when
+    // a UI command fails to register for an unrelated reason. Plugin must
+    // continue to load on older Obsidian runtimes without CLI support.
+    this.cliRegistry = new CliRegistry(this);
+    const cliBoot = this.cliRegistry.boot();
+    if (!cliBoot.registered) {
+      console.debug('[Social Archiver] CLI not registered:', cliBoot.reason);
+    }
+
     // Delegate command registration to extracted module
     registerCommands({
       app: this.app,
@@ -672,6 +719,12 @@ export default class SocialArchiverPlugin extends Plugin {
     // Stop annotation fallback polling (public-WS degraded mode)
     this.annotationFallbackPoller?.stop();
     this.annotationFallbackPoller = undefined;
+
+    // Stop desktop AI-comment executor services
+    this.aiCommentJobProcessor?.stop();
+    this.aiCommentJobProcessor = undefined;
+    this.aiCommentCapabilityReporter?.dispose();
+    this.aiCommentCapabilityReporter = undefined;
 
     // Stop periodic job checker
     if (this.jobCheckInterval) {
@@ -1302,6 +1355,38 @@ export default class SocialArchiverPlugin extends Plugin {
           Promise.resolve(),
       });
 
+      this.aiCommentCapabilityReporter?.dispose();
+      this.aiCommentCapabilityReporter = new DesktopCapabilityReporter({
+        apiClient: () => this.apiClient,
+        settings: () => this.settings,
+        pluginVersion: this.manifest.version,
+        schedule: (cb, delay) => this.scheduleTrackedTimeout(cb, delay),
+        clearSchedule: (id) => {
+          window.clearTimeout(id);
+          this.pendingTimeouts.delete(id);
+        },
+      });
+
+      this.aiCommentJobProcessor?.stop();
+      this.aiCommentJobProcessor = new AICommentJobProcessor({
+        app: this.app,
+        apiClient: () => this.apiClient,
+        settings: () => this.settings,
+        saveSettings: () => this.saveSettingsPartial({}, { reinitialize: false, notify: false }),
+        archiveLookupService: () => this.archiveLookupService,
+        ingestRemoteArchive: (archiveId) =>
+          this.remoteArchiveIngestService?.ingestArchiveById(archiveId, 'ai_comment_job') ??
+          Promise.resolve('skipped' as const),
+        isArchiveLibrarySyncRunning: () => this.archiveLibrarySyncService?.isRunning ?? false,
+        refreshTimelineView: () => this.refreshTimelineView(),
+        schedule: (cb, delay) => this.scheduleTrackedTimeout(cb, delay),
+        clearSchedule: (id) => {
+          window.clearTimeout(id);
+          this.pendingTimeouts.delete(id);
+        },
+        notify: (msg, timeout) => new Notice(msg, timeout),
+      });
+
       // Create ArchiveDeleteSyncService
       this.archiveDeleteSyncService = new ArchiveDeleteSyncService({
         apiClient: () => this.apiClient,
@@ -1469,6 +1554,7 @@ export default class SocialArchiverPlugin extends Plugin {
             this.billingEventNoticer?.shouldShow(event) ?? false,
           markBillingEventNoticed: (eventId) => this.billingEventNoticer?.markShown(eventId),
           refreshTimelineView: () => this.refreshTimelineView(),
+          aiCommentJobProcessor: this.aiCommentJobProcessor,
           processPendingSyncQueue: () => this.mobileSyncService?.processPendingSyncQueue() ?? Promise.resolve(),
           processSyncQueueItem: (queueId, archiveId, clientId) =>
             this.mobileSyncService?.processSyncQueueItem(queueId, archiveId, clientId) ?? Promise.resolve(false),
@@ -1539,6 +1625,13 @@ export default class SocialArchiverPlugin extends Plugin {
         // Catch up on pending mobile sync queue items missed while offline
         if (this.settings.syncClientId) {
           this.scheduleTrackedTimeout(() => { void this.mobileSyncService?.processPendingSyncQueue(); }, 5000);
+        }
+
+        if (this.settings.syncClientId) {
+          await this.aiCommentCapabilityReporter?.refreshNow().catch((error) => {
+            console.warn('[Social Archiver] Failed to report AI comment capability:', error);
+          });
+          this.aiCommentJobProcessor?.start();
         }
 
         // Auto-start Archive Library Sync on startup.
@@ -1868,6 +1961,25 @@ export default class SocialArchiverPlugin extends Plugin {
   }
 
   /**
+   * Headless batch archive entry point used by the CLI surface.
+   * Resolves the lazily-initialized archiver and forwards to
+   * `runBatch()`. Returns the aggregate result for the CLI envelope.
+   */
+  public async runGoogleMapsBatch(
+    links: string[],
+    sourceNotePath?: string,
+  ): Promise<import('./plugin/jobs/BatchGoogleMapsArchiver').BatchRunResult> {
+    if (!this.batchGoogleMapsArchiver) {
+      throw new Error('Google Maps batch archiver is not initialized.');
+    }
+    return this.batchGoogleMapsArchiver.runBatch({
+      links,
+      sourceNotePath,
+      skipConfirmation: true,
+    });
+  }
+
+  /**
    * Process batch archive result and create documents
    */
   private async processBatchArchiveResult(
@@ -2025,7 +2137,7 @@ export default class SocialArchiverPlugin extends Plugin {
    * dynamic import lets the UI compile even before Agent E lands the service
    * file, and keeps the module out of the plugin's critical load path.
    */
-  private async getImportOrchestrator(): Promise<ImportOrchestrator> {
+  public async getImportOrchestrator(): Promise<ImportOrchestrator> {
     if (this.importOrchestrator) return this.importOrchestrator;
 
     // Dynamic import — the engine module is only loaded when the feature is
@@ -2433,6 +2545,7 @@ export default class SocialArchiverPlugin extends Plugin {
         clientName,
         settings: {
           vaultName,
+          runtime: ObsidianPlatform.isMobile ? 'mobile' : 'desktop',
           platform: ObsidianPlatform.isMobile ? 'mobile' : 'desktop',
           deviceId: this.settings.deviceId,
         },
@@ -2441,6 +2554,9 @@ export default class SocialArchiverPlugin extends Plugin {
       if (response.clientId) {
         this.settings.syncClientId = response.clientId;
         await this.saveSettings();
+        await this.aiCommentCapabilityReporter?.refreshNow().catch((error) => {
+          console.warn('[Social Archiver] Failed to report AI comment capability after registration:', error);
+        });
         console.debug('[Social Archiver] Registered sync client:', response.clientId);
 
         // Auto-start library sync on first registration if not yet completed

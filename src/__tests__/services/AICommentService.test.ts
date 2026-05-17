@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { AICommentService } from '../../services/AICommentService';
 import {
   AICommentError,
   DEFAULT_PROMPTS,
@@ -15,6 +16,16 @@ import {
   isAICommentType,
 } from '../../types/ai-comment';
 import type { AICommentOptions, AICommentMeta, AICli, AICommentType } from '../../types/ai-comment';
+
+type AICommentServiceInternals = AICommentService & {
+  buildCodexCommand(
+    cliPath: string,
+    prompt: string,
+    commentType: AICommentType,
+    isWindows: boolean,
+    model?: string
+  ): { command: string; args: string[]; stdinPrompt?: string };
+};
 
 describe('AICommentService Types and Utilities', () => {
   // ============================================================================
@@ -156,6 +167,36 @@ describe('AICommentService Types and Utilities', () => {
         expect(isAICommentType('explain')).toBe(false);
         expect(isAICommentType('')).toBe(false);
       });
+    });
+  });
+
+  // ============================================================================
+  // Codex Command Tests
+  // ============================================================================
+
+  describe('Codex command model selection', () => {
+    it('uses the CLI default model when no model is explicitly selected', () => {
+      const service = new AICommentService() as AICommentServiceInternals;
+
+      const command = service.buildCodexCommand('/opt/homebrew/bin/codex', 'Check this claim', 'factcheck', false);
+
+      expect(command.command).toBe('/opt/homebrew/bin/codex');
+      expect(command.args).not.toContain('-m');
+      expect(command.args).not.toContain('-c');
+      expect(command.args).toContain('--ephemeral');
+      expect(command.args).toContain('danger-full-access');
+      expect(command.args.at(-1)).toBe('Check this claim');
+    });
+
+    it('passes the selected model to Codex when requested', () => {
+      const service = new AICommentService() as AICommentServiceInternals;
+
+      const command = service.buildCodexCommand('/opt/homebrew/bin/codex', 'Summarize this', 'summary', false, 'gpt-5.4-mini');
+
+      expect(command.args).toContain('-m');
+      expect(command.args).toContain('gpt-5.4-mini');
+      expect(command.args).toContain('--ephemeral');
+      expect(command.args.at(-1)).toBe('Summarize this');
     });
   });
 

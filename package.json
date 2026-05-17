@@ -1,6 +1,6 @@
 {
   "name": "obsidian-social-archiver",
-  "version": "3.6.3",
+  "version": "3.6.4",
   "description": "Save social media posts directly into your Obsidian vault",
   "main": "main.js",
   "type": "module",
@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
+    "@eslint/json": "^0.14.0",
     "@sveltejs/vite-plugin-svelte": "^6.1.4",
     "@types/jsdom": "^27.0.0",
     "@types/leaflet": "^1.9.21",
@@ -41,7 +42,7 @@
     "eslint-plugin-svelte": "^2.0.0",
     "globals": "^14.0.0",
     "jsdom": "^27.0.1",
-    "obsidian": "latest",
+    "obsidian": "^1.12.0",
     "postcss": "^8.5.6",
     "rollup-plugin-visualizer": "^6.0.5",
     "simple-icons": "^16.18.0",

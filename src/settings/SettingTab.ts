@@ -2297,9 +2297,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setDesc('Show AI comment suggestions on archived posts. Requires local AI CLI tools.')
       .addToggle(toggle => toggle
         .setValue(settings.enabled)
-        .onChange((value) => {
+        .onChange(async (value) => {
           this.plugin.settings.aiComment.enabled = value;
-          this.markDirty();
+          await this.plugin.saveSettingsPartial(
+            { aiComment: this.plugin.settings.aiComment },
+            { reinitialize: false, notify: true },
+          );
         }));
 
     // AI Tools Detection Display

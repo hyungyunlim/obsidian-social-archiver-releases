@@ -1,12 +1,14 @@
-import { type App, Notice, Plugin } from 'obsidian';
+import { type App, Notice, Platform, Plugin } from 'obsidian';
 import type { BatchMode } from '../../types/batch-transcription';
 import type { BatchTranscriptionManager } from '../../services/BatchTranscriptionManager';
 import type { EditorTTSController } from '../../services/tts/EditorTTSController';
 import type { AuthorCatalogEntry } from '../../types/author-catalog';
 import type { AuthorNoteService } from '../../services/AuthorNoteService';
 import type { DetachedMediaService } from '../media/DetachedMediaService';
+import { FEATURE_EDITOR_TTS_ENABLED } from '../../shared/constants';
 import { TimelineView, VIEW_TYPE_TIMELINE } from '../../views/TimelineView';
 import { AuthorDetailView, VIEW_TYPE_AUTHOR_DETAIL } from '../../views/AuthorDetailView';
+import { MediaToolDetector, type MediaToolDetectionResult } from '../../utils/media-tool-detector';
 
 /**
  * Narrow dependency interface for command registration.
@@ -167,7 +169,7 @@ export function registerCommands(deps: CommandRegistryDeps): void {
 
       if (!leafWithState) {
         if (!checking) {
-          new Notice('No author detail view with a saved author. Open an author from the Author Catalog or Timeline first.');
+          new Notice('No author detail view with a saved author. Open an author from the author catalog or timeline first.');
         }
         return false;
       }
@@ -206,6 +208,30 @@ export function registerCommands(deps: CommandRegistryDeps): void {
     name: 'Batch download & transcribe videos in archive notes',
     callback: async () => {
       await deps.startBatchTranscription('download-and-transcribe');
+    },
+  });
+
+  plugin.addCommand({
+    id: 'show-media-tool-diagnostics',
+    name: 'Show media tool diagnostics',
+    callback: async () => {
+      if (!Platform.isDesktopApp) {
+        new Notice('Media tool diagnostics are only available on desktop.');
+        return;
+      }
+
+      const [ffmpeg, ffprobe] = await Promise.all([
+        MediaToolDetector.detectFfmpeg(true),
+        MediaToolDetector.detectFfprobe(true),
+      ]);
+      const noticeLines = [
+        formatMediaToolNoticeLine('ffmpeg', ffmpeg),
+        formatMediaToolNoticeLine('ffprobe', ffprobe),
+        'Full detection details logged to console.',
+      ];
+
+      console.debug('[Social Archiver] Media tool detection', { ffmpeg, ffprobe });
+      new Notice(noticeLines.join('\n'), 12000);
     },
   });
 
@@ -285,13 +311,16 @@ export function registerCommands(deps: CommandRegistryDeps): void {
   });
 
   // ── TTS commands ─────────────────────────────────────────────────────
+  // Registration is gated on the feature flag, not on the controller being
+  // present at registration time. Each callback resolves the controller
+  // lazily so registration order is tolerant to future refactors of
+  // `main.ts` (PR-8a §"Registration point").
 
-  const ttsController = deps.getEditorTTSController();
-  if (ttsController) {
+  if (FEATURE_EDITOR_TTS_ENABLED) {
     // Read entire document aloud
     plugin.addCommand({
       id: 'tts-read-document',
-      name: 'Read document aloud',
+      name: 'Read document aloud (TTS)', // eslint-disable-line obsidianmd/ui/sentence-case -- product feature name
       editorCheckCallback: (checking, _editor, _ctx) => {
         const controller = deps.getEditorTTSController();
         if (!controller) return false;
@@ -305,7 +334,7 @@ export function registerCommands(deps: CommandRegistryDeps): void {
     // Read selected text aloud
     plugin.addCommand({
       id: 'tts-read-selection',
-      name: 'Read selection aloud',
+      name: 'Read selection aloud (TTS)', // eslint-disable-line obsidianmd/ui/sentence-case -- product feature name
       editorCheckCallback: (checking, editor) => {
         const controller = deps.getEditorTTSController();
         if (!controller) return false;
@@ -320,7 +349,7 @@ export function registerCommands(deps: CommandRegistryDeps): void {
     // Toggle pause/resume
     plugin.addCommand({
       id: 'tts-toggle-pause',
-      name: 'Pause or resume reading',
+      name: 'Pause / Resume reading (TTS)', // eslint-disable-line obsidianmd/ui/sentence-case -- product feature name
       checkCallback: (checking) => {
         const controller = deps.getEditorTTSController();
         if (!controller) return false;
@@ -335,7 +364,7 @@ export function registerCommands(deps: CommandRegistryDeps): void {
     // Stop reading
     plugin.addCommand({
       id: 'tts-stop',
-      name: 'Stop reading',
+      name: 'Stop reading (TTS)', // eslint-disable-line obsidianmd/ui/sentence-case -- product feature name
       checkCallback: (checking) => {
         const controller = deps.getEditorTTSController();
         if (!controller?.isActive()) return false;
@@ -344,70 +373,81 @@ export function registerCommands(deps: CommandRegistryDeps): void {
         return true;
       },
     });
+  }
 
-    // ── Author Notes ──────────────────────────────────────────────────────
+  // ── Author Notes ──────────────────────────────────────────────────────
+  // NOT gated on TTS — Author Notes is its own feature surface. Settings
+  // gating (`enableAuthorNotes`) is handled inside the callback so users
+  // see why nothing happened when the feature is off.
 
-    plugin.addCommand({
-      id: 'create-all-author-notes',
-      name: 'Create author notes for existing authors',
-      callback: async () => {
-        const noteService = deps.getAuthorNoteService();
-        const settings = deps.getSettings();
-        if (!noteService || !settings.enableAuthorNotes) {
-          new Notice('Author Notes feature is not enabled. Enable it in Settings → Author Notes.');
-          return;
-        }
+  plugin.addCommand({
+    id: 'create-all-author-notes',
+    name: 'Create author notes for existing authors',
+    callback: async () => {
+      const noteService = deps.getAuthorNoteService();
+      const settings = deps.getSettings();
+      if (!noteService || !settings.enableAuthorNotes) {
+        new Notice('Author notes are not enabled. Enable them in settings.');
+        return;
+      }
 
-        new Notice('Scanning vault for authors...');
+      new Notice('Scanning vault for authors...');
 
-        try {
-          const { AuthorVaultScanner } = await import('../../services/AuthorVaultScanner');
-          const { AuthorDeduplicator } = await import('../../services/AuthorDeduplicator');
+      try {
+        const { AuthorVaultScanner } = await import('../../services/AuthorVaultScanner');
+        const { AuthorDeduplicator } = await import('../../services/AuthorDeduplicator');
 
-          const scanner = new AuthorVaultScanner({
-            app,
-            archivePath: settings.archivePath,
-            includeEmbeddedArchives: true,
-          });
+        const scanner = new AuthorVaultScanner({
+          app,
+          archivePath: settings.archivePath,
+          includeEmbeddedArchives: true,
+        });
 
-          const scanResult = await scanner.scanVault();
-          const deduplicator = new AuthorDeduplicator();
-          const dedupeResult = deduplicator.deduplicate(scanResult.authors, new Map());
+        const scanResult = await scanner.scanVault();
+        const deduplicator = new AuthorDeduplicator();
+        const dedupeResult = deduplicator.deduplicate(scanResult.authors, new Map());
 
-          const authors = dedupeResult.authors;
-          let created = 0;
-          let updated = 0;
-          const BATCH_SIZE = 50;
+        const authors = dedupeResult.authors;
+        let created = 0;
+        let updated = 0;
+        const BATCH_SIZE = 50;
 
-          for (let i = 0; i < authors.length; i += BATCH_SIZE) {
-            const batch = authors.slice(i, i + BATCH_SIZE);
-            for (const author of batch) {
-              const result = await noteService.upsertFromCatalogEntry(author);
-              if (result) {
-                // Check if this was a new creation by seeing if archiveCount was 1
-                // In practice, upsertFromCatalogEntry handles both create and update
-                const data = noteService.readNote(result);
-                if (data && data.archiveCount === author.archiveCount) {
-                  created++;
-                } else {
-                  updated++;
-                }
+        for (let i = 0; i < authors.length; i += BATCH_SIZE) {
+          const batch = authors.slice(i, i + BATCH_SIZE);
+          for (const author of batch) {
+            const result = await noteService.upsertFromCatalogEntry(author);
+            if (result) {
+              // Check if this was a new creation by seeing if archiveCount was 1
+              // In practice, upsertFromCatalogEntry handles both create and update
+              const data = noteService.readNote(result);
+              if (data && data.archiveCount === author.archiveCount) {
+                created++;
+              } else {
+                updated++;
               }
             }
-            // Yield to UI between batches
-            if (i + BATCH_SIZE < authors.length) {
-              await new Promise<void>(resolve => window.setTimeout(resolve, 0));
-            }
           }
-
-          new Notice(`Author notes: ${created} created, ${updated} updated (${authors.length} authors total)`);
-        } catch (err) {
-          console.error('[Social Archiver] Bulk author note generation failed:', err);
-          new Notice('Failed to generate author notes. Check console for details.');
+          // Yield to UI between batches
+          if (i + BATCH_SIZE < authors.length) {
+            await new Promise<void>(resolve => window.setTimeout(resolve, 0));
+          }
         }
-      },
-    });
+
+        new Notice(`Author notes: ${created} created, ${updated} updated (${authors.length} authors total)`);
+      } catch (err) {
+        console.error('[Social Archiver] Bulk author note generation failed:', err);
+        new Notice('Failed to generate author notes. Check console for details.');
+      }
+    },
+  });
+}
+
+function formatMediaToolNoticeLine(tool: string, result: MediaToolDetectionResult): string {
+  if (!result.available) {
+    return `${tool}: missing`;
   }
+
+  return `${tool}: available${result.path ? ` (${result.path})` : ''}`;
 }
 
 /**

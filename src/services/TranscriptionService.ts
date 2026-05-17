@@ -8,6 +8,7 @@
  */
 
 import { WhisperDetector, type WhisperVariant, type WhisperModel } from '../utils/whisper';
+import { MediaToolDetector } from '../utils/media-tool-detector';
 import nodeRequire from '../utils/nodeRequire';
 import type {
   TranscriptionResult,
@@ -195,25 +196,68 @@ export class TranscriptionService {
    */
   private async getAudioDuration(audioPath: string): Promise<number> {
     try {
-      const { exec } = nodeRequire('child_process') as typeof import('child_process');
-      const { promisify } = nodeRequire('util') as typeof import('util');
-      const execAsync = promisify(exec);
-
-      // Try ffprobe first
-      const { stdout } = await execAsync(
-        `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${audioPath}"`,
-        { timeout: 10000 }
-      );
-
-      const duration = parseFloat(stdout.trim());
-      if (!isNaN(duration)) {
-        return duration;
+      const ffprobe = await MediaToolDetector.detectFfprobe();
+      if (!ffprobe.available || !ffprobe.path) {
+        return 0;
       }
+
+      return await this.readDurationWithFfprobe(ffprobe.path, audioPath);
     } catch {
       // ffprobe not available, return 0 (unknown duration)
     }
 
     return 0;
+  }
+
+  private async readDurationWithFfprobe(ffprobePath: string, audioPath: string): Promise<number> {
+    const { spawn } = nodeRequire('child_process') as typeof import('child_process');
+
+    return await new Promise<number>((resolve) => {
+      let settled = false;
+      let stdout = '';
+
+      const child = spawn(ffprobePath, [
+        '-v', 'error',
+        '-show_entries', 'format=duration',
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        audioPath,
+      ], {
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+
+      let timeout: ReturnType<typeof setTimeout>;
+
+      const finish = (duration: number): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        resolve(duration);
+      };
+
+      timeout = setTimeout(() => {
+        try {
+          child.kill('SIGTERM');
+        } catch {
+          // Ignore process cleanup errors.
+        }
+        finish(0);
+      }, 10000);
+
+      child.stdout?.on('data', (data: Buffer) => {
+        stdout += data.toString();
+      });
+
+      child.on('error', () => finish(0));
+      child.on('close', (code: number | null) => {
+        if (code !== 0) {
+          finish(0);
+          return;
+        }
+
+        const duration = parseFloat(stdout.trim());
+        finish(Number.isFinite(duration) ? duration : 0);
+      });
+    });
   }
 
   /**
@@ -261,14 +305,15 @@ export class TranscriptionService {
     const path = nodeRequire('path') as typeof import('path');
     const { spawn } = nodeRequire('child_process') as typeof import('child_process');
 
-    const ffmpegPath = await this.resolveFfmpegPath();
-    if (!ffmpegPath) {
+    const ffmpeg = await MediaToolDetector.detectFfmpeg();
+    if (!ffmpeg.available || !ffmpeg.path) {
       throw new TranscriptionError(
         'INVALID_AUDIO',
         'ffmpeg not found for video transcription',
         'Video transcription requires ffmpeg. Please install ffmpeg and try again.'
       );
     }
+    const ffmpegPath = ffmpeg.path;
 
     const baseName = path.basename(videoPath, path.extname(videoPath));
     const outputPath = path.join(os.tmpdir(), `whisper_input_${baseName}_${Date.now()}.wav`);
@@ -293,7 +338,7 @@ export class TranscriptionService {
 
       ProcessManager.register(ffmpegProcess, 'transcription', 'ffmpeg audio extraction');
 
-      const abortHandler = () => {
+      const abortHandler = (): void => {
         if (settled) return;
         settled = true;
         ffmpegProcess.kill('SIGTERM');
@@ -347,65 +392,6 @@ export class TranscriptionService {
           `Failed to extract audio from video (exit ${code}): ${stderrData.slice(0, 300)}`,
           'Could not extract audio from this video. Please check the file or ffmpeg installation.'
         ));
-      });
-    });
-  }
-
-  /**
-   * Resolve an executable ffmpeg path from PATH and common install locations.
-   */
-  private async resolveFfmpegPath(): Promise<string | null> {
-    const os = nodeRequire('os') as typeof import('os');
-    const path = nodeRequire('path') as typeof import('path');
-    const isWindows = os.platform() === 'win32';
-    // Derive the username from os.homedir() so we never call os.userInfo().
-    const username = path.basename(os.homedir());
-
-    const candidates = [
-      isWindows ? 'ffmpeg.exe' : 'ffmpeg',
-      '/opt/homebrew/bin/ffmpeg',
-      '/usr/local/bin/ffmpeg',
-      '/usr/bin/ffmpeg',
-      '/bin/ffmpeg',
-      '/opt/local/bin/ffmpeg',
-      '/snap/bin/ffmpeg',
-      '/var/lib/flatpak/exports/bin/ffmpeg',
-      'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe',
-      'C:\\Program Files (x86)\\ffmpeg\\bin\\ffmpeg.exe',
-      'C:\\ProgramData\\chocolatey\\bin\\ffmpeg.exe',
-      `C:\\Users\\${username}\\scoop\\apps\\ffmpeg\\current\\bin\\ffmpeg.exe`,
-      `C:\\Users\\${username}\\scoop\\shims\\ffmpeg.exe`,
-    ];
-
-    for (const candidate of candidates) {
-      if (await this.canExecuteBinary(candidate, ['-version'])) {
-        return candidate;
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Check if a binary can be executed.
-   */
-  private async canExecuteBinary(binaryPath: string, args: string[] = []): Promise<boolean> {
-    const { spawn } = nodeRequire('child_process') as typeof import('child_process');
-
-    return await new Promise<boolean>((resolve) => {
-      let settled = false;
-      const proc = spawn(binaryPath, args, { stdio: ['ignore', 'ignore', 'ignore'] });
-
-      proc.on('error', () => {
-        if (settled) return;
-        settled = true;
-        resolve(false);
-      });
-
-      proc.on('close', (code: number | null) => {
-        if (settled) return;
-        settled = true;
-        resolve(code === 0);
       });
     });
   }

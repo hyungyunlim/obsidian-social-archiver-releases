@@ -10,7 +10,7 @@
  * - Auto-register on plugin load if authToken exists
  */
 
-import type { App } from 'obsidian';
+import { Platform as ObsidianPlatform, type App } from 'obsidian';
 import type { IService } from './base/IService';
 import type { SocialArchiverSettings } from '@/types/settings';
 import type { WorkersAPIClient, RegisterSyncClientRequest } from './WorkersAPIClient';
@@ -108,6 +108,8 @@ export class ClientRegistrationService implements IService {
         settings: {
           deviceId: this.settings.deviceId,
           vaultName: this.app.vault.getName(),
+          runtime: ObsidianPlatform.isMobile ? 'mobile' : 'desktop',
+          platform: ObsidianPlatform.isMobile ? 'mobile' : 'desktop',
         },
       };
 
