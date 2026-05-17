@@ -90,14 +90,17 @@ export class DesktopCapabilityReporter {
   }
 
   private async runRefresh(): Promise<void> {
+    // Mobile Obsidian can share plugin data with desktop vaults. Never let it
+    // clear or replace the desktop AI executor capability for a synced clientId.
+    if (Platform.isMobile) return;
+
     const settings = this.deps.settings();
     const clientId = settings.syncClientId;
     const apiClient = this.deps.apiClient();
     if (!apiClient || !settings.authToken || !clientId) return;
 
-    const runtime = Platform.isMobile ? 'mobile' : 'desktop';
     const capability = await this.buildCapabilityPayload();
-    await apiClient.refreshSyncClientCapability(clientId, capability, runtime);
+    await apiClient.refreshSyncClientCapability(clientId, capability, 'desktop');
   }
 
   private async detectProviders(): Promise<AICommentProviderCapability[]> {

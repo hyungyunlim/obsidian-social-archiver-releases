@@ -118,6 +118,7 @@ export class ClientRegistrationService implements IService {
       if (response.clientId) {
         // Store clientId in settings
         this.settings.syncClientId = response.clientId;
+        this.apiClient.setClientId(response.clientId);
         await this.saveSettings();
 
         console.debug('[ClientRegistration] Successfully registered:', response.clientId);

@@ -287,6 +287,12 @@ export default class SocialArchiverPlugin extends Plugin {
         });
       }
 
+      await this.runForegroundSyncStep('AI comment executor capability', () =>
+        this.refreshDesktopAICommentExecutor(`foreground-${trigger}`, {
+          reconnectRealtime: this.realtimeClient?.getChannelMode() !== 'private',
+        })
+      );
+
       await this.runForegroundSyncStep('pending mobile sync queue', () =>
         this.mobileSyncService?.processPendingSyncQueue() ?? Promise.resolve()
       );
@@ -316,6 +322,75 @@ export default class SocialArchiverPlugin extends Plugin {
         `[Social Archiver] Foreground catch-up step failed: ${label}`,
         error instanceof Error ? error.message : String(error),
       );
+    }
+  }
+
+  private currentObsidianRuntime(): 'desktop' | 'mobile' {
+    return ObsidianPlatform.isMobile ? 'mobile' : 'desktop';
+  }
+
+  private syncClientRuntime(client: { settings?: Record<string, unknown> } | undefined): 'desktop' | 'mobile' | 'unknown' {
+    const runtime = client?.settings?.runtime;
+    return runtime === 'desktop' || runtime === 'mobile' ? runtime : 'unknown';
+  }
+
+  private reconnectRealtimeClient(): void {
+    if (!this.realtimeClient) return;
+    this.realtimeClient.disconnect();
+    void this.realtimeClient.connect().catch((error) => {
+      console.debug('[Social Archiver] Realtime reconnect failed:', error);
+    });
+  }
+
+  private async refreshDesktopAICommentExecutor(
+    reason: string,
+    options: { reconnectRealtime?: boolean } = {},
+  ): Promise<void> {
+    if (ObsidianPlatform.isMobile) return;
+    if (!this.apiClient || !this.settings.authToken || !this.settings.syncClientId) return;
+
+    this.apiClient.setClientId(this.settings.syncClientId);
+    await this.aiCommentCapabilityReporter?.refreshNow();
+    this.aiCommentJobProcessor?.start();
+
+    if (options.reconnectRealtime) {
+      console.debug('[Social Archiver] Reconnecting realtime after AI executor refresh', { reason });
+      this.reconnectRealtimeClient();
+    }
+  }
+
+  private async ensureRuntimeScopedSyncClient(reason: string): Promise<void> {
+    if (!this.apiClient || !this.settings.authToken || !this.settings.syncClientId) return;
+
+    try {
+      const expectedRuntime = this.currentObsidianRuntime();
+      const response = await this.apiClient.getSyncClients();
+      const current = response.clients.find((client) => client.id === this.settings.syncClientId);
+      const actualRuntime = this.syncClientRuntime(current);
+      // Desktop can repair a legacy unknown runtime by refreshing capability
+      // before opening WS. Mobile cannot report executor capability, so it must
+      // not keep a legacy/unknown id that may actually belong to desktop.
+      const runtimeMismatch =
+        actualRuntime !== expectedRuntime &&
+        (actualRuntime !== 'unknown' || expectedRuntime === 'mobile');
+
+      if (!current || current.clientType !== 'obsidian' || runtimeMismatch) {
+        const previousClientId = this.settings.syncClientId;
+        console.warn('[Social Archiver] Sync client does not match this Obsidian runtime; registering a runtime-scoped client', {
+          reason,
+          previousClientId,
+          expectedRuntime,
+          actualRuntime: current ? actualRuntime : 'missing',
+        });
+        this.apiClient.setClientId('');
+        await this.saveSettingsPartial({ syncClientId: '' }, { reinitialize: false, notify: true });
+        await this.registerSyncClient({ reinitialize: false });
+        return;
+      }
+
+      this.apiClient.setClientId(this.settings.syncClientId);
+    } catch (error) {
+      console.warn('[Social Archiver] Failed to verify sync client runtime:', error);
     }
   }
 
@@ -1439,6 +1514,9 @@ export default class SocialArchiverPlugin extends Plugin {
         notify: (msg, timeout) => new Notice(msg, timeout),
       });
 
+      await this.ensureRuntimeScopedSyncClient('startup');
+      await this.refreshDesktopAICommentExecutor('startup-before-ws');
+
       // ── Initialize RealtimeClient & EventBridge ───────────────────────
 
       if (this.realtimeClient) {
@@ -1554,7 +1632,7 @@ export default class SocialArchiverPlugin extends Plugin {
             this.billingEventNoticer?.shouldShow(event) ?? false,
           markBillingEventNoticed: (eventId) => this.billingEventNoticer?.markShown(eventId),
           refreshTimelineView: () => this.refreshTimelineView(),
-          aiCommentJobProcessor: this.aiCommentJobProcessor,
+          aiCommentJobProcessor: ObsidianPlatform.isMobile ? undefined : this.aiCommentJobProcessor,
           processPendingSyncQueue: () => this.mobileSyncService?.processPendingSyncQueue() ?? Promise.resolve(),
           processSyncQueueItem: (queueId, archiveId, clientId) =>
             this.mobileSyncService?.processSyncQueueItem(queueId, archiveId, clientId) ?? Promise.resolve(false),
@@ -1628,10 +1706,9 @@ export default class SocialArchiverPlugin extends Plugin {
         }
 
         if (this.settings.syncClientId) {
-          await this.aiCommentCapabilityReporter?.refreshNow().catch((error) => {
+          await this.refreshDesktopAICommentExecutor('startup-after-subscription').catch((error) => {
             console.warn('[Social Archiver] Failed to report AI comment capability:', error);
           });
-          this.aiCommentJobProcessor?.start();
         }
 
         // Auto-start Archive Library Sync on startup.
@@ -2527,7 +2604,9 @@ export default class SocialArchiverPlugin extends Plugin {
   /**
    * Register this Obsidian vault as a sync client
    */
-  async registerSyncClient(): Promise<{ success: boolean; clientId?: string; error?: string }> {
+  async registerSyncClient(
+    options: { reinitialize?: boolean } = {},
+  ): Promise<{ success: boolean; clientId?: string; error?: string }> {
     if (!this.apiClient) {
       return { success: false, error: 'API client not initialized' };
     }
@@ -2552,9 +2631,12 @@ export default class SocialArchiverPlugin extends Plugin {
       });
 
       if (response.clientId) {
-        this.settings.syncClientId = response.clientId;
-        await this.saveSettings();
-        await this.aiCommentCapabilityReporter?.refreshNow().catch((error) => {
+        await this.saveSettingsPartial(
+          { syncClientId: response.clientId },
+          { reinitialize: options.reinitialize ?? false, notify: true },
+        );
+        this.apiClient.setClientId(response.clientId);
+        await this.refreshDesktopAICommentExecutor('registration', { reconnectRealtime: true }).catch((error) => {
           console.warn('[Social Archiver] Failed to report AI comment capability after registration:', error);
         });
         console.debug('[Social Archiver] Registered sync client:', response.clientId);
