@@ -1447,7 +1447,13 @@ export class MarkdownConverter implements IService {
     const templateData = this.prepareTemplateData(normalizedPostData, mediaResults, outputFilePath);
 
     // Process template
-    const content = TemplateEngine.process(template, templateData);
+    let content = TemplateEngine.process(template, templateData);
+    const whisperTranscriptBody = normalizedPostData.whisperTranscript?.segments?.length
+      ? this.transcriptFormatter.formatWhisperTranscript(normalizedPostData.whisperTranscript.segments)
+      : '';
+    if (whisperTranscriptBody && !/^##\s+.*Transcript\b/im.test(content)) {
+      content = `${content.replace(/\s+$/, '')}\n\n---\n\n## Transcript\n\n${whisperTranscriptBody}\n`;
+    }
 
     // Generate full document
     const fullDocument = this.frontmatterGenerator.generateFullDocument(frontmatter, content);

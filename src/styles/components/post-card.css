@@ -111,6 +111,82 @@
 }
 
 /* ========================================
+ * Content variant switch
+ * ======================================== */
+
+.pcr-content-variant-switch {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  margin: 4px 0 8px;
+}
+
+.pcr-content-variant-button.pcr-content-variant-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 22px;
+  max-width: 100%;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.pcr-content-variant-button:hover,
+.pcr-content-variant-button:focus-visible {
+  background-color: transparent;
+  color: var(--text-normal);
+  box-shadow: none;
+}
+
+.pcr-content-variant-label {
+  display: none;
+}
+
+.pcr-content-variant-current {
+  display: inline-flex;
+  align-items: center;
+  max-width: 120px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pcr-content-variant-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  color: var(--text-faint);
+  opacity: 0.8;
+}
+
+.pcr-content-variant-chevron svg {
+  width: 13px;
+  height: 13px;
+}
+
+.pcr-content-variant-body {
+  min-width: 0;
+}
+
+body.is-mobile .pcr-content-variant-switch,
+body.is-phone .pcr-content-variant-switch {
+  display: none;
+}
+
+/* ========================================
  * Author name
  * ======================================== */
 

@@ -13,7 +13,7 @@
  *   8. Action bar: engagement metrics | star, share, tag, archive, open, edit, delete
  */
 
-import { Component, MarkdownRenderer, setIcon, Notice, Platform as ObsidianPlatform, type App } from 'obsidian';
+import { Component, MarkdownRenderer, Menu, setIcon, Notice, Platform as ObsidianPlatform, type App } from 'obsidian';
 import type { PostData } from '../../../types/post';
 import type SocialArchiverPlugin from '../../../main';
 import { MediaGalleryRenderer } from '../renderers/MediaGalleryRenderer';
@@ -25,6 +25,12 @@ import {
 import { getPlatformName } from '@/shared/platforms';
 import { createCustomSVG } from '@/utils/dom-helpers';
 import type { ReaderTTSController } from './ReaderTTSController';
+
+export interface ReaderContentVariantOption {
+  id: string | null;
+  label: string;
+  language?: string | null;
+}
 
 /**
  * Matches `==text==` highlight marks, including ones with whitespace padding
@@ -90,6 +96,13 @@ export interface ReaderContentCallbacks {
   onTypographyToggle?: (anchorEl: HTMLElement) => void;
   /** Whether the typography panel is currently open */
   isTypographyOpen?: () => boolean;
+  /** Content variant switcher */
+  contentVariantOptions?: ReaderContentVariantOption[];
+  selectedContentVariantId?: string | null;
+  onContentVariantChange?: (variantId: string | null) => void;
+  onContentVariantMenu?: (anchorEl: HTMLElement) => void;
+  /** AI actions menu */
+  onAIActionMenu?: (anchorEl: HTMLElement) => void;
 }
 
 export class ReaderModeContentRenderer extends Component {
@@ -147,6 +160,10 @@ export class ReaderModeContentRenderer extends Component {
     // 4. Title
     if (post.title) {
       this.renderTitle(content, post.title);
+    }
+
+    if (callbacks.contentVariantOptions && callbacks.contentVariantOptions.length > 1) {
+      this.renderContentVariantSwitch(content, callbacks);
     }
 
     // 5. Body text
@@ -213,6 +230,7 @@ export class ReaderModeContentRenderer extends Component {
 
     // Typography "Aa" button
     if (callbacks.onTypographyToggle) {
+      const onTypographyToggle = callbacks.onTypographyToggle;
       const aaBtn = rightGroup.createDiv({ cls: 'sa-reader-mode-header-btn sa-reader-typography-button' });
       aaBtn.setAttribute('title', 'Typography settings');
       aaBtn.setAttribute('aria-label', 'Typography settings');
@@ -227,7 +245,7 @@ export class ReaderModeContentRenderer extends Component {
 
       aaBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        callbacks.onTypographyToggle!(aaBtn);
+        onTypographyToggle(aaBtn);
       });
     }
 
@@ -490,6 +508,49 @@ export class ReaderModeContentRenderer extends Component {
     titleEl.textContent = title;
   }
 
+  private renderContentVariantSwitch(parent: HTMLElement, callbacks: ReaderContentCallbacks): void {
+    const row = parent.createDiv({ cls: 'sa-reader-mode-content-variant-switch' });
+    const selectedId = callbacks.selectedContentVariantId ?? null;
+    const selectedOption = callbacks.contentVariantOptions?.find((option) => (option.id ?? null) === selectedId);
+
+    const button = row.createEl('button', {
+      cls: 'sa-reader-mode-content-variant-button',
+      attr: {
+        type: 'button',
+        'aria-label': 'Select content language',
+      },
+    });
+    button.createSpan({
+      text: selectedOption?.label ?? 'Original',
+      cls: 'sa-reader-mode-content-variant-current',
+    });
+    const chevron = button.createSpan({ cls: 'sa-reader-mode-content-variant-chevron' });
+    setIcon(chevron, 'chevron-down');
+
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (callbacks.onContentVariantMenu) {
+        callbacks.onContentVariantMenu(button);
+        return;
+      }
+
+      const menu = new Menu();
+      for (const option of callbacks.contentVariantOptions ?? []) {
+        const optionId = option.id ?? null;
+        menu.addItem((item) => {
+          item
+            .setIcon(optionId ? 'languages' : 'file-text')
+            .setTitle(option.label)
+            .setChecked(optionId === selectedId)
+            .onClick(() => {
+              callbacks.onContentVariantChange?.(optionId);
+            });
+        });
+      }
+      menu.showAtMouseEvent(event);
+    });
+  }
+
   // ---------- Body ----------
 
   private async renderBody(parent: HTMLElement, post: PostData): Promise<HTMLElement | null> {
@@ -690,6 +751,14 @@ export class ReaderModeContentRenderer extends Component {
       setIcon(hlIcon, 'highlighter');
     }
 
+    if (callbacks.onAIActionMenu) {
+      this.renderActionBtn(actionsGroup, {
+        icon: 'sparkles',
+        title: 'AI actions',
+        onClick: callbacks.onAIActionMenu,
+      });
+    }
+
     // 5. Archive
     this.renderActionBtn(actionsGroup, {
       icon: 'archive',
@@ -734,7 +803,7 @@ export class ReaderModeContentRenderer extends Component {
       filled?: boolean;
       filledStroke?: boolean;
       danger?: boolean;
-      onClick: () => void;
+      onClick: (buttonEl: HTMLElement, event: MouseEvent) => void;
     },
   ): void {
     const btn = parent.createDiv({ cls: 'sa-reader-mode-action-btn' });
@@ -758,7 +827,7 @@ export class ReaderModeContentRenderer extends Component {
 
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      opts.onClick();
+      opts.onClick(btn, e);
     });
   }
 

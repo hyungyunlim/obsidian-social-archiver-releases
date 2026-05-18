@@ -148,6 +148,18 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     this.plugin.settings.naverCookie = parts.join('; ');
   }
 
+  private renderLocalCommandExecutionNotice(containerEl: HTMLElement): void {
+    const setting = new Setting(containerEl)
+      .setName('Local command execution')
+      .setDesc(
+        'Obsidian may show a Shell Execution warning for Social Archiver. '
+        + 'The plugin can run local command-line tools only for desktop features you enable or request: '
+        + 'AI comments (Claude/Gemini/Codex CLI), Whisper transcription, video downloads (yt-dlp/ffmpeg), '
+        + 'and optional Supertonic TTS. Mobile Obsidian does not run these local shell commands.'
+      );
+    setting.settingEl.addClass('sa-settings-info');
+  }
+
   display(): void {
     // Clean up existing Svelte components synchronously before display
     this.cleanupComponents();
@@ -710,6 +722,9 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Set initial visibility
     updatePreviewLengthVisibility();
+
+    // Explain the Obsidian plugin scanner warning before desktop-local features.
+    this.renderLocalCommandExecutionNotice(containerEl);
 
     // Transcription Settings Section (Desktop Only)
     new Setting(containerEl).setName('Transcription').setHeading()

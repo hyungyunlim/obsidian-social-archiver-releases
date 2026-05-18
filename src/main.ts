@@ -94,6 +94,9 @@ import {
 } from './plugin/billing/billingEventNoticer';
 import { DesktopCapabilityReporter } from './plugin/ai-comment/DesktopCapabilityReporter';
 import { AICommentJobProcessor } from './plugin/ai-comment/AICommentJobProcessor';
+import { TranscriptionCapabilityReporter } from './plugin/transcription/TranscriptionCapabilityReporter';
+import { TranscriptionJobProcessor, type PendingTranscriptUploadRecord } from './plugin/transcription/TranscriptionJobProcessor';
+import { LocalLockRegistry } from './plugin/locks/LocalLockRegistry';
 
 // Import styles for Vite to process
 import './styles/index.css';
@@ -182,6 +185,7 @@ export default class SocialArchiverPlugin extends Plugin {
   private bulkArchiveActionAccumulator?: BulkArchiveActionAccumulator; // Shared accumulator for batching outbound like/archive API calls
   private authorProfileSyncService?: AuthorProfileSyncService; // Inbound/startup synced author profile application
   private remoteArchiveIngestService?: RemoteArchiveIngestService; // Shared single-archive fetch+save for WS events
+  private readonly localLockRegistry = new LocalLockRegistry();
 
   // Extracted module instances
   private realtimeEventBridge?: RealtimeEventBridge;
@@ -199,6 +203,8 @@ export default class SocialArchiverPlugin extends Plugin {
   public archiveDeleteSyncService: ArchiveDeleteSyncService | null = null;
   private aiCommentCapabilityReporter?: DesktopCapabilityReporter;
   public aiCommentJobProcessor?: AICommentJobProcessor;
+  private transcriptionCapabilityReporter?: TranscriptionCapabilityReporter;
+  public transcriptionJobProcessor?: TranscriptionJobProcessor;
 
   /** In-app notice channel client (server-driven banner notifications). */
   public noticesService?: NoticesService;
@@ -287,7 +293,7 @@ export default class SocialArchiverPlugin extends Plugin {
         });
       }
 
-      await this.runForegroundSyncStep('AI comment executor capability', () =>
+      await this.runForegroundSyncStep('desktop executor capabilities', () =>
         this.refreshDesktopAICommentExecutor(`foreground-${trigger}`, {
           reconnectRealtime: this.realtimeClient?.getChannelMode() !== 'private',
         })
@@ -336,6 +342,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
   private reconnectRealtimeClient(): void {
     if (!this.realtimeClient) return;
+    if (this.realtimeClient.isConnected() || this.realtimeClient.isConnecting()) return;
     this.realtimeClient.disconnect();
     void this.realtimeClient.connect().catch((error) => {
       console.debug('[Social Archiver] Realtime reconnect failed:', error);
@@ -351,10 +358,12 @@ export default class SocialArchiverPlugin extends Plugin {
 
     this.apiClient.setClientId(this.settings.syncClientId);
     await this.aiCommentCapabilityReporter?.refreshNow();
+    await this.transcriptionCapabilityReporter?.refreshNow();
     this.aiCommentJobProcessor?.start();
+    this.transcriptionJobProcessor?.start();
 
     if (options.reconnectRealtime) {
-      console.debug('[Social Archiver] Reconnecting realtime after AI executor refresh', { reason });
+      console.debug('[Social Archiver] Reconnecting realtime after executor capability refresh', { reason });
       this.reconnectRealtimeClient();
     }
   }
@@ -658,12 +667,13 @@ export default class SocialArchiverPlugin extends Plugin {
     this.registerEvent(
       this.events.on('settings-changed', (...data: unknown[]) => {
         const changedKeys = data[1] as Array<keyof SocialArchiverSettings> | undefined;
-        if (changedKeys?.some(key => key.startsWith('aiComment'))) {
-          void this.aiCommentCapabilityReporter?.refreshNow();
+        if (changedKeys?.some(key => key.startsWith('aiComment') || key === 'transcription')) {
+          void this.refreshDesktopAICommentExecutor('settings-changed', { reconnectRealtime: true });
           return;
         }
         if (!changedKeys || changedKeys.length === 0) {
           this.aiCommentCapabilityReporter?.refreshSoon();
+          this.transcriptionCapabilityReporter?.refreshSoon();
         }
       }),
     );
@@ -796,9 +806,9 @@ export default class SocialArchiverPlugin extends Plugin {
     this.annotationFallbackPoller = undefined;
 
     // Stop desktop AI-comment executor services
-    this.aiCommentJobProcessor?.stop();
+    (this.aiCommentJobProcessor as AICommentJobProcessor | undefined)?.stop();
     this.aiCommentJobProcessor = undefined;
-    this.aiCommentCapabilityReporter?.dispose();
+    (this.aiCommentCapabilityReporter as DesktopCapabilityReporter | undefined)?.dispose();
     this.aiCommentCapabilityReporter = undefined;
 
     // Stop periodic job checker
@@ -845,6 +855,10 @@ export default class SocialArchiverPlugin extends Plugin {
     this.batchTranscriptionNotice = null;
     this.batchTranscriptionManager?.dispose();
     this.batchTranscriptionManager = null;
+    this.transcriptionJobProcessor?.stop();
+    this.transcriptionJobProcessor = undefined;
+    this.transcriptionCapabilityReporter?.dispose();
+    this.transcriptionCapabilityReporter = undefined;
 
     // Dispose Editor TTS
     if (this.editorTTSController) {
@@ -948,7 +962,7 @@ export default class SocialArchiverPlugin extends Plugin {
     await this.saveSettingsPartial({}, { reinitialize: true, notify: true });
   }
 
-  async saveSettingsPartial(
+	async saveSettingsPartial(
     partial: Partial<SocialArchiverSettings>,
     options: { reinitialize?: boolean; notify?: boolean } = {}
   ): Promise<void> {
@@ -957,7 +971,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
     if (options.reinitialize) {
       await this.initializeServices();
-    }
+		}
 
     if (options.notify) {
       this.events.trigger(
@@ -966,6 +980,23 @@ export default class SocialArchiverPlugin extends Plugin {
         Object.keys(partial) as Array<keyof SocialArchiverSettings>
       );
     }
+  }
+
+  private async loadTranscriptionPendingUploads(): Promise<PendingTranscriptUploadRecord[]> {
+    const data = ((await this.loadData()) as Record<string, unknown> | undefined) ?? {};
+    return Array.isArray(data.transcriptionPendingUploads)
+      ? data.transcriptionPendingUploads as PendingTranscriptUploadRecord[]
+      : [];
+  }
+
+  private async saveTranscriptionPendingUploads(records: PendingTranscriptUploadRecord[]): Promise<void> {
+    const data = ((await this.loadData()) as Record<string, unknown> | undefined) ?? {};
+    if (records.length > 0) {
+      data.transcriptionPendingUploads = records;
+    } else {
+      delete data.transcriptionPendingUploads;
+    }
+    await this.saveData(data);
   }
 
   /**
@@ -1362,6 +1393,7 @@ export default class SocialArchiverPlugin extends Plugin {
         convertUserArchiveToPostData: (archive) => this.convertUserArchiveToPostData(archive),
         saveSubscriptionPost: (post) => this.saveSubscriptionPost(post),
         refreshTimelineView: () => this.refreshTimelineView(),
+        localLockRegistry: this.localLockRegistry,
       });
 
       // Create SubscriptionSyncService
@@ -1428,6 +1460,9 @@ export default class SocialArchiverPlugin extends Plugin {
         reconcileAnnotationState: (file, archive) =>
           this.annotationSyncService?.reconcileFromLibrarySync(file, archive) ??
           Promise.resolve(),
+        reconcileTranscriptState: (file, archive) =>
+          this.reconcileTranscriptFromLibrarySync(file, archive),
+        localLockRegistry: this.localLockRegistry,
       });
 
       this.aiCommentCapabilityReporter?.dispose();
@@ -1435,6 +1470,17 @@ export default class SocialArchiverPlugin extends Plugin {
         apiClient: () => this.apiClient,
         settings: () => this.settings,
         pluginVersion: this.manifest.version,
+        schedule: (cb, delay) => this.scheduleTrackedTimeout(cb, delay),
+        clearSchedule: (id) => {
+          window.clearTimeout(id);
+          this.pendingTimeouts.delete(id);
+        },
+      });
+
+      this.transcriptionCapabilityReporter?.dispose();
+      this.transcriptionCapabilityReporter = new TranscriptionCapabilityReporter({
+        apiClient: () => this.apiClient,
+        settings: () => this.settings,
         schedule: (cb, delay) => this.scheduleTrackedTimeout(cb, delay),
         clearSchedule: (id) => {
           window.clearTimeout(id);
@@ -1460,6 +1506,52 @@ export default class SocialArchiverPlugin extends Plugin {
           this.pendingTimeouts.delete(id);
         },
         notify: (msg, timeout) => new Notice(msg, timeout),
+        localLockRegistry: this.localLockRegistry,
+      });
+
+      this.transcriptionJobProcessor?.stop();
+      this.transcriptionJobProcessor = new TranscriptionJobProcessor({
+        app: this.app,
+        apiClient: () => this.apiClient,
+        settings: () => this.settings,
+        archiveLookupService: () => this.archiveLookupService,
+        ingestRemoteArchive: (archiveId) =>
+          this.remoteArchiveIngestService?.ingestArchiveById(archiveId, 'transcription_job') ??
+          Promise.resolve('skipped' as const),
+        isArchiveLibrarySyncRunning: () => this.archiveLibrarySyncService?.isRunning ?? false,
+        mediaPathResolver: () => this.mediaPathResolver,
+        toAbsoluteVaultPath: (path) => this.toAbsoluteVaultPath(path),
+        downloadWithYtDlp: async (url, platform, postId, signal) => {
+          if (!await YtDlpDetector.isAvailable()) return null;
+
+          const vaultBasePath = (this.app.vault.adapter as unknown as { basePath: string }).basePath;
+          const basePath = this.settings.mediaPath || 'attachments/social-archives';
+          const platformFolder = `${basePath}/${platform}`;
+          const outputPath = `${vaultBasePath}/${platformFolder}`;
+
+          const folderExists = await this.app.vault.adapter.exists(platformFolder);
+          if (!folderExists) {
+            await this.app.vault.createFolder(platformFolder);
+          }
+
+          const sanitizedPostId = postId.replace(/[^a-z0-9_-]/gi, '_');
+          const filename = `${platform}_${sanitizedPostId}_${Date.now()}`;
+          const absolutePath = await YtDlpDetector.downloadVideo(url, outputPath, filename, undefined, signal);
+          const videoFilename = absolutePath.split(/[/\\]/).pop() || '';
+          return `${platformFolder}/${videoFilename}`;
+        },
+	        refreshCapability: () => this.transcriptionCapabilityReporter?.refreshNow() ?? Promise.resolve(),
+	        capabilityHash: () => this.transcriptionCapabilityReporter?.getCapabilityHash(),
+	        refreshTimelineView: () => this.refreshTimelineView(),
+	        loadPendingUploads: () => this.loadTranscriptionPendingUploads(),
+	        savePendingUploads: (records) => this.saveTranscriptionPendingUploads(records),
+	        schedule: (cb, delay) => this.scheduleTrackedTimeout(cb, delay),
+        clearSchedule: (id) => {
+          window.clearTimeout(id);
+          this.pendingTimeouts.delete(id);
+        },
+        notify: (msg, timeout) => new Notice(msg, timeout),
+        localLockRegistry: this.localLockRegistry,
       });
 
       // Create ArchiveDeleteSyncService
@@ -1633,6 +1725,7 @@ export default class SocialArchiverPlugin extends Plugin {
           markBillingEventNoticed: (eventId) => this.billingEventNoticer?.markShown(eventId),
           refreshTimelineView: () => this.refreshTimelineView(),
           aiCommentJobProcessor: ObsidianPlatform.isMobile ? undefined : this.aiCommentJobProcessor,
+          transcriptionJobProcessor: ObsidianPlatform.isMobile ? undefined : this.transcriptionJobProcessor,
           processPendingSyncQueue: () => this.mobileSyncService?.processPendingSyncQueue() ?? Promise.resolve(),
           processSyncQueueItem: (queueId, archiveId, clientId) =>
             this.mobileSyncService?.processSyncQueueItem(queueId, archiveId, clientId) ?? Promise.resolve(false),
@@ -1643,6 +1736,7 @@ export default class SocialArchiverPlugin extends Plugin {
             this.remoteArchiveIngestService?.ingestArchiveById(archiveId, source) ?? Promise.resolve('skipped' as const),
           notify: (msg, timeout) => new Notice(msg, timeout),
           schedule: (cb, delay) => this.scheduleTrackedTimeout(cb, delay),
+          localLockRegistry: this.localLockRegistry,
           currentCrawlWorkerJobId: {
             get value() { return self.currentCrawlWorkerJobId; },
             set value(v) { self.currentCrawlWorkerJobId = v; },
@@ -1706,7 +1800,7 @@ export default class SocialArchiverPlugin extends Plugin {
         }
 
         if (this.settings.syncClientId) {
-          await this.refreshDesktopAICommentExecutor('startup-after-subscription').catch((error) => {
+          await this.refreshDesktopAICommentExecutor('startup-after-subscription', { reconnectRealtime: true }).catch((error) => {
             console.warn('[Social Archiver] Failed to report AI comment capability:', error);
           });
         }
@@ -1942,6 +2036,7 @@ export default class SocialArchiverPlugin extends Plugin {
         return `${platformFolder}/${videoFilename}`;
       },
       refreshTimelineView: () => this.refreshTimelineView(),
+      localLockRegistry: this.localLockRegistry,
     };
     this.batchTranscriptionManager = new BatchTranscriptionManager(deps);
     this.batchTranscriptionManager.tryRestore();
@@ -2024,6 +2119,46 @@ export default class SocialArchiverPlugin extends Plugin {
 
     const normalizedContent = content.replace(/\s+$/, '');
     return `${normalizedContent}\n\n---\n\n## Transcript\n\n${body}\n`;
+  }
+
+  private async reconcileTranscriptFromLibrarySync(file: TFile, archive: UserArchive): Promise<void> {
+    const transcript = archive.whisperTranscript;
+    if (!transcript?.segments?.length) return;
+
+    const segments = transcript.segments.map((segment, index) => ({
+      id: typeof segment.id === 'number' ? segment.id : index,
+      start: segment.start,
+      end: typeof segment.end === 'number' ? segment.end : segment.start + 1,
+      text: segment.text,
+    }));
+    const body = this.transcriptFormatter.formatWhisperTranscript(segments);
+    if (!body) return;
+
+    const resultId = archive.transcriptResultId || transcript.transcriptResultId || `${archive.id}:whisper:${transcript.language}`;
+    const updatedAt = archive.transcriptionUpdatedAt || transcript.updatedAt || new Date().toISOString();
+
+    await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+      fm.videoTranscribed = true;
+      fm.videoTranscribedAt = updatedAt;
+      delete fm.videoTranscriptionError;
+      fm.transcriptionModel = archive.transcriptionModel || transcript.model || fm.transcriptionModel;
+      fm.transcriptionLanguage = archive.transcriptionLanguage || transcript.language;
+      if (archive.transcriptionDuration != null || transcript.duration != null) {
+        fm.transcriptionDuration = archive.transcriptionDuration ?? transcript.duration;
+      }
+      fm.transcriptionTime = updatedAt;
+      if (archive.transcriptionProcessingTime != null) {
+        fm.transcriptionProcessingTime = archive.transcriptionProcessingTime;
+      }
+      fm.transcriptResultId = resultId;
+      const ids = Array.isArray(fm.transcriptResultIds) ? [...fm.transcriptResultIds] : [];
+      if (!ids.includes(resultId)) ids.push(resultId);
+      fm.transcriptResultIds = ids;
+    });
+
+    await this.app.vault.process(file, (content) => {
+      return upsertMarkedTranscript(content, resultId, body);
+    });
   }
 
   // ============================================================================
@@ -2694,4 +2829,30 @@ export default class SocialArchiverPlugin extends Plugin {
       return { success: true };
     }
   }
+}
+
+function upsertMarkedTranscript(content: string, resultMarkerId: string, body: string): string {
+  if (!body.trim()) return content;
+  const rendered = renderMarkedTranscript(resultMarkerId, body);
+  if (buildMarkedTranscriptPattern(resultMarkerId).test(content)) {
+    return content.replace(buildMarkedTranscriptPattern(resultMarkerId), rendered);
+  }
+  const normalizedContent = content.replace(/\s+$/, '');
+  return `${normalizedContent}\n\n---\n\n${rendered}\n`;
+}
+
+function renderMarkedTranscript(resultMarkerId: string, body: string): string {
+  return `<!-- social-archiver-transcript:start resultMarkerId=${resultMarkerId} -->\n## Transcript\n\n${body}\n<!-- social-archiver-transcript:end resultMarkerId=${resultMarkerId} -->`;
+}
+
+function buildMarkedTranscriptPattern(resultMarkerId: string): RegExp {
+  const escaped = escapeRegExp(resultMarkerId);
+  return new RegExp(
+    `<!--\\s*social-archiver-transcript:start\\s+resultMarkerId=${escaped}\\s*-->\\s*##\\s+Transcript\\s*\\n+([\\s\\S]*?)\\n?<!--\\s*social-archiver-transcript:end\\s+resultMarkerId=${escaped}\\s*-->`,
+    'g',
+  );
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

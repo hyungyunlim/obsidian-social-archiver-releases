@@ -89,6 +89,12 @@ export interface YamlFrontmatter {
   };
   // Multi-language transcript fields
   transcriptionLanguage?: string;    // Original transcript language ISO code
+  transcriptionModel?: string;       // Whisper model used for server/local transcript
+  transcriptionDuration?: number;    // Audio/video duration in seconds
+  transcriptionTime?: string;        // ISO timestamp of transcript completion
+  transcriptionProcessingTime?: number; // Processing time in ms
+  transcriptResultId?: string;       // Current server transcript result id
+  transcriptResultIds?: string[];    // Completed transcript result markers
   transcriptLanguages?: string[];    // All available transcript language ISO codes (e.g., ['en', 'ko', 'ja'])
   isArticle?: boolean;               // X article (long-form) post marker
   /**

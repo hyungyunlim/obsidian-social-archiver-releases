@@ -22,6 +22,15 @@ export type RealtimeMessageType =
   | 'author_profile_updated' // From editable author profile changes
   | 'media_preserved' // From R2 media preservation
   | 'billing_status_updated' // From RevenueCat/server billing status changes
+  | 'ai_comment_requested' // Targeted desktop Obsidian AI comment job hint
+  | 'ai_comment_status_updated' // AI comment job status/progress update
+  | 'ai_comment_updated' // Archive AI comments projection updated
+  | 'ai_action_requested' // Targeted Obsidian AI action job hint
+  | 'content_variant_updated' // Archive content variant projection updated
+  | 'transcription_requested' // Targeted desktop Obsidian transcription job hint
+  | 'transcription_status_updated' // Transcription job status/progress update
+  | 'transcription_cancelled' // Targeted desktop Obsidian cancellation hint
+  | 'transcription_updated' // Archive transcript projection updated
   | 'pong'; // WebSocket pong response
 
 export interface RealtimeMessage {
@@ -76,6 +85,8 @@ export class RealtimeClient {
   private pingInterval: number | null = null;
   private ticketFetcher: TicketFetcher | null = null;
   private currentMode: RealtimeChannelMode = 'none';
+  private connectionGeneration = 0;
+  private connectPromise: Promise<void> | null = null;
   /** Track whether we logged a ticket failure for the current degraded session. */
   private ticketFailureLogged = false;
 
@@ -117,9 +128,19 @@ export class RealtimeClient {
     ) {
       return;
     }
+    if (this.connectPromise) return this.connectPromise;
 
     this.isIntentionallyClosed = false;
+    const generation = ++this.connectionGeneration;
 
+    const promise = this.openConnection(generation).finally(() => {
+      if (this.connectPromise === promise) this.connectPromise = null;
+    });
+    this.connectPromise = promise;
+    return promise;
+  }
+
+  private async openConnection(generation: number): Promise<void> {
     const baseWsUrl = this.apiUrl
       .replace('https://', 'wss://')
       .replace('http://', 'ws://');
@@ -154,10 +175,14 @@ export class RealtimeClient {
       nextMode = 'public';
     }
 
-    try {
-      this.ws = new WebSocket(wsUrl);
+    if (!this.isCurrentGeneration(generation)) return;
 
-      this.ws.onopen = () => {
+    try {
+      const ws = new WebSocket(wsUrl);
+      this.ws = ws;
+
+      ws.onopen = () => {
+        if (!this.isCurrentSocket(ws, generation)) return;
         this.reconnectAttempts = 0;
         this.reconnectDelay = 1000;
 
@@ -169,7 +194,8 @@ export class RealtimeClient {
         this.events.trigger('ws:connected');
       };
 
-      this.ws.onmessage = (event) => {
+      ws.onmessage = (event) => {
+        if (!this.isCurrentSocket(ws, generation)) return;
         try {
           const message = JSON.parse(String(event.data)) as RealtimeMessage;
 
@@ -184,13 +210,16 @@ export class RealtimeClient {
         }
       };
 
-      this.ws.onerror = (error) => {
+      ws.onerror = (error) => {
+        if (!this.isCurrentSocket(ws, generation)) return;
         console.error('[RealtimeClient] WebSocket error:', error);
         this.events.trigger('ws:error', error);
       };
 
-      this.ws.onclose = (event) => {
+      ws.onclose = (event) => {
+        if (!this.isCurrentSocket(ws, generation)) return;
         this.stopPing();
+        if (this.ws === ws) this.ws = null;
         // Mode resets to `none` on disconnect; the next connect() determines
         // whether we land on private or public. Do not emit onRecovered here.
         this.currentMode = 'none';
@@ -203,9 +232,18 @@ export class RealtimeClient {
       };
 
     } catch (error) {
+      if (!this.isCurrentGeneration(generation)) return;
       console.error('[RealtimeClient] Failed to create WebSocket:', error);
       this.scheduleReconnect();
     }
+  }
+
+  private isCurrentGeneration(generation: number): boolean {
+    return generation === this.connectionGeneration && !this.isIntentionallyClosed;
+  }
+
+  private isCurrentSocket(ws: WebSocket, generation: number): boolean {
+    return this.isCurrentGeneration(generation) && this.ws === ws;
   }
 
   /**
@@ -276,6 +314,8 @@ export class RealtimeClient {
    */
   disconnect(): void {
     this.isIntentionallyClosed = true;
+    this.connectionGeneration++;
+    this.connectPromise = null;
     this.stopPing();
     this.clearReconnectTimer();
 
@@ -291,6 +331,10 @@ export class RealtimeClient {
    */
   isConnected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  isConnecting(): boolean {
+    return this.ws?.readyState === WebSocket.CONNECTING || this.connectPromise !== null;
   }
 
   /**

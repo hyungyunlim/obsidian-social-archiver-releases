@@ -7102,7 +7102,8 @@ export class TimelineContainer {
     this.youtubeControllers.clear();
     this.youtubeEmbedRenderer.disconnectAllObservers();
 
-    // Clear series card caches (including subscription cache) for fresh data
+    // Clear renderer caches for fresh server-backed projections.
+    this.postCardRenderer.clearCaches();
     this.seriesCardRenderer.clearCaches();
 
     await this.loadPosts();

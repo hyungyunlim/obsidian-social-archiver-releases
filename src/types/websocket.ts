@@ -102,6 +102,8 @@ export interface ActionUpdatedEventData {
     hasAnnotationUpdate?: boolean;
     /** True when AI-generated comments were explicitly cleared remotely */
     clearAIComments?: boolean;
+    /** True when desktop-generated transcription was explicitly cleared remotely */
+    clearTranscription?: boolean;
   };
   updatedAt: string;
   timestamp: number;
@@ -176,6 +178,25 @@ export interface ArchiveTagsUpdatedEvent {
 }
 
 // ============================================================================
+// Content Variant Updated Event (private channel)
+// ============================================================================
+
+export interface ContentVariantUpdatedEventData {
+  type: 'content_variant_updated';
+  userId: string;
+  archiveId: string;
+  variantId: string;
+  action: 'created' | 'updated' | 'hidden' | 'deleted' | 'activated' | 'stale';
+  activeContentVariantId?: string;
+  updatedAt: string;
+}
+
+export interface ContentVariantUpdatedEvent {
+  type: 'content_variant_updated';
+  data: ContentVariantUpdatedEventData;
+}
+
+// ============================================================================
 // Author Profile Updated Event (private channel)
 // ============================================================================
 
@@ -217,6 +238,59 @@ export interface MediaPreservedEventData {
 export interface MediaPreservedEvent {
   type: 'media_preserved';
   data: MediaPreservedEventData;
+}
+
+// ============================================================================
+// Transcription Job Events (private channel)
+// ============================================================================
+
+export interface TranscriptionRequestedEventData {
+  jobId: string;
+  targetClientId: string;
+}
+
+export interface TranscriptionRequestedEvent {
+  type: 'transcription_requested';
+  data: TranscriptionRequestedEventData;
+}
+
+export interface TranscriptionStatusUpdatedEventData {
+  jobId: string;
+  targetClientId?: string;
+  status: string;
+  uiStatus?: string;
+  progressPercentage?: number;
+  progressCode?: string;
+  nextAttemptAt?: string;
+  errorCode?: string;
+  terminalReason?: string;
+}
+
+export interface TranscriptionStatusUpdatedEvent {
+  type: 'transcription_status_updated';
+  data: TranscriptionStatusUpdatedEventData;
+}
+
+export interface TranscriptionCancelledEventData {
+  jobId: string;
+  targetClientId: string;
+}
+
+export interface TranscriptionCancelledEvent {
+  type: 'transcription_cancelled';
+  data: TranscriptionCancelledEventData;
+}
+
+export interface TranscriptionUpdatedEventData {
+  jobId: string;
+  archiveId: string;
+  mediaRefHash: string;
+  transcriptResultId?: string;
+}
+
+export interface TranscriptionUpdatedEvent {
+  type: 'transcription_updated';
+  data: TranscriptionUpdatedEventData;
 }
 
 // ============================================================================

@@ -9,15 +9,26 @@
  * Delegates gesture detection to ReaderModeGestureHandler.
  */
 
-import { TFile, Notice, setIcon, Platform as ObsidianPlatform, type App } from 'obsidian';
+import { TFile, Notice, setIcon, Menu, Platform as ObsidianPlatform, type App, type EventRef } from 'obsidian';
 import type { PostData } from '../../../types/post';
 import type SocialArchiverPlugin from '../../../main';
+import type { AIActionType, ContentVariant } from '../../../services/WorkersAPIClient';
+import type { ContentVariantUpdatedEventData } from '../../../types/websocket';
 import { MediaGalleryRenderer } from '../renderers/MediaGalleryRenderer';
 import { LinkPreviewRenderer } from '../renderers/LinkPreviewRenderer';
-import { ReaderModeContentRenderer } from './ReaderModeContentRenderer';
+import { ReaderModeContentRenderer, type ReaderContentVariantOption } from './ReaderModeContentRenderer';
 import { ReaderModeGestureHandler } from './ReaderModeGestureHandler';
 import { ReaderHighlightManager } from './ReaderHighlightManager';
 import { ReaderTTSController } from './ReaderTTSController';
+import { AICommentJobStatusBanner } from '../AICommentJobStatusBanner';
+import {
+  MORE_TRANSLATION_LANGUAGE_OPTIONS,
+  PRIMARY_TRANSLATION_LANGUAGE_OPTIONS,
+  getMissingTranslationLanguageOptions,
+  isSupportedAIActionLanguageCode,
+  type AIActionLanguageOption,
+} from '../aiActionLanguageOptions';
+import { stripContentVariantMetadataFooter } from '../../../utils/contentVariantMarkdown';
 import {
   ReaderTypographyPanel,
   FONT_SIZE,
@@ -35,6 +46,14 @@ import { resolveTTSProvider } from '../../../services/tts/resolveProvider';
 import type { PluginTTSProvider } from '../../../services/tts/types';
 import type { TextHighlight, HighlightRenderProfile } from '../../../types/annotations';
 import { getRenderProfileForArchive, RENDER_PROFILE_CONFIG } from '../../../vendor/highlight-core';
+
+interface ReaderActionSheetItem {
+  icon: string;
+  title: string;
+  checked?: boolean;
+  warning?: boolean;
+  onSelect: () => void;
+}
 
 export interface ReaderModeContext {
   posts: PostData[];
@@ -106,6 +125,14 @@ export class ReaderModeOverlay {
   private typographyState: ReaderTypographyState;
   private typographyPanel: ReaderTypographyPanel | null = null;
   private typographyPanelOpen = false;
+  private contentVariantCache: Map<string, { variants: ContentVariant[]; activeContentVariantId?: string | null; fetchedAt: number }> = new Map();
+  private selectedContentVariantIds: Map<string, string | null> = new Map();
+  private readonly CONTENT_VARIANT_CACHE_TTL = 60 * 1000;
+  private activeContentVariantArchiveId: string | null = null;
+  private contentVariantEventRef: EventRef | null = null;
+  private readerActionSheetCleanup: (() => void) | null = null;
+  private aiCommentJobStatusBanner: AICommentJobStatusBanner | null = null;
+  private aiCommentJobStatusBannerUnsubscribe: (() => void) | null = null;
 
   // Safe-area fallback listeners (for Android WebView where env() may resolve to 0)
   private viewportSafeAreaListener: (() => void) | null = null;
@@ -129,6 +156,7 @@ export class ReaderModeOverlay {
   async open(): Promise<void> {
     if (this._isActive) return;
     this._isActive = true;
+    this.activeContentVariantArchiveId = null;
     activeDocument.body.addClass('sa-reader-mode-active', 'reader-mode-active');
 
     // Create backdrop
@@ -142,6 +170,7 @@ export class ReaderModeOverlay {
     this.container.className = 'sa-reader-mode-container';
     activeDocument.body.appendChild(this.container);
     this.setupSafeAreaFallback();
+    this.renderReaderAICommentJobStatusBanner();
 
     // Apply persisted typography (CSS variables)
     this.applyTypography();
@@ -212,6 +241,9 @@ export class ReaderModeOverlay {
       }
     };
     activeDocument.addEventListener('keydown', this.keyHandler);
+    this.contentVariantEventRef = this.context.plugin.events.on('ws:content_variant_updated', (payload: unknown) => {
+      void this.handleContentVariantUpdated(payload);
+    });
 
     // Show overlay immediately
     window.requestAnimationFrame(() => {
@@ -252,6 +284,14 @@ export class ReaderModeOverlay {
       activeDocument.removeEventListener('keydown', this.keyHandler);
       this.keyHandler = null;
     }
+    if (this.contentVariantEventRef) {
+      this.context.plugin.events.offref(this.contentVariantEventRef);
+      this.contentVariantEventRef = null;
+    }
+    this.readerActionSheetCleanup?.();
+    this.readerActionSheetCleanup = null;
+    this.destroyReaderAICommentJobStatusBanner();
+    this.activeContentVariantArchiveId = null;
 
     // Cleanup gesture
     if (this.gestureHandler) {
@@ -707,6 +747,420 @@ export class ReaderModeOverlay {
       this.cleanupRenderer();
       await this.renderCurrentPost();
     }
+  }
+
+  private openAIActionMenu(post: PostData, anchorEl: HTMLElement): void {
+    if (this.shouldUseReaderActionSheet()) {
+      this.openReaderActionSheet('AI', [
+        {
+          icon: 'list',
+          title: 'Summary',
+          onSelect: () => {
+            void this.requestReaderAIAction(post, 'comment.summary');
+          },
+        },
+        {
+          icon: 'shield-check',
+          title: 'Fact check',
+          onSelect: () => {
+            void this.requestReaderAIAction(post, 'comment.factcheck');
+          },
+        },
+        {
+          icon: 'book-open',
+          title: 'Glossary',
+          onSelect: () => {
+            void this.requestReaderAIAction(post, 'comment.glossary');
+          },
+        },
+        {
+          icon: 'tag',
+          title: 'Suggest tags',
+          onSelect: () => {
+            void this.requestReaderAIAction(post, 'tags.suggest_apply');
+          },
+        },
+        ...this.buildReaderTranslationActionSheetItems(post),
+      ]);
+      return;
+    }
+
+    const menu = new Menu();
+    menu.addItem((item) => {
+      item
+        .setIcon('list')
+        .setTitle('Summary')
+        .onClick(() => {
+          void this.requestReaderAIAction(post, 'comment.summary');
+        });
+    });
+    menu.addItem((item) => {
+      item
+        .setIcon('shield-check')
+        .setTitle('Fact check')
+        .onClick(() => {
+          void this.requestReaderAIAction(post, 'comment.factcheck');
+        });
+    });
+    menu.addItem((item) => {
+      item
+        .setIcon('book-open')
+        .setTitle('Glossary')
+        .onClick(() => {
+          void this.requestReaderAIAction(post, 'comment.glossary');
+        });
+    });
+    menu.addSeparator();
+    menu.addItem((item) => {
+      item
+        .setIcon('tag')
+        .setTitle('Suggest tags')
+        .onClick(() => {
+          void this.requestReaderAIAction(post, 'tags.suggest_apply');
+        });
+    });
+    menu.addSeparator();
+    this.addReaderTranslationMenuItems(menu, post, anchorEl);
+
+    const rect = anchorEl.getBoundingClientRect();
+    menu.showAtPosition({ x: rect.left, y: rect.bottom });
+  }
+
+  private buildReaderTranslationActionSheetItems(post: PostData): ReaderActionSheetItem[] {
+    const primaryItems = PRIMARY_TRANSLATION_LANGUAGE_OPTIONS.map((language) => ({
+      icon: 'languages',
+      title: language.shortLabel,
+      onSelect: () => {
+        void this.requestReaderAIAction(post, 'content.translate_variant', language.code);
+      },
+    }));
+
+    return [
+      ...primaryItems,
+      {
+        icon: 'chevron-right',
+        title: 'More languages',
+        onSelect: () => {
+          this.openReaderTranslationLanguageSheet(post, MORE_TRANSLATION_LANGUAGE_OPTIONS);
+        },
+      },
+    ];
+  }
+
+  private openReaderTranslationLanguageSheet(post: PostData, languages: AIActionLanguageOption[]): void {
+    this.openReaderActionSheet(
+      'Translate',
+      languages.map((language) => ({
+        icon: 'languages',
+        title: language.menuLabel,
+        onSelect: () => {
+          void this.requestReaderAIAction(post, 'content.translate_variant', language.code);
+        },
+      })),
+    );
+  }
+
+  private addReaderTranslationMenuItems(menu: Menu, post: PostData, anchorEl: HTMLElement): void {
+    for (const language of PRIMARY_TRANSLATION_LANGUAGE_OPTIONS) {
+      menu.addItem((item) => {
+        item
+          .setIcon('languages')
+          .setTitle(`Translate to ${language.menuLabel}`)
+          .onClick(() => {
+            void this.requestReaderAIAction(post, 'content.translate_variant', language.code);
+          });
+      });
+    }
+
+    menu.addItem((item) => {
+      item
+        .setIcon('chevron-right')
+        .setTitle('More languages')
+        .onClick(() => {
+          this.openReaderTranslationLanguageMenu(post, anchorEl, MORE_TRANSLATION_LANGUAGE_OPTIONS);
+        });
+    });
+  }
+
+  private openReaderTranslationLanguageMenu(
+    post: PostData,
+    anchorEl: HTMLElement,
+    languages: AIActionLanguageOption[],
+  ): void {
+    const menu = new Menu();
+    for (const language of languages) {
+      menu.addItem((item) => {
+        item
+          .setIcon('languages')
+          .setTitle(language.menuLabel)
+          .onClick(() => {
+            void this.requestReaderAIAction(post, 'content.translate_variant', language.code);
+          });
+      });
+    }
+
+    const rect = anchorEl.getBoundingClientRect();
+    menu.showAtPosition({ x: rect.left, y: rect.bottom });
+  }
+
+  private renderReaderAICommentJobStatusBanner(): void {
+    this.destroyReaderAICommentJobStatusBanner();
+    const processor = this.context.plugin.aiCommentJobProcessor;
+    if (!this.container || !processor) return;
+
+    const bannerHost = this.container.createDiv({ cls: 'sa-reader-ai-comment-job-banner-host' });
+    this.aiCommentJobStatusBanner = new AICommentJobStatusBanner(bannerHost);
+    this.aiCommentJobStatusBanner.onCancel((jobId) => {
+      void processor.cancelJob(jobId);
+    });
+    this.aiCommentJobStatusBanner.onDismiss((jobId) => {
+      processor.dismissJob(jobId);
+    });
+    this.aiCommentJobStatusBannerUnsubscribe = processor.onUpdate((state) => {
+      this.aiCommentJobStatusBanner?.update(state);
+    });
+  }
+
+  private destroyReaderAICommentJobStatusBanner(): void {
+    if (this.aiCommentJobStatusBannerUnsubscribe) {
+      this.aiCommentJobStatusBannerUnsubscribe();
+      this.aiCommentJobStatusBannerUnsubscribe = null;
+    }
+    if (this.aiCommentJobStatusBanner) {
+      this.aiCommentJobStatusBanner.destroy();
+      this.aiCommentJobStatusBanner = null;
+    }
+  }
+
+  private openReaderContentVariantMenu(
+    post: PostData,
+    archiveId: string,
+    options: ReaderContentVariantOption[],
+    selectedId: string | null,
+    anchorEl: HTMLElement,
+  ): void {
+    const applySelection = (variantId: string | null) => {
+      this.selectedContentVariantIds.set(archiveId, variantId);
+      void this.reRenderPreservingScroll();
+    };
+
+    if (this.shouldUseReaderActionSheet()) {
+      this.openReaderActionSheet(
+        'Version',
+        [
+          ...options.map((option) => {
+            const optionId = option.id ?? null;
+            return {
+              icon: optionId ? 'languages' : 'file-text',
+              title: option.label,
+              checked: optionId === selectedId,
+              onSelect: () => applySelection(optionId),
+            };
+          }),
+          ...this.buildReaderContentVariantTranslationActionSheetItems(post, options),
+        ],
+      );
+      return;
+    }
+
+    const menu = new Menu();
+    for (const option of options) {
+      const optionId = option.id ?? null;
+      menu.addItem((item) => {
+        item
+          .setIcon(optionId ? 'languages' : 'file-text')
+          .setTitle(option.label)
+          .setChecked(optionId === selectedId)
+          .onClick(() => applySelection(optionId));
+      });
+    }
+    this.addReaderContentVariantTranslationMenuItems(menu, post, options, anchorEl);
+    const rect = anchorEl.getBoundingClientRect();
+    menu.showAtPosition({ x: rect.left, y: rect.bottom });
+  }
+
+  private buildReaderContentVariantTranslationActionSheetItems(
+    post: PostData,
+    options: ReaderContentVariantOption[],
+  ): ReaderActionSheetItem[] {
+    const missing = getMissingTranslationLanguageOptions(options.map((option) => option.language));
+    if (missing.primary.length === 0 && missing.more.length === 0) return [];
+
+    const primaryItems = missing.primary.map((language) => ({
+      icon: 'languages',
+      title: `Translate to ${language.shortLabel}`,
+      onSelect: () => {
+        void this.requestReaderAIAction(post, 'content.translate_variant', language.code);
+      },
+    }));
+
+    return [
+      ...primaryItems,
+      ...(missing.more.length > 0
+        ? [{
+          icon: 'chevron-right',
+          title: 'More languages',
+          onSelect: () => {
+            this.openReaderTranslationLanguageSheet(post, missing.more);
+          },
+        }]
+        : []),
+    ];
+  }
+
+  private addReaderContentVariantTranslationMenuItems(
+    menu: Menu,
+    post: PostData,
+    options: ReaderContentVariantOption[],
+    anchorEl: HTMLElement,
+  ): void {
+    const missing = getMissingTranslationLanguageOptions(options.map((option) => option.language));
+    if (missing.primary.length === 0 && missing.more.length === 0) return;
+
+    menu.addSeparator();
+    for (const language of missing.primary) {
+      menu.addItem((item) => {
+        item
+          .setIcon('languages')
+          .setTitle(`Translate to ${language.menuLabel}`)
+          .onClick(() => {
+            void this.requestReaderAIAction(post, 'content.translate_variant', language.code);
+          });
+      });
+    }
+
+    if (missing.more.length > 0) {
+      menu.addItem((item) => {
+        item
+          .setIcon('chevron-right')
+          .setTitle('More languages')
+          .onClick(() => {
+            this.openReaderTranslationLanguageMenu(post, anchorEl, missing.more);
+          });
+      });
+    }
+  }
+
+  private shouldUseReaderActionSheet(): boolean {
+    return ObsidianPlatform.isMobile
+      || activeDocument.body.hasClass('is-mobile')
+      || activeDocument.body.hasClass('is-phone');
+  }
+
+  private openReaderActionSheet(title: string, items: ReaderActionSheetItem[]): void {
+    this.readerActionSheetCleanup?.();
+
+    const backdrop = activeDocument.body.createDiv({ cls: 'sa-reader-action-sheet-backdrop' });
+    backdrop.setAttribute('role', 'presentation');
+    const sheet = backdrop.createDiv({ cls: 'sa-reader-action-sheet' });
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-label', title);
+
+    const handle = sheet.createDiv({ cls: 'sa-reader-action-sheet-handle' });
+    handle.setAttribute('aria-hidden', 'true');
+    sheet.createDiv({ cls: 'sa-reader-action-sheet-title', text: title });
+
+    const close = () => {
+      backdrop.remove();
+      activeDocument.removeEventListener('keydown', onKeyDown, true);
+      this.modalOpen = false;
+      this.readerActionSheetCleanup = null;
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        close();
+      }
+    };
+
+    this.modalOpen = true;
+    activeDocument.addEventListener('keydown', onKeyDown, true);
+    this.readerActionSheetCleanup = close;
+    backdrop.addEventListener('click', (event) => {
+      if (event.target === backdrop) close();
+    });
+
+    for (const item of items) {
+      const button = sheet.createEl('button', {
+        cls: 'sa-reader-action-sheet-item',
+        attr: { type: 'button' },
+      });
+      if (item.checked) button.addClass('is-checked');
+      if (item.warning) button.addClass('is-warning');
+
+      const icon = button.createSpan({ cls: 'sa-reader-action-sheet-item-icon' });
+      setIcon(icon, item.checked ? 'check' : item.icon);
+      button.createSpan({ cls: 'sa-reader-action-sheet-item-label', text: item.title });
+      button.addEventListener('click', () => {
+        close();
+        item.onSelect();
+      });
+    }
+
+    window.requestAnimationFrame(() => {
+      backdrop.addClass('is-open');
+      sheet.addClass('is-open');
+    });
+  }
+
+  private async requestReaderAIAction(
+    post: PostData,
+    actionType: AIActionType,
+    outputLanguage?: string,
+  ): Promise<void> {
+    const archiveId = await this.resolveArchiveIdForPost(post);
+    const apiClient = this.context.plugin.workersApiClient;
+    const clientId = this.context.plugin.settings.syncClientId;
+    if (!archiveId || !apiClient || !clientId) {
+      new Notice('Connect sync before running AI actions from reader mode.');
+      return;
+    }
+
+    try {
+      const availability = await apiClient.getAIActionAvailability(archiveId, actionType);
+      if (availability.activeJob) {
+        new Notice('An AI action is already queued for this post.');
+        return;
+      }
+      const targetClientId = availability.capableClientIds.includes(clientId)
+        ? clientId
+        : availability.capableClientIds[0];
+      if (!availability.available || !targetClientId) {
+        new Notice('No capable Obsidian client is available for this AI action.');
+        return;
+      }
+
+      const language = outputLanguage ?? this.resolveDefaultAIActionLanguage();
+      const response = await apiClient.createAIActionJob({
+        archiveId,
+        actionType,
+        targetClientId,
+        provider: this.context.plugin.settings.aiComment.defaultCli,
+        outputLanguage: language,
+        sourceClientId: clientId,
+      });
+
+      new Notice(response.delivery === 'websocket' ? 'AI action sent.' : 'AI action queued.');
+      this.context.plugin.aiCommentJobProcessor?.trackAIActionSummary?.(
+        response.activeJob,
+        this.context.plugin.settings.aiComment.defaultCli,
+      );
+      if (targetClientId === clientId) {
+        void this.context.plugin.aiCommentJobProcessor?.handleRequestedAIActionJob(response.jobId, targetClientId);
+      }
+    } catch (error) {
+      console.error('[Social Archiver] Reader AI action request failed:', error);
+      new Notice(error instanceof Error ? error.message : 'Failed to request AI action.');
+    }
+  }
+
+  private resolveDefaultAIActionLanguage(): string | undefined {
+    const configured = this.context.plugin.settings.aiComment.outputLanguage;
+    if (configured && configured !== 'auto') return configured;
+    const language = navigator.language?.split('-')[0]?.toLowerCase();
+    return isSupportedAIActionLanguageCode(language)
+      ? language
+      : undefined;
   }
 
   // ---------- Comment / Note Modal ----------
@@ -1248,7 +1702,7 @@ export class ReaderModeOverlay {
   /**
    * Find text in the body portion of the file, using context for disambiguation.
    */
-  private findTextInBody(body: string, text: string, contextBefore?: string, contextAfter?: string): number {
+  private findTextInBody(body: string, text: string, contextBefore?: string, _contextAfter?: string): number {
     let searchFrom = 0;
     let bestMatch = -1;
 
@@ -1294,7 +1748,8 @@ export class ReaderModeOverlay {
       const regex = /==(?![-=])([\s\S]+?)==/g;
       let match: RegExpExecArray | null;
       while ((match = regex.exec(body)) !== null) {
-        const text = match[1]!;
+        const text = match[1];
+        if (!text) continue;
         const startOffset = match.index;
         const now = new Date().toISOString();
         highlights.push({
@@ -1434,8 +1889,9 @@ export class ReaderModeOverlay {
       s.letterSpacing = Math.max(LETTER_SPACING.min, Math.min(LETTER_SPACING.max, parseFloat(stepped.toFixed(3))));
     }
     if (patch.fontFamily !== undefined) {
-      const valid = FONT_FAMILIES.some(f => f.key === patch.fontFamily);
-      if (valid) s.fontFamily = patch.fontFamily!;
+      const fontFamily = patch.fontFamily;
+      const valid = FONT_FAMILIES.some(f => f.key === fontFamily);
+      if (valid) s.fontFamily = fontFamily;
     }
 
     // Keep legacy field in sync
@@ -1545,6 +2001,11 @@ export class ReaderModeOverlay {
 
     // Determine subscription status for badge
     const subscriptionStatus = this.getSubscriptionStatus(post);
+    const contentVariantState = await this.resolveContentVariantState(post);
+    this.activeContentVariantArchiveId = contentVariantState?.archiveId ?? this.activeContentVariantArchiveId;
+    const renderedPost = contentVariantState?.selectedVariant
+      ? this.applyContentVariantToPost(post, contentVariantState.selectedVariant)
+      : post;
 
     // Get cached highlights for this post; if empty, parse from vault file ==text==
     const postKey = post.filePath || post.id;
@@ -1558,7 +2019,7 @@ export class ReaderModeOverlay {
 
     await this.activeRenderer.render(
       this.panel,
-      post,
+      renderedPost,
       this.currentIndex,
       total,
       {
@@ -1585,9 +2046,31 @@ export class ReaderModeOverlay {
         onSubscribe: () => void this.subscribeAuthor(post),
         onUnsubscribe: () => void this.unsubscribeAuthor(post),
         ttsController: this.ttsController ?? undefined,
-        hasHighlights: highlights.length > 0,
-        highlightCount: highlights.length,
+        hasHighlights: !contentVariantState?.selectedVariant && highlights.length > 0,
+        highlightCount: contentVariantState?.selectedVariant ? 0 : highlights.length,
+        contentVariantOptions: contentVariantState?.options,
+        selectedContentVariantId: contentVariantState?.selectedVariant?.id ?? null,
+        onContentVariantChange: (variantId) => {
+          if (contentVariantState?.archiveId) {
+            this.selectedContentVariantIds.set(contentVariantState.archiveId, variantId);
+            void this.reRenderPreservingScroll();
+          }
+        },
+        onContentVariantMenu: contentVariantState
+          ? (anchorEl) => this.openReaderContentVariantMenu(
+            post,
+            contentVariantState.archiveId,
+            contentVariantState.options,
+            contentVariantState.selectedVariant?.id ?? null,
+            anchorEl,
+          )
+          : undefined,
+        onAIActionMenu: (anchorEl) => this.openAIActionMenu(post, anchorEl),
         onBodyRendered: (bodyEl, plainText) => {
+          if (contentVariantState?.selectedVariant) {
+            this.highlightManager?.detach();
+            return;
+          }
           // Detach previous and attach highlight manager to new body element
           this.highlightManager?.detach();
           this.highlightManager?.attach(bodyEl, plainText, highlights);
@@ -1623,6 +2106,119 @@ export class ReaderModeOverlay {
         newScrollEl.scrollTop = savedScroll;
       }
     }
+  }
+
+  private async handleContentVariantUpdated(payload: unknown): Promise<void> {
+    const message = payload as { data?: ContentVariantUpdatedEventData } | ContentVariantUpdatedEventData | undefined;
+    const data = 'data' in (message ?? {})
+      ? (message as { data?: ContentVariantUpdatedEventData }).data
+      : (message as ContentVariantUpdatedEventData | undefined);
+    if (!data?.archiveId) return;
+
+    this.contentVariantCache.delete(data.archiveId);
+    if (!this._isActive || this.activeContentVariantArchiveId !== data.archiveId) return;
+
+    const selectedId = this.selectedContentVariantIds.get(data.archiveId);
+    if (data.action === 'created' || data.action === 'updated' || data.action === 'activated') {
+      this.selectedContentVariantIds.set(data.archiveId, data.activeContentVariantId ?? data.variantId);
+    }
+    if (selectedId === data.variantId && (data.action === 'deleted' || data.action === 'hidden')) {
+      this.selectedContentVariantIds.set(data.archiveId, data.activeContentVariantId ?? null);
+    }
+
+    await this.reRenderPreservingScroll();
+  }
+
+  private async resolveContentVariantState(post: PostData): Promise<{
+    archiveId: string;
+    options: ReaderContentVariantOption[];
+    selectedVariant: ContentVariant | null;
+  } | null> {
+    const archiveId = await this.resolveArchiveIdForPost(post);
+    this.activeContentVariantArchiveId = archiveId;
+    if (!archiveId) return null;
+
+    const state = await this.getContentVariantState(archiveId);
+    const variants = (state?.variants ?? [])
+      .filter((variant) => variant.visibility === 'available' && (variant.contentMarkdown || variant.contentText))
+      .sort((a, b) => Date.parse(b.updatedAt || b.createdAt) - Date.parse(a.updatedAt || a.createdAt));
+    if (variants.length === 0) return null;
+
+    const selectedId = this.selectedContentVariantIds.has(archiveId)
+      ? this.selectedContentVariantIds.get(archiveId) ?? null
+      : (state?.activeContentVariantId ?? variants[0]?.id ?? null);
+    const selectedVariant = selectedId
+      ? variants.find((variant) => variant.id === selectedId) ?? variants[0] ?? null
+      : null;
+
+    return {
+      archiveId,
+      options: [
+        { id: null, label: 'Original' },
+        ...variants.map((variant) => ({
+          id: variant.id,
+          label: this.formatContentVariantLabel(variant),
+          language: variant.language,
+        })),
+      ],
+      selectedVariant,
+    };
+  }
+
+  private async resolveArchiveIdForPost(post: PostData): Promise<string | null> {
+    if (post.sourceArchiveId) return post.sourceArchiveId;
+    if (!post.filePath) return null;
+
+    const file = this.context.app.vault.getAbstractFileByPath(post.filePath);
+    if (!(file instanceof TFile)) return null;
+
+    const cache = this.context.app.metadataCache.getFileCache(file);
+    const directId = cache?.frontmatter?.sourceArchiveId as string | undefined;
+    const originalUrl = (cache?.frontmatter?.originalUrl as string | undefined) || post.originalUrl || post.url;
+    return this.resolveArchiveIdForSync(file, directId, originalUrl);
+  }
+
+  private async getContentVariantState(
+    archiveId: string,
+  ): Promise<{ variants: ContentVariant[]; activeContentVariantId?: string | null } | null> {
+    const cached = this.contentVariantCache.get(archiveId);
+    if (cached && Date.now() - cached.fetchedAt < this.CONTENT_VARIANT_CACHE_TTL) {
+      return cached;
+    }
+    try {
+      const response = await this.context.plugin.workersApiClient.getArchiveContentVariants(archiveId);
+      const state = {
+        variants: response.variants ?? [],
+        activeContentVariantId: response.activeContentVariantId ?? null,
+        fetchedAt: Date.now(),
+      };
+      this.contentVariantCache.set(archiveId, state);
+      return state;
+    } catch (error) {
+      console.warn('[Social Archiver] Failed to load reader content variants:', error);
+      return null;
+    }
+  }
+
+  private applyContentVariantToPost(post: PostData, variant: ContentVariant): PostData {
+    const markdown = stripContentVariantMetadataFooter(variant.contentMarkdown || variant.contentText || '');
+    const text = stripContentVariantMetadataFooter(variant.contentText || markdown);
+    return {
+      ...post,
+      ...(variant.title ? { title: variant.title } : {}),
+      content: {
+        ...post.content,
+        text: text || markdown,
+        markdown: markdown || text,
+        rawMarkdown: markdown || text,
+      },
+    };
+  }
+
+  private formatContentVariantLabel(variant: ContentVariant): string {
+    const language = (variant.language || '').trim();
+    if (language) return language.toUpperCase();
+    return variant.type === 'translation' ? 'Translation' : 'Variant';
   }
 
   // ---------- Subscription ----------

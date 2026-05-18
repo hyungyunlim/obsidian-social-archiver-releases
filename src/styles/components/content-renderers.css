@@ -813,6 +813,51 @@
   position: absolute;
 }
 
+body.is-mobile .acb-banner,
+body.is-phone .acb-banner {
+  margin-top: 10px;
+  padding: 8px 0;
+}
+
+body.is-mobile .acb-main-row,
+body.is-phone .acb-main-row {
+  align-items: flex-start;
+  gap: 8px;
+}
+
+body.is-mobile .acb-message,
+body.is-phone .acb-message {
+  flex-wrap: wrap;
+  row-gap: 4px;
+  line-height: 1.35;
+}
+
+body.is-mobile .acb-label-prefix,
+body.is-mobile .acb-label-using,
+body.is-mobile .acb-label-suffix,
+body.is-phone .acb-label-prefix,
+body.is-phone .acb-label-using,
+body.is-phone .acb-label-suffix {
+  font-size: 12px;
+}
+
+body.is-mobile .acb-minimal-select,
+body.is-phone .acb-minimal-select {
+  max-width: 148px;
+  font-size: 12px;
+}
+
+body.is-mobile .acb-actions,
+body.is-phone .acb-actions {
+  padding-top: 1px;
+}
+
+body.is-mobile .acb-icon-btn.acb-icon-btn,
+body.is-phone .acb-icon-btn.acb-icon-btn {
+  width: 30px;
+  height: 30px;
+}
+
 
 /* ========================================
  * CommentRenderer (cr-)

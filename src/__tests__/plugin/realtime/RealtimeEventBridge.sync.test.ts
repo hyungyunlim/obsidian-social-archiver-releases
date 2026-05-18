@@ -197,6 +197,41 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
     expect(syncSubscriptionPosts).toHaveBeenCalledWith('ws-connected');
   });
 
+  it('drains AI comment/action backlog after ws:connected', async () => {
+    const drainBacklog = vi.fn().mockResolvedValue(undefined);
+    const scheduleFn = vi.fn().mockImplementation((cb: () => void, delay: number) => {
+      return window.setTimeout(cb, delay);
+    });
+
+    const events = makeEvents();
+    const deps = makeDeps({
+      events: events as any,
+      schedule: scheduleFn,
+      aiCommentJobProcessor: {
+        drainBacklog,
+        handleRequestedJob: vi.fn().mockResolvedValue(undefined),
+        handleRequestedAIActionJob: vi.fn().mockResolvedValue(undefined),
+        handleStatusEvent: vi.fn().mockResolvedValue(undefined),
+      },
+    });
+
+    const bridge = new RealtimeEventBridge(deps);
+    bridge.setup();
+
+    await events.trigger('ws:connected', undefined);
+
+    const aiBacklogCall = scheduleFn.mock.calls.find(
+      (call: [() => void, number]) => call[1] === 3000
+    );
+    expect(aiBacklogCall).toBeDefined();
+    expect(drainBacklog).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(3000);
+    await vi.runAllTimersAsync();
+
+    expect(drainBacklog).toHaveBeenCalledOnce();
+  });
+
   // --------------------------------------------------------------------------
   // 2. archive_added with source=subscription triggers sync
   // --------------------------------------------------------------------------

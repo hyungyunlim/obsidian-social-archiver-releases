@@ -21,16 +21,28 @@ export type AICommentBannerState =
   | 'authRequired'
   | 'dismissed';
 
+export type AICommentBannerActionId = 'tags.suggest_apply' | 'content.translate_variant';
+
+export interface AICommentBannerActionItem {
+  id: AICommentBannerActionId;
+  label: string;
+}
+
 export interface AICommentBannerOptions {
   availableClis: AICli[];
   defaultCli: AICli;
   defaultType: AICommentType;
   onGenerate: (cli: AICli, type: AICommentType, customPrompt?: string, language?: AIOutputLanguage) => Promise<void>;
   onGenerateMulti?: (clis: AICli[], type: AICommentType, customPrompt?: string, language?: AIOutputLanguage) => Promise<void>;
+  onRunAction?: (actionId: AICommentBannerActionId, cli: AICli, language?: AIOutputLanguage) => Promise<void>;
   onDecline: () => void;
   isGenerating: boolean;
   progress?: AICommentProgress;
   initialState?: AICommentBannerState;
+  actionItems?: AICommentBannerActionItem[];
+  /** When false, show only server-backed action items instead of local comment types. */
+  commentTypesEnabled?: boolean;
+  defaultActionId?: AICommentBannerActionId;
   /** Multi-AI parallel generation mode */
   multiAiEnabled?: boolean;
   /** CLIs to use in multi-AI mode */
@@ -90,6 +102,7 @@ export class AICommentBanner {
   private state: AICommentBannerState = 'default';
   private selectedCli: AICli | null = null;
   private selectedType: AICommentType = 'summary';
+  private selectedActionId: AICommentBannerActionId | null = null;
   private selectedLanguage: AIOutputLanguage = 'auto';
   private customPrompt: string = '';
   private customPromptInput: HTMLInputElement | null = null;
@@ -104,6 +117,9 @@ export class AICommentBanner {
     this.state = options.initialState || 'default';
     this.selectedCli = options.defaultCli;
     this.selectedType = options.defaultType;
+    this.selectedActionId = options.commentTypesEnabled === false && options.actionItems?.length
+      ? options.defaultActionId ?? options.actionItems[0]?.id ?? null
+      : null;
     this.selectedLanguage = options.outputLanguage || 'auto';
 
     if (options.availableClis.length === 0 || this.state === 'dismissed') {
@@ -155,15 +171,18 @@ export class AICommentBanner {
     // Main row container
     const mainRow = parent.createDiv();
     mainRow.addClass('sa-flex-between', 'sa-gap-12');
+    mainRow.addClass('acb-main-row');
 
     // Check if multi-AI mode is enabled
-    const isMultiAi = this.options.multiAiEnabled &&
+    const isMultiAi = !this.selectedActionId &&
+      this.options.multiAiEnabled &&
       this.options.multiAiSelection &&
       this.options.multiAiSelection.length > 1;
 
     // Left section: "Add AI [Type ▼]?" + CLI info
     const messageSection = mainRow.createDiv();
     messageSection.addClass('sa-flex-row', 'sa-flex-1', 'sa-min-w-0');
+    messageSection.addClass('acb-message');
 
     // "Add " prefix
     const prefix = messageSection.createSpan({ text: 'Add' });
@@ -177,13 +196,28 @@ export class AICommentBanner {
 
     const typeSelect = this.createMinimalSelect(typeWrapper);
 
-    for (const type of getAvailableTypes(this.options.hasTranscript)) {
+    const commentTypesEnabled = this.options.commentTypesEnabled !== false;
+    if (commentTypesEnabled) for (const type of getAvailableTypes(this.options.hasTranscript)) {
       const option = typeSelect.createEl('option', {
-        value: type,
+        value: `comment:${type}`,
         text: COMMENT_TYPE_DISPLAY_NAMES[type]
       });
-      if (type === this.selectedType) {
+      if (!this.selectedActionId && type === this.selectedType) {
         option.selected = true;
+      }
+    }
+    if (this.options.actionItems?.length) {
+      const actionParent = commentTypesEnabled
+        ? typeSelect.createEl('optgroup', { attr: { label: 'Actions' } })
+        : typeSelect;
+      for (const action of this.options.actionItems) {
+        const option = actionParent.createEl('option', {
+          value: `action:${action.id}`,
+          text: action.label,
+        });
+        if (this.selectedActionId === action.id) {
+          option.selected = true;
+        }
       }
     }
 
@@ -213,11 +247,18 @@ export class AICommentBanner {
     let customPromptRow: HTMLElement | null = null;
 
     typeSelect.addEventListener('change', () => {
-      this.selectedType = typeSelect.value as AICommentType;
+      const wasAction = !!this.selectedActionId;
+      const parsedValue = this.parseTypeSelectValue(typeSelect.value);
+      if (parsedValue.kind === 'action') {
+        this.selectedActionId = parsedValue.id;
+      } else {
+        this.selectedActionId = null;
+        this.selectedType = parsedValue.type;
+      }
       adjustWidth(typeSelect);
       // Update custom prompt row visibility
       if (customPromptRow) {
-        if (typeSelect.value === 'custom') {
+        if (!this.selectedActionId && this.selectedType === 'custom') {
           customPromptRow.removeClass('sa-hidden');
           if (this.customPromptInput) {
             this.customPromptInput.focus();
@@ -225,6 +266,9 @@ export class AICommentBanner {
         } else {
           customPromptRow.addClass('sa-hidden');
         }
+      }
+      if (wasAction !== !!this.selectedActionId) {
+        this.renderCurrentState();
       }
     });
 
@@ -318,6 +362,7 @@ export class AICommentBanner {
     // Right section: buttons
     const buttonSection = mainRow.createDiv();
     buttonSection.addClass('sa-flex-row', 'sa-gap-4', 'sa-flex-shrink-0');
+    buttonSection.addClass('acb-actions');
 
     // No button (X)
     const noButton = this.createIconButton(buttonSection, 'x', 'No');
@@ -353,7 +398,7 @@ export class AICommentBanner {
     // Custom prompt input row (hidden by default, shown when 'custom' type is selected)
     customPromptRow = parent.createDiv();
     customPromptRow.addClass('sa-flex-row', 'sa-gap-8');
-    if (this.selectedType !== 'custom') {
+    if (this.selectedActionId || this.selectedType !== 'custom') {
       customPromptRow.addClass('sa-hidden');
     }
 
@@ -415,7 +460,10 @@ export class AICommentBanner {
       reformat: 'Reformatting content',
       custom: 'Processing',
     };
-    let currentStatus = typeMessages[this.selectedType] || `Generating ${COMMENT_TYPE_DISPLAY_NAMES[this.selectedType]}`;
+    const actionLabel = this.getSelectedActionLabel();
+    let currentStatus = actionLabel
+      ? `Running ${actionLabel}`
+      : typeMessages[this.selectedType] || `Generating ${COMMENT_TYPE_DISPLAY_NAMES[this.selectedType]}`;
 
     const formatElapsed = (seconds: number): string => {
       const minutes = Math.floor(seconds / 60);
@@ -498,7 +546,7 @@ export class AICommentBanner {
     checkIcon.addClass('sa-icon-16');
     setIcon(checkIcon, 'check');
 
-    successMsg.createSpan({ text: 'AI comment added' });
+    successMsg.createSpan({ text: this.selectedActionId ? 'AI action queued' : 'AI comment added' });
 
     // Auto-dismiss after 2 seconds (shorter since no action needed)
     window.setTimeout(() => {
@@ -572,6 +620,24 @@ export class AICommentBanner {
     return button;
   }
 
+  private parseTypeSelectValue(value: string): { kind: 'comment'; type: AICommentType } | { kind: 'action'; id: AICommentBannerActionId } {
+    if (value.startsWith('action:')) {
+      return {
+        kind: 'action',
+        id: value.slice('action:'.length) as AICommentBannerActionId,
+      };
+    }
+    return {
+      kind: 'comment',
+      type: value.replace(/^comment:/, '') as AICommentType,
+    };
+  }
+
+  private getSelectedActionLabel(): string | null {
+    if (!this.selectedActionId || !this.options?.actionItems) return null;
+    return this.options.actionItems.find((item) => item.id === this.selectedActionId)?.label ?? null;
+  }
+
   // ============================================================================
   // Event Handlers
   // ============================================================================
@@ -579,8 +645,10 @@ export class AICommentBanner {
   private async handleGenerate(): Promise<void> {
     if (!this.options || !this.selectedType) return;
 
+    const isAction = !!this.selectedActionId;
+
     // Validate custom prompt for custom type
-    if (this.selectedType === 'custom' && !this.customPrompt.trim()) {
+    if (!isAction && this.selectedType === 'custom' && !this.customPrompt.trim()) {
       // Focus the input if empty
       this.customPromptInput?.focus();
       return;
@@ -592,17 +660,19 @@ export class AICommentBanner {
       this.options.multiAiSelection.length > 1;
 
     // For single AI mode, need selectedCli
-    if (!isMultiAi && !this.selectedCli) return;
+    if ((!isMultiAi || isAction) && !this.selectedCli) return;
 
     // Get custom prompt if type is custom
-    const customPrompt = this.selectedType === 'custom' ? this.customPrompt.trim() : undefined;
+    const customPrompt = !isAction && this.selectedType === 'custom' ? this.customPrompt.trim() : undefined;
 
     this.state = 'generating';
     this.abortController = new AbortController();
     this.renderCurrentState();
 
     try {
-      if (isMultiAi && this.options.onGenerateMulti && this.options.multiAiSelection) {
+      if (isAction && this.selectedActionId && this.selectedCli && this.options.onRunAction) {
+        await this.options.onRunAction(this.selectedActionId, this.selectedCli, this.selectedLanguage);
+      } else if (isMultiAi && this.options.onGenerateMulti && this.options.multiAiSelection) {
         // Multi-AI parallel generation
         await this.options.onGenerateMulti(this.options.multiAiSelection, this.selectedType, customPrompt, this.selectedLanguage);
       } else if (this.selectedCli) {

@@ -99,7 +99,8 @@ export class AnnotationSyncService {
   async handleActionUpdated(data: ActionUpdatedEventData): Promise<void> {
     const shouldSyncAnnotations = data.changes.hasAnnotationUpdate === true;
     const shouldClearAIComments = data.changes.clearAIComments === true;
-    if (!shouldSyncAnnotations && !shouldClearAIComments) return;
+    const shouldClearTranscription = data.changes.clearTranscription === true;
+    if (!shouldSyncAnnotations && !shouldClearAIComments && !shouldClearTranscription) return;
     if (!this.getSettings().enableMobileAnnotationSync) return;
 
     const { archiveId } = data;
@@ -108,6 +109,9 @@ export class AnnotationSyncService {
     }
     if (shouldClearAIComments) {
       await this.clearAIComments(archiveId);
+    }
+    if (shouldClearTranscription) {
+      await this.clearTranscription(archiveId);
     }
   }
 
@@ -349,6 +353,62 @@ export class AnnotationSyncService {
     }
   }
 
+  /**
+   * Remove locally-rendered Whisper transcript state after a remote explicit clear.
+   *
+   * Server-side clear removes the archive projection; this keeps existing vault
+   * notes from retaining stale managed transcript blocks.
+   */
+  async clearTranscription(archiveId: string): Promise<void> {
+    const file = await this.resolveFileByArchiveId(archiveId);
+    if (!file) {
+      console.debug('[AnnotationSyncService] No matching vault file found for transcription clear:', archiveId);
+      return;
+    }
+
+    this.onBeforeInboundWrite?.(archiveId);
+
+    try {
+      await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+        if (!fm.sourceArchiveId) {
+          fm.sourceArchiveId = archiveId;
+        }
+        delete fm.hasTranscript;
+        delete fm.videoTranscribed;
+        delete fm.videoTranscribedAt;
+        delete fm.videoTranscriptionError;
+        delete fm.transcriptionModel;
+        delete fm.transcriptionLanguage;
+        delete fm.transcriptionDuration;
+        delete fm.transcriptionTime;
+        delete fm.transcriptionProcessingTime;
+        delete fm.transcriptResultId;
+        delete fm.transcriptResultIds;
+        delete fm.pendingTranscriptUploads;
+      });
+    } catch (err) {
+      console.error(
+        '[AnnotationSyncService] Failed to clear transcription frontmatter:',
+        file.path,
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+
+    try {
+      const content = await this.app.vault.read(file);
+      const updatedContent = removeMarkedTranscriptSections(content);
+      if (updatedContent !== content) {
+        await this.app.vault.modify(file, updatedContent);
+      }
+    } catch (err) {
+      console.error(
+        '[AnnotationSyncService] Failed to clear transcription body:',
+        file.path,
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+  }
+
   // --------------------------------------------------------------------------
   // File Resolution
   // --------------------------------------------------------------------------
@@ -406,6 +466,19 @@ export class AnnotationSyncService {
       return null;
     }
   }
+}
+
+function removeMarkedTranscriptSections(content: string): string {
+  const blockPattern =
+    /(?:\n{2,}---[ \t]*\n{2,})?<!--\s*social-archiver-transcript:start\s+resultMarkerId=[^>]+-->\s*##\s+Transcript\s*\n+[\s\S]*?\n?<!--\s*social-archiver-transcript:end\s+resultMarkerId=[^>]+-->\s*/g;
+  const withoutMarked = content.replace(blockPattern, '');
+  const withoutLegacyTrailing = withoutMarked === content
+    ? content.replace(/\n{2,}---[ \t]*\n{2,}##\s+Transcript\s*\n+[\s\S]*$/m, '')
+    : withoutMarked;
+
+  return withoutLegacyTrailing
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{4,}$/g, '\n\n');
 }
 
 function toAICommentMarkdownEntries(

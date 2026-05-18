@@ -311,6 +311,11 @@ export interface PostData {
    * Stored as frontmatter after Whisper transcription completes
    */
   transcriptionLanguage?: string;
+  transcriptionModel?: string | null;
+  transcriptionUpdatedAt?: string | null;
+  transcriptResultId?: string | null;
+  transcriptionDuration?: number | null;
+  transcriptionProcessingTime?: number | null;
   mediaPreservationStatus?: 'pending' | 'processing' | 'completed' | 'partial' | 'failed' | 'skipped';
   archiveStatus?: 'archiving' | 'completed' | 'failed'; // Archive status for loading states
   originalUrl?: string;     // Original URL (for preliminary documents with loading state)

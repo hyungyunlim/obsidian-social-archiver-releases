@@ -24,6 +24,18 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '3.6.6': {
+    title: 'Mobile AI Workflows',
+    date: '2026-05-18',
+    notes: `## Mobile AI Workflows
+
+- Mobile AI comment and AI action requests now work through a capable desktop Obsidian plugin environment, then sync results back across clients.
+- AI actions include content translation variants, tag suggestions, and language-aware timeline/reader rendering.
+- Mobile transcription requests can be handed off to Obsidian and receive completed transcript results back through sync.
+- Improved AI job backlog recovery, executor targeting, and realtime reconnect stability.
+`,
+    isImportant: true,
+  },
   '3.6.1': {
     title: 'Obsidian Review Polish',
     date: '2026-05-13',

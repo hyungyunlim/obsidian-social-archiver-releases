@@ -168,6 +168,335 @@ export interface AICommentExecutorCapabilityPayload {
   updatedAt: string;
 }
 
+export type AIActionType =
+  | 'comment.summary'
+  | 'comment.factcheck'
+  | 'comment.glossary'
+  | 'comment.custom'
+  | 'tags.suggest_apply'
+  | 'content.translate_variant'
+  | 'content.reformat_variant';
+
+export type AIActionResultKind = 'comment' | 'tag_patch' | 'content_variant';
+export type AIActionJobStatus = AICommentJobStatus | 'billing_blocked';
+
+export interface AIActionExecutorCapabilityPayload {
+  enabled: boolean;
+  capabilities: string[];
+  pluginVersion?: string;
+  updatedAt: string;
+}
+
+export interface AIActionExecutorJob {
+  jobId: string;
+  archiveId: string;
+  targetClientId?: string | null;
+  status: AIActionJobStatus;
+  progress?: number;
+  progressPercentage?: number;
+  progressMessage?: string | null;
+  actionType: AIActionType | string;
+  resultKind?: AIActionResultKind | null;
+  provider: AICommentProviderId;
+  model?: string | null;
+  outputLanguage?: string | null;
+  customPrompt?: string | null;
+  actionParams?: Record<string, unknown> | null;
+  sourceContentHash?: string | null;
+  archiveContentHash?: string | null;
+  archiveSnapshot?: unknown;
+  leaseExpiresAt?: string | null;
+  cancelRequestedAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export interface AIActionClaimResponse {
+  jobId: string;
+  lockToken: string;
+  lockTokenVersion: number;
+  leaseExpiresAt: string;
+  job: AIActionExecutorJob;
+}
+
+export interface AIActionLeaseResponse {
+  job: AIActionJobSummary;
+  lockToken: string;
+  lockTokenVersion: number;
+  leaseExpiresAt: string;
+}
+
+export interface AIActionJobSummary {
+  jobId: string;
+  archiveId: string;
+  targetClientId?: string | null;
+  actionType: AIActionType | string;
+  resultKind?: AIActionResultKind | null;
+  status: AIActionJobStatus;
+  progress?: number;
+  progressMessage?: string;
+  updatedAt: string;
+  errorCode?: string;
+  errorMessage?: string;
+}
+
+export interface AIActionAvailability {
+  available: boolean;
+  mode: 'queued' | 'unavailable';
+  reason: null | 'active_job_exists' | 'no_capable_executor';
+  actionType: AIActionType;
+  resultKind: AIActionResultKind;
+  capableClientIds: string[];
+  activeJob: AIActionJobSummary | null;
+}
+
+export interface CreateAIActionJobRequest {
+  archiveId: string;
+  actionType: AIActionType;
+  targetClientId?: string;
+  provider?: AICommentProviderId;
+  model?: string;
+  outputLanguage?: string;
+  targetLanguage?: string;
+  sourceLanguage?: string;
+  detectedLanguage?: string;
+  customPrompt?: string;
+  actionParams?: Record<string, unknown>;
+  sourceClientId?: string;
+}
+
+export interface CreateAIActionJobResponse {
+  jobId: string;
+  archiveId: string;
+  targetClientId?: string | null;
+  actionType: AIActionType;
+  resultKind: AIActionResultKind;
+  status: AIActionJobStatus;
+  delivery: 'websocket' | 'queued';
+  createdAt: string;
+  activeJob: AIActionJobSummary;
+}
+
+export interface ContentVariant {
+  id: string;
+  userId: string;
+  archiveId: string;
+  type: 'translation' | 'reformat';
+  language?: string;
+  title?: string;
+  contentMarkdown?: string;
+  contentText?: string;
+  sourceContentHash: string;
+  provider: string;
+  model?: string;
+  jobId?: string;
+  createdAt: string;
+  updatedAt: string;
+  visibility: 'available' | 'hidden' | 'stale';
+  bodyStorage: 'inline' | 'r2';
+  bodyR2Key?: string;
+  byteLength: number;
+}
+
+// ============================================================================
+// Transcription Job Types
+// ============================================================================
+
+export type TranscriptionMediaKind = 'audio' | 'video';
+export type TranscriptionJobMode = 'transcribe-existing-media' | 'download-and-transcribe';
+export type TranscriptionModel = 'tiny' | 'base' | 'small' | 'medium' | 'large';
+export type TranscriptionModelWithEnglish =
+  | TranscriptionModel
+  | 'tiny.en'
+  | 'base.en'
+  | 'small.en'
+  | 'medium.en';
+
+export interface TranscriptionMediaRef {
+  mediaId?: string;
+  mediaIndex?: number;
+  sourceUrlHash?: string;
+  kind: TranscriptionMediaKind;
+}
+
+export type TranscriptionCapabilityStatus =
+  | 'ready'
+  | 'settings_disabled'
+  | 'whisper_missing'
+  | 'model_missing'
+  | 'ffmpeg_missing'
+  | 'yt_dlp_missing'
+  | 'unsupported_runtime'
+  | 'error';
+
+export interface TranscriptionExecutorCapabilityPayload {
+  enabled: boolean;
+  runtime: 'desktop';
+  status: TranscriptionCapabilityStatus;
+  whisper: {
+    available: boolean;
+    variant: 'auto' | 'faster-whisper' | 'openai-whisper' | 'whisper.cpp' | null;
+    pathKind: 'path' | 'custom' | null;
+    version?: string;
+    installedModels: TranscriptionModelWithEnglish[];
+    preferredModel: TranscriptionModel;
+    language: string;
+  };
+  ffmpeg: {
+    available: boolean;
+    version?: string;
+  };
+  ffprobe: {
+    available: boolean;
+    version?: string;
+    optional: true;
+  };
+  ytDlp: {
+    available: boolean;
+    requiredOnlyForDownloadMode: true;
+  };
+  supportedMediaTypes: TranscriptionMediaKind[];
+  supportedModes: TranscriptionJobMode[];
+  maxConcurrentJobs: 1;
+  updatedAt: string;
+}
+
+export interface TranscriptionExecutorCapability extends TranscriptionExecutorCapabilityPayload {
+  capabilityHash: string;
+}
+
+export type TranscriptionJobStatus =
+  | 'queued'
+  | 'dispatched'
+  | 'claiming'
+  | 'claimed'
+  | 'preparing_archive'
+  | 'preparing_media'
+  | 'running'
+  | 'uploading'
+  | 'merging'
+  | 'retry_scheduled'
+  | 'completed'
+  | 'failed'
+  | 'cancel_requested'
+  | 'cancelled'
+  | 'expired';
+
+export type TranscriptionPublicErrorCode =
+  | 'WHISPER_NOT_INSTALLED'
+  | 'WHISPER_AUTH_OR_MODEL_ERROR'
+  | 'FFMPEG_MISSING'
+  | 'FFMPEG_FAILED'
+  | 'FFPROBE_UNAVAILABLE'
+  | 'YT_DLP_MISSING'
+  | 'MEDIA_FILE_MISSING'
+  | 'MEDIA_MATERIALIZATION_FAILED'
+  | 'ARCHIVE_MATERIALIZATION_FAILED'
+  | 'UNSUPPORTED_MEDIA_TYPE'
+  | 'TIMEOUT'
+  | 'OUT_OF_MEMORY'
+  | 'PROCESS_CANCELLED'
+  | 'UPLOAD_FAILED'
+  | 'STALE_LEASE'
+  | 'CAPABILITY_DRIFT'
+  | 'CAPABILITY_STALE'
+  | 'RATE_LIMITED'
+  | 'EXECUTOR_OFFLINE'
+  | 'FEATURE_DISABLED'
+  | 'OWNERSHIP_REVOKED'
+  | 'AVAILABILITY_TOKEN_INVALID'
+  | 'IDEMPOTENCY_KEY_CONFLICT'
+  | 'ACTIVE_JOB_EXISTS'
+  | 'RESULT_INTAKE_IN_PROGRESS'
+  | 'TRANSCRIPT_TOO_LARGE'
+  | 'UNKNOWN';
+
+export interface TranscriptionActiveJobSummary {
+  jobId: string;
+  archiveId: string;
+  mediaRefHash: string;
+  status: TranscriptionJobStatus;
+  uiStatus: 'queued' | 'preparing' | 'running' | 'done';
+  progressPercentage?: number;
+  progressCode?: string;
+  nextAttemptAt?: string;
+  errorCode?: string;
+  errorMessagePublic?: string;
+  terminalReason?: string;
+  transcriptResultId?: string;
+  updatedAt: string;
+}
+
+export interface TranscriptionExecutorJob extends TranscriptionActiveJobSummary {
+  targetClientId: string;
+  mediaRef: TranscriptionMediaRef;
+  mode: TranscriptionJobMode;
+  requestedModel?: string;
+  language?: string;
+}
+
+export interface TranscriptionClaimResponse {
+  job: TranscriptionExecutorJob;
+  lockToken: string;
+  lockTokenVersion: number;
+  leaseExpiresAt: string;
+}
+
+export interface TranscriptionLeaseResponse {
+  job: TranscriptionActiveJobSummary;
+  lockToken: string;
+  lockTokenVersion: number;
+  leaseExpiresAt: string;
+}
+
+export interface TranscriptionAvailabilityEntry {
+  archiveId: string;
+  mediaRefHash: string;
+  available: boolean;
+  executor: {
+    status:
+      | TranscriptionCapabilityStatus
+      | 'live_ready'
+      | 'queued_ready'
+      | 'no_executor';
+  };
+  activeJob?: TranscriptionActiveJobSummary;
+  availabilityToken?: string;
+}
+
+export interface WhisperTranscriptProjection {
+  source?: 'whisper';
+  segments: Array<{
+    id?: number;
+    start: number;
+    end?: number;
+    text: string;
+    speaker?: string;
+  }>;
+  text?: string;
+  rawText?: string;
+  language: string;
+  model?: string;
+  duration?: number;
+  hasWordTimestamps?: boolean;
+  transcriptResultId?: string;
+  updatedAt?: string;
+}
+
+export interface CreateTranscriptionJobResponse {
+  job: TranscriptionActiveJobSummary;
+  delivery?: {
+    liveDispatched?: boolean;
+    queued?: boolean;
+  };
+}
+
+export interface SyncClientCapabilityRefresh {
+  aiCommentExecutor?: AICommentExecutorCapabilityPayload | null;
+  aiActionExecutor?: AIActionExecutorCapabilityPayload | null;
+  transcriptionExecutor?: TranscriptionExecutorCapabilityPayload | null;
+}
+
 export interface SyncQueueItem {
   queueId: string;
   archiveId: string;
@@ -300,6 +629,13 @@ export interface UserArchive {
   userHighlights?: TextHighlight[];
   userHighlightCount?: number;
   aiComments?: AICommentPayload[];
+  whisperTranscript?: WhisperTranscriptProjection | null;
+  transcriptionLanguage?: string | null;
+  transcriptionModel?: string | null;
+  transcriptionUpdatedAt?: string | null;
+  transcriptResultId?: string | null;
+  transcriptionDuration?: number | null;
+  transcriptionProcessingTime?: number | null;
 }
 
 export interface AICommentPayload {
@@ -1482,6 +1818,7 @@ export class WorkersAPIClient implements IService {
       shareUrl?: string | null;
       aiComments?: AICommentPayload[];
       clearAIComments?: boolean;
+      clearTranscription?: boolean;
       userNotes?: UserNote[];
       userHighlights?: TextHighlight[];
     },
@@ -1581,12 +1918,24 @@ export class WorkersAPIClient implements IService {
     capability: AICommentExecutorCapabilityPayload | null,
     runtime: 'desktop' | 'mobile' | 'unknown',
   ): Promise<{ client: SyncClient }> {
+    return this.refreshSyncClientCapabilities(
+      clientId,
+      capability ? { aiCommentExecutor: capability } : {},
+      runtime,
+    );
+  }
+
+  async refreshSyncClientCapabilities(
+    clientId: string,
+    capabilities: SyncClientCapabilityRefresh,
+    runtime: 'desktop' | 'mobile' | 'unknown',
+  ): Promise<{ client: SyncClient }> {
     this.ensureInitialized();
     return this.request<{ client: SyncClient }>(`/api/sync/clients/${clientId}/capability/refresh`, {
       method: 'POST',
       body: JSON.stringify({
         runtime,
-        capabilities: capability ? { aiCommentExecutor: capability } : undefined,
+        capabilities,
       }),
     });
   }
@@ -1690,6 +2039,320 @@ export class WorkersAPIClient implements IService {
       method: 'POST',
       body: JSON.stringify(request),
     });
+  }
+
+  async getAvailableAIActionJobs(targetClientId: string): Promise<{ jobs: AIActionExecutorJob[] }> {
+    this.ensureInitialized();
+    return this.request<{ jobs: AIActionExecutorJob[] }>(
+      `/api/ai-actions/jobs?targetClientId=${encodeURIComponent(targetClientId)}&state=available`,
+      {
+        method: 'GET',
+        headers: { 'X-Client-Capabilities': 'ai-actions-v1,tag-patch-v1,content-variants-v1' },
+      },
+    );
+  }
+
+  async getAIActionAvailability(archiveId: string, actionType: AIActionType): Promise<AIActionAvailability> {
+    this.ensureInitialized();
+    const params = new URLSearchParams({ archiveId, actionType });
+    return this.request<AIActionAvailability>(`/api/ai-actions/jobs/availability?${params.toString()}`, {
+      method: 'GET',
+    });
+  }
+
+  async createAIActionJob(request: CreateAIActionJobRequest): Promise<CreateAIActionJobResponse> {
+    this.ensureInitialized();
+    const sourceClientId = request.sourceClientId ?? this.config.clientId;
+    const idempotencyKey = `ai-action:${request.archiveId}:${request.actionType}:${sourceClientId ?? 'obsidian'}:${crypto.randomUUID()}`;
+    return this.request<CreateAIActionJobResponse>('/api/ai-actions/jobs', {
+      method: 'POST',
+      headers: {
+        'Idempotency-Key': idempotencyKey,
+        ...(sourceClientId ? { 'X-Client-Id': sourceClientId } : {}),
+      },
+      body: JSON.stringify({
+        ...request,
+        ...(sourceClientId ? { sourceClientId } : {}),
+      }),
+    });
+  }
+
+  async getAIActionJob(jobId: string): Promise<{ job: AIActionJobSummary | AIActionExecutorJob }> {
+    this.ensureInitialized();
+    return this.request<{ job: AIActionJobSummary | AIActionExecutorJob }>(`/api/ai-actions/jobs/${jobId}`, {
+      method: 'GET',
+    });
+  }
+
+  async claimAIActionJob(
+    jobId: string,
+    request: {
+      clientId: string;
+    },
+  ): Promise<AIActionClaimResponse> {
+    this.ensureInitialized();
+    return this.request<AIActionClaimResponse>(`/api/ai-actions/jobs/${jobId}/claim`, {
+      method: 'POST',
+      headers: { 'X-Client-Capabilities': 'ai-actions-v1,tag-patch-v1,content-variants-v1' },
+      body: JSON.stringify(request),
+    });
+  }
+
+  async updateAIActionJobProgress(
+    jobId: string,
+    request: {
+      clientId: string;
+      lockToken: string;
+      lockTokenVersion: number;
+      status: AICommentJobStatus;
+      progress?: number;
+      progressPercentage?: number;
+      progressMessage?: string;
+    },
+  ): Promise<AIActionLeaseResponse> {
+    this.ensureInitialized();
+    return this.request<AIActionLeaseResponse>(`/api/ai-actions/jobs/${jobId}/progress`, {
+      method: 'PATCH',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async uploadAIActionJobResult(
+    jobId: string,
+    request: {
+      clientId: string;
+      lockToken: string;
+      lockTokenVersion: number;
+      result: Record<string, unknown>;
+    },
+  ): Promise<{ job: AIActionJobSummary; resultRefId?: string; comment?: unknown }> {
+    this.ensureInitialized();
+    return this.request<{ job: AIActionJobSummary; resultRefId?: string; comment?: unknown }>(`/api/ai-actions/jobs/${jobId}/result`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async failAIActionJob(
+    jobId: string,
+    request: {
+      clientId: string;
+      lockToken?: string;
+      lockTokenVersion?: number;
+      errorCode: string;
+      retryable: boolean;
+    },
+  ): Promise<{ job: AIActionJobSummary }> {
+    this.ensureInitialized();
+    return this.request<{ job: AIActionJobSummary }>(`/api/ai-actions/jobs/${jobId}/fail`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async getArchiveContentVariants(archiveId: string): Promise<{ variants: ContentVariant[]; activeContentVariantId?: string | null }> {
+    this.ensureInitialized();
+    return this.request<{ variants: ContentVariant[]; activeContentVariantId?: string | null }>(
+      `/api/user/archives/${encodeURIComponent(archiveId)}/content-variants`,
+      { method: 'GET' },
+    );
+  }
+
+  async patchArchiveContentVariant(
+    archiveId: string,
+    variantId: string,
+    patch: { action?: 'set_default' | 'clear_default' | 'hide' | 'unhide' | 'mark_stale'; active?: boolean; visibility?: string },
+  ): Promise<{ variant?: ContentVariant; activeContentVariantId?: string | null }> {
+    this.ensureInitialized();
+    return this.request<{ variant?: ContentVariant; activeContentVariantId?: string | null }>(
+      `/api/user/archives/${encodeURIComponent(archiveId)}/content-variants/${encodeURIComponent(variantId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      },
+    );
+  }
+
+  async deleteArchiveContentVariant(
+    archiveId: string,
+    variantId: string,
+  ): Promise<{ variantId: string; activeContentVariantId?: string | null; deletedAt?: string }> {
+    this.ensureInitialized();
+    return this.request<{ variantId: string; activeContentVariantId?: string | null; deletedAt?: string }>(
+      `/api/user/archives/${encodeURIComponent(archiveId)}/content-variants/${encodeURIComponent(variantId)}`,
+      { method: 'DELETE' },
+    );
+  }
+
+  async getTranscriptionAvailabilityBatch(request: {
+    refs: Array<{ archiveId: string; mediaRef: TranscriptionMediaRef }>;
+    requestedModel?: string;
+    language?: string;
+    mode?: TranscriptionJobMode;
+  }): Promise<{ entries: TranscriptionAvailabilityEntry[] }> {
+    this.ensureInitialized();
+    return this.request<{ entries: TranscriptionAvailabilityEntry[] }>('/api/transcription/availability/batch', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async createTranscriptionJob(request: {
+    archiveId: string;
+    mediaRef: TranscriptionMediaRef;
+    mode: TranscriptionJobMode;
+    requestedModel?: string;
+    language?: string;
+    idempotencyKey: string;
+    availabilityToken?: string;
+    sourceClientId?: string;
+  }): Promise<CreateTranscriptionJobResponse> {
+    this.ensureInitialized();
+    return this.request<CreateTranscriptionJobResponse>('/api/transcription/jobs', {
+      method: 'POST',
+      body: JSON.stringify(request),
+      headers: {
+        'Idempotency-Key': request.idempotencyKey,
+      },
+    });
+  }
+
+  async getAvailableTranscriptionJobs(): Promise<{ jobs: TranscriptionExecutorJob[] }> {
+    this.ensureInitialized();
+    return this.request<{ jobs: TranscriptionExecutorJob[] }>('/api/transcription/jobs?state=available', {
+      method: 'GET',
+    });
+  }
+
+  async getTranscriptionJob(jobId: string): Promise<{ job: TranscriptionExecutorJob | TranscriptionActiveJobSummary }> {
+    this.ensureInitialized();
+    return this.request<{ job: TranscriptionExecutorJob | TranscriptionActiveJobSummary }>(
+      `/api/transcription/jobs/${encodeURIComponent(jobId)}`,
+      { method: 'GET' },
+    );
+  }
+
+  async claimTranscriptionJob(
+    jobId: string,
+    request: {
+      clientId: string;
+      capabilityHash?: string;
+    },
+  ): Promise<TranscriptionClaimResponse> {
+    this.ensureInitialized();
+    return this.request<TranscriptionClaimResponse>(`/api/transcription/jobs/${encodeURIComponent(jobId)}/claim`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async updateTranscriptionJobProgress(
+    jobId: string,
+    request: {
+      clientId: string;
+      lockToken: string;
+      lockTokenVersion: number;
+      status: TranscriptionJobStatus;
+      progressPercentage?: number;
+      progressCode?: string;
+    },
+  ): Promise<TranscriptionLeaseResponse> {
+    this.ensureInitialized();
+    return this.request<TranscriptionLeaseResponse>(`/api/transcription/jobs/${encodeURIComponent(jobId)}/progress`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async uploadTranscriptionJobResult(
+    jobId: string,
+    request: {
+      clientId: string;
+      lockToken: string;
+      lockTokenVersion: number;
+      transcript: {
+        segments: Array<{ start: number; end?: number; text: string; speaker?: string }>;
+        rawText: string;
+        language: string;
+        duration?: number;
+        model: string;
+        hasWordTimestamps?: boolean;
+      };
+      localWrite: {
+        markdownUpdated: boolean;
+        frontmatterUpdated: boolean;
+        resultMarkerId: string;
+      };
+      processing: {
+        startedAt: string;
+        completedAt: string;
+        processingTimeMs: number;
+      };
+    },
+  ): Promise<{ job: TranscriptionActiveJobSummary; transcriptResultId: string }> {
+    this.ensureInitialized();
+    return this.request<{ job: TranscriptionActiveJobSummary; transcriptResultId: string }>(
+      `/api/transcription/jobs/${encodeURIComponent(jobId)}/result`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      },
+    );
+  }
+
+  async failTranscriptionJob(
+    jobId: string,
+    request: {
+      clientId: string;
+      lockToken?: string;
+      lockTokenVersion?: number;
+      errorCode: TranscriptionPublicErrorCode;
+      retryable: boolean;
+    },
+  ): Promise<{ job: TranscriptionActiveJobSummary }> {
+    this.ensureInitialized();
+    return this.request<{ job: TranscriptionActiveJobSummary }>(
+      `/api/transcription/jobs/${encodeURIComponent(jobId)}/fail`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      },
+    );
+  }
+
+  async cancelTranscriptionJob(
+    jobId: string,
+    request: {
+      clientId: string;
+      reason?: string;
+    },
+  ): Promise<{ job: TranscriptionActiveJobSummary }> {
+    this.ensureInitialized();
+    return this.request<{ job: TranscriptionActiveJobSummary }>(
+      `/api/transcription/jobs/${encodeURIComponent(jobId)}/cancel`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      },
+    );
+  }
+
+  async confirmTranscriptionJobCancel(
+    jobId: string,
+    request: {
+      clientId: string;
+      lockToken: string;
+      lockTokenVersion: number;
+    },
+  ): Promise<{ job: TranscriptionActiveJobSummary }> {
+    this.ensureInitialized();
+    return this.request<{ job: TranscriptionActiveJobSummary }>(
+      `/api/transcription/jobs/${encodeURIComponent(jobId)}/cancel/confirm`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      },
+    );
   }
 
   // ============================================================================

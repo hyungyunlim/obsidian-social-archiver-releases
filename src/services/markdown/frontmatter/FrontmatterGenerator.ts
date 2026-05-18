@@ -126,6 +126,13 @@ const CATEGORY_FIELDS: Record<keyof FrontmatterFieldVisibility, string[]> = {
     'videoTranscriptionRequestedAt',
     'videoTranscriptionError',
     'videoTranscribedAt',
+    'transcriptionModel',
+    'transcriptionLanguage',
+    'transcriptionDuration',
+    'transcriptionTime',
+    'transcriptionProcessingTime',
+    'transcriptResultId',
+    'transcriptResultIds',
     'download_time',
     'archiveStatus',
     'errorMessage',
@@ -217,6 +224,18 @@ export class FrontmatterGenerator {
     if (postData.title) frontmatter.title = postData.title;
     if (postData.transcript?.raw) frontmatter.hasTranscript = true;
     if (postData.transcript?.formatted && postData.transcript.formatted.length > 0) frontmatter.hasFormattedTranscript = true;
+    if (postData.whisperTranscript?.segments?.length) frontmatter.hasTranscript = true;
+    if (postData.transcriptionModel) frontmatter.transcriptionModel = postData.transcriptionModel;
+    if (postData.transcriptionLanguage || postData.whisperTranscript?.language) {
+      frontmatter.transcriptionLanguage = postData.transcriptionLanguage || postData.whisperTranscript?.language;
+    }
+    if (postData.transcriptionDuration != null) frontmatter.transcriptionDuration = postData.transcriptionDuration;
+    if (postData.transcriptionUpdatedAt) frontmatter.transcriptionTime = postData.transcriptionUpdatedAt;
+    if (postData.transcriptionProcessingTime != null) frontmatter.transcriptionProcessingTime = postData.transcriptionProcessingTime;
+    if (postData.transcriptResultId) {
+      frontmatter.transcriptResultId = postData.transcriptResultId;
+      frontmatter.transcriptResultIds = [postData.transcriptResultId];
+    }
     if (postData.videoId !== undefined) frontmatter.videoId = postData.videoId;
     if (postData.metadata.duration !== undefined) frontmatter.duration = postData.metadata.duration;
     if (postData.metadata.likes !== undefined) frontmatter.likes = postData.metadata.likes;

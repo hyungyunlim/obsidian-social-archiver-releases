@@ -115,6 +115,30 @@ function extractWebArticleBody(archive: Pick<UserArchive, 'fullContent' | 'previ
   return stripLeadingEmptyLinkLines(stripLeadingMatchingTitle(body, archive.title)).trim();
 }
 
+function normalizeWhisperTranscript(archive: UserArchive): PostData['whisperTranscript'] | undefined {
+  const transcript = archive.whisperTranscript;
+  if (!transcript || !Array.isArray(transcript.segments)) return undefined;
+
+  type NormalizedSegment = NonNullable<PostData['whisperTranscript']>['segments'][number];
+  const segments = transcript.segments
+    .map((segment, index) => {
+      if (!segment || typeof segment.start !== 'number' || typeof segment.text !== 'string') return null;
+      return {
+        id: typeof segment.id === 'number' ? segment.id : index,
+        start: segment.start,
+        end: typeof segment.end === 'number' ? segment.end : segment.start + 1,
+        text: segment.text,
+      };
+    })
+    .filter((segment): segment is NormalizedSegment => segment !== null);
+
+  if (segments.length === 0) return undefined;
+  return {
+    segments,
+    language: archive.transcriptionLanguage || transcript.language || 'auto',
+  };
+}
+
 /**
  * Convert a UserArchive server response into the local PostData format.
  *
@@ -199,6 +223,7 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
       altText: m.alt,
     };
   }) as Media[];
+  const whisperTranscript = normalizeWhisperTranscript(archive);
 
   return {
     platform,
@@ -262,6 +287,13 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
       } as Omit<PostData, 'quotedPost' | 'embeddedArchives'>,
     } : {}),
     ...(archive.mediaPreservationStatus ? { mediaPreservationStatus: archive.mediaPreservationStatus } : {}),
+    ...(whisperTranscript ? { whisperTranscript } : {}),
+    ...(archive.transcriptionLanguage ? { transcriptionLanguage: archive.transcriptionLanguage } : {}),
+    ...(archive.transcriptionModel ? { transcriptionModel: archive.transcriptionModel } : {}),
+    ...(archive.transcriptionUpdatedAt ? { transcriptionUpdatedAt: archive.transcriptionUpdatedAt } : {}),
+    ...(archive.transcriptResultId ? { transcriptResultId: archive.transcriptResultId } : {}),
+    ...(archive.transcriptionDuration != null ? { transcriptionDuration: archive.transcriptionDuration } : {}),
+    ...(archive.transcriptionProcessingTime != null ? { transcriptionProcessingTime: archive.transcriptionProcessingTime } : {}),
     ...(archive.isBookmarked != null ? { archive: archive.isBookmarked } : {}),
     ...(archive.isReblog != null ? { isReblog: archive.isReblog } : {}),
     ...(archive.comments && archive.comments.length > 0 ? {

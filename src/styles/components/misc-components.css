@@ -104,7 +104,8 @@
  * ======================================== */
 
 /* Container: hidden column layout until jobs exist */
-.sa-crawl-status-banners {
+.sa-crawl-status-banners,
+.sa-ai-comment-job-banners {
   display: none;
   flex-direction: column;
   gap: 8px;
@@ -112,7 +113,8 @@
   margin-bottom: 12px;
 }
 
-.sa-crawl-status-banners.csb-visible {
+.sa-crawl-status-banners.csb-visible,
+.sa-ai-comment-job-banners.csb-visible {
   display: flex;
 }
 
@@ -2367,6 +2369,7 @@ body.is-mobile .tc-selection-pill {
 /* Containers: tighter vertical spacing */
 body.is-mobile .archive-progress-banners,
 body.is-mobile .sa-crawl-status-banners,
+body.is-mobile .sa-ai-comment-job-banners,
 body.is-mobile .crosspost-status-banners,
 body.is-mobile .library-sync-banner {
   margin-bottom: 4px;
@@ -2376,6 +2379,7 @@ body.is-mobile .library-sync-banner {
 /* Banner rows: flat, borderless inline style */
 body.is-mobile .archive-banner,
 body.is-mobile .crawl-banner,
+body.is-mobile .sa-ai-comment-job-banners .crawl-banner,
 body.is-mobile .crosspost-banner,
 body.is-mobile .library-sync-banner-row {
   padding: 4px 8px;
@@ -2389,6 +2393,7 @@ body.is-mobile .library-sync-banner-row {
 /* Smaller icons on mobile */
 body.is-mobile .archive-banner .banner-icon,
 body.is-mobile .crawl-banner .banner-icon,
+body.is-mobile .sa-ai-comment-job-banners .banner-icon,
 body.is-mobile .crosspost-banner .banner-icon,
 body.is-mobile .library-sync-banner-row .banner-icon {
   --icon-size: 14px;
@@ -2397,6 +2402,7 @@ body.is-mobile .library-sync-banner-row .banner-icon {
 /* Muted text for reduced visual weight */
 body.is-mobile .archive-banner .banner-text,
 body.is-mobile .crawl-banner .banner-text,
+body.is-mobile .sa-ai-comment-job-banners .banner-text,
 body.is-mobile .crosspost-banner .banner-text,
 body.is-mobile .library-sync-banner-row .banner-text {
   color: var(--text-muted);

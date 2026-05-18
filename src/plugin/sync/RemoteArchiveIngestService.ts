@@ -15,6 +15,7 @@ import type { WorkersAPIClient, UserArchive } from '../../services/WorkersAPICli
 import type { ArchiveLookupService } from '../../services/ArchiveLookupService';
 import type { PendingPost } from '../../services/SubscriptionManager';
 import type { PostData } from '../../types/post';
+import type { LocalLockRegistry } from '../locks/LocalLockRegistry';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -51,6 +52,9 @@ export interface RemoteArchiveIngestDeps {
 
   /** Refresh the timeline view after a successful save. */
   refreshTimelineView: () => void;
+
+  /** Shared local write lock registry used by plugin archive/materialization writers. */
+  localLockRegistry?: LocalLockRegistry;
 }
 
 // ---------------------------------------------------------------------------
@@ -83,7 +87,14 @@ export class RemoteArchiveIngestService {
    */
   async ingestArchiveById(
     archiveId: string,
-    source: 'client_sync' | 'archive_complete' | 'ai_comment_job',
+    source: 'client_sync' | 'archive_complete' | 'ai_comment_job' | 'transcription_job',
+  ): Promise<IngestResult> {
+    return this.withArchiveWriteLocks(archiveId, () => this.ingestArchiveByIdUnderLock(archiveId, source));
+  }
+
+  private async ingestArchiveByIdUnderLock(
+    archiveId: string,
+    source: 'client_sync' | 'archive_complete' | 'ai_comment_job' | 'transcription_job',
   ): Promise<IngestResult> {
     // 1. Check if already exists by sourceArchiveId
     const existing = this.deps.archiveLookupService?.findBySourceArchiveId(archiveId) ?? null;
@@ -125,6 +136,8 @@ export class RemoteArchiveIngestService {
         ? 'Mobile Sync'
         : source === 'ai_comment_job'
           ? 'AI Comment Job'
+          : source === 'transcription_job'
+            ? 'Transcription Job'
           : 'Realtime Sync',
       post: postData,
       destinationFolder: this.deps.settings().archivePath,
@@ -139,6 +152,18 @@ export class RemoteArchiveIngestService {
 
     // saveSubscriptionPost returns false for existing files
     return 'existing';
+  }
+
+  private async withArchiveWriteLocks<T>(archiveId: string, fn: () => Promise<T>): Promise<T> {
+    const registry = this.deps.localLockRegistry;
+    if (!registry) return fn();
+    return registry.withLocks(
+      [
+        { kind: 'archiveMaterialization', archiveId },
+        { kind: 'markdownWrite', archiveId },
+      ],
+      fn,
+    );
   }
 
   // -- private helpers ------------------------------------------------------

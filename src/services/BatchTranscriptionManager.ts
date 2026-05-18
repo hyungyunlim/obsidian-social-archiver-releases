@@ -18,6 +18,8 @@ import type {
 import type { TranscriptionResult } from '../types/transcription';
 import type { Media } from '../types/post';
 import type { MediaResult } from './MediaHandler';
+import type { LocalLockRegistry } from '../plugin/locks/LocalLockRegistry';
+import { hashLocalLockComponent } from '../plugin/locks/LocalLockRegistry';
 
 const STORAGE_KEY = 'social-archiver:batch-transcription:v1';
 
@@ -36,6 +38,7 @@ export interface BatchTranscriptionManagerDeps {
   /** Download video via yt-dlp. Returns vault-relative path or null on failure. */
   downloadWithYtDlp: (url: string, platform: string, postId: string, signal?: AbortSignal) => Promise<string | null>;
   refreshTimelineView: () => void;
+  localLockRegistry?: LocalLockRegistry;
 }
 
 export class BatchTranscriptionManager {
@@ -254,10 +257,9 @@ export class BatchTranscriptionManager {
     const archivePath = settings.archivePath || 'Social Archives';
     const archiveFolder = app.vault.getAbstractFileByPath(archivePath);
 
-    // Check if it's a TFolder
-    if (!archiveFolder || !(archiveFolder instanceof TFolder)) return [];
+    if (!isTFolderLike(archiveFolder)) return [];
 
-    const files = this.deps.collectMarkdownFiles(archiveFolder);
+    const files = this.deps.collectMarkdownFiles(archiveFolder as TFolder);
     const items: BatchItem[] = [];
 
     for (const file of files) {
@@ -356,7 +358,7 @@ export class BatchTranscriptionManager {
           item.status = 'downloading';
           this.notifyObservers();
 
-          const downloaded = await this.downloadVideo(item);
+          const downloaded = await this.withMediaMaterializationLock(item, () => this.downloadVideo(item));
           if (!downloaded) {
             console.warn(`[BatchTranscription] ${itemNum} Download FAILED: ${itemName}`);
             item.status = 'failed';
@@ -388,7 +390,7 @@ export class BatchTranscriptionManager {
         this.notifyObservers();
 
         const rawFile = this.deps.app.vault.getAbstractFileByPath(item.filePath);
-        if (!rawFile || !(rawFile instanceof TFile)) {
+        if (!isTFileLike(rawFile)) {
           item.status = 'skipped';
           item.error = 'File not found';
           this.currentIndex++;
@@ -397,10 +399,12 @@ export class BatchTranscriptionManager {
         }
 
         const requestedAt = new Date().toISOString();
-        await this.deps.app.fileManager.processFrontMatter(rawFile, (fm: Record<string, unknown>) => {
-          fm.videoTranscribed = false;
-          fm.videoTranscriptionRequestedAt = requestedAt;
-          delete fm.videoTranscriptionError;
+        await this.withMarkdownWriteLock(rawFile, async () => {
+          await this.deps.app.fileManager.processFrontMatter(rawFile, (fm: Record<string, unknown>) => {
+            fm.videoTranscribed = false;
+            fm.videoTranscriptionRequestedAt = requestedAt;
+            delete fm.videoTranscriptionError;
+          });
         });
 
         const fullVideoPath = this.deps.toAbsoluteVaultPath(item.videoPath);
@@ -425,20 +429,22 @@ export class BatchTranscriptionManager {
 
         const completedAt = new Date().toISOString();
 
-        await this.deps.app.fileManager.processFrontMatter(rawFile, (fm: Record<string, unknown>) => {
-          fm.videoTranscribed = true;
-          fm.videoTranscribedAt = completedAt;
-          delete fm.videoTranscriptionError;
-          fm.transcriptionModel = result.model;
-          fm.transcriptionLanguage = result.language;
-          fm.transcriptionDuration = result.duration;
-          fm.transcriptionTime = completedAt;
-          fm.transcriptionProcessingTime = result.processingTime;
-        });
+        await this.withMarkdownWriteLock(rawFile, async () => {
+          await this.deps.app.fileManager.processFrontMatter(rawFile, (fm: Record<string, unknown>) => {
+            fm.videoTranscribed = true;
+            fm.videoTranscribedAt = completedAt;
+            delete fm.videoTranscriptionError;
+            fm.transcriptionModel = result.model;
+            fm.transcriptionLanguage = result.language;
+            fm.transcriptionDuration = result.duration;
+            fm.transcriptionTime = completedAt;
+            fm.transcriptionProcessingTime = result.processingTime;
+          });
 
-        await this.deps.app.vault.process(rawFile, (currentContent) => {
-          const updatedContent = this.deps.appendTranscriptSection(currentContent, result);
-          return updatedContent;
+          await this.processFile(rawFile, (currentContent) => {
+            const updatedContent = this.deps.appendTranscriptSection(currentContent, result);
+            return updatedContent;
+          });
         });
 
         item.status = 'completed';
@@ -463,10 +469,12 @@ export class BatchTranscriptionManager {
         // Update frontmatter with error
         try {
           const errFile = this.deps.app.vault.getAbstractFileByPath(item.filePath);
-          if (errFile && errFile instanceof TFile) {
-            await this.deps.app.fileManager.processFrontMatter(errFile, (fm: Record<string, unknown>) => {
-              fm.videoTranscribed = false;
-              fm.videoTranscriptionError = errorMessage;
+          if (isTFileLike(errFile)) {
+            await this.withMarkdownWriteLock(errFile as TFile, async () => {
+              await this.deps.app.fileManager.processFrontMatter(errFile as TFile, (fm: Record<string, unknown>) => {
+                fm.videoTranscribed = false;
+                fm.videoTranscriptionError = errorMessage;
+              });
             });
           }
         } catch {
@@ -504,7 +512,7 @@ export class BatchTranscriptionManager {
     try {
       // Extract platform and postId from the note's frontmatter
       const rawFile = this.deps.app.vault.getAbstractFileByPath(item.filePath);
-      if (!rawFile || !(rawFile instanceof TFile)) return null;
+      if (!isTFileLike(rawFile)) return null;
 
       const cache = this.deps.app.metadataCache.getFileCache(rawFile);
       const fm = (cache?.frontmatter as Record<string, unknown> | undefined) || {};
@@ -522,23 +530,27 @@ export class BatchTranscriptionManager {
         );
 
         if (vaultRelativePath) {
-          await this.deps.app.fileManager.processFrontMatter(rawFile, (frontmatter: Record<string, unknown>) => {
-            frontmatter.videoDownloaded = true;
-            if (!Array.isArray(frontmatter.downloadedUrls)) frontmatter.downloadedUrls = [];
-            const dlUrls = frontmatter.downloadedUrls as string[];
-            if (!dlUrls.includes(videoUrl)) {
-              dlUrls.push(videoUrl);
-            }
-            delete frontmatter.videoDownloadFailed;
-            delete frontmatter.videoDownloadFailedUrls;
+          await this.withMarkdownWriteLock(rawFile, async () => {
+            await this.deps.app.fileManager.processFrontMatter(rawFile, (frontmatter: Record<string, unknown>) => {
+              frontmatter.videoDownloaded = true;
+              if (!Array.isArray(frontmatter.downloadedUrls)) frontmatter.downloadedUrls = [];
+              const dlUrls = frontmatter.downloadedUrls as string[];
+              if (!dlUrls.includes(videoUrl)) {
+                dlUrls.push(videoUrl);
+              }
+              delete frontmatter.videoDownloadFailed;
+              delete frontmatter.videoDownloadFailedUrls;
+            });
           });
           return vaultRelativePath;
         }
 
         // yt-dlp failed — update frontmatter and return null
-        await this.deps.app.fileManager.processFrontMatter(rawFile, (frontmatter: Record<string, unknown>) => {
-          frontmatter.videoDownloadFailed = true;
-          frontmatter.videoDownloadFailedUrls = [item.videoUrl];
+        await this.withMarkdownWriteLock(rawFile, async () => {
+          await this.deps.app.fileManager.processFrontMatter(rawFile, (frontmatter: Record<string, unknown>) => {
+            frontmatter.videoDownloadFailed = true;
+            frontmatter.videoDownloadFailedUrls = [item.videoUrl];
+          });
         });
         return null;
       }
@@ -547,17 +559,21 @@ export class BatchTranscriptionManager {
       const media: Media[] = [{ type: 'video', url: item.videoUrl }];
       const results = await this.deps.downloadMedia(media, platform, postId, author);
       if (results.length > 0 && results[0]?.localPath) {
-        await this.deps.app.fileManager.processFrontMatter(rawFile, (frontmatter: Record<string, unknown>) => {
-          frontmatter.videoDownloaded = true;
-          delete frontmatter.videoDownloadFailed;
-          delete frontmatter.videoDownloadFailedUrls;
+        await this.withMarkdownWriteLock(rawFile, async () => {
+          await this.deps.app.fileManager.processFrontMatter(rawFile, (frontmatter: Record<string, unknown>) => {
+            frontmatter.videoDownloaded = true;
+            delete frontmatter.videoDownloadFailed;
+            delete frontmatter.videoDownloadFailedUrls;
+          });
         });
         return results[0].localPath;
       }
 
-      await this.deps.app.fileManager.processFrontMatter(rawFile, (frontmatter: Record<string, unknown>) => {
-        frontmatter.videoDownloadFailed = true;
-        frontmatter.videoDownloadFailedUrls = [item.videoUrl];
+      await this.withMarkdownWriteLock(rawFile, async () => {
+        await this.deps.app.fileManager.processFrontMatter(rawFile, (frontmatter: Record<string, unknown>) => {
+          frontmatter.videoDownloadFailed = true;
+          frontmatter.videoDownloadFailedUrls = [item.videoUrl];
+        });
       });
 
       return null;
@@ -576,27 +592,27 @@ export class BatchTranscriptionManager {
   private async embedVideoInNote(filePath: string, videoVaultPath: string): Promise<void> {
     try {
       const rawFile = this.deps.app.vault.getAbstractFileByPath(filePath);
-      if (!rawFile || !(rawFile instanceof TFile)) return;
+      if (!isTFileLike(rawFile)) return;
 
       const videoLink = `![[${videoVaultPath}]]`;
 
-      await this.deps.app.vault.process(rawFile, (content) => {
-        // Already embedded — skip
-        if (content.includes(videoLink)) return content;
+      await this.withMarkdownWriteLock(rawFile, async () => {
+        await this.processFile(rawFile, (content) => {
+          // Already embedded — skip
+          if (content.includes(videoLink)) return content;
 
-        // Replace existing video thumbnail: ![🎥 Video (duration)](path/to/thumbnail.jpg)
-        const videoThumbnailRegex = /!\[🎥 Video[^\]]*\]\([^)]+\)/;
-        if (videoThumbnailRegex.test(content)) {
-          return content.replace(videoThumbnailRegex, videoLink);
-        } else {
+          // Replace existing video thumbnail: ![🎥 Video (duration)](path/to/thumbnail.jpg)
+          const videoThumbnailRegex = /!\[🎥 Video[^\]]*\]\([^)]+\)/;
+          if (videoThumbnailRegex.test(content)) {
+            return content.replace(videoThumbnailRegex, videoLink);
+          }
           // No thumbnail found — append before the footer separator or at end
           const footerSeparator = content.lastIndexOf('\n---\n');
           if (footerSeparator > 0) {
             return content.slice(0, footerSeparator) + `\n\n${videoLink}\n` + content.slice(footerSeparator);
-          } else {
-            return content + `\n\n${videoLink}`;
           }
-        }
+          return content + `\n\n${videoLink}`;
+        });
       });
       console.debug(`[BatchTranscription] Embedded video in note: ${videoLink}`);
     } catch (error) {
@@ -623,6 +639,66 @@ export class BatchTranscriptionManager {
     }
   }
 
+  private async withMediaMaterializationLock<T>(item: BatchItem, fn: () => Promise<T>): Promise<T> {
+    const registry = this.deps.localLockRegistry;
+    if (!registry) return fn();
+
+    return registry.withLock(
+      {
+        kind: 'mediaMaterialization',
+        archiveId: this.resolveArchiveIdForPath(item.filePath),
+        mediaRefHash: hashLocalLockComponent(item.videoUrl ?? item.videoPath ?? item.filePath),
+      },
+      fn,
+      { signal: this.abortController?.signal },
+    );
+  }
+
+  private async processFile(file: TFile, updater: (content: string) => string): Promise<void> {
+    const vault = this.deps.app.vault as typeof this.deps.app.vault & {
+      process?: (file: TFile, updater: (content: string) => string) => Promise<void>;
+    };
+    if (typeof vault.process === 'function') {
+      await vault.process(file, updater);
+      return;
+    }
+
+    const current = await this.deps.app.vault.read(file);
+    const updated = updater(current);
+    if (updated !== current) {
+      await this.deps.app.vault.modify(file, updated);
+    }
+  }
+
+  private async withMarkdownWriteLock<T>(file: TFile, fn: () => Promise<T>): Promise<T> {
+    const registry = this.deps.localLockRegistry;
+    if (!registry) return fn();
+    return registry.withLock(
+      {
+        kind: 'markdownWrite',
+        archiveId: this.resolveArchiveIdForFile(file),
+      },
+      fn,
+      { signal: this.abortController?.signal },
+    );
+  }
+
+  private resolveArchiveIdForFile(file: TFile): string {
+    const cache = this.deps.app.metadataCache.getFileCache(file);
+    const frontmatter = (cache?.frontmatter as Record<string, unknown> | undefined) || {};
+    const sourceArchiveId = frontmatter.sourceArchiveId;
+    if (typeof sourceArchiveId === 'string' && sourceArchiveId.trim()) return sourceArchiveId;
+    const archiveId = frontmatter.archiveId;
+    if (typeof archiveId === 'string' && archiveId.trim()) return archiveId;
+    return file.path;
+  }
+
+  private resolveArchiveIdForPath(filePath: string): string {
+    const rawFile = this.deps.app.vault.getAbstractFileByPath(filePath);
+    if (isTFileLike(rawFile)) return this.resolveArchiveIdForFile(rawFile as TFile);
+    return filePath;
+  }
+
   // ─── Persistence ─────────────────────────────────────────────────────
 
   private persist(): void {
@@ -641,4 +717,16 @@ export class BatchTranscriptionManager {
   private deletePersisted(): void {
     this.deps.app.saveLocalStorage(STORAGE_KEY, null as unknown as string);
   }
+}
+
+function isTFileLike(value: unknown): value is TFile {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as { path?: unknown; extension?: unknown; children?: unknown };
+  return typeof candidate.path === 'string' && typeof candidate.extension === 'string' && !Array.isArray(candidate.children);
+}
+
+function isTFolderLike(value: unknown): value is TFolder {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as { path?: unknown; children?: unknown };
+  return typeof candidate.path === 'string' && Array.isArray(candidate.children);
 }

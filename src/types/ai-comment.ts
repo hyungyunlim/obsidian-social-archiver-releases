@@ -746,6 +746,8 @@ export interface AICommentOptions {
   outputLanguage?: AIOutputLanguage;
   /** Progress callback */
   onProgress?: (progress: AICommentProgress) => void;
+  /** Optional timeout override in milliseconds */
+  timeoutMs?: number;
   /** AbortSignal for cancellation */
   signal?: AbortSignal;
 }

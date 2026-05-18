@@ -493,6 +493,78 @@ AI summary`;
     });
   });
 
+  describe('transcription clear', () => {
+    it('removes transcription frontmatter and managed transcript blocks on explicit clear event', async () => {
+      const file = makeFile('Social Archives/test.md');
+      const capturedFm: Record<string, unknown> = {
+        transcriptionModel: 'large-v3',
+        transcriptionLanguage: 'en',
+        transcriptionTime: '2026-03-19T14:00:00.000Z',
+        transcriptResultId: 'result-1',
+        transcriptResultIds: ['result-1'],
+        videoTranscribed: true,
+        hasTranscript: true,
+      };
+      const content = `# Test Post
+
+Content here.
+
+---
+
+<!-- social-archiver-transcript:start resultMarkerId=result-1 -->
+## Transcript
+
+[00:00] Hello world
+<!-- social-archiver-transcript:end resultMarkerId=result-1 -->
+
+## Notes
+
+Keep this.`;
+
+      const app = {
+        vault: {
+          read: vi.fn().mockResolvedValue(content),
+          modify: vi.fn(),
+        },
+        fileManager: {
+          processFrontMatter: vi.fn().mockImplementation(async (_file: TFile, updater: (fm: Record<string, unknown>) => void) => {
+            updater(capturedFm);
+          }),
+        },
+      };
+
+      const service = new AnnotationSyncService(
+        app as any,
+        makeWorkersApiClient() as any,
+        makeArchiveLookup({ byId: file }) as any,
+        makeAnnotationRenderer('') as any,
+        makeSectionManager('body') as any,
+        makeSettings()
+      );
+
+      await service.handleActionUpdated(
+        makeActionUpdatedData({ changes: { clearTranscription: true } })
+      );
+
+      expect(capturedFm.transcriptionModel).toBeUndefined();
+      expect(capturedFm.transcriptionLanguage).toBeUndefined();
+      expect(capturedFm.transcriptionTime).toBeUndefined();
+      expect(capturedFm.transcriptResultId).toBeUndefined();
+      expect(capturedFm.transcriptResultIds).toBeUndefined();
+      expect(capturedFm.videoTranscribed).toBeUndefined();
+      expect(capturedFm.hasTranscript).toBeUndefined();
+      expect(capturedFm.sourceArchiveId).toBe('archive-123');
+      expect(app.vault.modify).toHaveBeenCalledWith(
+        file,
+        expect.not.stringContaining('social-archiver-transcript:start')
+      );
+      expect(app.vault.modify).toHaveBeenCalledWith(
+        file,
+        expect.stringContaining('## Notes')
+      );
+    });
+  });
+
   // ── Error handling ──
 
   describe('error handling', () => {

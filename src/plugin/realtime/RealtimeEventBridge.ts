@@ -9,7 +9,7 @@
  */
 
 import { Events, EventRef, Notice } from 'obsidian';
-import type { App } from 'obsidian';
+import type { App, TFile } from 'obsidian';
 import type { PendingJob } from '../../services/PendingJobsManager';
 import type { PendingPost } from '../../services/SubscriptionManager';
 import type { CrawlJobTracker } from '../../services/CrawlJobTracker';
@@ -30,12 +30,14 @@ import type {
   ActionUpdatedEventData,
   ArchiveDeletedEventData,
   ArchiveTagsUpdatedEventData,
+  ContentVariantUpdatedEventData,
   MediaPreservedEventData,
   AuthorProfileUpdatedEventData,
   BillingStatusUpdatedEventData,
 } from '../../types/websocket';
 import type { BillingEventApiPayload } from '../../types/billing-events';
 import type { IngestResult } from '../sync/RemoteArchiveIngestService';
+import type { LocalLockRegistry } from '../locks/LocalLockRegistry';
 import { TimelineView, VIEW_TYPE_TIMELINE } from '../../views/TimelineView';
 import type { UserAuthorProfile } from '@/types/author-profile';
 
@@ -221,8 +223,17 @@ export interface RealtimeEventBridgeDeps {
   markBillingEventNoticed?: (eventId: string) => void;
   refreshTimelineView: () => void;
   aiCommentJobProcessor?: {
+    drainBacklog?: () => Promise<void>;
+    handleRequestedJob: (jobId: string, targetClientId: string) => Promise<void>;
+    handleRequestedAIActionJob?: (jobId: string, targetClientId?: string | null) => Promise<void>;
+    handleStatusEvent: (event: { jobId?: string; targetClientId?: string; status?: string }) => Promise<void>;
+  };
+  transcriptionJobProcessor?: {
+    drainBacklog: () => Promise<void>;
     handleRequestedJob: (jobId: string, targetClientId: string) => Promise<void>;
     handleStatusEvent: (event: { jobId?: string; targetClientId?: string; status?: string }) => Promise<void>;
+    handleCancelledEvent: (event: { jobId?: string; targetClientId?: string }) => Promise<void>;
+    handleUpdatedEvent: (event: { archiveId?: string; jobId?: string; transcriptResultId?: string }) => Promise<void>;
   };
   processPendingSyncQueue: () => Promise<void>;
   processSyncQueueItem: (queueId: string, archiveId: string, clientId: string) => Promise<boolean>;
@@ -232,6 +243,7 @@ export interface RealtimeEventBridgeDeps {
   ingestRemoteArchive: (archiveId: string, source: 'client_sync' | 'archive_complete') => Promise<IngestResult>;
   notify: (message: string, timeout?: number) => void;
   schedule: (callback: () => void, delay: number) => number;
+  localLockRegistry?: LocalLockRegistry;
   currentCrawlWorkerJobId: { value: string | undefined };
   wsPostBatchCount: { value: number };
   wsPostBatchTimer: { value: number | undefined };
@@ -282,11 +294,13 @@ export class RealtimeEventBridge {
     this.setupShareDeletedListener();
     this.setupActionUpdatedListener();
     this.setupArchiveTagsUpdatedListener();
+    this.setupContentVariantUpdatedListener();
     this.setupAuthorProfileUpdatedListener();
     this.setupArchiveDeletedListener();
     this.setupMediaPreservedListener();
     this.setupBillingStatusUpdatedListener();
     this.setupAICommentJobListeners();
+    this.setupTranscriptionJobListeners();
   }
 
   private setupAICommentJobListeners(): void {
@@ -301,6 +315,38 @@ export class RealtimeEventBridge {
         const message = payload as { data?: { jobId?: string; targetClientId?: string; status?: string }; jobId?: string; targetClientId?: string; status?: string };
         const data = message.data ?? message;
         void this.deps.aiCommentJobProcessor?.handleStatusEvent(data);
+      }),
+      this.deps.events.on('ws:ai_action_requested', (payload: unknown) => {
+        const message = payload as { data?: { jobId?: string; targetClientId?: string | null }; jobId?: string; targetClientId?: string | null };
+        const data = message.data ?? message;
+        if (!data.jobId) return;
+        void this.deps.aiCommentJobProcessor?.handleRequestedAIActionJob?.(data.jobId, data.targetClientId ?? null);
+      }),
+    );
+  }
+
+  private setupTranscriptionJobListeners(): void {
+    this.eventRefs.push(
+      this.deps.events.on('ws:transcription_requested', (payload: unknown) => {
+        const message = payload as { data?: { jobId?: string; targetClientId?: string }; jobId?: string; targetClientId?: string };
+        const data = message.data ?? message;
+        if (!data.jobId || !data.targetClientId) return;
+        void this.deps.transcriptionJobProcessor?.handleRequestedJob(data.jobId, data.targetClientId);
+      }),
+      this.deps.events.on('ws:transcription_status_updated', (payload: unknown) => {
+        const message = payload as { data?: { jobId?: string; targetClientId?: string; status?: string }; jobId?: string; targetClientId?: string; status?: string };
+        const data = message.data ?? message;
+        void this.deps.transcriptionJobProcessor?.handleStatusEvent(data);
+      }),
+      this.deps.events.on('ws:transcription_cancelled', (payload: unknown) => {
+        const message = payload as { data?: { jobId?: string; targetClientId?: string }; jobId?: string; targetClientId?: string };
+        const data = message.data ?? message;
+        void this.deps.transcriptionJobProcessor?.handleCancelledEvent(data);
+      }),
+      this.deps.events.on('ws:transcription_updated', (payload: unknown) => {
+        const message = payload as { data?: { jobId?: string; archiveId?: string; transcriptResultId?: string }; jobId?: string; archiveId?: string; transcriptResultId?: string };
+        const data = message.data ?? message;
+        void this.deps.transcriptionJobProcessor?.handleUpdatedEvent(data);
       }),
     );
   }
@@ -498,6 +544,14 @@ export class RealtimeEventBridge {
           this.deps.schedule(() => {
             void this.deps.processPendingSyncQueue();
           }, 2000);
+
+          this.deps.schedule(() => {
+            void this.deps.transcriptionJobProcessor?.drainBacklog();
+          }, 2500);
+
+          this.deps.schedule(() => {
+            void this.deps.aiCommentJobProcessor?.drainBacklog?.();
+          }, 3000);
         }
       }),
     );
@@ -563,7 +617,9 @@ export class RealtimeEventBridge {
               archivedAt: new Date().toISOString(),
             };
 
-            const saved = await this.deps.saveSubscriptionPost(pendingPost);
+            const saved = message.archiveId
+              ? await this.withArchiveWriteLocks(message.archiveId, () => this.deps.saveSubscriptionPost(pendingPost))
+              : await this.deps.saveSubscriptionPost(pendingPost);
             if (saved) {
               // Acknowledge the pending post to remove it from KV
               if (message.pendingPostId && this.deps.acknowledgePendingPosts) {
@@ -896,10 +952,13 @@ export class RealtimeEventBridge {
           const cache = this.deps.app.metadataCache.getFileCache(file);
           if (cache?.frontmatter?.shareUrl === shareUrl) {
             try {
-              await this.deps.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-                fm.share = false;
-                delete fm.shareUrl;
-                delete fm.shareExpiry;
+              const archiveId = this.resolveArchiveIdForFile(file);
+              await this.withArchiveWriteLocks(archiveId, async () => {
+                await this.deps.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+                  fm.share = false;
+                  delete fm.shareUrl;
+                  delete fm.shareExpiry;
+                });
               });
               new Notice('Share link removed from note', 3000);
             } catch (err) {
@@ -926,27 +985,35 @@ export class RealtimeEventBridge {
 
         // Annotation sync: patch managed block and frontmatter in the local vault note
         const settings = this.deps.settings();
-        if (msg.data.changes.hasAnnotationUpdate || msg.data.changes.clearAIComments) {
+        if (msg.data.changes.hasAnnotationUpdate || msg.data.changes.clearAIComments || msg.data.changes.clearTranscription) {
           if (!settings.enableMobileAnnotationSync) {
             console.debug('[Social Archiver] Annotation update received but Mobile Annotation Sync is disabled. Enable it in Settings → Mobile sync.');
           } else {
-            void this.deps.annotationSyncService?.handleActionUpdated(msg.data);
+            void this.withArchiveWriteLocks(msg.data.archiveId, async () => {
+              await this.deps.annotationSyncService?.handleActionUpdated(msg.data);
+            });
           }
         }
 
         // Archive state sync: update fm.archive when isBookmarked changes from mobile
         if (msg.data.changes.isBookmarked !== undefined) {
-          void this.deps.archiveStateSyncService?.handleRemoteArchiveState(msg.data);
+          void this.withArchiveWriteLocks(msg.data.archiveId, async () => {
+            await this.deps.archiveStateSyncService?.handleRemoteArchiveState(msg.data);
+          });
         }
 
         // Like state sync: update fm.like when isLiked changes from mobile/web
         if (msg.data.changes.isLiked !== undefined) {
-          void this.deps.likeStateSyncService?.handleRemoteLikeState(msg.data);
+          void this.withArchiveWriteLocks(msg.data.archiveId, async () => {
+            await this.deps.likeStateSyncService?.handleRemoteLikeState(msg.data);
+          });
         }
 
         // Share state sync: update fm.share/fm.shareUrl when shareUrl changes from mobile/web
         if (msg.data.changes.shareUrl !== undefined) {
-          void this.deps.shareStateSyncService?.handleRemoteShareState(msg.data);
+          void this.withArchiveWriteLocks(msg.data.archiveId, async () => {
+            await this.deps.shareStateSyncService?.handleRemoteShareState(msg.data);
+          });
         }
       }),
     );
@@ -994,13 +1061,15 @@ export class RealtimeEventBridge {
         // REPLACEMENT semantics: set archiveTags to the server's canonical tag list.
         // Do NOT modify fm.tags — that field is local-only (Obsidian tag index).
         try {
-          await this.deps.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-            fm.archiveTags = serverTags;
+          await this.withArchiveWriteLocks(archiveId, async () => {
+            await this.deps.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+              fm.archiveTags = serverTags;
 
-            // Backfill sourceArchiveId if missing
-            if (!fm.sourceArchiveId) {
-              fm.sourceArchiveId = archiveId;
-            }
+              // Backfill sourceArchiveId if missing
+              if (!fm.sourceArchiveId) {
+                fm.sourceArchiveId = archiveId;
+              }
+            });
           });
 
           console.debug('[Social Archiver] archiveTags replaced for:', file.path, { serverTags });
@@ -1011,6 +1080,27 @@ export class RealtimeEventBridge {
             err instanceof Error ? err.message : String(err),
           );
         }
+      }),
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // ws:content_variant_updated
+  // --------------------------------------------------------------------------
+
+  private setupContentVariantUpdatedListener(): void {
+    this.eventRefs.push(
+      this.deps.events.on('ws:content_variant_updated', (_message: unknown) => {
+        const msg = _message as { type: string; data?: ContentVariantUpdatedEventData } | undefined;
+        const data = msg?.data;
+        if (!data?.archiveId) return;
+
+        console.debug('[Social Archiver] Content variant updated via WS:', data.archiveId, {
+          variantId: data.variantId,
+          action: data.action,
+        });
+
+        this.deps.refreshTimelineView();
       }),
     );
   }
@@ -1095,6 +1185,7 @@ export class RealtimeEventBridge {
         await new Promise(resolve => window.setTimeout(resolve, 3000));
 
         try {
+          await this.withArchiveMaterializationLock(archiveId, async () => {
           // Find the vault file by sourceArchiveId
           const file = this.deps.archiveLookupService?.findBySourceArchiveId(archiveId) ?? null;
           if (!file) {
@@ -1165,7 +1256,7 @@ export class RealtimeEventBridge {
 
             // Write updated content back to note if any placeholders were replaced
             if (recovered > 0) {
-              await this.deps.app.vault.modify(file, content);
+              await this.withMarkdownWriteLock(archiveId, () => this.deps.app.vault.modify(file, content));
 
               if (failed === 0) {
                 this.deps.notify(`Recovered ${recovered} media for archived note`, 5000);
@@ -1185,6 +1276,7 @@ export class RealtimeEventBridge {
           } finally {
             mediaHandler.dispose();
           }
+          });
         } catch (error) {
           console.error(
             '[Social Archiver] media_preserved handler failed for',
@@ -1248,5 +1340,39 @@ export class RealtimeEventBridge {
         }
       }),
     );
+  }
+
+  private async withArchiveWriteLocks<T>(archiveId: string, fn: () => Promise<T>): Promise<T> {
+    const registry = this.deps.localLockRegistry;
+    if (!registry) return fn();
+    return registry.withLocks(
+      [
+        { kind: 'archiveMaterialization', archiveId },
+        { kind: 'markdownWrite', archiveId },
+      ],
+      fn,
+    );
+  }
+
+  private async withArchiveMaterializationLock<T>(archiveId: string, fn: () => Promise<T>): Promise<T> {
+    const registry = this.deps.localLockRegistry;
+    if (!registry) return fn();
+    return registry.withLock({ kind: 'archiveMaterialization', archiveId }, fn);
+  }
+
+  private async withMarkdownWriteLock<T>(archiveId: string, fn: () => Promise<T>): Promise<T> {
+    const registry = this.deps.localLockRegistry;
+    if (!registry) return fn();
+    return registry.withLock({ kind: 'markdownWrite', archiveId }, fn);
+  }
+
+  private resolveArchiveIdForFile(file: TFile): string {
+    const cache = this.deps.app.metadataCache.getFileCache(file);
+    const frontmatter = (cache?.frontmatter as Record<string, unknown> | undefined) || {};
+    const sourceArchiveId = frontmatter.sourceArchiveId;
+    if (typeof sourceArchiveId === 'string' && sourceArchiveId.trim()) return sourceArchiveId;
+    const archiveId = frontmatter.archiveId;
+    if (typeof archiveId === 'string' && archiveId.trim()) return archiveId;
+    return file.path;
   }
 }

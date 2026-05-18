@@ -239,10 +239,7 @@ export class AICommentService {
       throw new AICommentError('CLI_NOT_AUTHENTICATED', `${options.cli} CLI not authenticated`, { cli: options.cli });
     }
 
-    // 4. Build prompt
-    const prompt = this.buildPrompt(content, options);
-
-    // 5. Report initial progress
+    // 4. Report initial progress
     options.onProgress?.({
       percentage: 0,
       status: 'Preparing...',
@@ -250,15 +247,16 @@ export class AICommentService {
       phase: 'preparing',
     });
 
-    // 6. Prepare content file (for large content)
+    // 5. Prepare content file (for large content)
     const tempFile = await this.prepareContentFile(content);
 
     try {
-      // 7. Build command
-      const { command, args, stdinPrompt } = this.buildCommand(options.cli, cliResult.path, prompt, tempFile, options);
+      // 6. Build prompt and command
+      const prompt = this.buildPrompt(content, options, tempFile);
+      const { command, args, stdinPrompt } = this.buildCommand(options.cli, cliResult.path, prompt, options);
 
-      // 8. Execute command
-      const output = await this.executeCommand(command, args, options, DEFAULT_TIMEOUT, stdinPrompt);
+      // 7. Execute command
+      const output = await this.executeCommand(command, args, options, options.timeoutMs ?? DEFAULT_TIMEOUT, stdinPrompt);
 
       // 9. Parse result
       const processingTime = Date.now() - startTime;
@@ -414,7 +412,7 @@ export class AICommentService {
   /**
    * Build the prompt for the AI CLI
    */
-  private buildPrompt(content: string, options: AICommentOptions): string {
+  private buildPrompt(content: string, options: AICommentOptions, contentFile?: string | null): string {
     let template: string;
 
     if (options.type === 'custom' && options.customPrompt) {
@@ -435,8 +433,12 @@ Content:
       template = DEFAULT_PROMPTS[options.type];
     }
 
+    const contentReference = contentFile
+      ? `Read the full content from this local file: ${contentFile}`
+      : content;
+
     // Replace placeholders
-    let prompt = template.replace(/\{\{content\}\}/g, content);
+    let prompt = template.replace(/\{\{content\}\}/g, contentReference);
 
     if ((options.type === 'translation' || options.type === 'translate-transcript') && options.targetLanguage) {
       prompt = prompt.replace(/\{\{targetLanguage\}\}/g, options.targetLanguage);
@@ -593,11 +595,9 @@ Content:
     cli: AICli,
     cliPath: string,
     prompt: string,
-    contentFile: string | null,
     options: AICommentOptions,
   ): { command: string; args: string[]; stdinPrompt?: string } {
-    // For file-based content, modify the prompt
-    const finalPrompt = contentFile ? `${prompt}\n\n[Content is in file: ${contentFile}]` : prompt;
+    const finalPrompt = prompt;
 
     // Check if we're on Windows - use stdin for prompts to avoid shell escaping issues
     const os = nodeRequire('os') as typeof import('os');

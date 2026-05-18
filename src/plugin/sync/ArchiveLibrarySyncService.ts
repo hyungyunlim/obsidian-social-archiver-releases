@@ -23,6 +23,7 @@ import type { WorkersAPIClient, UserArchive } from '../../services/WorkersAPICli
 import type { PendingPost } from '../../services/SubscriptionManager';
 import type { PostData } from '../../types/post';
 import type { SocialArchiverSettings } from '../../types/settings';
+import type { LocalLockRegistry } from '../locks/LocalLockRegistry';
 
 // ============================================================================
 // Constants
@@ -182,6 +183,12 @@ export interface ArchiveLibrarySyncDeps {
    * Wired to AnnotationSyncService.reconcileFromLibrarySync() in main.ts.
    */
   reconcileAnnotationState?: (file: TFile, archive: UserArchive) => Promise<void>;
+
+  /** Reconcile server-generated Whisper transcript projection into existing markdown. */
+  reconcileTranscriptState?: (file: TFile, archive: UserArchive) => Promise<void>;
+
+  /** Shared local write lock registry used by plugin archive/materialization writers. */
+  localLockRegistry?: LocalLockRegistry;
 }
 
 // ============================================================================
@@ -477,7 +484,7 @@ export class ArchiveLibrarySyncService {
       // Process each archive in this page
       for (const archive of response.archives) {
         this.throwIfAborted(signal);
-        await this.processArchive(archive);
+        await this.processArchive(archive, signal);
       }
 
       // Advance offset and persist checkpoint
@@ -591,7 +598,7 @@ export class ArchiveLibrarySyncService {
           continue;
         }
 
-        await this.processArchive(archive);
+        await this.processArchive(archive, signal);
       }
 
       offset += response.archives.length;
@@ -621,7 +628,11 @@ export class ArchiveLibrarySyncService {
 
   // -- Per-archive processing ------------------------------------------------
 
-  private async processArchive(archive: UserArchive): Promise<void> {
+  private async processArchive(archive: UserArchive, signal: AbortSignal): Promise<void> {
+    await this.withArchiveWriteLocks(archive.id, signal, () => this.processArchiveUnderLocks(archive));
+  }
+
+  private async processArchiveUnderLocks(archive: UserArchive): Promise<void> {
     this.updateState({ scannedCount: this.runtimeState.scannedCount + 1 });
 
     try {
@@ -638,6 +649,7 @@ export class ArchiveLibrarySyncService {
         await this.reconcileExistingArchiveState(existingById, archive);
         await this.reconcileExistingLikeState(existingById, archive);
         await this.reconcileExistingAnnotationState(existingById, archive);
+        await this.reconcileExistingTranscriptState(existingById, archive);
         this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
         return;
       }
@@ -691,6 +703,7 @@ export class ArchiveLibrarySyncService {
         await this.reconcileExistingArchiveState(matched, archive);
         await this.reconcileExistingLikeState(matched, archive);
         await this.reconcileExistingAnnotationState(matched, archive);
+        await this.reconcileExistingTranscriptState(matched, archive);
         this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
         return;
       }
@@ -718,6 +731,23 @@ export class ArchiveLibrarySyncService {
       });
       this.updateState({ failedCount: this.runtimeState.failedCount + 1 });
     }
+  }
+
+  private async withArchiveWriteLocks<T>(
+    archiveId: string,
+    signal: AbortSignal,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const registry = this.deps.localLockRegistry;
+    if (!registry) return fn();
+    return registry.withLocks(
+      [
+        { kind: 'archiveMaterialization', archiveId },
+        { kind: 'markdownWrite', archiveId },
+      ],
+      fn,
+      { signal },
+    );
   }
 
   /**
@@ -787,6 +817,21 @@ export class ArchiveLibrarySyncService {
       await this.deps.reconcileAnnotationState(file, archive);
     } catch (error) {
       console.warn('[Social Archiver] [LibrarySync] reconcileExistingAnnotationState failed', {
+        archiveId: archive.id,
+        path: file.path,
+        error,
+      });
+    }
+  }
+
+  private async reconcileExistingTranscriptState(file: TFile, archive: UserArchive): Promise<void> {
+    if (!this.deps.reconcileTranscriptState) return;
+    if (!archive.whisperTranscript?.segments?.length && !archive.transcriptResultId) return;
+
+    try {
+      await this.deps.reconcileTranscriptState(file, archive);
+    } catch (error) {
+      console.warn('[Social Archiver] [LibrarySync] reconcileExistingTranscriptState failed', {
         archiveId: archive.id,
         path: file.path,
         error,

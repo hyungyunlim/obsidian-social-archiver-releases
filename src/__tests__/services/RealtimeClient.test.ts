@@ -48,6 +48,10 @@ class FakeWebSocket {
     this.onclose?.({});
   }
 
+  fireError(error: unknown): void {
+    this.onerror?.(error);
+  }
+
   static reset(): void {
     FakeWebSocket.instances = [];
   }
@@ -169,5 +173,56 @@ describe('RealtimeClient (channel mode + logging)', () => {
     await client.connect();
 
     expect(FakeWebSocket.instances).toHaveLength(1);
+  });
+
+  it('does not create a socket from a stale ticket fetch after disconnect', async () => {
+    let resolveTicket!: (ticket: string) => void;
+    const ticketPromise = new Promise<string>((resolve) => {
+      resolveTicket = resolve;
+    });
+    const client = new RealtimeClient(
+      'https://api.example.com',
+      'alice',
+      events,
+      async () => ticketPromise,
+    );
+
+    const pending = client.connect();
+    await Promise.resolve();
+    client.disconnect();
+    resolveTicket('late-ticket');
+    await pending;
+
+    expect(FakeWebSocket.instances).toHaveLength(0);
+    expect(client.getChannelMode()).toBe('none');
+  });
+
+  it('ignores error and close events from a socket closed during forced reconnect', async () => {
+    const wsError = vi.fn();
+    const wsClosed = vi.fn();
+    events.on('ws:error', wsError);
+    events.on('ws:closed', wsClosed);
+
+    let ticketCounter = 0;
+    const client = new RealtimeClient(
+      'https://api.example.com',
+      'alice',
+      events,
+      async () => `valid-ticket-${++ticketCounter}`,
+    );
+
+    await client.connect();
+    const first = FakeWebSocket.instances[0];
+    client.disconnect();
+
+    await client.connect();
+    const second = FakeWebSocket.instances[1];
+    first?.fireError(new Error('stale socket failed'));
+    first?.fireClose();
+    second?.fireOpen();
+
+    expect(wsError).not.toHaveBeenCalled();
+    expect(wsClosed).not.toHaveBeenCalled();
+    expect(client.getChannelMode()).toBe('private');
   });
 });

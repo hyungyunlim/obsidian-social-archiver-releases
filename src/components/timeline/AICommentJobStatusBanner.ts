@@ -91,11 +91,21 @@ function getBannerText(state: AICommentJobBannerState): string {
   const subject = getShortSubject(state);
   const queue = state.queueDepth > 0 ? ` · queued ${state.queueDepth}` : '';
   const progress = typeof state.progressPercentage === 'number' ? ` · ${state.progressPercentage}%` : '';
-  if (state.status === 'completed') return `AI comment added${subject ? ` · ${subject}` : ''}${queue}`;
-  if (state.status === 'failed') return `${state.errorMessagePublic || 'AI comment failed'}${subject ? ` · ${subject}` : ''}${queue}`;
-  if (state.status === 'cancelled') return `AI comment cancelled${subject ? ` · ${subject}` : ''}${queue}`;
-  if (state.status === 'cancel_requested') return `Cancelling AI comment${subject ? ` · ${subject}` : ''}${queue}`;
-  return `${state.progressMessage || `Processing AI comment with ${state.provider}`}${progress}${queue}`;
+  const label = getJobLabel(state);
+  if (state.status === 'completed') return `${label} completed${subject ? ` · ${subject}` : ''}${queue}`;
+  if (state.status === 'failed') return `${state.errorMessagePublic || `${label} failed`}${subject ? ` · ${subject}` : ''}${queue}`;
+  if (state.status === 'cancelled') return `${label} cancelled${subject ? ` · ${subject}` : ''}${queue}`;
+  if (state.status === 'cancel_requested') return `Cancelling ${label.toLowerCase()}${subject ? ` · ${subject}` : ''}${queue}`;
+  return `${state.progressMessage || `Processing ${label.toLowerCase()} with ${state.provider}`}${progress}${queue}`;
+}
+
+function getJobLabel(state: AICommentJobBannerState): string {
+  if (state.actionType === 'content.translate_variant') return 'Translation';
+  if (state.actionType === 'tags.suggest_apply') return 'Tag suggestion';
+  if (state.actionType?.startsWith('comment.')) return 'AI comment';
+  if (state.resultKind === 'content_variant') return 'Content variant';
+  if (state.resultKind === 'tag_patch') return 'Tag suggestion';
+  return 'AI action';
 }
 
 function getShortSubject(state: AICommentJobBannerState): string {

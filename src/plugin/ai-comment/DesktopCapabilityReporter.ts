@@ -1,6 +1,11 @@
 import { Platform } from 'obsidian';
 import type { SocialArchiverSettings } from '../../types/settings';
-import type { AICommentExecutorCapabilityPayload, AICommentProviderCapability, WorkersAPIClient } from '../../services/WorkersAPIClient';
+import type {
+  AIActionExecutorCapabilityPayload,
+  AICommentExecutorCapabilityPayload,
+  AICommentProviderCapability,
+  WorkersAPIClient,
+} from '../../services/WorkersAPIClient';
 import type { AICli, AICommentType } from '../../types/ai-comment';
 import { AICliDetector } from '../../utils/ai-cli';
 
@@ -89,6 +94,17 @@ export class DesktopCapabilityReporter {
     };
   }
 
+  async buildAIActionCapabilityPayload(): Promise<AIActionExecutorCapabilityPayload | null> {
+    const commentCapability = await this.buildCapabilityPayload();
+    if (!commentCapability) return null;
+    return {
+      enabled: commentCapability.enabled,
+      capabilities: ['ai-actions-v1', 'tag-patch-v1', 'content-variants-v1'],
+      pluginVersion: this.deps.pluginVersion,
+      updatedAt: commentCapability.updatedAt,
+    };
+  }
+
   private async runRefresh(): Promise<void> {
     // Mobile Obsidian can share plugin data with desktop vaults. Never let it
     // clear or replace the desktop AI executor capability for a synced clientId.
@@ -99,8 +115,16 @@ export class DesktopCapabilityReporter {
     const apiClient = this.deps.apiClient();
     if (!apiClient || !settings.authToken || !clientId) return;
 
-    const capability = await this.buildCapabilityPayload();
-    await apiClient.refreshSyncClientCapability(clientId, capability, 'desktop');
+    const aiCommentExecutor = await this.buildCapabilityPayload();
+    const aiActionExecutor = await this.buildAIActionCapabilityPayload();
+    await apiClient.refreshSyncClientCapabilities(
+      clientId,
+      {
+        aiCommentExecutor,
+        aiActionExecutor,
+      },
+      'desktop',
+    );
   }
 
   private async detectProviders(): Promise<AICommentProviderCapability[]> {

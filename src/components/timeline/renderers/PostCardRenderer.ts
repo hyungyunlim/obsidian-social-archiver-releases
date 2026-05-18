@@ -16,7 +16,7 @@ import { CompactPostCardRenderer } from './CompactPostCardRenderer';
 import { YouTubePlayerController } from '../controllers/YouTubePlayerController';
 import { VideoTranscriptPlayer } from './VideoTranscriptPlayer';
 import { ShareAPIClient } from '../../../services/ShareAPIClient';
-import type { AICommentPayload } from '../../../services/WorkersAPIClient';
+import type { AIActionType, AICommentPayload, ContentVariant } from '../../../services/WorkersAPIClient';
 import { TextFormatter } from '../../../services/markdown/formatters/TextFormatter';
 import { TranscriptFormatter } from '../../../services/markdown/formatters/TranscriptFormatter';
 import { getAuthorCatalogStore } from '../../../services/AuthorCatalogStore';
@@ -27,7 +27,7 @@ import { isRssBasedPlatform } from '../../../constants/rssPlatforms';
 import { getPlatformName } from '@/shared/platforms';
 import { isSupportedPlatformUrl, validateAndDetectPlatform, isPinterestBoardUrl } from '../../../schemas/platforms';
 import { resolvePinterestUrl } from '../../../utils/pinterest';
-import { AICommentBanner, type AICommentBannerOptions } from './AICommentBanner';
+import { AICommentBanner, type AICommentBannerActionId, type AICommentBannerOptions } from './AICommentBanner';
 import { AICommentRenderer, type AICommentRendererOptions } from './AICommentRenderer';
 import { AICliDetector, type AICli, type AICliDetectionResult } from '../../../utils/ai-cli';
 import { parseAIComments, appendAIComment, removeAIComment, updateFrontmatterAIComments } from '../../../services/ai-comment/markdown-handler';
@@ -50,6 +50,14 @@ import { maybeProxyCdnUrl } from '../../../utils/cdnProxy';
 import { truncatePreview } from '../../../utils/preview-truncate';
 import { PreviewableCardRenderer } from './PreviewableCardRenderer';
 import type { PreviewContext } from './PreviewableContext';
+import {
+  MORE_TRANSLATION_LANGUAGE_OPTIONS,
+  PRIMARY_TRANSLATION_LANGUAGE_OPTIONS,
+  getMissingTranslationLanguageOptions,
+  isSupportedAIActionLanguageCode,
+  type AIActionLanguageOption,
+} from '../aiActionLanguageOptions';
+import { stripContentVariantMetadataFooter } from '../../../utils/contentVariantMarkdown';
 import {
   formatRelativeTime as helperFormatRelativeTime,
   formatNumber as helperFormatNumber,
@@ -139,6 +147,9 @@ export class PostCardRenderer extends Component {
   private cachedCliDetection: Map<AICli, AICliDetectionResult> | null = null;
   private cliDetectionTimestamp: number = 0;
   private readonly CLI_DETECTION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  private contentVariantCache: Map<string, { variants: ContentVariant[]; activeContentVariantId?: string | null; fetchedAt: number }> = new Map();
+  private selectedContentVariantIds: Map<string, string | null> = new Map();
+  private readonly CONTENT_VARIANT_CACHE_TTL = 60 * 1000;
 
   // ---------------------------------------------------------------------------
   // Previewable orchestrator
@@ -682,8 +693,9 @@ export class PostCardRenderer extends Component {
       // Header: Author + Time + Avatar (in same line)
       this.renderHeader(contentArea, post);
 
-      // Content (full text with expand/collapse)
-      await this.renderContent(contentArea, post);
+      // Content (full text with expand/collapse), optionally switched to a
+      // generated translation/content variant when one exists.
+      await this.renderContentWithVariantControls(contentArea, post);
     }
 
     const hasRenderableTikTokVideo = post.platform === 'tiktok' && hasDirectTikTokVideoMedia(post.media);
@@ -1019,33 +1031,43 @@ export class PostCardRenderer extends Component {
         actionsBar.addClass('pcr-actions-border-top');
       }
 
-      // Personal Like button
-      this.renderPersonalLikeButton(actionsBar, post);
+      if (ObsidianPlatform.isMobile) {
+        this.renderPersonalLikeButton(actionsBar, post);
+        this.renderArchiveButton(actionsBar, post, rootElement);
+        this.renderShareButton(actionsBar, post);
+        if (this.shouldShowMobileAIActionButton(post, isEmbedded)) {
+          this.renderMobileAIActionButton(actionsBar, post);
+        }
+        this.renderOverflowMenuButton(actionsBar, post, rootElement, isEmbedded);
+      } else {
+        // Personal Like button
+        this.renderPersonalLikeButton(actionsBar, post);
 
-      // Share button
-      this.renderShareButton(actionsBar, post);
+        // Share button
+        this.renderShareButton(actionsBar, post);
 
-      // Tag button
-      if (!isEmbedded) {
-        this.renderTagButton(actionsBar, post, rootElement);
+        // Tag button
+        if (!isEmbedded) {
+          this.renderTagButton(actionsBar, post, rootElement);
+        }
+
+        // Archive button
+        this.renderArchiveButton(actionsBar, post, rootElement);
+
+        // Reader mode button
+        this.renderReaderModeButton(actionsBar, post);
+
+        // Open Note button
+        this.renderOpenNoteButton(actionsBar, post);
+
+        // Edit button (only for user posts)
+        if (post.platform === 'post') {
+          this.renderEditButton(actionsBar, post);
+        }
+
+        // Delete button
+        this.renderDeleteButton(actionsBar, post, rootElement);
       }
-
-      // Archive button
-      this.renderArchiveButton(actionsBar, post, rootElement);
-
-      // Reader mode button
-      this.renderReaderModeButton(actionsBar, post);
-
-      // Open Note button
-      this.renderOpenNoteButton(actionsBar, post);
-
-      // Edit button (only for user posts)
-      if (post.platform === 'post') {
-        this.renderEditButton(actionsBar, post);
-      }
-
-      // Delete button
-      this.renderDeleteButton(actionsBar, post, rootElement);
     }
 
     // Comments section - AI comments, regular comments, then AI comment banner at bottom
@@ -1906,6 +1928,236 @@ export class PostCardRenderer extends Component {
     // Escape "number." at the start of a line followed by space, newline, or end of string
     // This prevents markdown from treating patterns like "1.\n" or "2. " as ordered lists
     return content.replace(/^(\s*)(\d+)\.(?=\s|$)/gm, '$1$2\\.');
+  }
+
+  private async renderContentWithVariantControls(contentArea: HTMLElement, post: PostData): Promise<void> {
+    const archiveId = this.resolveArchiveIdForContentVariants(post);
+    if (!archiveId) {
+      await this.renderContent(contentArea, post);
+      return;
+    }
+
+    const variantState = await this.getContentVariantState(archiveId);
+    const variants = (variantState?.variants ?? [])
+      .filter((variant) => variant.visibility === 'available' && (variant.contentMarkdown || variant.contentText))
+      .sort((a, b) => Date.parse(b.updatedAt || b.createdAt) - Date.parse(a.updatedAt || a.createdAt));
+
+    if (variants.length === 0) {
+      await this.renderContent(contentArea, post);
+      return;
+    }
+
+    const selectedId = this.selectedContentVariantIds.has(archiveId)
+      ? this.selectedContentVariantIds.get(archiveId) ?? null
+      : (variantState?.activeContentVariantId ?? variants[0]?.id ?? null);
+    const initialVariant = selectedId ? variants.find((variant) => variant.id === selectedId) ?? variants[0] ?? null : null;
+
+    const showInlineSwitch = !this.shouldUseMobileContentVariantMenu();
+    let selectedLabel: HTMLElement | null = null;
+    let menuButton: HTMLButtonElement | null = null;
+    if (showInlineSwitch) {
+      const controls = contentArea.createDiv({ cls: 'pcr-content-variant-switch' });
+      menuButton = controls.createEl('button', {
+        cls: 'pcr-content-variant-button',
+        attr: {
+          type: 'button',
+          'aria-label': 'Select content language',
+        },
+      });
+      selectedLabel = menuButton.createSpan({
+        text: initialVariant ? this.formatContentVariantLabel(initialVariant) : 'Original',
+        cls: 'pcr-content-variant-current',
+      });
+      const chevron = menuButton.createSpan({ cls: 'pcr-content-variant-chevron' });
+      setIcon(chevron, 'chevron-down');
+    }
+
+    const contentHost = contentArea.createDiv({ cls: 'pcr-content-variant-body' });
+    const renderSelected = async (variant: ContentVariant | null) => {
+      contentHost.empty();
+      await this.renderContent(contentHost, this.applyContentVariantToPost(post, variant));
+    };
+
+    const selectVariant = (nextVariant: ContentVariant | null) => {
+      const nextId = nextVariant?.id ?? null;
+      this.selectedContentVariantIds.set(archiveId, nextId);
+      selectedLabel?.setText(nextVariant ? this.formatContentVariantLabel(nextVariant) : 'Original');
+      void renderSelected(nextVariant);
+    };
+
+    menuButton?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const currentId = this.selectedContentVariantIds.has(archiveId)
+        ? this.selectedContentVariantIds.get(archiveId) ?? null
+        : initialVariant?.id ?? null;
+
+      const menu = new Menu();
+      menu.addItem((item) => {
+        item
+          .setIcon('file-text')
+          .setTitle('Original')
+          .setChecked(currentId === null)
+          .onClick(() => {
+            selectVariant(null);
+          });
+      });
+      menu.addSeparator();
+      for (const variant of variants) {
+        menu.addItem((item) => {
+          item
+            .setIcon('languages')
+            .setTitle(this.formatContentVariantLabel(variant))
+            .setChecked(currentId === variant.id)
+            .onClick(() => {
+              selectVariant(variant);
+            });
+        });
+      }
+      this.addContentVariantTranslationRequestItems(menu, post, variants, menuButton);
+      menu.showAtMouseEvent(event);
+    });
+
+    await renderSelected(initialVariant);
+  }
+
+  private resolveArchiveIdForContentVariants(post: PostData): string | null {
+    if (post.sourceArchiveId) return post.sourceArchiveId;
+    if (!post.filePath) return null;
+    const file = this.vault.getAbstractFileByPath(post.filePath);
+    if (!(file instanceof TFile)) return null;
+    const frontmatter: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter;
+    const sourceArchiveId = isRecord(frontmatter) ? frontmatter.sourceArchiveId : undefined;
+    return typeof sourceArchiveId === 'string' && sourceArchiveId.length > 0 ? sourceArchiveId : null;
+  }
+
+  private shouldUseMobileContentVariantMenu(): boolean {
+    return ObsidianPlatform.isMobile
+      || activeDocument.body.hasClass('is-mobile')
+      || activeDocument.body.hasClass('is-phone');
+  }
+
+  private async addContentVariantMenuItems(menu: Menu, post: PostData, rootElement: HTMLElement): Promise<boolean> {
+    const archiveId = this.resolveArchiveIdForContentVariants(post);
+    if (!archiveId) return false;
+
+    const variantState = await this.getContentVariantState(archiveId);
+    const variants = (variantState?.variants ?? [])
+      .filter((variant) => variant.visibility === 'available' && (variant.contentMarkdown || variant.contentText))
+      .sort((a, b) => Date.parse(b.updatedAt || b.createdAt) - Date.parse(a.updatedAt || a.createdAt));
+    if (variants.length === 0) return false;
+
+    const currentId = this.selectedContentVariantIds.has(archiveId)
+      ? this.selectedContentVariantIds.get(archiveId) ?? null
+      : (variantState?.activeContentVariantId ?? variants[0]?.id ?? null);
+    const applySelection = (variantId: string | null) => {
+      this.selectedContentVariantIds.set(archiveId, variantId);
+      void this.refreshPostCardFull(post, rootElement);
+    };
+
+    menu.addSeparator();
+    menu.addItem((item) => {
+      item
+        .setIcon('file-text')
+        .setTitle('Original')
+        .setChecked(currentId === null)
+        .onClick(() => applySelection(null));
+    });
+    for (const variant of variants) {
+      menu.addItem((item) => {
+        item
+          .setIcon('languages')
+          .setTitle(this.formatContentVariantLabel(variant))
+          .setChecked(currentId === variant.id)
+          .onClick(() => applySelection(variant.id));
+      });
+    }
+    this.addContentVariantTranslationRequestItems(menu, post, variants, rootElement);
+    return true;
+  }
+
+  private addContentVariantTranslationRequestItems(
+    menu: Menu,
+    post: PostData,
+    variants: ContentVariant[],
+    anchorEl: HTMLElement,
+  ): void {
+    const missing = getMissingTranslationLanguageOptions(variants.map((variant) => variant.language));
+    if (missing.primary.length === 0 && missing.more.length === 0) return;
+
+    const cli = this.plugin.settings.aiComment.defaultCli ?? 'claude';
+    menu.addSeparator();
+    for (const language of missing.primary) {
+      menu.addItem((item) => {
+        item
+          .setIcon('languages')
+          .setTitle(`Translate to ${language.menuLabel}`)
+          .onClick(() => {
+            void this.handleTimelineAIActionRequest(post, 'content.translate_variant', cli, language.code);
+          });
+      });
+    }
+
+    if (missing.more.length > 0) {
+      menu.addItem((item) => {
+        item
+          .setIcon('chevron-right')
+          .setTitle('More languages')
+          .onClick(() => {
+            this.openTimelineTranslationLanguageMenu(post, cli, anchorEl, missing.more);
+          });
+      });
+    }
+  }
+
+  private async getContentVariantState(
+    archiveId: string,
+  ): Promise<{ variants: ContentVariant[]; activeContentVariantId?: string | null } | null> {
+    const cached = this.contentVariantCache.get(archiveId);
+    if (cached && Date.now() - cached.fetchedAt < this.CONTENT_VARIANT_CACHE_TTL) {
+      return cached;
+    }
+    try {
+      const response = await this.plugin.workersApiClient.getArchiveContentVariants(archiveId);
+      const state = {
+        variants: response.variants ?? [],
+        activeContentVariantId: response.activeContentVariantId ?? null,
+        fetchedAt: Date.now(),
+      };
+      this.contentVariantCache.set(archiveId, state);
+      return state;
+    } catch (error) {
+      console.warn('[PostCardRenderer] Failed to load content variants:', error);
+      return null;
+    }
+  }
+
+  private applyContentVariantToPost(post: PostData, variant: ContentVariant | null): PostData {
+    if (!variant) return post;
+    const markdown = stripContentVariantMetadataFooter(variant.contentMarkdown || variant.contentText || '');
+    const text = stripContentVariantMetadataFooter(variant.contentText || markdown);
+    const shouldRenderMarkdown =
+      Boolean(post.content.rawMarkdown) ||
+      isRssBasedPlatform(post.platform) ||
+      post.platform === 'web' ||
+      post.platform === 'threads' ||
+      post.platform === 'x';
+
+    return {
+      ...post,
+      ...(variant.title ? { title: variant.title } : {}),
+      content: {
+        ...post.content,
+        text: text || markdown,
+        markdown: markdown || text,
+        rawMarkdown: shouldRenderMarkdown ? (markdown || text) : undefined,
+      },
+    };
+  }
+
+  private formatContentVariantLabel(variant: ContentVariant): string {
+    const language = (variant.language || '').trim();
+    if (language) return language.toUpperCase();
+    return variant.type === 'translation' ? 'Translation' : 'Variant';
   }
 
   /**
@@ -3128,6 +3380,9 @@ export class PostCardRenderer extends Component {
       this.renderPersonalLikeButton(interactions, post);
       this.renderArchiveButton(interactions, post, rootElement);
       this.renderShareButton(interactions, post);
+      if (this.shouldShowMobileAIActionButton(post, isEmbedded)) {
+        this.renderMobileAIActionButton(interactions, post);
+      }
       this.renderOverflowMenuButton(interactions, post, rootElement, isEmbedded);
     } else {
       // Desktop: show all buttons inline
@@ -3316,6 +3571,115 @@ export class PostCardRenderer extends Component {
     });
   }
 
+  private shouldShowMobileAIActionButton(post: PostData, isEmbedded: boolean): boolean {
+    if (!ObsidianPlatform.isMobile || isEmbedded) return false;
+    if (!this.plugin.settings.aiComment?.enabled) return false;
+    if (!post.filePath) return false;
+    return this.isAICommentEnabledForPlatform(post.platform);
+  }
+
+  private renderMobileAIActionButton(parent: HTMLElement, post: PostData): void {
+    const aiBtn = parent.createDiv({ cls: 'pcr-action-btn' });
+    aiBtn.setAttribute('title', 'AI actions');
+
+    const aiIcon = aiBtn.createDiv({ cls: 'pcr-action-icon' });
+    setIcon(aiIcon, 'sparkles');
+
+    aiBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const menu = new Menu();
+      const cli = this.plugin.settings.aiComment.defaultCli ?? 'claude';
+
+      menu.addItem((item) => {
+        item
+          .setIcon('list')
+          .setTitle('Summary')
+          .onClick(() => {
+            void this.handleTimelineAIActionRequest(post, 'comment.summary', cli);
+          });
+      });
+      menu.addItem((item) => {
+        item
+          .setIcon('shield-check')
+          .setTitle('Fact check')
+          .onClick(() => {
+            void this.handleTimelineAIActionRequest(post, 'comment.factcheck', cli);
+          });
+      });
+      menu.addItem((item) => {
+        item
+          .setIcon('book-open')
+          .setTitle('Glossary')
+          .onClick(() => {
+            void this.handleTimelineAIActionRequest(post, 'comment.glossary', cli);
+          });
+      });
+      menu.addSeparator();
+      menu.addItem((item) => {
+        item
+          .setIcon('tag')
+          .setTitle('Suggest tags')
+          .onClick(() => {
+            void this.handleTimelineAIActionRequest(post, 'tags.suggest_apply', cli);
+          });
+      });
+      menu.addSeparator();
+      this.addTimelineTranslationMenuItems(menu, post, cli, aiBtn);
+
+      const rect = aiBtn.getBoundingClientRect();
+      menu.showAtPosition({ x: rect.left, y: rect.bottom });
+    });
+  }
+
+  private addTimelineTranslationMenuItems(
+    menu: Menu,
+    post: PostData,
+    cli: AICli,
+    anchorEl: HTMLElement,
+  ): void {
+    for (const language of PRIMARY_TRANSLATION_LANGUAGE_OPTIONS) {
+      menu.addItem((item) => {
+        item
+          .setIcon('languages')
+          .setTitle(language.shortLabel)
+          .onClick(() => {
+            void this.handleTimelineAIActionRequest(post, 'content.translate_variant', cli, language.code);
+          });
+      });
+    }
+
+    menu.addItem((item) => {
+      item
+        .setIcon('chevron-right')
+        .setTitle('More languages')
+        .onClick(() => {
+          this.openTimelineTranslationLanguageMenu(post, cli, anchorEl, MORE_TRANSLATION_LANGUAGE_OPTIONS);
+        });
+    });
+  }
+
+  private openTimelineTranslationLanguageMenu(
+    post: PostData,
+    cli: AICli,
+    anchorEl: HTMLElement,
+    languages: AIActionLanguageOption[],
+  ): void {
+    const menu = new Menu();
+    for (const language of languages) {
+      menu.addItem((item) => {
+        item
+          .setIcon('languages')
+          .setTitle(language.menuLabel)
+          .onClick(() => {
+            void this.handleTimelineAIActionRequest(post, 'content.translate_variant', cli, language.code);
+          });
+      });
+    }
+
+    const rect = anchorEl.getBoundingClientRect();
+    menu.showAtPosition({ x: rect.left, y: rect.bottom });
+  }
+
   /**
    * Render overflow "more" button for mobile that opens an Obsidian Menu
    * with secondary action items (tag, reader mode, open note, edit, delete).
@@ -3330,6 +3694,7 @@ export class PostCardRenderer extends Component {
     moreBtn.addEventListener('click', (e) => {
       e.stopPropagation();
 
+      void (async () => {
       const menu = new Menu();
 
       // Tag button (not shown for embedded posts)
@@ -3393,6 +3758,8 @@ export class PostCardRenderer extends Component {
           });
       });
 
+      await this.addContentVariantMenuItems(menu, post, rootElement);
+
       // Edit button (only for user posts)
       if (post.platform === 'post') {
         menu.addItem((item) => {
@@ -3455,6 +3822,7 @@ export class PostCardRenderer extends Component {
       // Position the menu below the "more" button
       const rect = moreBtn.getBoundingClientRect();
       menu.showAtPosition({ x: rect.left, y: rect.bottom });
+      })();
     });
   }
 
@@ -8037,10 +8405,10 @@ export class PostCardRenderer extends Component {
 
   /**
    * Check if AI comment banner should be shown for a post
-   * Desktop only, archived posts, with available CLI tools
+   * Desktop-only banner for local CLI comment generation.
+   * Mobile uses the card action bar AI button instead.
    */
   private async shouldShowAICommentBanner(post: PostData): Promise<boolean> {
-    // Desktop only
     if (ObsidianPlatform.isMobile) return false;
 
     // Feature must be enabled
@@ -8060,7 +8428,7 @@ export class PostCardRenderer extends Component {
       return false;
     }
 
-    // At least one AI CLI must be available
+    // At least one local AI CLI must be available on desktop.
     const availableClis = await this.getAvailableClis();
     return availableClis.length > 0;
   }
@@ -8128,7 +8496,7 @@ export class PostCardRenderer extends Component {
     post: PostData,
     rootElement: HTMLElement
   ): Promise<void> {
-    const availableClis = await this.getAvailableClis();
+    const availableClis = await this.getAvailableClisForAICommentBanner();
     if (availableClis.length === 0) return;
 
     const settings = this.plugin.settings.aiComment;
@@ -8167,12 +8535,21 @@ export class PostCardRenderer extends Component {
       onGenerateMulti: async (clis: AICli[], type: AICommentType, customPrompt?: string, language?: AIOutputLanguage) => {
         await this.handleAICommentGenerateMulti(post, clis, type, banner, rootElement, customPrompt, language);
       },
+      onRunAction: async (actionId: AICommentBannerActionId, cli: AICli, language?: AIOutputLanguage) => {
+        await this.handleTimelineAIActionRequest(post, actionId, cli, language);
+      },
       onDecline: () => {
         void this.handleAICommentDecline(post, rootElement);
       },
+      actionItems: [
+        { id: 'tags.suggest_apply', label: 'Suggest Tags' },
+        { id: 'content.translate_variant', label: 'Translate Content' },
+      ],
+      commentTypesEnabled: !ObsidianPlatform.isMobile,
+      defaultActionId: 'content.translate_variant',
       // Multi-AI settings
-      multiAiEnabled: settings.multiAiEnabled && multiAiSelection.length > 1,
-      multiAiSelection: multiAiSelection.length > 1 ? multiAiSelection : undefined,
+      multiAiEnabled: !ObsidianPlatform.isMobile && settings.multiAiEnabled && multiAiSelection.length > 1,
+      multiAiSelection: !ObsidianPlatform.isMobile && multiAiSelection.length > 1 ? multiAiSelection : undefined,
       // Language settings
       outputLanguage: settings.outputLanguage || 'auto',
       // Transcript availability (enables translate-transcript type)
@@ -8180,6 +8557,13 @@ export class PostCardRenderer extends Component {
     };
 
     banner.render(bannerContainer, options);
+  }
+
+  private async getAvailableClisForAICommentBanner(): Promise<AICli[]> {
+    if (ObsidianPlatform.isMobile) {
+      return [this.plugin.settings.aiComment.defaultCli ?? 'claude'];
+    }
+    return this.getAvailableClis();
   }
 
   /**
@@ -8256,6 +8640,60 @@ export class PostCardRenderer extends Component {
     } catch (error) {
       console.error('[PostCardRenderer] Failed to render AI comments:', error);
     }
+  }
+
+  private async handleTimelineAIActionRequest(
+    post: PostData,
+    actionType: AIActionType,
+    cli: AICli,
+    language?: string
+  ): Promise<void> {
+    const archiveId = this.resolveArchiveIdForContentVariants(post);
+    const apiClient = this.plugin.workersApiClient;
+    const clientId = this.plugin.settings.syncClientId;
+    if (!archiveId || !apiClient || !clientId) {
+      new Notice('Connect sync before running AI actions from the timeline.');
+      throw new Error('Sync is not connected');
+    }
+
+    const availability = await apiClient.getAIActionAvailability(archiveId, actionType);
+    if (availability.activeJob) {
+      new Notice('An AI action is already queued for this post.');
+      throw new Error('AI action already queued');
+    }
+
+    const targetClientId = availability.capableClientIds.includes(clientId)
+      ? clientId
+      : availability.capableClientIds[0];
+    if (!availability.available || !targetClientId) {
+      new Notice('No capable Obsidian client is available for this AI action.');
+      throw new Error('No capable AI action client');
+    }
+
+    const response = await apiClient.createAIActionJob({
+      archiveId,
+      actionType,
+      targetClientId,
+      provider: cli,
+      outputLanguage: this.resolveTimelineAIActionLanguage(language),
+      sourceClientId: clientId,
+    });
+
+    new Notice(response.delivery === 'websocket' ? 'AI action sent.' : 'AI action queued.');
+    this.plugin.aiCommentJobProcessor?.trackAIActionSummary?.(response.activeJob, cli);
+    if (targetClientId === clientId) {
+      void this.plugin.aiCommentJobProcessor?.handleRequestedAIActionJob(response.jobId, targetClientId);
+    }
+  }
+
+  private resolveTimelineAIActionLanguage(language?: string): string | undefined {
+    if (language && language !== 'auto') return language;
+    const configured = this.plugin.settings.aiComment.outputLanguage;
+    if (configured && configured !== 'auto') return configured;
+    const browserLanguage = navigator.language?.split('-')[0]?.toLowerCase();
+    return isSupportedAIActionLanguageCode(browserLanguage)
+      ? browserLanguage
+      : undefined;
   }
 
   /**
@@ -9006,7 +9444,8 @@ export class PostCardRenderer extends Component {
     }
 
     const cache = this.app.metadataCache.getFileCache(file);
-    const sourceArchiveId = cache?.frontmatter?.sourceArchiveId;
+    const frontmatter: unknown = cache?.frontmatter;
+    const sourceArchiveId = isRecord(frontmatter) ? frontmatter.sourceArchiveId : undefined;
     return typeof sourceArchiveId === 'string' && sourceArchiveId.length > 0
       ? sourceArchiveId
       : undefined;
@@ -9045,7 +9484,8 @@ export class PostCardRenderer extends Component {
     }
 
     const cache = this.app.metadataCache.getFileCache(file);
-    const frontmatter = cache?.frontmatter;
+    const rawFrontmatter: unknown = cache?.frontmatter;
+    const frontmatter = isRecord(rawFrontmatter) ? rawFrontmatter : undefined;
     for (const key of ['originalUrl', 'url']) {
       const value = frontmatter?.[key];
       if (typeof value === 'string' && value.length > 0) {
@@ -9136,7 +9576,13 @@ export class PostCardRenderer extends Component {
     this.videoTranscriptPlayers.clear();
 
     this.cachedCliDetection = null;
+    this.contentVariantCache.clear();
+    this.selectedContentVariantIds.clear();
     this.subscriptionsCache.clear();
     this.badgeUpdateCallbacks.clear();
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
