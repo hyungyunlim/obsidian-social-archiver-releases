@@ -385,7 +385,11 @@ export class SubscriptionSyncService {
 
       const existingFile = this.app.vault.getAbstractFileByPath(targetFilePath);
       if (existingFile) {
-        return { status: 'existing', path: targetFilePath };
+        return {
+          status: 'existing',
+          path: targetFilePath,
+          ...(existingFile instanceof TFile ? { file: existingFile } : {}),
+        };
       }
 
       let mediaResults: import('../../services/MediaHandler').MediaResult[] | undefined;

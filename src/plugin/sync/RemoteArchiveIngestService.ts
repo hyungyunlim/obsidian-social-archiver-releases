@@ -11,6 +11,7 @@
  * Single Responsibility: remote archive fetch → dedup → save to vault
  */
 
+import type { TFile } from 'obsidian';
 import type { WorkersAPIClient, UserArchive } from '../../services/WorkersAPIClient';
 import type { ArchiveLookupService } from '../../services/ArchiveLookupService';
 import type { PendingPost } from '../../services/SubscriptionManager';
@@ -50,6 +51,9 @@ export interface RemoteArchiveIngestDeps {
   /** Persist a PendingPost to the vault (handles media download, path generation, etc.). */
   saveSubscriptionPost: (post: PendingPost) => Promise<boolean>;
 
+  /** Persist with enough detail to immediately bind existing/new files to server archive IDs. */
+  saveSubscriptionPostDetailed?: (post: PendingPost) => Promise<RemoteArchiveSaveResult>;
+
   /** Refresh the timeline view after a successful save. */
   refreshTimelineView: () => void;
 
@@ -62,6 +66,13 @@ export interface RemoteArchiveIngestDeps {
 // ---------------------------------------------------------------------------
 
 export type IngestResult = 'created' | 'existing' | 'skipped';
+
+interface RemoteArchiveSaveResult {
+  status: 'created' | 'existing' | 'skipped' | 'failed';
+  file?: TFile;
+  path?: string;
+  reason?: string;
+}
 
 // ---------------------------------------------------------------------------
 // Service
@@ -117,7 +128,9 @@ export class RemoteArchiveIngestService {
     // 3. Dedup by URL
     const url = archive.originalUrl;
     if (url && this.deps.hasRecentlyArchivedUrl(url)) {
-      return 'existing';
+      if (await this.bindSingleUrlMatch(archive)) {
+        return 'existing';
+      }
     }
 
     // 4. Re-check sourceArchiveId (race with client_sync)
@@ -144,14 +157,23 @@ export class RemoteArchiveIngestService {
       archivedAt: new Date().toISOString(),
     };
 
-    const saved = await this.deps.saveSubscriptionPost(pendingPost);
-    if (saved) {
-      this.deps.refreshTimelineView();
-      return 'created';
+    const saveResult = await this.savePendingPost(pendingPost);
+    if (saveResult.status === 'failed' || saveResult.status === 'skipped') {
+      return 'skipped';
     }
 
-    // saveSubscriptionPost returns false for existing files
-    return 'existing';
+    if (saveResult.file) {
+      await this.bindFileIdentity(saveResult.file, archive);
+      this.deps.refreshTimelineView();
+      return saveResult.status;
+    }
+
+    if (await this.bindSingleUrlMatch(archive)) {
+      return saveResult.status;
+    }
+
+    this.deps.refreshTimelineView();
+    return saveResult.status;
   }
 
   private async withArchiveWriteLocks<T>(archiveId: string, fn: () => Promise<T>): Promise<T> {
@@ -195,6 +217,32 @@ export class RemoteArchiveIngestService {
       }
     }
     return null;
+  }
+
+  private async savePendingPost(pendingPost: PendingPost): Promise<RemoteArchiveSaveResult> {
+    if (this.deps.saveSubscriptionPostDetailed) {
+      return this.deps.saveSubscriptionPostDetailed(pendingPost);
+    }
+
+    const saved = await this.deps.saveSubscriptionPost(pendingPost);
+    return saved ? { status: 'created' } : { status: 'failed', reason: 'save returned false' };
+  }
+
+  private async bindSingleUrlMatch(archive: UserArchive): Promise<boolean> {
+    const matches = this.deps.archiveLookupService?.findByOriginalUrl(archive.originalUrl) ?? [];
+    if (matches.length !== 1) return false;
+
+    await this.bindFileIdentity(matches[0]!, archive);
+    this.deps.refreshTimelineView();
+    return true;
+  }
+
+  private async bindFileIdentity(file: TFile, archive: UserArchive): Promise<void> {
+    await this.deps.archiveLookupService?.backfillFileIdentity(file, archive.id);
+    this.deps.archiveLookupService?.indexSavedFile(file, {
+      sourceArchiveId: archive.id,
+      originalUrl: archive.originalUrl,
+    });
   }
 
   private isNotFoundError(error: unknown): boolean {

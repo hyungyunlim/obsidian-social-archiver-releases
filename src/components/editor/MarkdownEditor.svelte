@@ -297,7 +297,10 @@ $effect(() => {
 
   .markdown-editor {
     width: 100%;
+    box-sizing: border-box;
+    height: auto;
     min-height: 150px;
+    max-height: none;
     padding: 12px;
     border: 1px solid var(--background-modifier-border);
     border-radius: var(--radius-s);
@@ -305,11 +308,16 @@ $effect(() => {
     color: var(--text-normal);
     font-size: 14px;
     line-height: 1.5;
+    overflow-y: visible;
     transition: all 0.2s ease;
   }
 
   .markdown-editor :global(.ProseMirror) {
+    height: auto;
     min-height: 126px; /* 150px - (12px padding * 2) */
+    max-height: none;
+    overflow-y: visible;
+    overflow-wrap: anywhere;
   }
 
   .markdown-editor:focus-within {

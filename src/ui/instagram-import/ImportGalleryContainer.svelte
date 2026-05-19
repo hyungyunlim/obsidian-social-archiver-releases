@@ -147,10 +147,10 @@
   import { onMount, onDestroy } from 'svelte';
   import type { ImportPostPreview, StartImportFile } from '@/types/import';
   import {
-    extractMediaBytes,
     type ImportSelectionStore,
     type MediaPreviewService,
   } from '@/services/import-gallery';
+  import { ImportZipReader } from '@/services/import/ImportZipReader';
   import { IntersectionObserverManager } from '@/components/timeline/managers/IntersectionObserverManager';
   import {
     PreviewableCardRenderer,
@@ -234,6 +234,11 @@
     return n;
   }
 
+  function isPostSelected(postId: string): boolean {
+    void bumpVersion;
+    return selectionStore.isSelected(postId);
+  }
+
   // ---------------------------------------------------------------------------
   // Side-channel media resolution
   //
@@ -248,11 +253,83 @@
   const acquired = new Map<string, Set<string>>();
   /** Per-post in-flight extraction (so concurrent observer fires dedupe). */
   const inflight = new Map<string, Promise<void>>();
+  /** ZIP readers are expensive; keep one parsed central directory per part. */
+  const readersByZipKey = new Map<string, ImportZipReader>();
+  /** Extracted media blobs keyed by (zipKey, relativePath), reusable after LRU eviction. */
+  const mediaBlobs = new Map<string, Blob>();
+  /** Shared in-flight extraction keyed by (zipKey, relativePath). */
+  const mediaBlobInflight = new Map<string, Promise<Blob | null>>();
+  /** Terminal missing/corrupt media entries, so the renderer stops saying "loading". */
+  const unavailableMediaKeys = new Set<string>();
+
+  const MEDIA_KEY_SEP = '\u0000';
+  const INITIAL_MEDIA_KICK_MARGIN_PX = 600;
 
   function getResolvedUrl(postId: string, relativePath: string): string | undefined {
     // Reading mediaVersion inside a $derived caller subscribes to changes;
     // here we are inside a normal function so callers must do the touch.
     return resolvedMedia.get(postId)?.get(relativePath);
+  }
+
+  function makeMediaKey(zipKey: string, relativePath: string): string {
+    return `${zipKey}${MEDIA_KEY_SEP}${relativePath}`;
+  }
+
+  function readerForFile(file: StartImportFile, zipKey: string): ImportZipReader {
+    const existing = readersByZipKey.get(zipKey);
+    if (existing) return existing;
+    const reader = new ImportZipReader(file.blob);
+    readersByZipKey.set(zipKey, reader);
+    return reader;
+  }
+
+  async function extractMediaBlob(
+    file: StartImportFile,
+    zipKey: string,
+    relativePath: string,
+  ): Promise<Blob | null> {
+    const mediaKey = makeMediaKey(zipKey, relativePath);
+    if (unavailableMediaKeys.has(mediaKey)) return null;
+
+    const cached = mediaBlobs.get(mediaKey);
+    if (cached) return cached;
+
+    const existing = mediaBlobInflight.get(mediaKey);
+    if (existing) return existing;
+
+    const work = (async () => {
+      try {
+        const reader = readerForFile(file, zipKey);
+        const bytes = await reader.extractMediaFile(relativePath);
+        if (!bytes) {
+          unavailableMediaKeys.add(mediaKey);
+          return null;
+        }
+        const blob = new Blob([bytes]);
+        mediaBlobs.set(mediaKey, blob);
+        return blob;
+      } catch {
+        unavailableMediaKeys.add(mediaKey);
+        return null;
+      }
+    })();
+
+    mediaBlobInflight.set(mediaKey, work);
+    try {
+      return await work;
+    } finally {
+      mediaBlobInflight.delete(mediaKey);
+    }
+  }
+
+  function isMediaUnavailable(post: ImportPostPreview, raw: string | undefined | null): boolean {
+    if (!raw) return false;
+    if (/^(?:https?:|data:|blob:)/i.test(raw)) return false;
+    const file = filesByName.get(post.partFilename);
+    if (!file) return false;
+    const zipKey = makeZipKey(file);
+    const normalized = raw.replace(/^\.\//, '');
+    return unavailableMediaKeys.has(makeMediaKey(zipKey, normalized));
   }
 
   /**
@@ -296,17 +373,26 @@
       let touched = false;
 
       for (const rel of paths) {
+        const mediaKey = makeMediaKey(zipKey, rel);
+        if (unavailableMediaKeys.has(mediaKey)) continue;
+
         if (map.has(rel)) {
           // Already resolved — but we still need to bump retain count if we
           // released earlier on viewport-leave. We track per-acquire, so a
           // repeat enter ALWAYS calls acquire (LRU service handles dedup).
           if (!acquiredSet.has(rel)) {
             try {
+              const blob = await extractMediaBlob(file, zipKey, rel);
+              if (!blob) {
+                map.delete(rel);
+                touched = true;
+                continue;
+              }
               const url = await mediaPreviewService.acquire(
                 PREVIEW_JOB_ID,
                 zipKey,
                 rel,
-                file.blob,
+                blob,
               );
               map.set(rel, url);
               acquiredSet.add(rel);
@@ -318,13 +404,17 @@
           continue;
         }
         try {
-          const bytes = await extractMediaBytes(file.blob, rel);
-          if (!bytes) continue; // Missing media → leave placeholder.
+          const blob = await extractMediaBlob(file, zipKey, rel);
+          if (!blob) {
+            map.delete(rel);
+            touched = true;
+            continue;
+          }
           const url = await mediaPreviewService.acquire(
             PREVIEW_JOB_ID,
             zipKey,
             rel,
-            new Blob([bytes]),
+            blob,
           );
           map.set(rel, url);
           acquiredSet.add(rel);
@@ -470,28 +560,39 @@
     }
   }
 
+  function shouldKickInitialMediaLoad(element: HTMLElement): boolean {
+    if (!element.isConnected) return false;
+    const rect = element.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return false;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+    return (
+      rect.bottom >= -INITIAL_MEDIA_KICK_MARGIN_PX &&
+      rect.top <= viewportHeight + INITIAL_MEDIA_KICK_MARGIN_PX
+    );
+  }
+
   onMount(() => {
     // Observers are created at script-body time (see comment above) so they
     // are already wired by the time `bindCard` actions ran on initial mount.
-    // We additionally trigger an eager media load for any card already in
-    // viewport, because IntersectionObserver does NOT fire its callback for
-    // elements that intersect at observation time within Obsidian's modal
-    // (the modal contentEl is created off-document then attached, which can
-    // confuse the observer's initial intersection detection).
-    for (const [postId, element] of cardElements.entries()) {
-      const post = cardPosts.get(postId);
-      if (!post) continue;
-      // Best-effort kick: even if IO fires correctly we'll just dedup via
-      // the per-post `inflight` map.
-      void ensureMediaForPost(post);
-      // Re-arm the manager observer in case the initial observe() call's
-      // synchronous intersection check missed.
-      if (observerManager && element.isConnected) {
-        observerManager.observe(element, post.postData, () => {
-          handleEnter(element, post.postId);
-        });
+    // Best-effort initial kick only for cards near the viewport. This covers
+    // Obsidian modal attachment timing without accidentally extracting media
+    // for every card in a large ZIP package.
+    const kick = () => {
+      if (!observerManager) return;
+      for (const [postId, element] of cardElements.entries()) {
+        const post = cardPosts.get(postId);
+        if (!post) continue;
+        if (shouldKickInitialMediaLoad(element)) {
+          void ensureMediaForPost(post);
+        }
+        if (element.isConnected) {
+          observerManager.observe(element, post.postData, () => {
+            handleEnter(element, post.postId);
+          });
+        }
       }
-    }
+    };
+    window.requestAnimationFrame?.(kick) ?? window.setTimeout(kick, 0);
   });
 
   onDestroy(() => {
@@ -506,6 +607,10 @@
     cardElements.clear();
     cardPosts.clear();
     inflight.clear();
+    mediaBlobInflight.clear();
+    mediaBlobs.clear();
+    readersByZipKey.clear();
+    unavailableMediaKeys.clear();
     // Note: we DO NOT call mediaPreviewService.clearForJob('preview') — the
     // parent (ImportGallery) owns that lifecycle so the URL cache survives
     // pane round-trips (back to preflight and forward again).
@@ -555,11 +660,12 @@
    * whenever `mediaVersion` changes, so re-rendering picks up newly resolved
    * URLs. Reading `mediaVersion` here would be a no-op outside a $derived.
    */
-  function resolveMediaUrl(postId: string, raw: string | undefined | null): string | undefined {
+  function resolveMediaUrl(post: ImportPostPreview, raw: string | undefined | null): string | undefined {
     if (!raw) return undefined;
     if (/^(?:https?:|data:|blob:)/i.test(raw)) return raw;
+    if (isMediaUnavailable(post, raw)) return undefined;
     const normalized = raw.replace(/^\.\//, '');
-    return getResolvedUrl(postId, normalized);
+    return getResolvedUrl(post.postId, normalized);
   }
 
   /**
@@ -581,7 +687,8 @@
       // we resolve through our side-channel `Map`. We close over `currentPost`
       // (NOT `args.post`) so the renderer always uses the latest postId after
       // an `update`.
-      resolveMediaUrl: (raw) => resolveMediaUrl(currentPost.postId, raw),
+      resolveMediaUrl: (raw) => resolveMediaUrl(currentPost, raw),
+      isMediaUnavailable: (raw) => isMediaUnavailable(currentPost, raw),
       // No `app`/`component`: we don't have a vault file context yet — the
       // renderer's plain-text caption fallback is the correct behavior.
       // No `onCardClick`: per PRD §5.3 the gallery card body is non-interactive
@@ -623,10 +730,7 @@
 {:else}
   <div class="sa-ig-gc__sections">
     {#each groups as group (group.key)}
-      <!-- bumpVersion read explicitly in the comma expression so Svelte 5
-           establishes the dependency before the function call. Mirrors the
-           per-card `isSelected` pattern below. -->
-      {@const groupSelected = (bumpVersion, selectedCountForGroup(group))}
+      {@const groupSelected = selectedCountForGroup(group)}
       {@const allSelected = groupSelected === group.posts.length && group.posts.length > 0}
       <section class="sa-ig-group" aria-label={`Posts by ${group.name}`}>
         <header class="sa-ig-group__header">
@@ -657,11 +761,7 @@
 
         <div class="sa-ig-gc">
           {#each group.posts as post (post.postId)}
-            <!-- Subscribe to bumpVersion BEFORE calling selectionStore.isSelected
-                 so Svelte 5 establishes the dependency. The two reads must happen
-                 in the same reactive scope; combining them in a single $derived-style
-                 expression guarantees the subscription is recorded before the call. -->
-            {@const isSelected = (bumpVersion, selectionStore.isSelected(post.postId))}
+            {@const isSelected = isPostSelected(post.postId)}
             <div class="sa-ig-gc__cell" use:bindCard={post}>
               <ImportPostCardOverlay
                 postId={post.postId}

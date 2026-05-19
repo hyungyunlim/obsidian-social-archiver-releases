@@ -46,6 +46,7 @@ import {
   getPlatformSimpleIcon,
 } from '@/services/IconService';
 import type { CliMediaMode } from '@/plugin/cli/ArchiveCliService';
+import { attachAutosizingTextarea, resizeTextareaToContent } from '@/utils/textarea';
 
 /**
  * Map the modal's MediaDownloadMode to the CLI service's CliMediaMode.
@@ -94,6 +95,7 @@ export class ArchiveModal extends Modal {
   // User comment
   private comment: string = '';
   private commentTextarea!: HTMLTextAreaElement;
+  private detachCommentTextareaAutosize: (() => void) | null = null;
   private resolvedUrl: string | null = null;
   private validationRequestId = 0;
 
@@ -341,6 +343,9 @@ export class ArchiveModal extends Modal {
       const target = e.target as HTMLTextAreaElement;
       this.comment = target.value;
     });
+    this.detachCommentTextareaAutosize = attachAutosizingTextarea(this.commentTextarea, {
+      resizeOnAttach: false,
+    });
 
     // ============================================================================
     // Tag Selector Section (hidden by default, shown for post URLs)
@@ -455,6 +460,8 @@ export class ArchiveModal extends Modal {
     if (this.urlValidationTimer) {
       window.clearTimeout(this.urlValidationTimer);
     }
+    this.detachCommentTextareaAutosize?.();
+    this.detachCommentTextareaAutosize = null;
     const { contentEl } = this;
     contentEl.empty();
   }
@@ -945,6 +952,7 @@ export class ArchiveModal extends Modal {
 
       if (this.isValidUrl && !this.isResolving) {
         this.commentContainer.removeClass('sa-hidden');
+        window.requestAnimationFrame(() => resizeTextareaToContent(this.commentTextarea));
         this.tagSelectorContainer.removeClass('sa-hidden');
         this.postFooterEl.removeClass('sa-hidden');
         this.disclaimerEl.removeClass('sa-hidden');

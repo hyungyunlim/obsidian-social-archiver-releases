@@ -73,6 +73,7 @@ import { BatchGoogleMapsArchiver } from './plugin/jobs/BatchGoogleMapsArchiver';
 import { PostShareService } from './plugin/session/PostShareService';
 import { ArchiveLibrarySyncService } from './plugin/sync/ArchiveLibrarySyncService';
 import { ArchiveDeleteSyncService } from './plugin/sync/ArchiveDeleteSyncService';
+import { getForegroundSyncDeferral } from './plugin/sync/foregroundSyncDeferral';
 import { AnnotationOutboundService } from './plugin/sync/AnnotationOutboundService';
 import { ArchiveTagOutboundService } from './plugin/sync/ArchiveTagOutboundService';
 import { AuthorProfileOutboundService } from './plugin/sync/AuthorProfileOutboundService';
@@ -102,7 +103,10 @@ import { LocalLockRegistry } from './plugin/locks/LocalLockRegistry';
 import './styles/index.css';
 
 const FOREGROUND_SYNC_CATCH_UP_DEBOUNCE_MS = 750;
+const FOREGROUND_SYNC_CATCH_UP_USER_BUSY_RETRY_MS = 10_000;
+const FOREGROUND_SYNC_CATCH_UP_MEDIA_MAX_DEFER_MS = 30 * 60 * 1000;
 const FOREGROUND_SYNC_CATCH_UP_MIN_INTERVAL_MS = 30_000;
+type ForegroundSyncCatchUpTrigger = 'focus' | 'visibilitychange' | 'online';
 
 export default class SocialArchiverPlugin extends Plugin {
   settings: SocialArchiverSettings = DEFAULT_SETTINGS;
@@ -145,6 +149,7 @@ export default class SocialArchiverPlugin extends Plugin {
   private foregroundSyncCatchUpTimer?: number; // Debounced app foreground/resume catch-up timer
   private foregroundSyncCatchUpInFlight = false; // Single-flight guard for foreground catch-up
   private lastForegroundSyncCatchUpAt = 0; // Throttle frequent focus/visibility events
+  private foregroundSyncMediaDeferredSince?: number; // Media playback can defer foreground catch-up for up to 30 minutes
   private archiveQueueLocks = new Set<string>(); // Dedup guard for archive submission race conditions
   private wsPostBatchCount = 0; // Count of posts in current batch
   private currentCrawlWorkerJobId?: string; // Track workerJobId for current profile crawl batch
@@ -260,19 +265,30 @@ export default class SocialArchiverPlugin extends Plugin {
     }
   }
 
-  private scheduleForegroundSyncCatchUp(trigger: 'focus' | 'visibilitychange' | 'online'): void {
+  private scheduleForegroundSyncCatchUp(
+    trigger: ForegroundSyncCatchUpTrigger,
+    delayMs = FOREGROUND_SYNC_CATCH_UP_DEBOUNCE_MS,
+  ): void {
     if (!this.settings.authToken || !this.settings.syncClientId) return;
-    if (typeof document !== 'undefined' && activeDocument.hidden) return;
+    const doc = this.getActiveDomDocument();
+    if (doc?.hidden) return;
     if (this.foregroundSyncCatchUpTimer !== undefined) return;
 
     this.foregroundSyncCatchUpTimer = this.scheduleTrackedTimeout(() => {
       this.foregroundSyncCatchUpTimer = undefined;
       void this.runForegroundSyncCatchUp(trigger);
-    }, FOREGROUND_SYNC_CATCH_UP_DEBOUNCE_MS);
+    }, delayMs);
   }
 
-  private async runForegroundSyncCatchUp(trigger: string): Promise<void> {
+  private async runForegroundSyncCatchUp(trigger: ForegroundSyncCatchUpTrigger): Promise<void> {
     if (this.foregroundSyncCatchUpInFlight) return;
+    if (this.shouldDelayForegroundSyncCatchUp()) {
+      this.scheduleForegroundSyncCatchUp(
+        trigger,
+        FOREGROUND_SYNC_CATCH_UP_USER_BUSY_RETRY_MS,
+      );
+      return;
+    }
 
     const now = Date.now();
     if (now - this.lastForegroundSyncCatchUpAt < FOREGROUND_SYNC_CATCH_UP_MIN_INTERVAL_MS) {
@@ -329,6 +345,38 @@ export default class SocialArchiverPlugin extends Plugin {
         error instanceof Error ? error.message : String(error),
       );
     }
+  }
+
+  private getActiveDomDocument(): Document | null {
+    if (typeof activeDocument !== 'undefined') return activeDocument;
+    if (typeof document !== 'undefined') return document;
+    return null;
+  }
+
+  private shouldDelayForegroundSyncCatchUp(): boolean {
+    const doc = this.getActiveDomDocument();
+    if (!doc) return false;
+    if (doc.hidden) return true;
+
+    const deferral = getForegroundSyncDeferral(doc);
+    if (!deferral.shouldDefer) {
+      this.foregroundSyncMediaDeferredSince = undefined;
+      return false;
+    }
+
+    if (deferral.reason !== 'media-playback') {
+      this.foregroundSyncMediaDeferredSince = undefined;
+      return true;
+    }
+
+    const now = Date.now();
+    this.foregroundSyncMediaDeferredSince ??= now;
+    if (now - this.foregroundSyncMediaDeferredSince < FOREGROUND_SYNC_CATCH_UP_MEDIA_MAX_DEFER_MS) {
+      return true;
+    }
+
+    this.foregroundSyncMediaDeferredSince = undefined;
+    return false;
   }
 
   private currentObsidianRuntime(): 'desktop' | 'mobile' {
@@ -1392,6 +1440,9 @@ export default class SocialArchiverPlugin extends Plugin {
         archiveLookupService: this.archiveLookupService ?? null,
         convertUserArchiveToPostData: (archive) => this.convertUserArchiveToPostData(archive),
         saveSubscriptionPost: (post) => this.saveSubscriptionPost(post),
+        saveSubscriptionPostDetailed: (post) =>
+          this.subscriptionSyncService?.saveSubscriptionPostDetailed(post) ??
+          Promise.resolve({ status: 'failed' as const, reason: 'Subscription sync service not initialized' }),
         refreshTimelineView: () => this.refreshTimelineView(),
         localLockRegistry: this.localLockRegistry,
       });

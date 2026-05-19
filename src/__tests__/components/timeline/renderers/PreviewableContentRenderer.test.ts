@@ -165,6 +165,23 @@ describe('PreviewableContentRenderer', () => {
     expect(contentText?.querySelectorAll('p').length ?? 0).toBe(0);
   });
 
+  it('renders a user-created post title above the body', async () => {
+    const renderer = makeRenderer();
+    const wrapper = await renderer.renderContent(
+      container,
+      basePost({
+        platform: 'post',
+        title: 'Timeline title',
+        content: { text: 'Body text.' },
+        url: 'Social Archives/Post/2026/05/post-title.md',
+      }),
+    );
+
+    const title = wrapper.querySelector('.pcr-title-post');
+    expect(title?.textContent).toBe('Timeline title');
+    expect(wrapper.querySelector('.pcr-content-text')?.textContent).toContain('Body text.');
+  });
+
   // -------------------------------------------------------------------------
   // renderTextWithHashtags
   // -------------------------------------------------------------------------

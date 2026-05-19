@@ -316,7 +316,7 @@ export class CommentRenderer {
 
     // Render comment content with parsed links/mentions
     const commentContentSpan = contentSpan.createSpan();
-    commentContentSpan.addClass('sa-text-normal');
+    commentContentSpan.addClass('sa-text-normal', 'cr-comment-content');
     this.renderTextWithLinks(commentContentSpan, comment.content);
 
     // Time and likes (inline for both main comments and replies)

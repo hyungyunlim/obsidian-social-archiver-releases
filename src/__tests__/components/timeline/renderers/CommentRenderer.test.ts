@@ -78,4 +78,21 @@ describe('CommentRenderer', () => {
     expect(container.querySelectorAll('a.cr-link')).toHaveLength(0);
     expect(container.textContent).toContain('Bad Link');
   });
+
+  it('keeps multi-paragraph comment text in the preserved-content span', () => {
+    const container = document.createElement('div');
+    const comments: Comment[] = [
+      {
+        id: '1',
+        author: { name: 'Commenter', url: 'https://www.reddit.com/user/commenter' },
+        content: 'First paragraph.\n\nSecond paragraph with https://example.com/link',
+      },
+    ];
+
+    new CommentRenderer().render(container, comments, 'reddit');
+
+    const content = container.querySelector('.cr-comment-content');
+    expect(content?.textContent).toContain('First paragraph.\n\nSecond paragraph');
+    expect(content?.querySelector('a.cr-link')?.textContent).toBe('https://example.com/link');
+  });
 });

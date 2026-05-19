@@ -121,6 +121,25 @@ describe('PreviewableMediaRenderer.renderHeroImage — single item', () => {
     expect(placeholder?.textContent).toContain('Preview loading');
   });
 
+  it('renders a terminal unavailable placeholder when the host marks media unavailable', () => {
+    const renderer = new PreviewableMediaRenderer({
+      resolveMediaUrl: () => undefined,
+      isMediaUnavailable: (raw) => raw === 'media/missing.jpg',
+    });
+    renderer.renderHeroImage(
+      container,
+      basePost({ media: [{ type: 'image', url: 'media/missing.jpg' }] }),
+    );
+
+    expect(container.querySelector('img')).toBeNull();
+    const placeholder = container.querySelector('.pcr-media-carousel-placeholder');
+    expect(placeholder).toBeTruthy();
+    expect(placeholder?.textContent).toContain('Preview unavailable');
+    expect(placeholder?.classList.contains('pcr-media-hero-placeholder--unavailable')).toBe(
+      true,
+    );
+  });
+
   it('returns the wrapper element so callers can layer overlays', () => {
     const renderer = new PreviewableMediaRenderer(baseContext);
     const wrapper = renderer.renderHeroImage(
@@ -475,6 +494,27 @@ describe('PreviewableMediaRenderer.renderHeroImage — carousel', () => {
       frames[0]?.querySelector('.pcr-media-carousel-placeholder'),
     ).toBeTruthy();
     expect(frames[0]?.querySelector('img')).toBeNull();
+    expect(frames[1]?.querySelector('img')).toBeTruthy();
+  });
+
+  it('shows an unavailable placeholder for individual carousel frames known to be missing', () => {
+    const renderer = new PreviewableMediaRenderer({
+      resolveMediaUrl: (raw) => (raw === 'https://example.com/b.jpg' ? raw : undefined),
+      isMediaUnavailable: (raw) => raw === 'media/a.jpg',
+    });
+    renderer.renderHeroImage(
+      container,
+      basePost({
+        media: [
+          { type: 'image', url: 'media/a.jpg' },
+          { type: 'image', url: 'https://example.com/b.jpg' },
+        ],
+      }),
+    );
+
+    const frames = container.querySelectorAll('.pcr-media-carousel-frame');
+    const placeholder = frames[0]?.querySelector('.pcr-media-carousel-placeholder');
+    expect(placeholder?.textContent).toContain('Preview unavailable');
     expect(frames[1]?.querySelector('img')).toBeTruthy();
   });
 

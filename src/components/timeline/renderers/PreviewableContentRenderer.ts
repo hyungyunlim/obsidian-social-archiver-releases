@@ -127,6 +127,14 @@ export class PreviewableContentRenderer {
     const contentContainer = this.makeDiv(contentArea, 'mb-2 pcr-content');
 
     // Title strip — kept verbatim from PostCardRenderer.renderContent.
+    if (post.platform === 'post' && post.title) {
+      const titleEl = this.makeDiv(
+        contentContainer,
+        'post-title pcr-title-post',
+      );
+      titleEl.textContent = post.title;
+    }
+
     if (post.platform === 'youtube' && post.title) {
       const titleEl = this.makeDiv(
         contentContainer,

@@ -1968,8 +1968,10 @@ body.is-mobile .tc-selection-pill {
 
 /* Note edit textarea */
 .rmo-note-textarea {
+  box-sizing: border-box;
   min-height: 120px;
-  max-height: 300px;
+  max-height: min(60vh, 720px);
+  overflow-y: auto;
   resize: vertical;
   padding: 10px 12px;
   line-height: 1.6;

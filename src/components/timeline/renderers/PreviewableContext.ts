@@ -54,6 +54,18 @@ export interface PreviewContext {
   resolveMediaUrl: (raw: string | undefined | null) => string | undefined;
 
   /**
+   * Optional. Distinguishes "not loaded yet" from "known unavailable".
+   *
+   * `resolveMediaUrl(...) === undefined` normally means the host has not
+   * materialized the media URL yet, so the renderer shows a loading
+   * placeholder. Import ZIP previews can discover that a media entry is
+   * missing from the archive; in that case this callback returns true so the
+   * visual state becomes a terminal unavailable placeholder instead of
+   * "Preview loading..." forever.
+   */
+  isMediaUnavailable?: (raw: string | undefined | null) => boolean;
+
+  /**
    * Optional Obsidian `App`. When BOTH `app` and `component` are present,
    * captions render via `MarkdownRenderer` (full Obsidian markdown — wikilinks,
    * embeds, callouts). When either is missing, captions render as plain text

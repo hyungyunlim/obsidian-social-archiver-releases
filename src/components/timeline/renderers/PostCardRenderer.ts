@@ -58,6 +58,7 @@ import {
   type AIActionLanguageOption,
 } from '../aiActionLanguageOptions';
 import { stripContentVariantMetadataFooter } from '../../../utils/contentVariantMarkdown';
+import { attachAutosizingTextarea } from '../../../utils/textarea';
 import {
   formatRelativeTime as helperFormatRelativeTime,
   formatNumber as helperFormatNumber,
@@ -2222,6 +2223,13 @@ export class PostCardRenderer extends Component {
     }
 
     const contentContainer = contentArea.createDiv({ cls: 'mb-2' });
+
+    // For user-created posts: show the note title when present. The parser
+    // removes a leading H1 from body text so the card can render it once here.
+    if (post.platform === 'post' && post.title) {
+      const titleEl = contentContainer.createDiv({ cls: 'post-title pcr-title-post' });
+      titleEl.setText(post.title);
+    }
 
     // For YouTube: show video title at top of content area with title styling
     // Match embedded archive style: 📺 emoji + bold title
@@ -4815,6 +4823,10 @@ export class PostCardRenderer extends Component {
    */
   private editCommentInline(post: PostData, commentSection: HTMLElement): void {
     try {
+      if (commentSection.classList.contains('pcr-comment-section-editing')) {
+        return;
+      }
+
       const filePath = post.filePath;
       if (!filePath) {
         return;
@@ -4830,6 +4842,7 @@ export class PostCardRenderer extends Component {
       const restoreOriginalUI = () => {
         commentSection.empty();
         commentSection.addClass('pcr-comment-section');
+        commentSection.removeClass('pcr-comment-section-editing');
 
         const userName = this.plugin.settings.username || 'You';
         const archivedTime = this.getRelativeTime(post.archivedDate);
@@ -4915,6 +4928,9 @@ export class PostCardRenderer extends Component {
       // Textarea
       const textarea = commentSection.createEl('textarea', { cls: 'pcr-comment-textarea' });
       textarea.value = post.comment || '';
+      const detachTextareaAutosize = attachAutosizingTextarea(textarea);
+      textarea.addEventListener('click', (e) => e.stopPropagation());
+      textarea.addEventListener('mousedown', (e) => e.stopPropagation());
 
       // Focus and select
       window.setTimeout(() => {
@@ -4957,6 +4973,7 @@ export class PostCardRenderer extends Component {
 
           // Unregister scope
           this.app.keymap.popScope(editScope);
+          detachTextareaAutosize();
 
           // Restore UI manually (since we skip auto-refresh for UI-initiated changes)
           restoreOriginalUI();
@@ -4964,12 +4981,14 @@ export class PostCardRenderer extends Component {
           new Notice('Failed to save note');
           // Restore original on error
           this.app.keymap.popScope(editScope);
+          detachTextareaAutosize();
           restoreOriginalUI();
         }
       };
 
       const handleCancel = () => {
         this.app.keymap.popScope(editScope);
+        detachTextareaAutosize();
         restoreOriginalUI();
       };
 

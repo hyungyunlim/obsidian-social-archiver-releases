@@ -331,6 +331,10 @@ export class RealtimeEventBridge {
         const message = payload as { data?: { jobId?: string; targetClientId?: string }; jobId?: string; targetClientId?: string };
         const data = message.data ?? message;
         if (!data.jobId || !data.targetClientId) return;
+        console.debug('[Social Archiver] Transcription job requested via WebSocket:', {
+          jobId: data.jobId,
+          targetClientId: data.targetClientId,
+        });
         void this.deps.transcriptionJobProcessor?.handleRequestedJob(data.jobId, data.targetClientId);
       }),
       this.deps.events.on('ws:transcription_status_updated', (payload: unknown) => {

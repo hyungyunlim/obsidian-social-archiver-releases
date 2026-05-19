@@ -456,6 +456,15 @@ body.is-phone .pcr-content-variant-switch {
   word-break: break-word;
 }
 
+.pcr-title-post {
+  font-size: 18px;
+  font-weight: 650;
+  color: var(--text-normal);
+  margin-bottom: 10px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
 .pcr-title-youtube {
   font-size: 16px;
   font-weight: 600;
@@ -1304,6 +1313,8 @@ body.is-phone .pcr-content-variant-switch {
   font-size: 14px;
   line-height: 1.5;
   color: var(--text-normal);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .pcr-saved-header {
@@ -1346,6 +1357,7 @@ body.is-phone .pcr-content-variant-switch {
 
 .pcr-comment-textarea {
   width: 100%;
+  box-sizing: border-box;
   min-height: 60px;
   padding: 8px;
   font-family: var(--font-text);
@@ -1355,6 +1367,7 @@ body.is-phone .pcr-content-variant-switch {
   border-radius: var(--radius-s);
   background: var(--background-primary);
   color: var(--text-normal);
+  overflow-y: hidden;
   resize: vertical;
   margin-bottom: 8px;
 }

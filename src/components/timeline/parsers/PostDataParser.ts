@@ -30,6 +30,20 @@ interface ParsedMediaItem {
   altText?: string;
 }
 
+interface ParsedCommentHeader {
+  depth: number;
+  username: string;
+  url: string;
+  timestamp?: string;
+  likes?: number;
+}
+
+interface ParsedCommentEntry {
+  depth: number;
+  comment: Comment;
+  contentLines: string[];
+}
+
 /**
  * PostDataParser - Handles parsing of archived posts from vault files
  * Single Responsibility: Parse markdown files into PostData objects
@@ -385,7 +399,15 @@ export class PostDataParser {
         // Remove frontmatter for title extraction (avoid matching '---')
         const contentWithoutFrontmatter = content.replace(/^---\n[\s\S]*?\n---\n?/, '');
 
-        if (frontmatter.platform === 'youtube') {
+        if (frontmatter.platform === 'post') {
+          // User-created posts can use a leading H1 as their visible title.
+          // extractContentText already drops leading markdown headings from
+          // the body, so preserve that title in PostData for the card renderer.
+          const titleMatch = contentWithoutFrontmatter.match(/^\s*#\s+([^\n]+)(?:\n|$)/);
+          if (titleMatch?.[1]) {
+            title = titleMatch[1].trim();
+          }
+        } else if (frontmatter.platform === 'youtube') {
           const titleMatch = contentWithoutFrontmatter.match(/^#\s*📺\s*(.+)$/m);
           if (titleMatch?.[1]) {
             title = titleMatch[1].trim();
@@ -1000,89 +1022,156 @@ export class PostDataParser {
 
     const commentsSection = commentsMatch[1];
 
-    // Split by comment separator (--- between comments)
-    // Allow for multiple newlines around the separator
-    const commentBlocks = commentsSection.split(/\n+---\n+/).filter(block => block.trim());
+    // Split by top-level comment separator (`---` followed by another comment
+    // header). This avoids treating horizontal rules inside comment bodies as
+    // comment boundaries.
+    const commentBlocks = commentsSection.split(/\n+---\n+(?=\s*\*\*)/).filter(block => block.trim());
 
     for (const block of commentBlocks) {
-      const lines = block.split('\n');
-      if (lines.length === 0 || !lines[0]) continue;
-
-      // Parse main comment header: **[@username](url)** [· timestamp] [· likes]
-      // Timestamp is optional since Instagram comments don't have timestamp from API
-      // Support various Unicode separator dots: · (U+00B7), • (U+2022), ∙ (U+2219), and regular hyphen
-      const headerMatch = lines[0].match(/\*\*\[?@?([^\]]*)\]?\(?([^)]*)\)?\*\*(?:(?: [-·•∙] ([^·•∙\n]+))?)(?: [-·•∙] (\d+) likes)?/);
-      if (!headerMatch) continue;
-
-      const [, username, url, timestamp, likesStr] = headerMatch;
-
-      // Extract comment content (lines after header, before any replies)
-      const contentLines: string[] = [];
-      let i = 1;
-      while (i < lines.length) {
-        const line = lines[i];
-        if (!line || line.trim().startsWith('↳')) break;
-        contentLines.push(line);
-        i++;
+      const parsed = this.parseCommentBlock(block);
+      if (parsed) {
+        comments.push(parsed);
       }
-      const content = contentLines.join('\n').trim();
-
-      // Parse replies (lines starting with ↳)
-      const replies: Comment[] = [];
-      while (i < lines.length) {
-        const currentLine = lines[i];
-        if (currentLine && currentLine.trim().startsWith('↳')) {
-          // Reply header: ↳ **[@username](url)** [· timestamp] [· likes]
-          // Support various Unicode separator dots: · (U+00B7), • (U+2022), ∙ (U+2219), and regular hyphen
-          const replyHeaderMatch = currentLine.match(/↳ \*\*\[?@?([^\]]*)\]?\(?([^)]*)\)?\*\*(?:(?: [-·•∙] ([^·•∙\n]+))?)(?: [-·•∙] (\d+) likes)?/);
-          if (replyHeaderMatch) {
-            const [, replyUsername, replyUrl, replyTimestamp, replyLikesStr] = replyHeaderMatch;
-            i++;
-
-            // Get reply content (lines starting with "  " but not "  ↳")
-            const replyContentLines: string[] = [];
-            while (i < lines.length) {
-              const line = lines[i];
-              if (!line || !line.startsWith('  ') || line.trim().startsWith('↳')) break;
-              replyContentLines.push(line.substring(2)); // Remove the 2-space indent
-              i++;
-            }
-            const replyContent = replyContentLines.join('\n').trim();
-
-            replies.push({
-              id: `reply-${Date.now()}-${Math.random()}`,
-              author: {
-                name: replyUsername || 'Unknown',
-                url: replyUrl || '',
-                username: replyUsername,
-              },
-              content: replyContent,
-              timestamp: replyTimestamp?.trim() || undefined,
-              likes: replyLikesStr ? parseInt(replyLikesStr) : undefined,
-            });
-          } else {
-            i++;
-          }
-        } else {
-          i++;
-        }
-      }
-
-      comments.push({
-        id: `comment-${Date.now()}-${Math.random()}`,
-        author: {
-          name: username || 'Unknown',
-          url: url || '',
-          username: username,
-        },
-        content,
-        timestamp: timestamp?.trim() || undefined,
-        likes: likesStr ? parseInt(likesStr) : undefined,
-        replies: replies.length > 0 ? replies : undefined,
-      });
     }
 
     return comments;
+  }
+
+  private parseCommentBlock(block: string): Comment | null {
+    const lines = block.split('\n');
+    const stack: ParsedCommentEntry[] = [];
+    let root: ParsedCommentEntry | null = null;
+    let current: ParsedCommentEntry | null = null;
+
+    const finalize = (entry: ParsedCommentEntry | null): void => {
+      if (!entry) return;
+      entry.comment.content = this.normalizeCommentContentLines(entry.contentLines, entry.depth);
+    };
+
+    for (const line of lines) {
+      const parsedHeader = this.parseCommentHeaderLine(line);
+      const isAllowedHeader = parsedHeader && (parsedHeader.depth > 0 || !root);
+
+      if (parsedHeader && isAllowedHeader) {
+        finalize(current);
+
+        const comment: Comment = {
+          id: `${parsedHeader.depth > 0 ? 'reply' : 'comment'}-${Date.now()}-${Math.random()}`,
+          author: {
+            name: parsedHeader.username || 'Unknown',
+            url: parsedHeader.url,
+            username: parsedHeader.username,
+          },
+          content: '',
+          timestamp: parsedHeader.timestamp,
+          likes: parsedHeader.likes,
+        };
+
+        const entry: ParsedCommentEntry = {
+          depth: parsedHeader.depth,
+          comment,
+          contentLines: [],
+        };
+
+        if (parsedHeader.depth === 0) {
+          root = entry;
+          stack.length = 0;
+        } else {
+          while (stack.length > 0 && stack[stack.length - 1]!.depth >= parsedHeader.depth) {
+            stack.pop();
+          }
+          const parent = stack[stack.length - 1] ?? root;
+          if (parent) {
+            parent.comment.replies = parent.comment.replies ?? [];
+            parent.comment.replies.push(comment);
+          } else {
+            root = entry;
+          }
+        }
+
+        stack.push(entry);
+        current = entry;
+        continue;
+      }
+
+      if (!current && !line.trim()) {
+        continue;
+      }
+
+      if (current) {
+        current.contentLines.push(line);
+      }
+    }
+
+    finalize(current);
+    return root?.comment ?? null;
+  }
+
+  private parseCommentHeaderLine(line: string): ParsedCommentHeader | null {
+    const replyMatch = line.match(/^(\s*)↳\s+(.+)$/);
+    const depth = replyMatch ? Math.max(1, Math.floor((replyMatch[1]?.length ?? 0) / 2)) : 0;
+    const headerText = (replyMatch ? replyMatch[2] : line).trim();
+
+    if (!replyMatch && line !== line.trimStart()) {
+      return null;
+    }
+
+    const boldMatch = headerText.match(/^\*\*([\s\S]+?)\*\*(?:\s*(.*))?$/);
+    if (!boldMatch?.[1]) {
+      return null;
+    }
+
+    const { username, url } = this.parseCommentAuthorToken(boldMatch[1]);
+    const metadata = this.parseCommentMetadata(boldMatch[2] ?? '');
+
+    return {
+      depth,
+      username,
+      url,
+      timestamp: metadata.timestamp,
+      likes: metadata.likes,
+    };
+  }
+
+  private parseCommentAuthorToken(token: string): { username: string; url: string } {
+    const trimmed = token.trim();
+    const linkMatch = trimmed.match(/^\[([^\]]+)\]\(([^)]*)\)$/);
+    const label = (linkMatch?.[1] ?? trimmed).trim();
+    const url = (linkMatch?.[2] ?? '').trim();
+    return {
+      username: label.replace(/^@/, ''),
+      url,
+    };
+  }
+
+  private parseCommentMetadata(rawMetadata: string): { timestamp?: string; likes?: number } {
+    const parts = rawMetadata
+      .trim()
+      .split(/\s+[·•∙]\s+|\s+-\s+/)
+      .map(part => part.trim())
+      .filter(Boolean);
+
+    let timestamp: string | undefined;
+    let likes: number | undefined;
+
+    for (const part of parts) {
+      const likesMatch = part.match(/^(\d+)\s+likes?$/i);
+      if (likesMatch?.[1]) {
+        likes = parseInt(likesMatch[1], 10);
+      } else if (!timestamp) {
+        timestamp = part;
+      }
+    }
+
+    return { timestamp, likes };
+  }
+
+  private normalizeCommentContentLines(lines: string[], depth: number): string {
+    const indent = '  '.repeat(depth);
+    return lines
+      .map(line => (indent && line.startsWith(indent) ? line.slice(indent.length) : line))
+      .join('\n')
+      .trim();
   }
 
   /**

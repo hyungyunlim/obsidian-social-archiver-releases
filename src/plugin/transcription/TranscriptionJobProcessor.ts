@@ -89,6 +89,57 @@ const LEASE_RENEW_RATIO = 0.5;
 const AUDIO_EXTENSIONS = new Set(['mp3', 'm4a', 'ogg', 'wav', 'flac', 'aac', 'wma']);
 const VIDEO_EXTENSIONS = new Set(['mp4', 'webm', 'mov', 'avi', 'mkv', 'm4v']);
 
+export function upsertDownloadedVideoEmbed(content: string, localVideoPath: string): string {
+  const normalizedPath = normalizePath(localVideoPath).replace(/^\/+/, '');
+  if (!normalizedPath) return content;
+  if (content.includes(normalizedPath) || content.includes(encodeURI(normalizedPath))) return content;
+
+  const embed = `![[${normalizedPath}]]`;
+  const frontmatterMatch = content.match(/^---\n[\s\S]*?\n---\n?/);
+  const bodyStart = frontmatterMatch ? frontmatterMatch[0].length : 0;
+  const body = content.slice(bodyStart);
+  const headingMatch = body.match(/^\s*#\s+[^\n]+\n+/);
+  const insertAt = bodyStart + (headingMatch ? headingMatch[0].length : 0);
+  const before = content.slice(0, insertAt).replace(/\s*$/, '\n\n');
+  const after = content.slice(insertAt).replace(/^\s*/, '');
+  return after ? `${before}${embed}\n\n${after}` : `${before}${embed}\n`;
+}
+
+function applyDownloadedVideoFrontmatter(
+  frontmatter: Record<string, unknown>,
+  sourceUrl: string,
+  localVideoPath: string,
+): void {
+  const normalizedPath = normalizePath(localVideoPath).replace(/^\/+/, '');
+  const downloadedUrls = Array.isArray(frontmatter.downloadedUrls) ? [...frontmatter.downloadedUrls] : [];
+  for (const marker of [sourceUrl, `downloaded:${sourceUrl}`]) {
+    if (!downloadedUrls.includes(marker)) downloadedUrls.push(marker);
+  }
+  frontmatter.downloadedUrls = downloadedUrls;
+  frontmatter.videoDownloaded = true;
+  frontmatter.videoLocalPath = normalizedPath;
+  frontmatter.localVideoPath = normalizedPath;
+
+  const media = Array.isArray(frontmatter.media) ? [...frontmatter.media] : [];
+  const mediaMarker = `video:${normalizedPath}`;
+  const hasLocalVideoMarker = media.some((item) => {
+    if (typeof item === 'string') {
+      const trimmed = item.trim();
+      return trimmed === mediaMarker || trimmed === normalizedPath || trimmed.endsWith(`:${normalizedPath}`);
+    }
+    if (!item || typeof item !== 'object') return false;
+    const record = item as Record<string, unknown>;
+    return ['localPath', 'path', 'src', 'url'].some((key) => record[key] === normalizedPath);
+  });
+  if (!hasLocalVideoMarker) {
+    frontmatter.media = [...media, mediaMarker];
+  }
+
+  delete frontmatter.videoDownloadFailed;
+  delete frontmatter.videoDownloadFailedCount;
+  delete frontmatter.videoDownloadFailedUrls;
+}
+
 export class TranscriptionJobProcessor {
   private readonly queue: string[] = [];
   private readonly queued = new Set<string>();
@@ -123,6 +174,12 @@ export class TranscriptionJobProcessor {
     if (!apiClient || !clientId || !this.deps.settings().authToken) return;
 
     const response = await apiClient.getAvailableTranscriptionJobs();
+    if (response.jobs.length > 0) {
+      console.debug('[TranscriptionJobProcessor] Draining available transcription jobs:', {
+        count: response.jobs.length,
+        clientId,
+      });
+    }
     for (const job of response.jobs) {
       this.enqueue(job.jobId);
     }
@@ -130,7 +187,12 @@ export class TranscriptionJobProcessor {
   }
 
   async handleRequestedJob(jobId: string, targetClientId: string): Promise<void> {
-    if (targetClientId !== this.deps.settings().syncClientId) return;
+    const clientId = this.deps.settings().syncClientId;
+    if (targetClientId !== clientId) return;
+    console.debug('[TranscriptionJobProcessor] Handling requested transcription job:', {
+      jobId,
+      clientId,
+    });
     this.enqueue(jobId);
     await this.processQueue();
   }
@@ -436,6 +498,10 @@ export class TranscriptionJobProcessor {
     const cache = this.deps.app.metadataCache.getFileCache(file);
     const frontmatter = (cache?.frontmatter as Record<string, unknown> | undefined) || {};
     const urls = this.deps.mediaPathResolver().extractDownloadableVideoUrls(frontmatter);
+    if (urls.length === 0) {
+      const fallbackUrl = this.extractOriginalDownloadUrl(frontmatter);
+      if (fallbackUrl) urls.push(fallbackUrl);
+    }
     const url = urls[0];
     if (!url) return null;
 
@@ -450,19 +516,22 @@ export class TranscriptionJobProcessor {
       if (!downloaded) return null;
       await this.withMarkdownWriteLock(context.job.archiveId, async () => {
         await this.deps.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-          const downloadedUrls = Array.isArray(fm.downloadedUrls) ? [...fm.downloadedUrls] : [];
-          if (!downloadedUrls.includes(url)) downloadedUrls.push(url);
-          fm.downloadedUrls = downloadedUrls;
-          fm.videoDownloaded = true;
-          delete fm.videoDownloadFailed;
-          delete fm.videoDownloadFailedCount;
+          applyDownloadedVideoFrontmatter(fm, url, downloaded);
         });
+        await this.processFile(file, (content) => upsertDownloadedVideoEmbed(content, downloaded));
       }, context.abortController.signal);
       return downloaded;
     } catch (error) {
       console.warn('[TranscriptionJobProcessor] Media download failed:', safeError(error));
       return null;
     }
+  }
+
+  private extractOriginalDownloadUrl(frontmatter: Record<string, unknown>): string | null {
+    const originalUrl = typeof frontmatter.originalUrl === 'string' ? frontmatter.originalUrl.trim() : '';
+    if (!originalUrl) return null;
+    if (!/youtube\.com|youtu\.be|tiktok\.com/i.test(originalUrl)) return null;
+    return originalUrl;
   }
 
   private async writeTranscriptResult(

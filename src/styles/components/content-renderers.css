@@ -877,6 +877,12 @@ body.is-phone .acb-icon-btn.acb-icon-btn {
   vertical-align: middle;
 }
 
+/* Preserve archived comment paragraph breaks. */
+.cr-comment-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* Link styling */
 .cr-link {
   text-decoration: none;

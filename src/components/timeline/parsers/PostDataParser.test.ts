@@ -254,6 +254,63 @@ title: 카카오는 팔고 &mdash; 네이버는 물러서고
   });
 });
 
+describe('PostDataParser - user post titles', () => {
+  it('extracts a platform: post title from frontmatter', async () => {
+    const markdown = `---
+platform: post
+author: hyungyunlim
+published: 2026-05-19
+title: "Timeline title"
+---
+
+Body text.
+`;
+
+    const vault = {
+      cachedRead: vi.fn().mockResolvedValue(markdown),
+    } as any;
+    const parser = new PostDataParser(vault);
+    const file = {
+      basename: 'post-title',
+      path: 'Social Archives/Post/2026/05/post-title.md',
+      stat: { ctime: Date.now() },
+    } as any;
+
+    const post = await parser.parseFile(file);
+
+    expect(post?.title).toBe('Timeline title');
+    expect(post?.content.text).toBe('Body text.');
+  });
+
+  it('extracts a platform: post title from a leading H1 and removes it from body text', async () => {
+    const markdown = `---
+platform: post
+author: hyungyunlim
+published: 2026-05-19
+---
+
+# H1 timeline title
+
+Body text after title.
+`;
+
+    const vault = {
+      cachedRead: vi.fn().mockResolvedValue(markdown),
+    } as any;
+    const parser = new PostDataParser(vault);
+    const file = {
+      basename: 'post-h1-title',
+      path: 'Social Archives/Post/2026/05/post-h1-title.md',
+      stat: { ctime: Date.now() },
+    } as any;
+
+    const post = await parser.parseFile(file);
+
+    expect(post?.title).toBe('H1 timeline title');
+    expect(post?.content.text).toBe('Body text after title.');
+  });
+});
+
 describe('PostDataParser - extractContentText excludes media-only sections', () => {
   const parser = new PostDataParser({} as any);
 
@@ -360,6 +417,73 @@ Second paragraph after horizontal rule.
     const content = parser.extractContentText(markdown);
     expect(content).toContain('First paragraph.');
     expect(content).toContain('Second paragraph after horizontal rule.');
+  });
+});
+
+describe('PostDataParser - extractComments', () => {
+  const parser = new PostDataParser({} as any);
+
+  it('preserves multi-paragraph Reddit comments before nested replies', () => {
+    const markdown = `---
+platform: reddit
+author: datahoarderprime
+published: 2026-05-18
+---
+
+Post body.
+
+---
+
+## 💬 Comments
+
+**kepano** · 2026-05-18 12:05 · 1 likes
+It's amazing how much heart and soul Zsolt has poured into Excalidraw.
+
+Before I joined Obsidian I was a community member making my own themes and plugins.
+
+The video is pretty long, but I'll try to respond to all the main points.
+
+I'm really happy to see that Zsolt was able to update Excalidraw within a few days.
+
+  ↳ **Valuable_Cow2596** · 2026-05-18 13:31 · 60 likes
+  As always, thank you for what you do.
+
+  ↳ **ForgotMyPreviousPass** · 2026-05-18 15:18 · 27 likes
+  Just a clarification.
+
+---
+
+**Platform:** Reddit | **Author:** datahoarderprime | **Published:** 2026-05-18
+`;
+
+    const comments = parser.extractComments(markdown);
+
+    expect(comments).toHaveLength(1);
+    expect(comments[0]?.author.name).toBe('kepano');
+    expect(comments[0]?.content).toContain('Before I joined Obsidian');
+    expect(comments[0]?.content).toContain("The video is pretty long");
+    expect(comments[0]?.content).toContain("I'm really happy");
+    expect(comments[0]?.replies).toHaveLength(2);
+    expect(comments[0]?.replies?.[0]?.author.name).toBe('Valuable_Cow2596');
+  });
+
+  it('preserves multi-paragraph reply content', () => {
+    const markdown = `## 💬 Comments
+
+**alice**
+Parent.
+
+  ↳ **bob**
+  First reply paragraph.
+
+  Second reply paragraph.
+`;
+
+    const comments = parser.extractComments(markdown);
+
+    expect(comments[0]?.replies?.[0]?.content).toBe(
+      'First reply paragraph.\n\nSecond reply paragraph.'
+    );
   });
 });
 

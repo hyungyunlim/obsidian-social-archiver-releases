@@ -29,6 +29,7 @@ import {
   type AIActionLanguageOption,
 } from '../aiActionLanguageOptions';
 import { stripContentVariantMetadataFooter } from '../../../utils/contentVariantMarkdown';
+import { attachAutosizingTextarea, resizeTextareaToContent } from '../../../utils/textarea';
 import {
   ReaderTypographyPanel,
   FONT_SIZE,
@@ -1240,6 +1241,7 @@ export class ReaderModeOverlay {
     textarea.addClass('sa-text-md');
     textarea.addClass('rmo-note-textarea');
     body.appendChild(textarea);
+    const detachTextareaAutosize = attachAutosizingTextarea(textarea);
 
     // Footer
     const footer = activeDocument.createElement('div');
@@ -1308,6 +1310,7 @@ export class ReaderModeOverlay {
 
     // Focus textarea after render
     window.requestAnimationFrame(() => {
+      resizeTextareaToContent(textarea);
       textarea.focus();
       // Place cursor at end
       textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
@@ -1316,6 +1319,7 @@ export class ReaderModeOverlay {
     // --- Handlers ---
 
     const closeModal = () => {
+      detachTextareaAutosize();
       overlay.remove();
       window.setTimeout(() => { this.modalOpen = false; }, 0);
     };

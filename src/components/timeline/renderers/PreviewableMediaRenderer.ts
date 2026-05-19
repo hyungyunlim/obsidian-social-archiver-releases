@@ -360,7 +360,7 @@ export class PreviewableMediaRenderer {
   /**
    * Populate a frame with the right element type for the given media item:
    *
-   *   - resolve fails → "Preview loading…" placeholder
+   *   - resolve fails → loading/unavailable placeholder
    *   - image → <img loading="lazy">
    *   - video + isCurrent → <video controls playsinline poster=...>
    *   - video + !isCurrent → cheap <img> poster (upgraded later via
@@ -378,7 +378,7 @@ export class PreviewableMediaRenderer {
         // first; `renderVideoElement` separately resolves the poster.
         const videoSrc = this.pickVideoSrc(item);
         if (!videoSrc) {
-          this.renderPlaceholder(frame);
+          this.renderPlaceholder(frame, this.isUnavailable(item.url));
           return;
         }
         this.renderVideoElement(frame, item, videoSrc);
@@ -388,7 +388,10 @@ export class PreviewableMediaRenderer {
       // the poster URL, which is exactly what we want here.
       const posterSrc = this.pickMediaSrc(item);
       if (!posterSrc) {
-        this.renderPlaceholder(frame);
+        this.renderPlaceholder(
+          frame,
+          this.isUnavailable(item.thumbnail, item.thumbnailUrl, item.url),
+        );
         return;
       }
       this.renderImageElement(frame, item, posterSrc, /* lazy */ true);
@@ -397,7 +400,10 @@ export class PreviewableMediaRenderer {
     // Plain image frame.
     const src = this.pickMediaSrc(item);
     if (!src) {
-      this.renderPlaceholder(frame);
+      this.renderPlaceholder(
+        frame,
+        this.isUnavailable(item.thumbnail, item.thumbnailUrl, item.url),
+      );
       return;
     }
     this.renderImageElement(frame, item, src, /* lazy */ !isCurrent);
@@ -492,11 +498,14 @@ export class PreviewableMediaRenderer {
     frame.appendChild(video);
   }
 
-  private renderPlaceholder(frame: HTMLElement): void {
+  private renderPlaceholder(frame: HTMLElement, unavailable = false): void {
     const placeholder = this.makeDiv(
       frame,
       'pcr-media-carousel-placeholder pcr-media-hero-placeholder',
     );
+    if (unavailable) {
+      placeholder.classList.add('pcr-media-hero-placeholder--unavailable');
+    }
     placeholder.setCssStyles({
       width: '100%',
       height: '100%',
@@ -505,9 +514,11 @@ export class PreviewableMediaRenderer {
       justifyContent: 'center',
       color: 'var(--text-muted)',
       fontSize: 'var(--font-ui-smaller, 0.8rem)',
+      textAlign: 'center',
+      padding: '0 12px',
     });
     const label = activeDocument.createElement('span');
-    label.textContent = 'Preview loading…';
+    label.textContent = unavailable ? 'Preview unavailable' : 'Preview loading…';
     placeholder.appendChild(label);
   }
 
@@ -1193,6 +1204,11 @@ export class PreviewableMediaRenderer {
       this.context.resolveMediaUrl(m.thumbnailUrl) ||
       this.context.resolveMediaUrl(m.url)
     );
+  }
+
+  private isUnavailable(...raws: Array<string | undefined | null>): boolean {
+    if (!this.context.isMediaUnavailable) return false;
+    return raws.some((raw) => this.context.isMediaUnavailable?.(raw) === true);
   }
 
   private makeDiv(parent: HTMLElement, classes?: string): HTMLDivElement {
