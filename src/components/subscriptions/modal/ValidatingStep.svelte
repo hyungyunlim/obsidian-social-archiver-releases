@@ -12,8 +12,13 @@
  */
 
 import type { ValidatingStepProps, WizardError } from './types';
+import { Notice } from 'obsidian';
 import { ProfileValidationPoller, ProfileValidationError } from '@/services/ProfileValidationPoller';
 import { getValidationErrorMessage } from '@/types/validation-errors';
+import {
+  isSubscriptionPaywallError,
+  SUBSCRIPTION_PAYWALL_NOTICE_MESSAGE,
+} from '@/utils/subscriptionPaywall';
 
 let {
   profileUrl,
@@ -65,6 +70,13 @@ async function startValidation(): Promise<void> {
 
     if (!triggerResponse.ok) {
       const errorData = await triggerResponse.json().catch(() => ({}));
+      if (isSubscriptionPaywallError(errorData.error)) {
+        new Notice(SUBSCRIPTION_PAYWALL_NOTICE_MESSAGE, 8000);
+        throw new ProfileValidationError(
+          'SUBSCRIPTION_REQUIRED',
+          SUBSCRIPTION_PAYWALL_NOTICE_MESSAGE
+        );
+      }
       throw new ProfileValidationError(
         errorData.error?.code || 'CRAWL_FAILED',
         errorData.error?.message || `HTTP ${triggerResponse.status}`

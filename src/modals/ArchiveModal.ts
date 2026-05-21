@@ -5,7 +5,7 @@ import type { MediaDownloadMode } from '../types/settings';
 import { getVaultOrganizationStrategy } from '../types/settings';
 import { isAuthenticated } from '../utils/auth';
 import { TAG_NAME_MAX_LENGTH } from '@/types/tag';
-import { isValidTagName, normalizeTagName, sanitizeTagNames, validateTagName } from '@/utils/tags';
+import { isValidTagName, normalizeTagName, validateTagName } from '@/utils/tags';
 import { validateAndDetectPlatform } from '@/schemas/platforms';
 import { resolvePinterestUrl } from '@/utils/pinterest';
 import { analyzeUrl, type UrlAnalysisResult } from '@/utils/urlAnalysis';
@@ -47,6 +47,10 @@ import {
 } from '@/services/IconService';
 import type { CliMediaMode } from '@/plugin/cli/ArchiveCliService';
 import { attachAutosizingTextarea, resizeTextareaToContent } from '@/utils/textarea';
+import {
+  isSubscriptionPaywallError,
+  SUBSCRIPTION_PAYWALL_NOTICE_MESSAGE,
+} from '@/utils/subscriptionPaywall';
 
 /**
  * Map the modal's MediaDownloadMode to the CLI service's CliMediaMode.
@@ -182,6 +186,15 @@ export class ArchiveModal extends Modal {
         this.quickPreviewService = null;
       }
     }
+  }
+
+  private showSubscriptionPaywallNotice(error: unknown): boolean {
+    if (!isSubscriptionPaywallError(error)) {
+      return false;
+    }
+
+    new Notice(SUBSCRIPTION_PAYWALL_NOTICE_MESSAGE, 8000);
+    return true;
   }
 
   onOpen(): void {
@@ -1970,6 +1983,9 @@ export class ArchiveModal extends Modal {
 
     } catch (error) {
       console.error('[ArchiveModal] Profile crawl failed:', error);
+      if (this.subscribeEnabled) {
+        this.showSubscriptionPaywallNotice(error);
+      }
 
       // Parse and render error with retry option
       const crawlError = parseCrawlError(error);
@@ -2322,6 +2338,7 @@ export class ArchiveModal extends Modal {
 
     } catch (error) {
       console.error('[ArchiveModal] Subscribe only failed:', error);
+      this.showSubscriptionPaywallNotice(error);
 
       // Parse and render error with retry option
       const crawlError = parseCrawlError(error);
@@ -3390,7 +3407,7 @@ export class ArchiveModal extends Modal {
               if (comments.length > 0) {
                 // Extract internal IDs from comments
                 const allInternalIds: string[] = [];
-                const collectInternalIds = (commentList: typeof comments) => {
+                const collectInternalIds = (commentList: typeof comments): void => {
                   for (const c of commentList) {
                     allInternalIds.push(...BrunchLocalService.extractInternalIds(c.content));
                     if (c.authorUrl) {
@@ -3780,7 +3797,7 @@ export class ArchiveModal extends Modal {
     const stepsContainer = contentEl.createDiv();
     stepsContainer.addClass('am-unauth-steps');
 
-    const createStep = (number: string, text: string) => {
+    const createStep = (number: string, text: string): void => {
       const step = stepsContainer.createDiv();
       step.addClass('am-unauth-step');
 

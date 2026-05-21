@@ -1,5 +1,5 @@
 <script lang="ts">
-import { Notice } from 'obsidian';
+import { Notice, Platform } from 'obsidian';
 import QRCode from 'qrcode';
 import type SocialArchiverPlugin from '../main';
 import type { BillingUsageSummary, SocialArchiverSettings, PlatformTiming } from '../types/settings';
@@ -333,6 +333,15 @@ function validateUsername(username: string): boolean {
   return usernameRegex.test(username);
 }
 
+function getPlatformIdentifier(): string {
+  if (Platform.isDesktop) {
+    if (Platform.isMacOS) return 'macos';
+    if (Platform.isWin) return 'windows';
+    return 'linux';
+  }
+  return Platform.isIosApp ? 'ios' : 'android';
+}
+
 /**
  * Handle account creation (signup)
  */
@@ -359,12 +368,16 @@ async function handleCreateAccount() {
     const response = await fetch(`${plugin.settings.workerUrl}/api/auth/reserve-username`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-Client': 'obsidian-plugin',
+        'X-Client-Version': plugin.manifest.version,
+        'X-Platform': getPlatformIdentifier()
       },
       body: JSON.stringify({
         email: normalizedEmail,
         username: normalizedUsername,
-        deviceId: plugin.settings.deviceId
+        deviceId: plugin.settings.deviceId,
+        source: 'obsidian'
       })
     });
 

@@ -24,6 +24,7 @@ export type ValidationErrorCode =
   | 'VALIDATION_TIMEOUT'
   | 'NETWORK_ERROR'
   | 'CRAWL_FAILED'
+  | 'SUBSCRIPTION_REQUIRED'
   | 'UNSUPPORTED_PLATFORM'
   | 'INVALID_RESPONSE'
   | 'VALIDATION_FAILED'
@@ -109,6 +110,13 @@ export const VALIDATION_ERROR_MESSAGES: Record<ValidationErrorCode, ValidationEr
     suggestion: 'Please try again in a few moments.',
     canRetry: true,
     retryDelay: 10,
+  },
+
+  SUBSCRIPTION_REQUIRED: {
+    title: 'Premium Required',
+    message: 'Profile subscriptions now require Premium.',
+    suggestion: 'Existing subscriptions remain in your list, but creating or resuming subscriptions requires Premium.',
+    canRetry: false,
   },
 
   UNSUPPORTED_PLATFORM: {

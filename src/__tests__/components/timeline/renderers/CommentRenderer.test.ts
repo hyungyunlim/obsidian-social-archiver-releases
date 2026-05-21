@@ -95,4 +95,82 @@ describe('CommentRenderer', () => {
     expect(content?.textContent).toContain('First paragraph.\n\nSecond paragraph');
     expect(content?.querySelector('a.cr-link')?.textContent).toBe('https://example.com/link');
   });
+
+  it('renders very deep comment trees fully by default without a visible depth control', () => {
+    const container = document.createElement('div');
+    const comments: Comment[] = [
+      {
+        id: 'root',
+        author: { name: 'RootAuthor', url: 'https://www.reddit.com/user/root' },
+        content: 'Root comment',
+        replies: [
+          {
+            id: 'level1',
+            author: { name: 'LevelOneAuthor', url: 'https://www.reddit.com/user/one' },
+            content: 'Level 1',
+            replies: [
+              {
+                id: 'level2',
+                author: { name: 'LevelTwoAuthor', url: 'https://www.reddit.com/user/two' },
+                content: 'Level 2',
+                replies: [
+                  {
+                    id: 'level3',
+                    author: { name: 'LevelThreeAuthor', url: 'https://www.reddit.com/user/three' },
+                    content: 'Level 3',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    new CommentRenderer().render(container, comments, 'reddit');
+
+    expect(container.textContent).toContain('LevelTwoAuthor');
+    expect(container.textContent).toContain('LevelThreeAuthor');
+    expect(container.querySelector('.cr-depth-btn')).toBeNull();
+  });
+
+  it('collapses and expands a single branch without removing the parent comment', () => {
+    const container = document.createElement('div');
+    const comments: Comment[] = [
+      {
+        id: 'root',
+        author: { name: 'RootAuthor', url: 'https://www.reddit.com/user/root' },
+        content: 'Root comment',
+        replies: [
+          {
+            id: 'level1',
+            author: { name: 'LevelOneAuthor', url: 'https://www.reddit.com/user/one' },
+            content: 'Level 1',
+            replies: [
+              {
+                id: 'level2',
+                author: { name: 'LevelTwoAuthor', url: 'https://www.reddit.com/user/two' },
+                content: 'Level 2',
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    new CommentRenderer().render(container, comments, 'reddit');
+
+    const rootToggle = container.querySelector<HTMLButtonElement>('.cr-thread-toggle');
+    rootToggle?.click();
+
+    expect(container.textContent).toContain('RootAuthor');
+    expect(container.textContent).not.toContain('LevelOneAuthor');
+    expect(container.textContent).toContain('Show 2 replies');
+
+    const showRepliesButton = container.querySelector<HTMLButtonElement>('.cr-hidden-replies');
+    showRepliesButton?.click();
+
+    expect(container.textContent).toContain('LevelOneAuthor');
+    expect(container.textContent).toContain('LevelTwoAuthor');
+  });
 });

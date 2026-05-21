@@ -536,6 +536,20 @@ describe('profile-crawl types', () => {
         expect(result.retryable).toBe(false);
       });
 
+      it('should parse subscription paywall errors', () => {
+        const error = Object.assign(new Error('Profile subscriptions require Premium'), {
+          code: 'PAYWALL_REQUIRED',
+          details: {
+            reason: 'subscription_required',
+            feature: 'profile_subscriptions',
+          },
+        });
+        const result = parseCrawlError(error);
+
+        expect(result.code).toBe('SUBSCRIPTION_REQUIRED');
+        expect(result.retryable).toBe(false);
+      });
+
       it('should parse not found errors', () => {
         const error = new Error('Profile not found (404)');
         const result = parseCrawlError(error);

@@ -17,6 +17,10 @@ import { Logger } from './Logger';
 import { extractYouTubeChannelInfo } from './YouTubeChannelExtractor';
 import { SUBSCRIPTION_SUPPORTED_PLATFORMS, type SubscriptionSupportedPlatform } from '@/constants/rssPlatforms';
 import type { PostData } from '../types/post';
+import {
+  isSubscriptionPaywallError,
+  SUBSCRIPTION_PAYWALL_NOTICE_MESSAGE,
+} from '@/utils/subscriptionPaywall';
 
 // ============================================================================
 // Types - Plugin-side subscription types mirroring Workers API
@@ -349,11 +353,15 @@ export class SubscriptionValidationError extends Error {
 
 export class SubscriptionAPIError extends Error {
   code: string;
+  status?: number;
+  details?: unknown;
 
-  constructor(code: string, message: string) {
+  constructor(code: string, message: string, options?: { status?: number; details?: unknown }) {
     super(message);
     this.name = 'SubscriptionAPIError';
     this.code = code;
+    this.status = options?.status;
+    this.details = options?.details;
   }
 }
 
@@ -596,6 +604,9 @@ export class SubscriptionManager implements IService {
 
       return subscription;
     } catch (error) {
+      if (isSubscriptionPaywallError(error)) {
+        new Notice(SUBSCRIPTION_PAYWALL_NOTICE_MESSAGE, 8000);
+      }
       this.logger?.error('Failed to add subscription', error as Error);
       throw error;
     }
@@ -667,6 +678,9 @@ export class SubscriptionManager implements IService {
 
       return subscription;
     } catch (error) {
+      if (isSubscriptionPaywallError(error)) {
+        new Notice(SUBSCRIPTION_PAYWALL_NOTICE_MESSAGE, 8000);
+      }
       this.logger?.error('Failed to update subscription', error as Error);
       throw error;
     }
@@ -823,6 +837,9 @@ export class SubscriptionManager implements IService {
 
       return run;
     } catch (error) {
+      if (isSubscriptionPaywallError(error)) {
+        new Notice(SUBSCRIPTION_PAYWALL_NOTICE_MESSAGE, 8000);
+      }
       this.logger?.error('Failed to trigger manual run', error as Error);
       throw error;
     }
@@ -1212,7 +1229,11 @@ export class SubscriptionManager implements IService {
         const errObj = errorData?.['error'] as Record<string, unknown> | undefined;
         throw new SubscriptionAPIError(
           typeof errObj?.['code'] === 'string' ? errObj['code'] : 'API_ERROR',
-          typeof errObj?.['message'] === 'string' ? errObj['message'] : `HTTP ${response.status}`
+          typeof errObj?.['message'] === 'string' ? errObj['message'] : `HTTP ${response.status}`,
+          {
+            status: response.status,
+            details: errObj?.['details'],
+          }
         );
       }
 

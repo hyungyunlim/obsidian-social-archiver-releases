@@ -2,6 +2,18 @@ import type { Comment, Author } from '../../../types/post';
 
 import type { Platform } from '../../../types/post';
 
+type CommentDepthLimit = number | null;
+
+interface CommentRenderContext {
+  depth: number;
+  commentKey: string;
+  maxVisibleDepth: CommentDepthLimit;
+  expandedCommentKeys: Set<string>;
+  collapsedCommentKeys: Set<string>;
+  onToggleComment: (commentKey: string, currentlyExpanded: boolean) => void;
+}
+
+const MAX_COMMENT_RENDER_DEPTH = 20;
 /**
  * CommentRenderer - Renders Instagram-style comments section
  * Single Responsibility: Comments rendering with replies
@@ -137,6 +149,22 @@ export class CommentRenderer {
     return undefined;
   }
 
+  private countCommentTree(comments: Comment[] | undefined | null): number {
+    if (!comments || comments.length === 0) return 0;
+
+    let count = 0;
+    const stack = [...comments];
+    while (stack.length > 0) {
+      const item = stack.pop();
+      if (!item) continue;
+      count += 1;
+      if (item.replies && item.replies.length > 0) {
+        stack.push(...item.replies);
+      }
+    }
+    return count;
+  }
+
   /**
    * Render comments section (Instagram style)
    * @param container - Container element to render into
@@ -152,14 +180,45 @@ export class CommentRenderer {
 
     const maxVisibleComments = 2;
     const hasMoreComments = comments.length > maxVisibleComments;
+    let showingAll = false;
+    let expandedCommentKeys = new Set<string>();
+    let collapsedCommentKeys = new Set<string>();
+    let commentsListContainer: HTMLElement;
+
+    const renderVisibleComments = () => {
+      commentsListContainer.empty();
+      const commentsToShow = hasMoreComments && !showingAll ? comments.slice(-maxVisibleComments) : comments;
+
+      commentsToShow.forEach((comment, index) => {
+        this.renderComment(commentsListContainer, comment, {
+          depth: 0,
+          commentKey: `root-${index}-${comment.id || 'comment'}`,
+          maxVisibleDepth: null,
+          expandedCommentKeys,
+          collapsedCommentKeys,
+          onToggleComment: (commentKey, currentlyExpanded) => {
+            const nextExpanded = new Set(expandedCommentKeys);
+            const nextCollapsed = new Set(collapsedCommentKeys);
+            if (currentlyExpanded) {
+              nextExpanded.delete(commentKey);
+              nextCollapsed.add(commentKey);
+            } else {
+              nextCollapsed.delete(commentKey);
+              nextExpanded.add(commentKey);
+            }
+            expandedCommentKeys = nextExpanded;
+            collapsedCommentKeys = nextCollapsed;
+            renderVisibleComments();
+          },
+        });
+      });
+    };
 
     // "View all X comments" button (if there are more than 2 comments)
     if (hasMoreComments) {
       const viewAllBtn = commentsContainer.createDiv();
       viewAllBtn.addClass('sa-text-base', 'sa-text-muted', 'sa-clickable', 'sa-mb-8', 'sa-transition-color');
       viewAllBtn.setText(`View all ${comments.length} comments`);
-
-      let showingAll = false;
 
       viewAllBtn.addEventListener('mouseenter', () => {
         viewAllBtn.removeClass('sa-text-muted');
@@ -173,29 +232,15 @@ export class CommentRenderer {
       viewAllBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         showingAll = !showingAll;
-
-        // Clear and re-render
-        commentsListContainer.empty();
-        const commentsToShow = showingAll ? comments : comments.slice(-maxVisibleComments);
-
-        for (const comment of commentsToShow) {
-          this.renderComment(commentsListContainer, comment);
-        }
-
+        renderVisibleComments();
         viewAllBtn.setText(showingAll ? 'Hide comments' : `View all ${comments.length} comments`);
       });
     }
 
     // Comments list
-    const commentsListContainer = commentsContainer.createDiv();
+    commentsListContainer = commentsContainer.createDiv();
     commentsListContainer.addClass('sa-flex-col', 'sa-gap-8');
-
-    // Show last 2 comments initially (like Instagram)
-    const commentsToShow = hasMoreComments ? comments.slice(-maxVisibleComments) : comments;
-
-    for (const comment of commentsToShow) {
-      this.renderComment(commentsListContainer, comment);
-    }
+    renderVisibleComments();
   }
 
   /**
@@ -276,23 +321,53 @@ export class CommentRenderer {
   /**
    * Render a single comment (Instagram style)
    */
-  private renderComment(container: HTMLElement, comment: Comment, isReply: boolean = false): void {
+  private renderComment(container: HTMLElement, comment: Comment, context: CommentRenderContext): void {
     const commentDiv = container.createDiv();
     commentDiv.addClass('sa-text-base', 'sa-leading-normal');
-    if (isReply) {
+    commentDiv.setAttribute('data-depth', String(context.depth));
+
+    if (context.depth > MAX_COMMENT_RENDER_DEPTH) {
+      commentDiv.addClass('sa-text-muted', 'cr-more-fallback');
+      commentDiv.setText('… more nested replies');
+      return;
+    }
+
+    if (context.depth > 0) {
       commentDiv.addClass('cr-reply');
     }
 
+    const author: Author = comment.author ?? { name: 'Anonymous', url: '' };
+    const children = comment.replies ?? [];
+    const hasChildren = children.length > 0;
+    const hiddenReplyCount = this.countCommentTree(children);
+    const depthLimited = typeof context.maxVisibleDepth === 'number' && context.depth >= context.maxVisibleDepth;
+    const manuallyExpanded = context.expandedCommentKeys.has(context.commentKey);
+    const manuallyCollapsed = context.collapsedCommentKeys.has(context.commentKey);
+    const repliesCollapsed = hasChildren && (manuallyCollapsed || (depthLimited && !manuallyExpanded));
+
     // Comment content: **name** content (on same line)
     const contentSpan = commentDiv.createSpan();
+    contentSpan.addClass('cr-comment-line');
+
+    if (hasChildren) {
+      const toggleBtn = contentSpan.createEl('button', { text: repliesCollapsed ? '>' : 'v' });
+      toggleBtn.addClass('cr-thread-toggle');
+      toggleBtn.setAttribute('type', 'button');
+      toggleBtn.setAttribute('aria-expanded', String(!repliesCollapsed));
+      toggleBtn.setAttribute('aria-label', repliesCollapsed ? `Show ${hiddenReplyCount} replies` : `Hide ${hiddenReplyCount} replies`);
+      toggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        context.onToggleComment(context.commentKey, !repliesCollapsed);
+      });
+    }
 
     const usernameSpan = contentSpan.createSpan();
     usernameSpan.addClass('sa-font-semibold', 'sa-text-normal', 'sa-clickable');
     // Use author.name for display (e.g., "Charlie Moon" for LinkedIn)
-    usernameSpan.setText(comment.author.name);
+    usernameSpan.setText(author.name || 'Anonymous');
 
     // Add "Author" badge if this is the post author's comment
-    if (this.isPostAuthor(comment.author)) {
+    if (this.isPostAuthor(author)) {
       const authorBadge = contentSpan.createSpan({ cls: 'comment-author-badge' });
       authorBadge.setText('Author');
       authorBadge.addClass('sa-text-accent', 'sa-bg-hover', 'sa-ml-4');
@@ -300,7 +375,7 @@ export class CommentRenderer {
     }
 
     // Fix Reddit author URL if empty
-    const authorUrl = this.fixRedditAuthorUrl(comment);
+    const authorUrl = this.fixRedditAuthorUrl({ ...comment, author });
 
     if (authorUrl) {
       usernameSpan.addClass('cr-username');
@@ -317,7 +392,7 @@ export class CommentRenderer {
     // Render comment content with parsed links/mentions
     const commentContentSpan = contentSpan.createSpan();
     commentContentSpan.addClass('sa-text-normal', 'cr-comment-content');
-    this.renderTextWithLinks(commentContentSpan, comment.content);
+    this.renderTextWithLinks(commentContentSpan, comment.content ?? '');
 
     // Time and likes (inline for both main comments and replies)
     // Only show time if timestamp exists and is valid
@@ -342,13 +417,28 @@ export class CommentRenderer {
     }
 
     // Render replies (nested) - inside commentDiv to avoid gap duplication
-    if (comment.replies && comment.replies.length > 0) {
+    if (hasChildren && !repliesCollapsed) {
       const repliesContainer = commentDiv.createDiv();
       repliesContainer.addClass('sa-mt-4');
+      repliesContainer.addClass('cr-replies');
 
-      for (const reply of comment.replies) {
-        this.renderComment(repliesContainer, reply, true);
-      }
+      children.forEach((reply, index) => {
+        this.renderComment(repliesContainer, reply, {
+          ...context,
+          depth: context.depth + 1,
+          commentKey: `${context.commentKey}/${reply.id || index}`,
+        });
+      });
+    } else if (hasChildren) {
+      const hiddenBtn = commentDiv.createEl('button', {
+        text: `Show ${hiddenReplyCount} ${hiddenReplyCount === 1 ? 'reply' : 'replies'}`,
+      });
+      hiddenBtn.addClass('cr-hidden-replies');
+      hiddenBtn.setAttribute('type', 'button');
+      hiddenBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        context.onToggleComment(context.commentKey, false);
+      });
     }
   }
 }

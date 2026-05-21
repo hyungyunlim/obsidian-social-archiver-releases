@@ -35,6 +35,70 @@ export function buildAICommentInputContent(markdown: string, archiveSnapshot: un
   return `${context}\n\n---\n\n${markdown}`;
 }
 
+export function buildAIActionInputContent(
+  markdown: string,
+  archiveSnapshot: unknown,
+  actionType: string,
+): string {
+  if (actionType !== 'content.translate_variant') {
+    return buildAICommentInputContent(markdown, archiveSnapshot);
+  }
+
+  const platform = readArchivePlatform(archiveSnapshot);
+  const inputMarkdown = platform === 'threads' || hasThreadsFooter(markdown)
+    ? extractThreadsTranslationBody(markdown)
+    : markdown;
+
+  return buildAICommentInputContent(inputMarkdown, archiveSnapshot);
+}
+
+function readArchivePlatform(snapshot: unknown): string | null {
+  if (!snapshot || typeof snapshot !== 'object') return null;
+  const archive = (snapshot as { archive?: unknown }).archive;
+  if (!archive || typeof archive !== 'object') return null;
+  const platform = (archive as { platform?: unknown }).platform;
+  return typeof platform === 'string' ? platform : null;
+}
+
+function hasThreadsFooter(markdown: string): boolean {
+  return /^\*\*Platform:\*\*\s+Threads\b/m.test(removeFrontmatter(markdown));
+}
+
+function extractThreadsTranslationBody(markdown: string): string {
+  let body = removeFrontmatter(markdown).trim();
+  body = removeLeadingMyNote(body).trim();
+
+  const cutoffPatterns = [
+    /^---\s*\n+##\s+(?:\S+\s+)?Comments\b/m,
+    /^##\s+(?:\S+\s+)?Comments\b/m,
+    /^---\s*\n+##\s+(?:\S+\s+)?AI Analysis\b/m,
+    /^##\s+(?:\S+\s+)?AI Analysis\b/m,
+    /^---\s*\n+##\s+AI Comments\b/m,
+    /^##\s+AI Comments\b/m,
+    /^---\s*\n+##\s+AI Content Variants\b/m,
+    /^##\s+AI Content Variants\b/m,
+    /^---\s*\n+##\s+Mobile Annotations\b/m,
+    /^##\s+Mobile Annotations\b/m,
+    /^---\s*\n+\*\*Platform:\*\*\s+Threads\b/m,
+    /^\*\*Platform:\*\*\s+Threads\b/m,
+  ];
+
+  const cutoff = cutoffPatterns
+    .map((pattern) => body.search(pattern))
+    .filter((index) => index >= 0)
+    .sort((a, b) => a - b)[0];
+
+  return (typeof cutoff === 'number' ? body.slice(0, cutoff) : body).trim();
+}
+
+function removeFrontmatter(markdown: string): string {
+  return markdown.replace(/\r\n?/g, '\n').replace(/^---\n[\s\S]*?\n---\n?/, '');
+}
+
+function removeLeadingMyNote(markdown: string): string {
+  return markdown.replace(/^>\s*\*\*My Note:\*\*[\s\S]*?\n---\s*\n+/, '');
+}
+
 function readImageTextContext(snapshot: unknown): ImageTextContext[] {
   if (!snapshot || typeof snapshot !== 'object') return [];
   const archive = (snapshot as { archive?: unknown }).archive;

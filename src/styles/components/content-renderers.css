@@ -868,6 +868,49 @@ body.is-phone .acb-icon-btn.acb-icon-btn {
   margin-left: 24px;
 }
 
+.cr-comment-line {
+  display: inline;
+}
+
+.cr-thread-toggle {
+  width: 16px;
+  height: 16px;
+  margin: 0 4px 0 -2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--font-ui-smaller);
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.cr-thread-toggle:hover {
+  color: var(--text-normal);
+}
+
+.cr-hidden-replies {
+  display: block;
+  margin: 6px 0 0 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--font-ui-smaller);
+  cursor: pointer;
+}
+
+.cr-hidden-replies:hover {
+  color: var(--text-normal);
+  text-decoration: underline;
+}
+
+.cr-more-fallback {
+  font-style: italic;
+}
+
 /* Author badge */
 .cr-author-badge {
   font-size: 10px;

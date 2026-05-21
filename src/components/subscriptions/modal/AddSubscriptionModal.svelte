@@ -32,6 +32,10 @@ import URLInputStep from './URLInputStep.svelte';
 import ValidatingStep from './ValidatingStep.svelte';
 import ProfilePreviewStep from './ProfilePreviewStep.svelte';
 import ErrorStep from './ErrorStep.svelte';
+import {
+  isSubscriptionPaywallError,
+  SUBSCRIPTION_PAYWALL_NOTICE_MESSAGE,
+} from '@/utils/subscriptionPaywall';
 
 let {
   isOpen,
@@ -209,6 +213,16 @@ async function handleSubscribe(): Promise<void> {
     handleClose();
   } catch (error) {
     console.error('[AddSubscriptionModal] Failed to create subscription:', error);
+    if (isSubscriptionPaywallError(error)) {
+      handleValidationError({
+        code: 'SUBSCRIPTION_REQUIRED',
+        title: 'Premium Required',
+        message: SUBSCRIPTION_PAYWALL_NOTICE_MESSAGE,
+        suggestion: 'Upgrade to Premium to create or resume profile subscriptions.',
+        canRetry: false,
+      });
+      return;
+    }
     handleValidationError({
       code: 'CREATE_FAILED',
       title: 'Subscription Failed',

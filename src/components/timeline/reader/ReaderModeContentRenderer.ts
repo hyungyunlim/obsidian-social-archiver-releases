@@ -14,10 +14,11 @@
  */
 
 import { Component, MarkdownRenderer, Menu, setIcon, Notice, Platform as ObsidianPlatform, type App } from 'obsidian';
-import type { PostData } from '../../../types/post';
+import type { PostData, Comment } from '../../../types/post';
 import type SocialArchiverPlugin from '../../../main';
 import { MediaGalleryRenderer } from '../renderers/MediaGalleryRenderer';
 import { LinkPreviewRenderer } from '../renderers/LinkPreviewRenderer';
+import { CommentRenderer } from '../renderers/CommentRenderer';
 import {
   getPlatformSimpleIcon,
   getPlatformLucideIcon,
@@ -103,6 +104,10 @@ export interface ReaderContentCallbacks {
   onContentVariantMenu?: (anchorEl: HTMLElement) => void;
   /** AI actions menu */
   onAIActionMenu?: (anchorEl: HTMLElement) => void;
+  /** Saved comments/notes viewer */
+  hasReaderComments?: boolean;
+  isReaderCommentsOpen?: () => boolean;
+  onToggleReaderComments?: () => void;
 }
 
 export class ReaderModeContentRenderer extends Component {
@@ -132,10 +137,40 @@ export class ReaderModeContentRenderer extends Component {
     container.empty();
     container.addClass('sa-reader-mode-panel');
 
+    let commentsOpen = false;
+    let layout: HTMLElement | null = null;
+    let commentsPanel: HTMLElement | null = null;
+    const hasReaderComments = this.hasReaderComments(post);
+    const renderCommentsPanel = async () => {
+      if (!layout) return;
+      commentsPanel?.remove();
+      commentsPanel = null;
+      layout.toggleClass('sa-reader-mode-layout-comments-open', commentsOpen);
+      if (!commentsOpen) return;
+      commentsPanel = layout.createEl('aside', {
+        cls: 'sa-reader-mode-comments-panel',
+        attr: { 'aria-label': 'Reader comments' },
+      });
+      await this.renderReaderComments(commentsPanel, post);
+      if (typeof window !== 'undefined' && window.matchMedia?.('(max-width: 960px)').matches) {
+        commentsPanel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    };
+    const readerCallbacks: ReaderContentCallbacks = {
+      ...callbacks,
+      hasReaderComments,
+      isReaderCommentsOpen: () => commentsOpen,
+      onToggleReaderComments: () => {
+        if (!hasReaderComments) return;
+        commentsOpen = !commentsOpen;
+        void renderCommentsPanel();
+      },
+    };
+
     // 1. Header bar (fixed, outside scroll area)
     const headerWrapper = container.createDiv({ cls: 'sa-reader-mode-header-wrapper' });
     const headerContent = headerWrapper.createDiv({ cls: 'sa-reader-mode-header-content' });
-    this.renderHeader(headerContent, index, total, post, callbacks);
+    this.renderHeader(headerContent, index, total, post, readerCallbacks);
 
     // TTS mini controller (below header, hidden until TTS starts)
     if (callbacks.ttsController) {
@@ -147,10 +182,11 @@ export class ReaderModeContentRenderer extends Component {
     const scrollArea = container.createDiv({ cls: 'sa-reader-mode-scroll rmcr-scroll-hide' });
 
     // Centered content wrapper (max-width 680px)
-    const content = scrollArea.createDiv({ cls: 'sa-reader-mode-content' });
+    layout = scrollArea.createDiv({ cls: 'sa-reader-mode-layout' });
+    const content = layout.createDiv({ cls: 'sa-reader-mode-content' });
 
     // 2. Author section
-    this.renderAuthor(content, post, callbacks);
+    this.renderAuthor(content, post, readerCallbacks);
 
     // 3. Tags
     if (post.tags && post.tags.length > 0) {
@@ -163,7 +199,7 @@ export class ReaderModeContentRenderer extends Component {
     }
 
     if (callbacks.contentVariantOptions && callbacks.contentVariantOptions.length > 1) {
-      this.renderContentVariantSwitch(content, callbacks);
+      this.renderContentVariantSwitch(content, readerCallbacks);
     }
 
     // 5. Body text
@@ -196,7 +232,7 @@ export class ReaderModeContentRenderer extends Component {
     this.renderSourceLink(content, post);
 
     // 9. Action bar (engagement metrics + action buttons)
-    this.renderActionBar(content, post, callbacks);
+    this.renderActionBar(content, post, readerCallbacks);
 
     // 10. TTS: connect body + scroll containers for highlighting/scroll sync
     if (callbacks.ttsController) {
@@ -225,8 +261,28 @@ export class ReaderModeContentRenderer extends Component {
     // Center spacer
     header.createDiv({ cls: 'sa-reader-mode-header-center' });
 
-    // Right group: typography | TTS | copy | close
+    // Right group: comments | typography | TTS | copy | close
     const rightGroup = header.createDiv({ cls: 'sa-reader-mode-header-right' });
+
+    if (callbacks.hasReaderComments && callbacks.onToggleReaderComments) {
+      const commentsBtn = rightGroup.createDiv({ cls: 'sa-reader-mode-header-btn sa-reader-mode-comments-toggle' });
+      const updateCommentsButtonState = () => {
+        const open = callbacks.isReaderCommentsOpen?.() ?? false;
+        commentsBtn.toggleClass('sa-reader-mode-comments-toggle-active', open);
+        commentsBtn.setAttribute('aria-expanded', String(open));
+        commentsBtn.setAttribute('aria-label', open ? 'Hide comments' : 'Show comments');
+        commentsBtn.setAttribute('title', open ? 'Hide comments' : 'Show comments');
+      };
+      commentsBtn.setAttribute('aria-label', 'Show comments');
+      commentsBtn.setAttribute('aria-haspopup', 'region');
+      setIcon(commentsBtn, 'message-circle');
+      updateCommentsButtonState();
+      commentsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        callbacks.onToggleReaderComments?.();
+        updateCommentsButtonState();
+      });
+    }
 
     // Typography "Aa" button
     if (callbacks.onTypographyToggle) {
@@ -255,7 +311,7 @@ export class ReaderModeContentRenderer extends Component {
     }
 
     // Copy text button
-    const copyBtn = rightGroup.createDiv({ cls: 'sa-reader-mode-header-btn' });
+    const copyBtn = rightGroup.createDiv({ cls: 'sa-reader-mode-header-btn sa-reader-mode-copy-btn' });
     copyBtn.setAttribute('title', 'Copy text');
     setIcon(copyBtn, 'copy');
     copyBtn.addEventListener('click', (e) => {
@@ -685,6 +741,96 @@ export class ReaderModeContentRenderer extends Component {
       e.stopPropagation();
       window.open(url, '_blank');
     });
+  }
+
+  // ---------- Reader Comments ----------
+
+  private hasReaderComments(post: PostData): boolean {
+    return (post.aiComments?.length ?? 0) > 0 ||
+      !!post.comment?.trim() ||
+      (post.comments?.length ?? 0) > 0;
+  }
+
+  private countCommentTree(comments: Comment[] | undefined | null): number {
+    if (!comments || comments.length === 0) return 0;
+    let count = 0;
+    const stack = [...comments];
+    while (stack.length > 0) {
+      const item = stack.pop();
+      if (!item) continue;
+      count += 1;
+      if (item.replies && item.replies.length > 0) {
+        stack.push(...item.replies);
+      }
+    }
+    return count;
+  }
+
+  private async renderReaderComments(parent: HTMLElement, post: PostData): Promise<void> {
+    const aiCount = post.aiComments?.length ?? 0;
+    const noteCount = post.comment?.trim() ? 1 : 0;
+    const platformCommentCount = this.countCommentTree(post.comments);
+    const totalCount = aiCount + noteCount + platformCommentCount;
+
+    const header = parent.createDiv({ cls: 'sa-reader-mode-comments-header' });
+    const headingGroup = header.createDiv();
+    headingGroup.createEl('h3', { text: 'Comments' });
+    headingGroup.createEl('span', {
+      text: `${totalCount} saved item${totalCount === 1 ? '' : 's'}`,
+    });
+
+    if (post.aiComments && post.aiComments.length > 0) {
+      const section = this.createReaderCommentsSection(parent, 'AI Comments');
+      for (const comment of post.aiComments) {
+        const item = section.createDiv({ cls: 'sa-reader-mode-ai-comment' });
+        const meta = item.createDiv({ cls: 'sa-reader-mode-ai-comment-meta' });
+        meta.createSpan({ text: (comment.meta.cli || 'AI').toUpperCase() });
+        meta.createSpan({ text: '·' });
+        meta.createSpan({ text: this.formatAICommentType(comment.meta.type) });
+        if (comment.meta.generatedAt) {
+          const generatedAt = new Date(comment.meta.generatedAt);
+          if (!Number.isNaN(generatedAt.getTime())) {
+            meta.createSpan({ text: '·' });
+            meta.createSpan({ text: this.formatDate(generatedAt) });
+          }
+        }
+
+        const body = item.createDiv({ cls: 'sa-reader-mode-ai-comment-body' });
+        await MarkdownRenderer.render(
+          this.app,
+          comment.content.replace(/\\n/g, '\n').trim(),
+          body,
+          post.filePath || '',
+          this,
+        );
+      }
+    }
+
+    if (post.comment?.trim()) {
+      const section = this.createReaderCommentsSection(parent, 'Note');
+      const note = section.createDiv({ cls: 'sa-reader-mode-user-note' });
+      note.setText(post.comment.trim());
+    }
+
+    if (post.comments && post.comments.length > 0) {
+      const section = this.createReaderCommentsSection(parent, 'Platform Comments');
+      const renderer = new CommentRenderer();
+      renderer.render(section, post.comments, post.platform, post.author);
+    }
+  }
+
+  private createReaderCommentsSection(parent: HTMLElement, title: string): HTMLElement {
+    const section = parent.createDiv({ cls: 'sa-reader-mode-comments-section' });
+    section.createDiv({ cls: 'sa-reader-mode-comments-section-title', text: title });
+    return section;
+  }
+
+  private formatAICommentType(type: string): string {
+    return type
+      .split(/[-_]/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
   }
 
   // ---------- Action Bar ----------

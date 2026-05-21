@@ -25,7 +25,7 @@ import type { SocialArchiverSettings } from '../../types/settings';
 import type { LocalAICommentPendingUpload, AICommentPublicJobErrorCode } from '../../types/ai-comment-job';
 import { appendAIComment, parseAIComments, updateFrontmatterAIComments } from '../../services/ai-comment/markdown-handler';
 import { stripContentVariantMetadataFooter } from '../../utils/contentVariantMarkdown';
-import { buildAICommentInputContent } from './AICommentInputContext';
+import { buildAIActionInputContent, buildAICommentInputContent } from './AICommentInputContext';
 import type { LocalLockRegistry } from '../locks/LocalLockRegistry';
 
 type IngestResult = 'created' | 'existing' | 'skipped';
@@ -346,7 +346,7 @@ export class AICommentJobProcessor {
 
       await this.enqueueActionProgress(context, 'running', 25, 'Running in Obsidian...');
       const content = await this.deps.app.vault.read(file);
-      const inputContent = buildAICommentInputContent(content, context.job.archiveSnapshot);
+      const inputContent = buildAIActionInputContent(content, context.job.archiveSnapshot, context.job.actionType);
       if (!inputContent.trim()) {
         await this.failAction(context, 'CONTENT_EMPTY', false);
         return;

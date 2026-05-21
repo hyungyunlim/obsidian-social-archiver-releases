@@ -10,6 +10,10 @@
  */
 
 import type { Platform } from './post';
+import {
+  isSubscriptionPaywallError,
+  SUBSCRIPTION_PAYWALL_NOTICE_MESSAGE,
+} from '@/utils/subscriptionPaywall';
 
 // ============================================================================
 // Constants
@@ -323,6 +327,7 @@ export type CrawlErrorCode =
   | 'NETWORK_ERROR'
   | 'AUTH_REQUIRED'
   | 'CREDITS_INSUFFICIENT'
+  | 'SUBSCRIPTION_REQUIRED'
   | 'PROFILE_NOT_FOUND'
   | 'PROFILE_PRIVATE'
   | 'SERVER_ERROR'
@@ -342,6 +347,7 @@ export const CRAWL_ERROR_MESSAGES: Record<CrawlErrorCode, string> = {
   NETWORK_ERROR: 'Network connection failed. Please check your connection and retry.',
   AUTH_REQUIRED: 'Authentication required. Please sign in to continue.',
   CREDITS_INSUFFICIENT: 'Insufficient credits. Please upgrade your plan or wait for monthly reset.',
+  SUBSCRIPTION_REQUIRED: SUBSCRIPTION_PAYWALL_NOTICE_MESSAGE,
   PROFILE_NOT_FOUND: 'Profile not found. Please check the URL is correct.',
   PROFILE_PRIVATE: 'This profile is private. Only public profiles can be archived.',
   SERVER_ERROR: 'Server error occurred. Please try again later.',
@@ -395,6 +401,10 @@ export function createCrawlError(
  * Maps HTTP status codes and error messages to appropriate CrawlErrorCode
  */
 export function parseCrawlError(error: unknown): CrawlError {
+  if (isSubscriptionPaywallError(error)) {
+    return createCrawlError('SUBSCRIPTION_REQUIRED');
+  }
+
   // Handle Error objects
   if (error instanceof Error) {
     const message = error.message.toLowerCase();
