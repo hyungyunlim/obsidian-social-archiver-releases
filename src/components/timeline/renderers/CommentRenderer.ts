@@ -350,11 +350,15 @@ export class CommentRenderer {
     contentSpan.addClass('cr-comment-line');
 
     if (hasChildren) {
-      const toggleBtn = contentSpan.createEl('button', { text: repliesCollapsed ? '>' : 'v' });
+      const toggleBtn = contentSpan.createEl('button');
       toggleBtn.addClass('cr-thread-toggle');
+      if (repliesCollapsed) {
+        toggleBtn.addClass('is-collapsed');
+      }
       toggleBtn.setAttribute('type', 'button');
       toggleBtn.setAttribute('aria-expanded', String(!repliesCollapsed));
       toggleBtn.setAttribute('aria-label', repliesCollapsed ? `Show ${hiddenReplyCount} replies` : `Hide ${hiddenReplyCount} replies`);
+      toggleBtn.createSpan({ cls: 'cr-thread-toggle-icon' });
       toggleBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         context.onToggleComment(context.commentKey, !repliesCollapsed);

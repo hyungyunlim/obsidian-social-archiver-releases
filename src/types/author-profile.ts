@@ -11,6 +11,10 @@ export interface UserAuthorProfile {
   fetchedBio?: string | null;
   fetchedBioUpdatedAt?: string | null;
   fetchedBioSource?: string | null;
+  fetchedAvatarUrl?: string | null;
+  fetchedAvatarR2Key?: string | null;
+  fetchedAvatarUpdatedAt?: string | null;
+  avatarPreservationStatus?: string | null;
   aliases: string[];
   updatedAt: string;
 }
@@ -35,4 +39,6 @@ export interface AuthorProfileSystemUpsertInput {
   fetchedBio?: string | null;
   fetchedBioSource?: string | null;
   fetchedBioUpdatedAt?: string | null;
+  fetchedAvatarUrl?: string | null;
+  fetchedAvatarUpdatedAt?: string | null;
 }

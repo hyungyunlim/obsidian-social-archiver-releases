@@ -161,6 +161,8 @@ describe('CommentRenderer', () => {
     new CommentRenderer().render(container, comments, 'reddit');
 
     const rootToggle = container.querySelector<HTMLButtonElement>('.cr-thread-toggle');
+    expect(rootToggle?.textContent).toBe('');
+    expect(rootToggle?.querySelector('.cr-thread-toggle-icon')).toBeTruthy();
     rootToggle?.click();
 
     expect(container.textContent).toContain('RootAuthor');

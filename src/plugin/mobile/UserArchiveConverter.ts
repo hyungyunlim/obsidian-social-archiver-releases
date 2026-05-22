@@ -115,6 +115,49 @@ function extractWebArticleBody(archive: Pick<UserArchive, 'fullContent' | 'previ
   return stripLeadingEmptyLinkLines(stripLeadingMatchingTitle(body, archive.title)).trim();
 }
 
+function normalizeComparableArticleText(value: string): string {
+  return value
+    .replace(/!\[[^\]]*]\([^)]+\)/g, '')
+    .replace(/\[([^\]]*)]\(([^)]*)\)/g, '$1 $2')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^\s*[-*_]{3,}\s*$/gm, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function extractXArticleIntro(
+  archive: Pick<UserArchive, 'fullContent' | 'previewText' | 'title' | 'articleMarkdown'>
+): string {
+  const source = (archive.fullContent || archive.previewText || '').trim();
+  if (!source) return '';
+
+  const separatorIndex = source.indexOf(LEGACY_WEB_CLIP_SEPARATOR);
+  const introSource = separatorIndex >= 0
+    ? source.slice(0, separatorIndex).trim()
+    : source;
+
+  const intro = stripLeadingEmptyLinkLines(stripLeadingMatchingTitle(introSource, archive.title)).trim();
+  if (!intro) return '';
+
+  const articleBody = (archive.articleMarkdown || (
+    separatorIndex >= 0
+      ? source.slice(separatorIndex + LEGACY_WEB_CLIP_SEPARATOR.length).trim()
+      : ''
+  )).trim();
+
+  if (!articleBody) return intro;
+
+  const comparableIntro = normalizeComparableArticleText(intro);
+  const comparableArticle = normalizeComparableArticleText(articleBody);
+
+  if (comparableIntro && comparableArticle.includes(comparableIntro)) {
+    return '';
+  }
+
+  return intro;
+}
+
 function normalizeWhisperTranscript(archive: UserArchive): PostData['whisperTranscript'] | undefined {
   const transcript = archive.whisperTranscript;
   if (!transcript || !Array.isArray(transcript.segments)) return undefined;
@@ -151,8 +194,11 @@ function normalizeWhisperTranscript(archive: UserArchive): PostData['whisperTran
  */
 export function convertUserArchiveToPostData(archive: UserArchive): PostData {
   const platform = archive.platform as Platform;
+  const isXArticle = platform === 'x' && (archive.isArticle === true || !!archive.articleMarkdown);
   const normalizedWebBody = platform === 'web'
     ? extractWebArticleBody(archive)
+    : isXArticle
+      ? extractXArticleIntro(archive)
     : archive.fullContent || archive.previewText || '';
   const authorUsername = normalizeHandle(archive.authorHandle);
   const authorHandle = authorUsername ? `@${authorUsername}` : undefined;

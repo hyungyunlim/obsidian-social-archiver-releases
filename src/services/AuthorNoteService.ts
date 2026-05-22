@@ -306,7 +306,7 @@ export class AuthorNoteService {
    */
   async applySyncedProfileFields(
     file: TFile,
-    profile: Pick<UserAuthorProfile, 'displayNameOverride' | 'bioOverride' | 'aliases' | 'fetchedBio'>,
+    profile: Pick<UserAuthorProfile, 'displayNameOverride' | 'bioOverride' | 'aliases' | 'fetchedBio' | 'fetchedAvatarUrl'>,
   ): Promise<void> {
     try {
       await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
@@ -328,7 +328,7 @@ export class AuthorNoteService {
 
   private applyProfileToFrontmatter(
     fm: Record<string, unknown>,
-    profile: Pick<UserAuthorProfile, 'displayNameOverride' | 'bioOverride' | 'aliases' | 'fetchedBio'>,
+    profile: Pick<UserAuthorProfile, 'displayNameOverride' | 'bioOverride' | 'aliases' | 'fetchedBio' | 'fetchedAvatarUrl'>,
   ): void {
     if (profile.displayNameOverride?.trim()) {
       fm.displayNameOverride = profile.displayNameOverride.trim();
@@ -349,11 +349,14 @@ export class AuthorNoteService {
     if (profile.fetchedBio?.trim()) {
       fm.bio = profile.fetchedBio.trim().replace(/\n+/g, ' ');
     }
+    if (profile.fetchedAvatarUrl?.trim()) {
+      fm.avatar = profile.fetchedAvatarUrl.trim();
+    }
   }
 
   private async repairFrontmatter(
     file: TFile,
-    profile: Pick<UserAuthorProfile, 'displayNameOverride' | 'bioOverride' | 'aliases' | 'fetchedBio'>,
+    profile: Pick<UserAuthorProfile, 'displayNameOverride' | 'bioOverride' | 'aliases' | 'fetchedBio' | 'fetchedAvatarUrl'>,
   ): Promise<void> {
     const content = await this.app.vault.read(file);
     const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
@@ -393,7 +396,8 @@ export class AuthorNoteService {
       profile.displayNameOverride?.trim() ||
       profile.bioOverride?.trim() ||
       (profile.aliases?.length ?? 0) > 0 ||
-      profile.fetchedBio?.trim()
+      profile.fetchedBio?.trim() ||
+      profile.fetchedAvatarUrl?.trim()
     );
     if (!hasUserFields) {
       return null;
@@ -410,6 +414,7 @@ export class AuthorNoteService {
       authorHandle: profile.authorHandle || undefined,
       archiveCount: 0,
       lastMetadataUpdate: profile.updatedAt,
+      avatar: profile.fetchedAvatarUrl || undefined,
       bio: profile.fetchedBio || undefined,
       displayNameOverride: profile.displayNameOverride || undefined,
       bioOverride: profile.bioOverride || undefined,

@@ -222,6 +222,33 @@ describe('MarkdownConverter', () => {
       expect(result.content).toContain('Retweets:'); // X-specific term
     });
 
+    it('should use X article markdown without appending duplicate preview text', async () => {
+      const xArticlePost: PostData = {
+        platform: 'x',
+        id: '2057408627615613208',
+        url: 'https://x.com/__umoaye__/status/2057408627615613208',
+        title: 'Everyone, exactly one week from now',
+        author: {
+          name: '전시정보공유해드림',
+          url: 'https://x.com/__umoaye__',
+        },
+        content: {
+          text: 'Everyone, exactly one week from now\n\n## 1\n\nDuplicate preview body',
+          html: '# Everyone, exactly one week from now\n\n## 1\n\nDuplicate preview body',
+        },
+        media: [],
+        metadata: {
+          timestamp: new Date('2026-05-21T10:30:00Z'),
+        },
+      };
+
+      const result = await converter.convert(xArticlePost);
+
+      expect(result.content.match(/## 1/g)).toHaveLength(1);
+      expect(result.content).not.toContain('Duplicate preview body\n\n---\n\n# Everyone');
+      expect(result.frontmatter.isArticle).toBe(true);
+    });
+
     it('should use Threads template for Threads posts', async () => {
       const threadsPost = {
         ...mockPostData,

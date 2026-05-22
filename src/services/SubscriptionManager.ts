@@ -125,6 +125,7 @@ export interface Subscription {
 /** Pending post from server (crawled but not yet synced to vault) */
 export interface PendingPost {
   id: string; // Unique ID for this pending entry
+  archiveId?: string; // Canonical server archive ID, when available
   subscriptionId: string;
   subscriptionName: string;
   post: PostData; // PostData from server

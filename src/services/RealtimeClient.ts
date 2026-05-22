@@ -20,6 +20,7 @@ export type RealtimeMessageType =
   | 'archive_deleted' // From archive deletion
   | 'archive_tags_updated' // From tag changes (mobile/web)
   | 'author_profile_updated' // From editable author profile changes
+  | 'subscription_changed' // From subscription create/update/delete
   | 'media_preserved' // From R2 media preservation
   | 'billing_status_updated' // From RevenueCat/server billing status changes
   | 'ai_comment_requested' // Targeted desktop Obsidian AI comment job hint

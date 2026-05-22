@@ -254,6 +254,173 @@ title: 카카오는 팔고 &mdash; 네이버는 물러서고
   });
 });
 
+describe('PostDataParser - X article body cleanup', () => {
+  it('deduplicates repeated X article sections from existing notes', async () => {
+    const markdown = `---
+platform: x
+author: 전시정보공유해드림
+authorUrl: https://x.com/__umoaye__
+published: 2026-05-21 19:30
+originalUrl: https://x.com/__umoaye__/status/2057408627615613208
+title: Everyone, exactly one week from now
+isArticle: true
+---
+
+# Everyone, exactly one week from now
+
+## 1
+
+First section body.
+
+---
+
+## 2
+
+Second section body.
+
+---
+
+## 1
+
+First section body.
+
+---
+
+## 2
+
+Second section body.
+
+---
+
+![image 1](attachments/social-archives/x/sample.jpg)
+
+---
+
+**Platform:** X (Twitter) | **Author:** [전시정보공유해드림](https://x.com/__umoaye__) | **Published:** 2026-05-21 19:30
+
+**Original URL:** https://x.com/__umoaye__/status/2057408627615613208
+`;
+
+    const vault = {
+      cachedRead: vi.fn().mockResolvedValue(markdown),
+    } as any;
+    const parser = new PostDataParser(vault);
+    const file = {
+      basename: 'x-article',
+      path: 'Social Archives/X/2026/05/x-article.md',
+      stat: { ctime: Date.now() },
+    } as any;
+
+    const post = await parser.parseFile(file);
+
+    expect(post).toBeTruthy();
+    expect(post!.content.rawMarkdown?.match(/## 1/g)).toHaveLength(1);
+    expect(post!.content.rawMarkdown?.match(/## 2/g)).toHaveLength(1);
+    expect(post!.content.rawMarkdown).toContain('First section body.');
+    expect(post!.content.rawMarkdown).not.toContain('sample.jpg');
+  });
+});
+
+describe('PostDataParser - Threads article body cleanup', () => {
+  it('parses Threads articles as rawMarkdown for timeline markdown rendering', async () => {
+    const markdown = `---
+platform: threads
+author: terracotta.nj
+authorUrl: https://www.threads.com/@terracotta.nj
+published: 2026-05-22 09:30
+originalUrl: https://www.threads.com/@terracotta.nj/post/ABC123
+title: 주변인들의 미국 스타트업 채용을 가끔 도우며 듣는것:
+contentType: article
+---
+
+# 주변인들의 미국 스타트업 채용을 가끔 도우며 듣는것:
+
+## 1
+
+First Threads section.
+
+---
+
+## 2
+
+Second Threads section.
+
+---
+
+**Platform:** Threads | **Author:** [terracotta.nj](https://www.threads.com/@terracotta.nj) | **Published:** 2026-05-22 09:30
+
+**Original URL:** https://www.threads.com/@terracotta.nj/post/ABC123
+`;
+
+    const vault = {
+      cachedRead: vi.fn().mockResolvedValue(markdown),
+    } as any;
+    const parser = new PostDataParser(vault);
+    const file = {
+      basename: 'threads-article',
+      path: 'Social Archives/Threads/2026/05/threads-article.md',
+      stat: { ctime: Date.now() },
+    } as any;
+
+    const post = await parser.parseFile(file);
+
+    expect(post).toBeTruthy();
+    expect(post!.title).toBe('주변인들의 미국 스타트업 채용을 가끔 도우며 듣는것:');
+    expect(post!.content.rawMarkdown).toContain('## 1');
+    expect(post!.content.rawMarkdown).toContain('First Threads section.');
+    expect(post!.content.rawMarkdown).toContain('## 2');
+    expect(post!.content.rawMarkdown).not.toContain('# 주변인들의 미국 스타트업 채용을 가끔 도우며 듣는것:');
+    expect(post!.content.rawMarkdown).not.toContain('**Platform:**');
+  });
+
+  it('unescapes Threads article headings escaped as social text', async () => {
+    const markdown = `---
+platform: threads
+author: terracotta.nj
+authorUrl: https://www.threads.com/@terracotta.nj
+published: 2026-05-22 09:30
+originalUrl: https://www.threads.com/@terracotta.nj/post/ABC123
+title: 주변인들의 미국 스타트업 채용을 가끔 도우며 듣는것:
+contentType: article
+---
+
+\\# 주변인들의 미국 스타트업 채용을 가끔 도우며 듣는것:
+
+\\#\\# 1
+
+First Threads section.
+
+---
+
+\\#\\# 2
+
+Second Threads section.
+
+---
+
+**Platform:** Threads | **Author:** [terracotta.nj](https://www.threads.com/@terracotta.nj) | **Published:** 2026-05-22 09:30
+`;
+
+    const vault = {
+      cachedRead: vi.fn().mockResolvedValue(markdown),
+    } as any;
+    const parser = new PostDataParser(vault);
+    const file = {
+      basename: 'threads-escaped-article',
+      path: 'Social Archives/Threads/2026/05/threads-escaped-article.md',
+      stat: { ctime: Date.now() },
+    } as any;
+
+    const post = await parser.parseFile(file);
+
+    expect(post).toBeTruthy();
+    expect(post!.content.rawMarkdown).toContain('## 1');
+    expect(post!.content.rawMarkdown).toContain('## 2');
+    expect(post!.content.rawMarkdown).not.toContain('\\#\\# 1');
+    expect(post!.content.rawMarkdown).not.toContain('\\#\\# 2');
+  });
+});
+
 describe('PostDataParser - user post titles', () => {
   it('extracts a platform: post title from frontmatter', async () => {
     const markdown = `---

@@ -209,6 +209,13 @@ export interface AuthorProfileUpdatedEventData {
     authorHandle: string | null;
     displayNameOverride: string | null;
     bioOverride: string | null;
+    fetchedBio?: string | null;
+    fetchedBioUpdatedAt?: string | null;
+    fetchedBioSource?: string | null;
+    fetchedAvatarUrl?: string | null;
+    fetchedAvatarR2Key?: string | null;
+    fetchedAvatarUpdatedAt?: string | null;
+    avatarPreservationStatus?: string | null;
     aliases: string[];
     updatedAt: string;
   };
@@ -220,6 +227,34 @@ export interface AuthorProfileUpdatedEventData {
 export interface AuthorProfileUpdatedEvent {
   type: 'author_profile_updated';
   data: AuthorProfileUpdatedEventData;
+}
+
+// ============================================================================
+// Subscription Changed Event (private channel)
+// ============================================================================
+
+export interface SubscriptionChangedEventData {
+  subscriptionId: string;
+  action: 'created' | 'updated' | 'deleted' | 'paused' | 'resumed';
+  subscription?: {
+    id: string;
+    platform: string;
+    name: string;
+    target: {
+      handle: string;
+      profileUrl?: string;
+    };
+    enabled: boolean;
+    updatedAt: string;
+  };
+  updatedAt: string;
+  timestamp: number;
+  sourceClientId?: string;
+}
+
+export interface SubscriptionChangedEvent {
+  type: 'subscription_changed';
+  data: SubscriptionChangedEventData;
 }
 
 // ============================================================================
@@ -373,6 +408,7 @@ export type WebSocketEvent =
   | ArchiveDeletedEvent
   | ArchiveTagsUpdatedEvent
   | AuthorProfileUpdatedEvent
+  | SubscriptionChangedEvent
   | MediaPreservedEvent
   | BillingStatusUpdatedEvent
   | PongEvent;

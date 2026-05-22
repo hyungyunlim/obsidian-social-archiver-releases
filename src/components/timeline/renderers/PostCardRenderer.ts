@@ -2250,6 +2250,13 @@ export class PostCardRenderer extends Component {
       titleEl.setText(post.title);
     }
 
+    // Threads multi-post archives use structured markdown sections and should
+    // render like articles, while single inline-media Threads posts stay compact.
+    if (post.platform === 'threads' && post.content.rawMarkdown && post.title && this.isStructuredArticleMarkdown(post.content.rawMarkdown)) {
+      const titleEl = contentContainer.createDiv({ cls: 'blog-article-title pcr-title-blog' });
+      titleEl.setText(post.title);
+    }
+
     // For Reddit: show post title at top of content area
     if (post.platform === 'reddit' && post.title) {
       const titleEl = contentContainer.createDiv({ cls: 'reddit-post-title pcr-title-reddit' });
@@ -2470,12 +2477,58 @@ export class PostCardRenderer extends Component {
     return helperFormatDuration(seconds);
   }
 
+  private normalizeMarkdownTitle(value?: string | null): string {
+    return (value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  }
+
+  private stripLeadingMatchingMarkdownTitle(markdown: string, title?: string | null): string {
+    if (!title) return markdown.trim();
+
+    const headingMatch = markdown.match(/^\\?#\s+([^\n]+)\n+/);
+    if (headingMatch?.[1] && this.normalizeMarkdownTitle(headingMatch[1]) === this.normalizeMarkdownTitle(title)) {
+      return markdown.slice(headingMatch[0].length).trimStart();
+    }
+
+    const lines = markdown.split('\n');
+    const firstMeaningfulIndex = lines.findIndex((line) => line.trim().length > 0);
+    if (
+      firstMeaningfulIndex >= 0 &&
+      this.normalizeMarkdownTitle(lines[firstMeaningfulIndex]) === this.normalizeMarkdownTitle(title)
+    ) {
+      return lines.slice(firstMeaningfulIndex + 1).join('\n').trimStart();
+    }
+
+    return markdown.trim();
+  }
+
+  private unescapeEscapedMarkdownHeadings(markdown: string): string {
+    return markdown.replace(/^((?:\\#|#){1,6})(?=\s)/gm, (match) => match.replace(/\\/g, ''));
+  }
+
+  private isStructuredArticleMarkdown(markdown: string): boolean {
+    return /(?:^|\n)#{1,3}\s+\S/.test(markdown) ||
+      /(?:^|\n)\d+\.\s+\S/.test(markdown) ||
+      /(?:^|\n)---(?:\n|$)/.test(markdown);
+  }
+
   /**
    * Render blog content with inline images
    * Uses rawMarkdown to preserve image placement within text flow
    */
   private async renderBlogContent(contentContainer: HTMLElement, post: PostData): Promise<void> {
     let rawMarkdown = post.content.rawMarkdown || '';
+    rawMarkdown = this.unescapeEscapedMarkdownHeadings(rawMarkdown);
+
+    const titleIsRenderedSeparately =
+      !!post.title &&
+      (isRssBasedPlatform(post.platform) ||
+        post.platform === 'web' ||
+        post.platform === 'x' ||
+        (post.platform === 'threads' && this.isStructuredArticleMarkdown(rawMarkdown)));
+
+    if (titleIsRenderedSeparately) {
+      rawMarkdown = this.stripLeadingMatchingMarkdownTitle(rawMarkdown, post.title);
+    }
 
     // For podcasts: strip <audio> tags since our custom player handles audio
     // This prevents duplicate audio players (markdown's <audio> + MediaGalleryRenderer)

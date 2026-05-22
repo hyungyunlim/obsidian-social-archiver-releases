@@ -198,6 +198,7 @@ export interface RealtimeEventBridgeDeps {
   processFailedJob: (job: PendingJob, message: string) => Promise<void>;
   saveSubscriptionPost: (pendingPost: PendingPost) => Promise<boolean>;
   syncSubscriptionPosts: (trigger?: string) => Promise<void>;
+  refreshSubscriptions?: () => Promise<void>;
   createProfileNote: (message: WsProfileMetadataMessage) => Promise<void>;
   applyAuthorProfileUpdate?: (profile: UserAuthorProfile) => Promise<void>;
   syncAuthorProfiles?: () => Promise<void>;
@@ -286,6 +287,7 @@ export class RealtimeEventBridge {
     this.setupTruncationWarningListener();
     this.setupConnectionStatusListeners();
     this.setupSubscriptionPostListener();
+    this.setupSubscriptionChangedListener();
     this.setupArchiveAddedListener();
     this.setupProfileMetadataListener();
     this.setupProfileCrawlCompleteListener();
@@ -614,6 +616,7 @@ export class RealtimeEventBridge {
 
             const pendingPost: PendingPost = {
               id: message.pendingPostId || crypto.randomUUID(),
+              ...(message.archiveId ? { archiveId: message.archiveId } : {}),
               subscriptionId: message.subscriptionId ?? '',
               subscriptionName: message.subscriptionName ?? '',
               post: message.post,
@@ -682,6 +685,23 @@ export class RealtimeEventBridge {
           // Fallback: fetch from KV (for older message format)
           await new Promise(resolve => window.setTimeout(resolve, 1000));
           await this.deps.syncSubscriptionPosts('subscription-post-fallback');
+        }
+      }),
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // ws:subscription_changed
+  // --------------------------------------------------------------------------
+
+  private setupSubscriptionChangedListener(): void {
+    this.eventRefs.push(
+      this.deps.events.on('ws:subscription_changed', async () => {
+        try {
+          await this.deps.refreshSubscriptions?.();
+          this.deps.refreshTimelineView();
+        } catch (error) {
+          console.warn('[Social Archiver] Failed to refresh subscriptions after WS event:', error);
         }
       }),
     );

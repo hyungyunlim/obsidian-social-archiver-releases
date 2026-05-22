@@ -144,7 +144,8 @@ export class CommentFormatter {
     }
 
     if (platform === 'x' && authorHandle) {
-      return `[@${authorHandle}](https://x.com/${authorHandle})`;
+      const normalizedHandle = authorHandle.replace(/^@+/, '');
+      return `[@${normalizedHandle}](https://x.com/${normalizedHandle})`;
     }
 
     if (comment.author.name === '[deleted]') {

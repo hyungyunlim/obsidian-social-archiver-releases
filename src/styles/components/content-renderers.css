@@ -872,39 +872,85 @@ body.is-phone .acb-icon-btn.acb-icon-btn {
   display: inline;
 }
 
-.cr-thread-toggle {
-  width: 16px;
-  height: 16px;
+button.cr-thread-toggle.cr-thread-toggle {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  min-width: 14px;
+  height: 14px;
+  min-height: 14px;
   margin: 0 4px 0 -2px;
   padding: 0;
   border: 0;
+  border-radius: 0;
+  box-shadow: none;
   background: transparent;
   color: var(--text-muted);
-  font: inherit;
-  font-size: var(--font-ui-smaller);
-  line-height: 16px;
+  line-height: 1;
+  vertical-align: middle;
   cursor: pointer;
 }
 
-.cr-thread-toggle:hover {
+button.cr-thread-toggle.cr-thread-toggle:hover,
+button.cr-thread-toggle.cr-thread-toggle:active,
+button.cr-thread-toggle.cr-thread-toggle:focus {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
   color: var(--text-normal);
 }
 
-.cr-hidden-replies {
+button.cr-thread-toggle.cr-thread-toggle:focus-visible {
+  outline: 1px solid var(--background-modifier-border-focus);
+  outline-offset: 1px;
+}
+
+.cr-thread-toggle-icon {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  transform: translateY(-2px);
+}
+
+button.cr-thread-toggle.is-collapsed .cr-thread-toggle-icon {
+  transform: rotate(-90deg) translateX(1px) translateY(-2px);
+}
+
+button.cr-hidden-replies.cr-hidden-replies {
+  appearance: none;
   display: block;
   margin: 6px 0 0 18px;
   padding: 0;
   border: 0;
+  border-radius: 0;
+  box-shadow: none;
   background: transparent;
   color: var(--text-muted);
   font: inherit;
   font-size: var(--font-ui-smaller);
+  line-height: 1.4;
   cursor: pointer;
+  min-width: 0;
+  min-height: 0;
 }
 
-.cr-hidden-replies:hover {
+button.cr-hidden-replies.cr-hidden-replies:hover,
+button.cr-hidden-replies.cr-hidden-replies:active,
+button.cr-hidden-replies.cr-hidden-replies:focus {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
   color: var(--text-normal);
   text-decoration: underline;
+}
+
+button.cr-hidden-replies.cr-hidden-replies:focus-visible {
+  outline: 1px solid var(--background-modifier-border-focus);
+  outline-offset: 2px;
 }
 
 .cr-more-fallback {

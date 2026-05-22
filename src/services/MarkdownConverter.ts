@@ -1941,6 +1941,40 @@ export class MarkdownConverter implements IService {
     return icons[platform] || '🔗';
   }
 
+  private dedupeRepeatedXArticleSections(markdown: string): string {
+    const normalized = markdown.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+    if (!normalized) return '';
+
+    const sections = normalized
+      .split(/\n\s*---\s*\n/)
+      .map(section => section.trim())
+      .filter(Boolean);
+
+    if (sections.length < 2 || sections.length % 2 !== 0) {
+      return normalized;
+    }
+
+    const midpoint = sections.length / 2;
+    const firstHalf = sections.slice(0, midpoint).join('\n\n---\n\n');
+    const secondHalf = sections.slice(midpoint).join('\n\n---\n\n');
+
+    return this.normalizeComparableArticleText(firstHalf) === this.normalizeComparableArticleText(secondHalf)
+      ? firstHalf
+      : normalized;
+  }
+
+  private normalizeComparableArticleText(markdown: string): string {
+    return markdown
+      .replace(/!\[[\s\S]*?\]\([^)]+\)/g, '')
+      .replace(/\[[^\]]+\]\(([^)]+)\)/g, '$1')
+      .replace(/^#{1,6}\s*/gm, '')
+      .replace(/^(\d+)\.\s*/gm, '$1 ')
+      .replace(/[\\`*_>#+-]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
+
   /**
    * Prepare data for template engine
    * @param postData - Post data
@@ -2031,13 +2065,15 @@ export class MarkdownConverter implements IService {
       baseText = this.textFormatter.linkifyInlineHashtags(baseText, postData.platform);
     }
 
-    // X Article: append rendered article body (content.html contains Draft.js → Markdown)
+    // X Article: use the rendered article body as canonical content.
+    // content.text usually repeats the article title/preview and can duplicate
+    // the Draft.js article body when appended.
     const isXArticle = postData.platform === 'x' && !!postData.content.html;
     if (isXArticle) {
-      const articleBody = postData.content.html ?? '';
-      baseText = baseText
-        ? `${baseText}\n\n---\n\n${articleBody}`
-        : articleBody;
+      const articleBody = this.dedupeRepeatedXArticleSections(postData.content.html ?? '');
+      if (articleBody.trim()) {
+        baseText = articleBody;
+      }
     }
 
     // For RSS-based platforms and Threads inline archives: replace media

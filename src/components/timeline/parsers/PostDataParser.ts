@@ -256,6 +256,9 @@ export class PostDataParser {
       const threadsInlineMarkdown = frontmatter.platform === 'threads'
         ? this.extractThreadsInlineContent(content, mediaUrls)
         : undefined;
+      const threadsArticleMarkdown = frontmatter.platform === 'threads' && this.isStructuredArticlePost(frontmatter, content)
+        ? this.extractThreadsArticleContent(content, mediaUrls)
+        : undefined;
 
       const publishedDate = frontmatter.published ? new Date(frontmatter.published) : undefined;
       const archivedDate = frontmatter.archived ? new Date(frontmatter.archived) : undefined;
@@ -441,6 +444,11 @@ export class PostDataParser {
           if (titleMatch?.[1]) {
             title = titleMatch[1].trim();
           }
+        } else if (frontmatter.platform === 'threads' && this.isStructuredArticlePost(frontmatter, content)) {
+          const titleMatch = contentWithoutFrontmatter.match(/^\\?#\s+(.+)$/m);
+          if (titleMatch?.[1]) {
+            title = titleMatch[1].trim();
+          }
         } else if (frontmatter.platform === 'x' && this.isXArticlePost(frontmatter, content)) {
           // For X articles: extract title from first H1 heading (may be escaped as \#)
           const titleMatch = contentWithoutFrontmatter.match(/^\\?#\s+(.+)$/m);
@@ -541,8 +549,8 @@ export class PostDataParser {
           // For X articles: extract article body and unescape markdown artifacts
           rawMarkdown: (isRssBasedPlatform(frontmatter.platform) || frontmatter.platform === 'web')
             ? this.extractBlogContentWithInlineMedia(content, mediaUrls)
-            : threadsInlineMarkdown
-              ? threadsInlineMarkdown
+            : (threadsArticleMarkdown || threadsInlineMarkdown)
+              ? (threadsArticleMarkdown || threadsInlineMarkdown)
             : (frontmatter.platform === 'x' && this.isXArticlePost(frontmatter, content))
               ? this.extractXArticleContent(content)
               : undefined,
@@ -884,6 +892,33 @@ export class PostDataParser {
       /<img\b/i.test(markdown);
   }
 
+  private isStructuredArticlePost(frontmatter: YamlFrontmatter, content: string): boolean {
+    if (frontmatter['contentType'] === 'article') return true;
+    if (frontmatter['isArticle'] === true || frontmatter['isXArticle'] === true || frontmatter['isWebArticle'] === true) {
+      return true;
+    }
+
+    const withoutFrontmatter = content.replace(/^---\n[\s\S]*?\n---\n?/, '');
+    return /^((?:\\#|#){1,6})\s+.+$/m.test(withoutFrontmatter) &&
+      /(?:^|\n)(?:(?:\\#|#){2,3}\s+\S|\d+\\?\.\s+\S|\s*---\s*\n)/.test(withoutFrontmatter);
+  }
+
+  private unescapeEscapedMarkdownHeadings(markdown: string): string {
+    return markdown.replace(/^((?:\\#|#){1,6})(?=\s)/gm, (match) => match.replace(/\\/g, ''));
+  }
+
+  private extractThreadsArticleContent(markdown: string, mediaUrls?: string[]): string {
+    let content = this.extractBlogContentWithInlineMedia(markdown, mediaUrls);
+
+    // Older notes may contain escaped markdown from social-text rendering paths.
+    content = this.unescapeEscapedMarkdownHeadings(content);
+    content = content.replace(/^\\?#\s+[^\n]+\n+/, '');
+    content = content.replace(/^(\d+)\\\./gm, '$1.');
+    content = content.replace(/\[Image: mediaId=[^\]]*\]\n*/g, '');
+
+    return content.trim();
+  }
+
   /**
    * Detect whether an archived X post is a long-form article.
    * Checks frontmatter `isArticle` flag first (new archives), then
@@ -933,10 +968,46 @@ export class PostDataParser {
     // Remove [Image: mediaId=...] placeholders from older archives
     content = content.replace(/\[Image: mediaId=[^\]]*\]\n*/g, '');
 
+    content = this.dedupeRepeatedXArticleSections(content);
+
     // Clean up excessive whitespace
     content = content.trim();
 
     return content;
+  }
+
+  private dedupeRepeatedXArticleSections(markdown: string): string {
+    const normalized = markdown.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+    if (!normalized) return '';
+
+    const sections = normalized
+      .split(/\n\s*---\s*\n/)
+      .map(section => section.trim())
+      .filter(Boolean);
+
+    if (sections.length < 2 || sections.length % 2 !== 0) {
+      return normalized;
+    }
+
+    const midpoint = sections.length / 2;
+    const firstHalf = sections.slice(0, midpoint).join('\n\n---\n\n');
+    const secondHalf = sections.slice(midpoint).join('\n\n---\n\n');
+
+    return this.normalizeComparableArticleText(firstHalf) === this.normalizeComparableArticleText(secondHalf)
+      ? firstHalf
+      : normalized;
+  }
+
+  private normalizeComparableArticleText(markdown: string): string {
+    return markdown
+      .replace(/!\[[\s\S]*?\]\([^)]+\)/g, '')
+      .replace(/\[[^\]]+\]\(([^)]+)\)/g, '$1')
+      .replace(/^#{1,6}\s*/gm, '')
+      .replace(/^(\d+)\.\s*/gm, '$1 ')
+      .replace(/[\\`*_>#+-]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
   }
 
   /**
@@ -1110,7 +1181,7 @@ export class PostDataParser {
   private parseCommentHeaderLine(line: string): ParsedCommentHeader | null {
     const replyMatch = line.match(/^(\s*)↳\s+(.+)$/);
     const depth = replyMatch ? Math.max(1, Math.floor((replyMatch[1]?.length ?? 0) / 2)) : 0;
-    const headerText = (replyMatch ? replyMatch[2] : line).trim();
+    const headerText = (replyMatch ? (replyMatch[2] ?? '') : line).trim();
 
     if (!replyMatch && line !== line.trimStart()) {
       return null;

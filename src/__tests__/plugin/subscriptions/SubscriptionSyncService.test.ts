@@ -15,6 +15,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { TFile } from 'obsidian';
 
 const serviceMocks = vi.hoisted(() => ({
   mediaHandlerDownloadMedia: vi.fn(),
@@ -313,6 +314,55 @@ describe('SubscriptionSyncService', () => {
   });
 
   describe('saveSubscriptionPostDetailed media download mode', () => {
+    it('skips creation when a pending subscription post already exists by originalUrl', async () => {
+      const existingFile = new TFile('Social Archives/Facebook/existing.md');
+      const lookup = {
+        findBySourceArchiveId: vi.fn().mockReturnValue(null),
+        findByOriginalUrl: vi.fn().mockReturnValue([existingFile]),
+        backfillFileIdentity: vi.fn().mockResolvedValue(undefined),
+        indexSavedFile: vi.fn(),
+      };
+      const deps = makeDeps({
+        archiveLookupService: () => lookup as any,
+        apiClient: () => ({ proxyMedia: vi.fn() } as any),
+      });
+
+      const service = new SubscriptionSyncService(deps);
+      const result = await service.saveSubscriptionPostDetailed(makePendingPost({
+        platform: 'facebook',
+        url: 'https://www.facebook.com/example/posts/1',
+      }));
+
+      expect(result).toEqual({
+        status: 'existing',
+        file: existingFile,
+        path: existingFile.path,
+        reason: 'originalUrl',
+      });
+      expect(lookup.findByOriginalUrl).toHaveBeenCalledWith('https://www.facebook.com/example/posts/1');
+      expect(serviceMocks.vaultManagerGenerateFilePath).not.toHaveBeenCalled();
+      expect(serviceMocks.vaultStorageSavePost).not.toHaveBeenCalled();
+      expect(serviceMocks.mediaHandlerDownloadMedia).not.toHaveBeenCalled();
+    });
+
+    it('copies pending archiveId into PostData before saving KV-fetched posts', async () => {
+      const deps = makeDeps({
+        apiClient: () => undefined,
+      });
+
+      const service = new SubscriptionSyncService(deps);
+      const result = await service.saveSubscriptionPostDetailed({
+        ...makePendingPost(),
+        archiveId: 'archive-from-kv',
+      });
+
+      expect(result.status).toBe('created');
+      expect(serviceMocks.vaultStorageSavePost).toHaveBeenCalledOnce();
+      expect(serviceMocks.vaultStorageSavePost.mock.calls[0][0]).toMatchObject({
+        sourceArchiveId: 'archive-from-kv',
+      });
+    });
+
     it('downloads images but skips videos when settings are images-only', async () => {
       const deps = makeDeps({
         settings: () => ({

@@ -13,6 +13,22 @@ describe('CommentFormatter', () => {
   });
 
   describe('formatComments with media', () => {
+    it('normalizes X handles that already include @', () => {
+      const comments: Comment[] = [
+        {
+          id: '1',
+          author: { name: 'X User', url: 'https://x.com/example', handle: '@example' },
+          content: 'X comment',
+        },
+      ];
+
+      const result = formatter.formatComments(comments, 'x');
+
+      expect(result).toContain('**[@example](https://x.com/example)**');
+      expect(result).not.toContain('@@example');
+      expect(result).not.toContain('https://x.com/@example');
+    });
+
     it('should render inline image in comment', () => {
       const comments: Comment[] = [
         {

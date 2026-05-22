@@ -16,6 +16,7 @@ import { VaultManager } from '../../services/VaultManager';
 import type { SubscriptionManager, PendingPost } from '../../services/SubscriptionManager';
 import type { WorkersAPIClient } from '../../services/WorkersAPIClient';
 import type { AuthorAvatarService } from '../../services/AuthorAvatarService';
+import type { ArchiveLookupService } from '../../services/ArchiveLookupService';
 import type { MediaDownloadMode, SocialArchiverSettings } from '../../types/settings';
 import { getVaultOrganizationStrategy } from '../../types/settings';
 import type { PostData, Platform, Media } from '../../types/post';
@@ -67,6 +68,7 @@ export interface SubscriptionSyncServiceDeps {
   subscriptionManager: () => SubscriptionManager | undefined;
   apiClient: () => WorkersAPIClient | undefined;
   authorAvatarService: () => AuthorAvatarService | undefined;
+  archiveLookupService?: () => ArchiveLookupService | undefined;
   archiveCompletionService: {
     enrichAuthorMetadata: (postData: PostData, platform: Platform) => Promise<void>;
   } | undefined;
@@ -335,6 +337,14 @@ export class SubscriptionSyncService {
       const { MediaHandler } = await import('../../services/MediaHandler');
 
       const post = pendingPost.post;
+      if (pendingPost.archiveId && !post.sourceArchiveId) {
+        post.sourceArchiveId = pendingPost.archiveId;
+      }
+
+      const existingByIdentity = await this.findExistingArchiveFile(post);
+      if (existingByIdentity) {
+        return existingByIdentity;
+      }
 
       const rawAuthorName = post.author?.name || post.author?.handle || '';
       // Skip unknown author — but allow composed posts (platform: 'post') which are self-authored
@@ -385,6 +395,9 @@ export class SubscriptionSyncService {
 
       const existingFile = this.app.vault.getAbstractFileByPath(targetFilePath);
       if (existingFile) {
+        if (existingFile instanceof TFile) {
+          await this.bindFileIdentityIfPossible(existingFile, post);
+        }
         return {
           status: 'existing',
           path: targetFilePath,
@@ -653,6 +666,7 @@ export class SubscriptionSyncService {
       const saveResult = await storageService.savePost(post, undefined, targetFilePath, mediaResults);
 
       if (saveResult.path) {
+        this.indexSavedFileIfPossible(saveResult.file, post);
         this.deps.refreshTimelineView();
         return { status: 'created', file: saveResult.file, path: saveResult.path };
       }
@@ -662,6 +676,94 @@ export class SubscriptionSyncService {
       console.error('[Social Archiver] saveSubscriptionPostDetailed error:', error);
       return { status: 'failed', reason: error instanceof Error ? error.message : String(error) };
     }
+  }
+
+  private async findExistingArchiveFile(post: PostData): Promise<SavePendingPostResult | null> {
+    const lookup = this.deps.archiveLookupService?.();
+    if (!lookup) return null;
+
+    const sourceArchiveId = post.sourceArchiveId;
+    if (sourceArchiveId) {
+      const existingById = lookup.findBySourceArchiveId(sourceArchiveId);
+      if (existingById) {
+        return {
+          status: 'existing',
+          file: existingById,
+          path: existingById.path,
+          reason: 'sourceArchiveId',
+        };
+      }
+    }
+
+    const originalUrl = this.getOriginalUrlForIdentity(post);
+    if (!originalUrl) return null;
+
+    const matches = lookup.findByOriginalUrl(originalUrl);
+    if (matches.length === 0) return null;
+
+    if (matches.length === 1) {
+      const matched = matches[0]!;
+      await this.bindFileIdentityIfPossible(matched, post);
+      return {
+        status: 'existing',
+        file: matched,
+        path: matched.path,
+        reason: 'originalUrl',
+      };
+    }
+
+    console.warn('[Social Archiver] Subscription post matched multiple existing files by URL; skipping new file creation', {
+      sourceArchiveId,
+      originalUrl,
+      paths: matches.map(file => file.path),
+    });
+
+    return {
+      status: 'existing',
+      path: matches[0]?.path,
+      reason: 'ambiguous originalUrl',
+    };
+  }
+
+  private async bindFileIdentityIfPossible(file: TFile, post: PostData): Promise<void> {
+    const lookup = this.deps.archiveLookupService?.();
+    if (!lookup) return;
+
+    const sourceArchiveId = post.sourceArchiveId;
+    const originalUrl = this.getOriginalUrlForIdentity(post);
+
+    if (sourceArchiveId) {
+      try {
+        await lookup.backfillFileIdentity(file, sourceArchiveId);
+      } catch (error) {
+        console.warn('[Social Archiver] Failed to backfill subscription archive identity', {
+          sourceArchiveId,
+          path: file.path,
+          error,
+        });
+      }
+    }
+
+    lookup.indexSavedFile(file, {
+      ...(sourceArchiveId ? { sourceArchiveId } : {}),
+      ...(originalUrl ? { originalUrl } : {}),
+    });
+  }
+
+  private indexSavedFileIfPossible(file: TFile, post: PostData): void {
+    const lookup = this.deps.archiveLookupService?.();
+    if (!lookup) return;
+
+    const sourceArchiveId = post.sourceArchiveId;
+    const originalUrl = this.getOriginalUrlForIdentity(post);
+    lookup.indexSavedFile(file, {
+      ...(sourceArchiveId ? { sourceArchiveId } : {}),
+      ...(originalUrl ? { originalUrl } : {}),
+    });
+  }
+
+  private getOriginalUrlForIdentity(post: PostData): string | undefined {
+    return post.url || post.originalUrl;
   }
 
   /**
