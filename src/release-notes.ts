@@ -29,9 +29,10 @@ export const RELEASE_NOTES: Record<string, ReleaseNote> = {
     date: '2026-05-23',
     notes: `## Video Download Reliability
 
-- Improved desktop-assisted YouTube video downloads so completed media is inserted back into the original archive note and timeline.
-- Mobile now reconciles downloaded local media after expired CDN media is refreshed.
-- Failed mobile queue activity can now be cleared so stale failures do not keep the status badge alive.
+- YouTube downloads can now run as desktop download-only jobs and update the existing archive note/timeline when media is ready.
+- Mobile handoff now reflects desktop-downloaded media after expired CDN refreshes.
+- Failed or expired queue activity can be cleared so stale badges do not remain.
+- Reader CSS cleanup for current Obsidian review checks.
 `,
   },
   '3.6.10': {
