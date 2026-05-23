@@ -85,7 +85,7 @@
   box-sizing: border-box;
   display: grid;
   grid-template-columns: minmax(0, var(--reader-content-width, 680px)) minmax(var(--reader-comments-min-width, 360px), var(--reader-comments-width, 520px));
-  column-gap: var(--reader-comments-gap, clamp(24px, 3vw, 40px));
+  gap: 0 var(--reader-comments-gap, clamp(24px, 3vw, 40px));
   align-items: start;
   width: min(100%, calc(var(--reader-content-width, 680px) + var(--reader-comments-width, 520px) + var(--reader-comments-gap, 32px)));
   margin: 0 auto
@@ -208,9 +208,9 @@
 }
 
 .sa-reader-mode-comments-panel .sa-mt-12.sa-pt-12.sa-border-b {
-  margin-top: 0 !important;
-  padding-top: 0 !important;
-  border-bottom: 0 !important
+  margin-top: 0;
+  padding-top: 0;
+  border-bottom: 0
 }
 
 .sa-reader-mode-comments-panel .sa-flex-col.sa-gap-8 {
@@ -272,7 +272,8 @@
   }
 }
 
-.sa-reader-ai-comment-job-banner-host {
+.sa-reader-ai-comment-job-banner-host,
+.sa-reader-transcription-job-banner-host {
   position: absolute;
   top: 52px;
   left: 16px;
@@ -281,10 +282,15 @@
   pointer-events: none
 }
 
-.sa-reader-ai-comment-job-banner-host .sa-ai-comment-job-banners {
+.sa-reader-ai-comment-job-banner-host .sa-ai-comment-job-banners,
+.sa-reader-transcription-job-banner-host .sa-transcription-job-banners {
   width: min(var(--reader-content-width, 680px), 100%);
   margin: 0 auto;
   pointer-events: auto
+}
+
+.sa-reader-transcription-job-banner-host {
+  top: 96px
 }
 
 .sa-reader-mode-header-wrapper {

@@ -71,7 +71,7 @@ import { SubscriptionSyncService } from './plugin/subscriptions/SubscriptionSync
 import { convertUserArchiveToPostData } from './plugin/mobile/UserArchiveConverter';
 import { BatchGoogleMapsArchiver } from './plugin/jobs/BatchGoogleMapsArchiver';
 import { PostShareService } from './plugin/session/PostShareService';
-import { ArchiveLibrarySyncService } from './plugin/sync/ArchiveLibrarySyncService';
+import { ArchiveLibrarySyncService, type ArchiveLibrarySyncMode } from './plugin/sync/ArchiveLibrarySyncService';
 import { ArchiveDeleteSyncService } from './plugin/sync/ArchiveDeleteSyncService';
 import { getForegroundSyncDeferral } from './plugin/sync/foregroundSyncDeferral';
 import { AnnotationOutboundService } from './plugin/sync/AnnotationOutboundService';
@@ -106,6 +106,7 @@ const FOREGROUND_SYNC_CATCH_UP_DEBOUNCE_MS = 750;
 const FOREGROUND_SYNC_CATCH_UP_USER_BUSY_RETRY_MS = 10_000;
 const FOREGROUND_SYNC_CATCH_UP_MEDIA_MAX_DEFER_MS = 30 * 60 * 1000;
 const FOREGROUND_SYNC_CATCH_UP_MIN_INTERVAL_MS = 30_000;
+const ARCHIVE_LIBRARY_SYNC_MEDIA_RETRY_MS = 10_000;
 type ForegroundSyncCatchUpTrigger = 'focus' | 'visibilitychange' | 'online';
 
 export default class SocialArchiverPlugin extends Plugin {
@@ -377,6 +378,30 @@ export default class SocialArchiverPlugin extends Plugin {
 
     this.foregroundSyncMediaDeferredSince = undefined;
     return false;
+  }
+
+  private shouldDelayArchiveLibrarySyncForMediaPlayback(): boolean {
+    const doc = this.getActiveDomDocument();
+    if (!doc || doc.hidden) return false;
+
+    return getForegroundSyncDeferral(doc).reason === 'media-playback';
+  }
+
+  private scheduleArchiveLibrarySyncWhenTimelineIdle(mode?: ArchiveLibrarySyncMode): void {
+    this.scheduleTrackedTimeout(() => {
+      void this.startArchiveLibrarySyncWhenTimelineIdle(mode);
+    }, ARCHIVE_LIBRARY_SYNC_MEDIA_RETRY_MS);
+  }
+
+  private async startArchiveLibrarySyncWhenTimelineIdle(mode?: ArchiveLibrarySyncMode): Promise<void> {
+    if (this.shouldDelayArchiveLibrarySyncForMediaPlayback()) {
+      console.debug('[Social Archiver] [LibrarySync] Deferring auto-start while timeline media is playing');
+      this.scheduleArchiveLibrarySyncWhenTimelineIdle(mode);
+      return;
+    }
+
+    await this.archiveDeleteSyncService?.flushPendingDeletes();
+    await this.archiveLibrarySyncService?.startSync(mode);
   }
 
   private currentObsidianRuntime(): 'desktop' | 'mobile' {
@@ -1777,8 +1802,10 @@ export default class SocialArchiverPlugin extends Plugin {
             this.billingEventNoticer?.shouldShow(event) ?? false,
           markBillingEventNoticed: (eventId) => this.billingEventNoticer?.markShown(eventId),
           refreshTimelineView: () => this.refreshTimelineView(),
-          aiCommentJobProcessor: ObsidianPlatform.isMobile ? undefined : this.aiCommentJobProcessor,
-          transcriptionJobProcessor: ObsidianPlatform.isMobile ? undefined : this.transcriptionJobProcessor,
+          canExecuteAICommentJobs: () => !ObsidianPlatform.isMobile,
+          aiCommentJobProcessor: this.aiCommentJobProcessor,
+          canExecuteTranscriptionJobs: () => !ObsidianPlatform.isMobile,
+          transcriptionJobProcessor: this.transcriptionJobProcessor,
           processPendingSyncQueue: () => this.mobileSyncService?.processPendingSyncQueue() ?? Promise.resolve(),
           processSyncQueueItem: (queueId, archiveId, clientId) =>
             this.mobileSyncService?.processSyncQueueItem(queueId, archiveId, clientId) ?? Promise.resolve(false),
@@ -1881,10 +1908,7 @@ export default class SocialArchiverPlugin extends Plugin {
           if (shouldAutoStart) {
             // Delay to let services fully initialise before starting sync
             this.scheduleTrackedTimeout(() => {
-              void (async () => {
-                await this.archiveDeleteSyncService?.flushPendingDeletes();
-                await this.archiveLibrarySyncService?.startSync();
-              })();
+              void this.startArchiveLibrarySyncWhenTimelineIdle();
             }, 8000);
           }
         }
@@ -2833,10 +2857,7 @@ export default class SocialArchiverPlugin extends Plugin {
         const libSync = this.settings.archiveLibrarySync;
         if (!libSync?.completedAt) {
           this.scheduleTrackedTimeout(() => {
-            void (async () => {
-              await this.archiveDeleteSyncService?.flushPendingDeletes();
-              await this.archiveLibrarySyncService?.startSync('bootstrap');
-            })();
+            void this.startArchiveLibrarySyncWhenTimelineIdle('bootstrap');
           }, 2000);
         }
 

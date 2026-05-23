@@ -1,4 +1,4 @@
-import { normalizePath, TFile, type App } from 'obsidian';
+import { normalizePath, parseYaml, TFile, type App } from 'obsidian';
 import type {
   TranscriptionActiveJobSummary,
   TranscriptionClaimResponse,
@@ -84,6 +84,25 @@ export interface PendingTranscriptUploadRecord {
   };
 }
 
+export interface TranscriptionJobBannerState {
+  jobId: string;
+  archiveId: string;
+  mediaRefHash?: string;
+  title?: string;
+  targetClientId?: string;
+  status: TranscriptionJobStatus;
+  uiStatus?: TranscriptionActiveJobSummary['uiStatus'];
+  progressPercentage?: number;
+  progressCode?: string;
+  queueDepth: number;
+  errorCode?: string;
+  errorMessagePublic?: string;
+  terminalReason?: string;
+  transcriptResultId?: string;
+  localMediaPath?: string;
+  updatedAt: string;
+}
+
 const BACKLOG_POLL_MS = 3 * 60 * 1000;
 const LEASE_RENEW_RATIO = 0.5;
 const AUDIO_EXTENSIONS = new Set(['mp3', 'm4a', 'ogg', 'wav', 'flac', 'aac', 'wma']);
@@ -92,28 +111,32 @@ const VIDEO_EXTENSIONS = new Set(['mp4', 'webm', 'mov', 'avi', 'mkv', 'm4v']);
 export function upsertDownloadedVideoEmbed(content: string, localVideoPath: string): string {
   const normalizedPath = normalizePath(localVideoPath).replace(/^\/+/, '');
   if (!normalizedPath) return content;
-  if (content.includes(normalizedPath) || content.includes(encodeURI(normalizedPath))) return content;
 
   const embed = `![[${normalizedPath}]]`;
-  const frontmatterMatch = content.match(/^---\n[\s\S]*?\n---\n?/);
+  const frontmatterMatch = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
   const bodyStart = frontmatterMatch ? frontmatterMatch[0].length : 0;
   const body = content.slice(bodyStart);
+  if (body.includes(normalizedPath) || body.includes(encodeURI(normalizedPath))) return content;
+
+  const newline = content.includes('\r\n') ? '\r\n' : '\n';
   const headingMatch = body.match(/^\s*#\s+[^\n]+\n+/);
   const insertAt = bodyStart + (headingMatch ? headingMatch[0].length : 0);
-  const before = content.slice(0, insertAt).replace(/\s*$/, '\n\n');
+  const before = content.slice(0, insertAt).replace(/\s*$/, `${newline}${newline}`);
   const after = content.slice(insertAt).replace(/^\s*/, '');
-  return after ? `${before}${embed}\n\n${after}` : `${before}${embed}\n`;
+  return after ? `${before}${embed}${newline}${newline}${after}` : `${before}${embed}${newline}`;
 }
 
 function applyDownloadedVideoFrontmatter(
   frontmatter: Record<string, unknown>,
-  sourceUrl: string,
+  sourceUrl: string | null,
   localVideoPath: string,
 ): void {
   const normalizedPath = normalizePath(localVideoPath).replace(/^\/+/, '');
   const downloadedUrls = Array.isArray(frontmatter.downloadedUrls) ? [...frontmatter.downloadedUrls] : [];
-  for (const marker of [sourceUrl, `downloaded:${sourceUrl}`]) {
-    if (!downloadedUrls.includes(marker)) downloadedUrls.push(marker);
+  if (sourceUrl) {
+    for (const marker of [sourceUrl, `downloaded:${sourceUrl}`]) {
+      if (!downloadedUrls.includes(marker)) downloadedUrls.push(marker);
+    }
   }
   frontmatter.downloadedUrls = downloadedUrls;
   frontmatter.videoDownloaded = true;
@@ -148,6 +171,9 @@ export class TranscriptionJobProcessor {
   private currentJobId: string | null = null;
   private currentAbortController: AbortController | null = null;
   private readonly formatter = new TranscriptFormatter();
+  private bannerState: TranscriptionJobBannerState | null = null;
+  private readonly listeners = new Set<(state: TranscriptionJobBannerState | null) => void>();
+  private readonly reconciledDownloadResults = new Set<string>();
 
   constructor(private readonly deps: TranscriptionJobProcessorDeps) {}
 
@@ -166,6 +192,34 @@ export class TranscriptionJobProcessor {
     this.currentAbortController = null;
     this.queue.length = 0;
     this.queued.clear();
+    this.setBannerState(null);
+  }
+
+  onUpdate(listener: (state: TranscriptionJobBannerState | null) => void): () => void {
+    this.listeners.add(listener);
+    listener(this.bannerState);
+    return () => this.listeners.delete(listener);
+  }
+
+  getBannerState(): TranscriptionJobBannerState | null {
+    return this.bannerState;
+  }
+
+  dismissJob(jobId: string): void {
+    if (this.bannerState?.jobId === jobId) this.setBannerState(null);
+  }
+
+  async cancelJob(jobId: string): Promise<void> {
+    const apiClient = this.deps.apiClient();
+    const clientId = this.deps.settings().syncClientId;
+    if (!apiClient || !clientId) return;
+    try {
+      const response = await apiClient.cancelTranscriptionJob(jobId, { clientId });
+      this.applySummaryToBanner(response.job);
+      if (jobId === this.currentJobId) this.currentAbortController?.abort();
+    } catch (error) {
+      console.warn('[TranscriptionJobProcessor] Cancel request failed:', safeError(error));
+    }
   }
 
   async drainBacklog(): Promise<void> {
@@ -183,6 +237,7 @@ export class TranscriptionJobProcessor {
     for (const job of response.jobs) {
       this.enqueue(job.jobId);
     }
+    this.updateQueueDepth();
     await this.processQueue();
   }
 
@@ -197,27 +252,60 @@ export class TranscriptionJobProcessor {
     await this.processQueue();
   }
 
+  trackJobSummary(summary: TranscriptionActiveJobSummary): void {
+    this.applySummaryToBanner(summary);
+  }
+
   async handleStatusEvent(event: {
     jobId?: string;
     targetClientId?: string;
+    archiveId?: string;
+    mediaRefHash?: string;
     status?: string;
+    uiStatus?: TranscriptionActiveJobSummary['uiStatus'];
+    progressPercentage?: number;
+    progressCode?: string;
+    nextAttemptAt?: string;
+    errorCode?: string;
+    errorMessagePublic?: string;
+    terminalReason?: string;
+    transcriptResultId?: string;
+    localMediaPath?: string;
+    updatedAt?: string;
   }): Promise<void> {
     if (!event.jobId) return;
-    if (event.targetClientId && event.targetClientId !== this.deps.settings().syncClientId) return;
     if ((event.status === 'cancel_requested' || event.status === 'cancelled') && event.jobId === this.currentJobId) {
       this.currentAbortController?.abort();
     }
+    this.applySummaryToBanner(event);
+    await this.reconcileDownloadedVideoStatus(event);
   }
 
   async handleCancelledEvent(event: { jobId?: string; targetClientId?: string }): Promise<void> {
-    if (!event.jobId || event.targetClientId !== this.deps.settings().syncClientId) return;
+    if (!event.jobId) return;
     if (event.jobId === this.currentJobId) {
       this.currentAbortController?.abort();
     }
+    this.applySummaryToBanner({
+      jobId: event.jobId,
+      targetClientId: event.targetClientId,
+      status: 'cancel_requested',
+    });
   }
 
-  async handleUpdatedEvent(event: { archiveId?: string }): Promise<void> {
+  async handleUpdatedEvent(event: { archiveId?: string; jobId?: string; transcriptResultId?: string; updatedAt?: string }): Promise<void> {
     if (!event.archiveId) return;
+    if (event.jobId) {
+      this.applySummaryToBanner({
+        jobId: event.jobId,
+        archiveId: event.archiveId,
+        status: 'completed',
+        uiStatus: 'done',
+        progressPercentage: 100,
+        transcriptResultId: event.transcriptResultId,
+        updatedAt: event.updatedAt,
+      });
+    }
     const file = this.deps.archiveLookupService()?.findBySourceArchiveId(event.archiveId) ?? null;
     const apiClient = this.deps.apiClient();
     if (file && apiClient) {
@@ -248,6 +336,7 @@ export class TranscriptionJobProcessor {
     if (this.queued.has(jobId)) return;
     this.queued.add(jobId);
     this.queue.push(jobId);
+    this.updateQueueDepth();
   }
 
   private async processQueue(): Promise<void> {
@@ -262,6 +351,7 @@ export class TranscriptionJobProcessor {
       }
     } finally {
       this.processing = false;
+      this.updateQueueDepth();
     }
   }
 
@@ -281,6 +371,7 @@ export class TranscriptionJobProcessor {
     }
 
     if (detail.targetClientId !== clientId) return;
+    this.applyExecutorJobToBanner(detail);
 
     let claim: TranscriptionClaimResponse;
     try {
@@ -347,17 +438,28 @@ export class TranscriptionJobProcessor {
         await this.fail(context, 'ARCHIVE_MATERIALIZATION_FAILED', true);
         return;
       }
+      await this.normalizeDuplicateSourceArchiveId(file);
 
       const resumed = await this.resumePendingUpload(file, context);
       if (resumed) return;
 
       throwIfAborted(context.abortController.signal);
-      await this.progress(context, 'preparing_media', 20, 'preparing_media');
+      await this.progress(
+        context,
+        'preparing_media',
+        20,
+        this.isDownloadMode(context.job.mode) ? 'downloading_video' : 'preparing_media',
+      );
       const localMediaPath = await this.withMediaMaterializationLock(context, () =>
         this.resolveOrMaterializeMedia(file, context),
       );
       if (!localMediaPath) {
-        await this.fail(context, 'MEDIA_FILE_MISSING', context.job.mode === 'download-and-transcribe');
+        await this.fail(context, 'MEDIA_FILE_MISSING', this.isDownloadMode(context.job.mode));
+        return;
+      }
+
+      if (context.job.mode === 'download-only') {
+        await this.completeDownloadOnlyJob(file, context, localMediaPath);
         return;
       }
 
@@ -466,8 +568,105 @@ export class TranscriptionJobProcessor {
   ): Promise<string | null> {
     const local = await this.resolveLocalMediaPath(file, context.job.mediaRef.kind);
     if (local) return local;
-    if (context.job.mode !== 'download-and-transcribe') return null;
+    if (!this.isDownloadMode(context.job.mode)) return null;
     return this.downloadMediaForJob(file, context);
+  }
+
+  private async completeDownloadOnlyJob(file: TFile, context: ProcessingContext, localMediaPath: string): Promise<void> {
+    throwIfAborted(context.abortController.signal);
+    await this.progress(context, 'uploading', 95, 'download_completed');
+      await this.ensureDownloadedVideoReference(file, context, localMediaPath);
+
+    const apiClient = this.deps.apiClient();
+    const clientId = this.deps.settings().syncClientId;
+    if (!apiClient || !clientId) return;
+
+    const completedAt = new Date().toISOString();
+    const response = await apiClient.uploadTranscriptionDownloadResult(context.job.jobId, {
+      clientId,
+      lockToken: context.lease.lockToken,
+      lockTokenVersion: context.lease.lockTokenVersion,
+      localWrite: {
+        markdownUpdated: true,
+        frontmatterUpdated: true,
+        localMediaPath,
+      },
+      processing: {
+        startedAt: context.startedAt,
+        completedAt,
+        processingTimeMs: Date.parse(completedAt) - Date.parse(context.startedAt),
+      },
+    });
+    this.applySummaryToBanner(response.job);
+    this.deps.notify('Video downloaded in Obsidian.', 5000);
+    this.deps.refreshTimelineView();
+    if (response.job.status !== 'completed') {
+      console.debug('[TranscriptionJobProcessor] Download-only job not completed yet', response.job);
+    }
+  }
+
+  private async ensureDownloadedVideoReference(
+    file: TFile,
+    context: ProcessingContext,
+    localMediaPath: string,
+    sourceUrlOverride?: string,
+  ): Promise<void> {
+    if (context.job.mediaRef.kind !== 'video') return;
+    await this.assertLocalMediaFileExists(localMediaPath);
+    const frontmatter = await this.readFrontmatter(file);
+    const sourceUrl = sourceUrlOverride ?? this.extractOriginalDownloadUrl(frontmatter);
+    await this.withMarkdownWriteLock(context.job.archiveId, async () => {
+      await this.deps.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+        applyDownloadedVideoFrontmatter(fm, sourceUrl, localMediaPath);
+      });
+      await this.processFile(file, (content) => upsertDownloadedVideoEmbed(content, localMediaPath));
+    }, context.abortController.signal);
+
+    const updated = await this.deps.app.vault.read(file);
+    if (!this.contentBodyContainsLocalMedia(updated, localMediaPath)) {
+      throw new Error(`Downloaded video embed was not written to note: ${localMediaPath}`);
+    }
+  }
+
+  private async reconcileDownloadedVideoStatus(event: {
+    jobId?: string;
+    archiveId?: string;
+    status?: string;
+    progressCode?: string;
+    localMediaPath?: string;
+  }): Promise<void> {
+    if (
+      event.status !== 'completed' ||
+      event.progressCode !== 'download_completed' ||
+      !event.jobId ||
+      !event.archiveId ||
+      !event.localMediaPath
+    ) {
+      return;
+    }
+
+    const localMediaPath = normalizePath(event.localMediaPath).replace(/^\/+/, '');
+    if (!localMediaPath) return;
+
+    const dedupeKey = `${event.jobId}:${localMediaPath}`;
+    if (this.reconciledDownloadResults.has(dedupeKey)) return;
+
+    const file = this.deps.archiveLookupService()?.findBySourceArchiveId(event.archiveId) ?? null;
+    if (!file) return;
+
+    try {
+      await this.withMarkdownWriteLock(event.archiveId, async () => {
+        await this.normalizeDuplicateSourceArchiveId(file);
+        await this.deps.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+          applyDownloadedVideoFrontmatter(fm, null, localMediaPath);
+        });
+        await this.processFile(file, (content) => upsertDownloadedVideoEmbed(content, localMediaPath));
+      });
+      this.reconciledDownloadResults.add(dedupeKey);
+      this.deps.refreshTimelineView();
+    } catch (error) {
+      console.warn('[TranscriptionJobProcessor] Failed to reconcile downloaded video status:', safeError(error));
+    }
   }
 
   private async resolveLocalMediaPath(file: TFile, kind: TranscriptionMediaKind): Promise<string | null> {
@@ -478,8 +677,7 @@ export class TranscriptionJobProcessor {
     }
 
     const content = await this.deps.app.vault.read(file);
-    const cache = this.deps.app.metadataCache.getFileCache(file);
-    const frontmatter = (cache?.frontmatter as Record<string, unknown> | undefined) || {};
+    const frontmatter = this.readFrontmatterFromContent(file, content);
     const candidates = [
       ...this.extractFrontmatterMediaCandidates(frontmatter, kind),
       ...this.deps.mediaPathResolver().extractVideoPathCandidatesFromContent(content),
@@ -495,8 +693,7 @@ export class TranscriptionJobProcessor {
   private async downloadMediaForJob(file: TFile, context: ProcessingContext): Promise<string | null> {
     const download = this.deps.downloadWithYtDlp;
     if (!download || context.job.mediaRef.kind !== 'video') return null;
-    const cache = this.deps.app.metadataCache.getFileCache(file);
-    const frontmatter = (cache?.frontmatter as Record<string, unknown> | undefined) || {};
+    const frontmatter = await this.readFrontmatter(file);
     const urls = this.deps.mediaPathResolver().extractDownloadableVideoUrls(frontmatter);
     if (urls.length === 0) {
       const fallbackUrl = this.extractOriginalDownloadUrl(frontmatter);
@@ -514,12 +711,7 @@ export class TranscriptionJobProcessor {
     try {
       const downloaded = await download(url, platform, postId, context.abortController.signal);
       if (!downloaded) return null;
-      await this.withMarkdownWriteLock(context.job.archiveId, async () => {
-        await this.deps.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-          applyDownloadedVideoFrontmatter(fm, url, downloaded);
-        });
-        await this.processFile(file, (content) => upsertDownloadedVideoEmbed(content, downloaded));
-      }, context.abortController.signal);
+      await this.ensureDownloadedVideoReference(file, context, downloaded, url);
       return downloaded;
     } catch (error) {
       console.warn('[TranscriptionJobProcessor] Media download failed:', safeError(error));
@@ -527,11 +719,30 @@ export class TranscriptionJobProcessor {
     }
   }
 
+  private async assertLocalMediaFileExists(localMediaPath: string): Promise<void> {
+    const normalized = normalizePath(localMediaPath).replace(/^\/+/, '');
+    if (!normalized) throw new Error('Downloaded media path is empty');
+    const exists = await this.deps.app.vault.adapter.exists(normalized);
+    if (!exists) throw new Error(`Downloaded media file is missing from vault: ${normalized}`);
+  }
+
+  private contentBodyContainsLocalMedia(content: string, localMediaPath: string): boolean {
+    const normalizedPath = normalizePath(localMediaPath).replace(/^\/+/, '');
+    if (!normalizedPath) return false;
+    const frontmatterMatch = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+    const body = content.slice(frontmatterMatch ? frontmatterMatch[0].length : 0);
+    return body.includes(normalizedPath) || body.includes(encodeURI(normalizedPath));
+  }
+
   private extractOriginalDownloadUrl(frontmatter: Record<string, unknown>): string | null {
     const originalUrl = typeof frontmatter.originalUrl === 'string' ? frontmatter.originalUrl.trim() : '';
     if (!originalUrl) return null;
     if (!/youtube\.com|youtu\.be|tiktok\.com/i.test(originalUrl)) return null;
     return originalUrl;
+  }
+
+  private isDownloadMode(mode: TranscriptionExecutorJob['mode']): boolean {
+    return mode === 'download-and-transcribe' || mode === 'download-only';
   }
 
   private async writeTranscriptResult(
@@ -775,6 +986,86 @@ export class TranscriptionJobProcessor {
     });
   }
 
+  private applyExecutorJobToBanner(job: TranscriptionExecutorJob): void {
+    this.setBannerState({
+      jobId: job.jobId,
+      archiveId: job.archiveId,
+      mediaRefHash: job.mediaRefHash,
+      title: this.resolveArchiveTitle(job.archiveId),
+      targetClientId: job.targetClientId,
+      status: job.status,
+      uiStatus: job.uiStatus,
+      progressPercentage: job.progressPercentage,
+      progressCode: job.progressCode,
+      queueDepth: this.queue.length,
+      errorCode: job.errorCode,
+      errorMessagePublic: job.errorMessagePublic,
+      terminalReason: job.terminalReason,
+      transcriptResultId: job.transcriptResultId,
+      updatedAt: job.updatedAt,
+    });
+  }
+
+  private applySummaryToBanner(summary: {
+    jobId?: string;
+    archiveId?: string;
+    mediaRefHash?: string;
+    targetClientId?: string;
+    status?: string;
+    uiStatus?: TranscriptionActiveJobSummary['uiStatus'];
+    progressPercentage?: number;
+    progressCode?: string;
+    errorCode?: string;
+    errorMessagePublic?: string;
+    terminalReason?: string;
+    transcriptResultId?: string;
+    localMediaPath?: string;
+    updatedAt?: string;
+  }): void {
+    if (!summary.jobId) return;
+    const previous = this.bannerState?.jobId === summary.jobId ? this.bannerState : null;
+    const archiveId = summary.archiveId ?? previous?.archiveId ?? '';
+    const status = normalizeTranscriptionBannerStatus(summary.status) ?? previous?.status ?? 'queued';
+    this.setBannerState({
+      jobId: summary.jobId,
+      archiveId,
+      mediaRefHash: summary.mediaRefHash ?? previous?.mediaRefHash,
+      title: previous?.title ?? this.resolveArchiveTitle(archiveId),
+      targetClientId: summary.targetClientId ?? previous?.targetClientId,
+      status,
+      uiStatus: summary.uiStatus ?? previous?.uiStatus,
+      progressPercentage: summary.progressPercentage ?? previous?.progressPercentage,
+      progressCode: summary.progressCode ?? previous?.progressCode,
+      queueDepth: this.queue.length,
+      errorCode: summary.errorCode ?? previous?.errorCode,
+      errorMessagePublic: summary.errorMessagePublic ?? previous?.errorMessagePublic,
+      terminalReason: summary.terminalReason ?? previous?.terminalReason,
+      transcriptResultId: summary.transcriptResultId ?? previous?.transcriptResultId,
+      localMediaPath: summary.localMediaPath ?? previous?.localMediaPath,
+      updatedAt: summary.updatedAt ?? new Date().toISOString(),
+    });
+  }
+
+  private updateQueueDepth(): void {
+    if (!this.bannerState) return;
+    this.setBannerState({
+      ...this.bannerState,
+      queueDepth: this.queue.length,
+    });
+  }
+
+  private setBannerState(state: TranscriptionJobBannerState | null): void {
+    this.bannerState = state;
+    for (const listener of this.listeners) {
+      listener(state);
+    }
+  }
+
+  private resolveArchiveTitle(archiveId: string): string | undefined {
+    if (!archiveId) return undefined;
+    return this.deps.archiveLookupService()?.findBySourceArchiveId(archiveId)?.basename;
+  }
+
   private async processFile(file: TFile, updater: (content: string) => string): Promise<void> {
     const vault = this.deps.app.vault as typeof this.deps.app.vault & {
       process?: (file: TFile, fn: (content: string) => string) => Promise<void>;
@@ -790,6 +1081,50 @@ export class TranscriptionJobProcessor {
     if (updated !== existing && typeof vault.modify === 'function') {
       await vault.modify(file, updated);
     }
+  }
+
+  private async normalizeDuplicateSourceArchiveId(file: TFile): Promise<void> {
+    const vault = this.deps.app.vault;
+    const content = await vault.read(file);
+    const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    const frontmatter = match?.[1];
+    if (!match || match.index !== 0 || frontmatter === undefined) return;
+
+    const lines = frontmatter.split(/\r?\n/);
+    const identityLines = lines.filter((line) => /^sourceArchiveId:\s*/.test(line));
+    if (identityLines.length <= 1) return;
+
+    const value = identityLines[identityLines.length - 1]?.replace(/^sourceArchiveId:\s*/, '').trim();
+    if (!value) return;
+
+    const nextFrontmatter = [
+      ...lines.filter((line) => !/^sourceArchiveId:\s*/.test(line)),
+      `sourceArchiveId: ${value}`,
+    ].join('\n').replace(/\s+$/, '');
+    const updated = content.replace(/^---\r?\n[\s\S]*?\r?\n---/, `---\n${nextFrontmatter}\n---`);
+    if (updated !== content) {
+      await vault.modify(file, updated);
+    }
+  }
+
+  private async readFrontmatter(file: TFile): Promise<Record<string, unknown>> {
+    return this.readFrontmatterFromContent(file, await this.deps.app.vault.read(file));
+  }
+
+  private readFrontmatterFromContent(file: TFile, content: string): Record<string, unknown> {
+    const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    const raw = match?.[1];
+    if (raw !== undefined) {
+      try {
+        const parsed = parseYaml(raw);
+        if (parsed && typeof parsed === 'object') return parsed as Record<string, unknown>;
+      } catch {
+        // The metadata cache may still have a usable value if raw parsing fails.
+      }
+    }
+
+    const cached = this.deps.app.metadataCache.getFileCache(file)?.frontmatter;
+    return cached && typeof cached === 'object' ? cached as Record<string, unknown> : {};
   }
 
   private async progress(
@@ -811,6 +1146,7 @@ export class TranscriptionJobProcessor {
       progressPercentage,
       progressCode,
     });
+    this.applySummaryToBanner(response.job);
     context.lease.lockToken = response.lockToken;
     context.lease.lockTokenVersion = response.lockTokenVersion;
     context.lease.leaseExpiresAt = response.leaseExpiresAt;
@@ -832,7 +1168,7 @@ export class TranscriptionJobProcessor {
     const apiClient = this.deps.apiClient();
     const clientId = this.deps.settings().syncClientId;
     if (!apiClient || !clientId) return;
-    await apiClient.failTranscriptionJob(context.job.jobId, {
+    const response = await apiClient.failTranscriptionJob(context.job.jobId, {
       clientId,
       lockToken: context.lease.lockToken,
       lockTokenVersion: context.lease.lockTokenVersion,
@@ -840,7 +1176,9 @@ export class TranscriptionJobProcessor {
       retryable,
     }).catch((error) => {
       console.warn('[TranscriptionJobProcessor] Failed to report job failure:', safeError(error));
+      return null;
     });
+    if (response) this.applySummaryToBanner(response.job);
   }
 
   private async confirmCancel(context: ProcessingContext): Promise<boolean> {
@@ -947,8 +1285,7 @@ export class TranscriptionJobProcessor {
   }
 
   private async readFrontmatterDuration(file: TFile): Promise<number | undefined> {
-    const cache = this.deps.app.metadataCache.getFileCache(file);
-    const frontmatter = (cache?.frontmatter as Record<string, unknown> | undefined) || {};
+    const frontmatter = await this.readFrontmatter(file);
     const duration = frontmatter.duration;
     if (typeof duration === 'number' && Number.isFinite(duration)) return duration;
     if (typeof duration === 'string') {
@@ -989,6 +1326,30 @@ export class TranscriptionJobProcessor {
 
 function isExecutorJob(job: TranscriptionExecutorJob | TranscriptionActiveJobSummary): job is TranscriptionExecutorJob {
   return typeof (job as TranscriptionExecutorJob).targetClientId === 'string';
+}
+
+function normalizeTranscriptionBannerStatus(status: string | undefined): TranscriptionJobStatus | null {
+  if (!status) return null;
+  switch (status) {
+    case 'queued':
+    case 'dispatched':
+    case 'claiming':
+    case 'claimed':
+    case 'preparing_archive':
+    case 'preparing_media':
+    case 'running':
+    case 'uploading':
+    case 'merging':
+    case 'retry_scheduled':
+    case 'completed':
+    case 'failed':
+    case 'cancel_requested':
+    case 'cancelled':
+    case 'expired':
+      return status;
+    default:
+      return null;
+  }
 }
 
 function normalizeWhisperModel(value: string | undefined): 'tiny' | 'base' | 'small' | 'medium' | 'large' {

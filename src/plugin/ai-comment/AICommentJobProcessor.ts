@@ -714,7 +714,11 @@ export class AICommentJobProcessor {
     const clientId = this.deps.settings().syncClientId;
     if (!apiClient || !clientId) return;
 
-    if (!this.shouldRenewLease(context) && status === context.job.status) return;
+    const progressUnchanged =
+      status === context.job.status &&
+      progressPercentage === context.job.progressPercentage &&
+      progressMessage === context.job.progressMessage;
+    if (!this.shouldRenewLease(context) && progressUnchanged) return;
 
     const response: AICommentLeaseResponse = await apiClient.updateAICommentJobProgress(context.job.jobId, {
       clientId,
@@ -727,7 +731,11 @@ export class AICommentJobProcessor {
     context.lease.lockToken = response.lockToken;
     context.lease.lockTokenVersion = response.lockTokenVersion;
     context.lease.leaseExpiresAt = response.leaseExpiresAt;
-    context.job.status = status;
+    context.job.status = response.job.status;
+    context.job.progressPercentage = response.job.progressPercentage ?? progressPercentage;
+    context.job.progressMessage = response.job.progressMessage ?? progressMessage;
+    context.job.updatedAt = response.job.updatedAt;
+    this.applySummaryToBanner(response.job);
   }
 
   private async handleLocalProgress(context: ProcessingContext, progress: AICommentProgress): Promise<void> {

@@ -105,11 +105,21 @@ function getDeepActiveElement(doc: Document): Element | null {
 
 function hasPlayingMedia(doc: Document): boolean {
   const mediaElements = Array.from(doc.querySelectorAll<HTMLMediaElement>('audio, video'));
-  return mediaElements.some(isPlayingMedia);
+  if (mediaElements.some(isPlayingMedia)) return true;
+
+  const youtubeIframes = Array.from(
+    doc.querySelectorAll<HTMLIFrameElement>('iframe[data-sa-youtube-player-state]')
+  );
+  return youtubeIframes.some(isPlayingYouTubeIframe);
 }
 
 function isPlayingMedia(media: HTMLMediaElement): boolean {
   return !media.paused && !media.ended && media.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
+}
+
+function isPlayingYouTubeIframe(iframe: HTMLIFrameElement): boolean {
+  const state = Number(iframe.dataset.saYoutubePlayerState);
+  return state === 1 || state === 3;
 }
 
 function isVisibleElement(element: HTMLElement): boolean {

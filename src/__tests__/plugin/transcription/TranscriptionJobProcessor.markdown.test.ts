@@ -44,4 +44,66 @@ Body.
 
     expect(upsertDownloadedVideoEmbed(content, 'attachments/social-archives/youtube/video.mp4')).toBe(content);
   });
+
+  it('inserts a video embed even when the path already exists in frontmatter metadata', () => {
+    const content = `---
+platform: youtube
+videoDownloaded: true
+localVideoPath: attachments/social-archives/youtube/video.mp4
+media:
+  - video:attachments/social-archives/youtube/video.mp4
+---
+
+# Example Video
+
+## Transcript
+
+Existing transcript.
+`;
+
+    expect(upsertDownloadedVideoEmbed(content, 'attachments/social-archives/youtube/video.mp4')).toBe(`---
+platform: youtube
+videoDownloaded: true
+localVideoPath: attachments/social-archives/youtube/video.mp4
+media:
+  - video:attachments/social-archives/youtube/video.mp4
+---
+
+# Example Video
+
+![[attachments/social-archives/youtube/video.mp4]]
+
+## Transcript
+
+Existing transcript.
+`);
+  });
+
+  it('handles CRLF frontmatter delimiters without inserting into frontmatter', () => {
+    const content = [
+      '---',
+      'platform: youtube',
+      'localVideoPath: attachments/social-archives/youtube/video.mp4',
+      '---',
+      '',
+      '# Example Video',
+      '',
+      'Body.',
+      '',
+    ].join('\r\n');
+
+    expect(upsertDownloadedVideoEmbed(content, 'attachments/social-archives/youtube/video.mp4')).toBe([
+      '---',
+      'platform: youtube',
+      'localVideoPath: attachments/social-archives/youtube/video.mp4',
+      '---',
+      '',
+      '# Example Video',
+      '',
+      '![[attachments/social-archives/youtube/video.mp4]]',
+      '',
+      'Body.',
+      '',
+    ].join('\r\n'));
+  });
 });

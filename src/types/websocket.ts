@@ -299,6 +299,7 @@ export interface TranscriptionStatusUpdatedEventData {
   nextAttemptAt?: string;
   errorCode?: string;
   terminalReason?: string;
+  localMediaPath?: string;
 }
 
 export interface TranscriptionStatusUpdatedEvent {

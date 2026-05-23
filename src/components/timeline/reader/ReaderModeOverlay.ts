@@ -21,6 +21,7 @@ import { ReaderModeGestureHandler } from './ReaderModeGestureHandler';
 import { ReaderHighlightManager } from './ReaderHighlightManager';
 import { ReaderTTSController } from './ReaderTTSController';
 import { AICommentJobStatusBanner } from '../AICommentJobStatusBanner';
+import { TranscriptionJobStatusBanner } from '../TranscriptionJobStatusBanner';
 import {
   MORE_TRANSLATION_LANGUAGE_OPTIONS,
   PRIMARY_TRANSLATION_LANGUAGE_OPTIONS,
@@ -134,6 +135,8 @@ export class ReaderModeOverlay {
   private readerActionSheetCleanup: (() => void) | null = null;
   private aiCommentJobStatusBanner: AICommentJobStatusBanner | null = null;
   private aiCommentJobStatusBannerUnsubscribe: (() => void) | null = null;
+  private transcriptionJobStatusBanner: TranscriptionJobStatusBanner | null = null;
+  private transcriptionJobStatusBannerUnsubscribe: (() => void) | null = null;
 
   // Safe-area fallback listeners (for Android WebView where env() may resolve to 0)
   private viewportSafeAreaListener: (() => void) | null = null;
@@ -172,6 +175,7 @@ export class ReaderModeOverlay {
     activeDocument.body.appendChild(this.container);
     this.setupSafeAreaFallback();
     this.renderReaderAICommentJobStatusBanner();
+    this.renderReaderTranscriptionJobStatusBanner();
 
     // Apply persisted typography (CSS variables)
     this.applyTypography();
@@ -292,6 +296,7 @@ export class ReaderModeOverlay {
     this.readerActionSheetCleanup?.();
     this.readerActionSheetCleanup = null;
     this.destroyReaderAICommentJobStatusBanner();
+    this.destroyReaderTranscriptionJobStatusBanner();
     this.activeContentVariantArchiveId = null;
 
     // Cleanup gesture
@@ -930,6 +935,35 @@ export class ReaderModeOverlay {
     if (this.aiCommentJobStatusBanner) {
       this.aiCommentJobStatusBanner.destroy();
       this.aiCommentJobStatusBanner = null;
+    }
+  }
+
+  private renderReaderTranscriptionJobStatusBanner(): void {
+    this.destroyReaderTranscriptionJobStatusBanner();
+    const processor = this.context.plugin.transcriptionJobProcessor;
+    if (!this.container || !processor) return;
+
+    const bannerHost = this.container.createDiv({ cls: 'sa-reader-transcription-job-banner-host' });
+    this.transcriptionJobStatusBanner = new TranscriptionJobStatusBanner(bannerHost);
+    this.transcriptionJobStatusBanner.onCancel((jobId) => {
+      void processor.cancelJob(jobId);
+    });
+    this.transcriptionJobStatusBanner.onDismiss((jobId) => {
+      processor.dismissJob(jobId);
+    });
+    this.transcriptionJobStatusBannerUnsubscribe = processor.onUpdate((state) => {
+      this.transcriptionJobStatusBanner?.update(state);
+    });
+  }
+
+  private destroyReaderTranscriptionJobStatusBanner(): void {
+    if (this.transcriptionJobStatusBannerUnsubscribe) {
+      this.transcriptionJobStatusBannerUnsubscribe();
+      this.transcriptionJobStatusBannerUnsubscribe = null;
+    }
+    if (this.transcriptionJobStatusBanner) {
+      this.transcriptionJobStatusBanner.destroy();
+      this.transcriptionJobStatusBanner = null;
     }
   }
 

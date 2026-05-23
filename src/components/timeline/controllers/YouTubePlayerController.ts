@@ -7,6 +7,7 @@ export class YouTubePlayerController {
   private iframe: HTMLIFrameElement;
   private ready = false;
   private readyResolvers: Array<() => void> = [];
+  private playerState: number | null = null;
 
   // Event subscribers
   private timeUpdateCallbacks: Array<(currentTime: number) => void> = [];
@@ -44,8 +45,9 @@ export class YouTubePlayerController {
    * YouTube sends infoDelivery messages with currentTime and playerState.
    */
   private handleMessage(event: MessageEvent): void {
-    // Only process messages from the iframe's origin
+    // Only process messages from the iframe this controller owns.
     if (!this.iframe.src) return;
+    if (event.source !== this.iframe.contentWindow) return;
 
     let data: Record<string, unknown>;
     try {
@@ -66,9 +68,13 @@ export class YouTubePlayerController {
     }
 
     // State change (1=playing, 2=paused, 0=ended, 3=buffering, 5=cued)
-    if (typeof info['playerState'] === 'number' && this.stateChangeCallbacks.length > 0) {
+    if (typeof info['playerState'] === 'number') {
+      this.playerState = info['playerState'];
+      this.iframe.dataset.saYoutubePlayerState = String(this.playerState);
+      this.iframe.dataset.saYoutubePlaying = this.isPlaybackActive() ? 'true' : 'false';
+
       for (const cb of this.stateChangeCallbacks) {
-        cb(info['playerState']);
+        cb(this.playerState);
       }
     }
   }
@@ -121,6 +127,23 @@ export class YouTubePlayerController {
   }
 
   /**
+   * Return the last observed YouTube player state.
+   * States: 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued.
+   */
+  public getPlayerState(): number | null {
+    return this.playerState;
+  }
+
+  /**
+   * True while playback is actively underway or buffering.
+   * Buffering is treated as active playback so background work does not
+   * disrupt a video between play and resumed data delivery.
+   */
+  public isPlaybackActive(): boolean {
+    return this.playerState === 1 || this.playerState === 3;
+  }
+
+  /**
    * Seek to specific time in video (in seconds)
    */
   public seekTo(seconds: number): void {
@@ -170,5 +193,7 @@ export class YouTubePlayerController {
     this.timeUpdateCallbacks = [];
     this.stateChangeCallbacks = [];
     this.readyResolvers = [];
+    delete this.iframe.dataset.saYoutubePlayerState;
+    delete this.iframe.dataset.saYoutubePlaying;
   }
 }

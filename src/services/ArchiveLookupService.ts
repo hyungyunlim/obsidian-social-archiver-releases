@@ -52,6 +52,36 @@ function normalizeUrl(url: string): string {
   }
 }
 
+function readSourceArchiveIdState(content: string): { count: number; value?: string } {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  const frontmatter = match?.[1];
+  if (!frontmatter) return { count: 0 };
+
+  const matches = Array.from(frontmatter.matchAll(/^sourceArchiveId:\s*(.*?)\s*$/gm));
+  const firstValue = matches[0]?.[1]
+    ?.replace(/^['"]|['"]$/g, '')
+    .trim();
+  return { count: matches.length, ...(firstValue ? { value: firstValue } : {}) };
+}
+
+function upsertSourceArchiveId(content: string, archiveId: string): string {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  const line = `sourceArchiveId: ${archiveId}`;
+
+  if (!match || match.index !== 0 || match[1] === undefined) {
+    return `---\n${line}\n---\n\n${content.replace(/^\s+/, '')}`;
+  }
+
+  const frontmatter = match[1];
+  const withoutIdentity = frontmatter
+    .split(/\r?\n/)
+    .filter((frontmatterLine) => !/^sourceArchiveId:\s*/.test(frontmatterLine))
+    .join('\n')
+    .replace(/\s+$/, '');
+  const nextFrontmatter = withoutIdentity ? `${withoutIdentity}\n${line}` : line;
+  return content.replace(/^---\r?\n[\s\S]*?\r?\n---/, `---\n${nextFrontmatter}\n---`);
+}
+
 // ============================================================================
 // Index Types
 // ============================================================================
@@ -275,9 +305,37 @@ export class ArchiveLookupService implements IService {
    * and avoids clobbering other frontmatter fields.
    */
   async backfillFileIdentity(file: TFile, archiveId: string): Promise<void> {
-    await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-      fm.sourceArchiveId = archiveId;
-    });
+    const content = await this.app.vault.read(file);
+    const identityState = readSourceArchiveIdState(content);
+
+    if (identityState.count === 1 && identityState.value === archiveId) {
+      this.indexFileIdentity(archiveId, file);
+      return;
+    }
+
+    if (identityState.count > 1 || identityState.count === 1) {
+      const updated = upsertSourceArchiveId(content, archiveId);
+      if (updated !== content) {
+        await this.app.vault.modify(file, updated);
+      }
+      this.indexFileIdentity(archiveId, file);
+      return;
+    }
+
+    try {
+      await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+        fm.sourceArchiveId = archiveId;
+      });
+    } catch (error) {
+      const updated = upsertSourceArchiveId(content, archiveId);
+      if (updated === content) throw error;
+      await this.app.vault.modify(file, updated);
+    }
+
+    this.indexFileIdentity(archiveId, file);
+  }
+
+  private indexFileIdentity(archiveId: string, file: TFile): void {
     // Optimistically update the in-memory index (MetadataCache `changed` will
     // also fire, but the optimistic update ensures the lookup is immediately
     // consistent within the same call chain).

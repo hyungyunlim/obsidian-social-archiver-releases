@@ -24,6 +24,7 @@ export const VIEW_TYPE_TIMELINE = 'social-archiver-timeline';
  */
 interface TimelineComponent {
   isFullscreenActive?(): boolean;
+  isMediaPlaybackActive?(): boolean;
   handleVaultFileChange?(type: string, filePath: string, oldPath?: string): Promise<void>;
   reload?(): Promise<void>;
   destroy?(): void;
@@ -45,6 +46,9 @@ export class TimelineView extends ItemView {
   private suppressedArchiveEvents = false; // True if at least one archive-path event was suppressed during library sync
   private librarySyncUnsubscribe: (() => void) | null = null; // Unsubscribe fn for library sync progress subscription
   private pendingCleanupTimers: Set<number> = new Set(); // Track cleanup timers
+  private playbackIdleTimer: number | null = null; // Polls for safe refresh after media playback ends
+  private deferredFullRefreshForPlayback = false;
+  private deferredIncrementalUpdateForPlayback = false;
   private timelineSafeAreaListener: (() => void) | null = null;
   private timelineVisualViewport: VisualViewport | null = null;
 
@@ -69,6 +73,10 @@ export class TimelineView extends ItemView {
       this.markSuppressedArchiveEvent();
       return;
     }
+    if (this.isMediaPlaybackActive()) {
+      this.deferFullRefreshUntilPlaybackIdle();
+      return;
+    }
     // Don't refresh while fullscreen or reader mode is active - would destroy overlay state
     if (this.component?.isFullscreenActive?.()) return;
     void this.refresh();
@@ -85,6 +93,10 @@ export class TimelineView extends ItemView {
       this.markSuppressedArchiveEvent();
       return;
     }
+    if (this.isMediaPlaybackActive()) {
+      this.deferIncrementalUpdateUntilPlaybackIdle();
+      return;
+    }
     if (this.component?.isFullscreenActive?.()) return;
     void this.processIncrementalChanges();
   }, 1000, true);
@@ -94,6 +106,11 @@ export class TimelineView extends ItemView {
    * Each change is applied to the index one by one, then a single re-filter/re-render.
    */
   private async processIncrementalChanges(): Promise<void> {
+    if (this.isMediaPlaybackActive()) {
+      this.deferIncrementalUpdateUntilPlaybackIdle();
+      return;
+    }
+
     if (this.incrementalUpdateInProgress) {
       this.incrementalUpdatePending = true;
       return;
@@ -213,6 +230,47 @@ export class TimelineView extends ItemView {
    */
   private scheduleFinalLibrarySyncRefresh(): void {
     this.debouncedRefresh();
+  }
+
+  private isMediaPlaybackActive(): boolean {
+    return this.component?.isMediaPlaybackActive?.() === true;
+  }
+
+  private deferFullRefreshUntilPlaybackIdle(): void {
+    this.deferredFullRefreshForPlayback = true;
+    this.schedulePlaybackIdleWork();
+  }
+
+  private deferIncrementalUpdateUntilPlaybackIdle(): void {
+    this.deferredIncrementalUpdateForPlayback = true;
+    this.schedulePlaybackIdleWork();
+  }
+
+  private schedulePlaybackIdleWork(): void {
+    if (this.playbackIdleTimer !== null) return;
+
+    this.playbackIdleTimer = window.setTimeout(() => {
+      this.playbackIdleTimer = null;
+
+      if (this.isMediaPlaybackActive()) {
+        this.schedulePlaybackIdleWork();
+        return;
+      }
+
+      if (this.deferredFullRefreshForPlayback) {
+        this.deferredFullRefreshForPlayback = false;
+        this.deferredIncrementalUpdateForPlayback = false;
+        this.pendingVaultChanges = [];
+        this.debouncedIncrementalUpdate.cancel();
+        void this.refresh();
+        return;
+      }
+
+      if (this.deferredIncrementalUpdateForPlayback) {
+        this.deferredIncrementalUpdateForPlayback = false;
+        void this.processIncrementalChanges();
+      }
+    }, 1000);
   }
 
   /**
@@ -543,6 +601,10 @@ export class TimelineView extends ItemView {
       window.clearTimeout(timer);
     }
     this.pendingCleanupTimers.clear();
+    if (this.playbackIdleTimer !== null) {
+      window.clearTimeout(this.playbackIdleTimer);
+      this.playbackIdleTimer = null;
+    }
 
     if (this.component) {
       this.component?.destroy?.();
@@ -556,6 +618,11 @@ export class TimelineView extends ItemView {
    * Useful when new posts are archived or view is re-activated
    */
   public async refresh(): Promise<void> {
+    if (this.isMediaPlaybackActive()) {
+      this.deferFullRefreshUntilPlaybackIdle();
+      return;
+    }
+
     // Reload the timeline without re-mounting
     if (this.component && this.component.reload) {
       await this.component?.reload?.();

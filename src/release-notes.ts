@@ -24,6 +24,16 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '3.6.10': {
+    title: 'Video Download Sync Fixes',
+    date: '2026-05-23',
+    notes: `## Video Download Sync Fixes
+
+- Downloaded YouTube videos are now written back into the existing archive note and reflected in the timeline.
+- Mobile requests handed off to the desktop Obsidian plugin now reconcile completed local media downloads after expired CDN media is refreshed.
+- Improved stuck transcription/download banners so failed or completed work can clear cleanly.
+`,
+  },
   '3.6.6': {
     title: 'Mobile AI Workflows',
     date: '2026-05-18',

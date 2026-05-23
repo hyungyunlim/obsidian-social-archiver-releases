@@ -30,6 +30,7 @@ import { CrawlStatusBanner } from './CrawlStatusBanner';
 import { ArchiveProgressBanner } from './ArchiveProgressBanner';
 import { CrossPostStatusBanner } from './CrossPostStatusBanner';
 import { AICommentJobStatusBanner } from './AICommentJobStatusBanner';
+import { TranscriptionJobStatusBanner } from './TranscriptionJobStatusBanner';
 import { NoticeBanner } from './NoticeBanner';
 import { NoticeDetailModal } from '../../modals/NoticeDetailModal';
 import type { NoticePayloadV1 } from '../../types/notices';
@@ -243,6 +244,28 @@ export class TimelineContainer {
   // Store cleanup functions for event listeners
   private cleanupFunctions: Array<() => void> = [];
 
+  /**
+   * True while any timeline-owned media is actively playing.
+   * Used by TimelineView to defer disruptive reloads/background sync refreshes.
+   */
+  public isMediaPlaybackActive(): boolean {
+    for (const controller of this.youtubeControllers.values()) {
+      if (controller.isPlaybackActive()) return true;
+    }
+
+    const activeYouTubeIframe = this.containerEl.querySelector(
+      'iframe[data-sa-youtube-player-state="1"], iframe[data-sa-youtube-player-state="3"]'
+    );
+    if (activeYouTubeIframe) return true;
+
+    const mediaElements = Array.from(this.containerEl.querySelectorAll<HTMLMediaElement>('audio, video'));
+    return mediaElements.some((media) =>
+      !media.paused &&
+      !media.ended &&
+      media.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+    );
+  }
+
   // PostComposer (Svelte component)
   private composerComponent: Record<string, unknown> | null = null;
   private composerContainer: HTMLElement | null = null;
@@ -309,6 +332,10 @@ export class TimelineContainer {
   // AI comment job banner component
   private aiCommentJobStatusBanner: AICommentJobStatusBanner | null = null;
   private aiCommentJobStatusBannerUnsubscribe: (() => void) | null = null;
+
+  // Transcription job banner component
+  private transcriptionJobStatusBanner: TranscriptionJobStatusBanner | null = null;
+  private transcriptionJobStatusBannerUnsubscribe: (() => void) | null = null;
 
   // Tag chip bar for filtering by user-defined tags
   private tagChipBar: TagChipBar;
@@ -2042,6 +2069,38 @@ export class TimelineContainer {
     if (this.aiCommentJobStatusBanner) {
       this.aiCommentJobStatusBanner.destroy();
       this.aiCommentJobStatusBanner = null;
+    }
+  }
+
+  private renderTranscriptionJobStatusBanner(): void {
+    this.destroyTranscriptionJobStatusBanner();
+    const processor = this.plugin.transcriptionJobProcessor;
+    if (!processor) return;
+
+    const bannerContainer = this.containerEl.createDiv({
+      cls: 'max-w-2xl mx-auto'
+    });
+
+    this.transcriptionJobStatusBanner = new TranscriptionJobStatusBanner(bannerContainer);
+    this.transcriptionJobStatusBanner.onCancel((jobId) => {
+      void processor.cancelJob(jobId);
+    });
+    this.transcriptionJobStatusBanner.onDismiss((jobId) => {
+      processor.dismissJob(jobId);
+    });
+    this.transcriptionJobStatusBannerUnsubscribe = processor.onUpdate((state) => {
+      this.transcriptionJobStatusBanner?.update(state);
+    });
+  }
+
+  private destroyTranscriptionJobStatusBanner(): void {
+    if (this.transcriptionJobStatusBannerUnsubscribe) {
+      this.transcriptionJobStatusBannerUnsubscribe();
+      this.transcriptionJobStatusBannerUnsubscribe = null;
+    }
+    if (this.transcriptionJobStatusBanner) {
+      this.transcriptionJobStatusBanner.destroy();
+      this.transcriptionJobStatusBanner = null;
     }
   }
 
@@ -4675,6 +4734,7 @@ export class TimelineContainer {
             this.renderCrawlStatusBanner();
             this.renderArchiveProgressBanner();
             this.renderAICommentJobStatusBanner();
+            this.renderTranscriptionJobStatusBanner();
             this.renderCrossPostStatusBanner();
 
             void this.loadPosts();
@@ -4739,6 +4799,7 @@ export class TimelineContainer {
     this.renderCrawlStatusBanner();
     this.renderArchiveProgressBanner();
     this.renderAICommentJobStatusBanner();
+    this.renderTranscriptionJobStatusBanner();
     this.renderCrossPostStatusBanner();
 
     // Add Subscriptions header
@@ -4845,6 +4906,7 @@ export class TimelineContainer {
     this.renderCrawlStatusBanner();
     this.renderArchiveProgressBanner();
     this.renderAICommentJobStatusBanner();
+    this.renderTranscriptionJobStatusBanner();
     this.renderCrossPostStatusBanner();
 
     // Mark that posts have been rendered (for subsequent reloads)
@@ -7064,6 +7126,9 @@ export class TimelineContainer {
     // Clean up AI comment job banner
     this.destroyAICommentJobStatusBanner();
 
+    // Clean up transcription job banner
+    this.destroyTranscriptionJobStatusBanner();
+
     // Clean up CrossPostStatusBanner
     this.destroyCrossPostStatusBanner();
 
@@ -7622,6 +7687,7 @@ export class TimelineContainer {
     this.renderCrawlStatusBanner();
     this.renderArchiveProgressBanner();
     this.renderAICommentJobStatusBanner();
+    this.renderTranscriptionJobStatusBanner();
     this.renderCrossPostStatusBanner();
 
     // Render gallery group controls (below header)

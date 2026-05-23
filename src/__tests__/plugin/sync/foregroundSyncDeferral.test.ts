@@ -28,7 +28,7 @@ describe('shouldDeferForegroundSync', () => {
   it('ignores hidden modal containers', () => {
     const modal = document.createElement('div');
     modal.className = 'modal-container';
-    modal.style.display = 'none';
+    modal.hidden = true;
     document.body.appendChild(modal);
 
     expect(shouldDeferForegroundSync(document)).toBe(false);
@@ -87,6 +87,25 @@ describe('shouldDeferForegroundSync', () => {
       value: HTMLMediaElement.HAVE_FUTURE_DATA,
     });
     document.body.appendChild(audio);
+
+    expect(shouldDeferForegroundSync(document)).toBe(false);
+  });
+
+  it('defers while a tracked YouTube iframe is playing', () => {
+    const iframe = document.createElement('iframe');
+    iframe.dataset.saYoutubePlayerState = '1';
+    document.body.appendChild(iframe);
+
+    expect(getForegroundSyncDeferral(document)).toEqual({
+      shouldDefer: true,
+      reason: 'media-playback',
+    });
+  });
+
+  it('does not defer for a tracked paused YouTube iframe', () => {
+    const iframe = document.createElement('iframe');
+    iframe.dataset.saYoutubePlayerState = '2';
+    document.body.appendChild(iframe);
 
     expect(shouldDeferForegroundSync(document)).toBe(false);
   });

@@ -223,19 +223,50 @@ export interface RealtimeEventBridgeDeps {
   /** Record that we've already shown a Notice for `eventId` this session. */
   markBillingEventNoticed?: (eventId: string) => void;
   refreshTimelineView: () => void;
+  canExecuteAICommentJobs?: () => boolean;
   aiCommentJobProcessor?: {
     drainBacklog?: () => Promise<void>;
     handleRequestedJob: (jobId: string, targetClientId: string) => Promise<void>;
     handleRequestedAIActionJob?: (jobId: string, targetClientId?: string | null) => Promise<void>;
-    handleStatusEvent: (event: { jobId?: string; targetClientId?: string; status?: string }) => Promise<void>;
+    handleStatusEvent: (event: {
+      jobId?: string;
+      targetClientId?: string;
+      archiveId?: string;
+      actionType?: string;
+      resultKind?: string | null;
+      status?: string;
+      progress?: number;
+      progressPercentage?: number;
+      progressMessage?: string;
+      errorCode?: string;
+      errorMessagePublic?: string;
+      updatedAt?: string;
+    }) => Promise<void>;
   };
   transcriptionJobProcessor?: {
     drainBacklog: () => Promise<void>;
     handleRequestedJob: (jobId: string, targetClientId: string) => Promise<void>;
-    handleStatusEvent: (event: { jobId?: string; targetClientId?: string; status?: string }) => Promise<void>;
+    handleStatusEvent: (event: {
+      jobId?: string;
+      targetClientId?: string;
+      archiveId?: string;
+      mediaRefHash?: string;
+      status?: string;
+      uiStatus?: 'queued' | 'preparing' | 'running' | 'done';
+      progressPercentage?: number;
+      progressCode?: string;
+      nextAttemptAt?: string;
+      errorCode?: string;
+      errorMessagePublic?: string;
+      terminalReason?: string;
+      transcriptResultId?: string;
+      localMediaPath?: string;
+      updatedAt?: string;
+    }) => Promise<void>;
     handleCancelledEvent: (event: { jobId?: string; targetClientId?: string }) => Promise<void>;
-    handleUpdatedEvent: (event: { archiveId?: string; jobId?: string; transcriptResultId?: string }) => Promise<void>;
+    handleUpdatedEvent: (event: { archiveId?: string; jobId?: string; transcriptResultId?: string; updatedAt?: string }) => Promise<void>;
   };
+  canExecuteTranscriptionJobs?: () => boolean;
   processPendingSyncQueue: () => Promise<void>;
   processSyncQueueItem: (queueId: string, archiveId: string, clientId: string) => Promise<boolean>;
   getReadableErrorMessage: (code: string | undefined, msg: string | undefined) => string;
@@ -311,10 +342,38 @@ export class RealtimeEventBridge {
         const message = payload as { data?: { jobId?: string; targetClientId?: string }; jobId?: string; targetClientId?: string };
         const data = message.data ?? message;
         if (!data.jobId || !data.targetClientId) return;
+        if (!this.canExecuteAICommentJobs()) return;
         void this.deps.aiCommentJobProcessor?.handleRequestedJob(data.jobId, data.targetClientId);
       }),
       this.deps.events.on('ws:ai_comment_status_updated', (payload: unknown) => {
-        const message = payload as { data?: { jobId?: string; targetClientId?: string; status?: string }; jobId?: string; targetClientId?: string; status?: string };
+        const message = payload as {
+          data?: {
+            jobId?: string;
+            targetClientId?: string;
+            archiveId?: string;
+            actionType?: string;
+            resultKind?: string | null;
+            status?: string;
+            progress?: number;
+            progressPercentage?: number;
+            progressMessage?: string;
+            errorCode?: string;
+            errorMessagePublic?: string;
+            updatedAt?: string;
+          };
+          jobId?: string;
+          targetClientId?: string;
+          archiveId?: string;
+          actionType?: string;
+          resultKind?: string | null;
+          status?: string;
+          progress?: number;
+          progressPercentage?: number;
+          progressMessage?: string;
+          errorCode?: string;
+          errorMessagePublic?: string;
+          updatedAt?: string;
+        };
         const data = message.data ?? message;
         void this.deps.aiCommentJobProcessor?.handleStatusEvent(data);
       }),
@@ -322,6 +381,7 @@ export class RealtimeEventBridge {
         const message = payload as { data?: { jobId?: string; targetClientId?: string | null }; jobId?: string; targetClientId?: string | null };
         const data = message.data ?? message;
         if (!data.jobId) return;
+        if (!this.canExecuteAICommentJobs()) return;
         void this.deps.aiCommentJobProcessor?.handleRequestedAIActionJob?.(data.jobId, data.targetClientId ?? null);
       }),
     );
@@ -333,6 +393,7 @@ export class RealtimeEventBridge {
         const message = payload as { data?: { jobId?: string; targetClientId?: string }; jobId?: string; targetClientId?: string };
         const data = message.data ?? message;
         if (!data.jobId || !data.targetClientId) return;
+        if (!this.canExecuteTranscriptionJobs()) return;
         console.debug('[Social Archiver] Transcription job requested via WebSocket:', {
           jobId: data.jobId,
           targetClientId: data.targetClientId,
@@ -340,7 +401,40 @@ export class RealtimeEventBridge {
         void this.deps.transcriptionJobProcessor?.handleRequestedJob(data.jobId, data.targetClientId);
       }),
       this.deps.events.on('ws:transcription_status_updated', (payload: unknown) => {
-        const message = payload as { data?: { jobId?: string; targetClientId?: string; status?: string }; jobId?: string; targetClientId?: string; status?: string };
+        const message = payload as {
+          data?: {
+            jobId?: string;
+            targetClientId?: string;
+            archiveId?: string;
+            mediaRefHash?: string;
+            status?: string;
+            uiStatus?: 'queued' | 'preparing' | 'running' | 'done';
+            progressPercentage?: number;
+            progressCode?: string;
+            nextAttemptAt?: string;
+            errorCode?: string;
+            errorMessagePublic?: string;
+            terminalReason?: string;
+            transcriptResultId?: string;
+            localMediaPath?: string;
+            updatedAt?: string;
+          };
+          jobId?: string;
+          targetClientId?: string;
+          archiveId?: string;
+          mediaRefHash?: string;
+          status?: string;
+          uiStatus?: 'queued' | 'preparing' | 'running' | 'done';
+          progressPercentage?: number;
+          progressCode?: string;
+          nextAttemptAt?: string;
+          errorCode?: string;
+          errorMessagePublic?: string;
+          terminalReason?: string;
+          transcriptResultId?: string;
+          localMediaPath?: string;
+          updatedAt?: string;
+        };
         const data = message.data ?? message;
         void this.deps.transcriptionJobProcessor?.handleStatusEvent(data);
       }),
@@ -551,13 +645,17 @@ export class RealtimeEventBridge {
             void this.deps.processPendingSyncQueue();
           }, 2000);
 
-          this.deps.schedule(() => {
-            void this.deps.transcriptionJobProcessor?.drainBacklog();
-          }, 2500);
+          if (this.canExecuteTranscriptionJobs()) {
+            this.deps.schedule(() => {
+              void this.deps.transcriptionJobProcessor?.drainBacklog();
+            }, 2500);
+          }
 
-          this.deps.schedule(() => {
-            void this.deps.aiCommentJobProcessor?.drainBacklog?.();
-          }, 3000);
+          if (this.canExecuteAICommentJobs()) {
+            this.deps.schedule(() => {
+              void this.deps.aiCommentJobProcessor?.drainBacklog?.();
+            }, 3000);
+          }
         }
       }),
     );
@@ -1376,6 +1474,14 @@ export class RealtimeEventBridge {
       ],
       fn,
     );
+  }
+
+  private canExecuteAICommentJobs(): boolean {
+    return this.deps.canExecuteAICommentJobs?.() ?? true;
+  }
+
+  private canExecuteTranscriptionJobs(): boolean {
+    return this.deps.canExecuteTranscriptionJobs?.() ?? true;
   }
 
   private async withArchiveMaterializationLock<T>(archiveId: string, fn: () => Promise<T>): Promise<T> {

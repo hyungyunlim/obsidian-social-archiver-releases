@@ -303,7 +303,7 @@ export interface ContentVariant {
 // ============================================================================
 
 export type TranscriptionMediaKind = 'audio' | 'video';
-export type TranscriptionJobMode = 'transcribe-existing-media' | 'download-and-transcribe';
+export type TranscriptionJobMode = 'transcribe-existing-media' | 'download-and-transcribe' | 'download-only';
 export type TranscriptionModel = 'tiny' | 'base' | 'small' | 'medium' | 'large';
 export type TranscriptionModelWithEnglish =
   | TranscriptionModel
@@ -424,6 +424,7 @@ export interface TranscriptionActiveJobSummary {
   errorMessagePublic?: string;
   terminalReason?: string;
   transcriptResultId?: string;
+  localMediaPath?: string;
   updatedAt: string;
 }
 
@@ -2293,6 +2294,34 @@ export class WorkersAPIClient implements IService {
     this.ensureInitialized();
     return this.request<{ job: TranscriptionActiveJobSummary; transcriptResultId: string }>(
       `/api/transcription/jobs/${encodeURIComponent(jobId)}/result`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      },
+    );
+  }
+
+  async uploadTranscriptionDownloadResult(
+    jobId: string,
+    request: {
+      clientId: string;
+      lockToken: string;
+      lockTokenVersion: number;
+      localWrite: {
+        markdownUpdated: boolean;
+        frontmatterUpdated: boolean;
+        localMediaPath?: string;
+      };
+      processing: {
+        startedAt: string;
+        completedAt: string;
+        processingTimeMs: number;
+      };
+    },
+  ): Promise<{ job: TranscriptionActiveJobSummary }> {
+    this.ensureInitialized();
+    return this.request<{ job: TranscriptionActiveJobSummary }>(
+      `/api/transcription/jobs/${encodeURIComponent(jobId)}/download-result`,
       {
         method: 'POST',
         body: JSON.stringify(request),

@@ -99,6 +99,9 @@ export class TranscriptionCapabilityReporter {
     else if (!ffmpeg.available) status = 'ffmpeg_missing';
 
     const supportedModes: TranscriptionJobMode[] = ['transcribe-existing-media'];
+    if (ytDlpAvailable) {
+      supportedModes.push('download-only');
+    }
     if (ytDlpAvailable && ffmpeg.available) {
       supportedModes.push('download-and-transcribe');
     }

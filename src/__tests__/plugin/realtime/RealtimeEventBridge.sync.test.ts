@@ -232,6 +232,139 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
     expect(drainBacklog).toHaveBeenCalledOnce();
   });
 
+  it('handles AI comment status updates when AI job execution is disabled', async () => {
+    const drainBacklog = vi.fn().mockResolvedValue(undefined);
+    const handleRequestedJob = vi.fn().mockResolvedValue(undefined);
+    const handleRequestedAIActionJob = vi.fn().mockResolvedValue(undefined);
+    const handleStatusEvent = vi.fn().mockResolvedValue(undefined);
+    const scheduleFn = vi.fn().mockImplementation((cb: () => void, delay: number) => {
+      return window.setTimeout(cb, delay);
+    });
+
+    const events = makeEvents();
+    const deps = makeDeps({
+      events: events as any,
+      schedule: scheduleFn,
+      canExecuteAICommentJobs: () => false,
+      aiCommentJobProcessor: {
+        drainBacklog,
+        handleRequestedJob,
+        handleRequestedAIActionJob,
+        handleStatusEvent,
+      },
+    });
+
+    const bridge = new RealtimeEventBridge(deps);
+    bridge.setup();
+
+    await events.trigger('ws:ai_comment_status_updated', {
+      data: {
+        jobId: 'job-1',
+        archiveId: 'archive-1',
+        status: 'running',
+        progressPercentage: 42,
+        progressMessage: 'Running in Obsidian...',
+      },
+    });
+
+    expect(handleStatusEvent).toHaveBeenCalledWith(expect.objectContaining({
+      jobId: 'job-1',
+      archiveId: 'archive-1',
+      status: 'running',
+      progressPercentage: 42,
+      progressMessage: 'Running in Obsidian...',
+    }));
+
+    await events.trigger('ws:ai_comment_requested', {
+      data: { jobId: 'job-2', targetClientId: 'my-client-id' },
+    });
+    await events.trigger('ws:ai_action_requested', {
+      data: { jobId: 'job-3', targetClientId: 'my-client-id' },
+    });
+    await events.trigger('ws:connected', undefined);
+
+    expect(handleRequestedJob).not.toHaveBeenCalled();
+    expect(handleRequestedAIActionJob).not.toHaveBeenCalled();
+    expect(scheduleFn.mock.calls.some((call: [() => void, number]) => call[1] === 3000)).toBe(false);
+
+    vi.advanceTimersByTime(3000);
+    await vi.runAllTimersAsync();
+
+    expect(drainBacklog).not.toHaveBeenCalled();
+  });
+
+  it('handles transcription status updates when transcription execution is disabled', async () => {
+    const drainBacklog = vi.fn().mockResolvedValue(undefined);
+    const handleRequestedJob = vi.fn().mockResolvedValue(undefined);
+    const handleStatusEvent = vi.fn().mockResolvedValue(undefined);
+    const handleCancelledEvent = vi.fn().mockResolvedValue(undefined);
+    const handleUpdatedEvent = vi.fn().mockResolvedValue(undefined);
+    const scheduleFn = vi.fn().mockImplementation((cb: () => void, delay: number) => {
+      return window.setTimeout(cb, delay);
+    });
+
+    const events = makeEvents();
+    const deps = makeDeps({
+      events: events as any,
+      schedule: scheduleFn,
+      canExecuteAICommentJobs: () => false,
+      canExecuteTranscriptionJobs: () => false,
+      transcriptionJobProcessor: {
+        drainBacklog,
+        handleRequestedJob,
+        handleStatusEvent,
+        handleCancelledEvent,
+        handleUpdatedEvent,
+      },
+    });
+
+    const bridge = new RealtimeEventBridge(deps);
+    bridge.setup();
+
+    await events.trigger('ws:transcription_status_updated', {
+      data: {
+        jobId: 'trj-1',
+        archiveId: 'archive-1',
+        targetClientId: 'desktop-client',
+        status: 'running',
+        uiStatus: 'running',
+        progressPercentage: 44,
+        progressCode: 'running',
+      },
+    });
+
+    expect(handleStatusEvent).toHaveBeenCalledWith(expect.objectContaining({
+      jobId: 'trj-1',
+      archiveId: 'archive-1',
+      targetClientId: 'desktop-client',
+      status: 'running',
+      uiStatus: 'running',
+      progressPercentage: 44,
+      progressCode: 'running',
+    }));
+
+    await events.trigger('ws:transcription_requested', {
+      data: { jobId: 'trj-2', targetClientId: 'my-client-id' },
+    });
+    await events.trigger('ws:transcription_updated', {
+      data: { jobId: 'trj-1', archiveId: 'archive-1', transcriptResultId: 'result-1' },
+    });
+    await events.trigger('ws:connected', undefined);
+
+    expect(handleRequestedJob).not.toHaveBeenCalled();
+    expect(handleUpdatedEvent).toHaveBeenCalledWith(expect.objectContaining({
+      jobId: 'trj-1',
+      archiveId: 'archive-1',
+      transcriptResultId: 'result-1',
+    }));
+    expect(scheduleFn.mock.calls.some((call: [() => void, number]) => call[1] === 2500)).toBe(false);
+
+    vi.advanceTimersByTime(2500);
+    await vi.runAllTimersAsync();
+
+    expect(drainBacklog).not.toHaveBeenCalled();
+  });
+
   // --------------------------------------------------------------------------
   // 2. archive_added with source=subscription triggers sync
   // --------------------------------------------------------------------------

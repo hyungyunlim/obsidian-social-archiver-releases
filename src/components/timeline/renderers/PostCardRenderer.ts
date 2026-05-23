@@ -10,13 +10,13 @@ import {
 import { MediaGalleryRenderer } from './MediaGalleryRenderer';
 import { CommentRenderer } from './CommentRenderer';
 import { YouTubeEmbedRenderer } from './YouTubeEmbedRenderer';
-import { hasDirectTikTokVideoMedia } from './tiktokMedia';
+import { extractTikTokVideoId, hasDirectTikTokVideoMedia } from './tiktokMedia';
 import { LinkPreviewRenderer } from './LinkPreviewRenderer';
 import { CompactPostCardRenderer } from './CompactPostCardRenderer';
 import { YouTubePlayerController } from '../controllers/YouTubePlayerController';
 import { VideoTranscriptPlayer } from './VideoTranscriptPlayer';
 import { ShareAPIClient } from '../../../services/ShareAPIClient';
-import type { AIActionType, AICommentPayload, ContentVariant } from '../../../services/WorkersAPIClient';
+import type { AIActionType, AICommentPayload, ContentVariant, TranscriptionJobMode, TranscriptionMediaRef, WorkersAPIClient } from '../../../services/WorkersAPIClient';
 import { TextFormatter } from '../../../services/markdown/formatters/TextFormatter';
 import { TranscriptFormatter } from '../../../services/markdown/formatters/TranscriptFormatter';
 import { getAuthorCatalogStore } from '../../../services/AuthorCatalogStore';
@@ -3639,6 +3639,106 @@ export class PostCardRenderer extends Component {
     return this.isAICommentEnabledForPlatform(post.platform);
   }
 
+  private shouldShowMobileTranscriptionAction(post: PostData, isEmbedded: boolean): boolean {
+    if (!ObsidianPlatform.isMobile || isEmbedded) return false;
+    if (!post.filePath) return false;
+    if (post.videoTranscribed === true) return false;
+    if (post.whisperTranscript?.segments && post.whisperTranscript.segments.length > 0) return false;
+    return this.getMobileTranscriptionMediaRef(post) !== null;
+  }
+
+  private getMobileTranscriptionMediaRef(post: PostData): TranscriptionMediaRef | null {
+    const videoIndex = post.media.findIndex((mediaItem) => mediaItem.type === 'video');
+    if (videoIndex >= 0) {
+      return { kind: 'video', mediaIndex: videoIndex };
+    }
+    if (this.hasDownloadableOriginalVideoSource(post)) {
+      return { kind: 'video', mediaIndex: 0 };
+    }
+    return null;
+  }
+
+  private getMobileTranscriptionMode(post: PostData): TranscriptionJobMode {
+    return post.media.some((mediaItem) => mediaItem.type === 'video')
+      ? 'transcribe-existing-media'
+      : 'download-and-transcribe';
+  }
+
+  private getMobileVideoDownloadMediaRef(post: PostData, url: string): TranscriptionMediaRef | null {
+    if (!post.filePath || (post.platform !== 'youtube' && post.platform !== 'tiktok')) {
+      return null;
+    }
+
+    const sourceUrls = [post.url, post.originalUrl]
+      .filter((sourceUrl): sourceUrl is string => typeof sourceUrl === 'string' && sourceUrl.length > 0);
+
+    if (post.platform === 'youtube') {
+      const requestedVideoId = this.extractYouTubeVideoId(url);
+      const sourceVideoIds = [post.videoId, ...sourceUrls.map((sourceUrl) => this.extractYouTubeVideoId(sourceUrl))]
+        .filter((videoId): videoId is string => Boolean(videoId));
+
+      if (requestedVideoId && sourceVideoIds.includes(requestedVideoId)) {
+        return { kind: 'video', mediaIndex: 0 };
+      }
+    }
+
+    if (post.platform === 'tiktok') {
+      const requestedVideoId = extractTikTokVideoId(url);
+      const sourceVideoIds = sourceUrls
+        .map((sourceUrl) => extractTikTokVideoId(sourceUrl, post.videoId || post.id))
+        .filter((videoId): videoId is string => Boolean(videoId));
+
+      if (requestedVideoId && sourceVideoIds.includes(requestedVideoId)) {
+        return { kind: 'video', mediaIndex: 0 };
+      }
+    }
+
+    const normalizedUrl = helperNormalizeUrlForComparison(url);
+    if (normalizedUrl && sourceUrls.some((sourceUrl) => helperNormalizeUrlForComparison(sourceUrl) === normalizedUrl)) {
+      return { kind: 'video', mediaIndex: 0 };
+    }
+
+    return null;
+  }
+
+  private hasDownloadableOriginalVideoSource(post: PostData): boolean {
+    const url = post.originalUrl || post.url || '';
+    if (post.platform === 'youtube') {
+      return Boolean(post.videoId || this.isYouTubeVideoUrl(url));
+    }
+    if (post.platform === 'tiktok') {
+      return this.isTikTokVideoUrl(url);
+    }
+    return false;
+  }
+
+  private isYouTubeVideoUrl(url: string): boolean {
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname.toLowerCase();
+      if (!/(^|\.)youtube\.com$/.test(host) && host !== 'youtu.be') return false;
+      if (host === 'youtu.be') return parsed.pathname.split('/').filter(Boolean)[0]?.length === 11;
+      if (parsed.searchParams.get('v')?.length === 11) return true;
+      const segments = parsed.pathname.split('/').filter(Boolean);
+      return (segments[0] === 'shorts' || segments[0] === 'embed') && segments[1]?.length === 11;
+    } catch {
+      return false;
+    }
+  }
+
+  private isTikTokVideoUrl(url: string): boolean {
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname.toLowerCase();
+      if (!host.endsWith('tiktok.com')) return false;
+      const segments = parsed.pathname.toLowerCase().split('/').filter(Boolean);
+      if (segments[0]?.startsWith('@')) return segments[1] === 'video' && Boolean(segments[2]);
+      return segments[0] === 'video' && Boolean(segments[1]);
+    } catch {
+      return false;
+    }
+  }
+
   private renderMobileAIActionButton(parent: HTMLElement, post: PostData): void {
     const aiBtn = parent.createDiv({ cls: 'pcr-action-btn' });
     aiBtn.setAttribute('title', 'AI actions');
@@ -3818,6 +3918,17 @@ export class PostCardRenderer extends Component {
             void this.openNote(post);
           });
       });
+
+      if (this.shouldShowMobileTranscriptionAction(post, isEmbedded)) {
+        menu.addItem((item) => {
+          item
+            .setIcon('captions')
+            .setTitle('Transcribe video')
+            .onClick(() => {
+              void this.handleMobileTranscriptionRequest(post);
+            });
+        });
+      }
 
       await this.addContentVariantMenuItems(menu, post, rootElement);
 
@@ -5829,12 +5940,7 @@ export class PostCardRenderer extends Component {
       if (hasRenderableVideo || isDownloaded) {
         await this.renderVideoTranscriptionSuggestion(contentArea, post, rootElement);
       } else if (!isDownloadDeclined) {
-        // Check if yt-dlp is available
-        const { YtDlpDetector } = await import('../../../utils/yt-dlp');
-        const isSupportedUrl = YtDlpDetector.isSupportedUrl(mainPostUrl);
-        const ytDlpAvailable = ObsidianPlatform.isDesktop && isSupportedUrl ? await YtDlpDetector.isAvailable() : false;
-
-        if (ytDlpAvailable) {
+        if (await this.canShowVideoDownloadSuggestion(mainPostUrl, post)) {
           this.renderDownloadSuggestionBanner(contentArea, mainPostUrl, post.platform, post, rootElement);
         }
       }
@@ -5938,22 +6044,14 @@ export class PostCardRenderer extends Component {
       } else if (isArchived) {
         // Show download suggestion only for YouTube and TikTok (no "Archived" status banner)
         if (platform === 'youtube' || platform === 'tiktok') {
-          const { YtDlpDetector } = await import('../../../utils/yt-dlp');
-          const isSupportedUrl = YtDlpDetector.isSupportedUrl(url);
-          const ytDlpAvailable = ObsidianPlatform.isDesktop && isSupportedUrl ? await YtDlpDetector.isAvailable() : false;
-
-          if (ytDlpAvailable) {
+          if (await this.canShowVideoDownloadSuggestion(url, post)) {
             this.renderDownloadSuggestionBanner(contentArea, url, platform, post, rootElement);
           }
         }
       } else if (isDeclined) {
         // Don't show "Declined" banner, just show download suggestion if applicable (YouTube/TikTok only)
         if (platform === 'youtube' || platform === 'tiktok') {
-          const { YtDlpDetector } = await import('../../../utils/yt-dlp');
-          const isSupportedUrl = YtDlpDetector.isSupportedUrl(url);
-          const ytDlpAvailable = ObsidianPlatform.isDesktop && isSupportedUrl ? await YtDlpDetector.isAvailable() : false;
-
-          if (ytDlpAvailable) {
+          if (await this.canShowVideoDownloadSuggestion(url, post)) {
             this.renderDownloadSuggestionBanner(contentArea, url, platform, post, rootElement);
           }
         }
@@ -5962,6 +6060,21 @@ export class PostCardRenderer extends Component {
         this.renderSuggestionBanner(contentArea, url, platform, post, rootElement, isPinterestBoard, urlVariants);
       }
     }
+  }
+
+  private async canShowVideoDownloadSuggestion(url: string, post: PostData): Promise<boolean> {
+    const { YtDlpDetector } = await import('../../../utils/yt-dlp');
+    if (!YtDlpDetector.isSupportedUrl(url)) return false;
+
+    if (ObsidianPlatform.isDesktop) {
+      return YtDlpDetector.isAvailable();
+    }
+
+    if (ObsidianPlatform.isMobile) {
+      return this.getMobileVideoDownloadMediaRef(post, url) !== null;
+    }
+
+    return false;
   }
 
   /**
@@ -6087,6 +6200,38 @@ export class PostCardRenderer extends Component {
     setIcon(yesIcon, 'download');
 
     yesButton.addEventListener('click', () => { void (async () => {
+      if (ObsidianPlatform.isMobile) {
+        buttonSection.hide();
+        message.textContent = 'Requesting desktop download...';
+        message.removeClass('pcr-text-muted');
+        message.addClass('pcr-text-normal');
+
+        try {
+          const statusMessage = await this.requestMobileVideoDownload(post, url);
+          message.textContent = statusMessage;
+          message.removeClass('pcr-text-error');
+          message.addClass('pcr-text-success');
+          new Notice(statusMessage, 5000);
+
+          window.setTimeout(() => {
+            banner.addClass('pcr-fade-out');
+            window.setTimeout(() => banner.remove(), 300);
+          }, 2500);
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Failed to request desktop download.';
+          message.textContent = errorMessage;
+          message.removeClass('pcr-text-normal');
+          message.addClass('pcr-text-error');
+          new Notice(errorMessage, 7000);
+
+          window.setTimeout(() => {
+            banner.addClass('pcr-fade-out');
+            window.setTimeout(() => banner.remove(), 300);
+          }, 4000);
+        }
+        return;
+      }
+
       // Create AbortController for cancellation
       const abortController = new AbortController();
 
@@ -8755,6 +8900,177 @@ export class PostCardRenderer extends Component {
     this.plugin.aiCommentJobProcessor?.trackAIActionSummary?.(response.activeJob, cli);
     if (targetClientId === clientId) {
       void this.plugin.aiCommentJobProcessor?.handleRequestedAIActionJob(response.jobId, targetClientId);
+    }
+  }
+
+  private async handleMobileTranscriptionRequest(post: PostData): Promise<void> {
+    const archiveId = this.resolveArchiveIdForContentVariants(post);
+    const clientId = this.plugin.settings.syncClientId;
+    const mediaRef = this.getMobileTranscriptionMediaRef(post);
+    if (!archiveId || !clientId || !mediaRef) {
+      new Notice('Connect sync before requesting desktop transcription.');
+      return;
+    }
+
+    let apiClient: WorkersAPIClient;
+    try {
+      apiClient = this.plugin.workersApiClient;
+    } catch {
+      new Notice('Connect sync before requesting desktop transcription.');
+      return;
+    }
+
+    const mode = this.getMobileTranscriptionMode(post);
+    const progressNotice = new Notice('Requesting transcription...', 0);
+    try {
+      const availabilityResponse = await apiClient.getTranscriptionAvailabilityBatch({
+        refs: [{ archiveId, mediaRef }],
+        mode,
+      });
+      const availability = availabilityResponse.entries[0] ?? null;
+      if (availability?.activeJob) {
+        this.plugin.transcriptionJobProcessor?.trackJobSummary(availability.activeJob);
+        new Notice('A transcription job is already queued for this video.');
+        return;
+      }
+      if (!availability?.available || !availability.availabilityToken) {
+        new Notice(this.formatMobileTranscriptionUnavailableMessage(availability?.executor.status), 7000);
+        return;
+      }
+
+      const response = await apiClient.createTranscriptionJob({
+        archiveId,
+        mediaRef,
+        mode,
+        availabilityToken: availability.availabilityToken,
+        sourceClientId: clientId,
+        idempotencyKey: this.createMobileTranscriptionIdempotencyKey(archiveId),
+      });
+      this.plugin.transcriptionJobProcessor?.trackJobSummary(response.job);
+      new Notice(
+        response.delivery?.liveDispatched
+          ? 'Transcription sent to Obsidian desktop.'
+          : 'Transcription queued for Obsidian desktop.',
+        5000,
+      );
+    } catch (error) {
+      console.warn('[PostCardRenderer] Mobile transcription request failed:', error);
+      new Notice('Failed to request transcription. Check desktop transcription setup and try again.', 7000);
+    } finally {
+      progressNotice.hide();
+    }
+  }
+
+  private async requestMobileVideoDownload(post: PostData, url: string): Promise<string> {
+    const archiveId = this.resolveArchiveIdForContentVariants(post);
+    const clientId = this.plugin.settings.syncClientId;
+    const mediaRef = this.getMobileVideoDownloadMediaRef(post, url);
+    if (!archiveId || !clientId) {
+      throw new Error('Connect sync before requesting desktop download.');
+    }
+    if (!mediaRef) {
+      throw new Error('This video can only be downloaded on mobile from its own YouTube or TikTok archive.');
+    }
+
+    let apiClient: WorkersAPIClient;
+    try {
+      apiClient = this.plugin.workersApiClient;
+    } catch {
+      throw new Error('Connect sync before requesting desktop download.');
+    }
+
+    try {
+      const availabilityResponse = await apiClient.getTranscriptionAvailabilityBatch({
+        refs: [{ archiveId, mediaRef }],
+        mode: 'download-only',
+      });
+      const availability = availabilityResponse.entries[0] ?? null;
+      if (availability?.activeJob) {
+        this.plugin.transcriptionJobProcessor?.trackJobSummary(availability.activeJob);
+        return 'A desktop download job is already queued for this video.';
+      }
+      if (!availability?.available || !availability.availabilityToken) {
+        throw new Error(this.formatMobileVideoDownloadUnavailableMessage(availability?.executor.status));
+      }
+
+      const response = await apiClient.createTranscriptionJob({
+        archiveId,
+        mediaRef,
+        mode: 'download-only',
+        availabilityToken: availability.availabilityToken,
+        sourceClientId: clientId,
+        idempotencyKey: this.createMobileVideoDownloadIdempotencyKey(archiveId),
+      });
+      this.plugin.transcriptionJobProcessor?.trackJobSummary(response.job);
+      return response.delivery?.liveDispatched
+        ? 'Download sent to Obsidian desktop.'
+        : 'Download queued for Obsidian desktop.';
+    } catch (error) {
+      console.warn('[PostCardRenderer] Mobile video download request failed:', error);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Failed to request desktop download. Check desktop transcription setup and try again.');
+    }
+  }
+
+  private createMobileTranscriptionIdempotencyKey(archiveId: string): string {
+    const randomPart = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    return `transcription_mobile_${archiveId}_${randomPart}`
+      .replace(/[^A-Za-z0-9:_-]/g, '_')
+      .slice(0, 160);
+  }
+
+  private createMobileVideoDownloadIdempotencyKey(archiveId: string): string {
+    const randomPart = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    return `video_download_mobile_${archiveId}_${randomPart}`
+      .replace(/[^A-Za-z0-9:_-]/g, '_')
+      .slice(0, 160);
+  }
+
+  private formatMobileTranscriptionUnavailableMessage(status: string | undefined): string {
+    switch (status) {
+      case 'settings_disabled':
+        return 'Enable transcription on an Obsidian desktop client first.';
+      case 'whisper_missing':
+        return 'No desktop transcription executor is ready. Install or configure Whisper on desktop.';
+      case 'model_missing':
+        return 'The selected Whisper model is missing on the desktop executor.';
+      case 'ffmpeg_missing':
+        return 'FFmpeg is required on the desktop executor for video transcription.';
+      case 'yt_dlp_missing':
+        return 'yt-dlp is required on the desktop executor for YouTube transcription.';
+      case 'unsupported_runtime':
+      case 'no_executor':
+      case undefined:
+        return 'No capable Obsidian desktop client is available for transcription.';
+      default:
+        return 'Transcription is not available from the current desktop executor.';
+    }
+  }
+
+  private formatMobileVideoDownloadUnavailableMessage(status: string | undefined): string {
+    switch (status) {
+      case 'settings_disabled':
+        return 'Enable transcription on an Obsidian desktop client first.';
+      case 'whisper_missing':
+        return 'Desktop video download currently uses the transcription executor. Install or configure Whisper on desktop.';
+      case 'model_missing':
+        return 'The selected Whisper model is missing on the desktop executor.';
+      case 'ffmpeg_missing':
+        return 'FFmpeg is required on the desktop executor for video download processing.';
+      case 'yt_dlp_missing':
+        return 'yt-dlp is required on the desktop executor for video downloads.';
+      case 'unsupported_runtime':
+      case 'no_executor':
+      case undefined:
+        return 'No capable Obsidian desktop client is available for video download.';
+      default:
+        return 'Video download is not available from the current desktop executor.';
     }
   }
 
