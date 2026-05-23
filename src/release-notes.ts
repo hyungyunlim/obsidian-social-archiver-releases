@@ -24,6 +24,16 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '3.7.0': {
+    title: 'Video Download Reliability',
+    date: '2026-05-23',
+    notes: `## Video Download Reliability
+
+- Improved desktop-assisted YouTube video downloads so completed media is inserted back into the original archive note and timeline.
+- Mobile now reconciles downloaded local media after expired CDN media is refreshed.
+- Failed mobile queue activity can now be cleared so stale failures do not keep the status badge alive.
+`,
+  },
   '3.6.10': {
     title: 'Video Download Sync Fixes',
     date: '2026-05-23',
