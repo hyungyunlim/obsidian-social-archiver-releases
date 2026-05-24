@@ -42,12 +42,12 @@ const CHECKSUM_FILE = '.checksum';
  * Version pinning — update these when upgrading Supertonic.
  * PRD §5.3: main branch URL 직접 참조 금지. commit SHA 기반.
  */
-const HELPER_COMMIT_SHA = 'main'; // TODO: pin to specific commit SHA before release
-const MODEL_REVISION = 'main'; // TODO: pin to specific HuggingFace revision before release
-const INSTALLER_VERSION = '1.0.0';
+const HELPER_COMMIT_SHA = '5379cc4e4297cec249a8a71283fc44d55ec327f1';
+const MODEL_REVISION = '3cadd1ee6394adea1bd021217a0e650ede09a323';
+const INSTALLER_VERSION = '3.0.0';
 
 const GITHUB_RAW_BASE = `https://raw.githubusercontent.com/supertone-inc/supertonic/${HELPER_COMMIT_SHA}`;
-const HF_BASE = `https://huggingface.co/Supertone/supertonic-2/resolve/${MODEL_REVISION}`;
+const HF_BASE = `https://huggingface.co/Supertone/supertonic-3/resolve/${MODEL_REVISION}`;
 
 /** Files to download from GitHub. */
 const GITHUB_FILES: ReadonlyArray<{ remote: string; local: string }> = [
@@ -367,6 +367,11 @@ export class SupertonicInstaller {
     return this.currentState;
   }
 
+  /** Target Supertonic engine version bundled by this installer. */
+  getTargetVersion(): string {
+    return INSTALLER_VERSION;
+  }
+
   /**
    * Check if Supertonic is properly installed (FR-03).
    * All 6 conditions must be met:
@@ -525,7 +530,7 @@ export class SupertonicInstaller {
         private: true,
         type: 'module',
         dependencies: {
-          'onnxruntime-node': '^1.17.0',
+          'onnxruntime-node': '^1.19.2',
           'fft.js': '^4.0.4',
           'js-yaml': '^4.1.0',
         },

@@ -67,7 +67,7 @@ function setupMocks() {
       if (p.endsWith('server.js')) return true;
       return false;
     }),
-    readFileSync: vi.fn(() => JSON.stringify({ version: '1.0.0' })),
+    readFileSync: vi.fn(() => JSON.stringify({ version: '3.0.0' })),
   };
 
   const mockPath = {
@@ -142,6 +142,14 @@ describe('SupertonicProvider', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mockFs = (window as any).require('fs');
       mockFs.readFileSync.mockReturnValue('not-json');
+      const provider = new SupertonicProvider('/mock/home');
+      expect(provider.isInstalled()).toBe(false);
+    });
+
+    it('should return false when installed engine version is stale', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mockFs = (window as any).require('fs');
+      mockFs.readFileSync.mockReturnValue(JSON.stringify({ version: '1.0.0' }));
       const provider = new SupertonicProvider('/mock/home');
       expect(provider.isInstalled()).toBe(false);
     });
@@ -375,22 +383,32 @@ describe('SupertonicProvider', () => {
       const provider = new SupertonicProvider('/mock/home');
       expect(provider.supportsLanguage('en-US')).toBe(true);
       expect(provider.supportsLanguage('ko-KR')).toBe(true);
+      expect(provider.supportsLanguage('ja-JP')).toBe(true);
+      expect(provider.supportsLanguage('de-DE')).toBe(true);
       expect(provider.supportsLanguage('es-ES')).toBe(true);
       expect(provider.supportsLanguage('pt-BR')).toBe(true);
       expect(provider.supportsLanguage('fr-FR')).toBe(true);
+      expect(provider.supportsLanguage('it-IT')).toBe(true);
+      expect(provider.supportsLanguage('ru-RU')).toBe(true);
+      expect(provider.supportsLanguage('ar-SA')).toBe(true);
+      expect(provider.supportsLanguage('hi-IN')).toBe(true);
+      expect(provider.supportsLanguage('vi-VN')).toBe(true);
+      expect(provider.supportsLanguage('id-ID')).toBe(true);
+      expect(provider.supportsLanguage('tr-TR')).toBe(true);
     });
 
     it('should return false for unsupported languages', () => {
       const provider = new SupertonicProvider('/mock/home');
-      expect(provider.supportsLanguage('ja-JP')).toBe(false);
       expect(provider.supportsLanguage('zh-CN')).toBe(false);
-      expect(provider.supportsLanguage('de-DE')).toBe(false);
+      expect(provider.supportsLanguage('zh-TW')).toBe(false);
+      expect(provider.supportsLanguage('th-TH')).toBe(false);
     });
 
     it('should handle short codes', () => {
       const provider = new SupertonicProvider('/mock/home');
       expect(provider.supportsLanguage('en')).toBe(true);
-      expect(provider.supportsLanguage('ja')).toBe(false);
+      expect(provider.supportsLanguage('ja')).toBe(true);
+      expect(provider.supportsLanguage('zh')).toBe(false);
     });
   });
 

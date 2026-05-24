@@ -24,6 +24,18 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '3.8.0': {
+    title: 'Supertonic 3 On-Device TTS',
+    date: '2026-05-24',
+    notes: `## Supertonic 3 On-Device TTS
+
+- Supertonic on-device TTS now uses Supertonic 3.
+- Local language support expands from 5 languages to 31 languages, including Japanese, German, Italian, Dutch, Polish, Russian, Turkish, Ukrainian, Vietnamese, Arabic, Hindi, and more.
+- Existing Supertonic 2 installs can update from Settings without uninstalling first.
+- The installer stages the new runtime and model files before replacing the existing local engine.
+`,
+    isImportant: true,
+  },
   '3.7.0': {
     title: 'Video Download Reliability',
     date: '2026-05-23',
@@ -32,17 +44,8 @@ export const RELEASE_NOTES: Record<string, ReleaseNote> = {
 - YouTube downloads can now run as desktop download-only jobs and update the existing archive note/timeline when media is ready.
 - Mobile handoff now reflects desktop-downloaded media after expired CDN refreshes.
 - Failed or expired queue activity can be cleared so stale badges do not remain.
+- Release notes can now be opened from Settings, with a shared web hub for cross-platform updates.
 - Reader CSS cleanup for current Obsidian review checks.
-`,
-  },
-  '3.6.10': {
-    title: 'Video Download Sync Fixes',
-    date: '2026-05-23',
-    notes: `## Video Download Sync Fixes
-
-- Downloaded YouTube videos are now written back into the existing archive note and reflected in the timeline.
-- Mobile requests handed off to the desktop Obsidian plugin now reconcile completed local media downloads after expired CDN media is refreshed.
-- Improved stuck transcription/download banners so failed or completed work can clear cleanly.
 `,
   },
   '3.6.6': {

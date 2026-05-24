@@ -43,6 +43,7 @@ import { getPlatformDefinition } from '../shared/platforms/definitions';
 
 const BUY_ME_A_COFFEE_URL = 'https://buymeacoffee.com/junlim';
 const PERSONAL_GITHUB_URL = 'https://github.com/hyungyunlim';
+const RELEASE_NOTES_URL = 'https://social-archive.org/release-notes?platform=obsidian&utm_source=obsidian-plugin&utm_medium=settings';
 
 export class SocialArchiverSettingTab extends PluginSettingTab {
   plugin: SocialArchiverPlugin;
@@ -2257,6 +2258,15 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName('Update notifications').setHeading()
       .settingEl.addClass('sa-settings-section-header');
 
+    new Setting(containerEl)
+      .setName('Release notes')
+      .setDesc('Open the shared Social Archiver release notes hub')
+      .addButton(button => button
+        .setButtonText('View release notes')
+        .onClick(() => {
+          window.open(RELEASE_NOTES_URL, '_blank');
+        }));
+
     // Show release notes toggle
     new Setting(containerEl)
       .setName('Show release notes after updates')
@@ -2747,20 +2757,31 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     if (isSupertonic) {
       const installer = new SupertonicInstaller();
+      const installedVersion = installer.getInstalledVersion();
+      const targetVersion = installer.getTargetVersion();
       supertonicInstalled = installer.isInstalled();
 
       if (!supertonicInstalled) {
+        const hasPreviousInstall = Boolean(installedVersion);
+        const actionLabel = hasPreviousInstall ? `Update to v${targetVersion}` : 'Install';
+        const runningLabel = hasPreviousInstall ? 'Updating...' : 'Installing...';
+        const successLabel = hasPreviousInstall ? 'updated' : 'installed';
+
         // Not installed: show install button only, skip all other TTS options
         const installSetting = new Setting(containerEl)
           .setName('Supertonic engine')
-          .setDesc('Not installed. Downloads ~270MB of models for on-device TTS (desktop only).')
+          .setDesc(
+            hasPreviousInstall
+              ? `Found Supertonic v${installedVersion}. Update to v${targetVersion} to enable Supertonic 3 support.`
+              : `Not installed. Downloads ~415MB of models for on-device TTS (desktop only).`,
+          )
           .addButton((button) => {
             button
-              .setButtonText('Install')
+              .setButtonText(actionLabel)
               .setCta()
               .onClick(async () => {
                 button.setDisabled(true);
-                button.setButtonText('Installing...');
+                button.setButtonText(runningLabel);
                 const progressEl = installSetting.descEl;
 
                 const abortController = new AbortController();
@@ -2770,9 +2791,9 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                 }, abortController.signal);
 
                 if (result.success) {
-                  new Notice(`Supertonic installed (v${result.version}).`);
+                  new Notice(`Supertonic ${successLabel} (v${result.version}).`);
                 } else {
-                  new Notice(`Install failed: ${result.error}`);
+                  new Notice(`Supertonic setup failed: ${result.error}`);
                 }
                 this.display();
               });
@@ -2841,10 +2862,40 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     if (isSupertonic && supertonicInstalled) {
       const installer = new SupertonicInstaller();
       const installedVersion = installer.getInstalledVersion();
+      const targetVersion = installer.getTargetVersion();
+      const updateAvailable = installer.isUpdateAvailable();
 
-      new Setting(containerEl)
+      const engineSetting = new Setting(containerEl)
         .setName('Supertonic engine')
-        .setDesc(`Installed (v${installedVersion ?? 'unknown'}). Runs locally on your machine.`)
+        .setDesc(
+          updateAvailable
+            ? `Installed (v${installedVersion ?? 'unknown'}). Update to v${targetVersion} for Supertonic 3 support.`
+            : `Installed (v${installedVersion ?? 'unknown'}). Runs locally on your machine.`,
+        );
+
+      if (updateAvailable) {
+        engineSetting.addButton((button) => {
+          button
+            .setButtonText(`Update to v${targetVersion}`)
+            .setCta()
+            .onClick(async () => {
+              button.setDisabled(true);
+              button.setButtonText('Updating...');
+              const progressEl = engineSetting.descEl;
+              const result = await installer.install((progress) => {
+                progressEl.textContent = `${progress.message} (${progress.step}/${progress.totalSteps})`;
+              });
+              if (result.success) {
+                new Notice(`Supertonic updated (v${result.version}).`);
+              } else {
+                new Notice(`Supertonic update failed: ${result.error}`);
+              }
+              this.display();
+            });
+        });
+      }
+
+      engineSetting
         .addButton((button) => {
           button
             .setButtonText('Uninstall')

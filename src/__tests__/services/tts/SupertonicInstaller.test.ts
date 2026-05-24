@@ -206,6 +206,11 @@ describe('SupertonicInstaller', () => {
       const installer = new SupertonicInstaller('/mock/home');
       expect(installer.state).toBe('idle');
     });
+
+    it('should expose the target engine version', () => {
+      const installer = new SupertonicInstaller('/mock/home');
+      expect(installer.getTargetVersion()).toBe('3.0.0');
+    });
   });
 
   describe('isInstalled', () => {
@@ -230,7 +235,7 @@ describe('SupertonicInstaller', () => {
     it('should return false when helper.js is missing', () => {
       const installer = new SupertonicInstaller('/mock/home');
       const basePath = '/mock/home/.social-archiver/tts';
-      mockFs._files.set(`${basePath}/.version`, JSON.stringify({ version: '1.0.0' }));
+      mockFs._files.set(`${basePath}/.version`, JSON.stringify({ version: '3.0.0' }));
       mockFs._files.set(`${basePath}/server.js`, 'x');
       mockFs._files.set(`${basePath}/package.json`, '{}');
       expect(installer.isInstalled()).toBe(false);
@@ -239,7 +244,7 @@ describe('SupertonicInstaller', () => {
     it('should return false when onnxruntime-node is missing', () => {
       const installer = new SupertonicInstaller('/mock/home');
       const basePath = '/mock/home/.social-archiver/tts';
-      mockFs._files.set(`${basePath}/.version`, JSON.stringify({ version: '1.0.0' }));
+      mockFs._files.set(`${basePath}/.version`, JSON.stringify({ version: '3.0.0' }));
       mockFs._files.set(`${basePath}/helper.js`, 'x');
       mockFs._files.set(`${basePath}/server.js`, 'x');
       mockFs._files.set(`${basePath}/package.json`, '{}');
@@ -250,7 +255,7 @@ describe('SupertonicInstaller', () => {
     it('should return false when ONNX model files are incomplete', () => {
       const installer = new SupertonicInstaller('/mock/home');
       const basePath = '/mock/home/.social-archiver/tts';
-      mockFs._files.set(`${basePath}/.version`, JSON.stringify({ version: '1.0.0' }));
+      mockFs._files.set(`${basePath}/.version`, JSON.stringify({ version: '3.0.0' }));
       mockFs._files.set(`${basePath}/helper.js`, 'x');
       mockFs._files.set(`${basePath}/server.js`, 'x');
       mockFs._files.set(`${basePath}/package.json`, '{}');
@@ -302,13 +307,13 @@ describe('SupertonicInstaller', () => {
       const installer = new SupertonicInstaller('/mock/home');
       const basePath = '/mock/home/.social-archiver/tts';
       mockFs._files.set(`${basePath}/.version`, JSON.stringify({
-        version: '1.0.0',
+        version: '3.0.0',
         helperRef: 'abc123',
         modelRevision: 'main',
         installedAt: '2026-02-28T00:00:00Z',
         nodeVersion: 'v20.0.0',
       }));
-      expect(installer.getInstalledVersion()).toBe('1.0.0');
+      expect(installer.getInstalledVersion()).toBe('3.0.0');
     });
 
     it('should handle legacy plain string format', () => {
@@ -335,7 +340,7 @@ describe('SupertonicInstaller', () => {
     it('should return false when version matches', () => {
       const installer = new SupertonicInstaller('/mock/home');
       const basePath = '/mock/home/.social-archiver/tts';
-      mockFs._files.set(`${basePath}/.version`, JSON.stringify({ version: '1.0.0' }));
+      mockFs._files.set(`${basePath}/.version`, JSON.stringify({ version: '3.0.0' }));
       expect(installer.isUpdateAvailable()).toBe(false);
     });
   });
@@ -472,7 +477,7 @@ function setupCompleteInstall(
 ): void {
   // 1. .version (valid JSON)
   mockFs._files.set(`${basePath}/.version`, JSON.stringify({
-    version: '1.0.0',
+    version: '3.0.0',
     helperRef: 'abc123',
     modelRevision: 'main',
     installedAt: '2026-02-28T00:00:00Z',

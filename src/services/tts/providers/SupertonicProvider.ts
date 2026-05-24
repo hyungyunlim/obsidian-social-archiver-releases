@@ -41,9 +41,14 @@ const READY_TIMEOUT_MS = 10 * 1000;    // 10 seconds for ready handshake
 const MAX_CRASH_RESTARTS = 3;
 const INSTALL_DIR = '.social-archiver/tts';
 const SUPPORTED_PROTOCOL_VERSION = 1;
+const CURRENT_ENGINE_VERSION = '3.0.0';
 
-/** Languages supported by the Supertonic engine. */
-const SUPPORTED_LANGUAGES = new Set(['en', 'ko', 'es', 'pt', 'fr']);
+/** Languages supported by Supertonic 3. `na` is a language-agnostic inference mode. */
+const SUPPORTED_LANGUAGES = new Set([
+  'en', 'ko', 'ja', 'ar', 'bg', 'cs', 'da', 'de', 'el', 'es', 'et',
+  'fi', 'fr', 'hi', 'hr', 'hu', 'id', 'it', 'lt', 'lv', 'nl', 'pl',
+  'pt', 'ro', 'ru', 'sk', 'sl', 'sv', 'tr', 'uk', 'vi', 'na',
+]);
 
 /** Quality -> totalStep mapping (FR-06). */
 const QUALITY_MAP: Record<SupertonicQuality, number> = {
@@ -166,19 +171,21 @@ export class SupertonicProvider implements PluginTTSProvider {
 
     this.resetIdleTimer();
 
-    // Supertonic expects short language codes: en, ko, es, pt, fr
+    // Supertonic expects short language codes.
     // Strip region suffix from BCP-47 codes (e.g., ko-KR → ko, en-US → en)
     const lang = options.lang ? (options.lang.split('-')[0] ?? options.lang) : undefined;
 
     // Pass rate to Supertonic for pitch-preserving time stretch.
-    // Supertonic server.js applies: rate * 1.05, clamped [0.5, 2.5].
+    // Supertonic's natural default is 1.05x, so user-facing 1.0 maps to 1.05.
     // When rate is undefined, the server uses its default (1.05x).
+    const speed = options.rate != null ? Math.max(0.5, Math.min(2.5, options.rate * 1.05)) : undefined;
+
     const response = await this.sendRequest({
       type: 'synthesize',
       id: 0, // will be assigned in sendRequest
       text: options.text,
       lang,
-      rate: options.rate,
+      rate: speed,
       voiceId: options.voiceId,
       totalStep: QUALITY_MAP[this.quality],
     }, SYNTH_TIMEOUT_MS);
@@ -238,11 +245,12 @@ export class SupertonicProvider implements PluginTTSProvider {
       const fs = this.nodeRequire('fs') as typeof import('fs');
       const pathMod = this.nodeRequire('path') as typeof import('path');
 
-      // Check .version marker (must be valid JSON per FR-03)
+      // Check .version marker (must be valid JSON per FR-03) and current engine.
       const versionPath = pathMod.join(installDir, '.version');
       if (!fs.existsSync(versionPath)) return false;
       try {
-        JSON.parse(fs.readFileSync(versionPath, 'utf-8'));
+        const meta = JSON.parse(fs.readFileSync(versionPath, 'utf-8')) as { version?: string };
+        if (meta.version !== CURRENT_ENGINE_VERSION) return false;
       } catch {
         return false;
       }

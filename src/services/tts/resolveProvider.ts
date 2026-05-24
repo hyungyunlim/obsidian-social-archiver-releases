@@ -12,9 +12,9 @@
  *  5. Smart default: prefer Azure if authenticated, else Supertonic if installed
  *
  * Language fallback:
- *  When the primary provider is Supertonic (en/ko/es/pt/fr only), a fallback
+ *  When the primary provider is Supertonic, a fallback
  *  Azure provider is returned so TTSService can switch providers for languages
- *  like ja-JP or zh-CN that Supertonic doesn't support.
+ *  like zh-CN that Supertonic doesn't support.
  */
 
 import type { PluginTTSProvider } from './types';

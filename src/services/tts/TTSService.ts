@@ -114,7 +114,7 @@ export class TTSService {
 
   /**
    * Set a fallback provider used when the primary doesn't support the detected language.
-   * For example, Supertonic (en/ko/es/pt/fr only) falls back to Azure for ja/zh/etc.
+   * For example, Supertonic falls back to Azure for unsupported languages like zh.
    */
   setFallbackProvider(provider: PluginTTSProvider | null): void {
     this.fallbackProvider = provider;
