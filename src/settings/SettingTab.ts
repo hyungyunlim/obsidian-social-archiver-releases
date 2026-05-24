@@ -31,6 +31,7 @@ import { COMMENT_TYPE_DISPLAY_NAMES, OUTPUT_LANGUAGE_NAMES } from '../types/ai-c
 import { FEATURE_READER_TTS_ENABLED, FEATURE_CROSSPOST_ENABLED } from '../shared/constants';
 import { DEFAULT_TTS_SETTINGS } from '../types/settings';
 import type { PluginTTSProviderId } from '../services/tts/types';
+import { TTS_LANGUAGE_OVERRIDE_OPTIONS } from '../services/tts/languages';
 import { SupertonicInstaller } from '../services/tts/SupertonicInstaller';
 import type { AICommentType, AIOutputLanguage } from '../types/ai-comment';
 import {
@@ -2947,26 +2948,11 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .setDesc('Auto-detect or override the speech language')
       .addDropdown((dropdown) => {
         dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
+        dropdown.addOption('', 'Auto-detect');
+        for (const option of TTS_LANGUAGE_OVERRIDE_OPTIONS) {
+          dropdown.addOption(option.code, option.label);
+        }
         dropdown
-          .addOption('', 'Auto-detect')
-          .addOption('en-US', 'English (US)')
-          .addOption('ko-KR', 'Korean')
-          .addOption('ja-JP', 'Japanese')
-          .addOption('zh-CN', 'Chinese (Simplified)')
-          .addOption('zh-TW', 'Chinese (Traditional)')
-          .addOption('de-DE', 'German')
-          .addOption('fr-FR', 'French')
-          .addOption('es-ES', 'Spanish (Spain)')
-          .addOption('es-MX', 'Spanish (Mexico)')
-          .addOption('pt-BR', 'Portuguese (Brazil)')
-          .addOption('it-IT', 'Italian')
-          .addOption('ru-RU', 'Russian')
-          .addOption('hi-IN', 'Hindi')
-          .addOption('ar-SA', 'Arabic')
-          .addOption('vi-VN', 'Vietnamese')
-          .addOption('th-TH', 'Thai')
-          .addOption('id-ID', 'Indonesian')
-          .addOption('tr-TR', 'Turkish')
           .setValue(this.plugin.settings.tts.language)
           .onChange(async (value: string) => {
             this.plugin.settings.tts.language = value;

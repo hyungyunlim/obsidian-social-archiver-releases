@@ -24,6 +24,16 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '3.8.1': {
+    title: 'Supertonic 3 Language Detection',
+    date: '2026-05-24',
+    notes: `## Supertonic 3 Language Detection
+
+- Reader Mode and timeline TTS now detect more Supertonic 3 languages before playback.
+- The TTS language override menu now exposes the full Supertonic 3 language set.
+- Supertonic language support is shared from one source of truth, so detection, settings, and provider fallback stay aligned.
+`,
+  },
   '3.8.0': {
     title: 'Supertonic 3 On-Device TTS',
     date: '2026-05-24',

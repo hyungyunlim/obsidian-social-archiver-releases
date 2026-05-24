@@ -3,6 +3,7 @@ import { Platform } from 'obsidian';
 import { SupertonicProvider } from '@/services/tts/providers/SupertonicProvider';
 import type { SupertonicQuality } from '@/services/tts/providers/SupertonicProvider';
 import { resetCache } from '@/services/tts/resolveNodeEnv';
+import { SUPERTONIC_V3_LANGUAGE_OPTIONS } from '@/services/tts/languages';
 
 // ============================================================================
 // Mock Helpers
@@ -379,22 +380,12 @@ describe('SupertonicProvider', () => {
   });
 
   describe('supportsLanguage', () => {
-    it('should return true for supported languages', () => {
+    it('should return true for all Supertonic v3 override languages', () => {
       const provider = new SupertonicProvider('/mock/home');
-      expect(provider.supportsLanguage('en-US')).toBe(true);
-      expect(provider.supportsLanguage('ko-KR')).toBe(true);
-      expect(provider.supportsLanguage('ja-JP')).toBe(true);
-      expect(provider.supportsLanguage('de-DE')).toBe(true);
-      expect(provider.supportsLanguage('es-ES')).toBe(true);
-      expect(provider.supportsLanguage('pt-BR')).toBe(true);
-      expect(provider.supportsLanguage('fr-FR')).toBe(true);
-      expect(provider.supportsLanguage('it-IT')).toBe(true);
-      expect(provider.supportsLanguage('ru-RU')).toBe(true);
-      expect(provider.supportsLanguage('ar-SA')).toBe(true);
-      expect(provider.supportsLanguage('hi-IN')).toBe(true);
-      expect(provider.supportsLanguage('vi-VN')).toBe(true);
-      expect(provider.supportsLanguage('id-ID')).toBe(true);
-      expect(provider.supportsLanguage('tr-TR')).toBe(true);
+      for (const option of SUPERTONIC_V3_LANGUAGE_OPTIONS) {
+        expect(provider.supportsLanguage(option.code)).toBe(true);
+      }
+      expect(provider.supportsLanguage('na')).toBe(true);
     });
 
     it('should return false for unsupported languages', () => {

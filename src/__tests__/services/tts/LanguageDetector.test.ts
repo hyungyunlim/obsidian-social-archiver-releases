@@ -134,6 +134,31 @@ describe('LanguageDetector', () => {
 		});
 	});
 
+	describe('Supertonic v3 expanded language detection', () => {
+		it.each([
+			['Bulgarian', 'Това е примерен текст на български език, който се използва за проверка. Тези думи показват, че системата работи добре.', 'bg-BG'],
+			['Czech', 'Tento text je český příklad, který ukazuje, že systém funguje dobře a také rozpozná jazyk podle slov.', 'cs-CZ'],
+			['Danish', 'Det er en dansk tekst, og den viser, at systemet ikke har problemer med sproget.', 'da-DK'],
+			['Greek', 'Αυτό είναι ένα ελληνικό κείμενο που δείχνει ότι το σύστημα αναγνωρίζει σωστά τη γλώσσα.', 'el-GR'],
+			['Estonian', 'See on eestikeelne tekst ja see näitab, et süsteem ei ole katki ning töötab hästi.', 'et-EE'],
+			['Finnish', 'Tämä on suomenkielinen teksti ja se näyttää, että järjestelmä toimii hyvin, mutta ei tee virhettä.', 'fi-FI'],
+			['Croatian', 'Ovo nije samo kratak tekst, nego primjer koji pokazuje što sustav može prepoznati nakon čitanja.', 'hr-HR'],
+			['Hungarian', 'Ez egy magyar szöveg, és azt mutatja, hogy a rendszer nem hibázik, mert nagyon jól működik.', 'hu-HU'],
+			['Indonesian', 'Ini adalah teks bahasa Indonesia yang digunakan untuk memastikan sistem tidak salah dalam mengenali bahasa.', 'id-ID'],
+			['Lithuanian', 'Tai lietuviškas tekstas ir jis rodo, kad sistema yra labai gera, todėl gali atpažinti kalbą.', 'lt-LT'],
+			['Latvian', 'Tas ir latviešu teksts un tas rāda, ka sistēma nav bojāta, bet var pareizi atpazīt valodu.', 'lv-LV'],
+			['Dutch', 'Dit is een Nederlandse tekst en het systeem is niet kapot, maar werkt ook goed voor deze taal.', 'nl-NL'],
+			['Polish', 'To jest polski tekst, który pokazuje, że system nie ma problemu i może rozpoznać język.', 'pl-PL'],
+			['Romanian', 'Acesta este un text românesc și sistemul nu greșește, pentru că poate recunoaște limba.', 'ro-RO'],
+			['Slovak', 'Tento slovenský text hovorí, že ľudia hľadajú rôzne riešenia pre systém, ktorý môže dobre fungovať.', 'sk-SK'],
+			['Slovenian', 'To je slovensko besedilo in ni napaka, ampak primer, ki lahko pokaže, kako sistem prepozna jezik.', 'sl-SI'],
+			['Swedish', 'Det är en svensk text och den visar att systemet inte har problem med språket.', 'sv-SE'],
+			['Ukrainian', 'Це український текст, який показує, що система не має проблем і може розпізнати мову.', 'uk-UA'],
+		])('should detect %s text', (_language, text, expected) => {
+			expect(detectLanguage(text)).toBe(expected);
+		});
+	});
+
 	describe('Turkish detection', () => {
 		it('should detect Turkish text with special characters', () => {
 			const turkish = 'Güneşli bir gün. İstanbul çok güzel bir şehir.';

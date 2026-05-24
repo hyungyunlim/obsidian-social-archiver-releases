@@ -30,6 +30,7 @@ import { ProcessManager } from '../../ProcessManager';
 import { resolveEnvPath, findNodeBinary } from '../resolveNodeEnv';
 import type { NodeModules } from '../resolveNodeEnv';
 import type { PluginTTSProvider, TTSSynthesizeOptions, TTSVoice } from '../types';
+import { isSupertonicV3Language, toShortLanguageCode } from '../languages';
 
 // ============================================================================
 // Constants
@@ -42,13 +43,6 @@ const MAX_CRASH_RESTARTS = 3;
 const INSTALL_DIR = '.social-archiver/tts';
 const SUPPORTED_PROTOCOL_VERSION = 1;
 const CURRENT_ENGINE_VERSION = '3.0.0';
-
-/** Languages supported by Supertonic 3. `na` is a language-agnostic inference mode. */
-const SUPPORTED_LANGUAGES = new Set([
-  'en', 'ko', 'ja', 'ar', 'bg', 'cs', 'da', 'de', 'el', 'es', 'et',
-  'fi', 'fr', 'hi', 'hr', 'hu', 'id', 'it', 'lt', 'lv', 'nl', 'pl',
-  'pt', 'ro', 'ru', 'sk', 'sl', 'sv', 'tr', 'uk', 'vi', 'na',
-]);
 
 /** Quality -> totalStep mapping (FR-06). */
 const QUALITY_MAP: Record<SupertonicQuality, number> = {
@@ -159,8 +153,7 @@ export class SupertonicProvider implements PluginTTSProvider {
   // ---------- PluginTTSProvider interface -----------------------------------
 
   supportsLanguage(lang: string): boolean {
-    const short = lang.split('-')[0] ?? lang;
-    return SUPPORTED_LANGUAGES.has(short);
+    return isSupertonicV3Language(lang);
   }
 
   async synthesize(options: TTSSynthesizeOptions): Promise<ArrayBuffer> {
@@ -173,7 +166,7 @@ export class SupertonicProvider implements PluginTTSProvider {
 
     // Supertonic expects short language codes.
     // Strip region suffix from BCP-47 codes (e.g., ko-KR → ko, en-US → en)
-    const lang = options.lang ? (options.lang.split('-')[0] ?? options.lang) : undefined;
+    const lang = options.lang ? toShortLanguageCode(options.lang) : undefined;
 
     // Pass rate to Supertonic for pitch-preserving time stretch.
     // Supertonic's natural default is 1.05x, so user-facing 1.0 maps to 1.05.
@@ -411,7 +404,7 @@ export class SupertonicProvider implements PluginTTSProvider {
 
       // Store readyTimer cleanup (cleared when ready is received)
       const originalIsReady = this.isReady;
-      const tickCheckReady = () => {
+      const tickCheckReady = (): void => {
         if (this.isReady !== originalIsReady || !this.process) {
           window.clearTimeout(readyTimer);
           return;
