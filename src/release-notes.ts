@@ -34,7 +34,6 @@ export const RELEASE_NOTES: Record<string, ReleaseNote> = {
 - Reddit references are linkified more consistently across timeline cards, comments, Markdown conversion, and saved note formatting.
 - AI comments now show clearer local/cloud model labels in timeline, reader mode, CLI output, and Markdown metadata.
 - Obsidian login magic links now include plugin source tags for cleaner auth attribution.
-- Billing and rate-limit copy was tightened up by removing expired launch-offer language and clarifying premium benefits.
 `,
   },
   '3.8.1': {
