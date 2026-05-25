@@ -2310,6 +2310,9 @@ export class PostCardRenderer extends Component {
       if (post.platform === 'x') {
         out = this.textFormatter.linkifyXMentions(out);
       }
+      if (post.platform === 'reddit') {
+        out = this.textFormatter.linkifyRedditReferences(out);
+      }
       if (!this.plugin.settings.includeHashtagsAsObsidianTags) {
         out = this.textFormatter.linkifyInlineHashtags(out, post.platform);
       }

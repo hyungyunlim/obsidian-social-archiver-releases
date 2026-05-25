@@ -219,6 +219,7 @@
 
 /* Status-specific icon colors */
 .crosspost-banner .banner-icon.xpb-icon-posting { color: var(--text-muted); }
+.crosspost-banner .banner-icon.xpb-icon-warning { color: var(--color-orange, var(--color-yellow)); }
 .crosspost-banner .banner-icon.xpb-icon-complete { color: var(--color-green); }
 .crosspost-banner .banner-icon.xpb-icon-failed { color: var(--color-red); }
 

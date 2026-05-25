@@ -1587,6 +1587,10 @@ export class MarkdownConverter implements IService {
           contentText = cleanedText || '';
         }
 
+        if (archive.platform === 'reddit' && contentText) {
+          contentText = this.textFormatter.linkifyRedditReferences(contentText);
+        }
+
         // When hashtags-as-tags is OFF, convert inline #hashtags in embedded content
         if (!this.includeHashtagsAsObsidianTags && contentText) {
           contentText = this.textFormatter.linkifyInlineHashtags(contentText, archive.platform);
@@ -1816,7 +1820,10 @@ export class MarkdownConverter implements IService {
     section += `### ${platformName} - ${authorName}\n\n`;
 
     // Content as plain text (hashtags are already included in text)
-    const contentText = (quotedPost.content.text || quotedPost.content.markdown || '').trim();
+    let contentText = (quotedPost.content.text || quotedPost.content.markdown || '').trim();
+    if (quotedPost.platform === 'reddit' && contentText) {
+      contentText = this.textFormatter.linkifyRedditReferences(contentText);
+    }
     if (contentText) {
       section += `${contentText}\n\n`;
     }
@@ -1987,9 +1994,12 @@ export class MarkdownConverter implements IService {
   ): Record<string, unknown> {
     const isWebArticle = postData.platform === 'web';
     const isThreadsInlineArchive = postData.platform === 'threads' && !!postData.content.markdown?.trim();
+    const rssMarkdownBody = isRssBasedPlatform(postData.platform)
+      ? postData.content.rawMarkdown?.trim() || postData.content.markdown?.trim() || undefined
+      : undefined;
     const inlineMarkdownBody = (isWebArticle || isThreadsInlineArchive)
       ? postData.content.markdown?.trim()
-      : undefined;
+      : rssMarkdownBody;
     let formattedSnippet = postData.content.snippet
       ? `> [!note]+ Threads Note\n> ${postData.content.snippet.replace(/\n/g, '\n> ')}`
       : undefined;
@@ -2054,6 +2064,8 @@ export class MarkdownConverter implements IService {
         ? this.textFormatter.linkifyInstagramMentions(contentText)
         : postData.platform === 'x'
         ? this.textFormatter.linkifyXMentions(contentText)
+        : postData.platform === 'reddit'
+        ? this.textFormatter.linkifyRedditReferences(contentText)
         : postData.platform === 'youtube' && postData.videoId
         ? this.textFormatter.linkifyYouTubeTimestamps(contentText, postData.videoId)
         : contentText)

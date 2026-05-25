@@ -4,6 +4,21 @@
  */
 export class TextFormatter {
   /**
+   * Convert Reddit user and subreddit references to Markdown links.
+   *
+   * Handles `r/subreddit`, `/r/subreddit`, `u/username`, and `/u/username`.
+   * Existing markdown links, inline code, and bare URLs are left untouched so
+   * repeated formatting does not nest links.
+   */
+  linkifyRedditReferences(text: string): string {
+    if (!text) return text;
+
+    return this.replaceOutsideProtectedMarkdownSpans(text, (segment) => (
+      this.linkifyRedditUsers(this.linkifyRedditSubreddits(segment))
+    ));
+  }
+
+  /**
    * Convert @mentions to Instagram profile links
    */
   linkifyInstagramMentions(text: string, isReply: boolean = false): string {
@@ -148,5 +163,47 @@ export class TextFormatter {
       case 'tumblr': return `https://www.tumblr.com/tagged/${encodedTag}`;
       default: return `https://www.google.com/search?q=%23${encodedTag}`;
     }
+  }
+
+  private replaceOutsideProtectedMarkdownSpans(
+    text: string,
+    replaceSegment: (segment: string) => string,
+  ): string {
+    const protectedPattern = /(```[\s\S]*?```|`[^`\n]*`|!?\[[^\]]*\]\([^)]+\)|<https?:\/\/[^>]+>|https?:\/\/[^\s<>()]+)/gi;
+    let result = '';
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = protectedPattern.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        result += replaceSegment(text.slice(lastIndex, match.index));
+      }
+      result += match[0];
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+      result += replaceSegment(text.slice(lastIndex));
+    }
+
+    return result;
+  }
+
+  private linkifyRedditSubreddits(text: string): string {
+    return text.replace(
+      /(^|[^A-Za-z0-9_/@.\\-])((?:\/)?r\/([A-Za-z0-9_]{2,21}))(?=$|[^A-Za-z0-9_/-])/g,
+      (_match, prefix: string, display: string, subreddit: string) => (
+        `${prefix}[${display}](https://www.reddit.com/r/${encodeURIComponent(subreddit)}/)`
+      ),
+    );
+  }
+
+  private linkifyRedditUsers(text: string): string {
+    return text.replace(
+      /(^|[^A-Za-z0-9_/@.\\-])((?:\/)?u\/([A-Za-z0-9_-]{3,20}))(?=$|[^A-Za-z0-9_/-])/g,
+      (_match, prefix: string, display: string, username: string) => (
+        `${prefix}[${display}](https://www.reddit.com/user/${encodeURIComponent(username)}/)`
+      ),
+    );
   }
 }

@@ -293,6 +293,29 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
     expect(drainBacklog).not.toHaveBeenCalled();
   });
 
+  it('refreshes the timeline when an AI comment update arrives over WebSocket', async () => {
+    const events = makeEvents();
+    const refreshTimelineView = vi.fn();
+    const deps = makeDeps({
+      events: events as any,
+      refreshTimelineView,
+    });
+
+    const bridge = new RealtimeEventBridge(deps);
+    bridge.setup();
+
+    await events.trigger('ws:ai_comment_updated', {
+      data: {
+        jobId: 'job-server-summary',
+        archiveId: 'archive-1',
+        targetClientId: 'server-ai',
+        updatedAt: '2026-05-24T10:00:00.000Z',
+      },
+    });
+
+    expect(refreshTimelineView).toHaveBeenCalledTimes(1);
+  });
+
   it('handles transcription status updates when transcription execution is disabled', async () => {
     const drainBacklog = vi.fn().mockResolvedValue(undefined);
     const handleRequestedJob = vi.fn().mockResolvedValue(undefined);

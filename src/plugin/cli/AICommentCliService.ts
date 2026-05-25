@@ -24,6 +24,7 @@ import type {
   AICli,
   AICommentMeta,
   AICommentOptions,
+  AICommentProviderId,
   AICommentType,
   AIOutputLanguage,
 } from '../../types/ai-comment';
@@ -54,7 +55,7 @@ export interface AICommentScheduleResult {
 
 export interface AICommentListEntry {
   id: string;
-  cli: AICli;
+  cli: AICommentProviderId;
   type: AICommentType;
   generatedAt: string;
   processingTime?: number;

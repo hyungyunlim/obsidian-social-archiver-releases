@@ -118,6 +118,33 @@ describe('parseAIComments', () => {
     expect(result.commentTexts.get(meta.id)).toBe('Model-specific output');
   });
 
+  it('should parse cloud AI comments rendered with model provider labels', () => {
+    const meta = createMockMeta({
+      id: 'ai-action-comment-job-1',
+      cli: 'workers-ai',
+      model: '@cf/zai-org/glm-4.7-flash',
+    });
+    const markdown = appendAIComment(SAMPLE_MARKDOWN_NO_COMMENTS, meta, 'Cloud summary output');
+    const result = parseAIComments(markdown);
+
+    expect(markdown).toContain('GLM 4.7 Flash');
+    expect(result.comments[0]?.cli).toBe('workers-ai');
+    expect(result.comments[0]?.model).toBe('@cf/zai-org/glm-4.7-flash');
+    expect(result.commentTexts.get(meta.id)).toBe('Cloud summary output');
+  });
+
+  it('should display old cloud AI comments by model even when the stored provider is Claude', () => {
+    const meta = createMockMeta({
+      id: 'ai-action-comment-job-legacy',
+      cli: 'claude',
+      model: '@cf/zai-org/glm-4.7-flash',
+    });
+    const header = formatCommentHeader(meta);
+
+    expect(header).toContain('GLM 4.7 Flash');
+    expect(header).not.toContain('Claude');
+  });
+
   it('should return empty results when no section exists', () => {
     const result = parseAIComments(SAMPLE_MARKDOWN_NO_COMMENTS);
 
@@ -244,6 +271,19 @@ describe('formatCommentHeader', () => {
     expect(header).toContain('💡');
     expect(header).toContain('Codex');
     expect(header).toContain('Critical Analysis');
+  });
+
+  it('should format Workers AI headers by concrete model', () => {
+    const meta = createMockMeta({
+      cli: 'workers-ai',
+      model: '@cf/moonshotai/kimi-k2.6',
+      type: 'glossary',
+    });
+    const header = formatCommentHeader(meta);
+
+    expect(header).toContain('☁️');
+    expect(header).toContain('Kimi K2.6');
+    expect(header).toContain('Glossary');
   });
 
   it('should format date correctly', () => {

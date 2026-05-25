@@ -1,6 +1,7 @@
 import type { Comment, Author } from '../../../types/post';
 
 import type { Platform } from '../../../types/post';
+import { TextFormatter } from '../../../services/markdown/formatters/TextFormatter';
 
 type CommentDepthLimit = number | null;
 
@@ -21,6 +22,7 @@ const MAX_COMMENT_RENDER_DEPTH = 20;
 export class CommentRenderer {
   private platform?: Platform;
   private postAuthor?: Author;
+  private textFormatter = new TextFormatter();
 
   constructor(
     private getRelativeTimeCallback?: (date: Date) => string
@@ -249,7 +251,10 @@ export class CommentRenderer {
    */
   private renderTextWithLinks(container: HTMLElement, text: string): void {
     // Normalize URLs with space after :// (e.g., "https:// example.com" -> "https://example.com")
-    const normalizedText = this.decodeHtmlEntities(text).replace(/https?:\/\/\s+/g, (match) => match.replace(/\s+/g, ''));
+    const decodedText = this.decodeHtmlEntities(text).replace(/https?:\/\/\s+/g, (match) => match.replace(/\s+/g, ''));
+    const normalizedText = this.platform === 'reddit'
+      ? this.textFormatter.linkifyRedditReferences(decodedText)
+      : decodedText;
 
     // Combined regex to match:
     // 1. Safe HTML anchors: <a href="...">text</a>

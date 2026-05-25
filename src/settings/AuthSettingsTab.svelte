@@ -238,10 +238,12 @@ $effect(() => {
 
 // Computed states
 let archiveQuota = $derived(billingUsage?.archiveQuota ?? settings.billingUsage?.archiveQuota);
+let aiActionQuota = $derived(billingUsage?.aiActionQuota ?? settings.billingUsage?.aiActionQuota);
 let rawBillingPlan = $derived(billingUsage?.plan ?? settings.billingUsage?.plan ?? settings.tier);
 let billingPlanDisplay = $derived(formatBillingPlan(rawBillingPlan));
 let betaFreeSunsetLine = $derived(getBetaFreeSunsetLine(rawBillingPlan, billingUsage?.policy ?? settings.billingUsage?.policy));
 let archiveQuotaProgress = $derived(getArchiveQuotaProgress(archiveQuota));
+let aiActionQuotaProgress = $derived(getAIActionQuotaProgress(aiActionQuota));
 let isLifetimePlan = $derived(rawBillingPlan === 'lifetime');
 let archiveQuotaExhausted = $derived(
   !!archiveQuota &&
@@ -287,6 +289,11 @@ function getBetaFreeSunsetLine(plan: string, policy?: BillingUsageSummary['polic
 function getArchiveQuotaProgress(quota: BillingUsageSummary['archiveQuota'] | undefined): number {
   if (!quota || quota.limit <= 0 || quota.limit === -1 || quota.unlimited) return 0;
   return Math.max(0, Math.min(100, (quota.used / quota.limit) * 100));
+}
+
+function getAIActionQuotaProgress(quota: BillingUsageSummary['aiActionQuota'] | undefined): number {
+  if (!quota || quota.limit <= 0 || quota.limit === -1 || quota.unlimited) return 0;
+  return Math.max(0, Math.min(100, ((quota.used + quota.reserved) / quota.limit) * 100));
 }
 
 async function handleRefreshBillingUsage(showNotice = true): Promise<void> {
@@ -422,10 +429,14 @@ async function handleLogin() {
     const response = await fetch(`${plugin.settings.workerUrl}/api/auth/login`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-Client': 'obsidian-plugin',
+        'X-Client-Version': plugin.manifest.version,
+        'X-Platform': getPlatformIdentifier()
       },
       body: JSON.stringify({
-        email: normalizedEmail
+        email: normalizedEmail,
+        source: 'obsidian'
       })
     });
 
@@ -905,6 +916,34 @@ $effect(() => {
         {:else}
           <div class="billing-usage-muted">Archive usage will appear after sync.</div>
         {/if}
+
+        {#if aiActionQuota}
+          <div class="billing-usage-subsection">
+            <div class="billing-usage-label">AI credits</div>
+            {#if aiActionQuota.unlimited || aiActionQuota.limit === -1}
+              <div class="billing-usage-main">
+                <span class="billing-usage-value">No monthly limit</span>
+                <span class="billing-usage-muted">{aiActionQuota.used} used this month</span>
+              </div>
+            {:else}
+              <div class="billing-usage-main">
+                <span class="billing-usage-value">{aiActionQuota.used}</span>
+                <span class="billing-usage-separator">/</span>
+                <span class="billing-usage-limit">{aiActionQuota.limit}</span>
+                <span class="billing-usage-muted">({aiActionQuota.remaining} left)</span>
+              </div>
+              {#if aiActionQuota.reserved > 0}
+                <div class="billing-usage-reset">{aiActionQuota.reserved} AI credits pending</div>
+              {/if}
+              <div class="billing-progress-track" aria-hidden="true">
+                <div class="billing-progress-bar" style={`width: ${aiActionQuotaProgress}%`}></div>
+              </div>
+              {#if aiActionQuota.resetAt}
+                <div class="billing-usage-reset">AI credits reset {formatDate(aiActionQuota.resetAt)}</div>
+              {/if}
+            {/if}
+          </div>
+        {/if}
       </div>
 
       <!-- Billing lifecycle events (server-driven; renders nothing when empty) -->
@@ -1137,6 +1176,12 @@ $effect(() => {
   gap: 3px;
   margin-bottom: 8px;
   color: var(--text-normal);
+}
+
+.billing-usage-subsection {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--background-modifier-border);
 }
 
 .billing-usage-value {

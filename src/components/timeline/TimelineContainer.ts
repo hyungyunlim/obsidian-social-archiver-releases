@@ -1836,6 +1836,12 @@ export class TimelineContainer {
             throw new Error('CrossPostStatusBanner failed to initialize');
           }
           return this.crossPostBanner;
+        },
+        onCrossPostStatusIssue: (message: string): void => {
+          this.showCrossPostStatusIssue(message);
+        },
+        onCrossPostStatusClear: (): void => {
+          this.crossPostBanner?.clearWarning();
         }
       }
     });
@@ -2117,6 +2123,13 @@ export class TimelineContainer {
     });
 
     this.crossPostBanner = new CrossPostStatusBanner(bannerContainer);
+  }
+
+  private showCrossPostStatusIssue(message: string): void {
+    if (!this.crossPostBanner) {
+      this.renderCrossPostStatusBanner();
+    }
+    this.crossPostBanner?.warn(message);
   }
 
   /**

@@ -5,6 +5,11 @@ import type SocialArchiverPlugin from '../main';
 import { CrossPostAPIClient } from '../services/CrossPostAPIClient';
 import { AuthenticationError } from '@/types/errors/http-errors';
 import type { ThreadsConnectionStatus, ThreadsReplyControl } from '../types/crosspost';
+import {
+  getThreadsConnectionIssueFromError,
+  getThreadsConnectionIssueFromStatus,
+  isThreadsConnectionUsable,
+} from '@/utils/crosspostStatus';
 
 interface Props {
   plugin: SocialArchiverPlugin;
@@ -29,7 +34,7 @@ let error = $state('');
 
 // Polling handles
 let pollingInterval: number | null = null;
-let pollingTimeout: ReturnType<typeof setTimeout> | null = null;
+let pollingTimeout: number | null = null;
 
 // ============================================================================
 // Derived
@@ -91,7 +96,7 @@ function getStatusDotClass(connected: boolean, status: typeof tokenStatus): stri
 }
 
 function applyStatusToState(status: ThreadsConnectionStatus): void {
-  isConnected = status.connected;
+  isConnected = isThreadsConnectionUsable(status);
   username = status.username ?? '';
   tokenStatus = status.tokenStatus ?? 'valid';
   tokenExpiresAt = status.tokenExpiresAt ?? null;
@@ -102,16 +107,40 @@ function applyStatusToState(status: ThreadsConnectionStatus): void {
 // ============================================================================
 
 async function checkConnectionStatus(): Promise<ThreadsConnectionStatus> {
+  if (!plugin.settings.authToken) {
+    const disconnected: ThreadsConnectionStatus = { connected: false };
+    applyStatusToState(disconnected);
+    error = '';
+    return disconnected;
+  }
+
   try {
     const client = getClient();
     const status = await client.getConnectionStatus();
     applyStatusToState(status);
+    const statusIssue = getThreadsConnectionIssueFromStatus(status);
+    error = statusIssue?.message ?? (status.status === 'error' && status.lastError ? status.lastError : '');
     return status;
   } catch (err) {
     console.error('[CrossPostSettingsTab] Failed to check connection status:', err);
-    // Don't surface transient network errors as persistent UI error on initial load
-    return { connected: false };
+    const issue = getThreadsConnectionIssueFromError(err, plugin.settings.workerUrl);
+    const failedStatus: ThreadsConnectionStatus = {
+      connected: false,
+      status: 'error',
+      tokenStatus: 'error',
+      lastError: issue.message,
+    };
+    applyStatusToState(failedStatus);
+    error = issue.message;
+    return failedStatus;
   }
+}
+
+async function retryConnectionStatus(): Promise<void> {
+  if (isLoadingStatus) return;
+  isLoadingStatus = true;
+  await checkConnectionStatus();
+  isLoadingStatus = false;
 }
 
 async function handleConnect(): Promise<void> {
@@ -386,7 +415,15 @@ onDestroy(() => {
 
     {#if error}
       <div class="crosspost-error" role="alert">
-        {error}
+        <span>{error}</span>
+        <button
+          class="crosspost-error-retry"
+          onclick={retryConnectionStatus}
+          disabled={isLoadingStatus}
+          aria-label="Retry Threads connection status check"
+        >
+          {isLoadingStatus ? 'Checking...' : 'Retry'}
+        </button>
       </div>
     {/if}
   </div>
@@ -636,6 +673,26 @@ onDestroy(() => {
   border-radius: 4px;
   font-size: 12px;
   color: var(--text-error, #ef4444);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.crosspost-error span {
+  flex: 1;
+}
+
+.crosspost-error-retry {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.crosspost-error-retry:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* ---- Connected / disconnected info blocks ---- */

@@ -24,6 +24,18 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '3.8.2': {
+    title: 'Threads Status and Timeline Polish',
+    date: '2026-05-25',
+    notes: `## Threads Status and Timeline Polish
+
+- Threads connection problems now surface in Cross-posting settings and the timeline status banner instead of only logging to the console.
+- Revoked, disconnected, expired, and API-unreachable Threads states are treated as actionable connection issues.
+- AI comments now show clearer local/cloud model labels in timeline and reader views.
+- Reddit references in archived/comment text are now linkified more consistently.
+- Obsidian login magic links, billing copy, and rate-limit messaging were tightened up.
+`,
+  },
   '3.8.1': {
     title: 'Supertonic 3 Language Detection',
     date: '2026-05-24',

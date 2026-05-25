@@ -2,8 +2,10 @@ export const PAYWALL_REQUIRED_CODE = 'PAYWALL_REQUIRED';
 
 export interface PaywallRequiredDetails {
   reason?: string;
+  quotaKind?: 'archive' | 'storage' | 'ai_action';
   plan?: string;
   used?: number;
+  reserved?: number;
   limit?: number;
   resetAt?: string;
   offeringId?: string;
@@ -78,7 +80,8 @@ export function isPaywallRequiredError(error: unknown): boolean {
   if (
     message.includes('paywall_required') ||
     message.includes('paywall required') ||
-    message.includes('monthly archive limit reached')
+    message.includes('monthly archive limit reached') ||
+    message.includes('monthly ai credit limit reached')
   ) {
     return true;
   }
@@ -100,11 +103,19 @@ export function formatPaywallRequiredMessage(error: unknown): string {
   }
 
   const used = readNumber(details, 'used');
+  const reserved = readNumber(details, 'reserved');
   const limit = readNumber(details, 'limit');
   const resetAt = readString(details, 'resetAt');
+  const quotaKind = readString(details, 'quotaKind') ?? readString(details, 'reason');
+  const isAIQuota = quotaKind === 'ai_action' || quotaKind === 'ai_action_quota_exceeded';
   const quota = used !== undefined && limit !== undefined ? ` (${used}/${limit} used)` : '';
+  const pending = reserved && reserved > 0 ? ` ${reserved} pending.` : '';
   const reset = formatIsoDate(resetAt);
   const resetText = reset ? ` Resets ${reset}.` : '';
+
+  if (isAIQuota) {
+    return `Monthly AI credit limit reached${quota}.${pending}${resetText} Upgrade your Social Archiver plan, then retry.`;
+  }
 
   return `Monthly archive limit reached${quota}.${resetText} Upgrade your Social Archiver plan, then retry.`;
 }

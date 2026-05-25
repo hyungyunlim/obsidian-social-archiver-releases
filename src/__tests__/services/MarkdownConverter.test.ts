@@ -93,6 +93,38 @@ describe('MarkdownConverter', () => {
       expect(result.content).toContain('This is a test post with **markdown**.');
     });
 
+    it('should linkify Reddit subreddit and user references in content', async () => {
+      const result = await converter.convert({
+        ...mockPostData,
+        platform: 'reddit' as Platform,
+        id: 'reddit-123',
+        url: 'https://www.reddit.com/r/cycling/comments/reddit123/example/',
+        title: 'Example Reddit post',
+        author: {
+          name: 'reddit_author',
+          url: 'https://www.reddit.com/user/reddit_author',
+        },
+        content: {
+          text: 'Saw this in r/mildlyinfuriating and u/example_user had thoughts. Already [r/cycling](https://www.reddit.com/r/cycling/).',
+          community: {
+            name: 'cycling',
+            url: 'https://www.reddit.com/r/cycling/',
+          },
+        },
+        media: [],
+        metadata: {
+          timestamp: new Date('2024-01-01T12:00:00Z'),
+          likes: 12,
+          comments: 3,
+        },
+      });
+
+      expect(result.content).toContain('[r/mildlyinfuriating](https://www.reddit.com/r/mildlyinfuriating/)');
+      expect(result.content).toContain('[u/example_user](https://www.reddit.com/user/example_user/)');
+      expect(result.content).toContain('[r/cycling](https://www.reddit.com/r/cycling/)');
+      expect(result.content).not.toContain('[[r/cycling]');
+    });
+
     it('should render quoted post markdown when quoted text is empty', async () => {
       const result = await converter.convert({
         ...mockPostData,
@@ -378,6 +410,50 @@ describe('MarkdownConverter', () => {
 
       expect(result.content).toContain('## Section');
       expect(result.content).toContain('![OG image](https://example.com/og.jpg)');
+    });
+
+    it('should use RSS platform markdown fields instead of plain text fallback', async () => {
+      const substackPost: PostData = {
+        platform: 'substack' as Platform,
+        id: 'substack-article',
+        url: 'https://example.substack.com/p/article',
+        title: 'Substack Article',
+        author: {
+          name: 'Example Author',
+          url: 'https://example.substack.com',
+        },
+        content: {
+          text: 'Plain text fallback that should not be used here.',
+          markdown: '## Section\n\nArticle body.\n\n{{IMAGE_0}}\n\nClosing paragraph.',
+        },
+        media: [
+          {
+            type: 'image',
+            url: 'https://example.com/inline.jpg',
+          },
+        ],
+        metadata: {
+          timestamp: new Date('2024-03-20T09:30:00Z'),
+        },
+      };
+
+      const result = await converter.convert(substackPost, undefined, [
+        {
+          originalUrl: 'https://example.com/inline.jpg',
+          localPath: 'attachments/social-archives/substack/inline.webp',
+          type: 'image',
+          size: 123,
+          file: {} as any,
+          sourceIndex: 0,
+        },
+      ]);
+
+      expect(result.content).toContain('## Section');
+      expect(result.content).toContain('Article body.');
+      expect(result.content).toContain('![[inline.webp]]');
+      expect(result.content).not.toContain('Plain text fallback');
+      expect(result.content).not.toContain('{{IMAGE_0}}');
+      expect(result.content).not.toMatch(/\n---\n\n!\[/);
     });
 
     it('should include media section for user-created posts with attachments', async () => {

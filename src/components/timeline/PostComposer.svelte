@@ -29,6 +29,11 @@ import type { CrossPostRequest } from '@/types/crosspost';
 import { ContentTransformerClient } from '@/utils/ContentTransformerClient';
 import type { CrossPostStatusBanner } from '@/components/timeline/CrossPostStatusBanner';
 import { FEATURE_CROSSPOST_ENABLED } from '@/shared/constants';
+import {
+  getThreadsConnectionIssueFromError,
+  getThreadsConnectionIssueFromStatus,
+  isThreadsConnectionUsable,
+} from '@/utils/crosspostStatus';
 
 /**
  * Attached image data
@@ -50,6 +55,8 @@ interface PostComposerProps {
   onPostCreated?: (post: PostData) => Promise<string>; // Returns file path
   onCrossPostComplete?: (filePath: string, crossPostId: string, threadsResult: { postId?: string; postUrl?: string }) => Promise<void>;
   onCrossPostStart?: () => CrossPostStatusBanner;
+  onCrossPostStatusIssue?: (message: string) => void;
+  onCrossPostStatusClear?: () => void;
   onCancel?: () => void;
   onSaveSettings?: (partial?: Partial<SocialArchiverSettings>) => Promise<void>; // Persist settings changes (e.g., toggle state)
   // Edit mode props
@@ -65,6 +72,8 @@ let {
   onPostCreated,
   onCrossPostComplete,
   onCrossPostStart,
+  onCrossPostStatusIssue,
+  onCrossPostStatusClear,
   onCancel,
   onSaveSettings,
   editMode = false,
@@ -354,7 +363,15 @@ function handleContentChange(): void {
  * Initialize CrossPostAPIClient and check Threads connection status
  */
 async function checkThreadsConnection(): Promise<void> {
-  if (!settings.workerUrl || !settings.authToken) return;
+  if (!settings.workerUrl || !settings.authToken) {
+    threadsConnected = false;
+    if (settings.crossPostThreadsEnabled) {
+      onCrossPostStatusIssue?.('Sign in to Social Archiver before using Threads cross-posting.');
+    } else {
+      onCrossPostStatusClear?.();
+    }
+    return;
+  }
 
   try {
     if (!crossPostClient) {
@@ -366,11 +383,29 @@ async function checkThreadsConnection(): Promise<void> {
     }
 
     const status = await crossPostClient.getConnectionStatus();
-    threadsConnected = status.connected;
+    const statusIssue = getThreadsConnectionIssueFromStatus(status, {
+      crossPostEnabled: settings.crossPostThreadsEnabled,
+    });
+    threadsConnected = isThreadsConnectionUsable(status);
     threadsUsername = status.username;
-  } catch {
-    // Silently fail — cross-posting is optional
+    if (statusIssue && settings.crossPostThreadsEnabled) {
+      onCrossPostStatusIssue?.(statusIssue.message);
+      return;
+    }
+    onCrossPostStatusClear?.();
+  } catch (err) {
     threadsConnected = false;
+    const issue = getThreadsConnectionIssueFromError(err, settings.workerUrl);
+    if (
+      settings.crossPostThreadsEnabled ||
+      issue.kind === 'api_unreachable' ||
+      issue.kind === 'auth_expired' ||
+      issue.kind === 'server_error'
+    ) {
+      onCrossPostStatusIssue?.(issue.message);
+    } else {
+      onCrossPostStatusClear?.();
+    }
   }
 }
 

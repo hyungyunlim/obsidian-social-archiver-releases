@@ -299,6 +299,21 @@ describe('CommentFormatter', () => {
       expect(result).toContain('    ↳ **[@carol](https://www.reddit.com/user/carol)**');
     });
 
+    it('reddit platform: linkifies subreddit and user references inside comment content', () => {
+      const comments: Comment[] = [
+        {
+          id: '1',
+          author: { name: 'alice', username: 'alice', url: 'https://www.reddit.com/user/alice' },
+          content: 'See r/cycling and u/example_user for more context.',
+        },
+      ];
+
+      const result = formatter.formatComments(comments, 'reddit');
+
+      expect(result).toContain('[r/cycling](https://www.reddit.com/r/cycling/)');
+      expect(result).toContain('[u/example_user](https://www.reddit.com/user/example_user/)');
+    });
+
     it('instagram platform: handle link format used at depth >= 2', () => {
       const comments: Comment[] = [
         {

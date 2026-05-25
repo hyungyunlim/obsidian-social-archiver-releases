@@ -2,10 +2,11 @@
  * CrossPostStatusBanner - Lightweight ephemeral status banner for cross-posting
  *
  * Unlike CrawlStatusBanner (multi-job, tracker-driven), this component
- * manages a single ephemeral cross-post operation with three states:
+ * manages a single ephemeral cross-post operation with four states:
  * - posting: spinner + "Cross-posting to Threads..."
  * - complete: check icon + success message (auto-dismiss 3s)
  * - failed: x icon + error message (manual dismiss)
+ * - warning: alert icon + status problem (manual dismiss)
  *
  * Usage:
  * ```typescript
@@ -27,6 +28,7 @@ export class CrossPostStatusBanner {
   private textEl: HTMLElement | null = null;
   private autoDismissTimer: number | null = null;
   private cleanupFunctions: Array<() => void> = [];
+  private currentState: 'posting' | 'complete' | 'failed' | 'warning' | null = null;
 
   constructor(parentEl: HTMLElement) {
     this.containerEl = parentEl.createDiv({ cls: 'crosspost-status-banners' });
@@ -38,23 +40,15 @@ export class CrossPostStatusBanner {
   public show(): void {
     this.clearBanner();
 
-    this.containerEl.addClass('xpb-visible');
-
-    this.bannerEl = this.containerEl.createDiv({
-      cls: 'crosspost-banner banner-posting',
-      attr: {
-        'role': 'status',
-        'aria-live': 'polite'
-      }
-    });
+    this.createBanner('posting', 'status', 'polite');
 
     // Icon
-    this.iconEl = this.bannerEl.createSpan({ cls: 'banner-icon xpb-icon-posting' });
+    this.iconEl = this.bannerEl!.createSpan({ cls: 'banner-icon xpb-icon-posting' });
     setIcon(this.iconEl, 'loader-2');
     this.iconEl.addClass('spin');
 
     // Text
-    this.textEl = this.bannerEl.createSpan({ cls: 'banner-text' });
+    this.textEl = this.bannerEl!.createSpan({ cls: 'banner-text' });
     this.textEl.setText('Cross-posting to Threads...');
   }
 
@@ -63,14 +57,15 @@ export class CrossPostStatusBanner {
    */
   public complete(message?: string): void {
     if (!this.bannerEl) return;
+    this.currentState = 'complete';
 
-    this.bannerEl.removeClass('banner-posting');
+    this.bannerEl.removeClass('banner-posting', 'banner-warning', 'banner-failed');
     this.bannerEl.addClass('banner-complete');
 
     // Update icon
     if (this.iconEl) {
       this.iconEl.empty();
-      this.iconEl.removeClass('xpb-icon-posting', 'spin');
+      this.iconEl.removeClass('xpb-icon-posting', 'xpb-icon-warning', 'xpb-icon-failed', 'spin');
       this.iconEl.addClass('xpb-icon-complete');
       setIcon(this.iconEl, 'check-circle');
     }
@@ -90,15 +85,22 @@ export class CrossPostStatusBanner {
    * Transition to "failed" state — shows dismiss button
    */
   public fail(errorMessage: string): void {
-    if (!this.bannerEl) return;
+    if (!this.bannerEl) {
+      this.createBanner('failed', 'alert', 'assertive');
+      this.iconEl = this.bannerEl!.createSpan({ cls: 'banner-icon' });
+      this.textEl = this.bannerEl!.createSpan({ cls: 'banner-text' });
+    }
+    const bannerEl = this.bannerEl;
+    if (!bannerEl) return;
+    this.currentState = 'failed';
 
-    this.bannerEl.removeClass('banner-posting');
-    this.bannerEl.addClass('banner-failed');
+    bannerEl.removeClass('banner-posting', 'banner-warning', 'banner-complete');
+    bannerEl.addClass('banner-failed');
 
     // Update icon
     if (this.iconEl) {
       this.iconEl.empty();
-      this.iconEl.removeClass('xpb-icon-posting', 'spin');
+      this.iconEl.removeClass('xpb-icon-posting', 'xpb-icon-warning', 'xpb-icon-complete', 'spin');
       this.iconEl.addClass('xpb-icon-failed');
       setIcon(this.iconEl, 'x-circle');
     }
@@ -110,6 +112,31 @@ export class CrossPostStatusBanner {
 
     // Add dismiss button
     this.addDismissButton();
+  }
+
+  /**
+   * Show a user-facing warning for connection/auth status checks.
+   */
+  public warn(message: string): void {
+    this.clearBanner();
+    this.createBanner('warning', 'alert', 'assertive');
+
+    this.iconEl = this.bannerEl!.createSpan({ cls: 'banner-icon xpb-icon-warning' });
+    setIcon(this.iconEl, 'alert-triangle');
+
+    this.textEl = this.bannerEl!.createSpan({ cls: 'banner-text' });
+    this.textEl.setText(message);
+
+    this.addDismissButton();
+  }
+
+  /**
+   * Clear only the passive warning state. Active post status stays intact.
+   */
+  public clearWarning(): void {
+    if (this.currentState === 'warning') {
+      this.dismiss();
+    }
   }
 
   /**
@@ -139,6 +166,9 @@ export class CrossPostStatusBanner {
   private addDismissButton(): void {
     if (!this.bannerEl) return;
 
+    const existing = this.bannerEl.querySelector('.xpb-dismiss-btn');
+    if (existing) return;
+
     const dismissBtn = this.bannerEl.createEl('button', {
       cls: 'banner-dismiss clickable-icon xpb-dismiss-btn',
       attr: { 'aria-label': 'Dismiss' }
@@ -158,11 +188,32 @@ export class CrossPostStatusBanner {
       window.clearTimeout(this.autoDismissTimer);
       this.autoDismissTimer = null;
     }
+    for (const cleanup of this.cleanupFunctions) {
+      cleanup();
+    }
+    this.cleanupFunctions = [];
     if (this.bannerEl) {
       this.bannerEl.remove();
       this.bannerEl = null;
       this.iconEl = null;
       this.textEl = null;
     }
+    this.currentState = null;
+  }
+
+  private createBanner(
+    state: 'posting' | 'complete' | 'failed' | 'warning',
+    role: 'status' | 'alert',
+    ariaLive: 'polite' | 'assertive'
+  ): void {
+    this.containerEl.addClass('xpb-visible');
+    this.currentState = state;
+    this.bannerEl = this.containerEl.createDiv({
+      cls: `crosspost-banner banner-${state}`,
+      attr: {
+        role,
+        'aria-live': ariaLive
+      }
+    });
   }
 }

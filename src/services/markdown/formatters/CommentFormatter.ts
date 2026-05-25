@@ -99,6 +99,8 @@ export class CommentFormatter {
       ? this.textFormatter.linkifyInstagramMentions(normalizedCommentContent, isReply)
       : platform === 'x'
       ? this.textFormatter.linkifyXMentions(normalizedCommentContent)
+      : platform === 'reddit'
+      ? this.textFormatter.linkifyRedditReferences(normalizedCommentContent)
       : normalizedCommentContent;
 
     const mediaBlock = this.formatCommentMedia(comment.media, indent);

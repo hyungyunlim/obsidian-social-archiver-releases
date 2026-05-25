@@ -96,6 +96,25 @@ describe('CommentRenderer', () => {
     expect(content?.querySelector('a.cr-link')?.textContent).toBe('https://example.com/link');
   });
 
+  it('renders Reddit subreddit and user references inside comment content as links', () => {
+    const container = document.createElement('div');
+    const comments: Comment[] = [
+      {
+        id: '1',
+        author: { name: 'Commenter', url: 'https://www.reddit.com/user/commenter' },
+        content: 'Discussed in r/cycling with u/example_user.',
+      },
+    ];
+
+    new CommentRenderer().render(container, comments, 'reddit');
+
+    const links = Array.from(container.querySelectorAll<HTMLAnchorElement>('a.cr-link'));
+    const subredditLink = links.find((link) => link.textContent === 'r/cycling');
+    const userLink = links.find((link) => link.textContent === 'u/example_user');
+    expect(subredditLink?.getAttribute('href')).toBe('https://www.reddit.com/r/cycling/');
+    expect(userLink?.getAttribute('href')).toBe('https://www.reddit.com/user/example_user/');
+  });
+
   it('renders very deep comment trees fully by default without a visible depth control', () => {
     const container = document.createElement('div');
     const comments: Comment[] = [

@@ -1,7 +1,8 @@
 import { setIcon, MarkdownRenderer, Platform } from 'obsidian';
 import type { App, Component } from 'obsidian';
-import type { AICommentMeta, AICli } from '../../../types/ai-comment';
+import type { AICommentMeta } from '../../../types/ai-comment';
 import { COMMENT_TYPE_DISPLAY_NAMES } from '../../../types/ai-comment';
+import { getAICommentDisplay } from '../../../utils/ai-comment-display';
 import { showConfirmModal } from '../../../utils/confirm-modal';
 
 /**
@@ -29,15 +30,6 @@ export interface AICommentRendererOptions {
   /** Callback when apply reformat button is clicked (for reformat type only) */
   onApplyReformat?: (id: string, newContent: string) => Promise<void>;
 }
-
-/**
- * CLI display names
- */
-const CLI_NAMES: Record<AICli, string> = {
-  claude: 'Claude',
-  gemini: 'Gemini',
-  codex: 'Codex',
-};
 
 /**
  * AICommentRenderer - Renders AI-generated comments in Instagram-style (same as regular comments)
@@ -149,11 +141,13 @@ export class AICommentRenderer {
     aiIcon.addClass('sa-dynamic-color');
     setIcon(aiIcon, 'sparkles');
 
+    const display = getAICommentDisplay(meta);
+
     // CLI name (bold, like username)
     const nameSpan = headerLine.createEl('strong');
     nameSpan.addClass('sa-font-semibold');
     nameSpan.addClass('sa-text-normal');
-    nameSpan.textContent = CLI_NAMES[meta.cli] || meta.cli;
+    nameSpan.textContent = display.headerLabel;
 
     // Separator after name
     const sep1 = headerLine.createSpan({ text: '·' });

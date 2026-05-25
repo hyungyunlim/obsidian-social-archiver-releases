@@ -25,6 +25,7 @@ import {
 } from '../../../services/IconService';
 import { getPlatformName } from '@/shared/platforms';
 import { createCustomSVG } from '@/utils/dom-helpers';
+import { getAICommentDisplay } from '@/utils/ai-comment-display';
 import type { ReaderTTSController } from './ReaderTTSController';
 
 export interface ReaderContentVariantOption {
@@ -784,7 +785,7 @@ export class ReaderModeContentRenderer extends Component {
       for (const comment of post.aiComments) {
         const item = section.createDiv({ cls: 'sa-reader-mode-ai-comment' });
         const meta = item.createDiv({ cls: 'sa-reader-mode-ai-comment-meta' });
-        meta.createSpan({ text: (comment.meta.cli || 'AI').toUpperCase() });
+        meta.createSpan({ text: getAICommentDisplay(comment.meta).headerLabel });
         meta.createSpan({ text: '·' });
         meta.createSpan({ text: this.formatAICommentType(comment.meta.type) });
         if (comment.meta.generatedAt) {

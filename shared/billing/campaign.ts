@@ -45,16 +45,16 @@ export type BillingCampaignConfig = {
 };
 
 export const DEFAULT_BILLING_CAMPAIGN: BillingCampaignConfig = {
-  campaignId: 'launch-2026',
+  campaignId: 'standard-2026',
   schemaVersion: 1,
-  defaultLabel: 'Launch price',
+  defaultLabel: '',
   priceDisclaimer:
-    'Prices may vary by country, currency, store, and taxes. The final price is shown before purchase.',
-  updatedAt: '2026-04-30T00:00:00Z',
+    'Prices may vary by country, currency, store, and taxes. The final price is shown before purchase. Premium still has rate limits, but they are more generous than the free plan.',
+  updatedAt: '2026-05-25T07:31:42Z',
   plans: {
     monthly: {
-      label: 'Launch price',
-      shortDescription: 'Flexible Premium access during launch.',
+      label: null,
+      shortDescription: 'Premium includes unlimited archiving and monthly Cloud AI credits.',
       detail: null,
       limitedAvailability: false,
       showCompareAtPrice: false,
@@ -64,8 +64,8 @@ export const DEFAULT_BILLING_CAMPAIGN: BillingCampaignConfig = {
       mediaStorageLimitBytes: null,
     },
     annual: {
-      label: 'Launch price',
-      shortDescription: 'Yearly Premium access at launch pricing.',
+      label: null,
+      shortDescription: 'Premium includes unlimited archiving and monthly Cloud AI credits.',
       detail: null,
       limitedAvailability: false,
       showCompareAtPrice: false,
@@ -75,11 +75,10 @@ export const DEFAULT_BILLING_CAMPAIGN: BillingCampaignConfig = {
       mediaStorageLimitBytes: null,
     },
     lifetime: {
-      label: 'Limited founding offer',
-      shortDescription: 'One-time Premium access while this launch offer is available.',
-      detail:
-        'Lifetime may be removed or repriced after launch. No monthly archive limit while your entitlement remains active.',
-      limitedAvailability: true,
+      label: null,
+      shortDescription: 'Premium includes unlimited archiving and monthly Cloud AI credits.',
+      detail: null,
+      limitedAvailability: false,
       showCompareAtPrice: false,
       showDiscountPercent: false,
       showInventoryCount: false,

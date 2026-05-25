@@ -377,6 +377,29 @@ export class RealtimeEventBridge {
         const data = message.data ?? message;
         void this.deps.aiCommentJobProcessor?.handleStatusEvent(data);
       }),
+      this.deps.events.on('ws:ai_comment_updated', (payload: unknown) => {
+        const message = payload as {
+          data?: {
+            jobId?: string;
+            archiveId?: string;
+            targetClientId?: string;
+            updatedAt?: string;
+          };
+          jobId?: string;
+          archiveId?: string;
+          targetClientId?: string;
+          updatedAt?: string;
+        };
+        const data = message.data ?? message;
+        if (!data.archiveId) return;
+
+        console.debug('[Social Archiver] AI comment updated via WS:', data.archiveId, {
+          jobId: data.jobId,
+          targetClientId: data.targetClientId,
+        });
+
+        this.deps.refreshTimelineView();
+      }),
       this.deps.events.on('ws:ai_action_requested', (payload: unknown) => {
         const message = payload as { data?: { jobId?: string; targetClientId?: string | null }; jobId?: string; targetClientId?: string | null };
         const data = message.data ?? message;

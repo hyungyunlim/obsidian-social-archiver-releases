@@ -98,6 +98,16 @@ export interface ArchiveQuotaSummary {
   unlimited?: boolean;
 }
 
+export interface AIActionQuotaSummary {
+  period: string;
+  used: number;
+  reserved: number;
+  limit: number;
+  remaining: number;
+  resetAt: string;
+  unlimited?: boolean;
+}
+
 export interface BillingPolicySummary {
   betaFreeSunsetAt?: string | null;
   betaFreeSunsetActive?: boolean;
@@ -106,6 +116,7 @@ export interface BillingPolicySummary {
 export interface BillingUsageSummary {
   plan: string;
   archiveQuota: ArchiveQuotaSummary;
+  aiActionQuota?: AIActionQuotaSummary;
   billing?: {
     entitlementActive?: boolean;
     source?: string;

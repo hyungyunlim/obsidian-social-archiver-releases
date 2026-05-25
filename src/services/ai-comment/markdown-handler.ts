@@ -6,8 +6,9 @@
  */
 
 import type { App, TFile } from 'obsidian';
-import type { AICommentMeta, AICommentType, AICli } from '../../types/ai-comment';
+import type { AICommentMeta, AICommentType, AICommentProviderId } from '../../types/ai-comment';
 import { COMMENT_TYPE_DISPLAY_NAMES } from '../../types/ai-comment';
+import { getAICommentDisplay } from '../../utils/ai-comment-display';
 
 // ============================================================================
 // Constants
@@ -20,20 +21,6 @@ const AI_COMMENT_SECTION_TITLE = '## AI Comments';
 const LEGACY_SECTION_START = '<!-- AI_COMMENT_SECTION_START -->';
 const LEGACY_SECTION_END = '<!-- AI_COMMENT_SECTION_END -->';
 const MOBILE_ANNOTATIONS_START = '<!-- social-archiver:annotations:start -->';
-
-/** CLI display icons */
-const CLI_ICONS: Record<AICli, string> = {
-  claude: '🤖',
-  gemini: '✨',
-  codex: '💡',
-};
-
-/** CLI display names */
-const CLI_NAMES: Record<AICli, string> = {
-  claude: 'Claude',
-  gemini: 'Gemini',
-  codex: 'Codex',
-};
 
 // ============================================================================
 // Types
@@ -54,7 +41,7 @@ export interface ParsedAIComments {
  */
 interface ParsedHeader {
   id: string;
-  cli: AICli;
+  cli: AICommentProviderId;
   type: AICommentType;
   date: string;
 }
@@ -112,9 +99,9 @@ export function parseAIComments(markdown: string): ParsedAIComments {
     return { comments, commentTexts };
   }
 
-  // Find all AI comment headers (with specific emoji + CLI + · + Type + · + Date pattern)
+  // Find all AI comment headers (with specific provider icon + · + Type + · + Date pattern)
   const headerMatches: { header: string; fullMatch: string; index: number }[] = [];
-  const headerRegex = /^### ((?:🤖|✨|💡|🦙)\s*\w+\s*·\s*.+\s*·\s*.+)$/gm;
+  const headerRegex = /^### ((?:🤖|✨|💡|🦙|☁️?|⚡)\s*[^·\n]+?\s*·\s*.+?\s*·\s*.+)$/gm;
   let match;
 
   while ((match = headerRegex.exec(sectionContent)) !== null) {
@@ -147,15 +134,15 @@ export function parseAIComments(markdown: string): ParsedAIComments {
       textContent = textContent.slice(0, -3).trim();
     }
 
-    // Parse header to extract metadata
-    const parsedHeader = parseCommentHeader(current.header);
-    if (!parsedHeader) continue;
-
     // Try to find ID comment in the text (flexible pattern)
     const idMatch = textContent.match(/<!-- id: ([^\s]+) -->/);
-    const commentId = idMatch?.[1] ?? parsedHeader.id;
-
     const metadata = parseHiddenMetadata(textContent);
+
+    // Parse header to extract metadata
+    const parsedHeader = parseCommentHeader(current.header, metadata.model);
+    if (!parsedHeader) continue;
+
+    const commentId = idMatch?.[1] ?? parsedHeader.id;
 
     // Remove hidden comments from displayed text
     const displayText = textContent
@@ -193,7 +180,7 @@ export function parseAIComments(markdown: string): ParsedAIComments {
  * @param header - The header string (without ###)
  * @returns Parsed header data or null if invalid
  */
-function parseCommentHeader(header: string): ParsedHeader | null {
+function parseCommentHeader(header: string, model?: string): ParsedHeader | null {
   // Match pattern: {icon} {CLI} · {Type} · {date}
   // Allow various whitespace and separators
   const parts = header.split(/\s*·\s*/);
@@ -202,17 +189,8 @@ function parseCommentHeader(header: string): ParsedHeader | null {
     return null;
   }
 
-  // Extract CLI from first part (icon + name)
-  const cliPart = parts[0]?.trim();
-  if (!cliPart) return null;
-
-  // Remove emoji and get CLI name
-  const cliNameMatch = cliPart.match(/(?:🤖|✨|💡|🦙)?\s*(\w+)/);
-  const cliName = cliNameMatch?.[1]?.toLowerCase();
-
-  if (!cliName || !isValidCli(cliName)) {
-    return null;
-  }
+  const provider = parseHeaderProvider(parts[0]?.trim() ?? '', model);
+  if (!provider) return null;
 
   // Extract type from second part
   const typePart = parts[1]?.trim();
@@ -232,22 +210,36 @@ function parseCommentHeader(header: string): ParsedHeader | null {
 
   // Generate ID from parsed data
   const timestamp = new Date(isoDate).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-  const id = `${cliName}-${type}-${timestamp}`;
+  const id = `${provider}-${type}-${timestamp}`;
 
   return {
     id,
-    cli: cliName,
+    cli: provider,
     type,
     date: isoDate,
   };
 }
 
 /**
- * Check if a string is a valid CLI name
- * Note: 🦙 (Ollama) kept in regex patterns for backwards compatibility with existing comments
+ * Check if a string is a valid AI comment provider name.
+ * Note: 🦙 (Ollama) kept in regex patterns for backwards compatibility with existing comments.
  */
-function isValidCli(value: string): value is AICli {
-  return ['claude', 'gemini', 'codex'].includes(value);
+function isValidCommentProvider(value: string): value is AICommentProviderId {
+  return ['claude', 'gemini', 'codex', 'workers-ai'].includes(value);
+}
+
+function parseHeaderProvider(providerPart: string, model?: string): AICommentProviderId | null {
+  const providerNameMatch = providerPart.match(/(?:🤖|✨|💡|🦙|☁️?|⚡)?\s*([^·]+)/);
+  const providerName = providerNameMatch?.[1]?.trim().toLowerCase();
+
+  if (providerName) {
+    const normalized = providerName.replace(/\s+/g, '-');
+    if (normalized === 'cloud-ai') return 'workers-ai';
+    if (isValidCommentProvider(normalized)) return normalized;
+  }
+
+  if (model?.trim()) return 'workers-ai';
+  return null;
 }
 
 /**
@@ -341,12 +333,11 @@ function parseHiddenMetadata(textContent: string): AICommentMetadataExtras {
  * @returns Formatted header string (without ### prefix)
  */
 export function formatCommentHeader(meta: AICommentMeta): string {
-  const icon = CLI_ICONS[meta.cli] || '🤖';
-  const cliName = CLI_NAMES[meta.cli] || meta.cli;
+  const display = getAICommentDisplay(meta);
   const typeLabel = COMMENT_TYPE_DISPLAY_NAMES[meta.type] || meta.type;
   const date = formatDisplayDate(meta.generatedAt);
 
-  return `${icon} ${cliName} · ${typeLabel} · ${date}`;
+  return `${display.icon} ${display.headerLabel} · ${typeLabel} · ${date}`;
 }
 
 /**
@@ -648,7 +639,7 @@ export function readFrontmatterAIComments(
     if (typeof item === 'object' && item !== null) {
       return {
         id: (item.id as string | undefined) || '',
-        cli: (item.cli as AICli) || 'claude',
+        cli: isValidCommentProvider(String(item.cli ?? '')) ? String(item.cli) as AICommentProviderId : 'claude',
         type: (item.type as AICommentType) || 'summary',
         generatedAt: (item.generatedAt as string | undefined) || new Date().toISOString(),
         processingTime: 0,
@@ -659,7 +650,9 @@ export function readFrontmatterAIComments(
     // Handle new string ID format: {cli}-{type}-{timestamp}
     const id = String(item);
     const parts = id.split('-');
-    const cli = (parts[0] as AICli) || 'claude';
+    const cli = isValidCommentProvider(parts[0] ?? '')
+      ? parts[0] as AICommentProviderId
+      : (id.startsWith('server-ai-') || id.startsWith('ai-action-comment-') ? 'workers-ai' : 'claude');
     const type = (parts[1] as AICommentType) || 'summary';
     // Reconstruct timestamp from remaining parts
     const timestampPart = parts.slice(2).join('-');

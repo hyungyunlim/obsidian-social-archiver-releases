@@ -69,6 +69,7 @@ export interface UpdateSyncClientRequest {
 // ============================================================================
 
 export type AICommentProviderId = 'claude' | 'gemini' | 'codex';
+export type AICommentSourceId = AICommentProviderId | 'workers-ai';
 export type AICommentJobStatus =
   | 'queued'
   | 'dispatched'
@@ -642,7 +643,7 @@ export interface UserArchive {
 export interface AICommentPayload {
   meta: {
     id: string;
-    cli: 'claude' | 'gemini' | 'codex';
+    cli: AICommentSourceId;
     model?: string;
     type: AICommentType;
     generatedAt: string;
@@ -842,6 +843,16 @@ export interface ArchiveQuotaSummary {
   unlimited?: boolean;
 }
 
+export interface AIActionQuotaSummary {
+  period: string;
+  used: number;
+  reserved: number;
+  limit: number;
+  remaining: number;
+  resetAt: string;
+  unlimited?: boolean;
+}
+
 export interface BillingPolicySummary {
   betaFreeSunsetAt?: string | null;
   betaFreeSunsetActive?: boolean;
@@ -850,6 +861,7 @@ export interface BillingPolicySummary {
 export interface BillingUsageResponse {
   plan: string;
   archiveQuota: ArchiveQuotaSummary;
+  aiActionQuota?: AIActionQuotaSummary;
   billing?: {
     entitlementActive?: boolean;
     source?: string;
