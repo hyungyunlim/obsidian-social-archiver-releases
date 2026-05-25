@@ -25,15 +25,16 @@ export interface ReleaseNote {
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
   '3.8.2': {
-    title: 'Threads Status and Timeline Polish',
+    title: 'Threads Connection Visibility',
     date: '2026-05-25',
-    notes: `## Threads Status and Timeline Polish
+    notes: `## Threads Connection Visibility
 
-- Threads connection problems now surface in Cross-posting settings and the timeline status banner instead of only logging to the console.
-- Revoked, disconnected, expired, and API-unreachable Threads states are treated as actionable connection issues.
-- AI comments now show clearer local/cloud model labels in timeline and reader views.
-- Reddit references in archived/comment text are now linkified more consistently.
-- Obsidian login magic links, billing copy, and rate-limit messaging were tightened up.
+- Threads connection problems now show actionable warnings in Cross-posting settings and the timeline status banner instead of only logging to the console.
+- Revoked, disconnected, expired, server-error, and API-unreachable Threads states now pause cross-posting until the account/API state is usable again.
+- Reddit references are linkified more consistently across timeline cards, comments, Markdown conversion, and saved note formatting.
+- AI comments now show clearer local/cloud model labels in timeline, reader mode, CLI output, and Markdown metadata.
+- Obsidian login magic links now include plugin source tags for cleaner auth attribution.
+- Billing and rate-limit copy was tightened up by removing expired launch-offer language and clarifying premium benefits.
 `,
   },
   '3.8.1': {
