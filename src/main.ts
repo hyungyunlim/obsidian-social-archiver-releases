@@ -1468,6 +1468,11 @@ export default class SocialArchiverPlugin extends Plugin {
         saveSubscriptionPostDetailed: (post) =>
           this.subscriptionSyncService?.saveSubscriptionPostDetailed(post) ??
           Promise.resolve({ status: 'failed' as const, reason: 'Subscription sync service not initialized' }),
+        isLimitedArchiveFile: (file) =>
+          this.subscriptionSyncService?.isLimitedArchiveFile(file) ?? Promise.resolve(false),
+        replaceExistingLimitedArchive: (file, post) =>
+          this.subscriptionSyncService?.replaceExistingLimitedArchiveFile(file, post) ??
+          Promise.resolve({ status: 'failed' as const, reason: 'Subscription sync service not initialized' }),
         refreshTimelineView: () => this.refreshTimelineView(),
         localLockRegistry: this.localLockRegistry,
       });
@@ -1519,6 +1524,9 @@ export default class SocialArchiverPlugin extends Plugin {
           this.archiveLookupService?.backfillFileIdentity(file, archiveId) ?? Promise.resolve(),
         saveSubscriptionPostDetailed: (post) =>
           this.subscriptionSyncService?.saveSubscriptionPostDetailed(post) ??
+          Promise.resolve({ status: 'failed' as const, reason: 'service-not-ready' }),
+        replaceExistingLimitedArchive: (file, post) =>
+          this.subscriptionSyncService?.replaceExistingLimitedArchiveFile(file, post) ??
           Promise.resolve({ status: 'failed' as const, reason: 'service-not-ready' }),
         convertUserArchiveToPostData: (archive) => convertUserArchiveToPostData(archive),
         notify: (msg, timeout) => new Notice(msg, timeout),

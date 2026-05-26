@@ -4,6 +4,7 @@ import type { ArchiveOptions } from '@/types/archive';
 import type { ArchiveRequest } from '@/types/api';
 import { PostDataSchema } from '@/types/post';
 import { ApiClient } from './ApiClient';
+import { detectPlatform as sharedDetectPlatform } from '@/shared/platforms';
 
 /**
  * ArchiveService configuration
@@ -22,24 +23,8 @@ class RequestBuilder {
    * Detect platform from URL
    */
   static detectPlatform(url: string): Platform {
-    const urlLower = url.toLowerCase();
-
-    if (urlLower.includes('facebook.com')) return 'facebook';
-    if (urlLower.includes('linkedin.com')) return 'linkedin';
-    if (urlLower.includes('instagram.com')) return 'instagram';
-    if (urlLower.includes('tiktok.com')) return 'tiktok';
-    if (urlLower.includes('x.com') || urlLower.includes('twitter.com')) return 'x';
-    if (urlLower.includes('threads.net') || urlLower.includes('threads.com')) return 'threads';
-    if (urlLower.includes('reddit.com') || urlLower.includes('redd.it')) return 'reddit';
-    if (urlLower.includes('youtube.com') || urlLower.includes('youtu.be')) return 'youtube';
-    if (urlLower.includes('pinterest.com') || urlLower.includes('pin.it')) return 'pinterest';
-    if (urlLower.includes('substack.com')) return 'substack';
-    if (urlLower.includes('tumblr.com')) return 'tumblr';
-    if (urlLower.includes('bsky.app')) return 'bluesky';
-    if (/https?:\/\/[^\s]+\/@[A-Za-z0-9_.-]+\/\d+/i.test(url)) return 'mastodon';
-    if (urlLower.includes('google.com/maps') || urlLower.includes('maps.google.') || urlLower.includes('goo.gl/maps') || urlLower.includes('maps.app.goo.gl')) return 'googlemaps';
-    if (urlLower.includes('brunch.co.kr')) return 'brunch';
-
+    const platform = sharedDetectPlatform(url);
+    if (platform !== 'post') return platform;
     throw new Error(`Unsupported platform: ${url}`);
   }
 

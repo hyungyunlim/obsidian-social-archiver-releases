@@ -54,6 +54,15 @@ export interface RemoteArchiveIngestDeps {
   /** Persist with enough detail to immediately bind existing/new files to server archive IDs. */
   saveSubscriptionPostDetailed?: (post: PendingPost) => Promise<RemoteArchiveSaveResult>;
 
+  /** Returns true when the local note is only a limited fallback archive. */
+  isLimitedArchiveFile?: (file: TFile) => Promise<boolean>;
+
+  /** Replace a limited fallback note with richer fetched archive content. */
+  replaceExistingLimitedArchive?: (
+    file: TFile,
+    post: PendingPost,
+  ) => Promise<RemoteArchiveSaveResult>;
+
   /** Refresh the timeline view after a successful save. */
   refreshTimelineView: () => void;
 
@@ -68,7 +77,7 @@ export interface RemoteArchiveIngestDeps {
 export type IngestResult = 'created' | 'existing' | 'skipped';
 
 interface RemoteArchiveSaveResult {
-  status: 'created' | 'existing' | 'skipped' | 'failed';
+  status: 'created' | 'updated' | 'existing' | 'skipped' | 'failed';
   file?: TFile;
   path?: string;
   reason?: string;
@@ -110,6 +119,9 @@ export class RemoteArchiveIngestService {
     // 1. Check if already exists by sourceArchiveId
     const existing = this.deps.archiveLookupService?.findBySourceArchiveId(archiveId) ?? null;
     if (existing) {
+      if (await this.updateExistingLimitedArchiveById(existing, archiveId, source)) {
+        return 'created';
+      }
       this.deps.refreshTimelineView();
       return 'existing';
     }
@@ -128,7 +140,7 @@ export class RemoteArchiveIngestService {
     // 3. Dedup by URL
     const url = archive.originalUrl;
     if (url && this.deps.hasRecentlyArchivedUrl(url)) {
-      if (await this.bindSingleUrlMatch(archive)) {
+      if (await this.bindSingleUrlMatch(archive, source)) {
         return 'existing';
       }
     }
@@ -141,23 +153,7 @@ export class RemoteArchiveIngestService {
     }
 
     // 5. Convert and save
-    const postData = this.deps.convertUserArchiveToPostData(archive);
-    const pendingPost: PendingPost = {
-      id: `ingest-${source}-${archiveId}`,
-      subscriptionId: `realtime-${source}`,
-      subscriptionName: source === 'client_sync'
-        ? 'Mobile Sync'
-        : source === 'ai_comment_job'
-          ? 'AI Comment Job'
-          : source === 'transcription_job'
-            ? 'Transcription Job'
-          : 'Realtime Sync',
-      post: postData,
-      destinationFolder: this.deps.settings().archivePath,
-      archivedAt: new Date().toISOString(),
-    };
-
-    const saveResult = await this.savePendingPost(pendingPost);
+    const saveResult = await this.savePendingPost(this.buildPendingPost(archive, source));
     if (saveResult.status === 'failed' || saveResult.status === 'skipped') {
       return 'skipped';
     }
@@ -165,15 +161,15 @@ export class RemoteArchiveIngestService {
     if (saveResult.file) {
       await this.bindFileIdentity(saveResult.file, archive);
       this.deps.refreshTimelineView();
-      return saveResult.status;
+      return saveResult.status === 'updated' ? 'created' : saveResult.status;
     }
 
-    if (await this.bindSingleUrlMatch(archive)) {
-      return saveResult.status;
+    if (await this.bindSingleUrlMatch(archive, source)) {
+      return saveResult.status === 'updated' ? 'created' : saveResult.status;
     }
 
     this.deps.refreshTimelineView();
-    return saveResult.status;
+    return saveResult.status === 'updated' ? 'created' : saveResult.status;
   }
 
   private async withArchiveWriteLocks<T>(archiveId: string, fn: () => Promise<T>): Promise<T> {
@@ -228,13 +224,83 @@ export class RemoteArchiveIngestService {
     return saved ? { status: 'created' } : { status: 'failed', reason: 'save returned false' };
   }
 
-  private async bindSingleUrlMatch(archive: UserArchive): Promise<boolean> {
+  private async bindSingleUrlMatch(
+    archive: UserArchive,
+    source: 'client_sync' | 'archive_complete' | 'ai_comment_job' | 'transcription_job',
+  ): Promise<boolean> {
     const matches = this.deps.archiveLookupService?.findByOriginalUrl(archive.originalUrl) ?? [];
     if (matches.length !== 1) return false;
+
+    if (await this.updateExistingLimitedArchive(matches[0]!, archive, source)) {
+      return true;
+    }
 
     await this.bindFileIdentity(matches[0]!, archive);
     this.deps.refreshTimelineView();
     return true;
+  }
+
+  private async updateExistingLimitedArchiveById(
+    file: TFile,
+    archiveId: string,
+    source: 'client_sync' | 'archive_complete' | 'ai_comment_job' | 'transcription_job',
+  ): Promise<boolean> {
+    if (!this.deps.isLimitedArchiveFile || !(await this.deps.isLimitedArchiveFile(file))) {
+      return false;
+    }
+
+    const apiClient = this.deps.apiClient();
+    if (!apiClient) return false;
+
+    const archive = await this.fetchWithRetry(apiClient, archiveId);
+    if (!archive) return false;
+
+    return this.updateExistingLimitedArchive(file, archive, source);
+  }
+
+  private async updateExistingLimitedArchive(
+    file: TFile,
+    archive: UserArchive,
+    source: 'client_sync' | 'archive_complete' | 'ai_comment_job' | 'transcription_job',
+  ): Promise<boolean> {
+    if (!this.deps.replaceExistingLimitedArchive) return false;
+    if (this.deps.isLimitedArchiveFile && !(await this.deps.isLimitedArchiveFile(file))) {
+      return false;
+    }
+
+    const result = await this.deps.replaceExistingLimitedArchive(
+      file,
+      this.buildPendingPost(archive, source),
+    );
+
+    if (result.status !== 'updated') return false;
+
+    await this.bindFileIdentity(result.file ?? file, archive);
+    this.deps.refreshTimelineView();
+    return true;
+  }
+
+  private buildPendingPost(
+    archive: UserArchive,
+    source: 'client_sync' | 'archive_complete' | 'ai_comment_job' | 'transcription_job',
+  ): PendingPost {
+    const postData = this.deps.convertUserArchiveToPostData(archive);
+    postData.sourceArchiveId = archive.id;
+
+    return {
+      id: `ingest-${source}-${archive.id}`,
+      subscriptionId: `realtime-${source}`,
+      subscriptionName: source === 'client_sync'
+        ? 'Mobile Sync'
+        : source === 'ai_comment_job'
+          ? 'AI Comment Job'
+          : source === 'transcription_job'
+            ? 'Transcription Job'
+            : 'Realtime Sync',
+      post: postData,
+      destinationFolder: this.deps.settings().archivePath,
+      archivedAt: new Date().toISOString(),
+    };
   }
 
   private async bindFileIdentity(file: TFile, archive: UserArchive): Promise<void> {

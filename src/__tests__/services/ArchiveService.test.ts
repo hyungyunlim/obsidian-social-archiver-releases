@@ -42,6 +42,7 @@ describe('ArchiveService', () => {
         status: 'pending',
       } as ArchiveResponse),
       waitForJob: vi.fn().mockResolvedValue(mockPostData),
+      submitStats: vi.fn().mockResolvedValue(undefined),
     };
 
     // Create service
@@ -119,10 +120,19 @@ describe('ArchiveService', () => {
       );
     });
 
-    it('should throw error for unsupported platform', () => {
-      expect(() =>
-        archiveService.detectPlatform('https://unsupported.com/post/123')
-      ).toThrow('Unsupported platform');
+    it('should detect generic HTTP URLs as web', () => {
+      expect(archiveService.detectPlatform('https://unsupported.com/post/123')).toBe(
+        'web'
+      );
+      expect(archiveService.detectPlatform('https://wikidocs.net/blog/@jaehong/12725/')).toBe(
+        'web'
+      );
+    });
+
+    it('should throw error for non-URL input', () => {
+      expect(() => archiveService.detectPlatform('not a url')).toThrow(
+        'Unsupported platform'
+      );
     });
 
     it('should be case insensitive', () => {
@@ -275,8 +285,8 @@ describe('ArchiveService', () => {
   });
 
   describe('dispose', () => {
-    it('should dispose without errors', async () => {
-      await expect(archiveService.dispose()).resolves.not.toThrow();
+    it('should dispose without errors', () => {
+      expect(() => archiveService.dispose()).not.toThrow();
     });
   });
 });

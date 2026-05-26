@@ -47,10 +47,14 @@ const LIBRARY_SYNC_RETRY_BASE_DELAY_MS = 1000;
 
 /** Result returned by saveSubscriptionPostDetailed (Pipeline agent). */
 export interface SavePendingPostResult {
-  status: 'created' | 'existing' | 'skipped' | 'failed';
+  status: 'created' | 'updated' | 'existing' | 'skipped' | 'failed';
   file?: TFile;
   path?: string;
   reason?: string;
+}
+
+export interface SavePendingPostOptions {
+  replaceExistingFile?: TFile;
 }
 
 // ============================================================================
@@ -117,7 +121,16 @@ export interface ArchiveLibrarySyncDeps {
   backfillFileIdentity: (file: TFile, archiveId: string) => Promise<void>;
 
   /** Save a pending post to vault (handles media download, markdown conversion, etc.). */
-  saveSubscriptionPostDetailed: (post: PendingPost) => Promise<SavePendingPostResult>;
+  saveSubscriptionPostDetailed: (
+    post: PendingPost,
+    options?: SavePendingPostOptions,
+  ) => Promise<SavePendingPostResult>;
+
+  /** Replace an existing limited fallback note with richer server content. */
+  replaceExistingLimitedArchive?: (
+    file: TFile,
+    post: PendingPost,
+  ) => Promise<SavePendingPostResult>;
 
   /** Convert a server UserArchive into the local PostData format. */
   convertUserArchiveToPostData: (archive: UserArchive) => PostData;
@@ -646,11 +659,14 @@ export class ArchiveLibrarySyncService {
       // Tier 1: exact match by stable server ID
       const existingById = this.deps.findBySourceArchiveId(archive.id);
       if (existingById) {
+        const updated = await this.replaceExistingLimitedArchive(existingById, archive);
         await this.reconcileExistingArchiveState(existingById, archive);
         await this.reconcileExistingLikeState(existingById, archive);
         await this.reconcileExistingAnnotationState(existingById, archive);
         await this.reconcileExistingTranscriptState(existingById, archive);
-        this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
+        if (!updated) {
+          this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
+        }
         return;
       }
 
@@ -700,11 +716,14 @@ export class ArchiveLibrarySyncService {
             error,
           });
         }
+        const updated = await this.replaceExistingLimitedArchive(matched, archive);
         await this.reconcileExistingArchiveState(matched, archive);
         await this.reconcileExistingLikeState(matched, archive);
         await this.reconcileExistingAnnotationState(matched, archive);
         await this.reconcileExistingTranscriptState(matched, archive);
-        this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
+        if (!updated) {
+          this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
+        }
         return;
       }
 
@@ -839,24 +858,60 @@ export class ArchiveLibrarySyncService {
     }
   }
 
-  private async saveArchive(archive: UserArchive): Promise<void> {
+  private buildPendingPost(
+    archive: UserArchive,
+    idPrefix: string,
+    subscriptionName: string,
+  ): PendingPost {
     const postData = this.deps.convertUserArchiveToPostData(archive);
     // Inject sourceArchiveId so the saved file will have it in frontmatter
     postData.sourceArchiveId = archive.id;
 
     const settings = this.deps.settings();
-    const pendingPost: PendingPost = {
-      id: `library-sync-${archive.id}`,
+    return {
+      id: `${idPrefix}-${archive.id}`,
       subscriptionId: `library-sync`,
-      subscriptionName: 'Library Sync',
+      subscriptionName,
       post: postData,
       destinationFolder: settings.archivePath || 'Social Archives',
       archivedAt: archive.archivedAt,
     };
+  }
+
+  private async replaceExistingLimitedArchive(file: TFile, archive: UserArchive): Promise<boolean> {
+    if (!this.deps.replaceExistingLimitedArchive) return false;
+
+    const result = await this.deps.replaceExistingLimitedArchive(
+      file,
+      this.buildPendingPost(archive, 'library-sync-update', 'Library Sync'),
+    );
+
+    if (result.status === 'updated' && result.file) {
+      this.deps.indexSavedFile(result.file, {
+        sourceArchiveId: archive.id,
+        originalUrl: archive.originalUrl,
+      });
+      this.updateState({ savedCount: this.runtimeState.savedCount + 1 });
+      return true;
+    }
+
+    if (result.status === 'failed') {
+      console.warn('[Social Archiver] [LibrarySync] limited archive replacement failed', {
+        archiveId: archive.id,
+        path: file.path,
+        reason: result.reason,
+      });
+    }
+
+    return false;
+  }
+
+  private async saveArchive(archive: UserArchive): Promise<void> {
+    const pendingPost = this.buildPendingPost(archive, 'library-sync', 'Library Sync');
 
     const result = await this.deps.saveSubscriptionPostDetailed(pendingPost);
 
-    if (result.status === 'created' && result.file) {
+    if ((result.status === 'created' || result.status === 'updated') && result.file) {
       // Optimistically update in-memory index
       this.deps.indexSavedFile(result.file, {
         sourceArchiveId: archive.id,

@@ -253,7 +253,7 @@ const PLATFORM_PATTERNS: URLPattern[] = [
     domains: [],
     skipDomainCheck: true,
     patterns: [
-      /https?:\/\/[^/]+\/@[^/]+\/\d+/i,
+      /^https?:\/\/[^/\s]+\/(?:@[^/]+\/\d+|users\/[^/]+\/statuses\/\d+)(?:[/?#]|$)/i,
     ],
   },
   {
@@ -658,8 +658,11 @@ export class PlatformDetector implements IService {
   }
 
   private extractMastodonPostId(urlObj: URL): string | null {
-    const match = urlObj.pathname.match(/\/(@[^/]+)\/(\d+)/);
-    return match ? match[2] || null : null;
+    const statusMatch = urlObj.pathname.match(/^\/users\/[^/]+\/statuses\/(\d+)\/?$/);
+    if (statusMatch) return statusMatch[1] || null;
+
+    const atMatch = urlObj.pathname.match(/^\/@[^/]+\/(\d+)\/?$/);
+    return atMatch ? atMatch[1] || null : null;
   }
 
   private extractTumblrPostId(urlObj: URL): string | null {

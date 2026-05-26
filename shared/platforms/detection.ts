@@ -329,10 +329,10 @@ export function extractPostIdFromUrl(platform: Platform, url: string): string | 
 
       case 'mastodon': {
         // /@user/{id} or /users/{user}/statuses/{id}
-        const statusMatch = pathname.match(/\/statuses\/(\d+)/);
+        const statusMatch = pathname.match(/^\/users\/[^/]+\/statuses\/(\d+)\/?$/);
         if (statusMatch) return statusMatch[1] ?? null;
 
-        const atMatch = pathname.match(/\/@[^/]+\/(\d+)/);
+        const atMatch = pathname.match(/^\/@[^/]+\/(\d+)\/?$/);
         return atMatch?.[1] ?? null;
       }
 

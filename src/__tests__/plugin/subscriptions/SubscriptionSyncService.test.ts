@@ -94,6 +94,7 @@ function makeDeps(overrides: Partial<SubscriptionSyncServiceDeps> = {}): Subscri
       },
       vault: {
         getAbstractFileByPath: vi.fn().mockReturnValue(null),
+        read: vi.fn().mockResolvedValue(''),
         adapter: { writeBinary: vi.fn() },
         createFolder: vi.fn(),
         create: vi.fn(),
@@ -205,6 +206,68 @@ describe('SubscriptionSyncService', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  describe('replaceExistingLimitedArchiveFile', () => {
+    it('updates a limited archive note in place when replacement content is rich', async () => {
+      const deps = makeDeps();
+      vi.mocked(deps.app.vault.read).mockResolvedValue(
+        '---\nplatform: web\n---\n\n> [!warning] Limited archive\n> Access denied (403)\n',
+      );
+
+      const service = new SubscriptionSyncService(deps);
+      const file = { path: 'Social Archives/Web Article/2026/05/wikidocs.md' } as TFile;
+      const pendingPost = makePendingPost({
+        platform: 'web',
+        id: 'web-wikidocs',
+        url: 'https://wikidocs.net/blog/@jaehong/12725/',
+        title: 'Wikidocs article',
+        author: { name: 'jaehong', url: 'https://wikidocs.net/blog/@jaehong' },
+        content: {
+          text: 'Real article body from the clipper.',
+          markdown: '# Wikidocs article\n\nReal article body from the clipper.',
+        },
+        media: [],
+        quotedPost: undefined,
+        metadata: {
+          timestamp: '2026-05-26T00:00:00.000Z',
+        },
+      });
+
+      const result = await service.replaceExistingLimitedArchiveFile(file, pendingPost);
+
+      expect(result.status).toBe('updated');
+      expect(serviceMocks.vaultStorageSavePost).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: 'https://wikidocs.net/blog/@jaehong/12725/',
+          content: expect.objectContaining({
+            markdown: expect.stringContaining('Real article body from the clipper.'),
+          }),
+        }),
+        undefined,
+        file.path,
+        undefined,
+      );
+    });
+
+    it('leaves an existing rich archive note untouched', async () => {
+      const deps = makeDeps();
+      vi.mocked(deps.app.vault.read).mockResolvedValue(
+        '---\nplatform: web\n---\n\nAlready has real content.\n',
+      );
+
+      const service = new SubscriptionSyncService(deps);
+      const file = { path: 'Social Archives/Web Article/2026/05/wikidocs.md' } as TFile;
+      const result = await service.replaceExistingLimitedArchiveFile(file, makePendingPost({
+        platform: 'web',
+        media: [],
+        quotedPost: undefined,
+        content: { text: 'Replacement body' },
+      }));
+
+      expect(result.status).toBe('existing');
+      expect(serviceMocks.vaultStorageSavePost).not.toHaveBeenCalled();
+    });
   });
 
   // --------------------------------------------------------------------------

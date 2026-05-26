@@ -248,8 +248,10 @@ export const PLATFORM_DEFINITIONS: Record<Platform, PlatformDefinition> = {
       'mstdn.social',
       'fosstodon.org',
     ],
-    // Mastodon URL pattern: https://instance/@user/postid
-    urlPattern: /https?:\/\/[^\s]+\/@[A-Za-z0-9_@.-]+\/\d+/i,
+    // Mastodon URL pattern: https://instance/@user/postid or /users/user/statuses/postid
+    // Keep the post path anchored at the instance root. Generic web articles can
+    // also contain /@author/id under a section path (e.g. /blog/@author/123).
+    urlPattern: /^https?:\/\/[^/\s]+\/(?:@[A-Za-z0-9_@.-]+\/\d+|users\/[A-Za-z0-9_@.-]+\/statuses\/\d+)(?:[/?#]|$)/i,
     allowCustomDomains: true,
     supportsMedia: true,
     supportsAI: true,

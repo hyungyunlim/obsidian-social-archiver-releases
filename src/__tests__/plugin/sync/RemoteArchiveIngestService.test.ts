@@ -39,6 +39,61 @@ function makeFile(path: string): TFile {
 }
 
 describe('RemoteArchiveIngestService', () => {
+  it('replaces an existing limited archive note when the fetched archive has rich content', async () => {
+    const archive = makeArchive({
+      title: 'Wikidocs article',
+      originalUrl: 'https://wikidocs.net/blog/@jaehong/12725/',
+      fullContent: '# Wikidocs article\n\nReal article body from the clipper.',
+    });
+    const file = makeFile('Social Archives/Web Article/wikidocs.md');
+    const getUserArchive = vi.fn().mockResolvedValue({ archive });
+    const replaceExistingLimitedArchive = vi.fn().mockResolvedValue({
+      status: 'updated',
+      file,
+      path: file.path,
+    });
+    const archiveLookupService = {
+      findBySourceArchiveId: vi.fn().mockReturnValue(file),
+      findByOriginalUrl: vi.fn().mockReturnValue([]),
+      backfillFileIdentity: vi.fn().mockResolvedValue(undefined),
+      indexSavedFile: vi.fn(),
+    };
+
+    const service = new RemoteArchiveIngestService({
+      apiClient: () => ({ getUserArchive }) as any,
+      settings: () => ({ archivePath: 'Social Archives' }),
+      hasRecentlyArchivedUrl: vi.fn().mockReturnValue(false),
+      archiveLookupService: archiveLookupService as any,
+      convertUserArchiveToPostData: vi.fn().mockReturnValue({
+        platform: 'web',
+        id: archive.postId,
+        url: archive.originalUrl,
+        author: { name: 'jaehong' },
+        content: { text: 'Real article body from the clipper.' },
+        media: [],
+      }),
+      saveSubscriptionPost: vi.fn(),
+      saveSubscriptionPostDetailed: vi.fn(),
+      isLimitedArchiveFile: vi.fn().mockResolvedValue(true),
+      replaceExistingLimitedArchive,
+      refreshTimelineView: vi.fn(),
+    });
+
+    await expect(service.ingestArchiveById(archive.id, 'archive_complete')).resolves.toBe('created');
+
+    expect(getUserArchive).toHaveBeenCalledWith(archive.id);
+    expect(replaceExistingLimitedArchive).toHaveBeenCalledWith(
+      file,
+      expect.objectContaining({
+        post: expect.objectContaining({
+          sourceArchiveId: archive.id,
+          url: archive.originalUrl,
+        }),
+      }),
+    );
+    expect(archiveLookupService.backfillFileIdentity).toHaveBeenCalledWith(file, archive.id);
+  });
+
   it('binds a recent same-url local note instead of treating it as materialized without an archive id', async () => {
     const archive = makeArchive();
     const file = makeFile('Social Archives/youtube/example.md');

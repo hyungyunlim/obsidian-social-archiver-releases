@@ -405,24 +405,30 @@ describe('PlatformDetector', () => {
       expect(result?.confidence).toBeLessThan(0.9);
     });
 
-    it('should return null for unsupported URLs', () => {
+    it('should return web confidence for generic web URLs', () => {
       const result = detector.detectWithConfidence('https://example.com/post/123');
-      expect(result).toBeNull();
+      expect(result).not.toBeNull();
+      expect(result?.platform).toBe('web');
+      expect(result?.confidence).toBe(0.8);
     });
   });
 
-  describe('Unsupported platforms', () => {
-    const unsupportedUrls = [
+  describe('Unsupported inputs', () => {
+    const unsupportedInputs = [
       'https://example.com/post/123',
       'https://github.com/user/repo',
       'not-a-url',
       '',
     ];
 
-    unsupportedUrls.forEach(url => {
-      it(`should return null for unsupported URL: ${url}`, () => {
+    unsupportedInputs.forEach(url => {
+      it(`should return expected platform for input: ${url}`, () => {
         const platform = detector.detectPlatform(url);
-        expect(platform).toBeNull();
+        if (url.startsWith('https://')) {
+          expect(platform).toBe('web');
+        } else {
+          expect(platform).toBeNull();
+        }
       });
     });
   });
@@ -430,16 +436,17 @@ describe('PlatformDetector', () => {
   describe('Utility methods', () => {
     it('should check if URL is supported', () => {
       expect(detector.isSupported('https://facebook.com/user/posts/123')).toBe(true);
-      expect(detector.isSupported('https://example.com/post/123')).toBe(false);
+      expect(detector.isSupported('https://example.com/post/123')).toBe(true);
+      expect(detector.isSupported('not-a-url')).toBe(false);
     });
 
     it('should return all supported platforms', () => {
       const platforms = detector.getSupportedPlatforms();
       // Platform count: facebook, linkedin, instagram, tiktok, x, threads, youtube,
       // reddit, pinterest, substack, tumblr, mastodon, bluesky, googlemaps, velog, medium, blog,
-      // podcast, naver, naver-webtoon, brunch = 21
+      // podcast, naver, naver-webtoon, webtoons, brunch, web = 23
       // Note: 'post' is excluded as it's the fallback for unknown URLs
-      expect(platforms).toHaveLength(21);
+      expect(platforms).toHaveLength(23);
       expect(platforms).toContain('facebook');
       expect(platforms).toContain('linkedin');
       expect(platforms).toContain('instagram');
@@ -460,7 +467,9 @@ describe('PlatformDetector', () => {
       expect(platforms).toContain('podcast');
       expect(platforms).toContain('naver');
       expect(platforms).toContain('naver-webtoon');
+      expect(platforms).toContain('webtoons');
       expect(platforms).toContain('brunch');
+      expect(platforms).toContain('web');
     });
 
     it('should return platform-specific domains', () => {
@@ -767,6 +776,12 @@ describe('PlatformDetector', () => {
 
     it('should extract Mastodon post IDs', () => {
       expect(detector.extractPostId('https://mastodon.social/@user/123456789')).toBe('123456789');
+      expect(detector.extractPostId('https://mastodon.social/users/user/statuses/123456789')).toBe('123456789');
+    });
+
+    it('should treat nested @author/id web article paths as generic web URLs', () => {
+      expect(detector.detectPlatform('https://wikidocs.net/blog/@jaehong/12725/')).toBe('web');
+      expect(detector.extractPostId('https://wikidocs.net/blog/@jaehong/12725/')).toBeNull();
     });
   });
 

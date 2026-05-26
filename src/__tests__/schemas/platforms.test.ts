@@ -592,6 +592,11 @@ describe('PinterestURLSchema', () => {
 			expect(result.errors).toEqual([]);
 		});
 
+		it('should not validate nested @author/id web article paths as Mastodon', () => {
+			const result = validatePlatformUrl('https://wikidocs.net/blog/@jaehong/12725/', 'mastodon');
+			expect(result.success).toBe(false);
+		});
+
 		it('should detect and validate Bluesky URLs', () => {
 			const result = validateAndDetectPlatform('https://bsky.app/profile/example.com/post/3k5abcxyz');
 			expect(result.valid).toBe(true);
@@ -993,6 +998,7 @@ describe('web platform detection', () => {
 		expect(detectPlatform('https://blog.example.org/post/123')).toBe('web');
 		expect(detectPlatform('https://news.ycombinator.com/item?id=12345')).toBe('web');
 		expect(detectPlatform('https://www.bbc.com/news/technology-12345')).toBe('web');
+		expect(detectPlatform('https://wikidocs.net/blog/@jaehong/12725/')).toBe('web');
 	});
 
 	it('should detect generic HTTP URLs as web', () => {
@@ -1022,5 +1028,6 @@ describe('web platform detection', () => {
 		expect(detectPlatform('https://www.reddit.com/r/test/comments/abc/title')).toBe('reddit');
 		expect(detectPlatform('https://bsky.app/profile/user.bsky.social/post/abc')).toBe('bluesky');
 		expect(detectPlatform('https://mastodon.social/@user/123456')).toBe('mastodon');
+		expect(detectPlatform('https://mastodon.social/users/user/statuses/123456')).toBe('mastodon');
 	});
 });

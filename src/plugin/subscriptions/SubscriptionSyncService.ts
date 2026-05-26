@@ -36,10 +36,14 @@ import type { WsProfileMetadataMessage } from '../realtime/RealtimeEventBridge';
  * updates within the same sync run.
  */
 export interface SavePendingPostResult {
-  status: 'created' | 'existing' | 'skipped' | 'failed';
+  status: 'created' | 'updated' | 'existing' | 'skipped' | 'failed';
   file?: TFile;
   path?: string;
   reason?: string;
+}
+
+interface SaveSubscriptionPostOptions {
+  replaceExistingFile?: TFile;
 }
 
 /**
@@ -331,19 +335,25 @@ export class SubscriptionSyncService {
    *
    * @returns SavePendingPostResult describing the outcome in detail
    */
-  async saveSubscriptionPostDetailed(pendingPost: PendingPost): Promise<SavePendingPostResult> {
+  async saveSubscriptionPostDetailed(
+    pendingPost: PendingPost,
+    options: SaveSubscriptionPostOptions = {},
+  ): Promise<SavePendingPostResult> {
     try {
       const { VaultStorageService } = await import('../../services/VaultStorageService');
       const { MediaHandler } = await import('../../services/MediaHandler');
 
       const post = pendingPost.post;
+      const replaceExistingFile = options.replaceExistingFile;
       if (pendingPost.archiveId && !post.sourceArchiveId) {
         post.sourceArchiveId = pendingPost.archiveId;
       }
 
-      const existingByIdentity = await this.findExistingArchiveFile(post);
-      if (existingByIdentity) {
-        return existingByIdentity;
+      if (!replaceExistingFile) {
+        const existingByIdentity = await this.findExistingArchiveFile(post);
+        if (existingByIdentity) {
+          return existingByIdentity;
+        }
       }
 
       const rawAuthorName = post.author?.name || post.author?.handle || '';
@@ -378,7 +388,9 @@ export class SubscriptionSyncService {
 
       let targetFilePath: string;
 
-      if ((post.platform === 'naver-webtoon' || post.platform === 'webtoons') && post.series) {
+      if (replaceExistingFile) {
+        targetFilePath = replaceExistingFile.path;
+      } else if ((post.platform === 'naver-webtoon' || post.platform === 'webtoons') && post.series) {
         const seriesTitle = (post.series.title || 'Unknown Series')
           .replace(/[\\/:*?"<>|]/g, '-')
           .trim();
@@ -393,16 +405,18 @@ export class SubscriptionSyncService {
         targetFilePath = pathVaultManager.generateFilePath(post);
       }
 
-      const existingFile = this.app.vault.getAbstractFileByPath(targetFilePath);
-      if (existingFile) {
-        if (existingFile instanceof TFile) {
-          await this.bindFileIdentityIfPossible(existingFile, post);
+      if (!replaceExistingFile) {
+        const existingFile = this.app.vault.getAbstractFileByPath(targetFilePath);
+        if (existingFile) {
+          if (existingFile instanceof TFile) {
+            await this.bindFileIdentityIfPossible(existingFile, post);
+          }
+          return {
+            status: 'existing',
+            path: targetFilePath,
+            ...(existingFile instanceof TFile ? { file: existingFile } : {}),
+          };
         }
-        return {
-          status: 'existing',
-          path: targetFilePath,
-          ...(existingFile instanceof TFile ? { file: existingFile } : {}),
-        };
       }
 
       let mediaResults: import('../../services/MediaHandler').MediaResult[] | undefined;
@@ -668,7 +682,11 @@ export class SubscriptionSyncService {
       if (saveResult.path) {
         this.indexSavedFileIfPossible(saveResult.file, post);
         this.deps.refreshTimelineView();
-        return { status: 'created', file: saveResult.file, path: saveResult.path };
+        return {
+          status: replaceExistingFile ? 'updated' : 'created',
+          file: saveResult.file,
+          path: saveResult.path,
+        };
       }
 
       return { status: 'failed', reason: 'save returned no path' };
@@ -676,6 +694,49 @@ export class SubscriptionSyncService {
       console.error('[Social Archiver] saveSubscriptionPostDetailed error:', error);
       return { status: 'failed', reason: error instanceof Error ? error.message : String(error) };
     }
+  }
+
+  async isLimitedArchiveFile(file: TFile): Promise<boolean> {
+    try {
+      const content = await this.app.vault.read(file);
+      return this.isLimitedArchiveContent(content);
+    } catch {
+      return false;
+    }
+  }
+
+  async replaceExistingLimitedArchiveFile(
+    file: TFile,
+    pendingPost: PendingPost,
+  ): Promise<SavePendingPostResult> {
+    const isLimited = await this.isLimitedArchiveFile(file);
+    if (!isLimited) {
+      return { status: 'existing', file, path: file.path, reason: 'not limited archive' };
+    }
+
+    if (!this.hasMeaningfulReplacementContent(pendingPost.post)) {
+      return { status: 'existing', file, path: file.path, reason: 'replacement content is limited or empty' };
+    }
+
+    return this.saveSubscriptionPostDetailed(pendingPost, { replaceExistingFile: file });
+  }
+
+  private hasMeaningfulReplacementContent(post: PostData): boolean {
+    const candidates = [
+      post.content?.markdown,
+      post.content?.text,
+      post.content?.html,
+    ];
+
+    const content = candidates
+      .find((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      ?.trim();
+
+    return Boolean(content && !this.isLimitedArchiveContent(content));
+  }
+
+  private isLimitedArchiveContent(content: string): boolean {
+    return /\[!warning\]\s*Limited archive/i.test(content);
   }
 
   private async findExistingArchiveFile(post: PostData): Promise<SavePendingPostResult | null> {
