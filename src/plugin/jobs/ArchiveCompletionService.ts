@@ -19,6 +19,7 @@ import { getAuthorCatalogStore, type AuthorMetadataUpdate } from '../../services
 import type { AuthorNoteService } from '../../services/AuthorNoteService';
 import { normalizeAuthorName, normalizeAuthorUrl } from '../../services/AuthorDeduplicator';
 import { MediaPathResolver, type VideoDownloadFailure } from '../media/MediaPathResolver';
+import { isHlsVideoUrl } from '../../utils/substack';
 import { ensureFolderExists } from '../utils/ensureFolderExists';
 import type { CompletedJobResponse } from '../realtime/RealtimeEventBridge';
 import { formatPaywallRequiredMessage, isPaywallRequiredError } from '../../utils/billingError';
@@ -656,8 +657,12 @@ export class ArchiveCompletionService {
     // Track downloaded media for markdown conversion
     const downloadedMedia: Array<import('../../services/MediaHandler').MediaResult> = [];
     const shouldAttemptVideoDownloads = downloadMode === 'images-and-videos';
+    // PRD §22.4: HLS videos are intentionally not downloaded (streamable
+    // resolver link is retained), so exclude them from the download-status
+    // count — otherwise the "Video Download Status" frontmatter/section would
+    // misreport an HLS-only note.
     const totalVideoMediaCount = shouldAttemptVideoDownloads && Array.isArray(postData.media)
-      ? postData.media.filter((item: { type: string }) => item.type === 'video').length
+      ? postData.media.filter((item: Media) => item.type === 'video' && !isHlsVideoUrl(item.url)).length
       : 0;
     const failedVideoDownloads: VideoDownloadFailure[] = [];
 
@@ -697,6 +702,22 @@ export class ArchiveCompletionService {
 
         // Filter by download mode
         if (downloadMode === 'images-only' && media.type !== 'image') {
+          continue;
+        }
+
+        // PRD §22.4: HLS video media (Substack note resolver `…/src?type=hls`,
+        // or `.m3u8`) cannot be client-downloaded — a binary fetch returns a
+        // manifest, not a seekable video, and local thumbnail frame-extraction
+        // also fails. Skip the download + thumbnail attempt entirely and keep
+        // the streamable resolver link in the note (rendered as
+        // `[🎥 Video](resolver)` via MediaFormatter Case 3). Do NOT record a
+        // videoDownloadFailure — the server R2-preserved MP4 (PRD §21) is the
+        // canonical preservation and is preferred when it arrives via sync /
+        // media refresh (follow-up: full plugin media-refresh of preserved MP4).
+        if (media.type === 'video' && isHlsVideoUrl(media.url)) {
+          console.debug(
+            `[Social Archiver] Skipping HLS video download (streamable resolver link retained): ${String(media.url).substring(0, 100)}`
+          );
           continue;
         }
 

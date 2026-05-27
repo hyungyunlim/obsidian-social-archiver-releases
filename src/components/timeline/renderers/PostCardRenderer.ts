@@ -24,6 +24,7 @@ import { isValidPreviewUrl, encodePathForMarkdownLink } from '../../../utils/url
 import { get } from 'svelte/store';
 import type { AuthorCatalogEntry } from '../../../types/author-catalog';
 import { isRssBasedPlatform } from '../../../constants/rssPlatforms';
+import { isSubstackNote } from '../../../utils/substack';
 import { getPlatformName } from '@/shared/platforms';
 import { isSupportedPlatformUrl, validateAndDetectPlatform, isPinterestBoardUrl } from '../../../schemas/platforms';
 import { resolvePinterestUrl } from '../../../utils/pinterest';
@@ -794,8 +795,14 @@ export class PostCardRenderer extends Component {
     const isThreadsInlineArchive = post.platform === 'threads' && !!post.content.rawMarkdown && hasInlineImageMarkdown;
     const isXArticleWithInline = post.platform === 'x' && !!post.content.rawMarkdown;
     const isWebArticleWithInlineImages = post.platform === 'web' && !!post.content.rawMarkdown && hasInlineImageMarkdown;
+    // PRD §22.2: Substack Notes (vs articles) render their images through the
+    // media gallery/carousel (same as IG/TikTok multi-image), NOT the stacked
+    // RSS/article inline-image path. A single-image note renders a single image;
+    // a multi-image note renders the carousel. Substack articles/blogs are
+    // unaffected and keep the inline-article rendering below.
+    const isSubstackNotePost = post.platform === 'substack' && isSubstackNote(post.postType, post.url);
     const isBlogWithInlineImages =
-      (isRssBasedPlatform(post.platform) && post.platform !== 'podcast' && !hasAudioMedia && post.content.rawMarkdown)
+      (isRssBasedPlatform(post.platform) && post.platform !== 'podcast' && !hasAudioMedia && !isSubstackNotePost && post.content.rawMarkdown)
       || isThreadsInlineArchive
       || isXArticleWithInline
       || isWebArticleWithInlineImages;
@@ -1914,9 +1921,22 @@ export class PostCardRenderer extends Component {
    * Escape angle brackets to prevent HTML interpretation.
    * Social media text uses <book title> or <인수공통> literally,
    * but MarkdownRenderer treats them as HTML tags (e.g. <A ...> → anchor).
+   * Preserve leading Markdown blockquote markers so Substack Notes render
+   * quoted excerpts as quotes instead of literal "&gt;" text.
    */
   private escapeAngleBrackets(content: string): string {
-    return content.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return content
+      .replace(/</g, '&lt;')
+      .split('\n')
+      .map((line) => {
+        const blockquotePrefix = line.match(/^([ \t]{0,3}(?:>[ \t]?)+)/)?.[1] ?? '';
+        if (!blockquotePrefix) {
+          return line.replace(/>/g, '&gt;');
+        }
+
+        return blockquotePrefix + line.slice(blockquotePrefix.length).replace(/>/g, '&gt;');
+      })
+      .join('\n');
   }
 
   /**
@@ -2238,8 +2258,14 @@ export class PostCardRenderer extends Component {
       titleEl.setText(`📺 ${post.title}`);
     }
 
+    // PRD §22.2: Substack Notes render compactly like a social post (plain text
+    // + media carousel), NOT as an article. Exclude them from the RSS/article
+    // title + blog-content rendering paths below. Substack articles/blogs keep
+    // the article rendering.
+    const isSubstackNoteContent = post.platform === 'substack' && isSubstackNote(post.postType, post.url);
+
     // For RSS-based platforms and web articles: show article title at top of content area with larger, bolder styling
-    if ((isRssBasedPlatform(post.platform) || post.platform === 'web') && post.title) {
+    if ((isRssBasedPlatform(post.platform) || post.platform === 'web') && post.title && !isSubstackNoteContent) {
       const titleEl = contentContainer.createDiv({ cls: 'blog-article-title pcr-title-blog' });
       titleEl.setText(post.title);
     }
@@ -2265,8 +2291,11 @@ export class PostCardRenderer extends Component {
 
     // For RSS-based platforms, Threads inline archives, web articles, and X articles:
     // use rawMarkdown with inline images.
+    // PRD §22.2: Substack Notes are excluded — they render as compact social
+    // posts (plain text + media carousel handled separately), not articles.
     if ((isRssBasedPlatform(post.platform) || post.platform === 'threads' || post.platform === 'web' || (post.platform === 'x' && post.content.rawMarkdown))
-        && post.content.rawMarkdown) {
+        && post.content.rawMarkdown
+        && !isSubstackNoteContent) {
       await this.renderBlogContent(contentContainer, post);
       return;
     }

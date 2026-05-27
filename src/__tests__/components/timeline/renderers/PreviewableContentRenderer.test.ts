@@ -484,6 +484,46 @@ describe('PreviewableContentRenderer', () => {
     expect(passedMarkdown).toContain('2\\.');
   });
 
+  it('preserves leading blockquote markers while escaping literal angle brackets on the markdown path', async () => {
+    const renderSpy = vi.fn(async (
+      _app: unknown,
+      md: string,
+      el: HTMLElement,
+    ): Promise<void> => {
+      const div = document.createElement('div');
+      div.className = 'mocked-md';
+      div.textContent = md;
+      el.appendChild(div);
+    });
+    vi.doMock('obsidian', async () => {
+      const actual = await vi.importActual<Record<string, unknown>>('obsidian');
+      return { ...actual, MarkdownRenderer: { render: renderSpy } };
+    });
+
+    const { PreviewableContentRenderer: RendererCtor } = await import(
+      '@/components/timeline/renderers/PreviewableContentRenderer'
+    );
+    const renderer = new RendererCtor({
+      resolveMediaUrl: identityResolver,
+      app: {} as unknown as PreviewContext['app'],
+      component: {} as unknown as PreviewContext['component'],
+    });
+
+    await renderer.renderContent(
+      container,
+      basePost({
+        platform: 'substack',
+        content: { text: '> Quoted excerpt with A > B\n\n<인수공통> Sentinel' },
+      }),
+    );
+
+    expect(renderSpy).toHaveBeenCalledTimes(1);
+    const passedMarkdown = renderSpy.mock.calls[0]?.[1] as string;
+    expect(passedMarkdown).toContain('> Quoted excerpt with A &gt; B');
+    expect(passedMarkdown).toContain('&lt;인수공통&gt; Sentinel');
+    expect(passedMarkdown).not.toContain('&gt; Quoted excerpt');
+  });
+
   it('convertWikilinkImages runs on the MARKDOWN path: ![[file.webp]] is rewritten and resolveMediaUrl is invoked', async () => {
     // The wikilink → markdown image conversion only makes sense when
     // MarkdownRenderer will consume the output. On the plain-text fallback

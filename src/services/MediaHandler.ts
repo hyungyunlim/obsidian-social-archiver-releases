@@ -5,6 +5,7 @@ import { normalizePath, requestUrl } from 'obsidian';
 import type { WorkersAPIClient } from './WorkersAPIClient';
 import { ImageOptimizer } from './ImageOptimizer';
 import type { MediaExpiredResult } from './MediaPlaceholderGenerator';
+import { isHlsVideoUrl } from '@/utils/substack';
 
 /**
  * MediaHandler configuration
@@ -490,6 +491,17 @@ export class MediaHandler implements IService {
       // Check if this is a Naver video that needs special handling
       if (platform === 'naver' && media.type === 'video' && this.isNaverVideoApiUrl(media.url)) {
         return await this.downloadNaverVideo(media, postId, authorUsername, index);
+      }
+
+      // PRD §22.4: HLS video media (Substack note resolver `…/src?type=hls`, or
+      // `.m3u8`) cannot be binary-downloaded — a fetch returns a playlist
+      // manifest, not a seekable video. Skip the download so the streamable
+      // resolver link is retained (rendered as `[🎥 Video](resolver)` via
+      // MediaFormatter). The caller (`downloadMedia`) treats a thrown error as a
+      // non-fatal skip (item dropped, batch continues). The server R2-preserved
+      // MP4 (PRD §21) is the canonical preservation and arrives via sync.
+      if (media.type === 'video' && isHlsVideoUrl(media.url)) {
+        throw new Error('HLS video download skipped - streamable resolver link retained');
       }
 
       // Prefer original/preserved media URL.

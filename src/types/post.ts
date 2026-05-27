@@ -228,6 +228,17 @@ export interface PostData {
    * - 'profile': Profile-only card (compact profile info)
    */
   type?: DocumentType;
+  /**
+   * Content sub-type within a platform (PRD §22.1).
+   *
+   * Currently used to distinguish Substack Notes (`'note'`) from Substack
+   * articles/blog posts (`'article'`). Set server-side by the worker and
+   * persisted through D1/sync so all clients can render them differently.
+   * Additive and optional: undefined for other platforms / older archives.
+   * When absent, derive from the URL via `resolveSubstackPostType` in
+   * `@/utils/substack`.
+   */
+  postType?: 'note' | 'article';
   platform: Platform;
   id: string;
   url: string;
@@ -476,6 +487,7 @@ export interface PostData {
 // Use lazy() for recursive embeddedArchives field
 export const PostDataSchema: z.ZodType<PostData> = z.lazy(() => z.object({
   schemaVersion: z.literal('1.0.0').optional(),
+  postType: z.enum(['note', 'article']).nullish(), // PRD §22.1: Substack note vs article
   platform: platformEnum,
   id: z.string(),
   url: z.string(),

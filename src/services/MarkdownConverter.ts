@@ -11,6 +11,7 @@ import { FactCheckFormatter } from './markdown/formatters/FactCheckFormatter';
 import { FrontmatterGenerator } from './markdown/frontmatter/FrontmatterGenerator';
 import { MediaPlaceholderGenerator } from './MediaPlaceholderGenerator';
 import { isRssBasedPlatform } from '@/constants/rssPlatforms';
+import { isSubstackNote } from '@/utils/substack';
 import { getPlatformName } from '@/shared/platforms';
 import { encodePathForMarkdownLink } from '@/utils/url';
 import { toRelativeMediaPath } from '@/utils/path';
@@ -549,6 +550,15 @@ const DEFAULT_TEMPLATES: Record<Platform, string> = {
 {{/if}}
 {{/if}}
 
+{{#if comments}}
+
+---
+
+## 💬 Comments
+
+{{comments}}
+{{/if}}
+
 ---
 
 **Platform:** Substack{{#if title}} | **Publication:** {{title}}{{/if}} | **Author:** {{author.name}} | **Published:** {{metadata.timestamp}}{{#if metadata.likes}} | **Likes:** {{metadata.likes}}{{/if}}{{#if metadata.comments}} | **Replies:** {{metadata.comments}}{{/if}}{{#if metadata.shares}} | **Restacks:** {{metadata.shares}}{{/if}}
@@ -607,6 +617,15 @@ const DEFAULT_TEMPLATES: Record<Platform, string> = {
 {{/if}}
 {{/if}}
 
+{{#if comments}}
+
+---
+
+## 💬 Comments
+
+{{comments}}
+{{/if}}
+
 ---
 
 **Platform:** Tumblr | **Author:** [{{author.name}}]({{author.url}}) | **Published:** {{metadata.timestamp}}{{#if metadata.likes}} | **Likes:** {{metadata.likes}}{{/if}}{{#if metadata.shares}} | **Reblogs:** {{metadata.shares}}{{/if}}{{#if metadata.comments}} | **Comments:** {{metadata.comments}}{{/if}}
@@ -653,6 +672,15 @@ const DEFAULT_TEMPLATES: Record<Platform, string> = {
 ### Fact Checks
 {{ai.factCheck}}
 {{/if}}
+{{/if}}
+
+{{#if comments}}
+
+---
+
+## 💬 Comments
+
+{{comments}}
 {{/if}}
 
 ---
@@ -1994,7 +2022,18 @@ export class MarkdownConverter implements IService {
   ): Record<string, unknown> {
     const isWebArticle = postData.platform === 'web';
     const isThreadsInlineArchive = postData.platform === 'threads' && !!postData.content.markdown?.trim();
-    const rssMarkdownBody = isRssBasedPlatform(postData.platform)
+    // PRD §22.3: Substack Notes are NOT treated as RSS/blog articles for media
+    // handling. Their image media must localize via the {{media}} section (using
+    // downloaded local paths), matching other social platforms — instead of
+    // being preserved as remote inline-markdown images. Substack articles/blogs
+    // keep the RSS inline-image rendering.
+    const isSubstackNotePost = postData.platform === 'substack' && isSubstackNote(postData.postType, postData.url);
+    // RSS-based platforms EXCEPT Substack Notes (for inline-media + finalMedia logic).
+    const isBlogLikeRss = isRssBasedPlatform(postData.platform) && !isSubstackNotePost;
+    // Substack Notes use plain `content.text` (PRD §9), so they do not adopt the
+    // RSS rawMarkdown body — this also keeps any remote inline images out of the
+    // note body so the localized {{media}} section is the single image source.
+    const rssMarkdownBody = isBlogLikeRss
       ? postData.content.rawMarkdown?.trim() || postData.content.markdown?.trim() || undefined
       : undefined;
     const inlineMarkdownBody = (isWebArticle || isThreadsInlineArchive)
@@ -2091,7 +2130,7 @@ export class MarkdownConverter implements IService {
     // For RSS-based platforms and Threads inline archives: replace media
     // placeholders with actual embeds while preserving per-post ordering.
     let blogMediaUsedInline = false;
-    if (isRssBasedPlatform(postData.platform) && mediaResults && mediaResults.length > 0) {
+    if (isBlogLikeRss && mediaResults && mediaResults.length > 0) {
       // Replace IMAGE placeholders with Obsidian image embeds
       // Include surrounding newlines to ensure proper paragraph separation
       // Use findMediaResultBySourceIndex so partial failures don't misalign the lookup.
@@ -2138,7 +2177,7 @@ export class MarkdownConverter implements IService {
 
     // For RSS-based platforms, also check if text already contains inline markdown images
     // (e.g., Naver cafe posts already have ![Image](...) in text, not placeholders)
-    if (isRssBasedPlatform(postData.platform) && !blogMediaUsedInline) {
+    if (isBlogLikeRss && !blogMediaUsedInline) {
       // Check for markdown image syntax: ![alt](url) or ![](url)
       const hasInlineMarkdownImages = /!\[[^\]]*\]\([^)]+\)/.test(baseText);
       if (hasInlineMarkdownImages) {
@@ -2153,14 +2192,14 @@ export class MarkdownConverter implements IService {
     // For RSS-based platforms, web articles, and X Articles, preserve markdown headings and ordered lists
     // (they come from HTML/Draft.js conversion and are intentional)
     // For other platforms, escape headings and ordered lists to prevent rendering issues
-    const preserveMarkdown = isRssBasedPlatform(postData.platform) || isWebArticle || isXArticle || isThreadsInlineArchive;
+    const preserveMarkdown = isBlogLikeRss || isWebArticle || isXArticle || isThreadsInlineArchive;
     const sanitizedText = preserveMarkdown
       ? baseText
       : this.escapeOrderedListPatterns(this.escapeLeadingMarkdownHeadings(baseText));
 
     // For RSS-based platforms and web articles with inline images, don't show a
     // duplicate media section at the bottom of the note.
-    const finalMedia = ((isRssBasedPlatform(postData.platform) || isWebArticle || isThreadsInlineArchive) && blogMediaUsedInline)
+    const finalMedia = ((isBlogLikeRss || isWebArticle || isThreadsInlineArchive) && blogMediaUsedInline)
       ? ''
       : formattedMedia;
 

@@ -1023,9 +1023,23 @@ export class PreviewableContentRenderer {
     return content.replace(/^([-=]+)$/gm, '\\$1');
   }
 
-  /** Escape `<` `>` so MarkdownRenderer doesn't treat `<책 제목>` as HTML. */
+  /**
+   * Escape `<` `>` so MarkdownRenderer doesn't treat `<책 제목>` as HTML.
+   * Leading blockquote markers stay intact for Substack Note excerpts.
+   */
   private static escapeAngleBrackets(content: string): string {
-    return content.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return content
+      .replace(/</g, '&lt;')
+      .split('\n')
+      .map((line) => {
+        const blockquotePrefix = line.match(/^([ \t]{0,3}(?:>[ \t]?)+)/)?.[1] ?? '';
+        if (!blockquotePrefix) {
+          return line.replace(/>/g, '&gt;');
+        }
+
+        return blockquotePrefix + line.slice(blockquotePrefix.length).replace(/>/g, '&gt;');
+      })
+      .join('\n');
   }
 
   /**
