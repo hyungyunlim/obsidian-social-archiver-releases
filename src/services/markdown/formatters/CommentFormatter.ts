@@ -150,6 +150,14 @@ export class CommentFormatter {
       return `[@${normalizedHandle}](https://x.com/${normalizedHandle})`;
     }
 
+    if (platform === 'substack') {
+      // Link the commenter's display name to their profile
+      // (mapAuthor sets author.url = https://substack.com/@{handle}).
+      return comment.author.url
+        ? `[${comment.author.name}](${comment.author.url})`
+        : comment.author.name;
+    }
+
     if (comment.author.name === '[deleted]') {
       return '@[deleted]';
     }
