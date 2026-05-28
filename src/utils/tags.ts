@@ -101,6 +101,61 @@ export function mergeTagsCaseInsensitive(
 }
 
 /**
+ * Merge any number of tag arrays for display.
+ *
+ * First-seen casing and order are preserved, while duplicates are removed
+ * case-insensitively. Invalid/empty values are ignored.
+ */
+export function mergeTagListsCaseInsensitive(...tagLists: Array<readonly string[] | undefined>): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
+
+  for (const tagList of tagLists) {
+    if (!tagList) continue;
+
+    for (const rawTag of tagList) {
+      const tag = normalizeTagName(rawTag);
+      if (!tag) continue;
+
+      const lower = tag.toLowerCase();
+      if (seen.has(lower)) continue;
+
+      seen.add(lower);
+      result.push(tag);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Mirror archive tags into Obsidian's native `tags` field without replacing
+ * unrelated user tags.
+ *
+ * Previous archive tags are removed first so server replacement semantics do
+ * not leave stale mirrored tags behind. Other tags are preserved.
+ */
+export function mirrorArchiveTagsIntoObsidianTags(
+  currentTags: string[],
+  previousArchiveTags: string[],
+  nextArchiveTags: string[]
+): string[] {
+  const previousArchiveTagNames = new Set(
+    previousArchiveTags
+      .map(normalizeTagName)
+      .filter(Boolean)
+      .map(tag => tag.toLowerCase())
+  );
+
+  const preservedTags = currentTags.filter((tag) => {
+    const normalized = normalizeTagName(tag);
+    return normalized && !previousArchiveTagNames.has(normalized.toLowerCase());
+  });
+
+  return mergeTagListsCaseInsensitive(preservedTags, nextArchiveTags);
+}
+
+/**
  * Sanitize tag names for safe storage.
  * Trims whitespace, removes empty strings.
  *

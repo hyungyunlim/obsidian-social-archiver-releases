@@ -48,6 +48,7 @@ export interface YamlFrontmatter {
   shares?: number;
   views?: number;
   tags: string[];
+  archiveTags?: string[];
   ai_summary?: string;
   sentiment?: string;
   topics?: string[];

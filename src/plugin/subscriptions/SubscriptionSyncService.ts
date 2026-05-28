@@ -709,12 +709,20 @@ export class SubscriptionSyncService {
     file: TFile,
     pendingPost: PendingPost,
   ): Promise<SavePendingPostResult> {
-    const isLimited = await this.isLimitedArchiveFile(file);
-    if (!isLimited) {
-      return { status: 'existing', file, path: file.path, reason: 'not limited archive' };
+    let existingContent = '';
+    try {
+      existingContent = await this.app.vault.read(file);
+    } catch {
+      existingContent = '';
     }
 
-    if (!this.hasMeaningfulReplacementContent(pendingPost.post)) {
+    const isLimited = this.isLimitedArchiveContent(existingContent);
+    const hasRicherMedia = !isLimited && this.hasRicherMediaReplacement(existingContent, pendingPost.post);
+    if (!isLimited && !hasRicherMedia) {
+      return { status: 'existing', file, path: file.path, reason: 'not limited archive or media enrichment' };
+    }
+
+    if (isLimited && !this.hasMeaningfulReplacementContent(pendingPost.post)) {
       return { status: 'existing', file, path: file.path, reason: 'replacement content is limited or empty' };
     }
 
@@ -737,6 +745,52 @@ export class SubscriptionSyncService {
 
   private isLimitedArchiveContent(content: string): boolean {
     return /\[!warning\]\s*Limited archive/i.test(content);
+  }
+
+  private hasRicherMediaReplacement(existingContent: string, post: PostData): boolean {
+    const media = post.media ?? [];
+    if (media.length === 0) return false;
+    if (post.mediaPreservationStatus === 'pending' || post.mediaPreservationStatus === 'processing') {
+      return false;
+    }
+
+    const existingMediaCount = this.countRenderedMediaItems(existingContent);
+    if (media.length > existingMediaCount) {
+      return true;
+    }
+
+    return (
+      this.hasRemoteVideoFallback(existingContent, post.url) &&
+      media.some(item => item.type === 'video' && this.hasDownloadableMedia(item))
+    );
+  }
+
+  private countRenderedMediaItems(content: string): number {
+    const body = this.stripFrontmatter(content);
+    const imageEmbeds = body.match(/!\[[^\]]*\]\([^)]+\)/g) ?? [];
+    const videoLinks = body.match(/(?<!!)\[🎥 Video[^\]]*\]\([^)]+\)/g) ?? [];
+    return imageEmbeds.length + videoLinks.length;
+  }
+
+  private hasRemoteVideoFallback(content: string, postUrl: string): boolean {
+    const body = this.stripFrontmatter(content);
+    const videoLinks = body.matchAll(/(?<!!)\[🎥 Video[^\]]*\]\(([^)]+)\)/g);
+    for (const match of videoLinks) {
+      const target = match[1] ?? '';
+      if (target === postUrl || /^https?:\/\/(?:www\.)?instagram\.com\//i.test(target)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private hasDownloadableMedia(item: Media): boolean {
+    const candidates = [item.r2Url, item.cdnUrl, item.url, item.r2ThumbnailUrl, item.thumbnail, item.thumbnailUrl];
+    return candidates.some((value) => typeof value === 'string' && value.trim().length > 0 && !value.startsWith('localpath:'));
+  }
+
+  private stripFrontmatter(content: string): string {
+    return content.replace(/^---\n[\s\S]*?\n---\n?/, '');
   }
 
   private async findExistingArchiveFile(post: PostData): Promise<SavePendingPostResult | null> {

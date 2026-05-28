@@ -171,6 +171,53 @@ describe('RealtimeEventBridge — archive_tags_updated handling', () => {
 
     // archiveTags must be replaced with server tags
     expect(capturedFm.archiveTags).toEqual(['server-tag-1', 'server-tag-2']);
+    expect(capturedFm.tags).toEqual(['local-tag']);
+  });
+
+  it('mirrors server archive tags into native tags when enabled', async () => {
+    const file = makeFile('Social Archives/post.md');
+    const capturedFm: Record<string, unknown> = {
+      tags: ['local-tag', 'old-tag'],
+      archiveTags: ['old-tag'],
+    };
+
+    const app = makeApp({
+      processFrontMatterFn: (_file, updater) => { updater(capturedFm); return Promise.resolve(); },
+    });
+
+    const archiveLookupService = {
+      findBySourceArchiveId: vi.fn().mockReturnValue(file),
+      findByOriginalUrl: vi.fn().mockReturnValue([]),
+    };
+
+    const events = makeEvents();
+    const deps = makeDeps({
+      events: events as any,
+      app: app as any,
+      archiveLookupService: archiveLookupService as any,
+      settings: () => ({
+        enableMobileAnnotationSync: true,
+        syncClientId: 'my-client-id',
+        mirrorArchiveTagsToObsidianTags: true,
+      } as any),
+    });
+
+    const bridge = new RealtimeEventBridge(deps);
+    bridge.setup();
+
+    await events.trigger('ws:archive_tags_updated', {
+      type: 'archive_tags_updated',
+      data: {
+        archiveId: 'archive-abc',
+        tags: ['new-tag'],
+        updatedAt: '2026-01-01T00:00:00Z',
+        timestamp: Date.now(),
+        sourceClientId: 'other-client',
+      },
+    });
+
+    expect(capturedFm.archiveTags).toEqual(['new-tag']);
+    expect(capturedFm.tags).toEqual(['local-tag', 'new-tag']);
   });
 
   // ── Test 2: replacement semantics ──

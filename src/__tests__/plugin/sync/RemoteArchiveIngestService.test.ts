@@ -94,6 +94,84 @@ describe('RemoteArchiveIngestService', () => {
     expect(archiveLookupService.backfillFileIdentity).toHaveBeenCalledWith(file, archive.id);
   });
 
+  it('offers existing non-limited notes to the richer replacement path for media enrichment', async () => {
+    const archive = makeArchive({
+      platform: 'instagram',
+      originalUrl: 'https://www.instagram.com/p/CPOST/',
+      mediaPreservationStatus: 'completed',
+      media: [
+        { type: 'image', url: 'https://cdn.example.com/00.jpg' },
+        { type: 'image', url: 'https://cdn.example.com/01.jpg' },
+        { type: 'video', url: 'https://cdn.example.com/02.mp4' },
+      ],
+      mediaPreserved: [
+        {
+          originalUrl: 'https://cdn.example.com/02.mp4',
+          r2Url: 'https://api.example/media/02.mp4',
+          r2Key: 'archives/user/archive-1/media/2.mp4',
+          type: 'video',
+          size: 100,
+          contentType: 'video/mp4',
+          preservedAt: '2026-05-28T00:00:00.000Z',
+        },
+      ],
+    });
+    const file = makeFile('Social Archives/Instagram/post.md');
+    const getUserArchive = vi.fn().mockResolvedValue({ archive });
+    const replaceExistingLimitedArchive = vi.fn().mockResolvedValue({
+      status: 'updated',
+      file,
+      path: file.path,
+    });
+    const archiveLookupService = {
+      findBySourceArchiveId: vi.fn().mockReturnValue(file),
+      findByOriginalUrl: vi.fn().mockReturnValue([]),
+      backfillFileIdentity: vi.fn().mockResolvedValue(undefined),
+      indexSavedFile: vi.fn(),
+    };
+
+    const service = new RemoteArchiveIngestService({
+      apiClient: () => ({ getUserArchive }) as any,
+      settings: () => ({ archivePath: 'Social Archives' }),
+      hasRecentlyArchivedUrl: vi.fn().mockReturnValue(false),
+      archiveLookupService: archiveLookupService as any,
+      convertUserArchiveToPostData: vi.fn().mockReturnValue({
+        platform: 'instagram',
+        id: archive.postId,
+        url: archive.originalUrl,
+        author: { name: 'Yon' },
+        content: { text: 'Caption' },
+        mediaPreservationStatus: 'completed',
+        media: [
+          { type: 'image', url: 'https://cdn.example.com/00.jpg' },
+          { type: 'image', url: 'https://cdn.example.com/01.jpg' },
+          { type: 'video', url: 'https://cdn.example.com/02.mp4', r2Url: 'https://api.example/media/02.mp4' },
+        ],
+      }),
+      saveSubscriptionPost: vi.fn(),
+      saveSubscriptionPostDetailed: vi.fn(),
+      isLimitedArchiveFile: vi.fn().mockResolvedValue(false),
+      replaceExistingLimitedArchive,
+      refreshTimelineView: vi.fn(),
+    });
+
+    await expect(service.ingestArchiveById(archive.id, 'archive_complete')).resolves.toBe('created');
+
+    expect(getUserArchive).toHaveBeenCalledWith(archive.id);
+    expect(replaceExistingLimitedArchive).toHaveBeenCalledWith(
+      file,
+      expect.objectContaining({
+        post: expect.objectContaining({
+          mediaPreservationStatus: 'completed',
+          media: expect.arrayContaining([
+            expect.objectContaining({ r2Url: 'https://api.example/media/02.mp4' }),
+          ]),
+        }),
+      }),
+    );
+    expect(archiveLookupService.backfillFileIdentity).toHaveBeenCalledWith(file, archive.id);
+  });
+
   it('binds a recent same-url local note instead of treating it as materialized without an archive id', async () => {
     const archive = makeArchive();
     const file = makeFile('Social Archives/youtube/example.md');

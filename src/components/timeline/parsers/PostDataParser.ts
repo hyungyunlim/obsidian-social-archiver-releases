@@ -6,6 +6,7 @@ import { detectMediaType, isImageUrl, isVideoUrl, isAudioUrl } from '../../../ut
 import { PostIndexService, type PostIndexEntry } from '../../../services/PostIndexService';
 import type { Platform } from '@shared/platforms/types';
 import { parseTranscriptSections } from '../../../services/markdown/TranscriptSectionManager';
+import { mergeTagListsCaseInsensitive } from '../../../utils/tags';
 
 /**
  * Vault folder node with children (Obsidian internal structure)
@@ -20,6 +21,12 @@ interface VaultFolder extends TAbstractFile {
  * are accessible via string indexing. This type alias documents them explicitly.
  */
 type ExtendedFrontmatter = YamlFrontmatter;
+
+function readFrontmatterStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
+}
 
 /**
  * Media item used during internal parsing before dedup/resolve
@@ -466,6 +473,10 @@ export class PostDataParser {
       const authorAvatarRaw = frontmatter['authorAvatar'] as string | undefined;
       const authorAvatarIsExternal = typeof authorAvatarRaw === 'string' && authorAvatarRaw.startsWith('http');
 
+      const obsidianTags = readFrontmatterStringArray(frontmatter.tags);
+      const archiveTags = readFrontmatterStringArray(frontmatter.archiveTags);
+      const displayTags = mergeTagListsCaseInsensitive(obsidianTags, archiveTags);
+
       const postData: PostData = {
         platform: frontmatter.platform as Platform,
         id: file.basename,
@@ -474,7 +485,8 @@ export class PostDataParser {
         videoId: frontmatter.videoId, // YouTube video ID
         title, // YouTube video title (extracted from markdown header)
         filePath: file.path, // Store file path for opening
-        tags: Array.isArray(frontmatter.tags) ? frontmatter.tags : [],
+        tags: displayTags,
+        archiveTags,
         comment: frontmatter.comment, // User's personal note
         like: frontmatter.like, // User's personal like
         archive: frontmatter.archive, // Archive status
@@ -2083,7 +2095,10 @@ export class PostDataParser {
         authorHandle: (frontmatter['authorHandle'] as string | undefined) || (frontmatter['handle'] as string | undefined),
         title: frontmatter['title'] as string | undefined,
         url: isUserPost ? file.path : ((frontmatter['originalUrl'] as string | undefined) || ''),
-        tags: Array.isArray(frontmatter['tags']) ? frontmatter['tags'] as string[] : [],
+        tags: mergeTagListsCaseInsensitive(
+          readFrontmatterStringArray(frontmatter['tags']),
+          readFrontmatterStringArray(frontmatter['archiveTags'])
+        ),
         hashtags: (frontmatter['hashtags'] as string[] | undefined) || [],
         like: frontmatter['like'] === true,
         archive: frontmatter['archive'] === true,

@@ -924,14 +924,22 @@ export class ArchiveCompletionService {
       markdown.frontmatter.comment = pendingJob.metadata.notes;
     }
 
-    // Merge user-selected tags into frontmatter (archive-time tagging)
+    // Merge user-selected tags into archiveTags (server-sync tag source).
+    // Native Obsidian tags are only written when the mirror setting is enabled.
     if (pendingJob.metadata?.selectedTags && pendingJob.metadata.selectedTags.length > 0) {
       const cleanedTags = sanitizeTagNames(pendingJob.metadata.selectedTags);
       if (cleanedTags.length > 0) {
-        const existingTags = Array.isArray(markdown.frontmatter.tags)
-          ? markdown.frontmatter.tags
+        const existingArchiveTags = Array.isArray(markdown.frontmatter.archiveTags)
+          ? markdown.frontmatter.archiveTags
           : [];
-        markdown.frontmatter.tags = mergeTagsCaseInsensitive(existingTags, cleanedTags);
+        markdown.frontmatter.archiveTags = mergeTagsCaseInsensitive(existingArchiveTags, cleanedTags);
+
+        if (this.settings.mirrorArchiveTagsToObsidianTags) {
+          const existingTags = Array.isArray(markdown.frontmatter.tags)
+            ? markdown.frontmatter.tags
+            : [];
+          markdown.frontmatter.tags = mergeTagsCaseInsensitive(existingTags, cleanedTags);
+        }
       }
     }
 

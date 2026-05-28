@@ -204,6 +204,42 @@ Shared post text.
   });
 });
 
+describe('PostDataParser - archiveTags display tags', () => {
+  it('merges native tags and archiveTags for timeline display', async () => {
+    const markdown = `---
+platform: facebook
+author: Test Author
+authorUrl: https://facebook.com/test
+originalUrl: https://facebook.com/test/posts/1
+published: 2026-05-01
+archived: 2026-05-02
+tags:
+  - local
+  - Research
+archiveTags:
+  - research
+  - synced
+---
+
+Body text.
+`;
+    const vault = {
+      cachedRead: vi.fn().mockResolvedValue(markdown),
+    } as any;
+    const parser = new PostDataParser(vault);
+    const file = {
+      basename: 'archive-tags',
+      path: 'Social Archives/Facebook/archive-tags.md',
+      stat: { ctime: Date.now() },
+    } as any;
+
+    const post = await parser.parseFile(file);
+
+    expect(post?.tags).toEqual(['local', 'Research', 'synced']);
+    expect(post?.archiveTags).toEqual(['research', 'synced']);
+  });
+});
+
 describe('PostDataParser - Naver raw HTML fallback cleanup', () => {
   it('removes trailing Naver HTML document fallback from raw markdown previews', async () => {
     const markdown = `---

@@ -268,6 +268,84 @@ describe('SubscriptionSyncService', () => {
       expect(result.status).toBe('existing');
       expect(serviceMocks.vaultStorageSavePost).not.toHaveBeenCalled();
     });
+
+    it('updates a non-limited note when a later sync has more preserved media', async () => {
+      const deps = makeDeps();
+      vi.mocked(deps.app.vault.read).mockResolvedValue([
+        '---',
+        'platform: instagram',
+        'sourceArchiveId: archive-1',
+        '---',
+        '',
+        'Caption',
+        '',
+        '![image 1](localpath:media/CPOST/00-image.jpg)',
+        '',
+        '![image 2](localpath:media/CPOST/01-image.jpg)',
+        '',
+        '[🎥 Video](https://www.instagram.com/p/CPOST/)',
+      ].join('\n'));
+
+      const service = new SubscriptionSyncService(deps);
+      const file = { path: 'Social Archives/Instagram/2023/10/post.md' } as TFile;
+      const pendingPost = makePendingPost({
+        platform: 'instagram',
+        id: 'CPOST',
+        url: 'https://www.instagram.com/p/CPOST/',
+        author: { name: 'Yon', handle: '@hihihiyeon', url: 'https://www.instagram.com/hihihiyeon' },
+        content: { text: 'Caption' },
+        mediaPreservationStatus: 'completed',
+        media: [
+          { type: 'image', url: 'https://cdn.example.com/00.jpg', r2Url: 'https://api.example/media/00.jpg' },
+          { type: 'image', url: 'https://cdn.example.com/01.jpg', r2Url: 'https://api.example/media/01.jpg' },
+          { type: 'video', url: 'https://cdn.example.com/02.mp4', r2Url: 'https://api.example/media/02.mp4' },
+          { type: 'image', url: 'https://cdn.example.com/03.jpg', r2Url: 'https://api.example/media/03.jpg' },
+        ],
+        quotedPost: undefined,
+      });
+
+      const result = await service.replaceExistingLimitedArchiveFile(file, pendingPost);
+
+      expect(result.status).toBe('updated');
+      expect(serviceMocks.vaultStorageSavePost).toHaveBeenCalledWith(
+        expect.objectContaining({
+          platform: 'instagram',
+          media: expect.arrayContaining([
+            expect.objectContaining({ url: 'https://cdn.example.com/03.jpg' }),
+          ]),
+        }),
+        undefined,
+        file.path,
+        undefined,
+      );
+    });
+
+    it('does not replace a non-limited note while server media preservation is still processing', async () => {
+      const deps = makeDeps();
+      vi.mocked(deps.app.vault.read).mockResolvedValue([
+        '---',
+        'platform: instagram',
+        'sourceArchiveId: archive-1',
+        '---',
+        '',
+        '![image 1](localpath:media/CPOST/00-image.jpg)',
+      ].join('\n'));
+
+      const service = new SubscriptionSyncService(deps);
+      const file = { path: 'Social Archives/Instagram/2023/10/post.md' } as TFile;
+      const result = await service.replaceExistingLimitedArchiveFile(file, makePendingPost({
+        platform: 'instagram',
+        mediaPreservationStatus: 'processing',
+        media: [
+          { type: 'image', url: 'https://cdn.example.com/00.jpg' },
+          { type: 'image', url: 'https://cdn.example.com/01.jpg' },
+        ],
+        quotedPost: undefined,
+      }));
+
+      expect(result.status).toBe('existing');
+      expect(serviceMocks.vaultStorageSavePost).not.toHaveBeenCalled();
+    });
   });
 
   // --------------------------------------------------------------------------

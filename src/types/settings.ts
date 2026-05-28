@@ -229,6 +229,7 @@ export const FRONTMATTER_CORE_LOCKED_FIELDS = [
   'archived',
   'lastModified',
   'tags',
+  'archiveTags',
 ] as const;
 
 const FRONTMATTER_CORE_LOCKED_FIELD_SET = new Set<string>(FRONTMATTER_CORE_LOCKED_FIELDS);
@@ -250,6 +251,7 @@ export const DEFAULT_FRONTMATTER_PROPERTY_ORDER: string[] = [
   'lastModified',
   'archive',
   'tags',
+  'archiveTags',
   'originalUrl',
   'title',
   'hasTranscript',
@@ -524,6 +526,7 @@ export interface SocialArchiverSettings {
 
   // Tag Management
   tagDefinitions: TagDefinition[]; // User-defined tag definitions (name, color, sortOrder)
+  mirrorArchiveTagsToObsidianTags: boolean; // Also write Social Archiver archiveTags into Obsidian's native tags field
 
   // Sharing Settings
   shareMode: ShareMode; // 'full' or 'preview' mode for shared posts
@@ -704,6 +707,7 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
 
   // Tag Management
   tagDefinitions: [], // No tags by default
+  mirrorArchiveTagsToObsidianTags: false, // Keep server-synced archive tags separate by default
 
   // Sharing Settings
   shareMode: 'preview', // Default to preview mode for copyright safety
@@ -1118,6 +1122,10 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
   } else if (migrated.enableMobileAnnotationSync === undefined) {
     // Key present but value is undefined (edge case) — default ON
     migrated.enableMobileAnnotationSync = true;
+  }
+
+  if (migrated.mirrorArchiveTagsToObsidianTags === undefined) {
+    migrated.mirrorArchiveTagsToObsidianTags = false;
   }
 
   // Initialize archive library sync settings if missing (migration)

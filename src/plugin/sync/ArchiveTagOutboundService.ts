@@ -18,7 +18,7 @@ import type { WorkersAPIClient, TagUpsertInput, ArchiveTagMappingInput } from '.
 import type { ArchiveLookupService } from '../../services/ArchiveLookupService';
 import type { TagStore } from '../../services/TagStore';
 import type { SocialArchiverSettings } from '../../types/settings';
-import { normalizeTagName } from '../../utils/tags';
+import { mirrorArchiveTagsIntoObsidianTags, normalizeTagName } from '../../utils/tags';
 
 // ============================================================================
 // Constants
@@ -301,9 +301,34 @@ export class ArchiveTagOutboundService {
     // 4. Suppress the resulting inbound WS echo
     this.addSuppression(archiveId);
 
+    if (settings.mirrorArchiveTagsToObsidianTags) {
+      await this.mirrorArchiveTagsToObsidianTags(archiveId, previousTags, currentTags);
+    }
+
     console.debug(`${LOG_PREFIX} Sync complete for ${archiveId}`, {
       added: added.length,
       removed: removed.length,
+    });
+  }
+
+  private async mirrorArchiveTagsToObsidianTags(
+    archiveId: string,
+    previousArchiveTags: string[],
+    nextArchiveTags: string[],
+  ): Promise<void> {
+    const file = this.archiveLookup.findBySourceArchiveId(archiveId);
+    if (!file) return;
+
+    await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+      const currentTags = Array.isArray(fm.tags)
+        ? (fm.tags as unknown[]).filter((t): t is string => typeof t === 'string')
+        : [];
+
+      fm.tags = mirrorArchiveTagsIntoObsidianTags(
+        currentTags,
+        previousArchiveTags,
+        nextArchiveTags,
+      );
     });
   }
 

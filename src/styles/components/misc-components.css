@@ -2249,32 +2249,6 @@ body.is-mobile .tc-selection-pill {
   border-top: 1px solid var(--background-modifier-border);
 }
 
-/* Support section: control area vertical centering */
-.st-sup-control {
-  align-self: center;
-}
-
-/* Support section: Buy Me a Coffee CTA link */
-.st-sup-cta-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  text-decoration: none;
-  border-radius: 10px;
-  outline-offset: 2px;
-  height: var(--input-height);
-}
-
-/* Support section: Buy Me a Coffee image inside CTA link */
-.st-sup-cta-img {
-  height: 100%;
-  width: auto;
-  display: block;
-  border-radius: 10px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
-}
-
 /* ========================================
  * LibrarySyncBanner (lsb-)
  * ======================================== */

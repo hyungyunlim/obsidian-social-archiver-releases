@@ -1,7 +1,7 @@
 import { TFile, TFolder, type App } from 'obsidian';
 import type { TagDefinition, TagWithCount } from '@/types/tag';
 import { TAG_COLORS } from '@/types/tag';
-import { normalizeTagName, validateTagName } from '@/utils/tags';
+import { mergeTagListsCaseInsensitive, normalizeTagName, validateTagName } from '@/utils/tags';
 import type SocialArchiverPlugin from '@/main';
 import type { WorkersAPIClient } from './WorkersAPIClient';
 
@@ -135,10 +135,24 @@ export class TagStore {
     if (!file || !(file instanceof TFile)) return [];
 
     const cache = this.app.metadataCache.getFileCache(file);
-    const rawTags: unknown = cache?.frontmatter?.tags;
-    if (!Array.isArray(rawTags)) return [];
+    return this.readStringArray(cache?.frontmatter?.tags);
+  }
 
-    return rawTags.filter((t: unknown): t is string => typeof t === 'string');
+  /** Get server-synced Social Archiver tags for a post from `archiveTags`. */
+  getArchiveTagsForPost(filePath: string): string[] {
+    const file = this.app.vault.getAbstractFileByPath(filePath);
+    if (!file || !(file instanceof TFile)) return [];
+
+    const cache = this.app.metadataCache.getFileCache(file);
+    return this.readStringArray(cache?.frontmatter?.archiveTags);
+  }
+
+  /** Get timeline-display tags from both native Obsidian tags and archiveTags. */
+  getDisplayTagsForPost(filePath: string): string[] {
+    return mergeTagListsCaseInsensitive(
+      this.getTagsForPost(filePath),
+      this.getArchiveTagsForPost(filePath)
+    );
   }
 
   /** Add a tag to a post's YAML frontmatter */
@@ -172,8 +186,62 @@ export class TagStore {
 
     await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
       if (!Array.isArray(frontmatter.tags)) return;
-      const lower = tagName.toLowerCase();
-      frontmatter.tags = frontmatter.tags.filter((t: string) => t.toLowerCase() !== lower);
+      frontmatter.tags = this.removeTagName(this.readStringArray(frontmatter.tags), tagName);
+    });
+  }
+
+  /** Add a Social Archiver archive tag to a post. Mirrors to `tags` when enabled. */
+  async addArchiveTagToPost(filePath: string, tagName: string): Promise<void> {
+    const validationError = validateTagName(tagName);
+    if (validationError) {
+      throw new Error(validationError);
+    }
+    const normalizedTagName = normalizeTagName(tagName);
+
+    const file = this.app.vault.getAbstractFileByPath(filePath);
+    if (!file || !(file instanceof TFile)) return;
+
+    await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
+      frontmatter.archiveTags = mergeTagListsCaseInsensitive(
+        this.readStringArray(frontmatter.archiveTags),
+        [normalizedTagName]
+      );
+
+      if (this.plugin.settings.mirrorArchiveTagsToObsidianTags) {
+        frontmatter.tags = mergeTagListsCaseInsensitive(
+          this.readStringArray(frontmatter.tags),
+          [normalizedTagName]
+        );
+      }
+    });
+  }
+
+  /** Remove a Social Archiver archive tag from `archiveTags`. */
+  async removeArchiveTagFromPost(filePath: string, tagName: string): Promise<void> {
+    const file = this.app.vault.getAbstractFileByPath(filePath);
+    if (!file || !(file instanceof TFile)) return;
+
+    await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
+      frontmatter.archiveTags = this.removeTagName(this.readStringArray(frontmatter.archiveTags), tagName);
+
+      if (this.plugin.settings.mirrorArchiveTagsToObsidianTags) {
+        frontmatter.tags = this.removeTagName(this.readStringArray(frontmatter.tags), tagName);
+      }
+    });
+  }
+
+  /** Remove a displayed tag from both possible storage fields. */
+  async removeDisplayTagFromPost(filePath: string, tagName: string): Promise<void> {
+    const file = this.app.vault.getAbstractFileByPath(filePath);
+    if (!file || !(file instanceof TFile)) return;
+
+    await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
+      if (Array.isArray(frontmatter.tags)) {
+        frontmatter.tags = this.removeTagName(this.readStringArray(frontmatter.tags), tagName);
+      }
+      if (Array.isArray(frontmatter.archiveTags)) {
+        frontmatter.archiveTags = this.removeTagName(this.readStringArray(frontmatter.archiveTags), tagName);
+      }
     });
   }
 
@@ -190,6 +258,49 @@ export class TagStore {
       await this.addTagToPost(filePath, tagName);
       return true; // added
     }
+  }
+
+  /** Toggle a timeline-display tag. New assignments use archiveTags. */
+  async toggleDisplayTagOnPost(filePath: string, tagName: string): Promise<boolean> {
+    const currentTags = this.getDisplayTagsForPost(filePath);
+    const lower = tagName.toLowerCase();
+    const exists = currentTags.some(t => t.toLowerCase() === lower);
+
+    if (exists) {
+      await this.removeDisplayTagFromPost(filePath, tagName);
+      return false;
+    }
+
+    await this.addArchiveTagToPost(filePath, tagName);
+    return true;
+  }
+
+  /** Backfill existing archiveTags into native Obsidian tags for users who opt in. */
+  async mirrorArchiveTagsToObsidianTagsForAllPosts(): Promise<number> {
+    const archivePath = this.plugin.settings.archivePath || 'Social Archives';
+    const folder = this.app.vault.getAbstractFileByPath(archivePath);
+    if (!folder || !(folder instanceof TFolder)) return 0;
+
+    const files = this.getMarkdownFiles(folder);
+    let count = 0;
+
+    for (const file of files) {
+      const cache = this.app.metadataCache.getFileCache(file);
+      if (cache?.frontmatter?.type === 'social-archiver-author') continue;
+
+      const archiveTags = this.readStringArray(cache?.frontmatter?.archiveTags);
+      if (archiveTags.length === 0) continue;
+
+      await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
+        frontmatter.tags = mergeTagListsCaseInsensitive(
+          this.readStringArray(frontmatter.tags),
+          this.readStringArray(frontmatter.archiveTags)
+        );
+      });
+      count++;
+    }
+
+    return count;
   }
 
   /**
@@ -211,15 +322,14 @@ export class TagStore {
         const cache = this.app.metadataCache.getFileCache(file);
         // Skip author note files
         if (cache?.frontmatter?.type === 'social-archiver-author') continue;
-        const rawTagsValue: unknown = cache?.frontmatter?.tags;
-        const tags = Array.isArray(rawTagsValue) ? rawTagsValue : [];
-        if (Array.isArray(tags)) {
-          for (const tag of tags) {
-            if (typeof tag !== 'string') continue;
-            const lower = tag.toLowerCase();
-            if (!definedLower.has(lower) && !discovered.has(lower)) {
-              discovered.set(lower, tag);
-            }
+        const tags = mergeTagListsCaseInsensitive(
+          this.readStringArray(cache?.frontmatter?.tags),
+          this.readStringArray(cache?.frontmatter?.archiveTags)
+        );
+        for (const tag of tags) {
+          const lower = tag.toLowerCase();
+          if (!definedLower.has(lower) && !discovered.has(lower)) {
+            discovered.set(lower, tag);
           }
         }
       }
@@ -255,14 +365,19 @@ export class TagStore {
       const cache = this.app.metadataCache.getFileCache(file);
       // Skip author note files
       if (cache?.frontmatter?.type === 'social-archiver-author') continue;
-      const rawTagsValue: unknown = cache?.frontmatter?.tags;
-        const tags = Array.isArray(rawTagsValue) ? rawTagsValue : [];
-      if (!Array.isArray(tags)) continue;
+      const tags = mergeTagListsCaseInsensitive(
+        this.readStringArray(cache?.frontmatter?.tags),
+        this.readStringArray(cache?.frontmatter?.archiveTags)
+      );
       if (!tags.some((t: string) => typeof t === 'string' && t.toLowerCase() === lower)) continue;
 
       await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
-        if (!Array.isArray(frontmatter.tags)) return;
-        frontmatter.tags = frontmatter.tags.filter((t: string) => t.toLowerCase() !== lower);
+        if (Array.isArray(frontmatter.tags)) {
+          frontmatter.tags = this.removeTagName(this.readStringArray(frontmatter.tags), tagName);
+        }
+        if (Array.isArray(frontmatter.archiveTags)) {
+          frontmatter.archiveTags = this.removeTagName(this.readStringArray(frontmatter.archiveTags), tagName);
+        }
       });
       count++;
     }
@@ -457,16 +572,19 @@ export class TagStore {
       const cache = this.app.metadataCache.getFileCache(file);
       // Skip author note files
       if (cache?.frontmatter?.type === 'social-archiver-author') continue;
-      const rawTagsValue: unknown = cache?.frontmatter?.tags;
-        const tags = Array.isArray(rawTagsValue) ? rawTagsValue : [];
-      if (!Array.isArray(tags)) continue;
+      const tags = mergeTagListsCaseInsensitive(
+        this.readStringArray(cache?.frontmatter?.tags),
+        this.readStringArray(cache?.frontmatter?.archiveTags)
+      );
       if (!tags.some((t: string) => t.toLowerCase() === oldLower)) continue;
 
       await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
-        if (!Array.isArray(frontmatter.tags)) return;
-        frontmatter.tags = frontmatter.tags.map((t: string) =>
-          t.toLowerCase() === oldLower ? newName : t
-        );
+        if (Array.isArray(frontmatter.tags)) {
+          frontmatter.tags = this.renameTagName(this.readStringArray(frontmatter.tags), oldName, newName);
+        }
+        if (Array.isArray(frontmatter.archiveTags)) {
+          frontmatter.archiveTags = this.renameTagName(this.readStringArray(frontmatter.archiveTags), oldName, newName);
+        }
       });
     }
   }
@@ -484,14 +602,19 @@ export class TagStore {
       const cache = this.app.metadataCache.getFileCache(file);
       // Skip author note files
       if (cache?.frontmatter?.type === 'social-archiver-author') continue;
-      const rawTagsValue: unknown = cache?.frontmatter?.tags;
-        const tags = Array.isArray(rawTagsValue) ? rawTagsValue : [];
-      if (!Array.isArray(tags)) continue;
+      const tags = mergeTagListsCaseInsensitive(
+        this.readStringArray(cache?.frontmatter?.tags),
+        this.readStringArray(cache?.frontmatter?.archiveTags)
+      );
       if (!tags.some((t: string) => t.toLowerCase() === lower)) continue;
 
       await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
-        if (!Array.isArray(frontmatter.tags)) return;
-        frontmatter.tags = frontmatter.tags.filter((t: string) => t.toLowerCase() !== lower);
+        if (Array.isArray(frontmatter.tags)) {
+          frontmatter.tags = this.removeTagName(this.readStringArray(frontmatter.tags), tagName);
+        }
+        if (Array.isArray(frontmatter.archiveTags)) {
+          frontmatter.archiveTags = this.removeTagName(this.readStringArray(frontmatter.archiveTags), tagName);
+        }
       });
     }
   }
@@ -518,20 +641,37 @@ export class TagStore {
         const cache = this.app.metadataCache.getFileCache(child);
         // Skip author note files
         if (cache?.frontmatter?.type === 'social-archiver-author') continue;
-        const rawTagsValue: unknown = cache?.frontmatter?.tags;
-        const tags = Array.isArray(rawTagsValue) ? rawTagsValue : [];
-        if (Array.isArray(tags)) {
-          for (const tag of tags) {
-            if (typeof tag !== 'string') continue;
-            const lower = tag.toLowerCase();
-            countMap.set(lower, (countMap.get(lower) || 0) + 1);
-            // Keep first-seen casing for undefined tags
-            if (!originalNames.has(lower)) {
-              originalNames.set(lower, tag);
-            }
+        const tags = mergeTagListsCaseInsensitive(
+          this.readStringArray(cache?.frontmatter?.tags),
+          this.readStringArray(cache?.frontmatter?.archiveTags)
+        );
+        for (const tag of tags) {
+          const lower = tag.toLowerCase();
+          countMap.set(lower, (countMap.get(lower) || 0) + 1);
+          // Keep first-seen casing for undefined tags
+          if (!originalNames.has(lower)) {
+            originalNames.set(lower, tag);
           }
         }
       }
     }
+  }
+
+  private readStringArray(value: unknown): string[] {
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === 'string')
+      : [];
+  }
+
+  private removeTagName(tags: string[], tagName: string): string[] {
+    const lower = normalizeTagName(tagName).toLowerCase();
+    return tags.filter((tag) => normalizeTagName(tag).toLowerCase() !== lower);
+  }
+
+  private renameTagName(tags: string[], oldName: string, newName: string): string[] {
+    const oldLower = normalizeTagName(oldName).toLowerCase();
+    return tags.map((tag) =>
+      normalizeTagName(tag).toLowerCase() === oldLower ? normalizeTagName(newName) : tag
+    );
   }
 }

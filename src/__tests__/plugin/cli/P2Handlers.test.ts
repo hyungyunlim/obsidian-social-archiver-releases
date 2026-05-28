@@ -111,9 +111,13 @@ function makePlugin(opts: {
       getAllDiscoveredTags: () => tagDefs,
       getTagsWithCounts: () => tagDefs,
       getTagsForPost: () => [] as string[],
+      getDisplayTagsForPost: () => [] as string[],
       addTagToPost: vi.fn(async () => undefined),
+      addArchiveTagToPost: vi.fn(async () => undefined),
       removeTagFromPost: vi.fn(async () => undefined),
+      removeDisplayTagFromPost: vi.fn(async () => undefined),
       toggleTagOnPost: vi.fn(async () => true),
+      toggleDisplayTagOnPost: vi.fn(async () => true),
       createTag: vi.fn(async (name: string) => ({
         id: name,
         name,

@@ -510,7 +510,7 @@ export class TagModal extends Modal {
         const nextLower = updatedTag.name.toLowerCase();
 
         // Keep post-mode UI stable while metadataCache catches up after bulk rename.
-        const currentTags = this.tagStore.getTagsForPost(this.filePath);
+        const currentTags = this.tagStore.getDisplayTagsForPost(this.filePath);
         if (currentTags.some(t => t.toLowerCase() === prevLower)) {
           this.toggledOffTags.add(prevLower);
           this.toggledOnTags.add(nextLower);
@@ -635,7 +635,7 @@ export class TagModal extends Modal {
 
     // Get ALL tags, excluding those deleted this session
     const allTags = this.getFilteredTags();
-    const postTags = this.filePath ? this.tagStore.getTagsForPost(this.filePath) : [];
+    const postTags = this.filePath ? this.tagStore.getDisplayTagsForPost(this.filePath) : [];
     // Apply optimistic toggles over stale cache
     const postTagsLower = new Set(
       postTags.map(t => t.toLowerCase()).filter(t => !this.toggledOffTags.has(t))
@@ -870,7 +870,7 @@ export class TagModal extends Modal {
         // Register UI modify to prevent timeline refresh from vault watcher
         if (this.onUIModify && this.filePath) this.onUIModify(this.filePath);
         // Background: actual YAML update
-        this.tagStore.toggleTagOnPost(this.filePath ?? '', tag.name).catch(() => {
+        this.tagStore.toggleDisplayTagOnPost(this.filePath ?? '', tag.name).catch(() => {
           // Revert on failure
           if (isApplied) {
             this.toggledOffTags.delete(lower);
@@ -927,7 +927,7 @@ export class TagModal extends Modal {
             this.toggledOnTags.add(tag.name.toLowerCase());
             // Register UI modify to prevent timeline refresh from vault watcher
             if (this.onUIModify) this.onUIModify(this.filePath);
-            await this.tagStore.addTagToPost(this.filePath, tag.name);
+            await this.tagStore.addArchiveTagToPost(this.filePath, tag.name);
           }
         } catch (err) {
           new Notice(`Failed to create tag: ${err instanceof Error ? err.message : 'Unknown error'}`);

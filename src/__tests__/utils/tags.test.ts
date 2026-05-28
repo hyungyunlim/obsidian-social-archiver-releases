@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { mergeTagsCaseInsensitive, normalizeTagName, sanitizeTagNames, validateTagName } from '@/utils/tags';
+import {
+  mergeTagListsCaseInsensitive,
+  mergeTagsCaseInsensitive,
+  mirrorArchiveTagsIntoObsidianTags,
+  normalizeTagName,
+  sanitizeTagNames,
+  validateTagName,
+} from '@/utils/tags';
 
 describe('mergeTagsCaseInsensitive', () => {
   it('merges non-overlapping tags', () => {
@@ -101,6 +108,42 @@ describe('normalizeTagName', () => {
   it('returns empty string for empty input', () => {
     expect(normalizeTagName('')).toBe('');
     expect(normalizeTagName('   ')).toBe('');
+  });
+});
+
+describe('mergeTagListsCaseInsensitive', () => {
+  it('merges native tags and archive tags for display', () => {
+    expect(mergeTagListsCaseInsensitive(['local', 'Research'], ['research', 'AI'])).toEqual([
+      'local',
+      'Research',
+      'AI',
+    ]);
+  });
+
+  it('ignores undefined tag lists', () => {
+    expect(mergeTagListsCaseInsensitive(undefined, ['archive'])).toEqual(['archive']);
+  });
+});
+
+describe('mirrorArchiveTagsIntoObsidianTags', () => {
+  it('replaces previous mirrored archive tags and preserves unrelated tags', () => {
+    expect(
+      mirrorArchiveTagsIntoObsidianTags(
+        ['local', 'old-archive', 'keep'],
+        ['old-archive'],
+        ['new-archive']
+      )
+    ).toEqual(['local', 'keep', 'new-archive']);
+  });
+
+  it('deduplicates incoming archive tags against existing native tags', () => {
+    expect(
+      mirrorArchiveTagsIntoObsidianTags(
+        ['Local', 'Research'],
+        [],
+        ['research', 'AI']
+      )
+    ).toEqual(['Local', 'Research', 'AI']);
   });
 });
 

@@ -215,6 +215,15 @@ export class FrontmatterGenerator {
       frontmatter.originalUrl = postData.url;
     }
 
+    const seededArchiveTags = Array.isArray(postData.archiveTags)
+      ? postData.archiveTags
+          .map((t) => (typeof t === 'string' ? t.trim() : ''))
+          .filter((t) => t.length > 0)
+      : [];
+    if (seededArchiveTags.length > 0) {
+      frontmatter.archiveTags = seededArchiveTags;
+    }
+
     // Stable server-side identifier for dedup and annotation sync
     if (postData.sourceArchiveId) {
       frontmatter.sourceArchiveId = postData.sourceArchiveId;

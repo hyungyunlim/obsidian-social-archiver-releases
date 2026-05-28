@@ -230,10 +230,6 @@ You can now archive general web pages and articles (blogs, docs, newsletters, et
 
 - Configure Obsidian filename format in Settings using tokens
 - Improved filename sanitization, duplicate-name handling, and settings UX
-
-## Support
-
-- Added a Support section in Settings with a Buy Me a Coffee link
 `,
     isImportant: true,
   },

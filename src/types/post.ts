@@ -267,7 +267,8 @@ export interface PostData {
   title?: string;           // YouTube video title
   thumbnail?: string;       // YouTube video thumbnail URL
   filePath?: string;        // File path in vault (for Timeline View)
-  tags?: string[];           // User-defined tags from YAML frontmatter
+  tags?: string[];           // Timeline-display tags from YAML `tags` + `archiveTags`
+  archiveTags?: string[];    // Server-synced Social Archiver tags from YAML `archiveTags`
   comment?: string;         // User's personal note/comment
   like?: boolean;           // User's personal like (for sorting/filtering)
   archive?: boolean;        // Whether post is archived (hidden by default)
@@ -528,6 +529,8 @@ export const PostDataSchema: z.ZodType<PostData> = z.lazy(() => z.object({
     altText: z.string().nullish(),
     alt: z.string().nullish()
   })),
+  tags: z.array(z.string()).nullish(),
+  archiveTags: z.array(z.string()).nullish(),
   metadata: z.object({
     likes: z.number().nullish(),
     comments: z.number().nullish(),

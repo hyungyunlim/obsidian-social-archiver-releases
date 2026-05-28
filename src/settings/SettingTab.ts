@@ -42,7 +42,6 @@ import {
 import type { Platform as SocialPlatform } from '../shared/platforms/types';
 import { getPlatformDefinition } from '../shared/platforms/definitions';
 
-const BUY_ME_A_COFFEE_URL = 'https://buymeacoffee.com/junlim';
 const PERSONAL_GITHUB_URL = 'https://github.com/hyungyunlim';
 const RELEASE_NOTES_URL = 'https://social-archive.org/release-notes?platform=obsidian&utm_source=obsidian-plugin&utm_medium=settings';
 
@@ -986,31 +985,6 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName('Support').setHeading()
       .settingEl.addClass('sa-settings-section-header');
 
-    const supportSetting = new Setting(containerEl)
-      .setName('Support development')
-      .setDesc('Feel free to buy me a coffee ☕ if you like this product. Optional and opens in browser.');
-
-    supportSetting.controlEl.empty();
-    supportSetting.controlEl.addClass('st-sup-control');
-
-    const supportCtaLink = supportSetting.controlEl.createEl('a', {
-      href: BUY_ME_A_COFFEE_URL,
-      attr: {
-        target: '_blank',
-        rel: 'noopener noreferrer',
-        'aria-label': 'Buy Me a Coffee (opens in browser)',
-      },
-    });
-    supportCtaLink.addClass('st-sup-cta-link');
-
-    const supportCtaImg = supportCtaLink.createEl('img', {
-      attr: {
-        src: 'https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png',
-        alt: 'Buy Me a Coffee',
-      },
-    });
-    supportCtaImg.addClass('st-sup-cta-img');
-
     new Setting(containerEl)
       .setName('About the creator')
       .setDesc('Hey, I’m Hyungyun Jun Lim. I’m a startup founder and builder, and I build Social Archiver as a solo side project. I created it for people like me who want local archives because posts get deleted, platforms change, and content disappears. Feel free to reach out on GitHub for feedback or business inquiries.')
@@ -1670,7 +1644,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     renderMixedPropertyRows();
 
     const coreLockedNote = bodyContainer.createEl('div', {
-      text: 'Core keys cannot be removed or overridden: platform, author, authorUrl, published, archived, lastModified, tags.',
+      text: 'Core keys cannot be removed or overridden: platform, author, authorUrl, published, archived, lastModified, tags, archiveTags.',
     });
     coreLockedNote.addClass('sa-settings-desc-small');
     coreLockedNote.setCssProps({ '--st-margin': '4px 0 12px 0' });
@@ -1706,6 +1680,21 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             this.markDirty();
           });
       });
+
+    new Setting(bodyContainer)
+      .setName('Mirror archive tags to Obsidian tags')
+      .setDesc('Also write Social Archiver archive tags into the native frontmatter tags field. Existing Obsidian tags are preserved.')
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.mirrorArchiveTagsToObsidianTags)
+        .onChange(async (value) => {
+          this.plugin.settings.mirrorArchiveTagsToObsidianTags = value;
+          await this.plugin.saveSettings();
+
+          if (value) {
+            const count = await this.plugin.tagStore?.mirrorArchiveTagsToObsidianTagsForAllPosts();
+            new Notice(`Mirrored archive tags to Obsidian tags in ${count ?? 0} note${count === 1 ? '' : 's'}.`);
+          }
+        }));
 
     new Setting(bodyContainer)
       .setName('Reset frontmatter settings')

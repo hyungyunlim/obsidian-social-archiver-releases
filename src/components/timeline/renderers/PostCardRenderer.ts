@@ -829,9 +829,11 @@ export class PostCardRenderer extends Component {
     }
 
     // Show transcription intent banner for notes with local video attachments.
-    // For YouTube/TikTok embeds, render it inside renderArchiveSuggestions so it appears
+    // For YouTube/TikTok URL posts, render it inside renderArchiveSuggestions so it appears
     // where the download banner was shown.
-    if (!isEmbedded && post.platform !== 'podcast' && post.platform !== 'youtube' && !(post.platform === 'tiktok' && !hasRenderableTikTokVideo)) {
+    const handlesTranscriptionInArchiveSuggestions =
+      post.platform === 'youtube' || (post.platform === 'tiktok' && !!post.url);
+    if (!isEmbedded && post.platform !== 'podcast' && !handlesTranscriptionInArchiveSuggestions) {
       await this.renderVideoTranscriptionSuggestion(contentArea, post, rootElement);
     }
 
@@ -3347,7 +3349,7 @@ export class PostCardRenderer extends Component {
         // Register UI modify to prevent timeline refresh from vault watcher
         if (this.onUIModifyCallback) this.onUIModifyCallback(filePath);
         // Background: YAML update, then refresh tag chip bar counts
-        tagStore.removeTagFromPost(filePath, tagName).then(() => {
+        tagStore.removeDisplayTagFromPost(filePath, tagName).then(() => {
           if (this.onTagsChangedCallback) this.onTagsChangedCallback();
         }).catch(() => {});
       });
@@ -3396,7 +3398,7 @@ export class PostCardRenderer extends Component {
     if (!tagStore) return;
 
     // Re-read tags from frontmatter
-    post.tags = tagStore.getTagsForPost(filePath);
+    post.tags = tagStore.getDisplayTagsForPost(filePath);
 
     // Always anchor chips within content area (above interaction/actions bar)
     const contentArea = rootElement.querySelector<HTMLElement>('.post-content-area');
@@ -3904,7 +3906,7 @@ export class PostCardRenderer extends Component {
               .onClick(() => {
                 void import('../modals/TagModal').then(({ TagModal }) => {
                   const modal = new TagModal(this.plugin.app, tagStore, filePath, () => {
-                    post.tags = tagStore.getTagsForPost(filePath);
+                    post.tags = tagStore.getDisplayTagsForPost(filePath);
                     // Refresh tag chips
                     const chipContainer = rootElement.querySelector('.post-tag-chips');
                     if (chipContainer) {
@@ -4108,7 +4110,7 @@ export class PostCardRenderer extends Component {
       void import('../modals/TagModal').then(({ TagModal }) => {
         const modal = new TagModal(this.plugin.app, tagStore, filePath, () => {
           // Update post tags in-memory
-          post.tags = tagStore.getTagsForPost(filePath);
+          post.tags = tagStore.getDisplayTagsForPost(filePath);
           // Update button color
           const nowHasTags = (post.tags?.length ?? 0) > 0;
           tagBtn.toggleClass('pcr-action-btn-active', nowHasTags);
@@ -6589,9 +6591,18 @@ export class PostCardRenderer extends Component {
     // Use user's preferred variant if set, otherwise use auto-detected
     const variant = preferredVariant !== 'auto' ? preferredVariant : WhisperDetector.getVariant();
     const installedModels = WhisperDetector.getInstalledModels();
+    const existingBanner = Array.from(
+      contentArea.querySelectorAll<HTMLElement>('.transcription-suggestion-banner')
+    ).some((banner) =>
+      banner.dataset.mediaPath === mediaPath && banner.dataset.transcriptionMode === mode
+    );
+    if (existingBanner) return;
+
     const duration = await this.getMediaDuration(mediaPath);
 
     const banner = contentArea.createDiv({ cls: 'transcription-suggestion-banner pcr-suggestion-banner' });
+    banner.dataset.mediaPath = mediaPath;
+    banner.dataset.transcriptionMode = mode;
 
     // Current selected model (mutable)
     let selectedModel: WhisperModel = (this.plugin.settings.transcription?.preferredModel || 'medium') as WhisperModel;

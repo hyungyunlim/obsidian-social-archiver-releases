@@ -23,6 +23,8 @@ export const USER_CONTROLLED_FRONTMATTER_FIELDS = [
   'archive',
   'like',
   'comment',
+  'tags',
+  'archiveTags',
   // Per-URL download/transcription decisions
   'downloadedUrls',
   'transcribedUrls',

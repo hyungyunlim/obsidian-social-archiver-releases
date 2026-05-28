@@ -18,7 +18,7 @@ export interface PostIndexEntry {
   authorHandle?: string;
   publishedDate?: number; // epoch ms
   archivedDate?: number;  // epoch ms
-  tags: string[];
+  tags: string[]; // Merged timeline-display tags from `tags` + `archiveTags`
   hashtags: string[];
   like: boolean;
   archive: boolean;
@@ -57,7 +57,7 @@ interface PostIndex {
   lastUpdated: number;
 }
 
-const INDEX_VERSION = 1;
+const INDEX_VERSION = 2;
 const INDEX_FILE_NAME = 'post-index.json';
 const SAVE_DEBOUNCE_MS = 5_000;
 

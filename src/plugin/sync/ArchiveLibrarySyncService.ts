@@ -126,7 +126,7 @@ export interface ArchiveLibrarySyncDeps {
     options?: SavePendingPostOptions,
   ) => Promise<SavePendingPostResult>;
 
-  /** Replace an existing limited fallback note with richer server content. */
+  /** Replace an existing limited or media-partial note with richer server content. */
   replaceExistingLimitedArchive?: (
     file: TFile,
     post: PendingPost,

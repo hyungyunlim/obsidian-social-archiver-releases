@@ -57,7 +57,7 @@ export interface RemoteArchiveIngestDeps {
   /** Returns true when the local note is only a limited fallback archive. */
   isLimitedArchiveFile?: (file: TFile) => Promise<boolean>;
 
-  /** Replace a limited fallback note with richer fetched archive content. */
+  /** Replace a limited or media-partial note with richer fetched archive content. */
   replaceExistingLimitedArchive?: (
     file: TFile,
     post: PendingPost,
@@ -245,7 +245,7 @@ export class RemoteArchiveIngestService {
     archiveId: string,
     source: 'client_sync' | 'archive_complete' | 'ai_comment_job' | 'transcription_job',
   ): Promise<boolean> {
-    if (!this.deps.isLimitedArchiveFile || !(await this.deps.isLimitedArchiveFile(file))) {
+    if (!this.deps.replaceExistingLimitedArchive) {
       return false;
     }
 
@@ -264,9 +264,6 @@ export class RemoteArchiveIngestService {
     source: 'client_sync' | 'archive_complete' | 'ai_comment_job' | 'transcription_job',
   ): Promise<boolean> {
     if (!this.deps.replaceExistingLimitedArchive) return false;
-    if (this.deps.isLimitedArchiveFile && !(await this.deps.isLimitedArchiveFile(file))) {
-      return false;
-    }
 
     const result = await this.deps.replaceExistingLimitedArchive(
       file,

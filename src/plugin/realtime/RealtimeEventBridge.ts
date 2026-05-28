@@ -23,6 +23,7 @@ import type { LikeStateSyncService } from '../sync/LikeStateSyncService';
 import type { ShareStateSyncService } from '../sync/ShareStateSyncService';
 import type { SocialArchiverSettings } from '../../types/settings';
 import type { PostData, Platform } from '../../types/post';
+import { mirrorArchiveTagsIntoObsidianTags } from '../../utils/tags';
 import type {
   ArchiveCompleteEventData,
   ClientSyncEventData,
@@ -1204,11 +1205,26 @@ export class RealtimeEventBridge {
         this.deps.archiveTagOutboundService?.addSuppression(archiveId);
 
         // REPLACEMENT semantics: set archiveTags to the server's canonical tag list.
-        // Do NOT modify fm.tags — that field is local-only (Obsidian tag index).
+        // Native Obsidian tags are only touched when the user enables mirroring.
         try {
           await this.withArchiveWriteLocks(archiveId, async () => {
             await this.deps.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+              const previousArchiveTags = Array.isArray(fm.archiveTags)
+                ? (fm.archiveTags as unknown[]).filter((t): t is string => typeof t === 'string')
+                : [];
+              const currentObsidianTags = Array.isArray(fm.tags)
+                ? (fm.tags as unknown[]).filter((t): t is string => typeof t === 'string')
+                : [];
+
               fm.archiveTags = serverTags;
+
+              if (settings.mirrorArchiveTagsToObsidianTags) {
+                fm.tags = mirrorArchiveTagsIntoObsidianTags(
+                  currentObsidianTags,
+                  previousArchiveTags,
+                  serverTags
+                );
+              }
 
               // Backfill sourceArchiveId if missing
               if (!fm.sourceArchiveId) {

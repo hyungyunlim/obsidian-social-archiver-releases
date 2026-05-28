@@ -92,9 +92,13 @@ interface FakeTagStore {
   getAllDiscoveredTags: () => TagDefinition[];
   getTagsWithCounts: () => Array<TagDefinition & { archiveCount: number }>;
   getTagsForPost: (path: string) => string[];
+  getDisplayTagsForPost: (path: string) => string[];
   addTagToPost: (path: string, tag: string) => Promise<void>;
+  addArchiveTagToPost: (path: string, tag: string) => Promise<void>;
   removeTagFromPost: (path: string, tag: string) => Promise<void>;
+  removeDisplayTagFromPost: (path: string, tag: string) => Promise<void>;
   toggleTagOnPost: (path: string, tag: string) => Promise<boolean>;
+  toggleDisplayTagOnPost: (path: string, tag: string) => Promise<boolean>;
   createTag: (name: string, color?: string | null) => Promise<TagDefinition>;
 }
 
@@ -119,14 +123,23 @@ function makePlugin(opts: {
     getAllDiscoveredTags: () => tagDefs,
     getTagsWithCounts: () => tagDefs.map((d) => ({ ...d, archiveCount: 0 })),
     getTagsForPost: () => [...tagState.tags],
+    getDisplayTagsForPost: () => [...tagState.tags],
     addTagToPost: vi.fn(async (_p, tag: string) => {
       if (!tagState.tags.some((t) => t.toLowerCase() === tag.toLowerCase())) {
         tagState.tags.push(tag);
       }
     }) as FakeTagStore['addTagToPost'],
+    addArchiveTagToPost: vi.fn(async (_p, tag: string) => {
+      if (!tagState.tags.some((t) => t.toLowerCase() === tag.toLowerCase())) {
+        tagState.tags.push(tag);
+      }
+    }) as FakeTagStore['addArchiveTagToPost'],
     removeTagFromPost: vi.fn(async (_p, tag: string) => {
       tagState.tags = tagState.tags.filter((t) => t.toLowerCase() !== tag.toLowerCase());
     }) as FakeTagStore['removeTagFromPost'],
+    removeDisplayTagFromPost: vi.fn(async (_p, tag: string) => {
+      tagState.tags = tagState.tags.filter((t) => t.toLowerCase() !== tag.toLowerCase());
+    }) as FakeTagStore['removeDisplayTagFromPost'],
     toggleTagOnPost: vi.fn(async (_p, tag: string) => {
       const lower = tag.toLowerCase();
       const exists = tagState.tags.some((t) => t.toLowerCase() === lower);
@@ -137,6 +150,16 @@ function makePlugin(opts: {
       tagState.tags.push(tag);
       return true;
     }) as FakeTagStore['toggleTagOnPost'],
+    toggleDisplayTagOnPost: vi.fn(async (_p, tag: string) => {
+      const lower = tag.toLowerCase();
+      const exists = tagState.tags.some((t) => t.toLowerCase() === lower);
+      if (exists) {
+        tagState.tags = tagState.tags.filter((t) => t.toLowerCase() !== lower);
+        return false;
+      }
+      tagState.tags.push(tag);
+      return true;
+    }) as FakeTagStore['toggleDisplayTagOnPost'],
     createTag: vi.fn(async (name: string, color?: string | null) => {
       const def: TagDefinition = {
         id: `id-${name}`,

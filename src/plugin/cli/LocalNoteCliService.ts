@@ -281,25 +281,25 @@ export class LocalNoteCliService {
     }
 
     let result: 'added' | 'removed' | 'noop' = 'noop';
-    const before = tagStore.getTagsForPost(file.path);
+    const before = tagStore.getDisplayTagsForPost(file.path);
     const hasBefore = before.some((t) => t.toLowerCase() === tag.toLowerCase());
 
     if (action === 'add') {
       if (!hasBefore) {
-        await tagStore.addTagToPost(file.path, tag);
+        await tagStore.addArchiveTagToPost(file.path, tag);
         result = 'added';
       }
     } else if (action === 'remove') {
       if (hasBefore) {
-        await tagStore.removeTagFromPost(file.path, tag);
+        await tagStore.removeDisplayTagFromPost(file.path, tag);
         result = 'removed';
       }
     } else {
-      const added = await tagStore.toggleTagOnPost(file.path, tag);
+      const added = await tagStore.toggleDisplayTagOnPost(file.path, tag);
       result = added ? 'added' : 'removed';
     }
 
-    const after = tagStore.getTagsForPost(file.path);
+    const after = tagStore.getDisplayTagsForPost(file.path);
     return {
       filePath: file.path,
       tag,

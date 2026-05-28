@@ -664,7 +664,7 @@ export class ReaderModeOverlay {
     void import('../modals/TagModal').then(({ TagModal }) => {
       this.modalOpen = true;
       const modal = new TagModal(this.context.app, tagStore, filePath, () => {
-        post.tags = tagStore.getTagsForPost(filePath);
+        post.tags = tagStore.getDisplayTagsForPost(filePath);
         this.dirty = true;
         this.context.onTagsChanged?.();
         this.reRenderPreservingScroll().catch(console.error);
