@@ -53,9 +53,9 @@ import { PreviewableCardRenderer } from './PreviewableCardRenderer';
 import type { PreviewContext } from './PreviewableContext';
 import {
   MORE_TRANSLATION_LANGUAGE_OPTIONS,
+  OUTPUT_LANGUAGE_OPTIONS,
   PRIMARY_TRANSLATION_LANGUAGE_OPTIONS,
   getMissingTranslationLanguageOptions,
-  isSupportedAIActionLanguageCode,
   type AIActionLanguageOption,
 } from '../aiActionLanguageOptions';
 import { stripContentVariantMetadataFooter } from '../../../utils/contentVariantMarkdown';
@@ -1606,6 +1606,18 @@ export class PostCardRenderer extends Component {
       subredditLink.addEventListener('click', (e) => {
         e.stopPropagation();
       });
+    }
+
+    // For Kidsnote: show daycare center next to timestamp.
+    if (post.platform === 'kidsnote' && post.content.community) {
+      const separator = timeRow.createSpan({ text: '·', cls: 'text-xs text-[var(--text-muted)]' });
+      separator.addClass('pcr-separator');
+
+      const centerSpan = timeRow.createSpan({
+        text: post.content.community.name,
+        cls: 'text-xs text-[var(--text-muted)]'
+      });
+      centerSpan.setAttribute('title', post.content.community.name);
     }
 
     // For Naver: show cafe info with link (truncate long names)
@@ -3795,6 +3807,14 @@ export class PostCardRenderer extends Component {
       });
       menu.addItem((item) => {
         item
+          .setIcon('chevron-right')
+          .setTitle('Summary language')
+          .onClick(() => {
+            this.openTimelineOutputLanguageMenu(post, cli, 'comment.summary', aiBtn);
+          });
+      });
+      menu.addItem((item) => {
+        item
           .setIcon('shield-check')
           .setTitle('Fact check')
           .onClick(() => {
@@ -3867,6 +3887,28 @@ export class PostCardRenderer extends Component {
           .setTitle(language.menuLabel)
           .onClick(() => {
             void this.handleTimelineAIActionRequest(post, 'content.translate_variant', cli, language.code);
+          });
+      });
+    }
+
+    const rect = anchorEl.getBoundingClientRect();
+    menu.showAtPosition({ x: rect.left, y: rect.bottom });
+  }
+
+  private openTimelineOutputLanguageMenu(
+    post: PostData,
+    cli: AICli,
+    actionType: AIActionType,
+    anchorEl: HTMLElement,
+  ): void {
+    const menu = new Menu();
+    for (const language of OUTPUT_LANGUAGE_OPTIONS) {
+      menu.addItem((item) => {
+        item
+          .setIcon('languages')
+          .setTitle(language.menuLabel)
+          .onClick(() => {
+            void this.handleTimelineAIActionRequest(post, actionType, cli, language.code);
           });
       });
     }
@@ -9118,13 +9160,8 @@ export class PostCardRenderer extends Component {
   }
 
   private resolveTimelineAIActionLanguage(language?: string): string | undefined {
-    if (language && language !== 'auto') return language;
-    const configured = this.plugin.settings.aiComment.outputLanguage;
-    if (configured && configured !== 'auto') return configured;
-    const browserLanguage = navigator.language?.split('-')[0]?.toLowerCase();
-    return isSupportedAIActionLanguageCode(browserLanguage)
-      ? browserLanguage
-      : undefined;
+    if (language) return language;
+    return this.plugin.settings.aiComment.outputLanguage || 'auto';
   }
 
   /**

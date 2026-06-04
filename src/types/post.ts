@@ -27,6 +27,7 @@ export interface Media {
   mimeType?: string;
   altText?: string; // Use 'altText' to match workers
   alt?: string; // Keep for backward compatibility
+  autoDownload?: boolean; // Client should automatically download/preserve this media
 }
 
 // Author information
@@ -86,6 +87,11 @@ export interface PostMetadata {
   explicit?: boolean; // Explicit content flag (itunes:explicit)
   // Webtoon-specific fields
   commentCount?: number; // Webtoon episode comment count
+  /** Human-readable diagnostics for media candidate selection at archive time. */
+  mediaSelectionSummary?: string[];
+  socialArchiverImportMode?: 'server-synced' | 'local-only';
+  socialArchiverImportSource?: 'instagram-saved-import' | string;
+  socialArchiverServerArchiveId?: string;
 }
 
 /**
@@ -340,6 +346,7 @@ export interface PostData {
    */
   subscribed?: boolean;       // true if post was auto-archived via subscription
   subscriptionId?: string;    // ID of the subscription that triggered this archive
+  podcastAutoDownloadAudio?: boolean; // Download podcast episode audio automatically during subscription sync
 
   /**
    * Podcast channel/show title
@@ -559,7 +566,8 @@ export const PostDataSchema: z.ZodType<PostData> = z.lazy(() => z.object({
     externalLinkDescription: z.string().nullish(),
     externalLinkImage: z.string().nullish(),
     downloadTime: z.number().nullish(),
-    duration: z.number().nullish()
+    duration: z.number().nullish(),
+    mediaSelectionSummary: z.array(z.string()).nullish()
   }),
   comments: z.array(z.object({
     id: z.string(),

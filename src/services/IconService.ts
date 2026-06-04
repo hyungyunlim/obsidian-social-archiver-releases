@@ -41,6 +41,7 @@ import {
   siNaver,
   siNaverWebtoon,
   siBrunch,
+  siKidsnote,
   siRss,
   siWeb,
   type PlatformIcon,
@@ -93,6 +94,7 @@ const SIMPLE_ICON_MAP: Record<string, PlatformIcon | null> = {
   'naver-webtoon': siNaverWebtoon, // Naver Webtoon
   webtoons: siNaverWebtoon, // WEBTOON Global (same icon as Naver Webtoon)
   brunch: siBrunch, // Brunch (Kakao publishing platform)
+  kidsnote: siKidsnote,
   blog: siRss,
   web: siWeb,
   post: null, // User posts use Lucide

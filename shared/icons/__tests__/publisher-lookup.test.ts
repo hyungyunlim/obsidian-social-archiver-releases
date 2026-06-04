@@ -122,11 +122,21 @@ describe('publisher-lookup: PublisherIcon discriminated union', () => {
       expect(entry.icon.url).toContain('domain=washingtonpost.com');
     }
   });
+
+  it('emits image + Google CDN URL for `tagesspiegel`', () => {
+    const entry = getPublisherFromUrl('https://www.tagesspiegel.de/politik/example');
+    expect(entry?.slug).toBe('tagesspiegel');
+    expect(entry?.name).toBe('Der Tagesspiegel');
+    expect(entry?.icon.type).toBe('image');
+    if (entry?.icon.type === 'image') {
+      expect(entry.icon.url).toContain('domain=tagesspiegel.de');
+    }
+  });
 });
 
 describe('publisher-lookup: registry health', () => {
-  it('contains the v1 starter set (34 publishers)', () => {
-    expect(PUBLISHER_REGISTRY.length).toBe(34);
+  it('contains the v1 starter set (35 publishers)', () => {
+    expect(PUBLISHER_REGISTRY.length).toBe(35);
   });
 
   it('has unique slugs', () => {

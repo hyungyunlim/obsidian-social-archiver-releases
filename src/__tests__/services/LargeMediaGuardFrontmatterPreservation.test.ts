@@ -199,6 +199,23 @@ describe('LargeMediaGuard: frontmatter preservation', () => {
       const frontmatter = generator.generateFrontmatter(postData);
       expect(frontmatter.mediaSourceUrls).toEqual([url]);
     });
+
+    it('writes archive-time media selection diagnostics', () => {
+      const postData = createTestPostData({
+        metadata: {
+          timestamp: new Date('2026-04-17T10:30:00Z'),
+          mediaSelectionSummary: [
+            '0:dash video 1080x1920 vp09.00.41.08 video/mp4 3200000bps audio=mp4a.40.2/audio/mp4/128000bps',
+          ],
+        },
+      });
+
+      const frontmatter = generator.generateFrontmatter(postData);
+
+      expect(frontmatter.mediaSelection).toEqual([
+        '0:dash video 1080x1920 vp09.00.41.08 video/mp4 3200000bps audio=mp4a.40.2/audio/mp4/128000bps',
+      ]);
+    });
   });
 
   describe('PostData-level detach flags', () => {

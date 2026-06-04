@@ -974,6 +974,59 @@ const DEFAULT_TEMPLATES: Record<Platform, string> = {
 **Original URL:** {{url}}
 `,
 
+  kidsnote: `{{#if comment}}
+> **My Note:**
+> {{comment}}
+
+---
+
+{{/if}}{{#if title}}# {{title}}
+
+{{/if}}{{#if content.text}}{{content.text}}
+
+{{/if}}
+{{#if media}}
+
+---
+
+{{media}}
+{{/if}}
+
+{{#if comments}}
+
+---
+
+## 💬 Comments
+
+{{comments}}
+{{/if}}
+
+{{#if ai}}
+
+---
+
+## AI Analysis
+
+**Summary:** {{ai.summary}}
+
+**Sentiment:** {{ai.sentiment}}
+
+**Topics:** {{ai.topics}}
+
+{{#if ai.factCheck}}
+
+### Fact Checks
+{{ai.factCheck}}
+{{/if}}
+{{/if}}
+
+---
+
+**Platform:** 🏫 Kidsnote{{#if raw.kidsnote.childName}} | **Child:** {{raw.kidsnote.childName}}{{/if}}{{#if content.community.name}} | **Center:** {{content.community.name}}{{/if}}{{#if metadata.location}} | **Class:** {{metadata.location}}{{/if}}{{#if metadata.timestamp}} | **Published:** {{metadata.timestamp}}{{/if}}
+
+**Original URL:** {{url}}
+`,
+
   naver: `{{#if comment}}
 > **My Note:**
 > {{comment}}
@@ -1966,6 +2019,7 @@ export class MarkdownConverter implements IService {
       podcast: '🎙️',
       blog: '📝',
       medium: '📖',
+      kidsnote: '🏫',
       naver: '🇰🇷',
       'naver-webtoon': '📖',
       webtoons: '📚',

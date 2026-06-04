@@ -135,6 +135,30 @@ class MediaTypeDetector {
 /**
  * Media path generator
  */
+export function sanitizeMediaFilename(filename: string): string {
+  let sanitized = filename
+    // Remove invisible Unicode characters (Zero-Width Space, Non-Breaking Space, etc.)
+    .replace(/[\u200B-\u200D\u2060\u00A0\uFEFF\u200E\u200F\u202A-\u202E]/g, '')
+    .replace(/[\\/:*?"<>|]/g, '-')
+    // Replace consecutive dots (e.g., "...") with a single dash - Windows doesn't like multiple dots
+    .replace(/\.{2,}/g, '-')
+    // Replace multiple consecutive dashes with single dash
+    .replace(/-{2,}/g, '-')
+    .replace(/\s+/g, '_')
+    .trim();
+
+  // Truncate to prevent ENAMETOOLONG (macOS/Linux: 255 bytes per component)
+  // Preserve the final extension so media type detection still works later.
+  if (sanitized.length > 80) {
+    const extensionMatch = sanitized.match(/(\.[A-Za-z0-9]{1,10})$/);
+    const extension = extensionMatch?.[1] ?? '';
+    const maxBaseLength = Math.max(1, 80 - extension.length);
+    sanitized = `${sanitized.slice(0, maxBaseLength).replace(/[-_.]+$/, '')}${extension}`;
+  }
+
+  return sanitized;
+}
+
 class MediaPathGenerator {
   private basePath: string;
 
@@ -221,24 +245,7 @@ class MediaPathGenerator {
    * Also handles Windows-specific issues like consecutive dots and invisible Unicode characters
    */
   private sanitizeFilename(filename: string): string {
-    let sanitized = filename
-      // Remove invisible Unicode characters (Zero-Width Space, Non-Breaking Space, etc.)
-      .replace(/[\u200B-\u200D\u2060\u00A0\uFEFF\u200E\u200F\u202A-\u202E]/g, '')
-      .replace(/[\\/:*?"<>|]/g, '-')
-      // Replace consecutive dots (e.g., "...") with a single dash - Windows doesn't like multiple dots
-      .replace(/\.{2,}/g, '-')
-      // Replace multiple consecutive dashes with single dash
-      .replace(/-{2,}/g, '-')
-      .replace(/\s+/g, '_')
-      .trim();
-
-    // Truncate to prevent ENAMETOOLONG (macOS/Linux: 255 bytes per component)
-    // Reserve space for date prefix, postId suffix, index, and extension (~60 chars)
-    if (sanitized.length > 80) {
-      sanitized = sanitized.substring(0, 80).replace(/-$|_$/, '');
-    }
-
-    return sanitized;
+    return sanitizeMediaFilename(filename);
   }
 
   /**

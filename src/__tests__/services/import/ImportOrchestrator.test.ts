@@ -322,6 +322,73 @@ describe('ImportOrchestrator.loadGallery', () => {
 // ---------------------------------------------------------------------------
 
 describe('ImportOrchestrator.startImport({ selection })', () => {
+  it('opens a server import session before seeding a server-synced job', async () => {
+    const startImportSession = vi.fn(async () => ({
+      jobId: 'job-session',
+      sessionId: 'job-session',
+      expiresAt: Date.now() + 3600_000,
+    }));
+    const api = makeAPI({
+      startImportSession,
+      createArchiveFromImport: vi.fn(
+        () => new Promise(() => {}) as Promise<{ archiveId: string; skippedDuplicate: boolean }>,
+      ),
+    });
+    const store = new ImportJobStore(fakeVault(), '.obsidian/plugins/test');
+    await store.load();
+    const orchestrator = new ImportOrchestrator({
+      jobStore: store,
+      apiClient: api,
+      logger: makeLogger(),
+      generateId: () => 'job-session',
+      sourceClientId: 'client-1',
+    });
+
+    const blob = await makePartZip({
+      posts: [
+        { id: '1', shortcode: 'A' },
+        { id: '2', shortcode: 'B' },
+      ],
+    });
+
+    const { jobId } = await orchestrator.startImport({
+      files: [{ name: 'p.zip', blob }],
+      selection: { mode: 'only', ids: new Set(['2']) },
+    });
+
+    expect(startImportSession).toHaveBeenCalledWith({
+      jobId: 'job-session',
+      source: 'instagram-saved-import',
+      sourceClientId: 'client-1',
+      selectedCount: 1,
+    });
+    expect(store.getJob(jobId)!.mode).toBe('server-synced');
+
+    await orchestrator.cancel(jobId);
+  });
+
+  it('does not open a server import session for local-only jobs', async () => {
+    const startImportSession = vi.fn(async () => ({
+      jobId: 'job-local',
+      sessionId: 'job-local',
+      expiresAt: Date.now() + 3600_000,
+    }));
+    const { orchestrator, store } = await freshOrchestrator({
+      startImportSession,
+    });
+    const blob = await makePartZip({ posts: [{ id: '1', shortcode: 'A' }] });
+
+    const { jobId } = await orchestrator.startImport({
+      files: [{ name: 'p.zip', blob }],
+      mode: 'local-only',
+    });
+
+    expect(startImportSession).not.toHaveBeenCalled();
+    expect(store.getJob(jobId)!.mode).toBe('local-only');
+
+    await orchestrator.cancel(jobId);
+  });
+
   it("'all-except' filters out the deselected ids", async () => {
     // Use a non-resolving createArchiveFromImport so the worker hangs after
     // dispatching the first item — we only want to inspect the seeded items.

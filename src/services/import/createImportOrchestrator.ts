@@ -34,7 +34,7 @@ export interface CreateImportOrchestratorDeps {
    * existing archive → vault note pipeline here. Failures inside the hook
    * must not fail the upload (PRD §14 risks).
    */
-  onArchiveCreated?: (archiveId: string, postData: PostData) => Promise<void>;
+  onArchiveCreated?: (archiveId: string | null, postData: PostData) => Promise<void>;
   /** Sync client id so the server can suppress self-replay (PRD §11.2). */
   sourceClientId?: string;
   /**

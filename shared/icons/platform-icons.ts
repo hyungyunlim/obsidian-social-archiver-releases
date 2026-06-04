@@ -140,6 +140,13 @@ export const siNaver: PlatformIcon = {
   path: 'M16.273 12.845 7.376 0H0v24h7.727V11.155L16.624 24H24V0h-7.727z'
 };
 
+export const siKidsnote: PlatformIcon = {
+  title: 'Kidsnote',
+  hex: '429EFA',
+  // Official Kids Note header logo mark, reduced to a monochrome platform icon.
+  path: 'M20.117 18.179L6.53 1.58v11.281l8.043 9.825a3.584 3.584 0 005.032.51 3.56 3.56 0 00.51-5.018zM19.613.824a3.584 3.584 0 00-5.031.51l-8.177 9.989v11.28l13.718-16.76a3.56 3.56 0 00-.51-5.019zM7.18 20.413a3.585 3.585 0 01-3.59 3.58A3.585 3.585 0 010 20.413V3.58A3.585 3.585 0 013.59 0a3.584 3.584 0 013.59 3.58v16.833zM4.65 3.382c0 .58-.473 1.05-1.054 1.05-.583 0-1.055-.47-1.055-1.05 0-.58.472-1.051 1.055-1.051.581 0 1.053.47 1.053 1.05zM4.65 20.661c0 .58-.473 1.051-1.054 1.051-.583 0-1.055-.47-1.055-1.051 0-.58.472-1.05 1.055-1.05.581 0 1.053.47 1.053 1.05z'
+};
+
 export const siNaverWebtoon: PlatformIcon = {
   title: 'WEBTOON',
   hex: '00DC64', // Official WEBTOON green from Simple Icons

@@ -152,6 +152,65 @@ describe('ImportWorker', () => {
     expect(api.finalizeImportJob).toHaveBeenCalledTimes(1);
   });
 
+  it('uses batch ingestion when the API client supports it', async () => {
+    store.createJob(makeJob({ totalItems: 2 }), [makeItem('p1'), makeItem('p2')]);
+    const batch = vi.fn(async (args: Parameters<NonNullable<ImportAPIClient['createArchivesFromImportBatch']>>[0]) => ({
+      accepted: args.items.length,
+      created: args.items.map((item) => ({
+        postId: item.clientPostData.id,
+        archiveId: `arch-${item.clientPostData.id}`,
+      })),
+      skippedDuplicates: [],
+      failed: [],
+    }));
+    const api = makeAPI({
+      createArchivesFromImportBatch: batch,
+    });
+    const postData = new Map([
+      ['p1', makePostData('p1')],
+      ['p2', makePostData('p2')],
+    ]);
+
+    const worker = new ImportWorker('job1', {
+      apiClient: api,
+      jobStore: store,
+      progressBus: bus,
+      logger,
+      zipReaderFor: () => undefined,
+      postDataFor: (id) => postData.get(id),
+    });
+    await worker.start();
+
+    expect(batch).toHaveBeenCalledTimes(1);
+    expect(api.createArchiveFromImport).not.toHaveBeenCalled();
+    expect(store.getItems('job1').map((item) => item.archiveId)).toEqual(['arch-p1', 'arch-p2']);
+    expect(store.getItems('job1').every((it) => it.status === 'uploaded')).toBe(true);
+  });
+
+  it('falls back to per-item archive creation when batch ingestion fails', async () => {
+    store.createJob(makeJob({ totalItems: 2 }), [makeItem('p1'), makeItem('p2')]);
+    const batch = vi.fn(async () => {
+      throw new Error('batch disabled');
+    });
+    const api = makeAPI({
+      createArchivesFromImportBatch: batch,
+    });
+
+    const worker = new ImportWorker('job1', {
+      apiClient: api,
+      jobStore: store,
+      progressBus: bus,
+      logger,
+      zipReaderFor: () => undefined,
+      postDataFor: (id) => makePostData(id),
+    });
+    await worker.start();
+
+    expect(batch).toHaveBeenCalled();
+    expect(api.createArchiveFromImport).toHaveBeenCalledTimes(2);
+    expect(store.getItems('job1').every((it) => it.status === 'uploaded')).toBe(true);
+  });
+
   it('retries archive creation up to MAX_ITEM_RETRIES, then fails the item', async () => {
     store.createJob(makeJob({ totalItems: 1 }), [makeItem('p1')]);
     let attempts = 0;
@@ -357,6 +416,83 @@ describe('ImportWorker', () => {
     expect(snap.localAvatar).toBe('attachments/social-archives/instagram/C7WFj5WuiVm/avatar.jpg');
 
     expect(store.getItems('job1')[0]!.status).toBe('uploaded');
+  });
+
+  it('runs local-only imports without archive, media upload, or finalize API calls', async () => {
+    store.createJob(makeJob({ totalItems: 1, mode: 'local-only' }), [
+      makeItem('p1', { mediaPaths: ['media/C7WFj5WuiVm/00.jpg'] }),
+    ]);
+
+    const fakeVault = {
+      adapter: {
+        exists: vi.fn(async () => true),
+        writeBinary: vi.fn(async () => undefined),
+      },
+      createFolder: vi.fn(async () => undefined),
+    } as unknown as import('obsidian').Vault;
+    const fakeReader = {
+      extractMediaFile: vi.fn(async () => new ArrayBuffer(12)),
+    } as unknown as import('@/services/import/ImportZipReader').ImportZipReader;
+
+    const seed = makePostData('p1');
+    seed.media = [{ type: 'image', url: './media/C7WFj5WuiVm/00.jpg' }];
+    (seed as unknown as { raw: { code: string } }).raw = { code: 'C7WFj5WuiVm' };
+    const api = makeAPI({
+      createArchivesFromImportBatch: vi.fn(async () => ({
+        accepted: 0,
+        created: [],
+        skippedDuplicates: [],
+        failed: [],
+      })),
+    });
+    const hookSnapshots: Array<{
+      archiveId: string | null;
+      mode: string | undefined;
+      source: string | undefined;
+      serverArchiveId: string | undefined;
+      sourceArchiveId: string | undefined;
+      mediaUrl: string | undefined;
+    }> = [];
+    const onArchiveCreated = vi.fn(async (archiveId: string | null, postData: PostData) => {
+      hookSnapshots.push({
+        archiveId,
+        mode: postData.metadata.socialArchiverImportMode,
+        source: postData.metadata.socialArchiverImportSource,
+        serverArchiveId: postData.metadata.socialArchiverServerArchiveId,
+        sourceArchiveId: postData.sourceArchiveId,
+        mediaUrl: postData.media[0]?.url,
+      });
+    });
+
+    const worker = new ImportWorker('job1', {
+      apiClient: api,
+      jobStore: store,
+      progressBus: bus,
+      logger,
+      zipReaderFor: () => fakeReader,
+      postDataFor: () => seed,
+      onArchiveCreated,
+      vault: fakeVault,
+      mediaBasePath: 'attachments/social-archives',
+    });
+    await worker.start();
+
+    expect(api.createArchivesFromImportBatch).not.toHaveBeenCalled();
+    expect(api.createArchiveFromImport).not.toHaveBeenCalled();
+    expect(api.uploadArchiveMedia).not.toHaveBeenCalled();
+    expect(api.finalizeImportJob).not.toHaveBeenCalled();
+    expect(hookSnapshots).toEqual([
+      {
+        archiveId: null,
+        mode: 'local-only',
+        source: 'instagram-saved-import',
+        serverArchiveId: 'none',
+        sourceArchiveId: undefined,
+        mediaUrl: 'attachments/social-archives/instagram/C7WFj5WuiVm/00.jpg',
+      },
+    ]);
+    expect(store.getItems('job1')[0]!.status).toBe('uploaded');
+    expect(store.getJob('job1')?.status).toBe('completed');
   });
 
   it('downgrades to imported_with_warnings when vault hook throws', async () => {

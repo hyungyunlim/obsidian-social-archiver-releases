@@ -15,6 +15,7 @@ import type { Vault } from 'obsidian';
 import type { PostData } from '@/types/post';
 import {
   DEFAULT_IMPORT_DESTINATION,
+  DEFAULT_IMPORT_MODE,
   DEFAULT_IMPORT_RATE_PER_SEC,
   PREFLIGHT_BATCH_SIZE,
   type GallerySelection,
@@ -375,7 +376,18 @@ export class ImportOrchestrator implements ImportOrchestratorContract {
     const rateLimitPerSec = clampRate(opts.rateLimitPerSec ?? DEFAULT_IMPORT_RATE_PER_SEC);
     const destination: ImportDestination =
       opts.destination === 'archive' ? 'archive' : DEFAULT_IMPORT_DESTINATION;
+    const mode = opts.mode === 'local-only' ? 'local-only' : DEFAULT_IMPORT_MODE;
     const tags = normalizeImportTags(opts.tags);
+    const sourceClientId = opts.sourceClientId ?? this.deps.sourceClientId;
+
+    if (mode === 'server-synced' && this.deps.apiClient.startImportSession) {
+      await this.deps.apiClient.startImportSession({
+        jobId,
+        source: 'instagram-saved-import',
+        sourceClientId,
+        selectedCount: filteredSeeds.length,
+      });
+    }
 
     const jobState: ImportJobState = {
       jobId,
@@ -389,8 +401,9 @@ export class ImportOrchestrator implements ImportOrchestratorContract {
       skippedDuplicates: 0,
       rateLimitPerSec,
       destination,
+      mode,
       tags,
-      sourceClientId: opts.sourceClientId ?? this.deps.sourceClientId,
+      sourceClientId,
       // Persist the user's selection alongside the job so the modal can
       // restore it after restart (PRD §9.4) and so the terminal-event
       // handler can drop it on completion (PRD F3.6).

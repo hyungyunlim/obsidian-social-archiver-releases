@@ -523,6 +523,7 @@ export class PostDataParser {
         originalUrl: frontmatter.originalUrl, // Original URL (for preliminary documents)
         subscribed: frontmatter.subscribed, // Subscription-related flag
         subscriptionId: frontmatter.subscriptionId, // Subscription ID
+        podcastAutoDownloadAudio: frontmatter['podcastAutoDownloadAudio'] === true,
         // Podcast channel title (show name)
         channelTitle: frontmatter['channelTitle'] as string | undefined,
         // Podcast audio fields
@@ -606,6 +607,11 @@ export class PostDataParser {
           explicit: frontmatter.explicit,
           // Webtoon-specific metadata
           commentCount: frontmatter.commentCount,
+          mediaSelectionSummary: Array.isArray(frontmatter['mediaSelection'])
+            ? frontmatter['mediaSelection']
+                .map((item) => String(item || '').trim())
+                .filter((item) => item.length > 0)
+            : undefined,
         },
         comments: comments.length > 0 ? comments : undefined,
         quotedPost: quotedPost || undefined,

@@ -555,6 +555,105 @@ describe('SubscriptionSyncService', () => {
       expect(result.status).toBe('created');
       expect(serviceMocks.mediaHandlerDownloadMedia).not.toHaveBeenCalled();
     });
+
+    it('skips podcast audio by default', async () => {
+      const deps = makeDeps({
+        apiClient: () => ({ proxyMedia: vi.fn() } as any),
+      });
+
+      const service = new SubscriptionSyncService(deps);
+      const result = await service.saveSubscriptionPostDetailed(makePendingPost({
+        platform: 'podcast',
+        url: 'https://podcasts.example.com/episodes/1',
+        media: [
+          { type: 'audio', url: 'https://cdn.example.com/episode-1.mp3' },
+        ],
+        metadata: {
+          timestamp: '2026-04-23T00:00:00.000Z',
+        },
+        quotedPost: undefined,
+      }));
+
+      expect(result.status).toBe('created');
+      expect(serviceMocks.mediaHandlerDownloadMedia).not.toHaveBeenCalled();
+    });
+
+    it('does not download podcast audio directly from the RSS URL', async () => {
+      const deps = makeDeps({
+        settings: () => ({
+          archivePath: 'Social Archives',
+          mediaPath: 'attachments/social-archives',
+          archiveOrganization: 'platform',
+          fileNameFormat: 'default',
+          downloadMedia: 'text-only',
+          downloadAuthorAvatars: false,
+          overwriteAuthorAvatar: false,
+          includeComments: false,
+        } as any),
+        apiClient: () => ({ proxyMedia: vi.fn() } as any),
+      });
+
+      const service = new SubscriptionSyncService(deps);
+      const result = await service.saveSubscriptionPostDetailed(makePendingPost({
+        platform: 'podcast',
+        url: 'https://podcasts.example.com/episodes/1',
+        podcastAutoDownloadAudio: true,
+        media: [
+          { type: 'audio', url: 'https://cdn.example.com/episode-1.mp3' },
+        ],
+        metadata: {
+          timestamp: '2026-04-23T00:00:00.000Z',
+        },
+        quotedPost: undefined,
+      }));
+
+      expect(result.status).toBe('created');
+      expect(serviceMocks.mediaHandlerDownloadMedia).not.toHaveBeenCalled();
+    });
+
+    it('downloads podcast audio only after server-preserved sync provides an R2 URL', async () => {
+      const deps = makeDeps({
+        settings: () => ({
+          archivePath: 'Social Archives',
+          mediaPath: 'attachments/social-archives',
+          archiveOrganization: 'platform',
+          fileNameFormat: 'default',
+          downloadMedia: 'text-only',
+          downloadAuthorAvatars: false,
+          overwriteAuthorAvatar: false,
+          includeComments: false,
+        } as any),
+        apiClient: () => ({ proxyMedia: vi.fn() } as any),
+      });
+
+      const service = new SubscriptionSyncService(deps);
+      const result = await service.saveSubscriptionPostDetailed(makePendingPost({
+        platform: 'podcast',
+        url: 'https://podcasts.example.com/episodes/1',
+        podcastAutoDownloadAudio: true,
+        media: [
+          {
+            type: 'audio',
+            url: 'https://cdn.example.com/episode-1.mp3',
+            r2Url: 'https://social-archiver-api.social-archive.org/media/archives/u/a/podcast-audio.mp3',
+          },
+        ],
+        metadata: {
+          timestamp: '2026-04-23T00:00:00.000Z',
+        },
+        quotedPost: undefined,
+      }));
+
+      expect(result.status).toBe('created');
+      expect(serviceMocks.mediaHandlerDownloadMedia).toHaveBeenCalledOnce();
+      expect(serviceMocks.mediaHandlerDownloadMedia.mock.calls[0][0]).toEqual([
+        {
+          type: 'audio',
+          url: 'https://cdn.example.com/episode-1.mp3',
+          r2Url: 'https://social-archiver-api.social-archive.org/media/archives/u/a/podcast-audio.mp3',
+        },
+      ]);
+    });
   });
 
   // --------------------------------------------------------------------------

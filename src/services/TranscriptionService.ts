@@ -25,6 +25,8 @@ const SUPPORTED_MEDIA_FORMATS = [
   '.mp4', '.webm', '.mov', '.avi', '.mkv', '.m4v'
 ];
 
+const AUDIO_MEDIA_FORMATS = ['.mp3', '.m4a', '.ogg', '.wav', '.flac', '.aac', '.wma'];
+
 // Video formats that should be converted to WAV before transcription.
 const VIDEO_MEDIA_FORMATS = ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.m4v'];
 
@@ -77,11 +79,12 @@ export class TranscriptionService {
       throw new TranscriptionError('NOT_INSTALLED', 'Whisper not detected');
     }
 
-    // 2. Validate media file exists and format
-    this.validateAudioFile(mediaPath);
+    // 2. Validate media file exists
+    this.validateMediaFileExists(mediaPath);
 
-    // 3. Convert video input to WAV for Whisper CLI compatibility (especially whisper.cpp)
+    // 3. Convert video and extensionless inputs to Whisper-compatible paths.
     const preparedInput = await this.prepareInputForTranscription(mediaPath, options.signal);
+    this.validateSupportedMediaFormat(preparedInput.path);
 
     try {
       // 4. Check system resources (memory)
@@ -119,18 +122,21 @@ export class TranscriptionService {
   }
 
   /**
-   * Validate media file exists and has supported format
+   * Validate media file exists
    */
-  private validateAudioFile(audioPath: string): void {
+  private validateMediaFileExists(audioPath: string): void {
     const fs = nodeRequire('fs') as typeof import('fs');
-    const path = nodeRequire('path') as typeof import('path');
 
-    // Check file exists
     if (!fs.existsSync(audioPath)) {
       throw new TranscriptionError('AUDIO_NOT_FOUND', `Audio file not found: ${audioPath}`);
     }
+  }
 
-    // Check format
+  /**
+   * Validate media file has a supported extension.
+   */
+  private validateSupportedMediaFormat(audioPath: string): void {
+    const path = nodeRequire('path') as typeof import('path');
     const ext = path.extname(audioPath).toLowerCase();
     if (!SUPPORTED_MEDIA_FORMATS.includes(ext)) {
       throw new TranscriptionError(
@@ -271,11 +277,41 @@ export class TranscriptionService {
     const path = nodeRequire('path') as typeof import('path');
     const ext = path.extname(mediaPath).toLowerCase();
 
-    if (!VIDEO_MEDIA_FORMATS.includes(ext)) {
+    if (AUDIO_MEDIA_FORMATS.includes(ext)) {
       return {
         path: mediaPath,
         cleanup: (): Promise<void> => Promise.resolve(),
       };
+    }
+
+    if (!VIDEO_MEDIA_FORMATS.includes(ext)) {
+      const inferredExtension = this.inferMediaExtension(mediaPath);
+      if (!inferredExtension) {
+        throw new TranscriptionError(
+          'INVALID_AUDIO',
+          `Unsupported media format: ${ext}`,
+          `Unsupported media format: ${ext || 'extensionless'}. Supported: ${SUPPORTED_MEDIA_FORMATS.join(', ')}`
+        );
+      }
+
+      const copied = await this.copyMediaToTempWithExtension(mediaPath, inferredExtension);
+      if (VIDEO_MEDIA_FORMATS.includes(inferredExtension)) {
+        try {
+          const wavPath = await this.extractAudioFromVideo(copied.path, signal);
+          return {
+            path: wavPath,
+            cleanup: async (): Promise<void> => {
+              await copied.cleanup();
+              this.deleteTempFile(wavPath);
+            },
+          };
+        } catch (error) {
+          await copied.cleanup();
+          throw error;
+        }
+      }
+
+      return copied;
     }
 
     const wavPath = await this.extractAudioFromVideo(mediaPath, signal);
@@ -283,17 +319,79 @@ export class TranscriptionService {
       path: wavPath,
 
       cleanup: (): Promise<void> => {
-        const fs = nodeRequire('fs') as typeof import('fs');
-        try {
-          if (fs.existsSync(wavPath)) {
-            fs.unlinkSync(wavPath);
-          }
-        } catch {
-          // Ignore cleanup errors for temp files
-        }
+        this.deleteTempFile(wavPath);
         return Promise.resolve();
       },
     };
+  }
+
+  private async copyMediaToTempWithExtension(
+    mediaPath: string,
+    extension: string,
+  ): Promise<{ path: string; cleanup: () => Promise<void> }> {
+    const fs = nodeRequire('fs') as typeof import('fs');
+    const os = nodeRequire('os') as typeof import('os');
+    const path = nodeRequire('path') as typeof import('path');
+    const normalizedExtension = extension.startsWith('.') ? extension : `.${extension}`;
+    const baseName = path.basename(mediaPath, path.extname(mediaPath)) || 'media';
+    const outputPath = path.join(os.tmpdir(), `whisper_input_${baseName}_${Date.now()}${normalizedExtension}`);
+    fs.copyFileSync(mediaPath, outputPath);
+    return {
+      path: outputPath,
+      cleanup: (): Promise<void> => {
+        this.deleteTempFile(outputPath);
+        return Promise.resolve();
+      },
+    };
+  }
+
+  private inferMediaExtension(mediaPath: string): string | null {
+    const fs = nodeRequire('fs') as typeof import('fs');
+    let file: number | null = null;
+    try {
+      file = fs.openSync(mediaPath, 'r');
+      const bytes = Buffer.alloc(16);
+      const read = fs.readSync(file, bytes, 0, bytes.length, 0);
+      if (read < 4) return null;
+
+      if (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) return '.mp3';
+      if (bytes[0] === 0xff && ((bytes[1] ?? 0) & 0xe0) === 0xe0) return '.mp3';
+      if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) {
+        const marker = bytes.subarray(8, 12).toString('ascii');
+        if (marker === 'WAVE') return '.wav';
+      }
+      if (bytes.subarray(0, 4).toString('ascii') === 'OggS') return '.ogg';
+      if (bytes.subarray(0, 4).toString('ascii') === 'fLaC') return '.flac';
+      if (bytes[0] === 0xff && (bytes[1] === 0xf1 || bytes[1] === 0xf9)) return '.aac';
+      if (bytes.subarray(4, 8).toString('ascii') === 'ftyp') {
+        const brand = bytes.subarray(8, 12).toString('ascii').toLowerCase();
+        if (brand.startsWith('m4a') || brand === 'mp42' || brand === 'isom') return '.m4a';
+        return '.mp4';
+      }
+      if (bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) return '.webm';
+      return null;
+    } catch {
+      return null;
+    } finally {
+      if (file !== null) {
+        try {
+          fs.closeSync(file);
+        } catch {
+          // Ignore close errors for best-effort format inference.
+        }
+      }
+    }
+  }
+
+  private deleteTempFile(path: string): void {
+    const fs = nodeRequire('fs') as typeof import('fs');
+    try {
+      if (fs.existsSync(path)) {
+        fs.unlinkSync(path);
+      }
+    } catch {
+      // Ignore cleanup errors for temp files
+    }
   }
 
   /**

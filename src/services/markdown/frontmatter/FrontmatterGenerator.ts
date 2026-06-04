@@ -106,7 +106,7 @@ const CATEGORY_FIELDS: Record<keyof FrontmatterFieldVisibility, string[]> = {
   seriesInfo: ['series', 'seriesUrl', 'seriesId', 'episode', 'totalEpisodes', 'starScore', 'genre', 'ageRating', 'finished', 'publishDay'],
   podcastInfo: ['channelTitle', 'audioUrl', 'audioSize', 'audioType', 'season', 'subtitle', 'hosts', 'guests', 'explicit'],
   reblogInfo: ['isReblog', 'originalAuthor', 'originalAuthorHandle', 'originalAuthorUrl', 'originalPostUrl', 'originalAuthorAvatar'],
-  mediaMetadata: ['media_expired', 'media_expired_urls', 'processedUrls', 'mediaSourceUrls', 'mediaDetached', 'mediaPromptSuppressed'],
+  mediaMetadata: ['media_expired', 'media_expired_urls', 'processedUrls', 'mediaSourceUrls', 'mediaSelection', 'mediaDetached', 'mediaPromptSuppressed'],
   workflow: [
     'share',
     'archive',
@@ -229,6 +229,16 @@ export class FrontmatterGenerator {
       frontmatter.sourceArchiveId = postData.sourceArchiveId;
     }
 
+    if (postData.metadata.socialArchiverImportMode) {
+      frontmatter.social_archiver_import_mode = postData.metadata.socialArchiverImportMode;
+    }
+    if (postData.metadata.socialArchiverImportSource) {
+      frontmatter.social_archiver_import_source = postData.metadata.socialArchiverImportSource;
+    }
+    if (postData.metadata.socialArchiverServerArchiveId) {
+      frontmatter.social_archiver_server_archive_id = postData.metadata.socialArchiverServerArchiveId;
+    }
+
     // Only add optional fields if they have values
     if (postData.title) frontmatter.title = postData.title;
     if (postData.transcript?.raw) frontmatter.hasTranscript = true;
@@ -262,6 +272,9 @@ export class FrontmatterGenerator {
     // Subscription-related fields
     if (postData.subscribed) frontmatter.subscribed = true;
     if (postData.subscriptionId) frontmatter.subscriptionId = postData.subscriptionId;
+    if (postData.platform === 'podcast' && postData.podcastAutoDownloadAudio === true) {
+      frontmatter.podcastAutoDownloadAudio = true;
+    }
 
     // X article (long-form post) marker — enables rich blog-style rendering in timeline
     if (postData.platform === 'x' && postData.content.html) frontmatter.isArticle = true;
@@ -369,6 +382,12 @@ export class FrontmatterGenerator {
       : [];
     if (topLevelMediaSourceUrls.length > 0) {
       frontmatter.mediaSourceUrls = topLevelMediaSourceUrls;
+    }
+
+    if (Array.isArray(postData.metadata.mediaSelectionSummary) && postData.metadata.mediaSelectionSummary.length > 0) {
+      frontmatter.mediaSelection = postData.metadata.mediaSelectionSummary
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter((item) => item.length > 0);
     }
 
     // Large Media Guard: forward explicit note-level flags + per-URL markers

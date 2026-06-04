@@ -8,6 +8,7 @@
 
   import type {
     ImportDestination,
+    ImportMode,
     ImportPreflightResult,
     StartImportFile,
   } from '../../types/import';
@@ -19,6 +20,7 @@
     isRunningPreflight: boolean;
     error: string | null;
     destination: ImportDestination;
+    importMode: ImportMode;
     tagsInput: string;
     importButtonEnabled: boolean;
     /**
@@ -31,6 +33,7 @@
     onFilesSelected: (files: StartImportFile[]) => void | Promise<void>;
     onRemoveFile: (filename: string) => void;
     onDestinationChange: (v: ImportDestination) => void;
+    onImportModeChange: (v: ImportMode) => void;
     onTagsInputChange: (v: string) => void;
     /** Primary CTA — open the review gallery (PRD §5.1). */
     onReviewPosts: () => void | Promise<void>;
@@ -49,12 +52,14 @@
     isRunningPreflight,
     error,
     destination,
+    importMode,
     tagsInput,
     importButtonEnabled,
     isLoadingGallery = false,
     onFilesSelected,
     onRemoveFile,
     onDestinationChange,
+    onImportModeChange,
     onTagsInputChange,
     onReviewPosts,
     onSkipReview,
@@ -63,6 +68,10 @@
 
   function handleDestinationInput(next: ImportDestination): void {
     if (next !== destination) onDestinationChange(next);
+  }
+
+  function handleImportModeInput(next: ImportMode): void {
+    if (next !== importMode) onImportModeChange(next);
   }
 
   function handleTagsInput(e: Event): void {
@@ -176,6 +185,38 @@
     {#if error}
       <div class="sa-ig-preflight__error" role="alert">{error}</div>
     {/if}
+
+    <fieldset class="sa-ig-preflight__group" aria-label="Import mode">
+      <legend class="sa-ig-preflight__group-label">Import mode</legend>
+      <div class="sa-ig-preflight__radio-row">
+        <label class="sa-ig-preflight__radio">
+          <input
+            type="radio"
+            name="sa-ig-import-mode"
+            value="server-synced"
+            checked={importMode === 'server-synced'}
+            onchange={() => handleImportModeInput('server-synced')}
+          />
+          <span>
+            <strong>Server-synced</strong>
+            <span class="sa-ig-preflight__radio-hint">Creates server archives, R2 media, and cross-device sync.</span>
+          </span>
+        </label>
+        <label class="sa-ig-preflight__radio">
+          <input
+            type="radio"
+            name="sa-ig-import-mode"
+            value="local-only"
+            checked={importMode === 'local-only'}
+            onchange={() => handleImportModeInput('local-only')}
+          />
+          <span>
+            <strong>Local-only</strong>
+            <span class="sa-ig-preflight__radio-hint">Creates vault notes only; no mobile/web sync or R2 backup.</span>
+          </span>
+        </label>
+      </div>
+    </fieldset>
 
     <fieldset class="sa-ig-preflight__group" aria-label="Import destination">
       <legend class="sa-ig-preflight__group-label">Import to</legend>

@@ -16,6 +16,7 @@
   import { onMount } from 'svelte';
   import type {
     ImportDestination,
+    ImportMode,
     ImportOrchestrator,
     ImportPreflightResult,
     ImportJobState,
@@ -24,7 +25,7 @@
     StartImportFile,
     GallerySelection,
   } from '../../types/import';
-  import { DEFAULT_IMPORT_DESTINATION } from '../../types/import';
+  import { DEFAULT_IMPORT_DESTINATION, DEFAULT_IMPORT_MODE } from '../../types/import';
   // Concrete class import — the public {@link ImportOrchestrator} interface
   // intentionally does NOT expose `getMediaPreviewService()` (Layer 2 spec
   // keeps the interface narrow). The gallery pane needs the service for
@@ -87,6 +88,7 @@
 
   /** Target timeline bucket for every item in this job. */
   let destination = $state<ImportDestination>(DEFAULT_IMPORT_DESTINATION);
+  let importMode = $state<ImportMode>(DEFAULT_IMPORT_MODE);
 
   /** Raw comma-separated text; orchestrator normalizes on startImport. */
   let tagsInput = $state('');
@@ -293,6 +295,7 @@
       const { jobId } = await orchestrator.startImport({
         files: selectedFiles,
         destination,
+        mode: importMode,
         tags: parseTagsInput(tagsInput),
         ...(selection ? { selection } : {}),
       });
@@ -488,6 +491,7 @@
     intentionallyExcluded = 0;
     preflightError = null;
     activeJob = null;
+    importMode = DEFAULT_IMPORT_MODE;
     completedItems = 0;
     partialMediaItems = 0;
     skippedDuplicates = 0;
@@ -536,12 +540,14 @@
       {isRunningPreflight}
       error={preflightError}
       {destination}
+      {importMode}
       {tagsInput}
       {importButtonEnabled}
       {isLoadingGallery}
       onFilesSelected={onFilesSelected}
       onRemoveFile={onRemoveFile}
       onDestinationChange={(v) => { destination = v; }}
+      onImportModeChange={(v) => { importMode = v; }}
       onTagsInputChange={(v) => { tagsInput = v; }}
       onReviewPosts={onReviewPosts}
       onSkipReview={onSkipReview}

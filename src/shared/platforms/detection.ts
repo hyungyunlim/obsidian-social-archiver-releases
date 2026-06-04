@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/detection.ts
- * Generated: 2026-05-28T22:00:32.475Z
+ * Generated: 2026-06-04T22:49:55.508Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -51,6 +51,7 @@ const DETECTION_ORDER: Platform[] = [
   'tumblr',
   'medium', // Must be before mastodon (medium.com/@user looks like mastodon pattern)
   'velog', // Korean developer blog platform
+  'kidsnote', // Korean daycare report service (account-connected)
   'webtoons', // Global webtoons.com - must be before naver-webtoon (different domain)
   'naver-webtoon', // Must be before 'naver' - more specific pattern (comic.naver.com)
   'naver', // Korean portal - blog, cafe, news (must be before blog/mastodon)

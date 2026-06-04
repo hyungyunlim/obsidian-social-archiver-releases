@@ -96,6 +96,25 @@ describe('CommentRenderer', () => {
     expect(content?.querySelector('a.cr-link')?.textContent).toBe('https://example.com/link');
   });
 
+  it('renders Reddit quote lines as styled quote blocks while preserving links', () => {
+    const container = document.createElement('div');
+    const comments: Comment[] = [
+      {
+        id: '1',
+        author: { name: 'Commenter', url: 'https://www.reddit.com/user/commenter' },
+        content: 'Before\n> quoted r/cycling\nAfter',
+      },
+    ];
+
+    new CommentRenderer().render(container, comments, 'reddit');
+
+    const quote = container.querySelector('.cr-comment-quote');
+    expect(quote?.textContent).toBe('quoted r/cycling');
+    expect(quote?.querySelector('a.cr-link')?.getAttribute('href')).toBe('https://www.reddit.com/r/cycling/');
+    expect(container.textContent).toContain('Before');
+    expect(container.textContent).toContain('After');
+  });
+
   it('renders Reddit subreddit and user references inside comment content as links', () => {
     const container = document.createElement('div');
     const comments: Comment[] = [

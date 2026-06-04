@@ -24,9 +24,9 @@ import { AICommentJobStatusBanner } from '../AICommentJobStatusBanner';
 import { TranscriptionJobStatusBanner } from '../TranscriptionJobStatusBanner';
 import {
   MORE_TRANSLATION_LANGUAGE_OPTIONS,
+  OUTPUT_LANGUAGE_OPTIONS,
   PRIMARY_TRANSLATION_LANGUAGE_OPTIONS,
   getMissingTranslationLanguageOptions,
-  isSupportedAIActionLanguageCode,
   type AIActionLanguageOption,
 } from '../aiActionLanguageOptions';
 import { stripContentVariantMetadataFooter } from '../../../utils/contentVariantMarkdown';
@@ -766,6 +766,13 @@ export class ReaderModeOverlay {
           },
         },
         {
+          icon: 'languages',
+          title: 'Summary language',
+          onSelect: () => {
+            this.openReaderOutputLanguageSheet(post, 'comment.summary');
+          },
+        },
+        {
           icon: 'shield-check',
           title: 'Fact check',
           onSelect: () => {
@@ -798,6 +805,14 @@ export class ReaderModeOverlay {
         .setTitle('Summary')
         .onClick(() => {
           void this.requestReaderAIAction(post, 'comment.summary');
+        });
+    });
+    menu.addItem((item) => {
+      item
+        .setIcon('chevron-right')
+        .setTitle('Summary language')
+        .onClick(() => {
+          this.openReaderOutputLanguageMenu(post, anchorEl, 'comment.summary');
         });
     });
     menu.addItem((item) => {
@@ -866,6 +881,19 @@ export class ReaderModeOverlay {
     );
   }
 
+  private openReaderOutputLanguageSheet(post: PostData, actionType: AIActionType): void {
+    this.openReaderActionSheet(
+      'Summary language',
+      OUTPUT_LANGUAGE_OPTIONS.map((language) => ({
+        icon: 'languages',
+        title: language.menuLabel,
+        onSelect: () => {
+          void this.requestReaderAIAction(post, actionType, language.code);
+        },
+      })),
+    );
+  }
+
   private addReaderTranslationMenuItems(menu: Menu, post: PostData, anchorEl: HTMLElement): void {
     for (const language of PRIMARY_TRANSLATION_LANGUAGE_OPTIONS) {
       menu.addItem((item) => {
@@ -901,6 +929,27 @@ export class ReaderModeOverlay {
           .setTitle(language.menuLabel)
           .onClick(() => {
             void this.requestReaderAIAction(post, 'content.translate_variant', language.code);
+          });
+      });
+    }
+
+    const rect = anchorEl.getBoundingClientRect();
+    menu.showAtPosition({ x: rect.left, y: rect.bottom });
+  }
+
+  private openReaderOutputLanguageMenu(
+    post: PostData,
+    anchorEl: HTMLElement,
+    actionType: AIActionType,
+  ): void {
+    const menu = new Menu();
+    for (const language of OUTPUT_LANGUAGE_OPTIONS) {
+      menu.addItem((item) => {
+        item
+          .setIcon('languages')
+          .setTitle(language.menuLabel)
+          .onClick(() => {
+            void this.requestReaderAIAction(post, actionType, language.code);
           });
       });
     }
@@ -1190,12 +1239,7 @@ export class ReaderModeOverlay {
   }
 
   private resolveDefaultAIActionLanguage(): string | undefined {
-    const configured = this.context.plugin.settings.aiComment.outputLanguage;
-    if (configured && configured !== 'auto') return configured;
-    const language = navigator.language?.split('-')[0]?.toLowerCase();
-    return isSupportedAIActionLanguageCode(language)
-      ? language
-      : undefined;
+    return this.context.plugin.settings.aiComment.outputLanguage || 'auto';
   }
 
   // ---------- Comment / Note Modal ----------

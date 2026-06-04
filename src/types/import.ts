@@ -177,6 +177,10 @@ export type ImportDestination = 'inbox' | 'archive';
 
 export const DEFAULT_IMPORT_DESTINATION: ImportDestination = 'inbox';
 
+export type ImportMode = 'server-synced' | 'local-only';
+
+export const DEFAULT_IMPORT_MODE: ImportMode = 'server-synced';
+
 export type ImportJobState = {
   jobId: string;
   status: ImportJobStatus;
@@ -196,6 +200,12 @@ export type ImportJobState = {
    * user's original choice when the modal re-attaches after restart.
    */
   destination: ImportDestination;
+  /**
+   * Server-synced keeps the existing Workers/D1/R2 path. Local-only writes
+   * vault notes and attachments from the ZIP without archive/media/finalize
+   * API calls after optional preflight.
+   */
+  mode?: ImportMode;
   /**
    * Job-wide extra YAML tags merged into every imported post's frontmatter.
    * Normalized by the orchestrator (trim, strip leading `#`, de-duplicated
@@ -308,6 +318,7 @@ export type StartImportOptions = {
    * Defaults to {@link DEFAULT_IMPORT_DESTINATION} (`'inbox'`).
    */
   destination?: ImportDestination;
+  mode?: ImportMode;
   /**
    * Extra YAML tags to apply to every imported post. Raw user input —
    * the orchestrator normalizes (trim, strip leading `#`, de-dupe).
@@ -445,6 +456,39 @@ export interface ImportAPIClient {
   }): Promise<{ archiveId: string; skippedDuplicate: boolean }>;
 
   /**
+   * `POST /api/import/jobs/:jobId/items` batch ingestion path. Optional so
+   * older/fake clients can fall back to `createArchiveFromImport` without
+   * changing their implementation.
+   */
+  createArchivesFromImportBatch?(args: {
+    jobId: string;
+    source: 'instagram-saved-import';
+    sourceClientId?: string;
+    items: Array<{
+      url: string;
+      clientPostData: PostData;
+      importContext: {
+        source: 'instagram-saved-import';
+        jobId: string;
+        exportId: string;
+        partNumber: number;
+      };
+    }>;
+  }): Promise<{
+    accepted: number;
+    created: Array<{ postId: string; archiveId: string }>;
+    skippedDuplicates: Array<{ postId: string; archiveId: string }>;
+    failed: Array<{ postId: string; code: string; message: string }>;
+  }>;
+
+  startImportSession?(args: {
+    jobId: string;
+    source: 'instagram-saved-import';
+    sourceClientId?: string;
+    selectedCount: number;
+  }): Promise<{ jobId: string; sessionId: string; expiresAt: number }>;
+
+  /**
    * `POST /api/archive/:archiveId/media` (PRD §10.3). Multipart upload of
    * media files streamed from the local ZIP. Batches are caller-chosen.
    */
@@ -470,6 +514,12 @@ export interface ImportAPIClient {
     totalCount: number;
     partialMediaCount: number;
     failedCount: number;
+    mode?: ImportMode;
+    uploadedItemCount?: number;
+    duplicateCount?: number;
+    mediaFileCount?: number;
+    mediaByteCount?: number;
+    serverApiCallCount?: number;
     sourceClientId?: string;
   }): Promise<void>;
 }
@@ -500,11 +550,14 @@ export const MAX_ITEM_RETRIES = 3;
 /** Max items per single `/api/import/preflight` batch (PRD §10.2). */
 export const PREFLIGHT_BATCH_SIZE = 1000;
 
-/** Max files per single `/api/archive/:archiveId/media` request (keeps batches ≤ ~50MB). */
+/** Max items per single `/api/import/jobs/:jobId/items` batch. */
+export const IMPORT_INGEST_BATCH_SIZE = 100;
+
+/** Max files per single `/api/archive/:archiveId/media` request (keeps batches <= ~100MB). */
 export const MEDIA_UPLOAD_BATCH_SIZE = 20;
 
 /** Cap each media upload batch at this byte total. */
-export const MEDIA_UPLOAD_BATCH_BYTE_CAP = 50 * 1024 * 1024;
+export const MEDIA_UPLOAD_BATCH_BYTE_CAP = 100 * 1024 * 1024;
 
 /** Retention (days) for completed jobs in the local job store. */
 export const COMPLETED_JOB_RETENTION_DAYS = 30;

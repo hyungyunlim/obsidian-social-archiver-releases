@@ -363,6 +363,19 @@ export const PLATFORM_DEFINITIONS: Record<Platform, PlatformDefinition> = {
     features: { stories: false, live: false, reels: false, threads: true },
   },
 
+  kidsnote: {
+    id: 'kidsnote',
+    displayName: 'Kidsnote',
+    emoji: '🏫',
+    domains: ['kidsnote.com', 'www.kidsnote.com'],
+    urlPattern: /(?:^https?:\/\/)?(?:www\.)?kidsnote\.com(?:\/|$)/i,
+    supportsMedia: true,
+    supportsAI: true,
+    maxMediaSize: 200 * 1024 * 1024, // videos may be attached to reports
+    rateLimit: { requestsPerHour: 120, requestsPerDay: 1000 },
+    features: { stories: false, live: false, reels: false, threads: false },
+  },
+
   naver: {
     id: 'naver',
     displayName: 'Naver',
@@ -640,6 +653,12 @@ export const PLATFORM_AI_COMMENT_CONFIG: Record<Platform, PlatformAICommentConfi
     requiresTranscription: false,
     defaultEnabled: true,
     contentSource: 'rawMarkdown',
+  },
+  kidsnote: {
+    showBanner: true,
+    requiresTranscription: false,
+    defaultEnabled: true,
+    contentSource: 'text',
   },
   naver: {
     showBanner: true,

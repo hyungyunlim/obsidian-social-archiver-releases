@@ -546,12 +546,14 @@ export interface UserArchive {
     originalUrl: string;
     r2Url: string;
     r2Key: string;
-    type: 'image' | 'video';
+    type: 'image' | 'video' | 'audio';
     size: number;
     contentType: string;
     preservedAt: string;
     width?: number;
     height?: number;
+    sourceIndex?: number;
+    variant?: 'primary' | 'thumbnail';
   }> | null;
   mediaPreservationStatus?: 'pending' | 'processing' | 'completed' | 'partial' | 'failed' | 'skipped';
   postedAt: string | null;
@@ -1485,6 +1487,9 @@ export class WorkersAPIClient implements IService {
       console.error('[WorkersAPIClient] Request failed:', {
         url,
         error: error instanceof Error ? error.message : String(error),
+        code: error instanceof Error ? (error as Error & { code?: string }).code : undefined,
+        details: error instanceof Error ? (error as Error & { details?: unknown }).details : undefined,
+        status: error instanceof Error ? (error as Error & { status?: number }).status : undefined,
         stack: error instanceof Error ? error.stack : undefined,
       });
       throw error;

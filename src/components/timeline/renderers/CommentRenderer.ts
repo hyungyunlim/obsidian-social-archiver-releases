@@ -14,6 +14,11 @@ interface CommentRenderContext {
   onToggleComment: (commentKey: string, currentlyExpanded: boolean) => void;
 }
 
+interface CommentContentBlock {
+  type: 'text' | 'quote';
+  content: string;
+}
+
 const MAX_COMMENT_RENDER_DEPTH = 20;
 /**
  * CommentRenderer - Renders Instagram-style comments section
@@ -323,6 +328,55 @@ export class CommentRenderer {
     }
   }
 
+  private splitCommentQuoteBlocks(text: string): CommentContentBlock[] {
+    const normalized = this.decodeHtmlEntities(text)
+      .replace(/\\n/g, '\n')
+      .replace(/\r\n?/g, '\n');
+    const lines = normalized.split('\n');
+    const blocks: CommentContentBlock[] = [];
+    let currentType: CommentContentBlock['type'] | null = null;
+    let currentLines: string[] = [];
+
+    const flush = () => {
+      if (!currentType) return;
+      const content = currentLines.join('\n').trim();
+      if (content) blocks.push({ type: currentType, content });
+      currentType = null;
+      currentLines = [];
+    };
+
+    for (const line of lines) {
+      const quoteMatch = line.match(/^\s*>\s?(.*)$/);
+      const nextType: CommentContentBlock['type'] = quoteMatch ? 'quote' : 'text';
+      const nextContent = quoteMatch ? quoteMatch[1] ?? '' : line;
+      if (currentType && currentType !== nextType) flush();
+      currentType = nextType;
+      currentLines.push(nextContent);
+    }
+
+    flush();
+    return blocks;
+  }
+
+  private renderCommentContent(container: HTMLElement, text: string): void {
+    const blocks = this.splitCommentQuoteBlocks(text);
+    if (!blocks.some((block) => block.type === 'quote')) {
+      this.renderTextWithLinks(container, text);
+      return;
+    }
+
+    blocks.forEach((block, index) => {
+      const span = container.createSpan({
+        cls: block.type === 'quote'
+          ? 'cr-comment-quote'
+          : index === 0
+            ? 'cr-comment-text-run'
+            : 'cr-comment-text-block',
+      });
+      this.renderTextWithLinks(span, block.content);
+    });
+  }
+
   /**
    * Render a single comment (Instagram style)
    */
@@ -401,7 +455,7 @@ export class CommentRenderer {
     // Render comment content with parsed links/mentions
     const commentContentSpan = contentSpan.createSpan();
     commentContentSpan.addClass('sa-text-normal', 'cr-comment-content');
-    this.renderTextWithLinks(commentContentSpan, comment.content ?? '');
+    this.renderCommentContent(commentContentSpan, comment.content ?? '');
 
     // Time and likes (inline for both main comments and replies)
     // Only show time if timestamp exists and is valid

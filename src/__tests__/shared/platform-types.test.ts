@@ -80,8 +80,8 @@ describe('Platform Types', () => {
 			expect(PLATFORMS).toContain('post');
 		});
 
-		it('should have correct length (22 platforms)', () => {
-			expect(PLATFORMS).toHaveLength(22);
+		it('should have correct length (24 platforms)', () => {
+			expect(PLATFORMS).toHaveLength(24);
 		});
 	});
 
@@ -93,6 +93,10 @@ describe('Platform Types', () => {
 
 			it('should include naver', () => {
 				expect(CRAWL_SUPPORTED_PLATFORMS).toContain('naver');
+			});
+
+			it('should include threads for feature-flagged official API crawl', () => {
+				expect(CRAWL_SUPPORTED_PLATFORMS).toContain('threads');
 			});
 
 			it('should NOT include post', () => {
@@ -117,6 +121,10 @@ describe('Platform Types', () => {
 				expect(NEW_SUBSCRIPTION_PLATFORMS).toContain('x');
 			});
 
+			it('should NOT include threads until the user-facing rollout is enabled', () => {
+				expect(NEW_SUBSCRIPTION_PLATFORMS).not.toContain('threads');
+			});
+
 			it('should NOT include linkedin (disabled for new)', () => {
 				expect(NEW_SUBSCRIPTION_PLATFORMS).not.toContain('linkedin');
 			});
@@ -129,6 +137,10 @@ describe('Platform Types', () => {
 
 			it('should include x (for legacy subscriptions)', () => {
 				expect(SUBSCRIPTION_PLATFORMS).toContain('x');
+			});
+
+			it('should include threads for feature-flagged API-created subscriptions', () => {
+				expect(SUBSCRIPTION_PLATFORMS).toContain('threads');
 			});
 
 			it('should include linkedin (for legacy subscriptions)', () => {

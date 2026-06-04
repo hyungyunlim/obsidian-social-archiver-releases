@@ -180,6 +180,17 @@ export class PreviewableHeaderRenderer {
       timeRow.appendChild(subredditLink);
     }
 
+    // Kidsnote: daycare center label
+    if (post.platform === 'kidsnote' && post.content?.community) {
+      this.appendSeparator(timeRow);
+      const centerSpan = activeDocument.createElement('span');
+      centerSpan.classList.add('text-xs');
+      centerSpan.setCssStyles({ color: 'var(--text-muted)' });
+      centerSpan.textContent = post.content.community.name;
+      centerSpan.setAttribute('title', post.content.community.name);
+      timeRow.appendChild(centerSpan);
+    }
+
     // Naver: cafe link
     if (post.platform === 'naver' && post.content?.community) {
       this.appendSeparator(timeRow);

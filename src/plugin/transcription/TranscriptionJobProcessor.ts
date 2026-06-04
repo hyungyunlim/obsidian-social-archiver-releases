@@ -16,6 +16,8 @@ import { TranscriptFormatter } from '../../services/markdown/formatters/Transcri
 import type { TranscriptionProgress, TranscriptionResult } from '../../types/transcription';
 import { isTranscriptionError, TranscriptionError } from '../../types/transcription';
 import type { SocialArchiverSettings } from '../../types/settings';
+import type { Media, Platform } from '../../types/post';
+import type { MediaResult } from '../../services/MediaHandler';
 import type { MediaPathResolver } from '../media/MediaPathResolver';
 import type { IngestResult } from '../sync/RemoteArchiveIngestService';
 import type { LocalLockRegistry } from '../locks/LocalLockRegistry';
@@ -29,6 +31,7 @@ export interface TranscriptionJobProcessorDeps {
   isArchiveLibrarySyncRunning: () => boolean;
   mediaPathResolver: () => MediaPathResolver;
   toAbsoluteVaultPath: (vaultPath: string) => string;
+  downloadMedia?: (media: Media[], platform: string, postId: string, authorUsername: string) => Promise<MediaResult[]>;
   downloadWithYtDlp?: (url: string, platform: string, postId: string, signal?: AbortSignal) => Promise<string | null>;
   refreshCapability: () => Promise<void>;
   capabilityHash: () => string | undefined;
@@ -53,6 +56,11 @@ interface ProcessingContext {
   lease: ActiveLease;
   abortController: AbortController;
   startedAt: string;
+}
+
+interface AudioMaterializationSource {
+  media: Media;
+  sourceUrl: string | null;
 }
 
 export interface PendingTranscriptUploadRecord {
@@ -126,6 +134,29 @@ export function upsertDownloadedVideoEmbed(content: string, localVideoPath: stri
   return after ? `${before}${embed}${newline}${newline}${after}` : `${before}${embed}${newline}`;
 }
 
+export function upsertDownloadedAudioEmbed(content: string, localAudioPath: string): string {
+  const normalizedPath = normalizePath(localAudioPath).replace(/^\/+/, '');
+  if (!normalizedPath) return content;
+
+  const embed = `![[${normalizedPath}]]`;
+  const frontmatterMatch = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+  const bodyStart = frontmatterMatch ? frontmatterMatch[0].length : 0;
+  const body = content.slice(bodyStart);
+  if (body.includes(normalizedPath) || body.includes(encodeURI(normalizedPath))) return content;
+
+  const audioTagRegex = /<audio\b[^>]*\bsrc=(["'])[^"']+\1[^>]*>\s*<\/audio>/i;
+  if (audioTagRegex.test(body)) {
+    return content.slice(0, bodyStart) + body.replace(audioTagRegex, embed);
+  }
+
+  const newline = content.includes('\r\n') ? '\r\n' : '\n';
+  const headingMatch = body.match(/^\s*#\s+[^\n]+\n+/);
+  const insertAt = bodyStart + (headingMatch ? headingMatch[0].length : 0);
+  const before = content.slice(0, insertAt).replace(/\s*$/, `${newline}${newline}`);
+  const after = content.slice(insertAt).replace(/^\s*/, '');
+  return after ? `${before}${embed}${newline}${newline}${after}` : `${before}${embed}${newline}`;
+}
+
 function applyDownloadedVideoFrontmatter(
   frontmatter: Record<string, unknown>,
   sourceUrl: string | null,
@@ -161,6 +192,42 @@ function applyDownloadedVideoFrontmatter(
   delete frontmatter.videoDownloadFailed;
   delete frontmatter.videoDownloadFailedCount;
   delete frontmatter.videoDownloadFailedUrls;
+}
+
+function applyDownloadedAudioFrontmatter(
+  frontmatter: Record<string, unknown>,
+  sourceUrl: string | null,
+  localAudioPath: string,
+): void {
+  const normalizedPath = normalizePath(localAudioPath).replace(/^\/+/, '');
+  const downloadedUrls = Array.isArray(frontmatter.downloadedUrls) ? [...frontmatter.downloadedUrls] : [];
+  if (sourceUrl) {
+    for (const marker of [sourceUrl, `downloaded:${sourceUrl}`]) {
+      if (!downloadedUrls.includes(marker)) downloadedUrls.push(marker);
+    }
+  }
+  frontmatter.downloadedUrls = downloadedUrls;
+  frontmatter.audioDownloaded = true;
+  frontmatter.audioLocalPath = normalizedPath;
+  frontmatter.localAudioPath = normalizedPath;
+
+  const media = Array.isArray(frontmatter.media) ? [...frontmatter.media] : [];
+  const mediaMarker = `audio:${normalizedPath}`;
+  const hasLocalAudioMarker = media.some((item) => {
+    if (typeof item === 'string') {
+      const trimmed = item.trim();
+      return trimmed === mediaMarker || trimmed === normalizedPath || trimmed.endsWith(`:${normalizedPath}`);
+    }
+    if (!item || typeof item !== 'object') return false;
+    const record = item as Record<string, unknown>;
+    return ['localPath', 'path', 'src', 'url'].some((key) => record[key] === normalizedPath);
+  });
+  if (!hasLocalAudioMarker) {
+    frontmatter.media = [...media, mediaMarker];
+  }
+
+  delete frontmatter.audioDownloadFailed;
+  delete frontmatter.audioDownloadFailedUrls;
 }
 
 export class TranscriptionJobProcessor {
@@ -568,6 +635,9 @@ export class TranscriptionJobProcessor {
   ): Promise<string | null> {
     const local = await this.resolveLocalMediaPath(file, context.job.mediaRef.kind);
     if (local) return local;
+    if (context.job.mediaRef.kind === 'audio') {
+      return this.downloadAudioForJob(file, context);
+    }
     if (!this.isDownloadMode(context.job.mode)) return null;
     return this.downloadMediaForJob(file, context);
   }
@@ -716,6 +786,120 @@ export class TranscriptionJobProcessor {
     } catch (error) {
       console.warn('[TranscriptionJobProcessor] Media download failed:', safeError(error));
       return null;
+    }
+  }
+
+  private async downloadAudioForJob(file: TFile, context: ProcessingContext): Promise<string | null> {
+    const apiClient = this.deps.apiClient();
+    if (!apiClient) return null;
+
+    let archive: UserArchive | null = null;
+    try {
+      archive = await apiClient.getUserArchive(context.job.archiveId)
+        .then((response) => response.archive ?? null);
+    } catch (error) {
+      console.warn('[TranscriptionJobProcessor] Failed to fetch archive for audio materialization:', safeError(error));
+      return null;
+    }
+
+    if (!archive) return null;
+    const source = this.resolveAudioMaterializationSource(archive, context.job.mediaRef);
+    if (!source) return null;
+
+    try {
+      await this.progress(context, 'preparing_media', 22, 'downloading_audio');
+      const results = await this.downloadMediaForTranscription(
+        [source.media],
+        archive.platform || 'podcast',
+        archive.postId || archive.id,
+        archive.authorHandle || archive.authorName || 'unknown',
+      );
+      const result = results[0];
+      if (!result?.localPath) return null;
+      await this.ensureDownloadedAudioReference(file, context, result.localPath, source.sourceUrl);
+      return result.localPath;
+    } catch (error) {
+      console.warn('[TranscriptionJobProcessor] Audio materialization failed:', safeError(error));
+      return null;
+    }
+  }
+
+  private resolveAudioMaterializationSource(
+    archive: UserArchive,
+    mediaRef: TranscriptionExecutorJob['mediaRef'],
+  ): AudioMaterializationSource | null {
+    const media = archive.media ?? [];
+    const preserved = archive.mediaPreserved ?? [];
+    const mediaIndex = typeof mediaRef.mediaIndex === 'number' ? mediaRef.mediaIndex : undefined;
+    const indexedMedia = mediaIndex !== undefined ? media[mediaIndex] : undefined;
+    const sourceMedia = mediaIndex !== undefined
+      ? (indexedMedia?.type === 'audio' ? indexedMedia : undefined)
+      : media.find((item) => item.type === 'audio');
+
+    const preservedAudio = preserved.find((item) => {
+      if (item.type !== 'audio') return false;
+      if (mediaIndex !== undefined && item.sourceIndex === mediaIndex) return true;
+      if (sourceMedia?.url && item.originalUrl === sourceMedia.url) return true;
+      if (mediaIndex !== undefined && item.r2Key.includes(`/podcast-audio-${mediaIndex}-`)) return true;
+      return false;
+    }) ?? preserved.find((item) => item.type === 'audio');
+
+    const url = preservedAudio?.r2Url ?? sourceMedia?.url;
+    if (!url) return null;
+
+    return {
+      media: {
+        type: 'audio',
+        url,
+        ...(preservedAudio?.r2Url ? { r2Url: preservedAudio.r2Url } : {}),
+        ...(sourceMedia?.thumbnail || sourceMedia?.thumbnailUrl ? { thumbnail: sourceMedia.thumbnail ?? sourceMedia.thumbnailUrl } : {}),
+        ...(preservedAudio?.size != null ? { size: preservedAudio.size } : {}),
+        ...(preservedAudio?.contentType ? { mimeType: preservedAudio.contentType } : {}),
+      },
+      sourceUrl: sourceMedia?.url ?? preservedAudio?.originalUrl ?? url,
+    };
+  }
+
+  private async downloadMediaForTranscription(
+    media: Media[],
+    platform: string,
+    postId: string,
+    authorUsername: string,
+  ): Promise<MediaResult[]> {
+    if (this.deps.downloadMedia) {
+      return this.deps.downloadMedia(media, platform, postId, authorUsername);
+    }
+    const apiClient = this.deps.apiClient();
+    const { MediaHandler } = await import('../../services/MediaHandler');
+    const handler = new MediaHandler({
+      vault: this.deps.app.vault,
+      app: this.deps.app,
+      workersClient: apiClient,
+      basePath: this.deps.settings().mediaPath || 'attachments/social-archives',
+      optimizeImages: true,
+      imageQuality: 0.8,
+    });
+    return handler.downloadMedia(media, platform as Platform, postId, authorUsername);
+  }
+
+  private async ensureDownloadedAudioReference(
+    file: TFile,
+    context: ProcessingContext,
+    localMediaPath: string,
+    sourceUrlOverride?: string | null,
+  ): Promise<void> {
+    if (context.job.mediaRef.kind !== 'audio') return;
+    await this.assertLocalMediaFileExists(localMediaPath);
+    await this.withMarkdownWriteLock(context.job.archiveId, async () => {
+      await this.deps.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+        applyDownloadedAudioFrontmatter(fm, sourceUrlOverride ?? null, localMediaPath);
+      });
+      await this.processFile(file, (content) => upsertDownloadedAudioEmbed(content, localMediaPath));
+    }, context.abortController.signal);
+
+    const updated = await this.deps.app.vault.read(file);
+    if (!this.contentBodyContainsLocalMedia(updated, localMediaPath)) {
+      throw new Error(`Downloaded audio embed was not written to note: ${localMediaPath}`);
     }
   }
 
@@ -1278,9 +1462,11 @@ export class TranscriptionJobProcessor {
   }
 
   private isLocalMediaVaultPath(path: string, kind: TranscriptionMediaKind): boolean {
-    const ext = path.split('?')[0]?.split('#')[0]?.split('.').pop()?.toLowerCase() ?? '';
+    const cleanPath = path.split('?')[0]?.split('#')[0] ?? path;
+    const fileName = cleanPath.split('/').pop() ?? '';
+    const ext = fileName.includes('.') ? (fileName.split('.').pop()?.toLowerCase() ?? '') : '';
     const expected = kind === 'audio' ? AUDIO_EXTENSIONS : VIDEO_EXTENSIONS;
-    if (!expected.has(ext)) return false;
+    if (!expected.has(ext) && !(kind === 'audio' && ext === '')) return false;
     return this.deps.app.vault.getAbstractFileByPath(path) instanceof TFile;
   }
 

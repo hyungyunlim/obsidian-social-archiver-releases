@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { upsertDownloadedVideoEmbed } from '../../../plugin/transcription/TranscriptionJobProcessor';
+import {
+  upsertDownloadedAudioEmbed,
+  upsertDownloadedVideoEmbed,
+} from '../../../plugin/transcription/TranscriptionJobProcessor';
 
 describe('upsertDownloadedVideoEmbed', () => {
   it('inserts a downloaded video embed below the YouTube title', () => {
@@ -105,5 +108,71 @@ Existing transcript.
       'Body.',
       '',
     ].join('\r\n'));
+  });
+});
+
+describe('upsertDownloadedAudioEmbed', () => {
+  it('replaces a remote audio tag with a local vault embed', () => {
+    const content = `---
+platform: podcast
+---
+
+# Podcast Episode
+
+<audio controls src="https://rss.art19.com/episodes/example.mp3"></audio>
+
+Show notes.
+`;
+
+    expect(upsertDownloadedAudioEmbed(content, 'attachments/social-archives/podcast/episode.mp3')).toBe(`---
+platform: podcast
+---
+
+# Podcast Episode
+
+![[attachments/social-archives/podcast/episode.mp3]]
+
+Show notes.
+`);
+  });
+
+  it('does not duplicate an existing downloaded audio embed', () => {
+    const content = `---
+platform: podcast
+audioLocalPath: attachments/social-archives/podcast/episode.mp3
+---
+
+# Podcast Episode
+
+![[attachments/social-archives/podcast/episode.mp3]]
+
+Show notes.
+`;
+
+    expect(upsertDownloadedAudioEmbed(content, 'attachments/social-archives/podcast/episode.mp3')).toBe(content);
+  });
+
+  it('inserts an audio embed below the title when no audio tag exists', () => {
+    const content = `---
+platform: podcast
+audioLocalPath: attachments/social-archives/podcast/episode.mp3
+---
+
+# Podcast Episode
+
+Show notes.
+`;
+
+    expect(upsertDownloadedAudioEmbed(content, 'attachments/social-archives/podcast/episode.mp3')).toBe(`---
+platform: podcast
+audioLocalPath: attachments/social-archives/podcast/episode.mp3
+---
+
+# Podcast Episode
+
+![[attachments/social-archives/podcast/episode.mp3]]
+
+Show notes.
+`);
   });
 });

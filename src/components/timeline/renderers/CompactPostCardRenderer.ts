@@ -296,6 +296,12 @@ export class CompactPostCardRenderer extends Component {
     // Subscription indicator (passive, icon-only) — shown when the post author is subscribed
     this.maybeRenderSubscriptionIndicator(headerRow, post);
 
+    if (post.platform === 'kidsnote' && post.content.community?.name) {
+      const centerName = leftSection.createDiv({ text: post.content.community.name });
+      centerName.addClass('sa-text-xs', 'sa-text-muted', 'sa-truncate');
+      centerName.setAttribute('title', post.content.community.name);
+    }
+
     // Content preview
     // For YouTube: show title in bold + description preview
     // For others: show content text
@@ -550,6 +556,7 @@ export class CompactPostCardRenderer extends Component {
       podcast: 'Podcast',
       blog: 'Blog',
       medium: 'Medium',
+      kidsnote: 'Kidsnote',
       naver: 'Naver',
       'naver-webtoon': 'Naver Webtoon',
       webtoons: 'WEBTOON',

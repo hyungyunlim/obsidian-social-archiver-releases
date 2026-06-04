@@ -182,6 +182,11 @@ function normalizeWhisperTranscript(archive: UserArchive): PostData['whisperTran
   };
 }
 
+function metadataString(metadata: Record<string, unknown> | null | undefined, key: string): string | undefined {
+  const value = metadata?.[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
 /**
  * Convert a UserArchive server response into the local PostData format.
  *
@@ -194,14 +199,16 @@ function normalizeWhisperTranscript(archive: UserArchive): PostData['whisperTran
  */
 export function convertUserArchiveToPostData(archive: UserArchive): PostData {
   const platform = archive.platform as Platform;
+  const isKidsnote = platform === 'kidsnote';
   const isXArticle = platform === 'x' && (archive.isArticle === true || !!archive.articleMarkdown);
   const normalizedWebBody = platform === 'web'
     ? extractWebArticleBody(archive)
     : isXArticle
       ? extractXArticleIntro(archive)
     : archive.fullContent || archive.previewText || '';
-  const authorUsername = normalizeHandle(archive.authorHandle);
-  const authorHandle = authorUsername ? `@${authorUsername}` : undefined;
+  const kidsnoteCenterName = isKidsnote ? normalizeHandle(archive.authorHandle) : undefined;
+  const authorUsername = isKidsnote ? undefined : normalizeHandle(archive.authorHandle);
+  const authorHandle = isKidsnote ? kidsnoteCenterName : (authorUsername ? `@${authorUsername}` : undefined);
   const authorUrl =
     archive.authorUrl ||
     buildProfileUrl(platform, authorUsername) ||
@@ -288,6 +295,12 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
     content: {
       text: normalizedWebBody,
       html: (archive.isArticle || archive.articleMarkdown) ? (archive.articleMarkdown ?? undefined) : undefined,
+      ...(kidsnoteCenterName ? {
+        community: {
+          name: kidsnoteCenterName,
+          url: 'https://www.kidsnote.com/',
+        },
+      } : {}),
     },
     media: normalizedMedia,
     metadata: {
@@ -299,6 +312,7 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
       externalLink: archive.externalLink ?? undefined,
       externalLinkTitle: archive.externalLinkTitle ?? undefined,
       externalLinkImage: archive.externalLinkImage ?? undefined,
+      location: metadataString(archive.metadata, 'location'),
     },
     ...(quoted ? {
       quotedPost: {

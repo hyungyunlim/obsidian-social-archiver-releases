@@ -14,7 +14,7 @@
 
 import { requestUrl } from 'obsidian';
 import type { Platform, PostData } from '@/types/post';
-import type { ImportAPIClient } from '@/types/import';
+import type { ImportAPIClient, ImportMode } from '@/types/import';
 
 /** Narrow WorkersAPIClient surface the adapter depends on. */
 export interface AdapterHttp {
@@ -42,6 +42,24 @@ type CreateArchiveArgs = {
   sourceClientId?: string;
 };
 
+type CreateArchiveBatchArgs = {
+  jobId: string;
+  source: 'instagram-saved-import';
+  sourceClientId?: string;
+  items: Array<{
+    url: string;
+    clientPostData: PostData;
+    importContext: ImportContext;
+  }>;
+};
+
+type StartImportSessionArgs = {
+  jobId: string;
+  source: 'instagram-saved-import';
+  sourceClientId?: string;
+  selectedCount: number;
+};
+
 type UploadMediaFile = {
   filename: string;
   relativePath: string;
@@ -60,6 +78,12 @@ type FinalizeArgs = {
   totalCount: number;
   partialMediaCount: number;
   failedCount: number;
+  mode?: ImportMode;
+  uploadedItemCount?: number;
+  duplicateCount?: number;
+  mediaFileCount?: number;
+  mediaByteCount?: number;
+  serverApiCallCount?: number;
   sourceClientId?: string;
 };
 
@@ -126,6 +150,31 @@ class ImportAPIClientAdapter implements ImportAPIClient {
     return { archiveId, skippedDuplicate };
   }
 
+  async createArchivesFromImportBatch(args: CreateArchiveBatchArgs): Promise<{
+    accepted: number;
+    created: Array<{ postId: string; archiveId: string }>;
+    skippedDuplicates: Array<{ postId: string; archiveId: string }>;
+    failed: Array<{ postId: string; code: string; message: string }>;
+  }> {
+    return this.postJson(
+      `/api/import/jobs/${encodeURIComponent(args.jobId)}/items`,
+      {
+        source: args.source,
+        sourceClientId: args.sourceClientId,
+        items: args.items,
+      },
+    );
+  }
+
+  async startImportSession(args: StartImportSessionArgs): Promise<{ jobId: string; sessionId: string; expiresAt: number }> {
+    return this.postJson('/api/import/jobs/start', {
+      jobId: args.jobId,
+      source: args.source,
+      sourceClientId: args.sourceClientId,
+      selectedCount: args.selectedCount,
+    });
+  }
+
   async uploadArchiveMedia(
     args: UploadMediaArgs,
   ): Promise<{ uploaded: number; failed: Array<{ relativePath: string; reason: string }> }> {
@@ -185,6 +234,12 @@ class ImportAPIClientAdapter implements ImportAPIClient {
         totalCount: args.totalCount,
         partialMediaCount: args.partialMediaCount,
         failedCount: args.failedCount,
+        mode: args.mode,
+        uploadedItemCount: args.uploadedItemCount,
+        duplicateCount: args.duplicateCount,
+        mediaFileCount: args.mediaFileCount,
+        mediaByteCount: args.mediaByteCount,
+        serverApiCallCount: args.serverApiCallCount,
         sourceClientId: args.sourceClientId,
       },
     );

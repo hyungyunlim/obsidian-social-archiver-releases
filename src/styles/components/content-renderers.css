@@ -972,6 +972,21 @@ button.cr-hidden-replies.cr-hidden-replies:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.cr-comment-text-block {
+  display: block;
+  margin-top: 4px;
+}
+
+.cr-comment-quote {
+  display: block;
+  margin: 5px 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* Link styling */
 .cr-link {
   text-decoration: none;

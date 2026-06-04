@@ -43,6 +43,7 @@ import type {
   ImportLogger,
 } from '@/types/import';
 import {
+  IMPORT_INGEST_BATCH_SIZE,
   MAX_ITEM_RETRIES,
   MEDIA_UPLOAD_BATCH_BYTE_CAP,
   MEDIA_UPLOAD_BATCH_SIZE,
@@ -59,7 +60,7 @@ import type { ImportProgressBus } from './ImportProgressBus';
  * itself is already committed server-side, so we never undo it.
  */
 export type OnArchiveCreatedHook = (
-  archiveId: string,
+  archiveId: string | null,
   postData: PostData,
 ) => Promise<void> | void;
 
@@ -216,6 +217,18 @@ function applyImportOverridesToPostData(
   }
 }
 
+function markLocalOnlyImportPostData(postData: PostData): void {
+  const metadata = postData.metadata as PostData['metadata'] & {
+    socialArchiverImportMode?: 'local-only';
+    socialArchiverImportSource?: 'instagram-saved-import';
+    socialArchiverServerArchiveId?: 'none';
+  };
+  metadata.socialArchiverImportMode = 'local-only';
+  metadata.socialArchiverImportSource = 'instagram-saved-import';
+  metadata.socialArchiverServerArchiveId = 'none';
+  delete postData.sourceArchiveId;
+}
+
 /** Exponential backoff with jitter, capped at 5s. */
 function backoffMs(attempt: number): number {
   const base = Math.min(5000, 250 * Math.pow(2, attempt));
@@ -261,6 +274,9 @@ export class ImportWorker {
   private readonly control: ControlFlag = { paused: false, cancelled: false };
   private inFlight = false;
   private finishedPromise: Promise<void> | null = null;
+  private serverApiCallCount = 0;
+  private mediaFileCount = 0;
+  private mediaByteCount = 0;
 
   constructor(
     public readonly jobId: string,
@@ -369,11 +385,16 @@ export class ImportWorker {
         const budgetMs = Math.max(50, Math.floor(1000 / rate));
         const startedAt = Date.now();
 
-        await this.processItem(nextIndex);
+        const batchCount = await this.processBatch();
+        if (batchCount === 0) {
+          await this.processItem(nextIndex);
+        }
 
         const elapsed = Date.now() - startedAt;
-        if (elapsed < budgetMs) {
-          await delay(budgetMs - elapsed);
+        const processedCount = Math.max(1, batchCount);
+        const batchBudgetMs = budgetMs * processedCount;
+        if (elapsed < batchBudgetMs) {
+          await delay(batchBudgetMs - elapsed);
         }
       }
 
@@ -410,18 +431,21 @@ export class ImportWorker {
         });
       }
       progressBus.emit({ type: 'job.failed', jobId: this.jobId, error: message });
-      try {
-        // Best-effort finalize so the server isn't left waiting forever.
-        await apiClient.finalizeImportJob({
-          jobId: this.jobId,
-          archiveIds: [],
-          totalCount: current?.totalItems ?? 0,
-          partialMediaCount: current?.partialMediaItems ?? 0,
-          failedCount: current?.failedItems ?? 0,
-          sourceClientId: current?.sourceClientId,
-        });
-      } catch {
-        // swallow
+      if (current?.mode !== 'local-only') {
+        try {
+          // Best-effort finalize so the server isn't left waiting forever.
+          await apiClient.finalizeImportJob({
+            jobId: this.jobId,
+            archiveIds: [],
+            totalCount: current?.totalItems ?? 0,
+            partialMediaCount: current?.partialMediaItems ?? 0,
+            failedCount: current?.failedItems ?? 0,
+            mode: current?.mode ?? 'server-synced',
+            sourceClientId: current?.sourceClientId,
+          });
+        } catch {
+          // swallow
+        }
       }
     }
   }
@@ -429,6 +453,188 @@ export class ImportWorker {
   // ---------------------------------------------------------------------------
   // Per-item pipeline
   // ---------------------------------------------------------------------------
+
+  private async processBatch(): Promise<number> {
+    const { jobStore, logger, apiClient, postDataFor, onArchiveCreated } = this.deps;
+    if (!apiClient.createArchivesFromImportBatch || this.inFlight) return 0;
+    this.inFlight = true;
+    try {
+      const job = jobStore.getJob(this.jobId);
+      if (!job) return 0;
+      if (job.mode === 'local-only') return 0;
+
+      const items = [...jobStore.getItems(this.jobId)];
+      const pending = items
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) =>
+          item.status === 'pending' ||
+          (item.status === 'failed' && item.retryCount < MAX_ITEM_RETRIES),
+        )
+        .slice(0, IMPORT_INGEST_BATCH_SIZE);
+      if (pending.length === 0) return 0;
+
+      const batchItems: Array<{
+        index: number;
+        item: ImportItem;
+        postData: PostData;
+        previousStatus: ImportItem['status'];
+        exportId: string;
+        partNumber: number;
+      }> = [];
+
+      for (const candidate of pending) {
+        const postData = postDataFor(candidate.item.postId);
+        if (!postData) {
+          const failedItem: ImportItem = {
+            ...candidate.item,
+            status: 'failed',
+            retryCount: candidate.item.retryCount + 1,
+            errorMessage: 'post data not available (ZIP missing or closed)',
+          };
+          items[candidate.index] = failedItem;
+          this.emitItemProgress(failedItem);
+          continue;
+        }
+
+        applyImportOverridesToPostData(postData, job);
+        const sourceFile = job.sourceFiles.find((f) => f.filename === candidate.item.partFilename);
+        batchItems.push({
+          ...candidate,
+          postData,
+          previousStatus: candidate.item.status,
+          exportId: sourceFile?.exportId ?? '',
+          partNumber: sourceFile?.partNumber ?? 0,
+        });
+      }
+
+      if (batchItems.length === 0) {
+        jobStore.updateItems(this.jobId, items);
+        this.updateJobCounters();
+        return pending.length;
+      }
+
+      for (const candidate of batchItems) {
+        const uploading = { ...candidate.item, status: 'uploading' as const };
+        items[candidate.index] = uploading;
+        this.emitItemProgress(uploading);
+      }
+      jobStore.updateItems(this.jobId, items);
+
+      let response: Awaited<ReturnType<NonNullable<ImportAPIClient['createArchivesFromImportBatch']>>>;
+      try {
+        this.serverApiCallCount += 1;
+        response = await apiClient.createArchivesFromImportBatch({
+          jobId: this.jobId,
+          source: 'instagram-saved-import',
+          sourceClientId: job.sourceClientId,
+          items: batchItems.map(({ postData, exportId, partNumber }) => ({
+            url: postData.url,
+            clientPostData: postData,
+            importContext: {
+              source: 'instagram-saved-import',
+              jobId: this.jobId,
+              exportId,
+              partNumber,
+            },
+          })),
+        });
+      } catch (err) {
+        logger.warn('[ImportWorker] batch ingest failed; falling back to legacy item path', err);
+        const reverted = [...jobStore.getItems(this.jobId)];
+        for (const candidate of batchItems) {
+          reverted[candidate.index] = {
+            ...candidate.item,
+            status: candidate.previousStatus,
+          };
+          this.emitItemProgress(reverted[candidate.index]!);
+        }
+        jobStore.updateItems(this.jobId, reverted);
+        return 0;
+      }
+
+      const createdByPostId = new Map(response.created.map((entry) => [entry.postId, entry.archiveId]));
+      const skippedByPostId = new Map(response.skippedDuplicates.map((entry) => [entry.postId, entry.archiveId]));
+      const failedByPostId = new Map(response.failed.map((entry) => [entry.postId, entry]));
+
+      for (const candidate of batchItems) {
+        const current = jobStore.getItems(this.jobId)[candidate.index] ?? candidate.item;
+        const postId = candidate.postData.id;
+        const failed = failedByPostId.get(postId);
+        let finalItem: ImportItem;
+
+        if (failed) {
+          finalItem = {
+            ...current,
+            status: 'failed',
+            retryCount: current.retryCount + 1,
+            errorMessage: `${failed.code}: ${failed.message}`,
+          };
+        } else if (skippedByPostId.has(postId)) {
+          finalItem = {
+            ...current,
+            status: 'skipped_duplicate',
+            archiveId: skippedByPostId.get(postId),
+            uploadedAt: Date.now(),
+          };
+        } else {
+          const archiveId = createdByPostId.get(postId);
+          if (!archiveId) {
+            finalItem = {
+              ...current,
+              status: 'failed',
+              retryCount: current.retryCount + 1,
+              errorMessage: 'batch response missing archive result',
+            };
+          } else {
+            let outcome: ImportItemOutcome = 'uploaded';
+            const mediaPaths = candidate.item.mediaPaths ?? [];
+            const { failures: mediaFailures, vaultPathByRel } = await this.processImportMedia(
+              archiveId,
+              mediaPaths,
+              candidate.item.partFilename,
+              candidate.postData,
+            );
+            if (mediaFailures.length > 0) {
+              outcome = 'imported_with_warnings';
+            }
+
+            if (vaultPathByRel.size > 0) {
+              rewritePostDataUrlsToVaultPaths(candidate.postData, vaultPathByRel);
+            }
+
+            if (onArchiveCreated) {
+              try {
+                await onArchiveCreated(archiveId, candidate.postData);
+              } catch (hookErr) {
+                logger.warn(
+                  `[ImportWorker] vault note hook failed for ${archiveId}`,
+                  hookErr,
+                );
+                outcome = 'imported_with_warnings';
+              }
+            }
+
+            finalItem = {
+              ...current,
+              status: outcome,
+              archiveId,
+              uploadedAt: Date.now(),
+            };
+          }
+        }
+
+        const nextItems = [...jobStore.getItems(this.jobId)];
+        nextItems[candidate.index] = finalItem;
+        jobStore.updateItems(this.jobId, nextItems);
+        this.emitItemProgress(finalItem);
+        this.updateJobCounters();
+      }
+
+      return pending.length;
+    } finally {
+      this.inFlight = false;
+    }
+  }
 
   private async processItem(index: number): Promise<void> {
     const { jobStore, logger, apiClient, postDataFor, zipReaderFor, onArchiveCreated } =
@@ -474,33 +680,10 @@ export class ImportWorker {
       let lastError: string | undefined;
 
       try {
-        // --- Step 1: create the archive from clientPostData. ---
-        const archiveResp = await this.withRetry(
-          () =>
-            apiClient.createArchiveFromImport({
-              url: postData.url,
-              clientPostData: postData,
-              importContext: {
-                source: 'instagram-saved-import',
-                jobId: this.jobId,
-                exportId,
-                partNumber,
-              },
-              sourceClientId: job?.sourceClientId,
-            }),
-          item.retryCount,
-          `archive ${item.postId}`,
-        );
-        archiveId = archiveResp.archiveId;
-
-        if (archiveResp.skippedDuplicate) {
-          outcome = 'skipped_duplicate';
-        } else {
-          // --- Step 2: stream media from the ZIP, upload to R2, and write
-          //            the same bytes into the user's vault attachments. ---
+        if (job?.mode === 'local-only') {
           const mediaPaths = item.mediaPaths ?? [];
-          const { failures: mediaFailures, vaultPathByRel } = await this.uploadMediaBatches(
-            archiveId,
+          const { failures: mediaFailures, vaultPathByRel } = await this.processImportMedia(
+            null,
             mediaPaths,
             item.partFilename,
             postData,
@@ -509,24 +692,79 @@ export class ImportWorker {
             outcome = 'imported_with_warnings';
           }
 
-          // Rewrite the in-memory PostData so the vault-note hook renders
-          // vault-relative paths (working links) instead of the raw
-          // ZIP-relative `./media/...` strings. Best-effort — an empty
-          // map (vault writes skipped / all failed) leaves URLs untouched.
           if (vaultPathByRel.size > 0) {
             rewritePostDataUrlsToVaultPaths(postData, vaultPathByRel);
           }
 
-          // --- Step 3: vault note hook. ---
+          markLocalOnlyImportPostData(postData);
           if (onArchiveCreated) {
             try {
-              await onArchiveCreated(archiveId, postData);
+              await onArchiveCreated(null, postData);
             } catch (hookErr) {
               logger.warn(
-                `[ImportWorker] vault note hook failed for ${archiveId}`,
+                `[ImportWorker] local-only vault note hook failed for ${item.postId}`,
                 hookErr,
               );
               outcome = 'imported_with_warnings';
+            }
+          }
+        } else {
+          // --- Step 1: create the archive from clientPostData. ---
+          const archiveResp = await this.withRetry(
+            () => {
+              this.serverApiCallCount += 1;
+              return apiClient.createArchiveFromImport({
+                url: postData.url,
+                clientPostData: postData,
+                importContext: {
+                  source: 'instagram-saved-import',
+                  jobId: this.jobId,
+                  exportId,
+                  partNumber,
+                },
+                sourceClientId: job?.sourceClientId,
+              });
+            },
+            item.retryCount,
+            `archive ${item.postId}`,
+          );
+          archiveId = archiveResp.archiveId;
+
+          if (archiveResp.skippedDuplicate) {
+            outcome = 'skipped_duplicate';
+          } else {
+            // --- Step 2: stream media from the ZIP, upload to R2, and write
+            //            the same bytes into the user's vault attachments. ---
+            const mediaPaths = item.mediaPaths ?? [];
+            const { failures: mediaFailures, vaultPathByRel } = await this.processImportMedia(
+              archiveId,
+              mediaPaths,
+              item.partFilename,
+              postData,
+            );
+            if (mediaFailures.length > 0) {
+              outcome = 'imported_with_warnings';
+            }
+
+            // Rewrite the in-memory PostData so the vault-note hook renders
+            // vault-relative paths (working links) instead of the raw
+            // ZIP-relative `./media/...` strings. Best-effort — an empty
+            // map (vault writes skipped / all failed) leaves URLs untouched.
+            if (vaultPathByRel.size > 0) {
+              rewritePostDataUrlsToVaultPaths(postData, vaultPathByRel);
+            }
+
+            // --- Step 3: vault note hook. ---
+            if (onArchiveCreated) {
+              try {
+                await onArchiveCreated(archiveId, postData);
+              } catch (hookErr) {
+                logger.warn(
+                  `[ImportWorker] vault note hook failed for ${archiveId}`,
+                  hookErr,
+                );
+                outcome = 'imported_with_warnings';
+              }
             }
           }
         }
@@ -567,8 +805,8 @@ export class ImportWorker {
   // Media upload
   // ---------------------------------------------------------------------------
 
-  private async uploadMediaBatches(
-    archiveId: string,
+  private async processImportMedia(
+    archiveId: string | null,
     mediaPaths: string[],
     partFilename: string,
     postData: PostData,
@@ -597,7 +835,13 @@ export class ImportWorker {
 
     const flushBatch = async () => {
       if (batch.length === 0) return;
+      if (!archiveId) {
+        batch = [];
+        batchBytes = 0;
+        return;
+      }
       try {
+        this.serverApiCallCount += 1;
         const resp = await this.deps.apiClient.uploadArchiveMedia({
           archiveId,
           files: batch,
@@ -630,6 +874,8 @@ export class ImportWorker {
         failures.push({ relativePath: rel, reason: 'missing from ZIP' });
         continue;
       }
+      this.mediaFileCount += 1;
+      this.mediaByteCount += data.byteLength;
       const filename = rel.split('/').pop() ?? rel;
 
       // Vault write FIRST (cheap, already in memory). Failures are non-fatal
@@ -769,14 +1015,23 @@ export class ImportWorker {
     jobStore.updateJob(updated);
 
     try {
-      await apiClient.finalizeImportJob({
-        jobId: this.jobId,
-        archiveIds,
-        totalCount: items.length,
-        partialMediaCount: importedWithWarnings,
-        failedCount: failed,
-        sourceClientId: job.sourceClientId,
-      });
+      if (job.mode !== 'local-only') {
+        this.serverApiCallCount += 1;
+        await apiClient.finalizeImportJob({
+          jobId: this.jobId,
+          archiveIds,
+          totalCount: items.length,
+          partialMediaCount: importedWithWarnings,
+          failedCount: failed,
+          mode: job.mode ?? 'server-synced',
+          uploadedItemCount: imported + importedWithWarnings,
+          duplicateCount: skippedDuplicates,
+          mediaFileCount: this.mediaFileCount,
+          mediaByteCount: this.mediaByteCount,
+          serverApiCallCount: this.serverApiCallCount,
+          sourceClientId: job.sourceClientId,
+        });
+      }
     } catch (err) {
       logger.warn(`[ImportWorker] finalize call failed (archives were still created)`, err);
     }

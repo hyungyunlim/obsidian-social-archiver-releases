@@ -426,6 +426,16 @@ export class SubscriptionSyncService {
       const mainMediaCandidates = this.buildDownloadCandidates(post.media, downloadMode, {
         excludeAudio: post.platform === 'podcast',
       });
+      const syncedPodcastAudioCandidates = post.platform === 'podcast' && post.podcastAutoDownloadAudio === true
+        ? (post.media ?? [])
+            .map((media, mediaIndex) => ({ media, mediaIndex }))
+            .filter((candidate): candidate is MediaDownloadCandidate => (
+              candidate.media.type === 'audio' &&
+              typeof candidate.media.r2Url === 'string' &&
+              candidate.media.r2Url.trim().length > 0
+            ))
+        : [];
+      mainMediaCandidates.push(...syncedPodcastAudioCandidates);
 
       const quotedMediaCandidates = (post.quotedPost?.media && post.quotedPost.media.length > 0
         && post.quotedPost.platform !== 'youtube' && post.quotedPost.platform !== 'tiktok')

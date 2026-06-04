@@ -35,6 +35,22 @@ export const TRANSLATION_LANGUAGE_OPTIONS: AIActionLanguageOption[] = [
   ...MORE_TRANSLATION_LANGUAGE_OPTIONS,
 ];
 
+export const AUTO_OUTPUT_LANGUAGE_OPTION: AIActionLanguageOption = {
+  code: 'auto',
+  shortLabel: 'Auto',
+  menuLabel: 'Match original',
+};
+
+export const PRIMARY_OUTPUT_LANGUAGE_OPTIONS: AIActionLanguageOption[] = [
+  AUTO_OUTPUT_LANGUAGE_OPTION,
+  ...PRIMARY_TRANSLATION_LANGUAGE_OPTIONS,
+];
+
+export const OUTPUT_LANGUAGE_OPTIONS: AIActionLanguageOption[] = [
+  ...PRIMARY_OUTPUT_LANGUAGE_OPTIONS,
+  ...MORE_TRANSLATION_LANGUAGE_OPTIONS,
+];
+
 const SUPPORTED_TRANSLATION_LANGUAGE_CODES = new Set(
   TRANSLATION_LANGUAGE_OPTIONS.map((option) => option.code),
 );

@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/icons/publisher-lookup.ts
- * Generated: 2026-05-28T22:00:32.477Z
+ * Generated: 2026-06-04T22:49:55.510Z
  *
  * To modify, edit the source file in shared/icons/ and run:
  *   npm run sync:shared
@@ -136,7 +136,7 @@ function resolveIcon(entry: RegistryEntry): PublisherIcon {
 }
 
 // ============================================================================
-// Registry — starter set v1 (34 publishers)
+// Registry — starter set v1 (35 publishers)
 // ============================================================================
 
 /**
@@ -255,7 +255,7 @@ const PUBLISHER_REGISTRY_RAW: RegistryEntry[] = [
     },
   },
 
-  // --- google-cdn (23 publishers) ---
+  // --- google-cdn (24 publishers) ---
   // washingtonpost + theverge moved here from the original favicon-svg plan
   // because their favicons rely on clipPath / nested groups that do not fit
   // the single-`path` PlatformIcon shape.
@@ -275,6 +275,7 @@ const PUBLISHER_REGISTRY_RAW: RegistryEntry[] = [
   { slug: 'hbr', name: 'Harvard Business Review', domain: 'hbr.org', source: { kind: 'google-cdn' } },
   { slug: 'ft', name: 'Financial Times', domain: 'ft.com', source: { kind: 'google-cdn' } },
   { slug: 'theeconomist', name: 'The Economist', domain: 'economist.com', source: { kind: 'google-cdn' } },
+  { slug: 'tagesspiegel', name: 'Der Tagesspiegel', domain: 'tagesspiegel.de', source: { kind: 'google-cdn' } },
   { slug: 'wired', name: 'WIRED', domain: 'wired.com', source: { kind: 'google-cdn' } },
   { slug: 'vogue', name: 'Vogue', domain: 'vogue.com', source: { kind: 'google-cdn' } },
   { slug: 'gq', name: 'GQ', domain: 'gq.com', source: { kind: 'google-cdn' } },

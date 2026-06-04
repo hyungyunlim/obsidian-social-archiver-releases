@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/types.ts
- * Generated: 2026-05-28T22:00:32.476Z
+ * Generated: 2026-06-04T22:49:55.509Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -37,6 +37,7 @@ export type Platform =
   | 'podcast'
   | 'blog'
   | 'medium'
+  | 'kidsnote'
   | 'naver'
   | 'naver-webtoon'
   | 'webtoons'
@@ -67,6 +68,7 @@ export const PLATFORMS = [
   'podcast',
   'blog',
   'medium',
+  'kidsnote',
   'naver',
   'naver-webtoon',
   'webtoons',
@@ -100,6 +102,7 @@ export const PLATFORM_DETECTION_ORDER = [
   'googlemaps',
   'velog',
   'medium',
+  'kidsnote',
   'webtoons',
   'naver-webtoon',
   'naver',
@@ -141,11 +144,12 @@ export type RSSBasedPlatform = typeof RSS_BASED_PLATFORMS[number];
 
 /**
  * Platforms that support profile crawling
- * Excludes: 'post' (user-created), 'threads' (not supported yet), 'googlemaps' (location-based)
+ * Excludes: 'post' (user-created), 'googlemaps' (location-based)
  */
 export const CRAWL_SUPPORTED_PLATFORMS = [
   'instagram',
   'facebook',
+  'threads',
   'x', // Re-enabled via xcancel RSS (free, no BrightData)
   'linkedin',
   'reddit',
@@ -194,6 +198,7 @@ export type NewSubscriptionPlatform = typeof NEW_SUBSCRIPTION_PLATFORMS[number];
  */
 export const SUBSCRIPTION_PLATFORMS = [
   'instagram',
+  'threads', // Feature-flagged server/API support; not exposed in new-subscription UI yet
   'x', // Disabled but may have existing subscriptions
   'facebook',
   'linkedin', // Disabled for new but may have existing
@@ -205,6 +210,7 @@ export const SUBSCRIPTION_PLATFORMS = [
   'youtube',
   'naver-webtoon', // Direct API
   'webtoons', // Direct API (RSS available)
+  'kidsnote', // Account-connected session API
   ...RSS_BASED_PLATFORMS,
 ] as const;
 
@@ -230,6 +236,7 @@ export const PREVIEW_SUPPORTED_PLATFORMS = [
   'blog',
   'velog',
   'medium',
+  'kidsnote',
   'podcast',
   'naver',
   'naver-webtoon',
@@ -246,7 +253,7 @@ export type PreviewSupportedPlatform = typeof PREVIEW_SUPPORTED_PLATFORMS[number
 /**
  * Platforms supported by mobile app
  * Used for sync filtering, URL validation, and archive creation
- * Excludes platforms that need special UI (webtoons, podcasts, maps)
+ * Excludes platforms that need special UI (webtoons, maps)
  */
 export const MOBILE_PLATFORMS = [
   'instagram',
@@ -256,6 +263,7 @@ export const MOBILE_PLATFORMS = [
   'threads',
   'linkedin',
   'youtube',
+  'podcast',
   'tiktok',
   'bluesky',
   'mastodon',
@@ -266,6 +274,7 @@ export const MOBILE_PLATFORMS = [
   'medium',
   'substack',
   'velog',
+  'kidsnote',
   'pinterest',
   'tumblr',
   'web',
@@ -285,6 +294,7 @@ export const MOBILE_PLATFORM_INFO: Record<MobilePlatform, { name: string; placeh
   threads: { name: 'Threads', placeholder: 'Threads post' },
   linkedin: { name: 'LinkedIn', placeholder: 'LinkedIn post or article' },
   youtube: { name: 'YouTube', placeholder: 'YouTube video, short, or live stream' },
+  podcast: { name: 'Podcast', placeholder: 'Podcast episode or feed URL' },
   tiktok: { name: 'TikTok', placeholder: 'TikTok video' },
   bluesky: { name: 'Bluesky', placeholder: 'Bluesky post' },
   mastodon: { name: 'Mastodon', placeholder: 'Mastodon post' },
@@ -294,6 +304,7 @@ export const MOBILE_PLATFORM_INFO: Record<MobilePlatform, { name: string; placeh
   medium: { name: 'Medium', placeholder: 'Medium article URL' },
   substack: { name: 'Substack', placeholder: 'Substack post or newsletter URL' },
   velog: { name: 'Velog', placeholder: 'Velog post URL' },
+  kidsnote: { name: 'Kidsnote', placeholder: 'Kidsnote report' },
   pinterest: { name: 'Pinterest', placeholder: 'Pinterest pin URL' },
   tumblr: { name: 'Tumblr', placeholder: 'Tumblr post URL' },
   web: { name: 'Web Article', placeholder: 'Web page or article URL' },

@@ -138,6 +138,8 @@ export interface YamlFrontmatter {
    * local attachments have been removed. MVP: main post top-level media only.
    */
   mediaSourceUrls?: string[];
+  /** Human-readable diagnostics for media candidate selection at archive time. */
+  mediaSelection?: string[];
   [key: string]: unknown; // Allow custom fields
 }
 

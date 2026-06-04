@@ -2480,12 +2480,12 @@ export default class SocialArchiverPlugin extends Plugin {
        * job; the engine catches the throw and flips the item outcome to
        * `imported_with_warnings`.
        */
-      onArchiveCreated: async (archiveId: string, postData: PostData) => {
+      onArchiveCreated: async (archiveId: string | null, postData: PostData) => {
         const orch = this.orchestrator;
         if (!orch) {
           throw new Error('ArchiveOrchestrator not initialized');
         }
-        await orch.createNoteForArchive(archiveId, postData);
+        await orch.createNoteForArchive(archiveId ?? 'local-only', postData);
       },
     });
 
