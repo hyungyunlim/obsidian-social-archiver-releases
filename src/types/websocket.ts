@@ -6,6 +6,7 @@
  */
 
 import type { Platform } from './post';
+import type { ArchiveLinkRelation } from './link-relations';
 
 // ============================================================================
 // Client Sync Event (from mobile app sync)
@@ -385,6 +386,28 @@ export interface BillingStatusUpdatedEvent {
 }
 
 // ============================================================================
+// Archive Relation Updated Event (private channel)
+// ============================================================================
+
+/**
+ * Sent when an archive_link_relations row is created/updated/soft-deleted.
+ * Carries the FULL relation row (including `deletedAt` for soft-deletes) so the
+ * plugin can re-render the affected `## Linked archives` sections without a
+ * pull.
+ *
+ * Mirror of the server broadcast in `workers/src/utils/relation-broadcast.ts`
+ * (`{ type: 'archive_relation_updated', data: { relation } }`).
+ */
+export interface ArchiveRelationUpdatedEventData {
+  relation: ArchiveLinkRelation;
+}
+
+export interface ArchiveRelationUpdatedEvent {
+  type: 'archive_relation_updated';
+  data: ArchiveRelationUpdatedEventData;
+}
+
+// ============================================================================
 // Ping/Pong Events
 // ============================================================================
 
@@ -412,6 +435,7 @@ export type WebSocketEvent =
   | SubscriptionChangedEvent
   | MediaPreservedEvent
   | BillingStatusUpdatedEvent
+  | ArchiveRelationUpdatedEvent
   | PongEvent;
 
 // ============================================================================

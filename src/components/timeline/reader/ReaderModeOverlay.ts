@@ -274,6 +274,100 @@ export class ReaderModeOverlay {
         isAtEnd: () => this.currentIndex === this.context.posts.length - 1,
       });
     }
+
+    // Internal-link (wikilink) clicks inside the reader body: archived links
+    // converted to [[wikilinks]] should move the READER itself when the
+    // target is another post in the current list (mobile nested-reader
+    // parity) instead of opening a workspace tab behind the overlay. The
+    // listener lives on the container (delegated), so re-renders are covered
+    // and teardown rides the container's removal in close().
+    if (this.container) {
+      this.container.addEventListener('click', (e: MouseEvent) => {
+        const target = e.target as HTMLElement | null;
+        const anchor = target?.closest?.('a.internal-link');
+        if (!anchor) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const href = anchor.getAttribute('data-href') ?? anchor.getAttribute('href');
+        if (!href) return;
+        void this.openInternalLink(href);
+      });
+    }
+  }
+
+  /**
+   * Open a wikilink clicked inside the reader body. When the target resolves
+   * to another archived post in the current reader list, the reader jumps to
+   * it in place; otherwise the overlay closes and the note opens in the
+   * workspace (it would be invisible behind the overlay otherwise).
+   */
+  private async openInternalLink(linktext: string): Promise<void> {
+    const currentPost = this.context.posts[this.currentIndex];
+    const sourcePath = currentPost?.filePath || '';
+    const dest = this.context.app.metadataCache.getFirstLinkpathDest(linktext, sourcePath);
+
+    if (dest) {
+      const targetIndex = this.context.posts.findIndex((p) => p.filePath === dest.path);
+      if (targetIndex === this.currentIndex) return;
+      if (targetIndex !== -1) {
+        await this.jumpToIndex(targetIndex);
+        return;
+      }
+    }
+
+    // Not a post in the current list (filtered out, or a non-archive note).
+    this.close();
+    await this.context.app.workspace.openLinkText(linktext, sourcePath, false);
+  }
+
+  /**
+   * Jump the reader to an arbitrary index (wikilink navigation). Mirrors
+   * `navigate()`'s keyboard transition, deriving the slide direction from the
+   * index delta.
+   */
+  private async jumpToIndex(newIndex: number): Promise<void> {
+    if (this.transitioning) return;
+    if (newIndex < 0 || newIndex >= this.context.posts.length) return;
+    if (newIndex === this.currentIndex) return;
+
+    this.closeTypographyPanel();
+    this.transitioning = true;
+
+    const direction: -1 | 1 = newIndex > this.currentIndex ? 1 : -1;
+
+    if (this.panel) {
+      this.panel.setCssProps({
+        '--rmo-transition': 'transform 0.2s ease-in, opacity 0.2s ease-in',
+        '--rmo-transform': `translateX(${direction === 1 ? '-60px' : '60px'})`,
+        '--rmo-opacity': '0',
+      });
+    }
+    await this.wait(200);
+
+    this.currentIndex = newIndex;
+    this.cleanupRenderer();
+    try {
+      await this.renderCurrentPost();
+    } catch (err) {
+      console.error('[Social Archiver] Reader mode render error:', err);
+    }
+
+    if (this.panel) {
+      this.panel.setCssProps({
+        '--rmo-transition': 'none',
+        '--rmo-transform': `translateX(${direction === 1 ? '60px' : '-60px'})`,
+        '--rmo-opacity': '0',
+      });
+      void this.panel.offsetHeight;
+      this.panel.setCssProps({
+        '--rmo-transition': 'transform 0.25s ease-out, opacity 0.25s ease-out',
+        '--rmo-transform': 'translateX(0)',
+        '--rmo-opacity': '1',
+      });
+    }
+
+    await this.wait(250);
+    this.transitioning = false;
   }
 
   close(): void {

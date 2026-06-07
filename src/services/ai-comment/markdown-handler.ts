@@ -21,6 +21,7 @@ const AI_COMMENT_SECTION_TITLE = '## AI Comments';
 const LEGACY_SECTION_START = '<!-- AI_COMMENT_SECTION_START -->';
 const LEGACY_SECTION_END = '<!-- AI_COMMENT_SECTION_END -->';
 const MOBILE_ANNOTATIONS_START = '<!-- social-archiver:annotations:start -->';
+const LINKED_ARCHIVES_START = '<!-- social-archiver:linked-archives:start -->';
 
 // ============================================================================
 // Types
@@ -578,12 +579,19 @@ ${commentsContent}`;
 }
 
 function findAICommentSectionEnd(markdown: string, sectionStartIdx: number): number {
-  const annotationStartIdx = markdown.indexOf(
-    MOBILE_ANNOTATIONS_START,
-    sectionStartIdx + AI_COMMENT_SECTION_TITLE.length
-  );
+  // AI output can contain `##` headings, so the only reliable boundary for the
+  // end of the AI Comments section is a managed-block start marker. Both the
+  // Mobile Annotations block and the Linked Archives block are appended at EOF
+  // AFTER the AI Comments section — whichever appears FIRST bounds the section.
+  // Stopping at the linked-archives marker too prevents replaceAICommentSection
+  // from swallowing a linked-archives block in files that have NO annotations.
+  const searchFrom = sectionStartIdx + AI_COMMENT_SECTION_TITLE.length;
+  const annotationStartIdx = markdown.indexOf(MOBILE_ANNOTATIONS_START, searchFrom);
+  const linkedArchivesStartIdx = markdown.indexOf(LINKED_ARCHIVES_START, searchFrom);
 
-  return annotationStartIdx === -1 ? markdown.length : annotationStartIdx;
+  const candidates = [annotationStartIdx, linkedArchivesStartIdx].filter((idx) => idx !== -1);
+  if (candidates.length === 0) return markdown.length;
+  return Math.min(...candidates);
 }
 
 // ============================================================================

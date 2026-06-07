@@ -612,7 +612,7 @@ export class ArchiveModal extends Modal {
       // Check for unsupported profile platforms
       if (analysis.type === 'profile') {
         if (!PROFILE_CRAWL_SUPPORTED_PLATFORMS.includes(analysis.platform as typeof PROFILE_CRAWL_SUPPORTED_PLATFORMS[number])) {
-          this.inputValidationError = `Profile crawling for ${this.getPlatformName(analysis.platform ?? '')} is not supported yet. Supported: Instagram, Facebook, X (Twitter), Reddit, TikTok, Pinterest, Bluesky, Mastodon, and YouTube.`;
+          this.inputValidationError = `Profile crawling for ${this.getPlatformName(analysis.platform ?? '')} is not supported yet. Supported: Instagram, Facebook, Threads, X (Twitter), Reddit, TikTok, Pinterest, Bluesky, Mastodon, and YouTube.`;
           // Keep detectedPlatform for display but don't mark as valid
           this.isValidUrl = false;
           this.isResolving = false;
@@ -1820,7 +1820,7 @@ export class ArchiveModal extends Modal {
       return;
     }
 
-    // Profile crawling is supported for Instagram, Facebook, LinkedIn, Reddit, TikTok, Pinterest, Bluesky, Mastodon, and YouTube
+    // Profile crawling is supported for Instagram, Facebook, Threads, LinkedIn, Reddit, TikTok, Pinterest, Bluesky, Mastodon, and YouTube
     // X disabled - BrightData returns non-chronological posts when not logged in
     // Bluesky, Mastodon use free direct API (no BrightData credits)
     // YouTube uses free RSS feed (no BrightData credits for subscription runs)
@@ -1830,7 +1830,7 @@ export class ArchiveModal extends Modal {
         code: 'UNSUPPORTED_PLATFORM',
         message: isX
           ? 'X (Twitter) profile crawling is temporarily disabled. Only Instagram, Facebook, LinkedIn, Reddit, TikTok, Pinterest, Bluesky, Mastodon, and YouTube are supported.'
-          : `Profile crawling is currently only supported for Instagram, Facebook, LinkedIn, Reddit, TikTok, Pinterest, Bluesky, Mastodon, and YouTube. ${this.getPlatformName(this.detectedPlatform)} support coming soon!`,
+          : `Profile crawling is currently only supported for Instagram, Facebook, Threads, LinkedIn, Reddit, TikTok, Pinterest, Bluesky, Mastodon, and YouTube. ${this.getPlatformName(this.detectedPlatform)} support coming soon!`,
         retryable: false,
       });
       return;

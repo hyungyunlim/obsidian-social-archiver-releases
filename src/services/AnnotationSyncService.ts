@@ -115,6 +115,17 @@ export class AnnotationSyncService {
     }
   }
 
+  /**
+   * Re-fetch and re-apply the annotation state for one archive on demand.
+   * Used by the one-time mention-wikilink backfill: annotation blocks rendered
+   * before the token→wikilink conversion shipped still hold raw
+   * `socialarchiver://` links, and only a re-render converts them. Coalesced
+   * like every other entry point.
+   */
+  async resyncArchive(archiveId: string): Promise<void> {
+    await this.coalesce(archiveId);
+  }
+
   // --------------------------------------------------------------------------
   // Coalescing
   // --------------------------------------------------------------------------
@@ -260,8 +271,11 @@ export class AnnotationSyncService {
       // Non-fatal: continue to update body
     }
 
-    // Render the managed annotation block with ALL notes and highlights
-    const annotationBlock = this.annotationRenderer.render({ notes, highlights });
+    // Render the managed annotation block with ALL notes and highlights.
+    // `sourcePath` lets the renderer's injected resolvers emit links relative to
+    // the target note (shortest-unique-path / user link-format prefs). Mention
+    // tokens are converted ONLY inside this rendered body — never fm.comment.
+    const annotationBlock = this.annotationRenderer.render({ notes, highlights, sourcePath: file.path });
 
     // Apply annotation block to note body, and reconcile inline ==text== marks
     // so reader mode / timeline cards visualise the highlights.

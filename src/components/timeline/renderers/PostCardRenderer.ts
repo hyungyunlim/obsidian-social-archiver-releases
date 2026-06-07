@@ -25,6 +25,7 @@ import { get } from 'svelte/store';
 import type { AuthorCatalogEntry } from '../../../types/author-catalog';
 import { isRssBasedPlatform } from '../../../constants/rssPlatforms';
 import { isSubstackNote } from '../../../utils/substack';
+import { INTERNAL_LINK_SCHEME, parseArchiveMentionUrl, parseAuthorMentionUrl, type AuthorMentionUrlParts } from '../../../utils/note-mentions';
 import { getPlatformName } from '@/shared/platforms';
 import { isSupportedPlatformUrl, validateAndDetectPlatform, isPinterestBoardUrl } from '../../../schemas/platforms';
 import { resolvePinterestUrl } from '../../../utils/pinterest';
@@ -114,6 +115,11 @@ export class PostCardRenderer extends Component {
 
   // Callback for viewing author in Author Catalog
   private onViewAuthorCallback?: (authorUrl: string, platform: Platform) => void;
+
+  // Callback for opening the Author Detail view from a note's author mention
+  // (identity comes from the `socialarchiver://author?...` token, which may
+  // carry no profile URL — so the catalog-URL callback above doesn't fit)
+  private onViewAuthorIdentityCallback?: (identity: AuthorMentionUrlParts) => void;
 
   // Callback for subscribing to author
   private onSubscribeAuthorCallback?: (author: AuthorCatalogEntry) => Promise<void>;
@@ -312,6 +318,15 @@ export class PostCardRenderer extends Component {
    */
   public onViewAuthor(callback: (authorUrl: string, platform: Platform) => void): void {
     this.onViewAuthorCallback = callback;
+  }
+
+  /**
+   * Set callback for opening the Author Detail view from a note's author
+   * mention token (mobile parity: mentions open the detail view, not the
+   * author's note file, which is opt-in and may not exist).
+   */
+  public onViewAuthorIdentity(callback: (identity: AuthorMentionUrlParts) => void): void {
+    this.onViewAuthorIdentityCallback = callback;
   }
 
   /**
@@ -660,6 +675,12 @@ export class PostCardRenderer extends Component {
         this.editCommentInline(post, savedSection);
       });
     }
+
+    // Mobile user notes (read-only): rendered from the managed annotation block
+    // synced down from the mobile app. Distinct from the legacy `comment` UI
+    // above (which is bidirectionally synced and editable here). These note
+    // cards carry NO edit/delete affordances — mobile owns their lifecycle.
+    this.renderMobileUserNotes(wrapper, post);
 
     // Create nested container for the actual card (always nested now)
     // For user posts (platform === 'post'), don't show left border
@@ -1078,6 +1099,12 @@ export class PostCardRenderer extends Component {
         // Delete button
         this.renderDeleteButton(actionsBar, post, rootElement);
       }
+    }
+
+    // Linked archives (relation connections) — end of the card body, before
+    // comments (mobile relation-section parity). Non-embedded only.
+    if (!isEmbedded) {
+      this.renderLinkedArchivesSection(contentArea, post);
     }
 
     // Comments section - AI comments, regular comments, then AI comment banner at bottom
@@ -5398,6 +5425,156 @@ export class PostCardRenderer extends Component {
   }
 
   /**
+   * Render mobile user notes (read-only) parsed from the managed annotation
+   * block. One card per note with a muted timestamp header; the body is rendered
+   * through `renderMarkdownLinks` so wikilinks and any residual
+   * `socialarchiver://` tokens are clickable.
+   *
+   * These cards are intentionally NOT editable here — mobile owns their
+   * lifecycle (the bidirectionally-synced legacy `comment` UI is separate). The
+   * synthetic primary note (mirrored into `post.comment`) is de-duped out so it
+   * never appears twice on the same card.
+   */
+  private renderMobileUserNotes(wrapper: HTMLElement, post: PostData): void {
+    const notes = post.userNotes;
+    if (!notes || notes.length === 0) return;
+
+    // De-dup: skip the note already shown by the legacy comment UI.
+    const comment = post.comment?.trim();
+    const visibleNotes = notes.filter((n) => {
+      const content = n.content?.trim();
+      if (!content) return false;
+      return !(comment && content === comment);
+    });
+    if (visibleNotes.length === 0) return;
+
+    const section = wrapper.createDiv({ cls: 'pcr-mobile-notes' });
+
+    for (const note of visibleNotes) {
+      const card = section.createDiv({ cls: 'pcr-mobile-note' });
+
+      // Muted header: timestamp display string (already local-formatted).
+      if (note.createdAt) {
+        const header = card.createDiv({ cls: 'pcr-mobile-note-header' });
+        header.setText(note.createdAt);
+      }
+
+      const body = card.createDiv({ cls: 'pcr-mobile-note-body' });
+      this.renderMarkdownLinks(body, note.content, undefined, post.platform);
+    }
+  }
+
+  /**
+   * Render the relation connections parsed from the managed `## Linked
+   * archives` block (read-only, mobile relation-section parity): a titled
+   * section with "Links to" / "Linked from" groups whose rows go through
+   * `renderMarkdownLinks` — wikilinks open the target vault note, external
+   * fallbacks open the browser.
+   */
+  private renderLinkedArchivesSection(wrapper: HTMLElement, post: PostData): void {
+    const linked = post.linkedArchives;
+    if (!linked) return;
+    if (linked.linksTo.length === 0 && linked.linkedFrom.length === 0) return;
+
+    const section = wrapper.createDiv({ cls: 'pcr-linked-archives' });
+    const title = section.createDiv({ cls: 'pcr-linked-archives-title' });
+    title.setText('Linked archives');
+
+    const renderGroup = (label: string, rows: string[]): void => {
+      if (rows.length === 0) return;
+      const group = section.createDiv({ cls: 'pcr-linked-archives-group' });
+      const groupLabel = group.createDiv({ cls: 'pcr-linked-archives-group-label' });
+      groupLabel.setText(label);
+      for (const row of rows) {
+        const rowEl = group.createDiv({ cls: 'pcr-linked-archives-row' });
+        this.renderMarkdownLinks(rowEl, row, undefined, post.platform);
+      }
+    };
+
+    renderGroup('Links to', linked.linksTo);
+    renderGroup('Linked from', linked.linkedFrom);
+  }
+
+  /**
+   * Render an internal `socialarchiver://` mention as a clickable internal link
+   * when it resolves to a vault note, or a plain styled span when it does not.
+   *
+   * - `socialarchiver://archive/<id>` → ArchiveLookupService.findBySourceArchiveId
+   * - `socialarchiver://author?...`    → AuthorNoteService key lookup
+   *
+   * Mirrors the wikilink branch's open behaviour (`openLinkText`). Unresolved
+   * targets degrade to a non-anchor span so the card never shows a dead link.
+   */
+  private renderInternalMentionLink(container: HTMLElement, label: string, url: string): void {
+    const openInternal = (filePath: string): void => {
+      const anchor = container.createEl('a', {
+        text: label,
+        cls: 'internal-link',
+        attr: { href: filePath, 'data-href': filePath, title: filePath },
+      });
+      anchor.addClass('pcr-wiki-link');
+      anchor.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        void this.plugin.app.workspace.openLinkText(filePath, '', false);
+      });
+    };
+
+    const renderPlain = (): void => {
+      container.createSpan({ text: label, cls: 'pcr-mention-unresolved' });
+    };
+
+    // Archive mention?
+    const archiveId = parseArchiveMentionUrl(url);
+    if (archiveId) {
+      const file = this.plugin.getArchiveLookupService?.()?.findBySourceArchiveId(archiveId);
+      if (file instanceof TFile) {
+        openInternal(file.path);
+      } else {
+        renderPlain();
+      }
+      return;
+    }
+
+    // Author mention?
+    const authorParts = parseAuthorMentionUrl(url);
+    if (authorParts) {
+      // Mobile parity: an author mention opens the Author Detail view (the
+      // author's note file is opt-in and usually absent, so routing to it
+      // left most mentions dead).
+      if (this.onViewAuthorIdentityCallback) {
+        const anchor = container.createEl('a', {
+          text: label,
+          cls: 'internal-link pcr-wiki-link',
+          attr: { href: '#', title: `${authorParts.platform}: ${authorParts.name}` },
+        });
+        anchor.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.onViewAuthorIdentityCallback?.(authorParts);
+        });
+        return;
+      }
+      // Fallback (host without the detail-view callback): open the author
+      // note when one exists.
+      const authorNotes = this.plugin.getAuthorNoteService?.();
+      if (authorNotes) {
+        const key = authorNotes.buildAuthorKey(authorParts.profileUrl, authorParts.name, authorParts.platform);
+        const file = authorNotes.findNoteByKey(key);
+        if (file instanceof TFile) {
+          openInternal(file.path);
+          return;
+        }
+      }
+      renderPlain();
+      return;
+    }
+
+    // Unknown internal token shape — render as plain text rather than a dead link.
+    renderPlain();
+  }
+
+  /**
    * Format large numbers (e.g., 1000 -> 1K, 1000000 -> 1M).
    *
    * Round-3: delegates to `PreviewableHelpers.formatNumber` — single
@@ -5630,6 +5807,12 @@ export class PostCardRenderer extends Component {
                   // No seconds timestamp or no controller - no seek action
                 }
               });
+            } else if (linkData.url.startsWith(`${INTERNAL_LINK_SCHEME}://`)) {
+              // Internal mention deep link (`socialarchiver://archive/...` or
+              // `socialarchiver://author?...`). Resolve to a vault note and open
+              // it; degrade to a plain styled span when unresolved. Covers raw
+              // (pre-conversion) tokens; converted notes use the wikilink branch.
+              this.renderInternalMentionLink(container, linkData.text, linkData.url);
             } else {
               // Regular link
               const link = container.createEl('a', {
@@ -6032,8 +6215,18 @@ export class PostCardRenderer extends Component {
         // Check if audio is already downloaded or declined (same pattern as video)
         // Local path means already downloaded, external URL needs downloadedUrls check
         const isLocalPath = !audioUrl.startsWith('http://') && !audioUrl.startsWith('https://');
-        const isDownloaded = isLocalPath || downloadedUrls.includes(`downloaded:${audioUrl}`);
-        const isDownloadDeclined = downloadedUrls.includes(`declined:${audioUrl}`);
+        const localAudioPath = this.getLocalAudioPath(post, audioUrl);
+        const audioUrlMatchesMarker = (markerPrefix: 'downloaded:' | 'declined:'): boolean =>
+          downloadedUrls.some((entry) => {
+            if (!entry.startsWith(markerPrefix)) return false;
+            const markedUrl = entry.substring(markerPrefix.length);
+            return markedUrl === audioUrl
+              || markedUrl.includes(audioUrl)
+              || audioUrl.includes(markedUrl)
+              || helperNormalizeUrlForComparison(markedUrl) === helperNormalizeUrlForComparison(audioUrl);
+          });
+        const isDownloaded = Boolean(localAudioPath) || isLocalPath || audioUrlMatchesMarker('downloaded:');
+        const isDownloadDeclined = audioUrlMatchesMarker('declined:');
 
         if (isLocalPath) {
           // Audio already downloaded - render audio player in media section

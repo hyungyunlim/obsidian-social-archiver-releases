@@ -1317,6 +1317,76 @@ body.is-phone .pcr-content-variant-switch {
   overflow-wrap: anywhere;
 }
 
+/* Mobile user notes (read-only) — synced from the managed annotation block.
+   Visually distinct from the editable legacy comment above: a quiet left
+   accent stack, no hover edit/delete affordances. */
+.pcr-mobile-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.pcr-mobile-note {
+  padding: 6px 10px;
+  border-left: 2px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  border-radius: var(--radius-s);
+}
+
+.pcr-mobile-note-header {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.pcr-mobile-note-body {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-normal);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Unresolved internal mention — keep the label readable but non-interactive. */
+.pcr-mention-unresolved {
+  color: var(--text-normal);
+}
+
+/* Linked archives (relation connections) — end of card body, read-only.
+   Quiet titled section, parity with the mobile relation section. */
+.pcr-linked-archives {
+  margin: 10px 0 4px;
+  padding: 8px 10px;
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+}
+
+.pcr-linked-archives-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.pcr-linked-archives-group {
+  margin-top: 4px;
+}
+
+.pcr-linked-archives-group-label {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-bottom: 2px;
+}
+
+.pcr-linked-archives-row {
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .pcr-saved-header {
   font-size: 13px;
   color: var(--text-muted);

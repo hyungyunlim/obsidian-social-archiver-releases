@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyDownloadedAudioFrontmatter,
   upsertDownloadedAudioEmbed,
   upsertDownloadedVideoEmbed,
 } from '../../../plugin/transcription/TranscriptionJobProcessor';
@@ -174,5 +175,35 @@ audioLocalPath: attachments/social-archives/podcast/episode.mp3
 
 Show notes.
 `);
+  });
+});
+
+describe('applyDownloadedAudioFrontmatter', () => {
+  it('marks executor-downloaded podcast audio as locally downloaded', () => {
+    const frontmatter: Record<string, unknown> = {
+      platform: 'podcast',
+      audioUrl: 'https://rss.art19.com/episodes/example.mp3',
+      downloadedUrls: [],
+    };
+
+    applyDownloadedAudioFrontmatter(
+      frontmatter,
+      'https://cdn.example.com/episode.mp3',
+      'attachments/social-archives/podcast/episode.mp3',
+    );
+
+    expect(frontmatter.audioUrl).toBe('attachments/social-archives/podcast/episode.mp3');
+    expect(frontmatter.audioDownloaded).toBe(true);
+    expect(frontmatter.audioLocalPath).toBe('attachments/social-archives/podcast/episode.mp3');
+    expect(frontmatter.localAudioPath).toBe('attachments/social-archives/podcast/episode.mp3');
+    expect(frontmatter.downloadedUrls).toEqual([
+      'https://cdn.example.com/episode.mp3',
+      'downloaded:https://cdn.example.com/episode.mp3',
+      'https://rss.art19.com/episodes/example.mp3',
+      'downloaded:https://rss.art19.com/episodes/example.mp3',
+    ]);
+    expect(frontmatter.media).toEqual([
+      'audio:attachments/social-archives/podcast/episode.mp3',
+    ]);
   });
 });

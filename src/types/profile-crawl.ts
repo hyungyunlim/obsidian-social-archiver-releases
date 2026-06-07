@@ -326,6 +326,8 @@ export type CrawlErrorCode =
   | 'BRIGHTDATA_ERROR'
   | 'NETWORK_ERROR'
   | 'AUTH_REQUIRED'
+  | 'THREADS_RECONNECT_REQUIRED'
+  | 'THREADS_PROFILE_DISCOVERY_UNAVAILABLE'
   | 'CREDITS_INSUFFICIENT'
   | 'SUBSCRIPTION_REQUIRED'
   | 'PROFILE_NOT_FOUND'
@@ -346,6 +348,8 @@ export const CRAWL_ERROR_MESSAGES: Record<CrawlErrorCode, string> = {
   BRIGHTDATA_ERROR: 'Our crawling service is temporarily unavailable. Please try again later.',
   NETWORK_ERROR: 'Network connection failed. Please check your connection and retry.',
   AUTH_REQUIRED: 'Authentication required. Please sign in to continue.',
+  THREADS_RECONNECT_REQUIRED: 'Reconnect Threads in Social Archiver settings to enable profile discovery, then try again.',
+  THREADS_PROFILE_DISCOVERY_UNAVAILABLE: 'Threads profile discovery is unavailable for this profile. Please try another profile or try again later.',
   CREDITS_INSUFFICIENT: 'Insufficient credits. Please upgrade your plan or wait for monthly reset.',
   SUBSCRIPTION_REQUIRED: SUBSCRIPTION_PAYWALL_NOTICE_MESSAGE,
   PROFILE_NOT_FOUND: 'Profile not found. Please check the URL is correct.',
@@ -396,6 +400,58 @@ export function createCrawlError(
   };
 }
 
+function createCustomCrawlError(
+  code: CrawlErrorCode,
+  message: string,
+  details?: string
+): CrawlError {
+  return {
+    code,
+    message,
+    retryable: RETRYABLE_ERROR_CODES.includes(code),
+    details,
+  };
+}
+
+function readApiErrorCode(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null) return undefined;
+  const code = (error as Record<string, unknown>)['code'];
+  return typeof code === 'string' ? code : undefined;
+}
+
+function isThreadsReconnectError(code: string | undefined, message: string): boolean {
+  const normalizedCode = code?.toUpperCase();
+  if (
+    normalizedCode === 'MISSING_SCOPE' ||
+    normalizedCode === 'NOT_CONNECTED' ||
+    normalizedCode === 'TOKEN_EXPIRED'
+  ) {
+    return true;
+  }
+
+  const lower = message.toLowerCase();
+  return (
+    lower.includes('threads_profile_discovery') ||
+    lower.includes('reconnect threads') ||
+    lower.includes('connect threads again before using profile discovery') ||
+    lower.includes('threads token has expired')
+  );
+}
+
+function isThreadsProfileDiscoveryApiError(code: string | undefined, message: string): boolean {
+  const normalizedCode = code?.toUpperCase();
+  const lower = message.toLowerCase();
+
+  return (
+    normalizedCode === 'API_ERROR' ||
+    normalizedCode === 'ACCESS_TIER_RESTRICTED' ||
+    normalizedCode === 'THREADS_PROFILE_DISCOVERY_UNAVAILABLE' ||
+    lower.includes('threads profile discovery api') ||
+    lower.includes('profile discovery access tier') ||
+    lower.includes('threads profile is not available')
+  ) && lower.includes('threads');
+}
+
 /**
  * Parse API error response to CrawlError
  * Maps HTTP status codes and error messages to appropriate CrawlErrorCode
@@ -407,7 +463,24 @@ export function parseCrawlError(error: unknown): CrawlError {
 
   // Handle Error objects
   if (error instanceof Error) {
+    const apiCode = readApiErrorCode(error);
     const message = error.message.toLowerCase();
+
+    if (isThreadsReconnectError(apiCode, error.message)) {
+      return createCustomCrawlError(
+        'THREADS_RECONNECT_REQUIRED',
+        CRAWL_ERROR_MESSAGES.THREADS_RECONNECT_REQUIRED,
+        error.message
+      );
+    }
+
+    if (isThreadsProfileDiscoveryApiError(apiCode, error.message)) {
+      return createCustomCrawlError(
+        'THREADS_PROFILE_DISCOVERY_UNAVAILABLE',
+        error.message,
+        error.message
+      );
+    }
 
     // Map common error patterns to codes
     if (message.includes('rate limit') || message.includes('429')) {
@@ -446,6 +519,22 @@ export function parseCrawlError(error: unknown): CrawlError {
     const errorObj = error as Record<string, unknown>;
     const code = errorObj['code'] as string | undefined;
     const message = errorObj['message'] as string | undefined;
+
+    if (isThreadsReconnectError(code, message ?? '')) {
+      return createCustomCrawlError(
+        'THREADS_RECONNECT_REQUIRED',
+        CRAWL_ERROR_MESSAGES.THREADS_RECONNECT_REQUIRED,
+        message
+      );
+    }
+
+    if (message && isThreadsProfileDiscoveryApiError(code, message)) {
+      return createCustomCrawlError(
+        'THREADS_PROFILE_DISCOVERY_UNAVAILABLE',
+        message,
+        message
+      );
+    }
 
     if (code && code in CRAWL_ERROR_MESSAGES) {
       return createCrawlError(code as CrawlErrorCode, message);

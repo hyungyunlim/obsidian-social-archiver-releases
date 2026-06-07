@@ -8,6 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import { AnnotationRenderer } from '../../services/AnnotationRenderer';
 import type { UserNote, TextHighlight } from '../../types/annotations';
+import type { MentionResolvers } from '../../utils/note-mentions';
 
 // ─── Fixtures ────────────────────────────────────────────
 
@@ -255,6 +256,68 @@ describe('AnnotationRenderer', () => {
 
       // The --- line should be escaped to avoid being parsed as <hr>
       expect(result).toContain('> \\---');
+    });
+  });
+
+  // ── Mention token → wikilink conversion (A2) ──
+
+  describe('mention conversion', () => {
+    const ARCHIVE_TOKEN = '[Cool Title](socialarchiver://archive/known)';
+    const AUTHOR_TOKEN = '[@Jack](socialarchiver://author?platform=x&name=Jack)';
+
+    const resolvers: MentionResolvers = {
+      resolveArchiveLink: (id, alias, sourcePath) =>
+        id === 'known' ? `[[Some Note (known)|${alias}]] @${sourcePath}` : null,
+      resolveAuthorLink: ({ name, alias }) =>
+        name === 'Jack' ? `[[x-jack|@${alias}]]` : null,
+    };
+
+    it('converts a resolvable archive token in note content to a wikilink', () => {
+      const r = new AnnotationRenderer(resolvers);
+      const note = makeNote({ content: `read this ${ARCHIVE_TOKEN}` });
+      const result = r.render({ notes: [note], highlights: [], sourcePath: 'Archives/x.md' });
+      expect(result).toContain('[[Some Note (known)|Cool Title]] @Archives/x.md');
+      expect(result).not.toContain('socialarchiver://archive');
+    });
+
+    it('strips an unresolvable archive token to plain anchor text', () => {
+      const r = new AnnotationRenderer(resolvers);
+      const note = makeNote({ content: 'see [Gone](socialarchiver://archive/missing)' });
+      const result = r.render({ notes: [note], highlights: [] });
+      expect(result).toContain('> see Gone');
+      expect(result).not.toContain('socialarchiver://');
+    });
+
+    it('converts a resolvable author token to a wikilink', () => {
+      const r = new AnnotationRenderer(resolvers);
+      const note = makeNote({ content: `by ${AUTHOR_TOKEN}` });
+      const result = r.render({ notes: [note], highlights: [] });
+      expect(result).toContain('[[x-jack|@Jack]]');
+      expect(result).not.toContain('socialarchiver://author');
+    });
+
+    it('converts mention tokens in highlight text and inline note', () => {
+      const r = new AnnotationRenderer(resolvers);
+      const hl = makeHighlight({ text: `quote ${AUTHOR_TOKEN}`, note: `ref ${ARCHIVE_TOKEN}` });
+      const result = r.render({ notes: [], highlights: [hl], sourcePath: 'a.md' });
+      expect(result).toContain('[[x-jack|@Jack]]');
+      expect(result).toContain('[[Some Note (known)|Cool Title]]');
+    });
+
+    it('falls back to plain text with the default (no-op) renderer', () => {
+      const note = makeNote({ content: `read ${ARCHIVE_TOKEN} and ${AUTHOR_TOKEN}` });
+      const result = renderer.render({ notes: [note], highlights: [] });
+      // No resolvers → tokens degrade to plain anchor / @name text.
+      expect(result).toContain('> read Cool Title and @Jack');
+      expect(result).not.toContain('socialarchiver://');
+    });
+
+    it('is idempotent over a second render of the same input', () => {
+      const r = new AnnotationRenderer(resolvers);
+      const note = makeNote({ content: `read ${ARCHIVE_TOKEN}` });
+      const first = r.render({ notes: [note], highlights: [], sourcePath: 'a.md' });
+      const second = r.render({ notes: [note], highlights: [], sourcePath: 'a.md' });
+      expect(second).toBe(first);
     });
   });
 });

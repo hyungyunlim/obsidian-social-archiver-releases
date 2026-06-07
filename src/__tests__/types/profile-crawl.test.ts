@@ -435,6 +435,8 @@ describe('profile-crawl types', () => {
           'BRIGHTDATA_ERROR',
           'NETWORK_ERROR',
           'AUTH_REQUIRED',
+          'THREADS_RECONNECT_REQUIRED',
+          'THREADS_PROFILE_DISCOVERY_UNAVAILABLE',
           'CREDITS_INSUFFICIENT',
           'PROFILE_NOT_FOUND',
           'PROFILE_PRIVATE',
@@ -525,6 +527,32 @@ describe('profile-crawl types', () => {
         const result = parseCrawlError(error);
 
         expect(result.code).toBe('AUTH_REQUIRED');
+        expect(result.retryable).toBe(false);
+      });
+
+      it('should parse Threads profile discovery reconnect errors before generic auth errors', () => {
+        const error = Object.assign(
+          new Error('Reconnect Threads after enabling profile discovery so OAuth includes threads_profile_discovery'),
+          { code: 'MISSING_SCOPE' },
+        );
+        const result = parseCrawlError(error);
+
+        expect(result.code).toBe('THREADS_RECONNECT_REQUIRED');
+        expect(result.message).toContain('Reconnect Threads');
+        expect(result.details).toContain('threads_profile_discovery');
+        expect(result.retryable).toBe(false);
+      });
+
+      it('should preserve Threads profile discovery API messages', () => {
+        const error = Object.assign(
+          new Error('This Threads profile is not available to the app\'s current Profile Discovery access tier. Use an app admin, developer, or tester Threads profile for review recording.'),
+          { code: 'ACCESS_TIER_RESTRICTED' },
+        );
+        const result = parseCrawlError(error);
+
+        expect(result.code).toBe('THREADS_PROFILE_DISCOVERY_UNAVAILABLE');
+        expect(result.message).toContain('Profile Discovery access tier');
+        expect(result.details).toContain('tester Threads profile');
         expect(result.retryable).toBe(false);
       });
 

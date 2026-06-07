@@ -295,10 +295,17 @@ describe('urlAnalysis', () => {
 
     describe('Threads', () => {
       it('should detect Threads profile URLs', () => {
-        const result = analyzeUrl('https://threads.net/@username');
-        expect(result.type).toBe('profile');
-        expect(result.platform).toBe('threads');
-        expect(result.handle).toBe('username');
+        const testCases = [
+          { url: 'https://threads.net/@username', handle: 'username' },
+          { url: 'https://www.threads.com/@di_1985_', handle: 'di_1985_' },
+        ];
+
+        for (const { url, handle } of testCases) {
+          const result = analyzeUrl(url);
+          expect(result.type, `Failed for ${url}`).toBe('profile');
+          expect(result.platform).toBe('threads');
+          expect(result.handle).toBe(handle);
+        }
       });
 
       it('should detect Threads post URLs', () => {

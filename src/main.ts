@@ -50,6 +50,9 @@ import { AnnotationSyncService } from './services/AnnotationSyncService';
 import { AnnotationRenderer } from './services/AnnotationRenderer';
 import { AnnotationSectionManager } from './services/AnnotationSectionManager';
 import { HighlightBodyMarker } from './services/HighlightBodyMarker';
+import { LinkRelationSyncService } from './plugin/sync/LinkRelationSyncService';
+import { LinkedArchivesRenderer } from './services/LinkedArchivesRenderer';
+import { LinkedArchivesSectionManager } from './services/LinkedArchivesSectionManager';
 import { AnnotationFallbackPoller } from './services/AnnotationFallbackPoller';
 
 // Extracted modules
@@ -67,7 +70,7 @@ import { LogLevel } from './types/logger';
 import { PendingJobOrchestrator } from './plugin/jobs/PendingJobOrchestrator';
 import { ArchiveCompletionService } from './plugin/jobs/ArchiveCompletionService';
 import { ensureFolderExists as ensureFolderExistsUtil } from './plugin/utils/ensureFolderExists';
-import { SubscriptionSyncService } from './plugin/subscriptions/SubscriptionSyncService';
+import { SubscriptionSyncService, type SyncSubscriptionResult } from './plugin/subscriptions/SubscriptionSyncService';
 import { convertUserArchiveToPostData } from './plugin/mobile/UserArchiveConverter';
 import { BatchGoogleMapsArchiver } from './plugin/jobs/BatchGoogleMapsArchiver';
 import { PostShareService } from './plugin/session/PostShareService';
@@ -179,7 +182,13 @@ export default class SocialArchiverPlugin extends Plugin {
   private readonly transcriptFormatter = new TranscriptFormatter();
   private editorTTSController?: EditorTTSController;
   private archiveLookupService?: ArchiveLookupService; // File lookup by sourceArchiveId / originalUrl
+
+  /** Public accessor for archive file lookups (e.g., mention-link resolution). */
+  public getArchiveLookupService(): ArchiveLookupService | undefined {
+    return this.archiveLookupService;
+  }
   private annotationSyncService?: AnnotationSyncService; // Mobile annotation sync orchestrator
+  public linkRelationSyncService?: LinkRelationSyncService; // Managed `## Linked archives` section sync
   public annotationOutboundService?: AnnotationOutboundService; // Outbound comment → server sync
   private archiveTagOutboundService?: ArchiveTagOutboundService; // Outbound archiveTags → server sync
   private authorProfileOutboundService?: AuthorProfileOutboundService; // Outbound author note profile edits → server sync
@@ -321,7 +330,7 @@ export default class SocialArchiverPlugin extends Plugin {
       );
 
       await this.runForegroundSyncStep('subscription pending posts', () =>
-        this.syncSubscriptionPosts(`foreground-${trigger}`)
+        this.syncSubscriptionPosts(`foreground-${trigger}`).then(() => undefined)
       );
 
       await this.runForegroundSyncStep('author profile sync', async () => {
@@ -332,9 +341,87 @@ export default class SocialArchiverPlugin extends Plugin {
       await this.runForegroundSyncStep('archive library delta catch-up', () =>
         this.archiveLibrarySyncService?.startDeltaSync('delta-catch-up') ?? Promise.resolve()
       );
+
+      // After the library delta sync settles (local files exist/are up to date),
+      // pull link-relation deltas and re-render `## Linked archives` sections.
+      // Feature-gated + fail-soft inside the service.
+      await this.runForegroundSyncStep('linked archives pull-sync', async () => {
+        const relationSync = this.linkRelationSyncService;
+        if (!relationSync) return;
+
+        // One-time full re-sweep: relations that synced BEFORE the body
+        // link→wikilink pass shipped sit behind the cursor and would never
+        // re-apply. Clearing the cursor makes this pull re-render every
+        // relation-touched archive (idempotent); the marker is stamped only
+        // once the sweep repersisted a cursor (i.e. it actually completed).
+        const needsBodyBackfill = !this.settings.bodyWikilinkBackfillDoneAt;
+        if (needsBodyBackfill && this.settings.linkRelationsSync?.lastServerTime) {
+          this.settings.linkRelationsSync.lastServerTime = '';
+        }
+
+        await relationSync.pullSync();
+
+        if (needsBodyBackfill && this.settings.linkRelationsSync?.lastServerTime) {
+          this.settings.bodyWikilinkBackfillDoneAt = new Date().toISOString();
+          await this.saveSettings();
+        }
+      });
+
+      // One-time backfill: annotation blocks rendered BEFORE the mention
+      // token→wikilink conversion shipped still hold raw `socialarchiver://`
+      // links (re-renders only fire on annotation changes, so untouched
+      // archives never converge on their own). Re-sync those files once.
+      await this.runForegroundSyncStep('mention wikilink backfill', () =>
+        this.runMentionWikilinkBackfill()
+      );
     } finally {
       this.foregroundSyncCatchUpInFlight = false;
     }
+  }
+
+  /**
+   * One-time (per BACKFILL VERSION) sweep re-rendering the managed annotation
+   * block of every annotated archive, so conversion-rule changes propagate to
+   * blocks that would otherwise never re-render:
+   *   v1 — convert stale raw `socialarchiver://` tokens to `[[wikilinks]]`.
+   *   v2 — restore tokens that v1 wrongly stripped to plain text (unresolved
+   *        mentions now KEEP the token; the timeline resolves it at render
+   *        time — author mentions open the detail view from token params).
+   *
+   * The server's note content is the source of truth (raw tokens preserved
+   * there), so a re-render always reconstructs the correct block. Idempotent
+   * per archive; the version is stamped only when an API client exists so an
+   * offline boot retries on the next foreground catch-up.
+   */
+  private async runMentionWikilinkBackfill(): Promise<void> {
+    const BACKFILL_VERSION = 2;
+    if (!this.settings.enableMobileAnnotationSync) return;
+    if ((this.settings.mentionWikilinkBackfillVersion ?? 0) >= BACKFILL_VERSION) return;
+    if (!this.annotationSyncService) return;
+    if (!this.apiClient || !this.settings.authToken) return;
+
+    const annotatedIds: string[] = [];
+    const archivePath = this.settings.archivePath;
+    for (const file of this.app.vault.getMarkdownFiles()) {
+      if (!file.path.startsWith(`${archivePath}/`)) continue;
+      const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+      const sourceArchiveId = fm?.sourceArchiveId as string | undefined;
+      if (!sourceArchiveId) continue;
+      if (!fm?.hasAnnotations && !(typeof fm?.userNoteCount === 'number' && fm.userNoteCount > 0)) continue;
+      annotatedIds.push(sourceArchiveId);
+    }
+
+    if (annotatedIds.length > 0) {
+      console.log(`[Social Archiver] Mention wikilink backfill v${BACKFILL_VERSION}: re-syncing ${annotatedIds.length} archive(s)`);
+      for (const archiveId of annotatedIds) {
+        await this.annotationSyncService.resyncArchive(archiveId);
+        await new Promise((resolve) => window.setTimeout(resolve, 400));
+      }
+    }
+
+    this.settings.mentionWikilinkBackfillVersion = BACKFILL_VERSION;
+    this.settings.mentionWikilinkBackfillDoneAt = new Date().toISOString();
+    await this.saveSettings();
   }
 
   private async runForegroundSyncStep(label: string, action: () => Promise<void>): Promise<void> {
@@ -561,6 +648,13 @@ export default class SocialArchiverPlugin extends Plugin {
   get workersApiClient(): WorkersAPIClient {
     if (!this.apiClient) {
       throw new Error('WorkersAPIClient not initialized. Please configure API settings.');
+    }
+    const currentToken = this.settings.authToken || '';
+    if (this.apiClient.getAuthToken() !== currentToken) {
+      this.apiClient.setAuthToken(currentToken);
+    }
+    if (this.settings.syncClientId) {
+      this.apiClient.setClientId(this.settings.syncClientId);
     }
     return this.apiClient;
   }
@@ -972,6 +1066,7 @@ export default class SocialArchiverPlugin extends Plugin {
     this.archiveLookupService?.destroy();
     this.archiveLookupService = undefined;
     this.annotationSyncService = undefined;
+    this.linkRelationSyncService = undefined;
 
     // Stop recovery polling before disposing services
     this.subscriptionSyncService?.stopRecoveryPolling();
@@ -1177,7 +1272,42 @@ export default class SocialArchiverPlugin extends Plugin {
       this.archiveLookupService.initialize();
 
       // Initialize AnnotationSyncService (syncs mobile notes -> comment frontmatter + annotation block)
-      const annotationRenderer = new AnnotationRenderer();
+      //
+      // The renderer rewrites mobile `socialarchiver://` mention tokens into
+      // Obsidian wikilinks. Resolvers stay vault-aware here while the renderer
+      // itself imports no Obsidian API. Author notes are looked up lazily
+      // (`getAuthorNoteService` below) because that service is constructed
+      // later in this method.
+      const annotationRenderer = new AnnotationRenderer({
+        resolveArchiveLink: (archiveId, alias, sourcePath) => {
+          const file = this.archiveLookupService?.findBySourceArchiveId(archiveId);
+          if (!(file instanceof TFile)) return null;
+          // generateMarkdownLink honours user link-format prefs + shortest
+          // unique path, and never recomputes a colliding filename. The timeline
+          // card renderer (PostCardRenderer.renderMarkdownLinks) only understands
+          // `[[wikilinks]]`, so when the user prefers markdown-style links we
+          // normalize to a basename wikilink — Obsidian still resolves it and the
+          // timeline link stays clickable. Tradeoff: basename (not shortest path)
+          // could collide for same-named notes in different folders; acceptable
+          // because archive notes use date/id-suffixed unique basenames.
+          const generated = this.app.fileManager.generateMarkdownLink(file, sourcePath, undefined, alias);
+          if (generated.startsWith('[[')) return generated;
+          return `[[${file.basename}|${alias}]]`;
+        },
+        resolveAuthorLink: ({ platform, name, url, alias }) => {
+          const authorNotes = this.authorNoteService;
+          if (!authorNotes) return null;
+          // Rebuild the author key locally from token params — do not trust a
+          // server-provided key string. Matches AuthorNoteService.buildAuthorKey
+          // inputs exactly (url first, name fallback).
+          const key = authorNotes.buildAuthorKey(url, name, platform);
+          const file = authorNotes.findNoteByKey(key);
+          if (!(file instanceof TFile)) return null;
+          // Author notes use a stable, slug-based basename, so a basename
+          // wikilink is safe and keeps the @-label intact.
+          return `[[${file.basename}|@${alias}]]`;
+        },
+      });
       const annotationSectionManager = new AnnotationSectionManager();
       const highlightBodyMarker = new HighlightBodyMarker();
       this.annotationSyncService = new AnnotationSyncService(
@@ -1206,6 +1336,37 @@ export default class SocialArchiverPlugin extends Plugin {
 
       // Start listening for comment changes to sync outbound
       this.annotationOutboundService.start();
+
+      // Initialize LinkRelationSyncService (renders the managed `## Linked
+      // archives` section from server archive_link_relations → [[wikilinks]],
+      // powering Obsidian graph view). The renderer's resolver reuses the same
+      // generateMarkdownLink-backed approach as the Phase A mention resolver so
+      // links honour the user's link-format prefs and the timeline card renderer
+      // (which only understands [[wikilinks]]) stays clickable.
+      const linkedArchivesRenderer = new LinkedArchivesRenderer({
+        resolveArchiveLink: (archiveId, alias, sourcePath) => {
+          const file = this.archiveLookupService?.findBySourceArchiveId(archiveId);
+          if (!(file instanceof TFile)) return null;
+          const generated = this.app.fileManager.generateMarkdownLink(file, sourcePath, undefined, alias);
+          if (generated.startsWith('[[')) return generated;
+          return `[[${file.basename}|${alias}]]`;
+        },
+      });
+      const linkedArchivesSectionManager = new LinkedArchivesSectionManager();
+      this.linkRelationSyncService = new LinkRelationSyncService({
+        app: this.app,
+        apiClient: () => this.apiClient,
+        archiveLookup: () => this.archiveLookupService,
+        renderer: linkedArchivesRenderer,
+        sectionManager: linkedArchivesSectionManager,
+        settings: () => this.settings,
+        saveSettings: () => this.saveSettingsPartial({}, { reinitialize: false, notify: false }),
+      });
+      // Suppress the outbound comment echo when the linked-archives writer touches
+      // a note (reuses the annotation outbound suppression, same as inbound sync).
+      this.linkRelationSyncService.onBeforeInboundWrite = (archiveId: string) => {
+        this.annotationOutboundService?.addSuppression(archiveId);
+      };
 
       // Initialize ArchiveTagOutboundService (syncs archiveTags frontmatter edits → server)
       this.archiveTagOutboundService?.stop();
@@ -1474,6 +1635,11 @@ export default class SocialArchiverPlugin extends Plugin {
           this.subscriptionSyncService?.replaceExistingLimitedArchiveFile(file, post) ??
           Promise.resolve({ status: 'failed' as const, reason: 'Subscription sync service not initialized' }),
         refreshTimelineView: () => this.refreshTimelineView(),
+        onArchiveIngested: (_file, archiveId) => {
+          // Late-resolution: render the new note's linked-archives section and
+          // upgrade any source note already linking to it. Fire-and-forget.
+          void this.linkRelationSyncService?.applyForArchive(archiveId);
+        },
         localLockRegistry: this.localLockRegistry,
       });
 
@@ -1547,6 +1713,9 @@ export default class SocialArchiverPlugin extends Plugin {
           Promise.resolve(),
         reconcileTranscriptState: (file, archive) =>
           this.reconcileTranscriptFromLibrarySync(file, archive),
+        reconcileLinkRelationState: (_file, archiveId) =>
+          this.linkRelationSyncService?.applyForArchive(archiveId) ??
+          Promise.resolve(),
         localLockRegistry: this.localLockRegistry,
       });
 
@@ -1783,6 +1952,7 @@ export default class SocialArchiverPlugin extends Plugin {
             this.subscriptionManager?.acknowledgePendingPosts(ids) ?? Promise.resolve(),
           archiveLookupService: this.archiveLookupService,
           annotationSyncService: this.annotationSyncService,
+          linkRelationSyncService: this.linkRelationSyncService,
           archiveStateSyncService: this.archiveStateSyncService,
           likeStateSyncService: this.likeStateSyncService,
           shareStateSyncService: this.shareStateSyncService,
@@ -1972,11 +2142,9 @@ export default class SocialArchiverPlugin extends Plugin {
     return this.pendingJobOrchestrator?.checkPendingJobs();
   }
 
-  async syncSubscriptionPosts(trigger?: string): Promise<void> {
-    // Return value intentionally discarded — callers in main.ts and
-    // RealtimeEventBridge don't need the result. Recovery polling
-    // calls syncSubscriptionPosts directly on the service instance.
-    await this.subscriptionSyncService?.syncSubscriptionPosts(trigger);
+  async syncSubscriptionPosts(trigger?: string): Promise<SyncSubscriptionResult> {
+    return this.subscriptionSyncService?.syncSubscriptionPosts(trigger)
+      ?? { total: 0, saved: 0, failed: 0 };
   }
 
   // ============================================================================

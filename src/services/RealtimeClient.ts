@@ -20,6 +20,7 @@ export type RealtimeMessageType =
   | 'archive_deleted' // From archive deletion
   | 'archive_tags_updated' // From tag changes (mobile/web)
   | 'author_profile_updated' // From editable author profile changes
+  | 'archive_relation_updated' // From archive_link_relations create/update/soft-delete
   | 'subscription_changed' // From subscription create/update/delete
   | 'media_preserved' // From R2 media preservation
   | 'billing_status_updated' // From RevenueCat/server billing status changes

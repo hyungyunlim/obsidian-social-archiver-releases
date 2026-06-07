@@ -26,7 +26,7 @@ import {
 } from '@/services/IconService';
 import { formatNumber, formatNumberWithCommas } from '@/utils/formatNumber';
 import { MarkdownRenderer, Component } from 'obsidian';
-import { isSubscriptionSupported as checkSubscriptionSupported } from '@/constants/rssPlatforms';
+import { isGenericSubscriptionSupported as checkSubscriptionSupported } from '@/constants/rssPlatforms';
 import { BrunchLocalService } from '@/services/BrunchLocalService';
 
 /**

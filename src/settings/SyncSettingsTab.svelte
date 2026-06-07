@@ -256,6 +256,35 @@ async function handleRetryPendingDeletes() {
     </label>
   </div>
 
+  <!-- Linked Archives Section Toggle -->
+  <div class="sync-annotation-toggle">
+    <div class="annotation-toggle-info">
+      <div class="annotation-toggle-title">Linked archives section</div>
+      <div class="annotation-toggle-description">
+        Add a managed <code>## Linked archives</code> section with <code>[[wikilinks]]</code> to
+        related archives, so they show up in Obsidian graph view. Turning this off leaves any
+        existing sections in place.
+      </div>
+    </div>
+    <label class="annotation-toggle-switch">
+      <input
+        type="checkbox"
+        checked={settings.enableLinkedArchivesSection}
+        onchange={async (e) => {
+          const enabled = (e.target as HTMLInputElement).checked;
+          plugin.settings.enableLinkedArchivesSection = enabled;
+          await plugin.saveSettings();
+          settings = plugin.settings;
+          // OFF→ON: kick a pull-sync so existing notes get their sections.
+          if (enabled) {
+            void plugin.linkRelationSyncService?.pullSync();
+          }
+        }}
+      />
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
+
   <!-- Info Callout -->
   <div class="sync-info-callout">
     <strong>How Mobile Sync Works</strong>

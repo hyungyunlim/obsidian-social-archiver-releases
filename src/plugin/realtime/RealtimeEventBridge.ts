@@ -12,10 +12,12 @@ import { Events, EventRef, Notice } from 'obsidian';
 import type { App, TFile } from 'obsidian';
 import type { PendingJob } from '../../services/PendingJobsManager';
 import type { PendingPost } from '../../services/SubscriptionManager';
+import type { SyncSubscriptionResult } from '../subscriptions/SubscriptionSyncService';
 import type { CrawlJobTracker } from '../../services/CrawlJobTracker';
 import type { ArchiveJobTracker } from '../../services/ArchiveJobTracker';
 import type { ArchiveLookupService } from '../../services/ArchiveLookupService';
 import type { AnnotationSyncService } from '../../services/AnnotationSyncService';
+import type { LinkRelationSyncService } from '../sync/LinkRelationSyncService';
 import type { ArchiveDeleteSyncService } from '../sync/ArchiveDeleteSyncService';
 import type { ArchiveTagOutboundService } from '../sync/ArchiveTagOutboundService';
 import type { ArchiveStateSyncService } from '../sync/ArchiveStateSyncService';
@@ -35,6 +37,7 @@ import type {
   MediaPreservedEventData,
   AuthorProfileUpdatedEventData,
   BillingStatusUpdatedEventData,
+  ArchiveRelationUpdatedEventData,
 } from '../../types/websocket';
 import type { BillingEventApiPayload } from '../../types/billing-events';
 import type { IngestResult } from '../sync/RemoteArchiveIngestService';
@@ -186,6 +189,7 @@ export interface RealtimeEventBridgeDeps {
   acknowledgePendingPosts?: (ids: string[]) => Promise<void>;
   archiveLookupService: ArchiveLookupService | undefined;
   annotationSyncService: AnnotationSyncService | undefined;
+  linkRelationSyncService?: LinkRelationSyncService | undefined;
   archiveStateSyncService?: ArchiveStateSyncService | undefined;
   likeStateSyncService?: LikeStateSyncService | undefined;
   shareStateSyncService?: ShareStateSyncService | undefined;
@@ -198,7 +202,7 @@ export interface RealtimeEventBridgeDeps {
   processCompletedJob: (job: PendingJob, payload: CompletedJobResponse) => Promise<void>;
   processFailedJob: (job: PendingJob, message: string) => Promise<void>;
   saveSubscriptionPost: (pendingPost: PendingPost) => Promise<boolean>;
-  syncSubscriptionPosts: (trigger?: string) => Promise<void>;
+  syncSubscriptionPosts: (trigger?: string) => Promise<SyncSubscriptionResult>;
   refreshSubscriptions?: () => Promise<void>;
   createProfileNote: (message: WsProfileMetadataMessage) => Promise<void>;
   applyAuthorProfileUpdate?: (profile: UserAuthorProfile) => Promise<void>;
@@ -330,6 +334,7 @@ export class RealtimeEventBridge {
     this.setupArchiveTagsUpdatedListener();
     this.setupContentVariantUpdatedListener();
     this.setupAuthorProfileUpdatedListener();
+    this.setupArchiveRelationUpdatedListener();
     this.setupArchiveDeletedListener();
     this.setupMediaPreservedListener();
     this.setupBillingStatusUpdatedListener();
@@ -655,6 +660,14 @@ export class RealtimeEventBridge {
         // void this.deps.archiveDeleteSyncService?.flushPendingDeletes();
         void this.deps.syncAuthorProfiles?.();
 
+        // Catch up on link-relation changes missed while offline (re-renders the
+        // `## Linked archives` sections). Fail-soft + feature-gated internally.
+        this.deps.schedule(() => {
+          void this.deps.linkRelationSyncService?.pullSync().catch((error) => {
+            console.debug('[Social Archiver] Link relation pull-sync on WS reconnect failed:', error);
+          });
+        }, 3500);
+
         // Sync subscription pending posts missed while offline
         this.deps.schedule(() => {
           void this.deps.syncSubscriptionPosts('ws-connected').catch((error) => {
@@ -847,12 +860,23 @@ export class RealtimeEventBridge {
 
         this.subscriptionArchiveAddedSyncTimer = this.deps.schedule(() => {
           this.subscriptionArchiveAddedSyncTimer = undefined;
-          void this.deps.syncSubscriptionPosts('archive-added').catch((error) => {
+          void this.syncSubscriptionArchiveAdded(message).catch((error) => {
             console.debug('[Social Archiver] Subscription sync from archive_added failed:', error);
           });
         }, 2000);
       }),
     );
+  }
+
+  private async syncSubscriptionArchiveAdded(message: WsArchiveAddedMessage): Promise<void> {
+    const result = await this.deps.syncSubscriptionPosts('archive-added');
+    const archiveId = message.data?.archiveId;
+
+    if (!archiveId || (result?.total ?? 0) > 0) {
+      return;
+    }
+
+    await this.deps.ingestRemoteArchive(archiveId, 'archive_complete');
   }
 
   // --------------------------------------------------------------------------
@@ -1318,6 +1342,24 @@ export class RealtimeEventBridge {
         this.deps.authorProfileOutboundService?.addSuppression(profile.authorKey);
         await this.deps.applyAuthorProfileUpdate?.(profile);
         this.deps.refreshTimelineView();
+      }),
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // ws:archive_relation_updated
+  // --------------------------------------------------------------------------
+
+  private setupArchiveRelationUpdatedListener(): void {
+    this.eventRefs.push(
+      this.deps.events.on('ws:archive_relation_updated', async (_message: unknown) => {
+        const msg = _message as { type: string; data: ArchiveRelationUpdatedEventData } | undefined;
+        const relation = msg?.data?.relation;
+        if (!relation) return;
+
+        // Re-render the affected `## Linked archives` sections (both ends of the
+        // relation). Feature-gating + fail-soft handled inside the service.
+        await this.deps.linkRelationSyncService?.handleRelationUpdated(relation);
       }),
     );
   }

@@ -25,6 +25,7 @@ describe('ProfileCrawlService.classify', () => {
     { url: 'https://www.instagram.com/p/CXYZ/', kind: 'post' },
     { url: 'https://www.facebook.com/somepage', kind: 'profile' },
     { url: 'https://www.threads.net/@someone', kind: 'profile' },
+    { url: 'https://www.threads.com/@di_1985_', kind: 'profile' },
     { url: 'https://www.reddit.com/r/obsidianmd/', kind: 'profile' },
     { url: 'https://mastodon.social/@user', kind: 'profile' },
     { url: 'https://bsky.app/profile/user.bsky.social', kind: 'profile' },
@@ -40,6 +41,7 @@ describe('ProfileCrawlService.classify', () => {
       // kind we care about for the agent must match.
       expect(['post', 'profile', 'rss', 'unknown']).toContain(result.kind);
       if (kind === 'post') expect(result.kind).toBe('post');
+      if (url.includes('threads.com')) expect(result.kind).toBe('profile');
     });
   }
 
@@ -47,6 +49,18 @@ describe('ProfileCrawlService.classify', () => {
     const { service } = makeService();
     const out = service.classify('https://www.instagram.com/exampleuser/');
     expect(out.supportedFlows.length).toBeGreaterThan(0);
+  });
+
+  it('enables Threads profile crawl without exposing subscribe before rollout', () => {
+    const { service } = makeService();
+    const out = service.classify('https://www.threads.com/@di_1985_');
+    expect(out).toMatchObject({
+      kind: 'profile',
+      platform: 'threads',
+      handle: 'di_1985_',
+    });
+    expect(out.supportedFlows).toContain('profile-crawl');
+    expect(out.supportedFlows).not.toContain('subscribe');
   });
 });
 
@@ -58,6 +72,19 @@ describe('ProfileCrawlService.crawlNow', () => {
     expect(result.jobId).toBe('job-123');
     expect(result.estimatedPosts).toBe(5);
     expect(result.subscribed).toBe(false);
+  });
+
+  it('submits Threads profile crawl requests for threads.com profile URLs', async () => {
+    const { service, client } = makeService();
+    const result = await service.crawlNow({ url: 'https://www.threads.com/@di_1985_' });
+    expect(result.platform).toBe('threads');
+    expect(result.handle).toBe('di_1985_');
+    const request = client.crawlProfile.mock.calls[0][0];
+    expect(request).toMatchObject({
+      platform: 'threads',
+      handle: 'di_1985_',
+      profileUrl: 'https://www.threads.com/@di_1985_',
+    });
   });
 
   it("rejects range='custom' without start+end", async () => {

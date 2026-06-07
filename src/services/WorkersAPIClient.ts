@@ -22,6 +22,7 @@ import type { TextHighlight, UserNote } from '@/types/annotations';
 import type { AuthorProfileSystemUpsertInput, AuthorProfileUpsertInput, UserAuthorProfile } from '@/types/author-profile';
 import type { BillingEventApiPayload, BillingEventsResponse } from '@/types/billing-events';
 import type { AICommentType } from '@/types/ai-comment';
+import type { RelationWithSummary, RelationPullResponse } from '@/types/link-relations';
 
 // ============================================================================
 // Multi-Client Sync Types
@@ -1819,6 +1820,98 @@ export class WorkersAPIClient implements IService {
     return await this.request<GetUserArchivesResponse>(path, {
       method: 'GET',
     });
+  }
+
+  /**
+   * List active link relations for a single archive (the archive is source OR
+   * target), each paired with the NON-SELF side summary.
+   *
+   * `GET /api/user/archives/:archiveId/link-relations` → `{ relations }`.
+   * Active rows only (no soft-deleted). `otherArchive` is null when the other
+   * side is soft-deleted / unresolved / an author-mention.
+   *
+   * Throw-on-error (mirrors `getUserArchive`). The caller (LinkRelationSyncService)
+   * wraps this in a try/catch and degrades to a no-op on failure, so a single
+   * archive's relation fetch failing never blocks the broader sync loop.
+   */
+  async getArchiveLinkRelations(archiveId: string): Promise<RelationWithSummary[]> {
+    this.ensureInitialized();
+
+    const response = await this.request<{ relations: RelationWithSummary[] }>(
+      `/api/user/archives/${encodeURIComponent(archiveId)}/link-relations`,
+      { method: 'GET' },
+    );
+
+    return Array.isArray(response.relations) ? response.relations : [];
+  }
+
+  /**
+   * Pull-sync delta of link relations updated after a cursor.
+   *
+   * `GET /api/user/archive-link-relations?updatedAfter=<ISO>&limit=<n>` →
+   * `{ relations, serverTime }`. The response INCLUDES soft-deleted rows
+   * (deletedAt set) so the client can drop their rendered rows; `serverTime`
+   * is the next cursor (delta-sync convention). Server caps `limit` at 500.
+   *
+   * Fail-soft: returns `null` on any of HTTP non-2xx, JSON parse failure,
+   * unauthenticated state, or network error. NEVER throws — pull-sync must not
+   * block plugin load or the foreground catch-up chain. (Template:
+   * `getActiveBillingEvents`.)
+   */
+  async getLinkRelationsUpdatedAfter(
+    updatedAfter: string | null,
+    limit = 200,
+  ): Promise<RelationPullResponse | null> {
+    if (!this.config.endpoint) {
+      return null;
+    }
+    if (!this.config.authToken) {
+      return null;
+    }
+
+    const queryParams = new URLSearchParams();
+    if (updatedAfter) queryParams.set('updatedAfter', updatedAfter);
+    queryParams.set('limit', String(limit));
+    const query = queryParams.toString();
+    const url = `${this.config.endpoint}/api/user/archive-link-relations${query ? `?${query}` : ''}`;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Client': 'obsidian-plugin',
+      'X-Client-Version': this.config.pluginVersion || '0.0.0',
+      'X-Platform': this.getPlatformIdentifier(),
+      Authorization: `Bearer ${this.config.authToken}`,
+    };
+    if (this.config.clientId) {
+      headers['X-Client-Id'] = this.config.clientId;
+    }
+
+    try {
+      const response = await requestUrl({
+        url,
+        method: 'GET',
+        headers,
+        throw: false,
+      });
+
+      if (response.status < 200 || response.status >= 300) {
+        return null;
+      }
+
+      const body = response.json as
+        | { success?: boolean; data?: Partial<RelationPullResponse> }
+        | undefined;
+      if (!body || body.success !== true || !body.data) {
+        return null;
+      }
+
+      const relations = Array.isArray(body.data.relations) ? body.data.relations : [];
+      const serverTime = typeof body.data.serverTime === 'string' ? body.data.serverTime : '';
+      return { relations, serverTime };
+    } catch (err) {
+      console.warn('[WorkersAPIClient] getLinkRelationsUpdatedAfter failed:', err);
+      return null;
+    }
   }
 
   /**

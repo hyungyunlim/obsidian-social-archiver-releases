@@ -105,12 +105,13 @@ function makeDeps(overrides: Partial<RealtimeEventBridgeDeps> = {}): RealtimeEve
     processCompletedJob: vi.fn(),
     processFailedJob: vi.fn(),
     saveSubscriptionPost: vi.fn().mockResolvedValue(false),
-    syncSubscriptionPosts: vi.fn().mockResolvedValue(undefined),
+    syncSubscriptionPosts: vi.fn().mockResolvedValue({ total: 0, saved: 0, failed: 0 }),
     createProfileNote: vi.fn().mockResolvedValue(undefined),
     refreshBillingUsage: vi.fn().mockResolvedValue(true),
     refreshTimelineView: vi.fn(),
     processPendingSyncQueue: vi.fn().mockResolvedValue(undefined),
     processSyncQueueItem: vi.fn().mockResolvedValue(false),
+    ingestRemoteArchive: vi.fn().mockResolvedValue('skipped'),
     getReadableErrorMessage: vi.fn().mockReturnValue('error'),
     processingJobs: new Set(),
     notify: vi.fn(),
@@ -393,12 +394,14 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
   // --------------------------------------------------------------------------
 
   it('triggers debounced syncSubscriptionPosts on archive_added with source=subscription', async () => {
-    const syncSubscriptionPosts = vi.fn().mockResolvedValue(undefined);
+    const syncSubscriptionPosts = vi.fn().mockResolvedValue({ total: 1, saved: 1, failed: 0 });
+    const ingestRemoteArchive = vi.fn().mockResolvedValue('created');
 
     const events = makeEvents();
     const deps = makeDeps({
       events: events as any,
       syncSubscriptionPosts,
+      ingestRemoteArchive,
       schedule: vi.fn().mockImplementation((cb: () => void, delay: number) => {
         return window.setTimeout(cb, delay);
       }),
@@ -426,6 +429,41 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
 
     // Now it should fire with 'archive-added' trigger
     expect(syncSubscriptionPosts).toHaveBeenCalledWith('archive-added');
+    expect(ingestRemoteArchive).not.toHaveBeenCalled();
+  });
+
+  it('falls back to direct archive ingest when archive_added pending sync finds no posts', async () => {
+    const syncSubscriptionPosts = vi.fn().mockResolvedValue({ total: 0, saved: 0, failed: 0 });
+    const ingestRemoteArchive = vi.fn().mockResolvedValue('created');
+
+    const events = makeEvents();
+    const deps = makeDeps({
+      events: events as any,
+      syncSubscriptionPosts,
+      ingestRemoteArchive,
+      schedule: vi.fn().mockImplementation((cb: () => void, delay: number) => {
+        return window.setTimeout(cb, delay);
+      }),
+    });
+
+    const bridge = new RealtimeEventBridge(deps);
+    bridge.setup();
+
+    await events.trigger('ws:archive_added', {
+      type: 'archive_added',
+      data: {
+        archiveId: 'archive-kidsnote-1',
+        platform: 'kidsnote',
+        source: 'subscription',
+        subscriptionId: 'sub-kidsnote-1',
+      },
+    });
+
+    vi.advanceTimersByTime(2000);
+    await vi.runAllTimersAsync();
+
+    expect(syncSubscriptionPosts).toHaveBeenCalledWith('archive-added');
+    expect(ingestRemoteArchive).toHaveBeenCalledWith('archive-kidsnote-1', 'archive_complete');
   });
 
   // --------------------------------------------------------------------------

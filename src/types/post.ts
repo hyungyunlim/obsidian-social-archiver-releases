@@ -276,6 +276,19 @@ export interface PostData {
   tags?: string[];           // Timeline-display tags from YAML `tags` + `archiveTags`
   archiveTags?: string[];    // Server-synced Social Archiver tags from YAML `archiveTags`
   comment?: string;         // User's personal note/comment
+  /**
+   * Mobile user notes parsed from the managed `## Mobile Annotations` block at
+   * the bottom of the vault note (reverse of `AnnotationRenderer`). Read-only in
+   * the timeline — bidirectional sync stays on `comment`. `createdAt` is the
+   * local-formatted display string from `formatLocalTimestamp` (not ISO).
+   */
+  userNotes?: Array<{ content: string; createdAt: string | null }>;
+  /**
+   * Relation rows parsed from the managed `## Linked archives` block (reverse
+   * of `LinkedArchivesRenderer`). Rows keep their markdown form — the card
+   * renderer feeds them through `renderMarkdownLinks`. Read-only.
+   */
+  linkedArchives?: { linksTo: string[]; linkedFrom: string[] };
   like?: boolean;           // User's personal like (for sorting/filtering)
   archive?: boolean;        // Whether post is archived (hidden by default)
   share?: boolean;          // YAML frontmatter share flag (true when published to web)
@@ -616,6 +629,14 @@ export const PostDataSchema: z.ZodType<PostData> = z.lazy(() => z.object({
   thumbnail: z.string().nullish(),
   filePath: z.string().nullish(),
   comment: z.string().nullish(),
+  userNotes: z.array(z.object({
+    content: z.string(),
+    createdAt: z.string().nullable()
+  })).nullish(),
+  linkedArchives: z.object({
+    linksTo: z.array(z.string()),
+    linkedFrom: z.array(z.string())
+  }).nullish(),
   like: z.boolean().nullish(),
   archive: z.boolean().nullish(),
   shareUrl: z.string().nullish(),

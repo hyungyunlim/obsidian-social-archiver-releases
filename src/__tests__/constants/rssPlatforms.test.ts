@@ -1,0 +1,19 @@
+import { describe, expect, it } from 'vitest';
+import {
+  isGenericSubscriptionSupported,
+  isSubscriptionSupported,
+  NEW_SUBSCRIPTION_PLATFORMS,
+  SUBSCRIPTION_SUPPORTED_PLATFORMS,
+} from '@/constants/rssPlatforms';
+
+describe('rss platform subscription constants', () => {
+  it('supports receiving Kidsnote subscription archives in the plugin', () => {
+    expect(SUBSCRIPTION_SUPPORTED_PLATFORMS).toContain('kidsnote');
+    expect(isSubscriptionSupported('kidsnote')).toBe(true);
+  });
+
+  it('keeps Kidsnote out of the generic new-subscription UI list', () => {
+    expect(NEW_SUBSCRIPTION_PLATFORMS).not.toContain('kidsnote');
+    expect(isGenericSubscriptionSupported('kidsnote')).toBe(false);
+  });
+});

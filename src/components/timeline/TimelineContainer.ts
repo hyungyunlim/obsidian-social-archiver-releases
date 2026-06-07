@@ -10,7 +10,7 @@ import {
   getPlatformLucideIcon as getIconServiceLucideIcon
 } from '../../services/IconService';
 import { TIMELINE_PLATFORM_IDS, TIMELINE_PLATFORM_LABELS } from '../../constants/timelinePlatforms';
-import { needsFeedUrlDerivation, isSubscriptionSupported, type SubscriptionSupportedPlatform } from '../../constants/rssPlatforms';
+import { needsFeedUrlDerivation, isGenericSubscriptionSupported as isSubscriptionSupported, type SubscriptionSupportedPlatform } from '../../constants/rssPlatforms';
 import { PostDataParser } from './parsers/PostDataParser';
 import { FilterSortManager, type FilterState } from './filters/FilterSortManager';
 import { FilterPanel } from './filters/FilterPanel';
@@ -50,6 +50,7 @@ import { PostIndexService, type PostIndexEntry } from '../../services/PostIndexS
 import { SearchIndexService } from '../../services/SearchIndexService';
 import { createSVGElement } from '../../utils/dom-helpers';
 import type { AuthorCatalogEntry, AuthorSubscribeOptions, PlatformAuthorCounts } from '../../types/author-catalog';
+import type { AuthorMentionUrlParts } from '../../utils/note-mentions';
 import type { SubscriptionEvent } from '../../services/SubscriptionManager';
 import { AuthorDetailContainer } from '../author-detail/AuthorDetailContainer';
 import { showConfirmModal } from '../../utils/confirm-modal';
@@ -1006,6 +1007,10 @@ export class TimelineContainer {
       void this.handleViewAuthor(authorUrl, platform);
     });
 
+    this.postCardRenderer.onViewAuthorIdentity((identity) => {
+      void this.handleViewAuthorIdentity(identity);
+    });
+
     this.postCardRenderer.onSubscribeAuthor(async (author) => {
       await this.subscribeToAuthor(author);
     });
@@ -1082,6 +1087,77 @@ export class TimelineContainer {
         platform,
         avatar: author?.avatar || null,
         handle: author?.handle || author?.username,
+        bio: author?.bio,
+        followers: author?.followers,
+        lastSeenAt: firstPost?.metadata?.timestamp instanceof Date
+          ? firstPost.metadata.timestamp
+          : new Date(),
+        archiveCount: authorPosts.length,
+        filePaths: authorPosts
+          .map((p) => p.filePath)
+          .filter((fp): fp is string => !!fp),
+        subscriptionId: null,
+        status: 'not_subscribed',
+      };
+    }
+
+    const authorLocation = resolveViewLocation(
+      this.plugin.settings.authorDetailLocation,
+      this.plugin.settings.viewLocationDefault,
+    );
+    void this.plugin.activateAuthorDetailView(entry, authorLocation);
+  }
+
+  /**
+   * Handle author-mention click from a note card (PostCardRenderer). The
+   * mention token carries identity (platform + name, optional handle/url) but
+   * no catalog entry — resolve against the Author Catalog by URL, then handle,
+   * then name, falling back to an entry built from loaded posts so the Author
+   * Detail view always opens (mobile parity: mentions open the detail view).
+   */
+  private async handleViewAuthorIdentity(identity: AuthorMentionUrlParts): Promise<void> {
+    const norm = (value: string | undefined): string =>
+      (value ?? '').trim().toLowerCase().replace(/^@+/, '');
+
+    let entry: AuthorCatalogEntry | undefined;
+    try {
+      const { getAuthorCatalogStore } = await import('../../services/AuthorCatalogStore');
+      const { get } = await import('svelte/store');
+      const store = getAuthorCatalogStore();
+      const authors = get(store.state).authors;
+      entry =
+        (identity.profileUrl
+          ? authors.find((a) => a.platform === identity.platform && a.authorUrl === identity.profileUrl)
+          : undefined) ??
+        (identity.handle
+          ? authors.find((a) => a.platform === identity.platform && norm(a.handle) === norm(identity.handle))
+          : undefined) ??
+        authors.find((a) => a.platform === identity.platform && norm(a.authorName) === norm(identity.name));
+    } catch {
+      // Fall through to a post-derived entry
+    }
+
+    if (!entry) {
+      const authorPosts = this.posts.filter((p) => {
+        if (p.platform !== identity.platform) return false;
+        if (identity.profileUrl && p.author?.url === identity.profileUrl) return true;
+        if (
+          identity.handle &&
+          (norm(p.author?.handle) === norm(identity.handle) || norm(p.author?.username) === norm(identity.handle))
+        ) {
+          return true;
+        }
+        return norm(p.author?.name) === norm(identity.name);
+      });
+      const firstPost = authorPosts[0];
+      const author = firstPost?.author;
+
+      entry = {
+        authorName: author?.name || identity.name,
+        authorUrl: identity.profileUrl || author?.url || '',
+        platform: identity.platform,
+        avatar: author?.avatar || null,
+        handle: identity.handle || author?.handle || author?.username,
         bio: author?.bio,
         followers: author?.followers,
         lastSeenAt: firstPost?.metadata?.timestamp instanceof Date

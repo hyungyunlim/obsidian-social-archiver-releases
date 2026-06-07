@@ -66,6 +66,16 @@ export interface RemoteArchiveIngestDeps {
   /** Refresh the timeline view after a successful save. */
   refreshTimelineView: () => void;
 
+  /**
+   * Fired AFTER a brand-new archive note is written to the vault (status
+   * 'created'), with the new note's bound file + server archive id. Used to
+   * render its managed `## Linked archives` section and upgrade any source note
+   * already linking to it. Best-effort, fire-and-forget — never blocks ingest.
+   *
+   * Wired to LinkRelationSyncService.applyForArchive() in main.ts.
+   */
+  onArchiveIngested?: (file: TFile, archiveId: string) => void;
+
   /** Shared local write lock registry used by plugin archive/materialization writers. */
   localLockRegistry?: LocalLockRegistry;
 }
@@ -160,6 +170,11 @@ export class RemoteArchiveIngestService {
 
     if (saveResult.file) {
       await this.bindFileIdentity(saveResult.file, archive);
+      // Late-resolution: render the new note's linked-archives section + upgrade
+      // any source note already pointing at it. Fire-and-forget, non-fatal.
+      if (saveResult.status === 'created' || saveResult.status === 'updated') {
+        this.deps.onArchiveIngested?.(saveResult.file, archive.id);
+      }
       this.deps.refreshTimelineView();
       return saveResult.status === 'updated' ? 'created' : saveResult.status;
     }

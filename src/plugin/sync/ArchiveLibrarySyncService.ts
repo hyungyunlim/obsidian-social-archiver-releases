@@ -200,6 +200,19 @@ export interface ArchiveLibrarySyncDeps {
   /** Reconcile server-generated Whisper transcript projection into existing markdown. */
   reconcileTranscriptState?: (file: TFile, archive: UserArchive) => Promise<void>;
 
+  /**
+   * Reconcile the managed `## Linked archives` section on a vault file against
+   * the server's archive_link_relations for `archiveId`. Idempotent + fail-soft.
+   *
+   * Called both for existing files matched during the sweep AND for newly-saved
+   * archive notes (late-resolution: a freshly created note may be the TARGET of
+   * a relation whose SOURCE note already exists locally — the caller re-renders
+   * the source side too via the relation list).
+   *
+   * Wired to LinkRelationSyncService.applyForArchive() in main.ts.
+   */
+  reconcileLinkRelationState?: (file: TFile, archiveId: string) => Promise<void>;
+
   /** Shared local write lock registry used by plugin archive/materialization writers. */
   localLockRegistry?: LocalLockRegistry;
 }
@@ -664,6 +677,7 @@ export class ArchiveLibrarySyncService {
         await this.reconcileExistingLikeState(existingById, archive);
         await this.reconcileExistingAnnotationState(existingById, archive);
         await this.reconcileExistingTranscriptState(existingById, archive);
+        await this.reconcileLinkRelationState(existingById, archive);
         if (!updated) {
           this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
         }
@@ -721,6 +735,7 @@ export class ArchiveLibrarySyncService {
         await this.reconcileExistingLikeState(matched, archive);
         await this.reconcileExistingAnnotationState(matched, archive);
         await this.reconcileExistingTranscriptState(matched, archive);
+        await this.reconcileLinkRelationState(matched, archive);
         if (!updated) {
           this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
         }
@@ -858,6 +873,25 @@ export class ArchiveLibrarySyncService {
     }
   }
 
+  /**
+   * Reconcile the managed `## Linked archives` section on a vault file. Non-fatal
+   * — errors are logged and swallowed so the main sweep keeps progressing.
+   * No-op when the dep is not wired (feature disabled / not constructed).
+   */
+  private async reconcileLinkRelationState(file: TFile, archive: UserArchive): Promise<void> {
+    if (!this.deps.reconcileLinkRelationState) return;
+
+    try {
+      await this.deps.reconcileLinkRelationState(file, archive.id);
+    } catch (error) {
+      console.warn('[Social Archiver] [LibrarySync] reconcileLinkRelationState failed', {
+        archiveId: archive.id,
+        path: file.path,
+        error,
+      });
+    }
+  }
+
   private buildPendingPost(
     archive: UserArchive,
     idPrefix: string,
@@ -917,6 +951,10 @@ export class ArchiveLibrarySyncService {
         sourceArchiveId: archive.id,
         originalUrl: archive.originalUrl,
       });
+      // Late-resolution: render this new note's own linked-archives section AND
+      // upgrade any source note that already links to it (the relation list for
+      // this archive includes the incoming side). Fire-and-forget non-fatal.
+      await this.reconcileLinkRelationState(result.file, archive);
       this.updateState({ savedCount: this.runtimeState.savedCount + 1 });
     } else if (result.status === 'existing') {
       this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });

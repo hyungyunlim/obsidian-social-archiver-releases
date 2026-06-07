@@ -33,8 +33,16 @@ export const RSS_PLATFORMS_FOR_SUBSCRIPTION_MATCH = ['medium', 'velog', 'substac
 export const SUBSCRIPTION_SUPPORTED_PLATFORMS = [
   'instagram', 'facebook', 'linkedin', 'reddit', 'tiktok', 'pinterest',
   'bluesky', 'mastodon', 'youtube', 'x', 'naver-webtoon', 'webtoons',
+  'kidsnote',
   ...RSS_BASED_PLATFORMS
 ] as const;
+
+/**
+ * Account-connected subscription platforms.
+ * These can be received/synced by the plugin, but should not use the generic
+ * "subscribe to this author URL" UI because setup requires an integration flow.
+ */
+export const ACCOUNT_CONNECTED_SUBSCRIPTION_PLATFORMS = ['kidsnote'] as const;
 
 /**
  * Platforms where new subscriptions are currently disabled
@@ -49,7 +57,7 @@ export const SUBSCRIPTION_DISABLED_PLATFORMS = [] as const;
  * Bluesky/Mastodon use free direct API, YouTube uses free RSS feed, X uses xcancel RSS
  */
 export const PROFILE_CRAWL_SUPPORTED_PLATFORMS = [
-  'instagram', 'facebook', 'x', 'reddit', 'tiktok', 'pinterest',
+  'instagram', 'facebook', 'threads', 'x', 'reddit', 'tiktok', 'pinterest',
   'bluesky', 'mastodon', 'youtube', 'naver', 'brunch'
 ] as const;
 
@@ -58,7 +66,7 @@ export const PROFILE_CRAWL_SUPPORTED_PLATFORMS = [
  * Includes LinkedIn (profile crawling with posts)
  */
 export const PROFILE_ARCHIVE_SUPPORTED_PLATFORMS = [
-  'instagram', 'facebook', 'x', 'linkedin', 'reddit', 'tiktok', 'pinterest',
+  'instagram', 'facebook', 'threads', 'x', 'linkedin', 'reddit', 'tiktok', 'pinterest',
   'bluesky', 'mastodon', 'youtube', 'naver', 'brunch'
 ] as const;
 
@@ -76,6 +84,7 @@ export const NEW_SUBSCRIPTION_PLATFORMS = [
 export type RssBasedPlatform = typeof RSS_BASED_PLATFORMS[number];
 export type RssPlatformWithOwnId = typeof RSS_PLATFORMS_WITH_OWN_ID[number];
 export type SubscriptionSupportedPlatform = typeof SUBSCRIPTION_SUPPORTED_PLATFORMS[number];
+export type AccountConnectedSubscriptionPlatform = typeof ACCOUNT_CONNECTED_SUBSCRIPTION_PLATFORMS[number];
 
 // Helper functions
 export function isRssBasedPlatform(platform: string): platform is RssBasedPlatform {
@@ -92,4 +101,11 @@ export function needsFeedUrlDerivation(platform: string): boolean {
 
 export function isSubscriptionSupported(platform: string): platform is SubscriptionSupportedPlatform {
   return SUBSCRIPTION_SUPPORTED_PLATFORMS.includes(platform as SubscriptionSupportedPlatform);
+}
+
+export function isGenericSubscriptionSupported(
+  platform: string
+): platform is Exclude<SubscriptionSupportedPlatform, AccountConnectedSubscriptionPlatform> {
+  return isSubscriptionSupported(platform) &&
+    !ACCOUNT_CONNECTED_SUBSCRIPTION_PLATFORMS.includes(platform as AccountConnectedSubscriptionPlatform);
 }

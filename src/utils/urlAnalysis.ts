@@ -216,8 +216,8 @@ const PROFILE_PATTERNS: ProfilePattern[] = [
   {
     platform: 'threads',
     patterns: [
-      // threads.net/@username (with optional query params and hash)
-      /^https?:\/\/(?:www\.)?threads\.net\/@([a-zA-Z0-9._]+)\/?(?:\?[^#]*)?(?:#.*)?$/i,
+      // threads.net/@username or threads.com/@username (with optional query params and hash)
+      /^https?:\/\/(?:www\.)?(?:threads\.net|threads\.com)\/@([a-zA-Z0-9._]+)\/?(?:\?[^#]*)?(?:#.*)?$/i,
     ],
     handleExtractor: (url: URL): string | null => {
       const match = url.pathname.match(/^\/@([a-zA-Z0-9._]+)\/?$/);

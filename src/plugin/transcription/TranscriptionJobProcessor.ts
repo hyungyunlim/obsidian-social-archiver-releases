@@ -194,20 +194,24 @@ function applyDownloadedVideoFrontmatter(
   delete frontmatter.videoDownloadFailedUrls;
 }
 
-function applyDownloadedAudioFrontmatter(
+export function applyDownloadedAudioFrontmatter(
   frontmatter: Record<string, unknown>,
   sourceUrl: string | null,
   localAudioPath: string,
 ): void {
   const normalizedPath = normalizePath(localAudioPath).replace(/^\/+/, '');
   const downloadedUrls = Array.isArray(frontmatter.downloadedUrls) ? [...frontmatter.downloadedUrls] : [];
-  if (sourceUrl) {
-    for (const marker of [sourceUrl, `downloaded:${sourceUrl}`]) {
+  const existingAudioUrl = typeof frontmatter.audioUrl === 'string' ? frontmatter.audioUrl.trim() : '';
+  const sourceUrls = Array.from(new Set([sourceUrl, existingAudioUrl]
+    .filter((url): url is string => !!url && /^https?:\/\//i.test(url))));
+  for (const url of sourceUrls) {
+    for (const marker of [url, `downloaded:${url}`]) {
       if (!downloadedUrls.includes(marker)) downloadedUrls.push(marker);
     }
   }
   frontmatter.downloadedUrls = downloadedUrls;
   frontmatter.audioDownloaded = true;
+  frontmatter.audioUrl = normalizedPath;
   frontmatter.audioLocalPath = normalizedPath;
   frontmatter.localAudioPath = normalizedPath;
 
@@ -227,6 +231,7 @@ function applyDownloadedAudioFrontmatter(
   }
 
   delete frontmatter.audioDownloadFailed;
+  delete frontmatter.audioDownloadFailedCount;
   delete frontmatter.audioDownloadFailedUrls;
 }
 

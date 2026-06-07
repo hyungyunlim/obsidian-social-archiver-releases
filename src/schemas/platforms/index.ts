@@ -147,7 +147,7 @@ export {
  * External platforms that require URL validation
  * 'post' is excluded as it's for user-created local posts
  */
-type ExternalPlatform = Exclude<Platform, 'post'>;
+type ExternalPlatform = Exclude<Platform, 'post' | 'kidsnote'>;
 
 /**
  * Naver Webtoon URL schema
@@ -396,6 +396,8 @@ export function validateAndDetectPlatform(url: string): PlatformSchemaValidation
 	// Use centralized platform detection order from shared/platforms/types.ts
 	// Order is important: more specific platforms first, generic patterns last
 	for (const platform of PLATFORM_DETECTION_ORDER) {
+		if (platform === 'kidsnote') continue;
+
 		const schema = getPlatformSchema(platform);
 		const result = schema.safeParse(url);
 

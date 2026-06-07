@@ -6,6 +6,8 @@ import { detectMediaType, isImageUrl, isVideoUrl, isAudioUrl } from '../../../ut
 import { PostIndexService, type PostIndexEntry } from '../../../services/PostIndexService';
 import type { Platform } from '@shared/platforms/types';
 import { parseTranscriptSections } from '../../../services/markdown/TranscriptSectionManager';
+import { parseAnnotationBlock } from '../../../services/markdown/AnnotationBlockParser';
+import { parseLinkedArchivesBlock } from '../../../services/markdown/LinkedArchivesBlockParser';
 import { mergeTagListsCaseInsensitive } from '../../../utils/tags';
 
 /**
@@ -470,6 +472,19 @@ export class PostDataParser {
       const highlightMatches = bodyForHighlights.match(/==(?![-=])([\s\S]+?)==/g);
       const highlightCount = highlightMatches ? highlightMatches.length : 0;
 
+      // Parse mobile user notes from the managed "## Mobile Annotations" block.
+      // This MUST run against the RAW file content: the block is appended after
+      // the `**Platform:**` footer, so `extractContentText` (and the blog/RSS
+      // footer-strip paths) cut it off — that's the existing drop bug.
+      const annotationBlock = parseAnnotationBlock(content);
+      const userNotes = annotationBlock && annotationBlock.notes.length > 0
+        ? annotationBlock.notes
+        : undefined;
+
+      // Parse relation rows from the managed "## Linked archives" block — it
+      // sits after the footer too, so the same raw-content rule applies.
+      const linkedArchives = parseLinkedArchivesBlock(content) ?? undefined;
+
       const authorAvatarRaw = frontmatter['authorAvatar'] as string | undefined;
       const authorAvatarIsExternal = typeof authorAvatarRaw === 'string' && authorAvatarRaw.startsWith('http');
 
@@ -488,6 +503,8 @@ export class PostDataParser {
         tags: displayTags,
         archiveTags,
         comment: frontmatter.comment, // User's personal note
+        userNotes, // Mobile user notes parsed from the annotation block (read-only)
+        linkedArchives, // Relation rows parsed from the linked-archives block (read-only)
         like: frontmatter.like, // User's personal like
         archive: frontmatter.archive, // Archive status
         highlightCount: highlightCount > 0 ? highlightCount : undefined,

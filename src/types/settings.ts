@@ -462,6 +462,17 @@ export interface ArchiveLibrarySyncSettings {
 }
 
 /**
+ * Pull-sync cursor for the `## Linked archives` managed section.
+ *
+ * `lastServerTime` is the `serverTime` returned by the most recent successful
+ * `GET /api/user/archive-link-relations` page — fed back as `updatedAfter` on
+ * the next pull (delta-sync convention, mirrors ArchiveLibrarySyncSettings).
+ */
+export interface LinkRelationsSyncSettings {
+  lastServerTime?: string;
+}
+
+/**
  * Text-to-Speech settings for Reader Mode
  */
 export interface PluginTTSSettings {
@@ -574,6 +585,39 @@ export interface SocialArchiverSettings {
   // Mobile Annotation Sync Settings
   /** Sync highlights and notes from mobile app to vault (opt-in beta, default: false) */
   enableMobileAnnotationSync: boolean;
+
+  // Linked Archives Section Settings
+  /**
+   * Render a managed `## Linked archives` section (server archive_link_relations
+   * → `[[wikilinks]]`) on synced archive notes, powering Obsidian graph view.
+   * Default ON. Turning OFF stops all section writes + pull-sync + WS handling
+   * but leaves existing sections in place.
+   */
+  enableLinkedArchivesSection: boolean;
+
+  /** Pull-sync cursor for the Linked archives section. */
+  linkRelationsSync?: LinkRelationsSyncSettings;
+
+  /**
+   * ISO timestamp of the last completed mention-wikilink backfill sweep
+   * (informational; the version below is the actual gate).
+   */
+  mentionWikilinkBackfillDoneAt?: string;
+
+  /**
+   * Highest completed mention-wikilink backfill version. Bumped when the
+   * token→wikilink conversion rules change in a way that requires re-rendering
+   * annotation blocks that would otherwise never re-render (v2: unresolved
+   * tokens are kept verbatim instead of being stripped to plain text).
+   */
+  mentionWikilinkBackfillVersion?: number;
+
+  /**
+   * ISO timestamp set once the one-time body link→wikilink backfill completed
+   * (full relation pull re-sweep so pre-existing relations get the body
+   * conversion pass). Unset/empty = pending; retried on foreground catch-up.
+   */
+  bodyWikilinkBackfillDoneAt?: string;
 
   // Delete Sync Settings
   deleteSync: DeleteSyncSettings;
@@ -761,6 +805,10 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
 
   // Mobile Annotation Sync Settings
   enableMobileAnnotationSync: true, // Phase 3: default ON; opt-out via UI (migration respects explicit false)
+
+  // Linked Archives Section Settings
+  enableLinkedArchivesSection: true, // default ON; opt-out via UI (migration respects explicit false)
+  linkRelationsSync: { lastServerTime: '' },
 
   // Delete Sync Settings
   deleteSync: {
@@ -1126,6 +1174,20 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
 
   if (migrated.mirrorArchiveTagsToObsidianTags === undefined) {
     migrated.mirrorArchiveTagsToObsidianTags = false;
+  }
+
+  // Linked Archives section: default ON. Respect an explicit opt-out (false)
+  // when the key is present; enable for existing users without a persisted
+  // value. Idempotent — once written, subsequent loads see the key.
+  if (!('enableLinkedArchivesSection' in (settings as object))) {
+    migrated.enableLinkedArchivesSection = true;
+  } else if (migrated.enableLinkedArchivesSection === undefined) {
+    migrated.enableLinkedArchivesSection = true;
+  }
+
+  // Initialize linked-archives pull-sync cursor if missing (migration)
+  if (migrated.linkRelationsSync === undefined || typeof migrated.linkRelationsSync !== 'object') {
+    migrated.linkRelationsSync = { lastServerTime: '' };
   }
 
   // Initialize archive library sync settings if missing (migration)
