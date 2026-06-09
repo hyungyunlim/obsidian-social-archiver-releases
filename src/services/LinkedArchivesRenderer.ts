@@ -163,7 +163,9 @@ export class LinkedArchivesRenderer {
    *   2. unresolved but otherArchive present → `- [<title>](<originalUrl>)`
    *   3. otherArchive null / no URL → `- <anchorText | targetUrl>` plain text
    *
-   * Title fallback: otherArchive.title → relation.anchorText → normalizedTargetUrl.
+   * Title fallback: otherArchive.title → relation anchor → otherArchive preview
+   * text → normalized URL. Title-less social posts otherwise collapse to a bare
+   * domain/URL, which makes the relation section hard to scan.
    */
   private buildRow(
     entry: RelationWithSummary,
@@ -210,7 +212,8 @@ export class LinkedArchivesRenderer {
   }
 
   /**
-   * Title fallback chain: other archive title → relation anchor → normalized URL.
+   * Title fallback chain: other archive title → relation anchor → preview text
+   * → normalized URL.
    */
   private pickTitle(entry: RelationWithSummary): string {
     const { relation, otherArchive } = entry;
@@ -218,7 +221,15 @@ export class LinkedArchivesRenderer {
     if (title) return title;
     const anchor = relation.anchorText?.trim();
     if (anchor) return anchor;
+    const contentText = this.compactTitle(otherArchive?.contentText);
+    if (contentText) return contentText;
     return relation.normalizedTargetUrl;
+  }
+
+  private compactTitle(value: string | null | undefined): string {
+    const compacted = (value ?? '').replace(/\s+/g, ' ').trim();
+    if (compacted.length <= 120) return compacted;
+    return `${compacted.slice(0, 117).trimEnd()}...`;
   }
 
   /**

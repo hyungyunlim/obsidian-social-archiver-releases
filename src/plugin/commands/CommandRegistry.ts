@@ -320,7 +320,7 @@ export function registerCommands(deps: CommandRegistryDeps): void {
     // Read entire document aloud
     plugin.addCommand({
       id: 'tts-read-document',
-      name: 'Read document aloud (TTS)', // eslint-disable-line obsidianmd/ui/sentence-case -- product feature name
+      name: 'Read document aloud (TTS)',
       editorCheckCallback: (checking, _editor, _ctx) => {
         const controller = deps.getEditorTTSController();
         if (!controller) return false;
@@ -334,7 +334,7 @@ export function registerCommands(deps: CommandRegistryDeps): void {
     // Read selected text aloud
     plugin.addCommand({
       id: 'tts-read-selection',
-      name: 'Read selection aloud (TTS)', // eslint-disable-line obsidianmd/ui/sentence-case -- product feature name
+      name: 'Read selection aloud (TTS)',
       editorCheckCallback: (checking, editor) => {
         const controller = deps.getEditorTTSController();
         if (!controller) return false;
@@ -349,7 +349,7 @@ export function registerCommands(deps: CommandRegistryDeps): void {
     // Toggle pause/resume
     plugin.addCommand({
       id: 'tts-toggle-pause',
-      name: 'Pause / Resume reading (TTS)', // eslint-disable-line obsidianmd/ui/sentence-case -- product feature name
+      name: 'Pause / resume reading (TTS)',
       checkCallback: (checking) => {
         const controller = deps.getEditorTTSController();
         if (!controller) return false;
@@ -364,7 +364,7 @@ export function registerCommands(deps: CommandRegistryDeps): void {
     // Stop reading
     plugin.addCommand({
       id: 'tts-stop',
-      name: 'Stop reading (TTS)', // eslint-disable-line obsidianmd/ui/sentence-case -- product feature name
+      name: 'Stop reading (TTS)',
       checkCallback: (checking) => {
         const controller = deps.getEditorTTSController();
         if (!controller?.isActive()) return false;

@@ -469,10 +469,9 @@ export class ArchiveCliService {
     const shouldRun = (sub: SyncSubtarget): boolean => target === 'all' || target === sub;
 
     if (shouldRun('subscriptions')) {
-      const fn = this.plugin.syncSubscriptionPosts;
-      if (typeof fn === 'function') {
+      if (typeof this.plugin.syncSubscriptionPosts === 'function') {
         targets.push('subscriptions');
-        void fn.call(this.plugin, 'cli-sync').catch(() => {});
+        void this.plugin.syncSubscriptionPosts('cli-sync').catch(() => {});
       } else {
         skipped.push({ target: 'subscriptions', reason: 'service_unavailable' });
       }
@@ -588,7 +587,7 @@ export class ArchiveCliService {
     if (override) return override;
     const detection = validateAndDetectPlatform(url);
     if (detection.valid && detection.platform) {
-      return detection.platform as Platform;
+      return detection.platform;
     }
     throw new Error(`Unable to detect platform from URL: ${url}`);
   }

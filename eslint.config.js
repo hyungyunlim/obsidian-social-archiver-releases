@@ -71,6 +71,7 @@ export default defineConfig(
           // Tools/services
           'Whisper', 'Gumroad', 'Cloudflare', 'BrightData', 'Perplexity',
           'ffmpeg', 'faster-whisper', 'openai-whisper', 'whisper.cpp',
+          'TTS',
           // Map services
           'Google Maps',
           // Social Archiver product name

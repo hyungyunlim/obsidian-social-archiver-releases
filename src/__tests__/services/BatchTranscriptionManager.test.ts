@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
+import { TFile, TFolder } from 'obsidian';
 import { BatchTranscriptionManager, type BatchTranscriptionManagerDeps } from '@/services/BatchTranscriptionManager';
 import type { BatchOperationStatus } from '@/types/batch-transcription';
 
-// Mock obsidian module (duck-typed — manager no longer uses instanceof)
+// Mock obsidian module
 vi.mock('obsidian', async () => {
   const actual = await vi.importActual<typeof import('obsidian')>('obsidian');
   return {
@@ -32,18 +33,12 @@ vi.mock('@/utils/whisper', () => ({
   },
 }));
 
-/** Create a duck-typed TFile (has extension, basename, no children) */
-function mockFile(path: string) {
-  return {
-    path,
-    basename: path.split('/').pop()?.replace('.md', '') || '',
-    extension: 'md',
-  };
+function mockFile(path: string): TFile {
+  return new TFile(path);
 }
 
-/** Create a duck-typed TFolder (has children array) */
-function mockFolder(path: string) {
-  return { path, children: [] };
+function mockFolder(path: string): TFolder {
+  return new TFolder(path);
 }
 
 function createMockDeps(overrides?: Partial<BatchTranscriptionManagerDeps>): BatchTranscriptionManagerDeps {

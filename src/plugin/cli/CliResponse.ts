@@ -161,7 +161,7 @@ export function err(
     },
   };
   if (opts.details) {
-    envelope.error.details = redact(opts.details) as Record<string, unknown>;
+    envelope.error.details = redact(opts.details);
   }
   if (opts.warnings && opts.warnings.length > 0) {
     envelope.warnings = opts.warnings;
@@ -277,8 +277,8 @@ function redactInternal(value: unknown, seen: WeakSet<object>): unknown {
   }
 
   if (typeof value === 'object') {
-    if (seen.has(value as object)) return '[Circular]';
-    seen.add(value as object);
+    if (seen.has(value)) return '[Circular]';
+    seen.add(value);
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
       if (isSensitiveKey(k)) {
@@ -349,10 +349,18 @@ function summarizeData<T>(data: T): string {
   const obj = data as Record<string, unknown>;
   const keys = ['jobId', 'status', 'platform', 'filePath', 'subscriptionId', 'batchJobId', 'username', 'vault'];
   for (const k of keys) {
-    if (k in obj && obj[k] !== undefined && obj[k] !== null) {
-      parts.push(`${k}=${String(obj[k])}`);
+    const value = obj[k];
+    if (value !== undefined && value !== null) {
+      const text = summarizePrimitive(value);
+      if (text) parts.push(`${k}=${text}`);
     }
     if (parts.length >= 4) break;
   }
   return parts.join(' ');
+}
+
+function summarizePrimitive(value: unknown): string | undefined {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return undefined;
 }

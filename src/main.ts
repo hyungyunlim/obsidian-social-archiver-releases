@@ -112,6 +112,10 @@ const FOREGROUND_SYNC_CATCH_UP_MIN_INTERVAL_MS = 30_000;
 const ARCHIVE_LIBRARY_SYNC_MEDIA_RETRY_MS = 10_000;
 type ForegroundSyncCatchUpTrigger = 'focus' | 'visibilitychange' | 'online';
 
+function isUnknownArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
 export default class SocialArchiverPlugin extends Plugin {
   settings: SocialArchiverSettings = DEFAULT_SETTINGS;
   private apiClient?: WorkersAPIClient;
@@ -412,7 +416,7 @@ export default class SocialArchiverPlugin extends Plugin {
     }
 
     if (annotatedIds.length > 0) {
-      console.log(`[Social Archiver] Mention wikilink backfill v${BACKFILL_VERSION}: re-syncing ${annotatedIds.length} archive(s)`);
+      console.debug(`[Social Archiver] Mention wikilink backfill v${BACKFILL_VERSION}: re-syncing ${annotatedIds.length} archive(s)`);
       for (const archiveId of annotatedIds) {
         await this.annotationSyncService.resyncArchive(archiveId);
         await new Promise((resolve) => window.setTimeout(resolve, 400));
@@ -437,7 +441,6 @@ export default class SocialArchiverPlugin extends Plugin {
 
   private getActiveDomDocument(): Document | null {
     if (typeof activeDocument !== 'undefined') return activeDocument;
-    if (typeof document !== 'undefined') return document;
     return null;
   }
 
@@ -803,7 +806,7 @@ export default class SocialArchiverPlugin extends Plugin {
     if (!ObsidianPlatform.isMobile) {
       this.instagramImportRibbonEl = this.addRibbonIcon(
         'package',
-        'Import Instagram Saved Export',
+        'Import Instagram saved export',
         () => {
           if (!this.settings.instagramImportEnabled) return;
           void this.openInstagramImportModal();
@@ -814,7 +817,7 @@ export default class SocialArchiverPlugin extends Plugin {
       // Register import command (gated by setting via checkCallback → hidden when off)
       this.addCommand({
         id: 'import-instagram-export',
-        name: 'Import Instagram Saved Export',
+        name: 'Import Instagram saved export',
         checkCallback: (checking: boolean) => {
           if (!this.settings.instagramImportEnabled) return false;
           if (checking) return true;
@@ -973,9 +976,9 @@ export default class SocialArchiverPlugin extends Plugin {
     this.annotationFallbackPoller = undefined;
 
     // Stop desktop AI-comment executor services
-    (this.aiCommentJobProcessor as AICommentJobProcessor | undefined)?.stop();
+    this.aiCommentJobProcessor?.stop();
     this.aiCommentJobProcessor = undefined;
-    (this.aiCommentCapabilityReporter as DesktopCapabilityReporter | undefined)?.dispose();
+    this.aiCommentCapabilityReporter?.dispose();
     this.aiCommentCapabilityReporter = undefined;
 
     // Stop periodic job checker
@@ -2030,9 +2033,10 @@ export default class SocialArchiverPlugin extends Plugin {
         this.subscriptionSyncService?.startRecoveryPolling();
 
         // Pull tag definitions from server (merge into local tagDefinitions with colors)
-        if (this.apiClient) {
+        const apiClient = this.apiClient;
+        if (apiClient) {
           this.scheduleTrackedTimeout(() => {
-            void this.tagStore.pullTagDefinitionsFromServer(this.apiClient!).then(() => {
+            void this.tagStore.pullTagDefinitionsFromServer(apiClient).then(() => {
               // Rebuild outbound cache with latest definitions (includes server IDs)
               const defs = this.tagStore.getTagDefinitions();
               this.archiveTagOutboundService?.rebuildTagCache(
@@ -2404,7 +2408,7 @@ export default class SocialArchiverPlugin extends Plugin {
         fm.transcriptionProcessingTime = archive.transcriptionProcessingTime;
       }
       fm.transcriptResultId = resultId;
-      const ids = Array.isArray(fm.transcriptResultIds) ? [...fm.transcriptResultIds] : [];
+      const ids = isUnknownArray(fm.transcriptResultIds) ? [...fm.transcriptResultIds] : [];
       if (!ids.includes(resultId)) ids.push(resultId);
       fm.transcriptResultIds = ids;
     });

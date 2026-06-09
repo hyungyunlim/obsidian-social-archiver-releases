@@ -231,16 +231,16 @@ export class TranscriptionService {
         stdio: ['ignore', 'pipe', 'ignore'],
       });
 
-      let timeout: ReturnType<typeof setTimeout>;
+      let timeout: number;
 
       const finish = (duration: number): void => {
         if (settled) return;
         settled = true;
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         resolve(duration);
       };
 
-      timeout = setTimeout(() => {
+      timeout = window.setTimeout(() => {
         try {
           child.kill('SIGTERM');
         } catch {

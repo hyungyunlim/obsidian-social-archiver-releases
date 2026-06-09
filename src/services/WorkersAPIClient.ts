@@ -178,6 +178,7 @@ export type AIActionType =
   | 'tags.suggest_apply'
   | 'content.translate_variant'
   | 'content.reformat_variant';
+export type AIActionTypeValue = AIActionType | (string & Record<never, never>);
 
 export type AIActionResultKind = 'comment' | 'tag_patch' | 'content_variant';
 export type AIActionJobStatus = AICommentJobStatus | 'billing_blocked';
@@ -197,7 +198,7 @@ export interface AIActionExecutorJob {
   progress?: number;
   progressPercentage?: number;
   progressMessage?: string | null;
-  actionType: AIActionType | string;
+  actionType: AIActionTypeValue;
   resultKind?: AIActionResultKind | null;
   provider: AICommentProviderId;
   model?: string | null;
@@ -232,7 +233,7 @@ export interface AIActionJobSummary {
   jobId: string;
   archiveId: string;
   targetClientId?: string | null;
-  actionType: AIActionType | string;
+  actionType: AIActionTypeValue;
   resultKind?: AIActionResultKind | null;
   status: AIActionJobStatus;
   progress?: number;
@@ -2754,7 +2755,7 @@ export class WorkersAPIClient implements IService {
     const bytes = new Uint8Array(buffer);
     let binary = '';
     for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]!);
+      binary += String.fromCharCode(bytes[i] ?? 0);
     }
     return btoa(binary);
   }

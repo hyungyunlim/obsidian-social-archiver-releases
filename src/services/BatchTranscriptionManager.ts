@@ -257,9 +257,9 @@ export class BatchTranscriptionManager {
     const archivePath = settings.archivePath || 'Social Archives';
     const archiveFolder = app.vault.getAbstractFileByPath(archivePath);
 
-    if (!isTFolderLike(archiveFolder)) return [];
+    if (!(archiveFolder instanceof TFolder)) return [];
 
-    const files = this.deps.collectMarkdownFiles(archiveFolder as TFolder);
+    const files = this.deps.collectMarkdownFiles(archiveFolder);
     const items: BatchItem[] = [];
 
     for (const file of files) {
@@ -390,7 +390,7 @@ export class BatchTranscriptionManager {
         this.notifyObservers();
 
         const rawFile = this.deps.app.vault.getAbstractFileByPath(item.filePath);
-        if (!isTFileLike(rawFile)) {
+        if (!(rawFile instanceof TFile)) {
           item.status = 'skipped';
           item.error = 'File not found';
           this.currentIndex++;
@@ -469,9 +469,9 @@ export class BatchTranscriptionManager {
         // Update frontmatter with error
         try {
           const errFile = this.deps.app.vault.getAbstractFileByPath(item.filePath);
-          if (isTFileLike(errFile)) {
-            await this.withMarkdownWriteLock(errFile as TFile, async () => {
-              await this.deps.app.fileManager.processFrontMatter(errFile as TFile, (fm: Record<string, unknown>) => {
+          if (errFile instanceof TFile) {
+            await this.withMarkdownWriteLock(errFile, async () => {
+              await this.deps.app.fileManager.processFrontMatter(errFile, (fm: Record<string, unknown>) => {
                 fm.videoTranscribed = false;
                 fm.videoTranscriptionError = errorMessage;
               });
@@ -512,7 +512,7 @@ export class BatchTranscriptionManager {
     try {
       // Extract platform and postId from the note's frontmatter
       const rawFile = this.deps.app.vault.getAbstractFileByPath(item.filePath);
-      if (!isTFileLike(rawFile)) return null;
+      if (!(rawFile instanceof TFile)) return null;
 
       const cache = this.deps.app.metadataCache.getFileCache(rawFile);
       const fm = (cache?.frontmatter as Record<string, unknown> | undefined) || {};
@@ -592,7 +592,7 @@ export class BatchTranscriptionManager {
   private async embedVideoInNote(filePath: string, videoVaultPath: string): Promise<void> {
     try {
       const rawFile = this.deps.app.vault.getAbstractFileByPath(filePath);
-      if (!isTFileLike(rawFile)) return;
+      if (!(rawFile instanceof TFile)) return;
 
       const videoLink = `![[${videoVaultPath}]]`;
 
@@ -695,7 +695,7 @@ export class BatchTranscriptionManager {
 
   private resolveArchiveIdForPath(filePath: string): string {
     const rawFile = this.deps.app.vault.getAbstractFileByPath(filePath);
-    if (isTFileLike(rawFile)) return this.resolveArchiveIdForFile(rawFile as TFile);
+    if (rawFile instanceof TFile) return this.resolveArchiveIdForFile(rawFile);
     return filePath;
   }
 
@@ -717,16 +717,4 @@ export class BatchTranscriptionManager {
   private deletePersisted(): void {
     this.deps.app.saveLocalStorage(STORAGE_KEY, null as unknown as string);
   }
-}
-
-function isTFileLike(value: unknown): value is TFile {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as { path?: unknown; extension?: unknown; children?: unknown };
-  return typeof candidate.path === 'string' && typeof candidate.extension === 'string' && !Array.isArray(candidate.children);
-}
-
-function isTFolderLike(value: unknown): value is TFolder {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as { path?: unknown; children?: unknown };
-  return typeof candidate.path === 'string' && Array.isArray(candidate.children);
 }

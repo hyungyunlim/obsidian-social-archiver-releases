@@ -53,6 +53,10 @@
   align-items: center;
 }
 
+.sa-autosizing-textarea {
+  height: var(--sa-autosizing-textarea-height, auto);
+}
+
 /* ========================================
  * Gap
  * ======================================== */

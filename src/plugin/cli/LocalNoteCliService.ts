@@ -85,7 +85,7 @@ export class LocalNoteCliService {
 
   // ─── post ───────────────────────────────────────────────────────────
 
-  async post(pathOrActive: string | 'active'): Promise<PostResultDto> {
+  async post(pathOrActive: string): Promise<PostResultDto> {
     const file = this.resolveFile(pathOrActive, 'path');
     // Use PostService directly so we never depend on the active editor's
     // current file. This mirrors what the interactive PostShareService does
@@ -107,7 +107,7 @@ export class LocalNoteCliService {
   // ─── share ──────────────────────────────────────────────────────────
 
   async share(
-    pathOrActive: string | 'active',
+    pathOrActive: string,
     opts: { reader: boolean },
   ): Promise<ShareResultDto> {
     const file = this.resolveFile(pathOrActive, 'path');
@@ -270,7 +270,7 @@ export class LocalNoteCliService {
   // ─── tagApply ───────────────────────────────────────────────────────
 
   async tagApply(
-    pathOrActive: string | 'active',
+    pathOrActive: string,
     tag: string,
     action: 'add' | 'remove' | 'toggle',
   ): Promise<TagApplyResultDto> {
@@ -344,7 +344,7 @@ export class LocalNoteCliService {
   // ─── media ──────────────────────────────────────────────────────────
 
   async media(
-    pathOrActive: string | 'active',
+    pathOrActive: string,
     action: 'redownload-expired' | 'detach' | 'redownload-detached',
   ): Promise<MediaResultDto> {
     const file = this.resolveFile(pathOrActive, 'path');
@@ -536,7 +536,7 @@ export class LocalNoteCliService {
    * traversal via {@link parseVaultPath}; this method only verifies that
    * the path resolves to an existing markdown file.
    */
-  private resolveFile(pathOrActive: string | 'active', field: string): TFile {
+  private resolveFile(pathOrActive: string, field: string): TFile {
     const app: App = this.plugin.app;
     if (pathOrActive === 'active') {
       const active = app.workspace.getActiveFile();

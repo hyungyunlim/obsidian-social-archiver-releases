@@ -5,17 +5,18 @@
 export function resizeTextareaToContent(textarea: HTMLTextAreaElement): void {
   const currentHeight = Math.ceil(textarea.getBoundingClientRect().height || textarea.offsetHeight || 0);
 
-  textarea.style.height = 'auto';
+  textarea.classList.add('sa-autosizing-textarea');
+  textarea.setCssProps({ '--sa-autosizing-textarea-height': 'auto' });
 
   const contentHeight = textarea.scrollHeight;
   if (contentHeight <= 0) {
     if (currentHeight > 0) {
-      textarea.style.height = `${currentHeight}px`;
+      textarea.setCssProps({ '--sa-autosizing-textarea-height': `${currentHeight}px` });
     }
     return;
   }
 
-  textarea.style.height = `${Math.max(contentHeight, currentHeight)}px`;
+  textarea.setCssProps({ '--sa-autosizing-textarea-height': `${Math.max(contentHeight, currentHeight)}px` });
 }
 
 /**

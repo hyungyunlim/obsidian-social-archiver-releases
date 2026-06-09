@@ -5,6 +5,8 @@ export type { Platform } from '@shared/platforms/types';
 import type { Platform } from '@shared/platforms/types';
 import { PLATFORMS } from '@shared/platforms/types';
 
+type ExtensibleString = string & Record<never, never>;
+
 /**
  * Zod-compatible platform enum derived from centralized PLATFORMS constant
  * Cast to tuple type for z.enum() compatibility
@@ -90,7 +92,7 @@ export interface PostMetadata {
   /** Human-readable diagnostics for media candidate selection at archive time. */
   mediaSelectionSummary?: string[];
   socialArchiverImportMode?: 'server-synced' | 'local-only';
-  socialArchiverImportSource?: 'instagram-saved-import' | string;
+  socialArchiverImportSource?: 'instagram-saved-import' | ExtensibleString;
   socialArchiverServerArchiveId?: string;
 }
 

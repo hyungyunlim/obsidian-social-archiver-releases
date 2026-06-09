@@ -27,7 +27,8 @@ describe('textarea autosize utilities', () => {
 
     resizeTextareaToContent(textarea);
 
-    expect(textarea.style.height).toBe('180px');
+    expect(textarea.classList.contains('sa-autosizing-textarea')).toBe(true);
+    expect(textarea.style.getPropertyValue('--sa-autosizing-textarea-height')).toBe('180px');
   });
 
   it('preserves a larger manually resized height', () => {
@@ -35,7 +36,7 @@ describe('textarea autosize utilities', () => {
 
     resizeTextareaToContent(textarea);
 
-    expect(textarea.style.height).toBe('240px');
+    expect(textarea.style.getPropertyValue('--sa-autosizing-textarea-height')).toBe('240px');
   });
 
   it('updates height after input events', () => {
@@ -49,7 +50,7 @@ describe('textarea autosize utilities', () => {
       const detach = attachAutosizingTextarea(textarea, { resizeOnAttach: false });
       textarea.dispatchEvent(new Event('input'));
 
-      expect(textarea.style.height).toBe('160px');
+      expect(textarea.style.getPropertyValue('--sa-autosizing-textarea-height')).toBe('160px');
       detach();
     } finally {
       window.requestAnimationFrame = originalRequestAnimationFrame;

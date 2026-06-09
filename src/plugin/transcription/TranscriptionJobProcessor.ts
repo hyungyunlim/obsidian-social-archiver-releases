@@ -116,6 +116,10 @@ const LEASE_RENEW_RATIO = 0.5;
 const AUDIO_EXTENSIONS = new Set(['mp3', 'm4a', 'ogg', 'wav', 'flac', 'aac', 'wma']);
 const VIDEO_EXTENSIONS = new Set(['mp4', 'webm', 'mov', 'avi', 'mkv', 'm4v']);
 
+function isUnknownArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
 export function upsertDownloadedVideoEmbed(content: string, localVideoPath: string): string {
   const normalizedPath = normalizePath(localVideoPath).replace(/^\/+/, '');
   if (!normalizedPath) return content;
@@ -163,7 +167,7 @@ function applyDownloadedVideoFrontmatter(
   localVideoPath: string,
 ): void {
   const normalizedPath = normalizePath(localVideoPath).replace(/^\/+/, '');
-  const downloadedUrls = Array.isArray(frontmatter.downloadedUrls) ? [...frontmatter.downloadedUrls] : [];
+  const downloadedUrls = isUnknownArray(frontmatter.downloadedUrls) ? [...frontmatter.downloadedUrls] : [];
   if (sourceUrl) {
     for (const marker of [sourceUrl, `downloaded:${sourceUrl}`]) {
       if (!downloadedUrls.includes(marker)) downloadedUrls.push(marker);
@@ -174,7 +178,7 @@ function applyDownloadedVideoFrontmatter(
   frontmatter.videoLocalPath = normalizedPath;
   frontmatter.localVideoPath = normalizedPath;
 
-  const media = Array.isArray(frontmatter.media) ? [...frontmatter.media] : [];
+  const media = isUnknownArray(frontmatter.media) ? [...frontmatter.media] : [];
   const mediaMarker = `video:${normalizedPath}`;
   const hasLocalVideoMarker = media.some((item) => {
     if (typeof item === 'string') {
@@ -200,7 +204,7 @@ export function applyDownloadedAudioFrontmatter(
   localAudioPath: string,
 ): void {
   const normalizedPath = normalizePath(localAudioPath).replace(/^\/+/, '');
-  const downloadedUrls = Array.isArray(frontmatter.downloadedUrls) ? [...frontmatter.downloadedUrls] : [];
+  const downloadedUrls = isUnknownArray(frontmatter.downloadedUrls) ? [...frontmatter.downloadedUrls] : [];
   const existingAudioUrl = typeof frontmatter.audioUrl === 'string' ? frontmatter.audioUrl.trim() : '';
   const sourceUrls = Array.from(new Set([sourceUrl, existingAudioUrl]
     .filter((url): url is string => !!url && /^https?:\/\//i.test(url))));
@@ -215,7 +219,7 @@ export function applyDownloadedAudioFrontmatter(
   frontmatter.audioLocalPath = normalizedPath;
   frontmatter.localAudioPath = normalizedPath;
 
-  const media = Array.isArray(frontmatter.media) ? [...frontmatter.media] : [];
+  const media = isUnknownArray(frontmatter.media) ? [...frontmatter.media] : [];
   const mediaMarker = `audio:${normalizedPath}`;
   const hasLocalAudioMarker = media.some((item) => {
     if (typeof item === 'string') {
@@ -954,7 +958,7 @@ export class TranscriptionJobProcessor {
           fm.videoTranscribedAt = completedAt;
           delete fm.videoTranscriptionError;
         } else {
-          const transcribedUrls = Array.isArray(fm.transcribedUrls) ? [...fm.transcribedUrls] : [];
+          const transcribedUrls = isUnknownArray(fm.transcribedUrls) ? [...fm.transcribedUrls] : [];
           const marker = `transcribed:${localMediaPath}`;
           if (!transcribedUrls.includes(marker)) transcribedUrls.push(marker);
           fm.transcribedUrls = transcribedUrls;
@@ -964,7 +968,7 @@ export class TranscriptionJobProcessor {
         fm.transcriptionDuration = result.duration;
         fm.transcriptionTime = completedAt;
         fm.transcriptionProcessingTime = result.processingTime;
-        const transcriptResultIds = Array.isArray(fm.transcriptResultIds) ? [...fm.transcriptResultIds] : [];
+        const transcriptResultIds = isUnknownArray(fm.transcriptResultIds) ? [...fm.transcriptResultIds] : [];
         if (!transcriptResultIds.includes(resultMarkerId)) transcriptResultIds.push(resultMarkerId);
         fm.transcriptResultIds = transcriptResultIds;
         const pendingUploads = normalizePendingFrontmatter(fm.pendingTranscriptUploads);
@@ -1162,7 +1166,7 @@ export class TranscriptionJobProcessor {
           fm.transcriptionProcessingTime = archive.transcriptionProcessingTime;
         }
         fm.transcriptResultId = resultId;
-        const ids = Array.isArray(fm.transcriptResultIds) ? [...fm.transcriptResultIds] : [];
+        const ids = isUnknownArray(fm.transcriptResultIds) ? [...fm.transcriptResultIds] : [];
         if (!ids.includes(resultId)) ids.push(resultId);
         fm.transcriptResultIds = ids;
       });
@@ -1305,7 +1309,7 @@ export class TranscriptionJobProcessor {
     const raw = match?.[1];
     if (raw !== undefined) {
       try {
-        const parsed = parseYaml(raw);
+        const parsed: unknown = parseYaml(raw);
         if (parsed && typeof parsed === 'object') return parsed as Record<string, unknown>;
       } catch {
         // The metadata cache may still have a usable value if raw parsing fails.

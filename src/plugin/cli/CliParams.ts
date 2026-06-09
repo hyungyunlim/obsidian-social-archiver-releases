@@ -1,6 +1,6 @@
 /**
  * CliParams — single-responsibility helpers that parse Obsidian CLI flag
- * values (`Record<string, string | 'true' | undefined>` per the official
+ * values (`Record<string, string | undefined>` per the official
  * `CliData` type) into typed shapes for downstream handlers.
  *
  * Conventions:
@@ -20,7 +20,7 @@ import { ErrorCode } from './CliResponse';
  * payloads (`key=value` form), the literal `'true'` (bare boolean flag), or
  * absent.
  */
-export type CliParamValue = string | 'true' | undefined;
+export type CliParamValue = string | undefined;
 
 /**
  * Map of params — matches the official `CliData` shape but tolerates a
@@ -79,6 +79,18 @@ export interface ParseEnumOptions<T extends string> {
 /**
  * Parse a flag against a fixed list of allowed string values.
  */
+export function parseEnum<T extends string>(
+  p: CliParams,
+  key: string,
+  values: readonly T[],
+  opts: ParseEnumOptions<T> & { required: true },
+): T;
+export function parseEnum<T extends string>(
+  p: CliParams,
+  key: string,
+  values: readonly T[],
+  opts?: ParseEnumOptions<T>,
+): T | undefined;
 export function parseEnum<T extends string>(
   p: CliParams,
   key: string,
@@ -157,6 +169,8 @@ export interface ParseStringOptions {
   allowBareFlag?: boolean;
 }
 
+export function parseString(p: CliParams, key: string, opts: ParseStringOptions & { required: true }): string;
+export function parseString(p: CliParams, key: string, opts?: ParseStringOptions): string | undefined;
 export function parseString(p: CliParams, key: string, opts: ParseStringOptions = {}): string | undefined {
   const raw = p[key];
   if (raw === undefined) {
@@ -193,6 +207,18 @@ export interface ParseVaultPathOptions {
  * normalizes path separators to `/`. When `mustExist=true`, asserts the path
  * resolves against the supplied Obsidian `App` vault.
  */
+export function parseVaultPath(
+  p: CliParams,
+  key: string,
+  app: App,
+  opts: ParseVaultPathOptions & { required: true },
+): string;
+export function parseVaultPath(
+  p: CliParams,
+  key: string,
+  app: App,
+  opts?: ParseVaultPathOptions,
+): string | undefined;
 export function parseVaultPath(
   p: CliParams,
   key: string,

@@ -149,6 +149,26 @@ describe('LinkedArchivesRenderer', () => {
       expect(out).not.toContain('[[');
     });
 
+    it('uses content preview for titleless social targets before falling back to URL', () => {
+      const r = new LinkedArchivesRenderer(NO_RESOLVE);
+      const out = r.render({
+        relations: [
+          entry(
+            { anchorText: null },
+            makeSummary({
+              platform: 'facebook',
+              originalUrl: 'https://facebook.com/example/posts/1',
+              title: null,
+              contentText: 'A titleless social post with useful body text.',
+            }),
+          ),
+        ],
+        selfArchiveId: SELF,
+      });
+      expect(out).toContain('- [A titleless social post with useful body text.](https://facebook.com/example/posts/1)');
+      expect(out).not.toContain('[https://example.com/post/1]');
+    });
+
     it('falls back to plain text when unresolved and otherArchive is null with no URL', () => {
       const r = new LinkedArchivesRenderer(NO_RESOLVE);
       const out = r.render({
@@ -261,7 +281,7 @@ describe('LinkedArchivesRenderer', () => {
         relations: [
           entry(
             { anchorText: null, normalizedTargetUrl: 'https://ex.com/norm', relationType: 'plain_url' },
-            makeSummary({ title: null, originalUrl: 'https://ex.com/orig' }),
+            makeSummary({ title: null, contentText: null, originalUrl: 'https://ex.com/orig' }),
           ),
         ],
         selfArchiveId: SELF,

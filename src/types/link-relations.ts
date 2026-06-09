@@ -68,6 +68,8 @@ export interface EmbeddedArchiveSummary {
   authorName: string | null;
   authorHandle: string | null;
   contentText: string | null;
+  thumbnailUrl?: string | null;
+  thumbnailUrls?: string[];
 }
 
 /**

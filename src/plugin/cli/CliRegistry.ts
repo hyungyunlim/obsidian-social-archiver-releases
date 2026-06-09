@@ -75,11 +75,12 @@ import { JobNotFoundError } from './ArchiveCliService';
 import { isPaywallRequiredError } from '../../utils/billingError';
 import { LocalNoteCliService } from './LocalNoteCliService';
 import { AICommentCliService, AICommentService_NotAvailableError } from './AICommentCliService';
-import type { AICli, AICommentType, AIOutputLanguage } from '../../types/ai-comment';
+import type { AIOutputLanguage } from '../../types/ai-comment';
 import { ImportCliError, ImportCliService } from './ImportCliService';
 import { ProfileCliService } from './ProfileCliService';
 import { ProfileCrawlService } from '../services/ProfileCrawlService';
 import { extractGoogleMapsLinks } from '../../utils/googleMapsLinks';
+import nodeRequire from '../../utils/nodeRequire';
 
 export interface CliBootResult {
   registered: boolean;
@@ -198,7 +199,7 @@ export class CliRegistry {
   private async archiveHandler(params: CliParams): Promise<string> {
     const fmt = this.readFormat(params);
     try {
-      const url = parseString(params, 'url', { required: true })!;
+      const url = parseString(params, 'url', { required: true });
       const mode = (parseEnum(params, 'mode', ['queue', 'sync', 'fetch'] as const, {
         default: 'queue',
       }) ?? 'queue') as CliArchiveMode;
@@ -267,7 +268,7 @@ export class CliRegistry {
   private async jobHandler(params: CliParams): Promise<string> {
     const fmt = this.readFormat(params);
     try {
-      const id = parseString(params, 'id', { required: true })!;
+      const id = parseString(params, 'id', { required: true });
       // Default source is `local` — Obsidian 1.12.7 CLI loses output when the
       // handler yields to the macrotask queue (e.g. network I/O). Local lookup
       // is synchronous-fast; agents that want server data should run
@@ -455,7 +456,7 @@ export class CliRegistry {
         // Node's `fs/promises` is only available in the desktop bundle.
         // The Platform guard in ImportCliService catches mobile callers
         // before we get here.
-        const fs = await import('node:fs/promises');
+        const fs = (nodeRequire('fs') as typeof import('fs')).promises;
         const data = await fs.readFile(absolutePath);
         // Convert Uint8Array → Blob without bringing in Buffer typings.
         const u8 = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
@@ -645,7 +646,7 @@ export class CliRegistry {
           fmt,
         );
       }
-      const jobId = parseString(params, 'id', { required: true })!;
+      const jobId = parseString(params, 'id', { required: true });
       const includeItems = parseBool(params, 'items');
       const adapter = this.getImportCliService();
       const dto = await adapter.getJob(jobId, { items: includeItems });
@@ -666,10 +667,10 @@ export class CliRegistry {
           fmt,
         );
       }
-      const jobId = parseString(params, 'id', { required: true })!;
+      const jobId = parseString(params, 'id', { required: true });
       const action = parseEnum(params, 'action', ['pause', 'resume', 'cancel'] as const, {
         required: true,
-      })!;
+      });
       const adapter = this.getImportCliService();
       const result = await adapter.control(jobId, action);
       return this.formatOk(COMMANDS.IMPORT_CONTROL, result, fmt);
@@ -739,22 +740,25 @@ export class CliRegistry {
    * value the {@link LocalNoteCliService} understands. Exactly one of the
    * two must be supplied; missing or both → INVALID_ARGUMENT.
    */
-  private resolveTargetNote(params: CliParams, field: 'path' = 'path'): string | 'active' {
+  private resolveTargetNote(params: CliParams, field: 'path' = 'path'): string {
     const useActive = params['active'] !== undefined ? parseBool(params, 'active', false) : false;
     const path = parseVaultPath(params, field, this.plugin.app, { required: false });
-    if (useActive && path) {
-      throw new CliValidationError(
-        field,
-        "Pass exactly one of 'path=<vault-path>' or 'active' — not both.",
-      );
+    if (useActive) {
+      if (path) {
+        throw new CliValidationError(
+          field,
+          "Pass exactly one of 'path=<vault-path>' or 'active' — not both.",
+        );
+      }
+      return 'active';
     }
-    if (!useActive && !path) {
+    if (!path) {
       throw new CliValidationError(
         field,
         "Provide 'path=<vault-path>' or the bare 'active' flag to select a note.",
       );
     }
-    return useActive ? 'active' : (path as string);
+    return path;
   }
 
   private async postHandler(params: CliParams): Promise<string> {
@@ -794,7 +798,7 @@ export class CliRegistry {
   private async tagCreateHandler(params: CliParams): Promise<string> {
     const fmt = this.readFormat(params);
     try {
-      const name = parseString(params, 'name', { required: true })!;
+      const name = parseString(params, 'name', { required: true });
       const color = parseString(params, 'color');
       const tag = await this.getLocalNoteService().tagCreate(name, color);
       return this.formatOk(COMMANDS.TAG_CREATE, tag, fmt);
@@ -806,11 +810,11 @@ export class CliRegistry {
   private async tagApplyHandler(params: CliParams): Promise<string> {
     const fmt = this.readFormat(params);
     try {
-      const path = parseVaultPath(params, 'path', this.plugin.app, { required: true })!;
-      const tag = parseString(params, 'tag', { required: true })!;
-      const action = (parseEnum(params, 'action', ['add', 'remove', 'toggle'] as const, {
+      const path = parseVaultPath(params, 'path', this.plugin.app, { required: true });
+      const tag = parseString(params, 'tag', { required: true });
+      const action = parseEnum(params, 'action', ['add', 'remove', 'toggle'] as const, {
         default: 'toggle',
-      }) ?? 'toggle') as 'add' | 'remove' | 'toggle';
+      }) ?? 'toggle';
       const result = await this.getLocalNoteService().tagApply(path, tag, action);
       return this.formatOk(COMMANDS.TAG_APPLY, result, fmt);
     } catch (e) {
@@ -827,7 +831,7 @@ export class CliRegistry {
         'action',
         ['redownload-expired', 'detach', 'redownload-detached'] as const,
         { required: true },
-      ) as 'redownload-expired' | 'detach' | 'redownload-detached';
+      );
       const result = await this.getLocalNoteService().media(target, action);
       return this.formatOk(COMMANDS.MEDIA, result, fmt);
     } catch (e) {
@@ -858,7 +862,7 @@ export class CliRegistry {
         'action',
         ['start', 'pause', 'resume', 'cancel', 'status'] as const,
         { required: true },
-      ) as 'start' | 'pause' | 'resume' | 'cancel' | 'status';
+      );
       const mode = parseEnum(
         params,
         'mode',
@@ -888,7 +892,7 @@ export class CliRegistry {
   private aiCommentHandler(params: CliParams): string {
     const fmt = this.readFormat(params);
     try {
-      const path = parseVaultPath(params, 'path', this.plugin.app, { required: true })!;
+      const path = parseVaultPath(params, 'path', this.plugin.app, { required: true });
       const type = parseEnum(
         params,
         'type',
@@ -906,10 +910,8 @@ export class CliRegistry {
           'custom',
         ] as const,
         { required: true },
-      ) as AICommentType;
-      const provider = parseEnum(params, 'provider', ['claude', 'gemini', 'codex'] as const) as
-        | AICli
-        | undefined;
+      );
+      const provider = parseEnum(params, 'provider', ['claude', 'gemini', 'codex'] as const);
       const customPrompt = parseString(params, 'prompt');
       const targetLanguage = parseString(params, 'language');
       const outputLanguageRaw = parseString(params, 'outputLanguage');
@@ -934,7 +936,7 @@ export class CliRegistry {
   private async aiCommentsHandler(params: CliParams): Promise<string> {
     const fmt = this.readFormat(params);
     try {
-      const path = parseVaultPath(params, 'path', this.plugin.app, { required: true })!;
+      const path = parseVaultPath(params, 'path', this.plugin.app, { required: true });
       const result = await this.getAiCommentService().listComments(path);
       return this.formatOk(COMMANDS.AI_COMMENTS, result, fmt);
     } catch (e) {
@@ -1003,7 +1005,7 @@ export class CliRegistry {
       }
     };
 
-    host.registerCliHandler!(command, COMMAND_DESCRIPTIONS[command], flags, wrapped);
+    host.registerCliHandler(command, COMMAND_DESCRIPTIONS[command], flags, wrapped);
   }
 
   /** Read the `format` flag with safe defaults; never throws. */

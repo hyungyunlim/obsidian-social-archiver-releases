@@ -14,7 +14,6 @@
  * Does NOT register CLI handlers — that wiring lives in `CliRegistry`.
  */
 
-import type { Buffer as NodeBuffer } from 'node:buffer';
 import {
   CliValidationError,
   parseBool,
@@ -102,7 +101,7 @@ export class ProfileCliService {
   // -------------------------------------------------------------------------
 
   buildCrawlInput(params: CliParams): ProfileCrawlOptionsInput {
-    const url = parseString(params, 'url', { required: true })!;
+    const url = parseString(params, 'url', { required: true });
     const count = parseNumber(params, 'count', {
       integer: true,
       min: 1,
@@ -136,7 +135,7 @@ export class ProfileCliService {
   }
 
   buildSubscribeInput(params: CliParams): ProfileSubscribeOptionsInput {
-    const url = parseString(params, 'url', { required: true })!;
+    const url = parseString(params, 'url', { required: true });
     const hour = parseNumber(params, 'hour', { integer: true, min: 0, max: 23 });
     const folder = parseString(params, 'folder');
     return {
@@ -193,13 +192,8 @@ export class ProfileCliService {
  */
 function decodeNaverCookie(b64: string): string {
   try {
-    if (typeof globalThis.atob === 'function') {
-      return globalThis.atob(b64);
-    }
-    // Node fallback (vitest): use Buffer when atob is unavailable.
-    const buf = (globalThis as unknown as { Buffer?: typeof NodeBuffer }).Buffer;
-    if (buf && typeof buf.from === 'function') {
-      return buf.from(b64, 'base64').toString('utf8');
+    if (typeof activeWindow !== 'undefined' && typeof activeWindow.atob === 'function') {
+      return activeWindow.atob(b64);
     }
     throw new Error('No base64 decoder available in this environment.');
   } catch (e) {

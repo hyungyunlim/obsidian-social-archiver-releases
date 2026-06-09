@@ -197,10 +197,24 @@ function lowerReddit(input?: ProfileCrawlRedditInput): RedditCrawlOptions | unde
   if (!input) return undefined;
   if (!input.sortBy && !input.sortByTime && !input.keyword) return undefined;
   return {
-    sortBy: (input.sortBy ?? 'Hot') as RedditSortBy,
-    sortByTime: (input.sortByTime ?? '') as RedditSortByTime,
+    sortBy: input.sortBy ?? 'Hot',
+    sortByTime: input.sortByTime ?? '',
     keyword: input.keyword,
   };
+}
+
+function isProfileCrawlSupportedPlatform(
+  platform: Platform,
+): platform is typeof PROFILE_CRAWL_SUPPORTED_PLATFORMS[number] {
+  return PROFILE_CRAWL_SUPPORTED_PLATFORMS.includes(
+    platform as typeof PROFILE_CRAWL_SUPPORTED_PLATFORMS[number],
+  );
+}
+
+function isNewSubscriptionPlatform(
+  platform: Platform,
+): platform is typeof NEW_SUBSCRIPTION_PLATFORMS[number] {
+  return NEW_SUBSCRIPTION_PLATFORMS.includes(platform as typeof NEW_SUBSCRIPTION_PLATFORMS[number]);
 }
 
 function buildNaverCrawlOptions(
@@ -264,10 +278,8 @@ export class ProfileCrawlService {
       throw new Error('URL is not recognized as a profile or RSS feed.');
     }
 
-    const detectedPlatform = analysis.platform as Platform;
-    if (!isRss && !PROFILE_CRAWL_SUPPORTED_PLATFORMS.includes(
-      detectedPlatform as typeof PROFILE_CRAWL_SUPPORTED_PLATFORMS[number],
-    )) {
+    const detectedPlatform = analysis.platform;
+    if (!isRss && !isProfileCrawlSupportedPlatform(detectedPlatform)) {
       throw new Error(`Profile crawl is not supported for platform '${detectedPlatform}'.`);
     }
 
@@ -372,12 +384,8 @@ export class ProfileCrawlService {
       throw new Error('URL is not a profile or RSS feed — cannot subscribe.');
     }
 
-    const detectedPlatform = analysis.platform as Platform;
-    if (
-      !NEW_SUBSCRIPTION_PLATFORMS.includes(
-        detectedPlatform as typeof NEW_SUBSCRIPTION_PLATFORMS[number],
-      )
-    ) {
+    const detectedPlatform = analysis.platform;
+    if (!isNewSubscriptionPlatform(detectedPlatform)) {
       throw new Error(`Subscriptions are not supported for platform '${detectedPlatform}'.`);
     }
 

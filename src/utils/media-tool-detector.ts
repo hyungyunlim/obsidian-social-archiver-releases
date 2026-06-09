@@ -124,12 +124,12 @@ export class MediaToolDetector {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
-      let timeout: ReturnType<typeof setTimeout>;
+      let timeout: number;
 
       const finish = (available: boolean): void => {
         if (settled) return;
         settled = true;
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
 
         const firstLine = output
           .split(/\r?\n/)
@@ -145,7 +145,7 @@ export class MediaToolDetector {
         resolve(result);
       };
 
-      timeout = setTimeout(() => {
+      timeout = window.setTimeout(() => {
         try {
           child.kill('SIGTERM');
         } catch {
