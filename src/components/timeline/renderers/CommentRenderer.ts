@@ -2,6 +2,7 @@ import type { Comment, Author } from '../../../types/post';
 
 import type { Platform } from '../../../types/post';
 import { TextFormatter } from '../../../services/markdown/formatters/TextFormatter';
+import { sortPinnedCommentRoots, getPinnedSortTimestamp } from '../../../utils/comments';
 
 type CommentDepthLimit = number | null;
 
@@ -156,6 +157,25 @@ export class CommentRenderer {
     return undefined;
   }
 
+  /**
+   * Whether any DESCENDANT (reply at depth >= 1) of this comment is pinned.
+   * Does not consider the node itself. Used to surface a "Pinned reply" root
+   * indicator (PRD R3).
+   */
+  private hasPinnedDescendant(comment: Comment): boolean {
+    const children = comment.replies ?? [];
+    const stack: Comment[] = [...children];
+    while (stack.length > 0) {
+      const node = stack.pop();
+      if (!node) continue;
+      if (node.pinnedAt) return true;
+      if (node.replies && node.replies.length > 0) {
+        stack.push(...node.replies);
+      }
+    }
+    return false;
+  }
+
   private countCommentTree(comments: Comment[] | undefined | null): number {
     if (!comments || comments.length === 0) return 0;
 
@@ -185,21 +205,42 @@ export class CommentRenderer {
     const commentsContainer = container.createDiv();
     commentsContainer.addClass('sa-mt-12', 'sa-pt-12', 'sa-border-b');
 
+    // Pinned root threads sort above unpinned ones (PRD R3). Reply order inside a
+    // thread is preserved — only the top level is reordered.
+    const sortedComments = sortPinnedCommentRoots(comments);
+
     const maxVisibleComments = 2;
-    const hasMoreComments = comments.length > maxVisibleComments;
+    const hasMoreComments = sortedComments.length > maxVisibleComments;
     let showingAll = false;
     let expandedCommentKeys = new Set<string>();
     let collapsedCommentKeys = new Set<string>();
     let commentsListContainer: HTMLElement;
 
+    // Collapsed preview slice (PRD R3 "collapsed-preview reconciliation"):
+    // pinned roots are ALWAYS shown, then the most recent unpinned roots fill the
+    // remaining preview slots — never a blind tail slice that hides pins.
+    const buildPreviewComments = (): Comment[] => {
+      const pinned = sortedComments.filter((c) => getPinnedSortTimestamp(c) !== null);
+      const unpinned = sortedComments.filter((c) => getPinnedSortTimestamp(c) === null);
+      const remaining = Math.max(0, maxVisibleComments - pinned.length);
+      // Unpinned roots keep document order; preview the most recent (tail).
+      const recentUnpinned = remaining > 0 ? unpinned.slice(-remaining) : [];
+      // Re-project preview in the sorted order (pinned first, then unpinned tail).
+      const previewSet = new Set<Comment>([...pinned, ...recentUnpinned]);
+      return sortedComments.filter((c) => previewSet.has(c));
+    };
+
     const renderVisibleComments = () => {
       commentsListContainer.empty();
-      const commentsToShow = hasMoreComments && !showingAll ? comments.slice(-maxVisibleComments) : comments;
+      const commentsToShow = hasMoreComments && !showingAll ? buildPreviewComments() : sortedComments;
 
-      commentsToShow.forEach((comment, index) => {
+      commentsToShow.forEach((comment) => {
+        // Key off the position in the SORTED list (stable across preview/full
+        // toggles) so a thread's collapse state survives "View all".
+        const rootIndex = sortedComments.indexOf(comment);
         this.renderComment(commentsListContainer, comment, {
           depth: 0,
-          commentKey: `root-${index}-${comment.id || 'comment'}`,
+          commentKey: `root-${rootIndex}-${comment.id || 'comment'}`,
           maxVisibleDepth: null,
           expandedCommentKeys,
           collapsedCommentKeys,
@@ -225,7 +266,7 @@ export class CommentRenderer {
     if (hasMoreComments) {
       const viewAllBtn = commentsContainer.createDiv();
       viewAllBtn.addClass('sa-text-base', 'sa-text-muted', 'sa-clickable', 'sa-mb-8', 'sa-transition-color');
-      viewAllBtn.setText(`View all ${comments.length} comments`);
+      viewAllBtn.setText(`View all ${sortedComments.length} comments`);
 
       viewAllBtn.addEventListener('mouseenter', () => {
         viewAllBtn.removeClass('sa-text-muted');
@@ -240,7 +281,7 @@ export class CommentRenderer {
         e.stopPropagation();
         showingAll = !showingAll;
         renderVisibleComments();
-        viewAllBtn.setText(showingAll ? 'Hide comments' : `View all ${comments.length} comments`);
+        viewAllBtn.setText(showingAll ? 'Hide comments' : `View all ${sortedComments.length} comments`);
       });
     }
 
@@ -435,6 +476,28 @@ export class CommentRenderer {
       authorBadge.setText('Author');
       authorBadge.addClass('sa-text-accent', 'sa-bg-hover', 'sa-ml-4');
       authorBadge.addClass('cr-author-badge');
+    }
+
+    // Pinned badges (PRD R3). A node that is itself pinned shows a "Pinned"
+    // badge at any depth. A root thread (depth 0) that is NOT itself pinned but
+    // contains a pinned descendant shows a "Pinned reply" indicator so the pin
+    // is discoverable before the branch is expanded.
+    const isSelfPinned = Boolean(comment.pinnedAt);
+    if (isSelfPinned) {
+      // Prominent accent pill so the pin is clearly visible in the compact
+      // timeline (the old accent-text/hover-bg badge was nearly invisible).
+      // `cr-author-badge` supplies the pill shape; `cr-pinned-badge` the accent
+      // fill and the leading 📌 glyph (via CSS ::before, keeping the UI string
+      // sentence-cased for the Obsidian reviewer).
+      const pinnedBadge = contentSpan.createSpan({ cls: 'comment-pinned-badge' });
+      pinnedBadge.setText('Pinned');
+      pinnedBadge.addClass('cr-author-badge', 'cr-pinned-badge', 'sa-ml-4');
+      pinnedBadge.setAttribute('aria-label', 'Pinned comment');
+    } else if (context.depth === 0 && this.hasPinnedDescendant(comment)) {
+      const pinnedReplyBadge = contentSpan.createSpan({ cls: 'comment-pinned-reply-badge' });
+      pinnedReplyBadge.setText('Pinned reply');
+      pinnedReplyBadge.addClass('cr-author-badge', 'cr-pinned-reply-badge', 'sa-ml-4');
+      pinnedReplyBadge.setAttribute('aria-label', 'Contains a pinned reply');
     }
 
     // Fix Reddit author URL if empty

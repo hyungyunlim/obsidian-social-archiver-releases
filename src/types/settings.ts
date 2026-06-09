@@ -586,6 +586,15 @@ export interface SocialArchiverSettings {
   /** Sync highlights and notes from mobile app to vault (opt-in beta, default: false) */
   enableMobileAnnotationSync: boolean;
 
+  // Media Repair Settings
+  /**
+   * When a server `media_preserved` repair event arrives for an archive whose
+   * note was deleted locally, recreate the note from the repaired media.
+   * Default OFF (opt-in): repairs only patch existing notes' sentinel media
+   * regions; deleted notes are left deleted unless this is enabled.
+   */
+  recreateLocallyDeletedNotesOnRepair: boolean;
+
   // Linked Archives Section Settings
   /**
    * Render a managed `## Linked archives` section (server archive_link_relations
@@ -805,6 +814,9 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
 
   // Mobile Annotation Sync Settings
   enableMobileAnnotationSync: true, // Phase 3: default ON; opt-out via UI (migration respects explicit false)
+
+  // Media Repair Settings
+  recreateLocallyDeletedNotesOnRepair: false, // opt-in: default OFF
 
   // Linked Archives Section Settings
   enableLinkedArchivesSection: true, // default ON; opt-out via UI (migration respects explicit false)

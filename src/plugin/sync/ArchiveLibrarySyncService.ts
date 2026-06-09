@@ -201,6 +201,14 @@ export interface ArchiveLibrarySyncDeps {
   reconcileTranscriptState?: (file: TFile, archive: UserArchive) => Promise<void>;
 
   /**
+   * Reconcile the managed `## 💬 Comments` section on an existing note during a
+   * catch-up sweep, recovering platform-comment pin/delete changes whose live
+   * `hasCommentUpdate` WS event was missed. Wired to
+   * CommentStateSyncService.reconcileFromLibrarySync() in main.ts.
+   */
+  reconcileCommentState?: (file: TFile, archive: UserArchive) => Promise<void>;
+
+  /**
    * Reconcile the managed `## Linked archives` section on a vault file against
    * the server's archive_link_relations for `archiveId`. Idempotent + fail-soft.
    *
@@ -677,6 +685,7 @@ export class ArchiveLibrarySyncService {
         await this.reconcileExistingLikeState(existingById, archive);
         await this.reconcileExistingAnnotationState(existingById, archive);
         await this.reconcileExistingTranscriptState(existingById, archive);
+        await this.reconcileExistingCommentState(existingById, archive);
         await this.reconcileLinkRelationState(existingById, archive);
         if (!updated) {
           this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
@@ -735,6 +744,7 @@ export class ArchiveLibrarySyncService {
         await this.reconcileExistingLikeState(matched, archive);
         await this.reconcileExistingAnnotationState(matched, archive);
         await this.reconcileExistingTranscriptState(matched, archive);
+        await this.reconcileExistingCommentState(matched, archive);
         await this.reconcileLinkRelationState(matched, archive);
         if (!updated) {
           this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
@@ -866,6 +876,20 @@ export class ArchiveLibrarySyncService {
       await this.deps.reconcileTranscriptState(file, archive);
     } catch (error) {
       console.warn('[Social Archiver] [LibrarySync] reconcileExistingTranscriptState failed', {
+        archiveId: archive.id,
+        path: file.path,
+        error,
+      });
+    }
+  }
+
+  private async reconcileExistingCommentState(file: TFile, archive: UserArchive): Promise<void> {
+    if (!this.deps.reconcileCommentState) return;
+
+    try {
+      await this.deps.reconcileCommentState(file, archive);
+    } catch (error) {
+      console.warn('[Social Archiver] [LibrarySync] reconcileExistingCommentState failed', {
         archiveId: archive.id,
         path: file.path,
         error,

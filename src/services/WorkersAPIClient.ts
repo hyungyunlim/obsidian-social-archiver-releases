@@ -521,6 +521,37 @@ export interface GetSyncQueueResponse {
 /**
  * User archive data returned from server
  */
+/**
+ * Server-side platform comment node (as returned by GET /api/user/archives/:id).
+ *
+ * Recursive: `replies` carry the same shape at any depth (the server `mapComment`
+ * recurses). Pin/delete sync metadata (`pinnedAt`/`pinnedByClientId`/`updatedAt`)
+ * is additive and optional — see PRD R1
+ * (`docs/specs/platform-comment-delete-and-pin-sync-prd.md`).
+ *
+ * Note: comment-level `media` is intentionally absent here — the server drops it
+ * on read (`mapComment`), an accepted documented MVP round-trip loss (R1).
+ */
+export interface UserArchiveComment {
+  id: string;
+  author: {
+    name: string;
+    handle?: string;
+    avatarUrl?: string;
+    url?: string;
+  };
+  content: string;
+  timestamp?: string;
+  likes?: number;
+  /** ISO 8601 datetime — present when this comment node is pinned (PRD R1). */
+  pinnedAt?: string;
+  /** Optional source client ID (diagnostic only). */
+  pinnedByClientId?: string;
+  /** Optional mutation time (diagnostic only). */
+  updatedAt?: string;
+  replies?: UserArchiveComment[];
+}
+
 export interface UserArchive {
   id: string;
   userId: string;
@@ -592,30 +623,7 @@ export interface UserArchive {
       externalLinkImage?: string;
     };
   };
-  comments?: Array<{
-    id: string;
-    author: {
-      name: string;
-      handle?: string;
-      avatarUrl?: string;
-      url?: string;
-    };
-    content: string;
-    timestamp?: string;
-    likes?: number;
-    replies?: Array<{
-      id: string;
-      author: {
-        name: string;
-        handle?: string;
-        avatarUrl?: string;
-        url?: string;
-      };
-      content: string;
-      timestamp?: string;
-      likes?: number;
-    }>;
-  }>;
+  comments?: UserArchiveComment[];
   isReblog?: boolean;
   // Archive source (single, profile_crawl, subscription, composed)
   archiveSource?: string | null;

@@ -45,6 +45,8 @@ interface ParsedCommentHeader {
   url: string;
   timestamp?: string;
   likes?: number;
+  /** Round-tripped pin time from the `<!--sa-pin:ISO-->` header marker (R3). */
+  pinnedAt?: string;
 }
 
 interface ParsedCommentEntry {
@@ -1172,6 +1174,9 @@ export class PostDataParser {
           timestamp: parsedHeader.timestamp,
           likes: parsedHeader.likes,
         };
+        if (parsedHeader.pinnedAt) {
+          comment.pinnedAt = parsedHeader.pinnedAt;
+        }
 
         const entry: ParsedCommentEntry = {
           depth: parsedHeader.depth,
@@ -1214,6 +1219,17 @@ export class PostDataParser {
   }
 
   private parseCommentHeaderLine(line: string): ParsedCommentHeader | null {
+    // Round-trip the pin marker (CommentFormatter appends ` 📌<!--sa-pin:ISO-->`
+    // to the header line). Extract pinnedAt, then strip the HTML comment and the
+    // trailing visible 📌 so the rest of the header (author / time / likes)
+    // parses exactly as before.
+    let pinnedAt: string | undefined;
+    const pinMatch = line.match(/<!--sa-pin:(.*?)-->/);
+    if (pinMatch?.[1]) {
+      pinnedAt = pinMatch[1];
+      line = line.replace(/<!--sa-pin:.*?-->/g, '').replace(/\s*📌\s*$/u, '');
+    }
+
     const replyMatch = line.match(/^(\s*)↳\s+(.+)$/);
     const depth = replyMatch ? Math.max(1, Math.floor((replyMatch[1]?.length ?? 0) / 2)) : 0;
     const headerText = (replyMatch ? (replyMatch[2] ?? '') : line).trim();
@@ -1236,6 +1252,7 @@ export class PostDataParser {
       url,
       timestamp: metadata.timestamp,
       likes: metadata.likes,
+      pinnedAt,
     };
   }
 

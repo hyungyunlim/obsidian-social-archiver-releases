@@ -2,6 +2,7 @@ import type { PostData, Platform, Comment, Media } from '@/types/post';
 import { DateNumberFormatter } from './DateNumberFormatter';
 import { TextFormatter } from './TextFormatter';
 import { encodePathForMarkdownLink } from '@/utils/url';
+import { sortPinnedCommentRoots } from '@/utils/comments';
 
 /**
  * CommentFormatter - Format comments for markdown
@@ -61,7 +62,11 @@ export class CommentFormatter {
         ? comments.map(c => this.fixRedditComment(c))
         : comments;
 
-      return processedComments
+      // Pinned root threads sort above unpinned ones (PRD R3) so the markdown
+      // body stays consistent with the timeline renderer / mobile / share-web.
+      const orderedComments = sortPinnedCommentRoots(processedComments);
+
+      return orderedComments
         .map((comment) => this.renderCommentRecursive(comment, platform, 0))
         .filter(c => c.length > 0)
         .join('\n\n---\n\n');
@@ -106,7 +111,20 @@ export class CommentFormatter {
     const mediaBlock = this.formatCommentMedia(comment.media, indent);
     const mediaSection = mediaBlock ? `\n${mediaBlock}` : '';
 
-    let result = `${indent}${prefix}**${authorDisplay}**${timestampPart}${likes}\n${indent}${commentContent}${mediaSection}`;
+    // Pin marker (PRD R3): a visible 📌 plus a machine-readable HTML comment
+    // carrying pinnedAt, appended to the AUTHOR HEADER line. It MUST stay on the
+    // header line (not a separate `📌 **Pinned**` line): the timeline re-parses
+    // this markdown via PostDataParser, whose comment-block splitter only
+    // recognizes a `---` separator when it is followed by `**author**`. A
+    // leading `📌 **Pinned**` line would both break that splitting for non-first
+    // pinned roots AND be dropped (losing pinnedAt). The HTML comment round-trips
+    // pinnedAt back into the parsed tree so the timeline renders the pin badge
+    // and pinned-first order; it is invisible in Obsidian reading mode.
+    const pinSuffix = comment.pinnedAt
+      ? ` 📌<!--sa-pin:${comment.pinnedAt}-->`
+      : '';
+
+    let result = `${indent}${prefix}**${authorDisplay}**${timestampPart}${likes}${pinSuffix}\n${indent}${commentContent}${mediaSection}`;
 
     if (comment.replies && comment.replies.length > 0) {
       const formattedReplies = comment.replies

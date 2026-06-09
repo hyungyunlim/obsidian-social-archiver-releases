@@ -3,6 +3,8 @@ import { DateNumberFormatter } from './DateNumberFormatter';
 import type { MediaResult } from '../../MediaHandler';
 import { MediaPlaceholderGenerator, type MediaExpiredResult } from '../../MediaPlaceholderGenerator';
 import { encodePathForMarkdownLink } from '@/utils/url';
+import { isLocalSentinel, stripLocalpathPrefix } from './LocalpathGuard';
+import { UnavailableMediaBlockGenerator } from '../UnavailableMediaBlockGenerator';
 
 /**
  * Find a MediaResult by its sourceIndex (position in the original input array).
@@ -64,6 +66,22 @@ export class MediaFormatter {
       .map((item, index) => {
         // Support both altText and alt for backward compatibility
         const alt = item.altText || item.alt || `${item.type} ${index + 1}`;
+
+        // Local-sentinel guard (Ship 3): a `localpath:` / bare `media/...` URL
+        // points at a client-only file that was never resolved to a real local
+        // or remote path. Render an explicit Unavailable callout instead of
+        // emitting a broken `![](localpath:...)` image/video link. Only applies
+        // when no real downloaded local path is available for this item.
+        const resolvedLocalPath = mediaResults
+          ? findMediaResultBySourceIndex(mediaResults, index, item.url)?.localPath
+          : undefined;
+        if (!resolvedLocalPath && isLocalSentinel(item.url)) {
+          return UnavailableMediaBlockGenerator.generate({
+            reason: 'This media is stored only on the original device.',
+            kind: item.type,
+            filename: stripLocalpathPrefix(item.url),
+          });
+        }
 
         // For videos on TikTok/YouTube platforms
         if (item.type === 'video' && isTikTokOrYouTube) {

@@ -29,12 +29,12 @@ export const RELEASE_NOTES: Record<string, ReleaseNote> = {
     date: '2026-06-07',
     notes: `## Linked archives & note mentions
 
-- Mobile notes now appear on timeline cards, including @author and post mentions added in the mobile app.
+- Mobile notes now appear on timeline cards, including \`@author\` and post mentions added in the mobile app.
 - Mentions in synced notes become [[wikilinks]] when the target note exists in your vault.
 - A new managed "Linked archives" section connects related archives with [[wikilinks]] — relations show up in Obsidian graph view and on timeline cards.
 - Links you archived from an article body convert to [[wikilinks]] in place (the visible text never changes, so highlights stay intact).
 - Reader mode: clicking a wikilink jumps the reader to that post instead of leaving the overlay.
-- Clicking an @author mention opens the Author Detail view.
+- Clicking an \`@author\` mention opens the Author Detail view.
 - A one-time backfill upgrades previously synced notes automatically after the update.
 `,
   },

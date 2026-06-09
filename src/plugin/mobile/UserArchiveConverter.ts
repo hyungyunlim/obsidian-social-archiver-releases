@@ -7,8 +7,8 @@
  * Single Responsibility: UserArchive-to-PostData data mapping
  */
 
-import type { PostData, Media, Platform } from '../../types/post';
-import type { UserArchive } from '../../services/WorkersAPIClient';
+import type { PostData, Media, Platform, Comment } from '../../types/post';
+import type { UserArchive, UserArchiveComment } from '../../services/WorkersAPIClient';
 
 const LEGACY_WEB_CLIP_SEPARATOR = '\n\n---\n\n';
 const LEADING_WEB_CLIP_SEPARATOR = '---\n\n';
@@ -54,6 +54,49 @@ export function buildProfileUrl(platform: Platform, handle?: string): string {
     default:
       return '';
   }
+}
+
+/**
+ * Recursively map a server-side `UserArchiveComment` into the plugin `Comment`
+ * shape, preserving pin metadata and the FULL reply subtree at every depth.
+ *
+ * Mirrors `CommentFormatter.renderCommentRecursive` in that it recurses over
+ * `replies` rather than handling only two nesting levels. This is load-bearing
+ * for pin sync: a depth-≥2 pinned reply must survive conversion or the pin
+ * cannot be detected/rendered (PRD R10).
+ *
+ * Note: comment-level `media` is NOT carried — the server drops it on read, an
+ * accepted documented MVP round-trip loss (PRD R1).
+ */
+export function mapUserArchiveComment(
+  comment: UserArchiveComment,
+  platform: Platform,
+): Comment {
+  const mapped: Comment = {
+    id: comment.id,
+    author: {
+      name: comment.author.name,
+      url:
+        comment.author.url ||
+        (comment.author.handle ? buildProfileUrl(platform, comment.author.handle) : '') ||
+        '',
+      handle: comment.author.handle ? `@${comment.author.handle}` : undefined,
+      avatar: comment.author.avatarUrl,
+    },
+    content: comment.content,
+    timestamp: comment.timestamp,
+    likes: comment.likes,
+    // Pin/delete sync metadata (PRD R1) — preserved at every depth.
+    ...(comment.pinnedAt ? { pinnedAt: comment.pinnedAt } : {}),
+    ...(comment.pinnedByClientId ? { pinnedByClientId: comment.pinnedByClientId } : {}),
+    ...(comment.updatedAt ? { updatedAt: comment.updatedAt } : {}),
+  };
+
+  if (comment.replies && comment.replies.length > 0) {
+    mapped.replies = comment.replies.map((reply) => mapUserArchiveComment(reply, platform));
+  }
+
+  return mapped;
 }
 
 function normalizeTitle(value?: string | null): string {
@@ -357,32 +400,7 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
     ...(archive.isBookmarked != null ? { archive: archive.isBookmarked } : {}),
     ...(archive.isReblog != null ? { isReblog: archive.isReblog } : {}),
     ...(archive.comments && archive.comments.length > 0 ? {
-      comments: archive.comments.map(c => ({
-        id: c.id,
-        author: {
-          name: c.author.name,
-          url: c.author.url || (c.author.handle ? buildProfileUrl(platform, c.author.handle) : '') || '',
-          handle: c.author.handle ? `@${c.author.handle}` : undefined,
-          avatar: c.author.avatarUrl,
-        },
-        content: c.content,
-        timestamp: c.timestamp,
-        likes: c.likes,
-        ...(c.replies && c.replies.length > 0 ? {
-          replies: c.replies.map(r => ({
-            id: r.id,
-            author: {
-              name: r.author.name,
-              url: r.author.url || (r.author.handle ? buildProfileUrl(platform, r.author.handle) : '') || '',
-              handle: r.author.handle ? `@${r.author.handle}` : undefined,
-              avatar: r.author.avatarUrl,
-            },
-            content: r.content,
-            timestamp: r.timestamp,
-            likes: r.likes,
-          })),
-        } : {}),
-      })),
+      comments: archive.comments.map((c) => mapUserArchiveComment(c, platform)),
     } : {}),
   };
 }

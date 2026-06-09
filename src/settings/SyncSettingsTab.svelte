@@ -285,6 +285,29 @@ async function handleRetryPendingDeletes() {
     </label>
   </div>
 
+  <!-- Recreate Locally-Deleted Notes On Repair Toggle -->
+  <div class="sync-annotation-toggle">
+    <div class="annotation-toggle-info">
+      <div class="annotation-toggle-title">Recreate locally-deleted notes on repair</div>
+      <div class="annotation-toggle-description">
+        When the server repairs media for an archive whose note you deleted locally,
+        recreate the note. Off by default — repairs only update notes that still exist.
+      </div>
+    </div>
+    <label class="annotation-toggle-switch">
+      <input
+        type="checkbox"
+        checked={settings.recreateLocallyDeletedNotesOnRepair}
+        onchange={async (e) => {
+          plugin.settings.recreateLocallyDeletedNotesOnRepair = (e.target as HTMLInputElement).checked;
+          await plugin.saveSettings();
+          settings = plugin.settings;
+        }}
+      />
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
+
   <!-- Info Callout -->
   <div class="sync-info-callout">
     <strong>How Mobile Sync Works</strong>

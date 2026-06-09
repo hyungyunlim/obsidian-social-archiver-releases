@@ -141,6 +141,14 @@ export interface Comment {
   likes?: number;
   media?: Media[]; // Optional - comment/reply media (images, videos, carousels)
   replies?: Comment[];
+  /**
+   * Platform-comment pin/delete sync metadata (additive, optional).
+   * See `docs/specs/platform-comment-delete-and-pin-sync-prd.md` R1.
+   * Existing comments without these fields remain valid.
+   */
+  pinnedAt?: string;         // ISO 8601 datetime — present when this node is pinned
+  pinnedByClientId?: string; // optional source client ID (diagnostic only)
+  updatedAt?: string;        // optional mutation time (diagnostic only)
 }
 
 // Link preview metadata
@@ -403,6 +411,15 @@ export interface PostData {
   sourceArchiveId?: string;
 
   /**
+   * Alias for {@link sourceArchiveId} used as the key for the plugin-owned
+   * sentinel media region (`<!-- sa:media:start id=ARCHIVEID -->`). When both
+   * are present, `sourceArchiveId` is the canonical identity; this field lets
+   * callers that only carry a bare archive id key the region without overloading
+   * `sourceArchiveId`. Region keying prefers `sourceArchiveId ?? archiveId`.
+   */
+  archiveId?: string;
+
+  /**
    * Expired media items detected during download (CDN expired, download failed)
    * Set at runtime during subscription post processing; not persisted to frontmatter.
    */
@@ -615,6 +632,10 @@ export const PostDataSchema: z.ZodType<PostData> = z.lazy(() => z.object({
       altText: z.string().nullish(),
       alt: z.string().nullish()
     })).nullish(),
+    // Platform-comment pin/delete sync metadata (PRD R1, additive optional).
+    pinnedAt: z.string().nullish(),
+    pinnedByClientId: z.string().nullish(),
+    updatedAt: z.string().nullish(),
     replies: z.array(z.any()).nullish()
   })).nullish(),
   transcript: z.object({

@@ -966,6 +966,31 @@ button.cr-hidden-replies.cr-hidden-replies:focus-visible {
   vertical-align: middle;
 }
 
+/* Pinned comment badge — prominent accent pill (📌 Pinned) so it is clearly
+   distinguishable in the compact timeline, matching mobile/share-web. The 📌
+   glyph is supplied here (not in the JS UI string) so the rendered label stays
+   sentence-cased for the Obsidian reviewer. */
+.cr-pinned-badge {
+  color: var(--text-on-accent);
+  background-color: var(--interactive-accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cr-pinned-badge::before,
+.cr-pinned-reply-badge::before {
+  content: '📌 ';
+}
+
+/* "Pinned reply" hint on a root that itself is unpinned — subtler than a direct
+   pin (it only signals a pinned node lives in a collapsed branch). */
+.cr-pinned-reply-badge {
+  color: var(--text-accent);
+  background-color: var(--background-modifier-hover);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 /* Preserve archived comment paragraph breaks. */
 .cr-comment-content {
   white-space: pre-wrap;

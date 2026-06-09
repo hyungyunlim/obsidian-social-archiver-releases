@@ -85,6 +85,7 @@ import { ArchiveStateSyncService } from './plugin/sync/ArchiveStateSyncService';
 import { ArchiveStateOutboundService } from './plugin/sync/ArchiveStateOutboundService';
 import { LikeStateSyncService } from './plugin/sync/LikeStateSyncService';
 import { ShareStateSyncService } from './plugin/sync/ShareStateSyncService';
+import { CommentStateSyncService } from './plugin/sync/CommentStateSyncService';
 import { LikeStateOutboundService } from './plugin/sync/LikeStateOutboundService';
 import { BulkArchiveActionAccumulator } from './plugin/sync/BulkArchiveActionAccumulator';
 import { RemoteArchiveIngestService } from './plugin/sync/RemoteArchiveIngestService';
@@ -201,6 +202,7 @@ export default class SocialArchiverPlugin extends Plugin {
   private likeStateSyncService?: LikeStateSyncService; // Inbound isLiked → fm.like sync
   private likeStateOutboundService?: LikeStateOutboundService; // Outbound fm.like → server isLiked sync
   private shareStateSyncService?: ShareStateSyncService; // Inbound shareUrl → fm.share/fm.shareUrl sync
+  private commentStateSyncService?: CommentStateSyncService; // Inbound hasCommentUpdate → managed `## 💬 Comments` section sync
   private bulkArchiveActionAccumulator?: BulkArchiveActionAccumulator; // Shared accumulator for batching outbound like/archive API calls
   private authorProfileSyncService?: AuthorProfileSyncService; // Inbound/startup synced author profile application
   private remoteArchiveIngestService?: RemoteArchiveIngestService; // Shared single-archive fetch+save for WS events
@@ -1063,6 +1065,7 @@ export default class SocialArchiverPlugin extends Plugin {
     this.likeStateOutboundService = undefined;
     this.likeStateSyncService = undefined;
     this.shareStateSyncService = undefined;
+    this.commentStateSyncService = undefined;
     this.bulkArchiveActionAccumulator?.destroy();
     this.bulkArchiveActionAccumulator = undefined;
     this.authorProfileSyncService = undefined;
@@ -1448,6 +1451,16 @@ export default class SocialArchiverPlugin extends Plugin {
         this.refreshTimelineView();
       };
 
+      this.commentStateSyncService = new CommentStateSyncService(
+        this.app,
+        this.apiClient,
+        this.archiveLookupService,
+        () => this.settings,
+      );
+      this.commentStateSyncService.onAfterInboundWrite = () => {
+        this.refreshTimelineView();
+      };
+
       // Create shared accumulator for batching outbound like/archive API calls
       this.bulkArchiveActionAccumulator?.destroy();
       this.bulkArchiveActionAccumulator = new BulkArchiveActionAccumulator(this.apiClient);
@@ -1716,6 +1729,9 @@ export default class SocialArchiverPlugin extends Plugin {
           Promise.resolve(),
         reconcileTranscriptState: (file, archive) =>
           this.reconcileTranscriptFromLibrarySync(file, archive),
+        reconcileCommentState: (file, archive) =>
+          this.commentStateSyncService?.reconcileFromLibrarySync(file, archive) ??
+          Promise.resolve(),
         reconcileLinkRelationState: (_file, archiveId) =>
           this.linkRelationSyncService?.applyForArchive(archiveId) ??
           Promise.resolve(),
@@ -1959,6 +1975,7 @@ export default class SocialArchiverPlugin extends Plugin {
           archiveStateSyncService: this.archiveStateSyncService,
           likeStateSyncService: this.likeStateSyncService,
           shareStateSyncService: this.shareStateSyncService,
+          commentStateSyncService: this.commentStateSyncService,
           archiveDeleteSyncService: this.archiveDeleteSyncService ?? undefined,
           archiveTagOutboundService: this.archiveTagOutboundService,
           authorProfileOutboundService: this.authorProfileOutboundService,

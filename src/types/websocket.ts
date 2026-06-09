@@ -105,6 +105,14 @@ export interface ActionUpdatedEventData {
     clearAIComments?: boolean;
     /** True when desktop-generated transcription was explicitly cleared remotely */
     clearTranscription?: boolean;
+    /**
+     * True when the platform `comments` tree was mutated remotely (pin / unpin /
+     * delete). STANDALONE marker — it is NOT bundled into `hasAnnotationUpdate`
+     * (annotations = owner notes/highlights/AI/transcription; platform comments
+     * are distinct public archive content). Mirror of
+     * `workers/src/types/websocket.ts`. See PRD R4/R10.
+     */
+    hasCommentUpdate?: boolean;
   };
   updatedAt: string;
   timestamp: number;
@@ -268,7 +276,15 @@ export interface SubscriptionChangedEvent {
  */
 export interface MediaPreservedEventData {
   archiveId: string;
-  status: 'completed' | 'partial' | 'failed';
+  /**
+   * Server preservation outcome.
+   * - `completed`: all media preserved to R2.
+   * - `partial`: some media preserved.
+   * - `repairable`: media can be repaired (e.g. local-sentinel media that a
+   *   client re-upload resolved); the plugin should patch its sentinel region.
+   * - `failed`: preservation failed (no plugin action).
+   */
+  status: 'completed' | 'partial' | 'repairable' | 'failed';
 }
 
 export interface MediaPreservedEvent {

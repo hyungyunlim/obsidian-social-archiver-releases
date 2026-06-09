@@ -10,6 +10,7 @@ import { CommentFormatter } from './markdown/formatters/CommentFormatter';
 import { FactCheckFormatter } from './markdown/formatters/FactCheckFormatter';
 import { FrontmatterGenerator } from './markdown/frontmatter/FrontmatterGenerator';
 import { MediaPlaceholderGenerator } from './MediaPlaceholderGenerator';
+import { SentinelMediaRegionManager } from '@/plugin/realtime/SentinelMediaRegionManager';
 import { isRssBasedPlatform } from '@/constants/rssPlatforms';
 import { isSubstackNote } from '@/utils/substack';
 import { getPlatformName } from '@/shared/platforms';
@@ -2115,10 +2116,20 @@ export class MarkdownConverter implements IService {
       : transcriptBody || (rawTranscript ? rawTranscript : undefined);
 
     // Format media to string BEFORE spreading postData
-    const formattedMedia = this.mediaFormatter.formatMedia(
+    const rawFormattedMedia = this.mediaFormatter.formatMedia(
       postData.media, postData.platform, postData.url, mediaResults,
       postData._expiredMedia as import('./MediaPlaceholderGenerator').MediaExpiredResult[] | undefined
     );
+    // Wrap the media section in a plugin-owned sentinel region keyed by the
+    // archive id (Ship 3). Repair flows (`media_preserved` repairable/partial)
+    // replace ONLY the body inside this region, so hand-edits elsewhere in the
+    // note are never clobbered. Only wrap when there is a media body AND an
+    // archive id to key the region; otherwise leave the section unwrapped.
+    const mediaRegionId = postData.sourceArchiveId ?? postData.archiveId;
+    const formattedMedia =
+      rawFormattedMedia.trim().length > 0 && mediaRegionId
+        ? SentinelMediaRegionManager.wrap(mediaRegionId, rawFormattedMedia)
+        : rawFormattedMedia;
 
     // Format embedded archives (for platform: 'post' only)
     const formattedEmbeddedArchives = postData.embeddedArchives && postData.embeddedArchives.length > 0

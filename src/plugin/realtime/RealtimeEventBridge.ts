@@ -23,6 +23,7 @@ import type { ArchiveTagOutboundService } from '../sync/ArchiveTagOutboundServic
 import type { ArchiveStateSyncService } from '../sync/ArchiveStateSyncService';
 import type { LikeStateSyncService } from '../sync/LikeStateSyncService';
 import type { ShareStateSyncService } from '../sync/ShareStateSyncService';
+import type { CommentStateSyncService } from '../sync/CommentStateSyncService';
 import type { SocialArchiverSettings } from '../../types/settings';
 import type { PostData, Platform } from '../../types/post';
 import { mirrorArchiveTagsIntoObsidianTags } from '../../utils/tags';
@@ -42,6 +43,9 @@ import type {
 import type { BillingEventApiPayload } from '../../types/billing-events';
 import type { IngestResult } from '../sync/RemoteArchiveIngestService';
 import type { LocalLockRegistry } from '../locks/LocalLockRegistry';
+import { SentinelMediaRegionManager } from './SentinelMediaRegionManager';
+import { UnavailableMediaBlockGenerator } from '../../services/markdown/UnavailableMediaBlockGenerator';
+import { isLocalSentinel, stripLocalpathPrefix } from '../../services/markdown/formatters/LocalpathGuard';
 import { TimelineView, VIEW_TYPE_TIMELINE } from '../../views/TimelineView';
 import type { UserAuthorProfile } from '@/types/author-profile';
 
@@ -193,6 +197,7 @@ export interface RealtimeEventBridgeDeps {
   archiveStateSyncService?: ArchiveStateSyncService | undefined;
   likeStateSyncService?: LikeStateSyncService | undefined;
   shareStateSyncService?: ShareStateSyncService | undefined;
+  commentStateSyncService?: CommentStateSyncService | undefined;
   archiveDeleteSyncService?: ArchiveDeleteSyncService | undefined;
   archiveTagOutboundService?: ArchiveTagOutboundService | undefined;
   authorProfileOutboundService?: { addSuppression: (authorKey: string) => void; isSuppressed: (authorKey: string) => boolean } | undefined;
@@ -289,6 +294,12 @@ export interface RealtimeEventBridgeDeps {
 // ============================================================================
 // RealtimeEventBridge
 // ============================================================================
+
+/**
+ * Hidden HTML-comment marker embedded in the "media updated — review needed"
+ * callout so the media-repair pass can detect (and avoid duplicating) it.
+ */
+const REVIEW_NEEDED_MARKER = '<!-- sa:media:review-needed -->';
 
 export class RealtimeEventBridge {
   private eventRefs: EventRef[] = [];
@@ -1165,6 +1176,20 @@ export class RealtimeEventBridge {
           }
         }
 
+        // Comment state sync: re-project the managed `## 💬 Comments` section when
+        // the platform comment tree was mutated remotely (pin/unpin/delete).
+        // STANDALONE marker — not bundled into hasAnnotationUpdate. Gated behind
+        // the same enableMobileAnnotationSync toggle as annotation body sync.
+        if (msg.data.changes.hasCommentUpdate) {
+          if (!settings.enableMobileAnnotationSync) {
+            console.debug('[Social Archiver] Comment update received but Mobile Annotation Sync is disabled. Enable it in Settings → Mobile sync.');
+          } else {
+            void this.withArchiveWriteLocks(msg.data.archiveId, async () => {
+              await this.deps.commentStateSyncService?.handleRemoteCommentState(msg.data);
+            });
+          }
+        }
+
         // Archive state sync: update fm.archive when isBookmarked changes from mobile
         if (msg.data.changes.isBookmarked !== undefined) {
           void this.withArchiveWriteLocks(msg.data.archiveId, async () => {
@@ -1376,8 +1401,10 @@ export class RealtimeEventBridge {
 
         const { archiveId, status } = msg.data;
 
-        // Only process when server actually preserved media items
-        if (status !== 'completed' && status !== 'partial') {
+        // Only process when the server preserved media items or signalled a
+        // repairable outcome. `repairable`/`partial` also drive the sentinel
+        // media-region repair pass below (Ship 3).
+        if (status !== 'completed' && status !== 'partial' && status !== 'repairable') {
           console.debug('[Social Archiver] media_preserved: skipping status', status, archiveId);
           return;
         }
@@ -1392,17 +1419,43 @@ export class RealtimeEventBridge {
           // Find the vault file by sourceArchiveId
           const file = this.deps.archiveLookupService?.findBySourceArchiveId(archiveId) ?? null;
           if (!file) {
-            console.debug('[Social Archiver] media_preserved: no vault file for', archiveId);
+            // Note was deleted locally. Recreation is opt-in (default OFF): only
+            // re-materialize the note from the server when the user has enabled
+            // the "Recreate locally-deleted notes on repair" setting.
+            if (this.deps.settings().recreateLocallyDeletedNotesOnRepair) {
+              console.debug('[Social Archiver] media_preserved: recreating deleted note for', archiveId);
+              try {
+                await this.deps.ingestRemoteArchive(archiveId, 'client_sync');
+              } catch (recreateError) {
+                console.error(
+                  '[Social Archiver] media_preserved: recreation failed for',
+                  archiveId,
+                  recreateError instanceof Error ? recreateError.message : String(recreateError),
+                );
+              }
+            } else {
+              console.debug('[Social Archiver] media_preserved: no vault file for', archiveId, '(recreation disabled)');
+            }
             return;
           }
 
-          // Read note content and check for placeholder blocks
+          // Read note content.
           let content = await this.deps.app.vault.read(file);
+
+          // --- Ship 3: sentinel media-region repair ---------------------------
+          // Patch unresolved `localpath:` sentinels inside the plugin-owned
+          // media region ONLY, never the surrounding note. Runs before the
+          // legacy expired-media placeholder pass.
+          const repairedContent = await this.repairSentinelMediaRegion(file, content, archiveId);
+          if (repairedContent !== null && repairedContent !== content) {
+            content = repairedContent;
+            await this.withMarkdownWriteLock(archiveId, () => this.deps.app.vault.modify(file, content));
+          }
 
           const { MediaPlaceholderGenerator } = await import('../../services/MediaPlaceholderGenerator');
           const placeholders = MediaPlaceholderGenerator.findAllPlaceholders(content);
           if (placeholders.length === 0) {
-            console.debug('[Social Archiver] media_preserved: no placeholders in', file.path);
+            console.debug('[Social Archiver] media_preserved: no expired-media placeholders in', file.path);
             return;
           }
 
@@ -1489,6 +1542,85 @@ export class RealtimeEventBridge {
         }
       }),
     );
+  }
+
+  /**
+   * Repair the plugin-owned sentinel media region for `archiveId` (Ship 3).
+   *
+   * Scans the note for `<!-- sa:media:start id=ARCHIVEID -->` … `<!-- sa:media:end -->`
+   * (re-scanned each call; notes may be hand-edited) and:
+   *
+   * - If the region exists: replace any unresolved `localpath:` sentinels inside
+   *   the region body with an Unavailable callout, touching ONLY the region body
+   *   (never the surrounding note). When no sentinels remain, the content is
+   *   returned unchanged.
+   * - If no region (or no matching token) exists: append a non-destructive
+   *   "media updated — review needed" callout rather than performing a
+   *   structural rewrite.
+   *
+   * Returns the updated content, or `null` when no change is warranted (so the
+   * caller can skip a vault write). Fail-soft: any error returns `null`.
+   */
+  private async repairSentinelMediaRegion(
+    file: TFile,
+    content: string,
+    archiveId: string,
+  ): Promise<string | null> {
+    try {
+      const region = SentinelMediaRegionManager.findRegion(content, archiveId);
+
+      if (!region) {
+        // No plugin-owned region: never rewrite structurally. Append a single
+        // review-needed callout (idempotent — skip if one already exists).
+        if (content.includes(REVIEW_NEEDED_MARKER)) return null;
+        const callout = this.buildReviewNeededCallout();
+        const trimmed = content.replace(/\n+$/, '');
+        return `${trimmed}\n\n${callout}\n`;
+      }
+
+      // A region exists: replace unresolved localpath sentinels in the body.
+      const repairedBody = this.replaceSentinelsInRegionBody(region.body);
+      if (repairedBody === region.body) return null;
+
+      const updated = SentinelMediaRegionManager.replaceRegion(content, archiveId, repairedBody);
+      if (updated === null || updated === content) return null;
+      return updated;
+    } catch (error) {
+      console.error(
+        '[Social Archiver] repairSentinelMediaRegion failed for',
+        file.path,
+        error instanceof Error ? error.message : String(error),
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Replace `localpath:` sentinel image/video embeds inside a media region body
+   * with an Unavailable callout. Lines that are not sentinel embeds are left
+   * untouched. The plugin cannot resolve a client-only sentinel locally, so an
+   * unresolved sentinel deterministically becomes an Unavailable block.
+   */
+  private replaceSentinelsInRegionBody(body: string): string {
+    // Markdown image/embed link: ![alt](url) — capture the URL.
+    const embedRe = /!\[[^\]]*\]\(([^)\s]+)[^)]*\)/g;
+    return body.replace(embedRe, (match, rawUrl: string) => {
+      const url = decodeURIComponent(rawUrl);
+      if (!isLocalSentinel(url)) return match;
+      return UnavailableMediaBlockGenerator.generate({
+        reason: 'This media is stored only on the original device.',
+        filename: stripLocalpathPrefix(url),
+      });
+    });
+  }
+
+  /** Build the non-destructive "media updated — review needed" callout. */
+  private buildReviewNeededCallout(): string {
+    return [
+      `> [!note] Media updated — review needed ${REVIEW_NEEDED_MARKER}`,
+      '> The server repaired media for this archive, but no managed media region',
+      '> was found in this note. Re-archive or check the media section manually.',
+    ].join('\n');
   }
 
   // --------------------------------------------------------------------------
