@@ -1,0 +1,137 @@
+/*
+ * ImportLocalArchivesModal (sa-import-local-)
+ *
+ * Local-only archive graduation flow
+ * (.taskmaster/docs/prd-plugin-anonymous-local-mode.md S3/S4/S6).
+ * Obsidian CSS variables only — no hardcoded colors.
+ */
+
+.sa-import-local-modal {
+  max-width: 480px;
+}
+
+.sa-import-local-title {
+  margin: 0 0 8px;
+  font-size: var(--font-ui-large);
+}
+
+.sa-import-local-intro {
+  margin: 0 0 12px;
+  color: var(--text-normal);
+}
+
+.sa-import-local-consequences {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.sa-import-local-consequences li {
+  margin-bottom: 4px;
+}
+
+.sa-import-local-quota {
+  margin: 0 0 12px;
+  padding: 6px 10px;
+  background: var(--background-secondary);
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+/* Note selection list (Phase C multi-select) */
+.sa-import-local-list {
+  margin: 0 0 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  overflow: hidden;
+}
+
+.sa-import-local-list-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+}
+
+.sa-import-local-list-count {
+  margin-left: auto;
+}
+
+.sa-import-local-list-body {
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.sa-import-local-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: var(--font-ui-small);
+}
+
+.sa-import-local-row:hover {
+  background: var(--background-modifier-hover);
+}
+
+.sa-import-local-row-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-normal);
+}
+
+.sa-import-local-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* Progress (running state) */
+.sa-import-local-progress {
+  height: 6px;
+  margin: 16px 0 8px;
+  background: var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  overflow: hidden;
+}
+
+.sa-import-local-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--interactive-accent);
+  border-radius: var(--radius-s);
+  transition: width 0.2s ease;
+}
+
+.sa-import-local-progress-label {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.sa-import-local-note {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+}
+
+/* Done state */
+.sa-import-local-summary {
+  margin: 0 0 8px;
+  color: var(--text-normal);
+}
+
+.sa-import-local-stop-reason {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}

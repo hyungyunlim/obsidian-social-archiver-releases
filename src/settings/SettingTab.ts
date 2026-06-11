@@ -10,6 +10,7 @@ import type {
   FrontmatterFieldVisibility,
   CustomFrontmatterProperty,
   FrontmatterPropertyType,
+  LocalImportLastResult,
 } from '../types/settings';
 import {
   DEFAULT_FRONTMATTER_CUSTOMIZATION_SETTINGS,
@@ -41,6 +42,9 @@ import {
 } from '../shared/platforms/types';
 import type { Platform as SocialPlatform } from '../shared/platforms/types';
 import { getPlatformDefinition } from '../shared/platforms/definitions';
+import { isAuthenticated, isPaidPlan } from '../utils/auth';
+import { getAccountRequiredMessage } from '../utils/accountGate';
+import { LocalArchiveScanner } from '../services/import/local/LocalArchiveScanner';
 
 const PERSONAL_GITHUB_URL = 'https://github.com/hyungyunlim';
 const RELEASE_NOTES_URL = 'https://social-archive.org/release-notes?platform=obsidian&utm_source=obsidian-plugin&utm_medium=settings';
@@ -666,63 +670,13 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           this.markDirty();
         }));
 
+    // Local Archives Section (PRD S2.3, S5.2)
+    this.renderLocalArchivesSettings(containerEl);
+
     this.renderFrontmatterSettings(containerEl);
 
-    // Sharing Settings Section
-    new Setting(containerEl).setName('Sharing').setHeading()
-      .settingEl.addClass('sa-settings-section-header');
-
-    // Share Mode setting
-    new Setting(containerEl)
-      .setName('Share mode')
-      .setDesc('Choose how shared posts appear on the web. "preview" mode protects copyright by showing only excerpts without media.')
-      .addDropdown(dropdown => {
-        dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
-        return dropdown
-          .addOption('preview', 'Preview (copyright-safe)')
-          .addOption('full', 'Full content (original)')
-          .setValue(this.plugin.settings.shareMode)
-          .onChange((value: string) => {
-            this.plugin.settings.shareMode = value as ShareMode;
-            this.markDirty();
-            updatePreviewLengthVisibility(); // Update visibility when mode changes
-          });
-      });
-
-    new Setting(containerEl)
-      .setName('Copy reader mode link by default')
-      .setDesc('When creating a share link, copy the reader-mode URL (#reader). Disable to copy the normal post URL.')
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.copyShareLinkAsReaderMode)
-        .onChange((value) => {
-          this.plugin.settings.copyShareLinkAsReaderMode = value;
-          this.markDirty();
-        }));
-
-    // Preview Length setting (conditionally shown based on share mode)
-    const previewLengthSetting = new Setting(containerEl)
-      .setName('Preview length')
-      .setDesc('Maximum character count for text preview in "preview" mode. Platform link is always included in preview mode.')
-      .addText(text => text
-        .setPlaceholder('280')
-        .setValue(String(this.plugin.settings.sharePreviewLength))
-        .onChange((value) => {
-          const num = parseInt(value) || 280;
-          this.plugin.settings.sharePreviewLength = Math.max(100, Math.min(1000, num));
-          this.markDirty();
-        }));
-
-    // Function to toggle preview length visibility
-    const updatePreviewLengthVisibility = () => {
-      if (this.plugin.settings.shareMode === 'preview') {
-        previewLengthSetting.settingEl.removeClass('sa-hidden');
-      } else {
-        previewLengthSetting.settingEl.addClass('sa-hidden');
-      }
-    };
-
-    // Set initial visibility
-    updatePreviewLengthVisibility();
+    // Sharing Settings Section (account-bound — PRD S2.3)
+    this.renderSharingSettings(containerEl);
 
     // Explain the Obsidian plugin scanner warning before desktop-local features.
     this.renderLocalCommandExecutionNotice(containerEl);
@@ -1005,6 +959,187 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   /** Return true when this generation has been superseded by a new display() call */
   private isStaleGeneration(generation: number): boolean {
     return generation !== this.displayGeneration;
+  }
+
+  /**
+   * Render an account-bound section in its signed-out state (PRD S2.3):
+   * header + one-line capability description + "Sign in to enable" CTA
+   * instead of dead controls. The Account section sits at the top of this
+   * page, so the button scrolls the settings container back up to it.
+   */
+  private renderSignedOutSection(containerEl: HTMLElement, title: string, description: string): void {
+    new Setting(containerEl).setName(title).setHeading()
+      .settingEl.addClass('sa-settings-section-header');
+
+    new Setting(containerEl)
+      .setName('Sign in to enable')
+      .setDesc(description)
+      .addButton(button => button
+        .setButtonText('Sign in')
+        .setCta()
+        .onClick(() => {
+          this.containerEl.scrollTo({ top: 0, behavior: 'smooth' });
+        }));
+  }
+
+  /**
+   * Render the "Local archives" section (PRD S2.3, S5.2): count of
+   * local-only clip notes, the import entry point when signed in, and the
+   * durable last-import summary (S6.5). Hidden entirely when signed in with
+   * nothing to import and no past run to report.
+   */
+  private renderLocalArchivesSettings(containerEl: HTMLElement): void {
+    const authenticated = isAuthenticated(this.plugin);
+    const count = new LocalArchiveScanner(this.app).count();
+    const lastResult = this.plugin.settings.localImportLastResult;
+
+    new Setting(containerEl).setName('Local archives').setHeading()
+      .settingEl.addClass('sa-settings-section-header');
+
+    const countLabel = count === 1 ? '1 local archive' : `${count} local archives`;
+
+    if (!authenticated) {
+      new Setting(containerEl)
+        .setName(`${countLabel} in this vault`)
+        .setDesc(count > 0
+          ? 'Sign in to import them to your account.'
+          : 'Browser clips are stored only in this vault.');
+      this.renderAutoUploadToggle(containerEl, authenticated);
+      return;
+    }
+
+    if (count > 0) {
+      new Setting(containerEl)
+        .setName(`${countLabel} not yet imported`)
+        .addButton(button => button
+          .setButtonText('Import local archives…')
+          .setCta()
+          .onClick(() => {
+            void this.plugin.openLocalArchiveImport();
+          }));
+    }
+
+    this.renderAutoUploadToggle(containerEl, authenticated);
+
+    if (lastResult) {
+      const summaryEl = containerEl.createEl('div', {
+        cls: 'setting-item-description',
+        text: this.formatLocalImportSummary(lastResult),
+      });
+      summaryEl.addClass('sa-settings-info');
+    }
+  }
+
+  /**
+   * Auto-upload-new-clips toggle (PRD Phase C). Paid plans only — each
+   * upload consumes monthly archive quota, so the toggle renders disabled
+   * for logged-out and free-plan users instead of silently spending quota.
+   */
+  private renderAutoUploadToggle(containerEl: HTMLElement, authenticated: boolean): void {
+    const paid = isPaidPlan(this.plugin);
+
+    const setting = new Setting(containerEl)
+      .setName('Auto-upload new clips')
+      .setDesc(
+        !authenticated
+          ? 'Sign in to enable. Uploads count against your monthly archive quota.'
+          : paid
+            ? 'Automatically upload new browser clips to your account. Each upload counts against your monthly archive quota.'
+            : 'Available on paid plans. Each upload counts against your monthly archive quota.'
+      );
+
+    setting.addToggle(toggle => {
+      toggle
+        .setValue(paid && this.plugin.settings.autoUploadLocalClips)
+        .setDisabled(!paid)
+        .onChange(async (value) => {
+          await this.plugin.saveSettingsPartial(
+            { autoUploadLocalClips: value },
+            { reinitialize: false, notify: true }
+          );
+        });
+    });
+  }
+
+  /** Build the durable one-line last-import summary (PRD S4.8). */
+  private formatLocalImportSummary(result: LocalImportLastResult): string {
+    const stopReasonCopy: Record<LocalImportLastResult['stopReason'], string> = {
+      completed: 'completed',
+      quota: 'monthly quota reached',
+      error: 'stopped on error',
+    };
+    return `Last import (${new Date(result.at).toLocaleString()}): `
+      + `${result.imported} imported · ${result.duplicates} ${result.duplicates === 1 ? 'duplicate' : 'duplicates'} · `
+      + `${result.partialMedia} partial media · ${result.remaining} remaining `
+      + `(${stopReasonCopy[result.stopReason]})`;
+  }
+
+  /**
+   * Render Sharing settings section. Account-bound (PRD S2.3): share links
+   * are hosted on social-archive.org, so the signed-out state renders the
+   * sign-in CTA instead of dead controls.
+   */
+  private renderSharingSettings(containerEl: HTMLElement): void {
+    if (!isAuthenticated(this.plugin)) {
+      this.renderSignedOutSection(containerEl, 'Sharing', getAccountRequiredMessage('share'));
+      return;
+    }
+
+    // Section Header
+    new Setting(containerEl).setName('Sharing').setHeading()
+      .settingEl.addClass('sa-settings-section-header');
+
+    // Share Mode setting
+    new Setting(containerEl)
+      .setName('Share mode')
+      .setDesc('Choose how shared posts appear on the web. "preview" mode protects copyright by showing only excerpts without media.')
+      .addDropdown(dropdown => {
+        dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
+        return dropdown
+          .addOption('preview', 'Preview (copyright-safe)')
+          .addOption('full', 'Full content (original)')
+          .setValue(this.plugin.settings.shareMode)
+          .onChange((value: string) => {
+            this.plugin.settings.shareMode = value as ShareMode;
+            this.markDirty();
+            updatePreviewLengthVisibility(); // Update visibility when mode changes
+          });
+      });
+
+    new Setting(containerEl)
+      .setName('Copy reader mode link by default')
+      .setDesc('When creating a share link, copy the reader-mode URL (#reader). Disable to copy the normal post URL.')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.copyShareLinkAsReaderMode)
+        .onChange((value) => {
+          this.plugin.settings.copyShareLinkAsReaderMode = value;
+          this.markDirty();
+        }));
+
+    // Preview Length setting (conditionally shown based on share mode)
+    const previewLengthSetting = new Setting(containerEl)
+      .setName('Preview length')
+      .setDesc('Maximum character count for text preview in "preview" mode. Platform link is always included in preview mode.')
+      .addText(text => text
+        .setPlaceholder('280')
+        .setValue(String(this.plugin.settings.sharePreviewLength))
+        .onChange((value) => {
+          const num = parseInt(value) || 280;
+          this.plugin.settings.sharePreviewLength = Math.max(100, Math.min(1000, num));
+          this.markDirty();
+        }));
+
+    // Function to toggle preview length visibility
+    const updatePreviewLengthVisibility = () => {
+      if (this.plugin.settings.shareMode === 'preview') {
+        previewLengthSetting.settingEl.removeClass('sa-hidden');
+      } else {
+        previewLengthSetting.settingEl.addClass('sa-hidden');
+      }
+    };
+
+    // Set initial visibility
+    updatePreviewLengthVisibility();
   }
 
   /**
@@ -2227,6 +2362,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    * Render Mobile Sync settings section
    */
   private renderMobileSyncSettings(containerEl: HTMLElement): void {
+    // Account-bound (PRD S2.3): render the sign-in CTA instead of dead controls.
+    if (!isAuthenticated(this.plugin)) {
+      this.renderSignedOutSection(containerEl, 'Mobile sync', getAccountRequiredMessage('sync'));
+      return;
+    }
+
     // Section Header
     new Setting(containerEl).setName('Mobile sync').setHeading()
       .settingEl.addClass('sa-settings-section-header');
@@ -2274,6 +2415,16 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    * Render Cross-Posting settings section (Threads OAuth + future platforms)
    */
   private renderCrossPostSettings(containerEl: HTMLElement): void {
+    // Account-bound (PRD S2.3): render the sign-in CTA instead of dead controls.
+    if (!isAuthenticated(this.plugin)) {
+      this.renderSignedOutSection(
+        containerEl,
+        'Cross-posting',
+        getAccountRequiredMessage('crosspost')
+      );
+      return;
+    }
+
     // Section Header
     new Setting(containerEl).setName('Cross-posting').setHeading()
       .settingEl.addClass('sa-settings-section-header');
@@ -2290,6 +2441,16 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    * Render AI Comment Settings section
    */
   private async renderAICommentSettings(containerEl: HTMLElement): Promise<void> {
+    // Account-bound (PRD S2.3): render the sign-in CTA instead of dead controls.
+    if (!isAuthenticated(this.plugin)) {
+      this.renderSignedOutSection(
+        containerEl,
+        'AI comments',
+        getAccountRequiredMessage('ai-comments')
+      );
+      return;
+    }
+
     // Section Header
     new Setting(containerEl).setName('AI comments').setHeading()
       .settingEl.addClass('sa-settings-section-header');

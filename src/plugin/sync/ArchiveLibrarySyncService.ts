@@ -24,6 +24,7 @@ import type { PendingPost } from '../../services/SubscriptionManager';
 import type { PostData } from '../../types/post';
 import type { SocialArchiverSettings } from '../../types/settings';
 import type { LocalLockRegistry } from '../locks/LocalLockRegistry';
+import { isLocalOnlyNoteByContent } from './localOnlyNoteGuard';
 
 // ============================================================================
 // Constants
@@ -725,6 +726,20 @@ export class ArchiveLibrarySyncService {
       if (existingByUrl.length === 1) {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- existingByUrl[0] is always defined when length === 1
         const matched = existingByUrl[0]!;
+        // Sync-exclusion contract (PRD S5.1): a local-only note (anonymous
+        // clip, never uploaded) must NOT be adopted by ambient sync —
+        // backfilling sourceArchiveId / replacing content is only allowed
+        // inside the explicit import flow. Skip the server archive entirely
+        // so the clip note is never overwritten and no duplicate is created.
+        if (await isLocalOnlyNoteByContent(matched)) {
+          console.debug('[Social Archiver] [LibrarySync] Tier 2: URL matched a local-only note — skipping', {
+            archiveId: archive.id,
+            url: archive.originalUrl,
+            path: matched.path,
+          });
+          this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
+          return;
+        }
         // Tier-1 already confirmed this file does NOT have archive.id as its sourceArchiveId.
         // Backfill the stable server ID so future lookups use the fast O(1) path.
         // backfillFileIdentity is idempotent when the field already has a value —

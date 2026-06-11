@@ -17,6 +17,7 @@ import type { ArchiveLookupService } from '../../services/ArchiveLookupService';
 import type { PendingPost } from '../../services/SubscriptionManager';
 import type { PostData } from '../../types/post';
 import type { LocalLockRegistry } from '../locks/LocalLockRegistry';
+import { isLocalOnlyNoteByContent } from './localOnlyNoteGuard';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -144,6 +145,20 @@ export class RemoteArchiveIngestService {
 
     const archive = await this.fetchWithRetry(apiClient, archiveId);
     if (!archive) {
+      return 'skipped';
+    }
+
+    // 2.5. Sync-exclusion contract (PRD S5.1): if the archive's URL resolves to
+    // exactly one local-only note (anonymous clip, never uploaded), the ingest
+    // must neither bind/backfill identity into it nor create a duplicate note —
+    // skip entirely. Identity is only assigned by the explicit import flow.
+    const urlMatches = this.deps.archiveLookupService?.findByOriginalUrl(archive.originalUrl) ?? [];
+    const soleUrlMatch = urlMatches.length === 1 ? urlMatches[0] : undefined;
+    if (soleUrlMatch && (await isLocalOnlyNoteByContent(soleUrlMatch))) {
+      console.debug(
+        '[RemoteArchiveIngest] URL matches a local-only note — skipping ingest (import flow owns binding)',
+        { archiveId, path: soleUrlMatch.path }
+      );
       return 'skipped';
     }
 

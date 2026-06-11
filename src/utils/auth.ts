@@ -109,6 +109,20 @@ export function isAuthenticated(plugin: SocialArchiverPlugin): boolean {
   return plugin.settings.isVerified && plugin.settings.authToken !== '';
 }
 
+/** Plan ids that carry no paid entitlement. */
+const FREE_PLANS = new Set(['free', 'beta-free']);
+
+/**
+ * Whether the account is on a paid plan (premium/lifetime/pro/admin).
+ * Prefers the billing usage snapshot (ledger-backed) over the legacy tier.
+ * Gates quota-consuming conveniences like clip auto-upload (PRD Phase C).
+ */
+export function isPaidPlan(plugin: SocialArchiverPlugin): boolean {
+  if (!isAuthenticated(plugin)) return false;
+  const plan = plugin.settings.billingUsage?.plan ?? plugin.settings.tier;
+  return !FREE_PLANS.has(plan);
+}
+
 /**
  * Refresh user credits and usage statistics from backend
  *

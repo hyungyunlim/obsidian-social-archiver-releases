@@ -183,6 +183,15 @@ export class MediaFormatter {
       return `![🎥 Video${durationSuffix}](${encodePathForMarkdownLink(localVideoPath)})`;
     }
 
+    // Case 1b: item.url already IS a vault path — browser-clip folder
+    // handoff, where the extension downloads media and rewrites media[].url
+    // before the plugin runs (downloadMedia is off for mediaDelivery='local',
+    // so there is no MediaResult to consult). Without this, a fully local
+    // video falls through to the thumbnail-link fallback.
+    if (item.url && !/^https?:\/\//i.test(item.url) && !isLocalSentinel(item.url)) {
+      return `![🎥 Video${durationSuffix}](${encodePathForMarkdownLink(item.url)})`;
+    }
+
     // Determine local thumbnail path:
     // - from downloadedMedia when fallbackKind='thumbnail'
     // - or from item.thumbnail if it was set by ArchiveOrchestrator/SubscriptionSyncService

@@ -18,6 +18,7 @@ import { AuthorAvatarService } from './services/AuthorAvatarService';
 import { AuthorNoteService } from './services/AuthorNoteService';
 import { TagStore } from './services/TagStore';
 import type { PostData, Platform } from './types/post';
+import { ClipPayloadError } from './types/clip';
 import type { AuthorCatalogEntry } from './types/author-catalog';
 import type { UserArchive } from './services/WorkersAPIClient';
 import { TimelineView, VIEW_TYPE_TIMELINE } from './views/TimelineView';
@@ -31,7 +32,13 @@ import { InstagramImportModal } from './modals/InstagramImportModal';
 import type { ImportOrchestrator } from './types/import';
 import { NaverWebtoonLocalService } from './services/NaverWebtoonLocalService';
 import { RELEASE_NOTES } from './release-notes';
-import { completeAuthentication, showAuthError, showAuthSuccess, refreshUserCredits, refreshUserBillingUsage } from './utils/auth';
+import { completeAuthentication, showAuthError, showAuthSuccess, refreshUserCredits, refreshUserBillingUsage, isAuthenticated, isPaidPlan } from './utils/auth';
+import { showAccountRequiredNotice } from './utils/accountGate';
+import {
+  IMPORT_MODE_FRONTMATTER_KEY,
+  IMPORT_MODE_LOCAL_ONLY,
+  type LocalOnlyNoteRef,
+} from './services/import/local/LocalArchiveScanner';
 import { normalizeUrlForDedup } from './utils/url';
 
 import { ProcessManager } from './services/ProcessManager';
@@ -131,6 +138,13 @@ export default class SocialArchiverPlugin extends Plugin {
    * don't run for users who never use the feature.
    */
   private importOrchestrator?: ImportOrchestrator;
+
+  /**
+   * In-flight guard for the local→account import (PRD S4): the modal keeps
+   * running after close, so concurrent runs would double-submit the same
+   * notes. Set/cleared by ImportLocalArchivesModal around its run.
+   */
+  public localArchiveImportRunning = false;
   public linkPreviewExtractor!: LinkPreviewExtractor; // Link preview URL extractor
   private settingTab?: SocialArchiverSettingTab; // Settings tab reference for refresh
   public events: Events = new Events();
@@ -879,7 +893,26 @@ export default class SocialArchiverPlugin extends Plugin {
       getAuthorNoteService: () => this.authorNoteService,
       getDetachedMediaService: () => this.detachedMediaService,
       getSettings: () => ({ enableAuthorNotes: this.settings.enableAuthorNotes, archivePath: this.settings.archivePath }),
+      uploadLocalArchiveToAccount: (file) => this.uploadLocalArchiveToAccount(file),
     });
+
+    // Per-note graduation entry point (PRD S5.3): context menu on local-only
+    // archive notes.
+    this.registerEvent(
+      this.app.workspace.on('file-menu', (menu, file) => {
+        if (!(file instanceof TFile) || file.extension !== 'md') return;
+        const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+        if (frontmatter?.[IMPORT_MODE_FRONTMATTER_KEY] !== IMPORT_MODE_LOCAL_ONLY) return;
+        menu.addItem((item) => {
+          item
+            .setTitle('Upload archive to account')
+            .setIcon('cloud-upload')
+            .onClick(() => {
+              void this.uploadLocalArchiveToAccount(file);
+            });
+        });
+      })
+    );
 
     // Add settings tab
     this.settingTab = new SocialArchiverSettingTab(this.app, this);
@@ -2522,6 +2555,14 @@ export default class SocialArchiverPlugin extends Plugin {
 
   private registerProtocolHandler(): void {
     this.registerObsidianProtocolHandler('social-archive', async (params) => {
+      // Browser clip deep link (extension anonymous mode). Uses `op` rather
+      // than `action` because ObsidianProtocolData.action is reserved for
+      // the protocol action name itself.
+      if (params.op === 'clip') {
+        await this.handleClipProtocol(params);
+        return;
+      }
+
       if (params.token) {
         await this.handleAuthCompletion(params);
         return;
@@ -2546,6 +2587,146 @@ export default class SocialArchiverPlugin extends Plugin {
 
       this.openArchiveModal(url);
     });
+  }
+
+  /**
+   * Handle `obsidian://social-archive?op=clip` deep links from the browser
+   * extension (anonymous local clip flow). Plumbing only — decoding lives in
+   * ClipPayloadCodec, the import pipeline in LocalClipService. Works without
+   * login: the local clip path never touches the server.
+   * See prd-extension-anonymous-local-mode.md (Phase 1).
+   */
+  private async handleClipProtocol(params: Record<string, string>): Promise<void> {
+    // Version gate before any decoding so an outdated plugin still shows a
+    // useful message even when a future sender changes the codec itself.
+    const uriVersion = params.v ?? '1';
+    if (uriVersion !== '1') {
+      new Notice(
+        'This clip needs a newer version of Social Archiver. Please update the plugin.',
+        8000
+      );
+      return;
+    }
+
+    const progressNotice = new Notice('Importing clip...', 0);
+
+    try {
+      const { ClipPayloadCodec } = await import('./services/clip/ClipPayloadCodec');
+      const { LocalClipService } = await import('./services/clip/LocalClipService');
+
+      const codec = new ClipPayloadCodec();
+      const payload =
+        params.via === 'clipboard'
+          ? codec.decodeClipboardText(await navigator.clipboard.readText())
+          : codec.decode(params.payload);
+
+      const clipService = new LocalClipService({
+        getOrchestrator: (): ArchiveOrchestrator | undefined => this.orchestrator,
+      });
+      const { filePath } = await clipService.importClip(payload);
+
+      // Onboarding state: the clip counter drives the anonymous home card in
+      // settings and the one-time first-clip celebration copy (PRD S1).
+      // Partial save — a full saveSettings() reinitializes every service on
+      // the hottest anonymous path.
+      const isFirstClip = this.settings.localClipCount === 0;
+      await this.saveSettingsPartial(
+        { localClipCount: this.settings.localClipCount + 1 },
+        { reinitialize: false, notify: true }
+      );
+
+      progressNotice.hide();
+      const fileName = filePath.split('/').pop() ?? filePath;
+      new Notice(
+        isFirstClip
+          ? 'First clip saved! Find it in your timeline.'
+          : `Clipped to vault: ${fileName}`
+      );
+
+      const file = this.app.vault.getAbstractFileByPath(filePath);
+      if (file instanceof TFile) {
+        await this.app.workspace.getLeaf(false).openFile(file);
+      }
+      this.refreshTimelineView();
+      this.maybeAutoUploadClip(filePath);
+    } catch (error) {
+      progressNotice.hide();
+      new Notice(this.describeClipError(error, params.via === 'clipboard'), 8000);
+      console.error('[Social Archiver] Clip import failed:', error);
+    }
+  }
+
+  /**
+   * Auto-upload a freshly received clip to the account (PRD Phase C).
+   * Paid plans only — each upload consumes monthly archive quota, so the
+   * toggle is inert for free/logged-out users. Failures leave the note
+   * local-only; the explicit import flow remains the recovery path.
+   */
+  private maybeAutoUploadClip(filePath: string): void {
+    if (!this.settings.autoUploadLocalClips) return;
+    if (!isAuthenticated(this) || !isPaidPlan(this)) return;
+    if (this.localArchiveImportRunning) {
+      console.debug('[Social Archiver] Clip auto-upload skipped — an import is already running');
+      return;
+    }
+
+    void (async (): Promise<void> => {
+      const file = this.app.vault.getAbstractFileByPath(filePath);
+      if (!(file instanceof TFile)) return;
+
+      this.localArchiveImportRunning = true;
+      try {
+        const { LocalArchiveImportService } = await import(
+          './services/import/local/LocalArchiveImportService'
+        );
+        const service = LocalArchiveImportService.fromPlugin(this);
+        const result = await service.run([{ file }]);
+
+        if (result.stopReason === 'quota') {
+          new Notice(
+            'Monthly archive quota reached — this clip stays local. Import it later from settings.',
+            8000
+          );
+        } else if (result.stopReason === 'error' || result.failed > 0) {
+          new Notice(
+            'Clip auto-upload failed — the clip stays local. Import it later from settings.',
+            8000
+          );
+        } else if (result.imported + result.duplicates > 0) {
+          new Notice('Clip uploaded to your account.');
+        }
+      } catch (error) {
+        console.error('[Social Archiver] Clip auto-upload failed:', error);
+        new Notice(
+          'Clip auto-upload failed — the clip stays local. Import it later from settings.',
+          8000
+        );
+      } finally {
+        this.localArchiveImportRunning = false;
+      }
+    })();
+  }
+
+  private describeClipError(error: unknown, viaClipboard: boolean): string {
+    if (error instanceof ClipPayloadError) {
+      switch (error.reason) {
+        case 'unsupported_version':
+          return 'This clip needs a newer version of Social Archiver. Please update the plugin.';
+        case 'too_large':
+          return 'Clip is too large to import.';
+        case 'empty':
+        case 'invalid_envelope':
+          return viaClipboard
+            ? 'No Social Archiver clip found in the clipboard. Clip again from the browser extension, then retry.'
+            : 'This link does not contain a valid Social Archiver clip.';
+        case 'decompress_failed':
+        case 'invalid_json':
+        case 'invalid_post_data':
+          return 'Could not read this clip. Try clipping again from the browser extension.';
+      }
+    }
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return `Clip import failed: ${message}`;
   }
 
   private async handleAuthCompletion(params: Record<string, string>): Promise<void> {
@@ -2575,6 +2756,10 @@ export default class SocialArchiverPlugin extends Plugin {
       }
 
       await this.refreshAllTimelines();
+
+      // Graduation path (PRD S3): offer to import local-only archives into
+      // the freshly authenticated account.
+      this.maybeOfferLocalArchiveImport();
 
       const settingsMessage = ObsidianPlatform.isMobile
         ? '\uD83D\uDCA1 Tap \u2630 menu \u2192 Settings (\u2699\uFE0F) \u2192 Social Archiver to view your account'
@@ -2703,6 +2888,69 @@ export default class SocialArchiverPlugin extends Plugin {
       new Notice(`Cannot open import: ${message}`);
       console.error('[Social Archiver] Failed to open Instagram import modal', err);
     }
+  }
+
+  /**
+   * Open the local→account archive import flow (PRD S3/S4): scan the vault
+   * for local-only notes and show the import modal. Entry points: settings
+   * "Local archives" section and the per-note upload action.
+   */
+  async openLocalArchiveImport(): Promise<void> {
+    if (!isAuthenticated(this)) {
+      showAccountRequiredNotice(this, 'import');
+      return;
+    }
+    const { LocalArchiveScanner } = await import('./services/import/local/LocalArchiveScanner');
+    const notes = new LocalArchiveScanner(this.app).scan();
+    if (notes.length === 0) {
+      new Notice('No local archives to import.');
+      return;
+    }
+    await this.showLocalArchiveImportModal(notes);
+  }
+
+  /**
+   * Post-login hook (PRD S3): if the vault holds local-only archives, offer
+   * to import them. Silent when there is nothing to import; never blocks the
+   * auth flow on failure.
+   */
+  maybeOfferLocalArchiveImport(): void {
+    void (async (): Promise<void> => {
+      try {
+        const { LocalArchiveScanner } = await import('./services/import/local/LocalArchiveScanner');
+        const notes = new LocalArchiveScanner(this.app).scan();
+        if (notes.length === 0) return;
+        await this.showLocalArchiveImportModal(notes);
+      } catch (error) {
+        console.error('[Social Archiver] Local archive import offer failed:', error);
+      }
+    })();
+  }
+
+  /**
+   * Per-note graduation action (PRD S5.3): upload a single local-only
+   * archive to the account. Gate-hits show the capability notice.
+   */
+  async uploadLocalArchiveToAccount(file: TFile): Promise<void> {
+    if (!isAuthenticated(this)) {
+      showAccountRequiredNotice(this, 'import');
+      return;
+    }
+    const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+    if (frontmatter?.[IMPORT_MODE_FRONTMATTER_KEY] !== IMPORT_MODE_LOCAL_ONLY) {
+      new Notice('This note is not a local-only archive.');
+      return;
+    }
+    await this.showLocalArchiveImportModal([{ file }]);
+  }
+
+  private async showLocalArchiveImportModal(notes: LocalOnlyNoteRef[]): Promise<void> {
+    if (this.localArchiveImportRunning) {
+      new Notice('A local archive import is already running.');
+      return;
+    }
+    const { ImportLocalArchivesModal } = await import('./modals/ImportLocalArchivesModal');
+    new ImportLocalArchivesModal(this, notes).open();
   }
 
   /**

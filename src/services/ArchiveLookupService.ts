@@ -10,6 +10,7 @@
 
 import { type App, type CachedMetadata, type EventRef, type MetadataCache, TFile } from 'obsidian';
 import type { ArchiveFileIdentity } from '../plugin/sync/ArchiveDeleteSyncService';
+import { IMPORT_MODE_FRONTMATTER_KEY } from './import/local/LocalArchiveScanner';
 import type { IService } from './base/IService';
 
 // ============================================================================
@@ -366,10 +367,16 @@ export class ArchiveLookupService implements IService {
     this.index.indexedPaths.add(file.path);
 
     if (data.sourceArchiveId || data.originalUrl) {
+      // Best-effort importMode from the metadata cache: a freshly written
+      // file may not be cached yet, but the MetadataCache `changed` handler
+      // re-indexes with full frontmatter moments later.
+      const importMode: unknown =
+        this.app.metadataCache.getFileCache(file)?.frontmatter?.[IMPORT_MODE_FRONTMATTER_KEY];
       this.index.byPath.set(file.path, {
         path: file.path,
         archiveId: data.sourceArchiveId,
         originalUrl: data.originalUrl,
+        importMode: typeof importMode === 'string' ? importMode : undefined,
       });
     }
 
@@ -466,6 +473,10 @@ export class ArchiveLookupService implements IService {
     // Index by sourceArchiveId (stable 1:1 mapping)
     const archiveId: unknown = fm.sourceArchiveId;
     const originalUrl: unknown = fm.originalUrl;
+    // Local-only provenance must ride into the identity — the outbound
+    // delete guard keys off it to keep clip-note deletions from resolving
+    // (via URL match) to a server archive delete.
+    const importMode: unknown = fm[IMPORT_MODE_FRONTMATTER_KEY];
     if (
       (typeof archiveId === 'string' && archiveId.length > 0) ||
       (typeof originalUrl === 'string' && originalUrl.length > 0)
@@ -474,6 +485,7 @@ export class ArchiveLookupService implements IService {
         path: file.path,
         archiveId: typeof archiveId === 'string' && archiveId.length > 0 ? archiveId : undefined,
         originalUrl: typeof originalUrl === 'string' ? originalUrl : undefined,
+        importMode: typeof importMode === 'string' ? importMode : undefined,
       });
     }
 

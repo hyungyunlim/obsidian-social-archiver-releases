@@ -378,6 +378,169 @@ export class ArchiveOrchestrator implements IService {
       this.checkCancellation(options.abortSignal);
       this.emitStageComplete('fetching');
 
+      // Stages 3.5–6 (author enrichment → link previews → media guard →
+      // media download → markdown conversion → vault save) are shared with
+      // orchestrateFromPostData() via processFetchedPostData().
+      const filePath = await this.processFetchedPostData(
+        postData,
+        platform,
+        options,
+        transaction,
+        startTime
+      );
+
+      // Stage 7: Generate share link (if enabled)
+      let shareUrl: string | undefined;
+      if (options.generateShareLink) {
+        this.emitProgress('saving', 90, 'Generating share link...');
+        // TODO: Implement share link generation
+        // This would call a share service to upload and get URL
+      }
+
+      // Stage 8: Cache result
+      if (this.enableCache) {
+        this.cacheResult(url, postData, filePath);
+      }
+
+      // Complete
+      this.emitProgress('complete', 100, 'Archive complete!');
+      this.emitStageComplete('complete');
+
+      return {
+        success: true,
+        filePath,
+        shareUrl,
+        creditsUsed: this.calculateCreditsUsed(options),
+      };
+
+    } catch (error) {
+      // Emit error event
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.eventEmitter.emit({ type: 'error', data: err });
+
+      // Check if cancelled
+      if (this.isCancellationError(error)) {
+        this.eventEmitter.emit({ type: 'cancelled', data: undefined });
+        await this.rollback(transaction);
+
+        return {
+          success: false,
+          error: 'Archive cancelled by user',
+          creditsUsed: 0,
+        };
+      }
+
+      // Rollback transaction
+      await this.rollback(transaction);
+
+      return {
+        success: false,
+        error: err.message,
+        creditsUsed: 0,
+      };
+    }
+  }
+
+  /**
+   * Archive a fully populated PostData without any server fetch.
+   *
+   * Browser clip deep-link flow (extension anonymous mode): the extension
+   * extracts PostData client-side and hands it over via
+   * `obsidian://social-archive?op=clip`; this method runs the exact same
+   * post-fetch pipeline as `orchestrate()` — author enrichment, link
+   * previews, media download with local URL rewrite, markdown conversion,
+   * vault save with rollback — but performs no network fetch of the post
+   * itself and consumes no credits, so it works fully logged-out.
+   *
+   * See prd-extension-anonymous-local-mode.md (Phase 1).
+   */
+  async orchestrateFromPostData(
+    postData: PostData,
+    options: OrchestratorOptions = {
+      enableAI: false,
+      downloadMedia: true,
+      removeTracking: true,
+      generateShareLink: false,
+      deepResearch: false,
+    }
+  ): Promise<ArchiveResult> {
+    const startTime = Date.now();
+
+    const transaction: TransactionState = {
+      createdFiles: [],
+      createdMediaFiles: [],
+    };
+
+    try {
+      this.checkCancellation(options.abortSignal);
+
+      if (!postData?.platform || !postData.id || !postData.url) {
+        throw new Error('orchestrateFromPostData requires postData with platform, id, and url');
+      }
+
+      const filePath = await this.processFetchedPostData(
+        postData,
+        postData.platform,
+        options,
+        transaction,
+        startTime
+      );
+
+      // Complete
+      this.emitProgress('complete', 100, 'Archive complete!');
+      this.emitStageComplete('complete');
+
+      return {
+        success: true,
+        filePath,
+        creditsUsed: 0, // Local import — no server fetch, no credits
+      };
+
+    } catch (error) {
+      // Emit error event
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.eventEmitter.emit({ type: 'error', data: err });
+
+      // Check if cancelled
+      if (this.isCancellationError(error)) {
+        this.eventEmitter.emit({ type: 'cancelled', data: undefined });
+        await this.rollback(transaction);
+
+        return {
+          success: false,
+          error: 'Archive cancelled by user',
+          creditsUsed: 0,
+        };
+      }
+
+      // Rollback transaction
+      await this.rollback(transaction);
+
+      return {
+        success: false,
+        error: err.message,
+        creditsUsed: 0,
+      };
+    }
+  }
+
+  /**
+   * Shared post-fetch pipeline used by `orchestrate()` (after the server
+   * fetch) and `orchestrateFromPostData()` (caller already holds PostData):
+   * author enrichment → link preview extraction → Large Media Guard →
+   * media download (rewriting `media[].url` to local vault paths) →
+   * markdown conversion → vault save. Created files are recorded on the
+   * passed transaction so callers can roll back on failure.
+   *
+   * @returns Vault path of the saved note
+   */
+  private async processFetchedPostData(
+    postData: PostData,
+    platform: Platform,
+    options: OrchestratorOptions,
+    transaction: TransactionState,
+    startTime: number
+  ): Promise<string> {
       // Stage 3.5: Extract and apply author profile metadata
       await this.enrichAuthorMetadata(postData, platform);
 
@@ -673,56 +836,7 @@ export class ArchiveOrchestrator implements IService {
       this.checkCancellation(options.abortSignal);
       this.emitStageComplete('saving');
 
-      // Stage 7: Generate share link (if enabled)
-      let shareUrl: string | undefined;
-      if (options.generateShareLink) {
-        this.emitProgress('saving', 90, 'Generating share link...');
-        // TODO: Implement share link generation
-        // This would call a share service to upload and get URL
-      }
-
-      // Stage 8: Cache result
-      if (this.enableCache) {
-        this.cacheResult(url, postData, filePath);
-      }
-
-      // Complete
-      this.emitProgress('complete', 100, 'Archive complete!');
-      this.emitStageComplete('complete');
-
-      return {
-        success: true,
-        filePath,
-        shareUrl,
-        creditsUsed: this.calculateCreditsUsed(options),
-      };
-
-    } catch (error) {
-      // Emit error event
-      const err = error instanceof Error ? error : new Error(String(error));
-      this.eventEmitter.emit({ type: 'error', data: err });
-
-      // Check if cancelled
-      if (this.isCancellationError(error)) {
-        this.eventEmitter.emit({ type: 'cancelled', data: undefined });
-        await this.rollback(transaction);
-
-        return {
-          success: false,
-          error: 'Archive cancelled by user',
-          creditsUsed: 0,
-        };
-      }
-
-      // Rollback transaction
-      await this.rollback(transaction);
-
-      return {
-        success: false,
-        error: err.message,
-        creditsUsed: 0,
-      };
-    }
+      return filePath;
   }
 
   /**

@@ -621,6 +621,75 @@ Second paragraph after horizontal rule.
     expect(content).toContain('First paragraph.');
     expect(content).toContain('Second paragraph after horizontal rule.');
   });
+
+  it('excludes media section wrapped in sentinel region markers (Ship 3 subscription sync)', () => {
+    // Real shape written by MarkdownConverter when sourceArchiveId exists:
+    // the {{media}} section is wrapped in <!-- sa:media:start/end --> markers.
+    const markdown = `---
+platform: facebook
+author: Sanghyun Park
+published: 2026-06-09 10:59
+sourceArchiveId: a2B1xENdXk
+---
+
+소리 끄고 자막만 보다가 줄 알았음ㅋㅋ
+
+道費였음
+
+---
+
+<!-- sa:media:start id=a2B1xENdXk -->
+![image 1](attachments/social-archives/facebook/3929996490464258/20260610-img-1.webp)
+<!-- sa:media:end -->
+
+---
+
+**Platform:** Facebook | **Author:** Sanghyun Park | **Published:** 2026-06-09 10:59
+
+**Original URL:** https://www.facebook.com/sanghyun.simon.park/posts/abc
+`;
+
+    const content = parser.extractContentText(markdown);
+    expect(content).toBe('소리 끄고 자막만 보다가 줄 알았음ㅋㅋ\n\n道費였음');
+    expect(content).not.toContain('sa:media');
+    expect(content).not.toContain('![image');
+  });
+
+  it('excludes sentinel-wrapped media section when comments follow (sync catch-up shape)', () => {
+    const markdown = `---
+platform: facebook
+author: testuser
+published: 2026-06-09
+sourceArchiveId: abc123
+---
+
+Body text.
+
+---
+
+<!-- sa:media:start id=abc123 -->
+![image 1](attachments/social-archives/facebook/post/img-1.webp)
+
+![image 2](attachments/social-archives/facebook/post/img-2.webp)
+<!-- sa:media:end -->
+
+---
+
+## 💬 Comments
+
+**commenter** · 2026-06-09 12:00 · 3 likes
+Great post.
+
+---
+
+**Platform:** Facebook | **Author:** testuser | **Published:** 2026-06-09
+`;
+
+    const content = parser.extractContentText(markdown);
+    expect(content).toBe('Body text.');
+    expect(content).not.toContain('sa:media');
+    expect(content).not.toContain('![image');
+  });
 });
 
 describe('PostDataParser - extractComments', () => {

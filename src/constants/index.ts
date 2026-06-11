@@ -66,3 +66,14 @@ export const RATE_LIMITS = {
   MAX_RETRY_DELAY: 16000,
   TIMEOUT: 30000
 } as const;
+
+/**
+ * Anonymous (logged-out) mode: the browser extension is the archiving entry
+ * point, so every logged-out surface funnels to these two targets.
+ * See .taskmaster/docs/prd-plugin-anonymous-local-mode.md (S1).
+ */
+export const BROWSER_EXTENSION_LINKS = {
+  CHROME_WEB_STORE:
+    'https://chromewebstore.google.com/detail/social-archiver/gifddgdekeffpnadpdcgjaehmlblomaf',
+  GUIDE: 'https://docs.social-archive.org/en/guide/browser-extension'
+} as const;

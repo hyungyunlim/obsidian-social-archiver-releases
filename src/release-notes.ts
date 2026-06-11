@@ -24,6 +24,18 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '3.11.0': {
+    title: 'Browser Clips & Local-Only Mode',
+    date: '2026-06-11',
+    notes: `## Browser clips & local-only mode
+
+- Clip posts straight into your vault from the Social Archiver Chrome extension — no account needed.
+- Clips stay local-only: they never touch the server and never use your monthly archive quota.
+- Signed in? Import local clips to your account (media included) anytime from Settings → Local archives, or right-click a clip note → "Upload archive to account". On paid plans, new clips can upload automatically.
+- The plugin now works fully logged out — timeline, tags, and settings included.
+- Install or update the Chrome extension to **1.6.1** for the full clip platform set: X, Threads, Instagram, Facebook, Reddit, TikTok, Bluesky, Mastodon, LinkedIn, Substack notes, Naver Blog/Cafe, Kakao Brunch, and ordinary web pages.
+`,
+  },
   '3.9.0': {
     title: 'Linked Archives & Note Mentions',
     date: '2026-06-07',

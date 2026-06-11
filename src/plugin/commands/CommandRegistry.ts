@@ -1,4 +1,8 @@
-import { type App, Notice, Platform, Plugin } from 'obsidian';
+import { type App, Notice, Platform, Plugin, type TFile } from 'obsidian';
+import {
+  IMPORT_MODE_FRONTMATTER_KEY,
+  IMPORT_MODE_LOCAL_ONLY,
+} from '../../services/import/local/LocalArchiveScanner';
 import type { BatchMode } from '../../types/batch-transcription';
 import type { BatchTranscriptionManager } from '../../services/BatchTranscriptionManager';
 import type { EditorTTSController } from '../../services/tts/EditorTTSController';
@@ -31,6 +35,7 @@ export interface CommandRegistryDeps {
   getAuthorNoteService: () => AuthorNoteService | undefined;
   getDetachedMediaService: () => DetachedMediaService | undefined;
   getSettings: () => { enableAuthorNotes: boolean; archivePath: string };
+  uploadLocalArchiveToAccount: (file: TFile) => Promise<void>;
 }
 
 /**
@@ -105,6 +110,23 @@ export function registerCommands(deps: CommandRegistryDeps): void {
       if (!service.canRedownloadSync(activeFile)) return false;
       if (checking) return true;
       void service.redownloadWithUserFeedback(activeFile);
+      return true;
+    },
+  });
+
+  // ── Local archive graduation: upload local-only note to account ──────
+  // See prd-plugin-anonymous-local-mode.md (S5.3).
+
+  plugin.addCommand({
+    id: 'upload-local-archive',
+    name: 'Upload archive to account',
+    checkCallback: (checking: boolean) => {
+      const activeFile = app.workspace.getActiveFile();
+      if (!activeFile) return false;
+      const frontmatter = app.metadataCache.getFileCache(activeFile)?.frontmatter;
+      if (frontmatter?.[IMPORT_MODE_FRONTMATTER_KEY] !== IMPORT_MODE_LOCAL_ONLY) return false;
+      if (checking) return true;
+      void deps.uploadLocalArchiveToAccount(activeFile);
       return true;
     },
   });

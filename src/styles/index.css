@@ -41,5 +41,11 @@
 /* In-app notice banner + detail modal */
 @import './components/notice-banner.css';
 
+/* Anonymous mode: browser-clip onboarding guide modal */
+@import './components/clip-guide-modal.css';
+
+/* Local archive → account import modal */
+@import './components/import-local-archives-modal.css';
+
 /* Timeline and reader-mode incremental styles */
 @import '../components/timeline/managers/skeleton-card.css';

@@ -43,6 +43,37 @@ Very long transcript text that should not appear in the card content.
     expect(content).not.toContain('First line');
   });
 
+  it('treats a gallery with media fallback lines as media-only (no inline duplication)', () => {
+    // Mirrors a clipped Instagram story note: image embeds plus a
+    // "[🎥 Video](url)" link fallback for a skipped video. One non-`![`
+    // line must not make the whole gallery leak into the card body.
+    const markdown = `---
+platform: instagram
+title: "Instagram story by @user"
+---
+
+Instagram story by [@user](https://instagram.com/user)
+
+---
+
+![image 1](attachments/social-archives/clips/instagram-story_x/00-image.jpg)
+
+![image 2](attachments/social-archives/clips/instagram-story_x/01-image.jpg)
+
+[🎥 Video (0:20)](https://www.instagram.com/stories/user/)
+
+---
+
+**Platform:** Instagram | **Author:** [@user](https://instagram.com/user)
+`;
+
+    const content = parser.extractContentText(markdown);
+
+    expect(content).toContain('Instagram story by');
+    expect(content).not.toContain('![image 1]');
+    expect(content).not.toContain('🎥 Video');
+  });
+
   it('parses transcript segments from emoji transcript header', () => {
     const transcript = (parser as unknown as {
       parseWhisperTranscript: (content: string, language?: string) => { language: string; segments: Array<{ start: number; end: number; text: string }> } | undefined;

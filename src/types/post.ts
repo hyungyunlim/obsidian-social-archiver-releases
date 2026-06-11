@@ -599,6 +599,9 @@ export const PostDataSchema: z.ZodType<PostData> = z.lazy(() => z.object({
     externalLinkImage: z.string().nullish(),
     downloadTime: z.number().nullish(),
     duration: z.number().nullish(),
+    // Episode/article subtitle (podcast itunes:subtitle, Brunch cover
+    // subtitle). Without this the strip-mode clip codec drops it.
+    subtitle: z.string().nullish(),
     mediaSelectionSummary: z.array(z.string()).nullish()
   }),
   comments: z.array(z.object({
@@ -802,7 +805,8 @@ export const PostDataSchema: z.ZodType<PostData> = z.lazy(() => z.object({
       externalLinkDescription: z.string().nullish(),
       externalLinkImage: z.string().nullish(),
       downloadTime: z.number().nullish(),
-      duration: z.number().nullish()
+      duration: z.number().nullish(),
+      subtitle: z.string().nullish()
     }),
     comments: z.array(z.any()).nullish(),
     raw: z.unknown().nullish()

@@ -33,6 +33,7 @@ import { AICommentJobStatusBanner } from './AICommentJobStatusBanner';
 import { TranscriptionJobStatusBanner } from './TranscriptionJobStatusBanner';
 import { NoticeBanner } from './NoticeBanner';
 import { NoticeDetailModal } from '../../modals/NoticeDetailModal';
+import { ClipGuideModal } from '../../modals/ClipGuideModal';
 import type { NoticePayloadV1 } from '../../types/notices';
 import { TagChipBar } from './filters/TagChipBar';
 import { ReaderModeOverlay, type ReaderModeContext } from './reader/ReaderModeOverlay';
@@ -1364,9 +1365,10 @@ export class TimelineContainer {
       cls: 'mb-6'
     });
 
-    // Button container - vertical layout
+    // Button container - vertical layout. Spacing lives in tc-empty-actions:
+    // the Tailwind gap utility is not emitted into the built stylesheet.
     const buttonContainer = emptyDiv.createDiv({
-      cls: 'flex flex-col items-center gap-3'
+      cls: 'flex flex-col items-center tc-empty-actions'
     });
 
     // Show different primary button based on authentication status
@@ -1382,11 +1384,21 @@ export class TimelineContainer {
         this.plugin.openArchiveModal();
       });
     } else {
-      // User is not authenticated - show Setup button (primary)
-      const setupBtn = buttonContainer.createEl('button', {
+      // User is not authenticated - anonymous mode: the browser extension is
+      // the archiving entry point, so the clip guide is the primary CTA and
+      // account setup is the secondary action (PRD S1.2)
+      const clipGuideBtn = buttonContainer.createEl('button', {
         cls: 'px-4 py-2 rounded border border-[var(--background-modifier-border)] text-[var(--text-normal)] hover:border-[var(--text-muted)] hover:bg-[var(--background-modifier-hover)] transition-colors cursor-pointer'
       });
-      setupBtn.createEl('span', { text: 'Complete setup' });
+      clipGuideBtn.createEl('span', { text: 'Clip from your browser' });
+      clipGuideBtn.addEventListener('click', () => {
+        new ClipGuideModal(this.plugin).open();
+      });
+
+      const setupBtn = buttonContainer.createEl('button', {
+        cls: 'px-4 py-2 rounded border border-[var(--background-modifier-border)] text-[var(--text-muted)] hover:border-[var(--text-muted)] hover:bg-[var(--background-modifier-hover)] hover:text-[var(--text-normal)] transition-colors cursor-pointer'
+      });
+      setupBtn.createEl('span', { text: 'Set up account' });
       setupBtn.addEventListener('click', () => {
         // @ts-expect-error — app.setting is available at runtime but not in public Obsidian types
         (this.app.setting as { open: () => void; openTabById: (id: string) => void }).open();

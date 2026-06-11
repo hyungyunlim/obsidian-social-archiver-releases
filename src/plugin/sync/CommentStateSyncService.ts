@@ -42,6 +42,7 @@ import type { Comment, Platform } from '@/types/post';
 import type { WorkersAPIClient, UserArchive } from '../../services/WorkersAPIClient';
 import type { ArchiveLookupService } from '../../services/ArchiveLookupService';
 import { mapUserArchiveComment } from '../mobile/UserArchiveConverter';
+import { isLocalOnlyNote } from './localOnlyNoteGuard';
 import { sortPinnedCommentRoots } from '../../utils/comments';
 import { CommentFormatter } from '../../services/markdown/formatters/CommentFormatter';
 import { DateNumberFormatter } from '../../services/markdown/formatters/DateNumberFormatter';
@@ -293,6 +294,17 @@ export class CommentStateSyncService {
       return null;
     }
 
-    return byUrl[0] ?? null;
+    const candidate = byUrl[0] ?? null;
+    // Sync-exclusion contract (PRD S5.1): never write the managed comments
+    // section into a local-only note (anonymous clip) matched by URL.
+    if (candidate && isLocalOnlyNote(this.app, candidate)) {
+      console.debug(
+        `${LOG_PREFIX} URL matched a local-only note — skipping comment update.`,
+        { archiveId, path: candidate.path },
+      );
+      return null;
+    }
+
+    return candidate;
   }
 }

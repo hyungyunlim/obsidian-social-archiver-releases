@@ -159,7 +159,7 @@ export function sanitizeMediaFilename(filename: string): string {
   return sanitized;
 }
 
-class MediaPathGenerator {
+export class MediaPathGenerator {
   private basePath: string;
 
   constructor(basePath: string = 'attachments/social-archives') {
@@ -207,7 +207,19 @@ class MediaPathGenerator {
       const sanitizedPostId = this.sanitizeFilename(postId);
 
       // Format: YYYYMMDD-username-postId-index.ext
-      return `${date}-${sanitizedAuthor}-${sanitizedPostId}-${index + 1}.${extension}`;
+      //
+      // Cap the base HERE so the `-index.ext` tail always survives: the
+      // generic 80-char truncation in sanitizeMediaFilename cuts from the
+      // END, and a long author+postId combo (e.g. Naver Cafe 43-char member
+      // keys) would otherwise shear off the index — collapsing every media
+      // file of the post onto ONE path, each download overwriting the last.
+      const tail = `-${index + 1}.${extension}`;
+      let base = `${date}-${sanitizedAuthor}-${sanitizedPostId}`;
+      const maxBaseLength = Math.max(1, 80 - tail.length);
+      if (base.length > maxBaseLength) {
+        base = base.slice(0, maxBaseLength).replace(/[-_.]+$/, '');
+      }
+      return `${base}${tail}`;
     } catch {
       return `media-${index + 1}.bin`;
     }

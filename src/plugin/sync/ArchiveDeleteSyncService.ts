@@ -29,6 +29,7 @@ import type {
   PendingArchiveDeleteEntry,
 } from '../../types/settings';
 import { showDeleteConfirmModal } from './DeleteConfirmModal';
+import { isLocalOnlyImportMode, isLocalOnlyNote } from './localOnlyNoteGuard';
 
 // ============================================================================
 // Interfaces (provided by other agents / parallel modules)
@@ -42,6 +43,12 @@ export interface ArchiveFileIdentity {
   path: string;
   archiveId?: string;
   originalUrl?: string;
+  /**
+   * `social_archiver_import_mode` frontmatter value captured at index time.
+   * `'local-only'` marks an anonymous clip that was never uploaded — its
+   * deletion must never resolve/delete a server archive (PRD S5.1).
+   */
+  importMode?: string;
 }
 
 // Re-export for consumers that imported from this module
@@ -222,6 +229,18 @@ export class ArchiveDeleteSyncService {
     if (identity.archiveId && this.consumeSuppression(identity.archiveId)) {
       console.debug(`${LOG_PREFIX} Outbound delete suppressed (inbound loop guard)`, {
         archiveId: identity.archiveId,
+      });
+      return;
+    }
+
+    // Sync-exclusion contract (PRD S5.1): deleting a local-only note (anonymous
+    // clip) must never delete a server archive — the originalUrl resolution
+    // below could otherwise match an unrelated server record for the same URL.
+    // A present archiveId wins: a bound note is server-backed and its delete
+    // is legitimate (localOnlyNoteGuard module header).
+    if (!identity.archiveId && isLocalOnlyImportMode(identity.importMode)) {
+      console.debug(`${LOG_PREFIX} Deleted note was local-only — skipping outbound delete`, {
+        path: identity.path,
       });
       return;
     }
@@ -790,7 +809,17 @@ export class ArchiveDeleteSyncService {
       const byUrl = this.deps.findByOriginalUrl(originalUrl);
       if (byUrl.length === 1) {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- byUrl[0] is defined when length === 1
-        return byUrl[0]!;
+        const candidate = byUrl[0]!;
+        // Sync-exclusion contract (PRD S5.1): never trash a local-only note
+        // (anonymous clip) because a same-URL server archive was deleted.
+        if (isLocalOnlyNote(this.deps.app, candidate)) {
+          console.debug(`${LOG_PREFIX} Inbound delete: URL matched a local-only note — skipping`, {
+            archiveId,
+            path: candidate.path,
+          });
+          return null;
+        }
+        return candidate;
       }
       if (byUrl.length > 1) {
         console.warn(`${LOG_PREFIX} Inbound delete: ambiguous URL match — skipping`, {

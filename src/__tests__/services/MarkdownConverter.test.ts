@@ -338,10 +338,10 @@ describe('MarkdownConverter', () => {
       const result = await converter.convert(threadsPost, undefined, mediaResults);
 
       expect(result.content).toContain('Main post');
-      expect(result.content).toContain('![[image-1.webp]]');
+      expect(result.content).toContain('![[attachments/social-archives/threads/thread-123/image-1.webp]]');
       expect(result.content).toContain('> [!note]+ Threads Note');
       expect(result.content).toContain('Second post');
-      expect(result.content).toContain('![[video-1.mp4]]');
+      expect(result.content).toContain('![[attachments/social-archives/threads/thread-123/video-1.mp4]]');
       expect(result.content).not.toMatch(/\n---\n\n!\[/);
       expect(result.content).not.toContain('{{IMAGE_0}}');
       expect(result.content).not.toContain('{{VIDEO_1}}');
@@ -450,7 +450,7 @@ describe('MarkdownConverter', () => {
 
       expect(result.content).toContain('## Section');
       expect(result.content).toContain('Article body.');
-      expect(result.content).toContain('![[inline.webp]]');
+      expect(result.content).toContain('![[attachments/social-archives/substack/inline.webp]]');
       expect(result.content).not.toContain('Plain text fallback');
       expect(result.content).not.toContain('{{IMAGE_0}}');
       expect(result.content).not.toMatch(/\n---\n\n!\[/);
@@ -824,7 +824,7 @@ describe('MarkdownConverter', () => {
       expect(result.content).toContain('# 카카오는 팔고 — 네이버는 물러서고');
       expect(result.content).toContain('첫 문단입니다.');
       expect(result.content).toContain('둘째 문단입니다.');
-      expect(result.content).toContain('![[naver-1.webp]]');
+      expect(result.content).toContain('![[attachments/social-archives/naver/naver-1.webp]]');
       expect(result.content).not.toContain('<!DOCTYPE');
       expect(result.content).not.toContain('<html');
       expect(result.content).not.toContain('<style>');

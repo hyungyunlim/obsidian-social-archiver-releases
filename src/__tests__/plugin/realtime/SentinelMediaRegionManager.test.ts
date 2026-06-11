@@ -107,3 +107,41 @@ describe('SentinelMediaRegionManager.hasRegion', () => {
     expect(SentinelMediaRegionManager.hasRegion(note, 'nope')).toBe(false);
   });
 });
+
+describe('SentinelMediaRegionManager.stripMarkers', () => {
+  it('removes marker lines but keeps the region body', () => {
+    const note = buildNote('![](a.png)\n\n![](b.png)');
+    const stripped = SentinelMediaRegionManager.stripMarkers(note);
+    expect(stripped).not.toContain('sa:media');
+    expect(stripped).toContain('![](a.png)');
+    expect(stripped).toContain('![](b.png)');
+    expect(stripped).toContain('Some hand-written intro.');
+    expect(stripped).toContain('My personal notes.');
+  });
+
+  it('removes whole marker lines without leaving blank lines behind', () => {
+    const content = `Body text.\n\n---\n\n${SentinelMediaRegionManager.wrap(ID, '![image 1](a.webp)')}\n\n---\n`;
+    const stripped = SentinelMediaRegionManager.stripMarkers(content);
+    expect(stripped).toBe('Body text.\n\n---\n\n![image 1](a.webp)\n\n---\n');
+  });
+
+  it('strips markers for multiple regions with different ids', () => {
+    const content = [
+      SentinelMediaRegionManager.wrap('id-one', '![](1.png)'),
+      SentinelMediaRegionManager.wrap('id-two', '![](2.png)'),
+    ].join('\n\n');
+    const stripped = SentinelMediaRegionManager.stripMarkers(content);
+    expect(stripped).toBe('![](1.png)\n\n![](2.png)');
+  });
+
+  it('strips an inline marker without eating surrounding text', () => {
+    const content = `before <!-- sa:media:start id=${ID} --> middle <!-- sa:media:end --> after`;
+    const stripped = SentinelMediaRegionManager.stripMarkers(content);
+    expect(stripped).toBe('before  middle  after');
+  });
+
+  it('leaves content without markers untouched', () => {
+    const content = '# Title\n\nPlain note with an <!-- ordinary comment --> inside.';
+    expect(SentinelMediaRegionManager.stripMarkers(content)).toBe(content);
+  });
+});

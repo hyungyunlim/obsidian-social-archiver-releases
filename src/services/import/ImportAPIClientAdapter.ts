@@ -14,7 +14,7 @@
 
 import { requestUrl } from 'obsidian';
 import type { Platform, PostData } from '@/types/post';
-import type { ImportAPIClient, ImportMode } from '@/types/import';
+import type { ImportAPIClient, ImportMode, ImportSource } from '@/types/import';
 
 /** Narrow WorkersAPIClient surface the adapter depends on. */
 export interface AdapterHttp {
@@ -29,7 +29,7 @@ export interface AdapterHttp {
 type PreflightItem = { platform: Platform; postId: string };
 
 type ImportContext = {
-  source: 'instagram-saved-import';
+  source: ImportSource;
   jobId: string;
   exportId: string;
   partNumber: number;
@@ -44,7 +44,7 @@ type CreateArchiveArgs = {
 
 type CreateArchiveBatchArgs = {
   jobId: string;
-  source: 'instagram-saved-import';
+  source: ImportSource;
   sourceClientId?: string;
   items: Array<{
     url: string;
@@ -55,7 +55,7 @@ type CreateArchiveBatchArgs = {
 
 type StartImportSessionArgs = {
   jobId: string;
-  source: 'instagram-saved-import';
+  source: ImportSource;
   sourceClientId?: string;
   selectedCount: number;
 };
@@ -78,6 +78,12 @@ type FinalizeArgs = {
   totalCount: number;
   partialMediaCount: number;
   failedCount: number;
+  /**
+   * Must match the session row's source — the server defaults an omitted
+   * source to 'instagram-saved-import' and rejects mismatches. Optional only
+   * for the legacy Instagram flow, where the default matches.
+   */
+  source?: ImportSource;
   mode?: ImportMode;
   uploadedItemCount?: number;
   duplicateCount?: number;
@@ -234,6 +240,7 @@ class ImportAPIClientAdapter implements ImportAPIClient {
         totalCount: args.totalCount,
         partialMediaCount: args.partialMediaCount,
         failedCount: args.failedCount,
+        source: args.source,
         mode: args.mode,
         uploadedItemCount: args.uploadedItemCount,
         duplicateCount: args.duplicateCount,

@@ -9,6 +9,7 @@ import { parseTranscriptSections } from '../../../services/markdown/TranscriptSe
 import { parseAnnotationBlock } from '../../../services/markdown/AnnotationBlockParser';
 import { parseLinkedArchivesBlock } from '../../../services/markdown/LinkedArchivesBlockParser';
 import { mergeTagListsCaseInsensitive } from '../../../utils/tags';
+import { SentinelMediaRegionManager } from '../../../plugin/realtime/SentinelMediaRegionManager';
 
 /**
  * Vault folder node with children (Obsidian internal structure)
@@ -674,6 +675,11 @@ export class PostDataParser {
     // Remove frontmatter
     let withoutFrontmatter = markdown.replace(/^---\n[\s\S]*?\n---\n/, '');
 
+    // Strip sentinel media region markers (<!-- sa:media:start id=… --> /
+    // <!-- sa:media:end -->, Ship 3) so the media section is detected as
+    // media-only below and the markers never surface as body text.
+    withoutFrontmatter = SentinelMediaRegionManager.stripMarkers(withoutFrontmatter);
+
     // Remove transcript sections (## Transcript / ## 📄 Transcript variants)
     // so transcript content is shown only in the dedicated transcript player.
     const transcriptSections = parseTranscriptSections(withoutFrontmatter);
@@ -686,7 +692,7 @@ export class PostDataParser {
     }
 
     // Remove quotedPost section to avoid including it in content
-    withoutFrontmatter = withoutFrontmatter.replace(/## 🔗 Shared Post[\s\S]*?(?=\n---\n|$)/, '');
+    withoutFrontmatter = this.stripQuotedPostSections(withoutFrontmatter);
 
     // Remove embedded archives section
     withoutFrontmatter = withoutFrontmatter.replace(/## (?:📦 )?Referenced Social Media Posts[\s\S]*?(?=\n---\n\n\*\*Author:|$)/, '');
@@ -715,16 +721,27 @@ export class PostDataParser {
           trimmedSection.startsWith('**Author:**')) {
         break;
       }
-      // Also stop if this section contains only images (media gallery section)
-      // e.g., "![image 1](path)\n\n![image 2](path)\n..." or single "![image](path)"
-      // Handles both markdown images ![alt](url) and wikilink images ![[file]]
+      // Also stop if this section contains only media constructs (gallery
+      // section). Besides ![alt](url) / ![[file]] embeds this must accept
+      // every MediaFormatter fallback shape — "[🎥 Video (0:20)](url)" links
+      // (un-downloadable/skipped videos), "[![🎥 Video](thumb)](url)"
+      // clickable thumbnails, <audio> embeds, and "[📄 Document](url)" —
+      // otherwise one fallback line makes the whole gallery leak into the
+      // card body and media renders twice (inline + carousel).
       // Ignore trailing horizontal rules left after stripping comments/footer sections.
       const meaningfulLines = trimmedSection
         .split('\n')
         .map(l => l.trim())
         .filter(l => l.length > 0 && !/^[-*_]{3,}$/.test(l));
       const isMediaOnlySection = meaningfulLines.length > 0 &&
-        meaningfulLines.every(l => /^!\[/.test(l) || /^\*\*Media:\*\*$/.test(l));
+        meaningfulLines.every(l =>
+          /^!\[/.test(l) ||
+          /^\[!\[/.test(l) ||
+          /^\[🎥 /.test(l) ||
+          /^\[📄 /.test(l) ||
+          /^<audio\b/.test(l) ||
+          /^\*Duration: /.test(l) ||
+          /^\*\*Media:\*\*$/.test(l));
       if (isMediaOnlySection) {
         break;
       }
@@ -805,6 +822,10 @@ export class PostDataParser {
   private extractBlogContentWithImages(markdown: string): string {
     // Remove frontmatter
     let content = markdown.replace(/^---\n[\s\S]*?\n---\n+/, '');
+
+    // Strip sentinel media region markers so the trailing-media-section regex
+    // below keeps matching (markers would otherwise sit between --- and ![…]).
+    content = SentinelMediaRegionManager.stripMarkers(content);
 
     // Remove metadata footer section (starts with --- followed by **Platform:**)
     // Match from "---\n\n**Platform:**" to end of file
@@ -887,7 +908,11 @@ export class PostDataParser {
       replacedAny = true;
       const filename = mediaPath.split('/').pop() || mediaPath;
       inlinedFilenames.add(filename);
-      return `![[${filename}]]`;
+      // Vault paths embed with the full path — numbered media filenames repeat
+      // across archive folders, so a bare-name wikilink can resolve to another
+      // note's file. Remote URLs keep the legacy bare-name form (it only
+      // renders when a same-named local file exists).
+      return /^https?:\/\//i.test(mediaPath) ? `![[${filename}]]` : `![[${mediaPath}]]`;
     });
 
     if (replacedAny) {
@@ -907,8 +932,27 @@ export class PostDataParser {
     return { content: result, replacedAny };
   }
 
+  /**
+   * Remove quoted/reblogged post sections from a note body.
+   *
+   * Anchored through the trailing "**Original URL:**" metadata line so the
+   * section's INTERNAL `---` dividers (media block, metadata footer) don't
+   * truncate the removal early — the legacy first-divider boundary left the
+   * footer remnants behind. Falls back to that legacy boundary for older
+   * notes without an Original URL line. The optional leading divider is
+   * consumed too so removal doesn't leave stacked `---` rules behind.
+   */
+  private stripQuotedPostSections(markdown: string): string {
+    const anchored = markdown.replace(
+      /(?:\n---\n+)?## (?:🔗 Shared|🔄 Reblogged) Post[\s\S]*?\*\*Original URL:\*\*[^\n]*\n?/g,
+      '\n',
+    );
+    if (anchored !== markdown) return anchored;
+    return markdown.replace(/## (?:🔗 Shared|🔄 Reblogged) Post[\s\S]*?(?=\n---\n|$)/, '');
+  }
+
   private extractThreadsInlineContent(markdown: string, mediaUrls?: string[]): string | undefined {
-    let content = this.extractBlogContentWithImages(markdown);
+    let content = this.extractBlogContentWithImages(this.stripQuotedPostSections(markdown));
 
     if (mediaUrls && mediaUrls.length > 0) {
       const { content: replaced, replacedAny } = this.replaceMediaPlaceholders(content, mediaUrls);
@@ -945,7 +989,7 @@ export class PostDataParser {
   }
 
   private extractThreadsArticleContent(markdown: string, mediaUrls?: string[]): string {
-    let content = this.extractBlogContentWithInlineMedia(markdown, mediaUrls);
+    let content = this.extractBlogContentWithInlineMedia(this.stripQuotedPostSections(markdown), mediaUrls);
 
     // Older notes may contain escaped markdown from social-text rendering paths.
     content = this.unescapeEscapedMarkdownHeadings(content);
@@ -981,6 +1025,10 @@ export class PostDataParser {
   private extractXArticleContent(markdown: string): string {
     // Remove frontmatter
     let content = markdown.replace(/^---\n[\s\S]*?\n---\n+/, '');
+
+    // Strip sentinel media region markers so the trailing media gallery
+    // removal below keeps matching.
+    content = SentinelMediaRegionManager.stripMarkers(content);
 
     // Remove metadata footer section
     content = content.replace(/\n---\n\n\*\*Platform:\*\*[\s\S]*$/, '');
@@ -1077,7 +1125,7 @@ export class PostDataParser {
     const mediaUrls: string[] = [];
 
     // Remove quotedPost section to avoid counting their media
-    let cleanedMarkdown = markdown.replace(/## 🔗 Shared Post[\s\S]*?(?=\n---\n|$)/, '');
+    let cleanedMarkdown = this.stripQuotedPostSections(markdown);
 
     // Remove embedded archives section to avoid counting their media
     // Embedded archives section starts with "## Referenced Social Media Posts" and ends with "---\n\n**Author:"
@@ -1805,8 +1853,12 @@ export class PostDataParser {
       const authorName = authorMetadataMatch?.[1]?.trim();
       const authorUrl = authorMetadataMatch?.[2]?.trim() || url;
 
-      // Extract timestamp
-      const metadataLineMatch = quotedSection.match(/\*\*Published:\*\* (.+?)(?:\s*\||$)/);
+      // Extract timestamp. Published can be the LAST field on the metadata
+      // line (e.g. Threads quotes without engagement metrics), so the value
+      // must terminate at a newline too — `$` alone only matches the end of
+      // the whole section and `.` never crosses the newline, which used to
+      // fail the match and fall back to "now".
+      const metadataLineMatch = quotedSection.match(/\*\*Published:\*\* ([^|\n]+)/);
       const timestamp = metadataLineMatch?.[1] ? new Date(metadataLineMatch[1].trim()) : new Date();
 
       // Extract likes, comments, shares

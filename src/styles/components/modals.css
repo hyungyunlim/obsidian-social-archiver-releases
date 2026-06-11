@@ -857,6 +857,41 @@
   font-weight: 500;
 }
 
+/* Anonymous alternative: browser-clip path (no account needed) */
+.am-unauth-divider {
+  font-size: 11px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+}
+
+.am-unauth-clip-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+  margin: 0 auto 28px auto;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.am-unauth-clip-btn-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-normal);
+  line-height: 1.3;
+}
+
+.am-unauth-clip-btn-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
 /* Error container */
 .am-error-container {
   display: flex;

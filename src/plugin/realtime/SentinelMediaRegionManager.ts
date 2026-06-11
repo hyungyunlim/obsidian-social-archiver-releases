@@ -121,4 +121,23 @@ export class SentinelMediaRegionManager {
       'g',
     );
   }
+
+  /**
+   * Remove sentinel marker LINES (any id) from `content`, keeping the region
+   * bodies intact. Read-side parsers (timeline cards, blog/article body
+   * extraction, …) call this so the plugin's bookkeeping markers never render
+   * as visible text and media sections are recognized exactly as they were
+   * before regions existed.
+   */
+  static stripMarkers(content: string): string {
+    const startMarkerSource = `${escapeRegExp(START_PREFIX)}[^\\n]*?${escapeRegExp(START_SUFFIX)}`;
+    const markerSource = `(?:${startMarkerSource}|${escapeRegExp(END_MARKER)})`;
+    return (
+      content
+        // Marker on its own line → drop the entire line (incl. trailing newline)
+        .replace(new RegExp(`^[ \\t]*${markerSource}[ \\t]*\\r?\\n?`, 'gm'), '')
+        // Any leftover inline marker → drop just the marker text
+        .replace(new RegExp(markerSource, 'g'), '')
+    );
+  }
 }

@@ -74,6 +74,8 @@ export default defineConfig(
           'TTS',
           // Map services
           'Google Maps',
+          // Browser extension distribution
+          'Chrome', 'Chrome Web Store',
           // Social Archiver product name
           'Social Archiver',
           // Acronyms with specific casing

@@ -502,6 +502,22 @@ export const DEFAULT_TTS_SETTINGS: PluginTTSSettings = {
   supertonicQuality: 'balanced',
 };
 
+/**
+ * Durable summary of the most recent local→account archive import run.
+ * Rendered in the settings "Local archives" section so the outcome survives
+ * the transient completion Notice.
+ * See .taskmaster/docs/prd-plugin-anonymous-local-mode.md (S4.8, S6).
+ */
+export interface LocalImportLastResult {
+  at: string; // ISO timestamp of run completion
+  imported: number;
+  duplicates: number; // already on server; sourceArchiveId backfilled
+  partialMedia: number; // archives created but with some media uploads failed
+  failed: number; // items that could not be imported in this run
+  remaining: number; // local-only notes still in the vault after the run
+  stopReason: 'completed' | 'quota' | 'error';
+}
+
 export interface SocialArchiverSettings {
   // API Configuration
   workerUrl: string; // Cloudflare Worker URL for API
@@ -513,6 +529,16 @@ export interface SocialArchiverSettings {
   isVerified: boolean; // Whether email/username is verified
   deviceId: string; // Unique device identifier for multi-device support
   userAvatar: string; // Avatar URL for user-created posts (optional)
+
+  // Anonymous (logged-out) local mode
+  localClipCount: number; // clips received via op=clip; drives onboarding card state
+  localImportLastResult?: LocalImportLastResult; // last local→account import summary
+  /**
+   * Auto-upload new browser clips to the account (PRD Phase C). Paid plans
+   * only — each upload consumes monthly archive quota, so free users keep
+   * the explicit import flow. Ignored while logged out.
+   */
+  autoUploadLocalClips: boolean;
 
   // Storage Settings
   archivePath: string;
@@ -736,6 +762,10 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
   isVerified: false,
   deviceId: '', // Will be generated on first run
   userAvatar: '', // No avatar by default
+
+  // Anonymous (logged-out) local mode
+  localClipCount: 0,
+  autoUploadLocalClips: false,
 
   // Storage Settings
   archivePath: 'Social Archives',

@@ -1,0 +1,156 @@
+/* ========================================
+ * ClipGuideModal (sa-clip-guide-) — Anonymous Mode Clip Guide
+ *
+ * The shared 3-step "clip without an account" guide opened from the
+ * timeline empty state, the settings anonymous home card, and the
+ * archive modal capability guide. Mirrors the rhythm of the archive
+ * modal's unauthenticated state (`.am-unauth-*` in modals.css):
+ * centered column, numbered step rows on --background-secondary,
+ * muted footer.
+ *
+ * Conventions:
+ *   - Use Obsidian CSS variables for theme compatibility; no hex.
+ *   - Step 1 hosts the Web Store CTA (mod-cta) + guide link; mobile
+ *     adds a desktop-only hint line above the actions.
+ * ======================================== */
+
+.sa-clip-guide-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 20px 24px;
+  text-align: center;
+}
+
+.sa-clip-guide-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-normal);
+  margin: 0 0 8px 0;
+}
+
+/* Marketing tagline (localClipCount === 0) */
+.sa-clip-guide-tagline {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 24px 0;
+  line-height: 1.4;
+}
+
+/* Done-state counter (localClipCount > 0) */
+.sa-clip-guide-done {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-accent);
+  margin: 0 0 24px 0;
+  line-height: 1.4;
+}
+
+/* ----------------------------------------
+ * Numbered steps
+ * ---------------------------------------- */
+.sa-clip-guide-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 auto 24px auto;
+  max-width: 340px;
+  width: 100%;
+}
+
+.sa-clip-guide-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--background-secondary);
+  border-radius: var(--radius-s, 6px);
+  text-align: left;
+}
+
+.sa-clip-guide-step-number {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+
+.sa-clip-guide-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sa-clip-guide-step-text {
+  font-size: 13px;
+  color: var(--text-normal);
+  line-height: 1.4;
+}
+
+.sa-clip-guide-step-text em {
+  font-style: italic;
+  color: var(--text-normal);
+}
+
+/* Desktop-only hint shown on mobile (extension needs a desktop browser) */
+.sa-clip-guide-mobile-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ----------------------------------------
+ * Step 1 actions — Web Store CTA + guide link
+ * ---------------------------------------- */
+.sa-clip-guide-install-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sa-clip-guide-install-btn {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.sa-clip-guide-link {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.sa-clip-guide-link:hover {
+  color: var(--text-normal);
+  text-decoration: underline;
+}
+
+/* ----------------------------------------
+ * Footer — account upsell + settings link
+ * ---------------------------------------- */
+.sa-clip-guide-footer {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+  width: 100%;
+  max-width: 340px;
+  line-height: 1.4;
+}
+
+.sa-clip-guide-footer-link {
+  color: var(--text-muted);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.sa-clip-guide-footer-link:hover {
+  color: var(--text-normal);
+  text-decoration: underline;
+}

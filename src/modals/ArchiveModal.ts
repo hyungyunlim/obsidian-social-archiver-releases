@@ -4,6 +4,7 @@ import type { Platform as PlatformType, PostData } from '../types/post';
 import type { MediaDownloadMode } from '../types/settings';
 import { getVaultOrganizationStrategy } from '../types/settings';
 import { isAuthenticated } from '../utils/auth';
+import { showAccountRequiredNotice } from '../utils/accountGate';
 import { TAG_NAME_MAX_LENGTH } from '@/types/tag';
 import { isValidTagName, normalizeTagName, validateTagName } from '@/utils/tags';
 import { validateAndDetectPlatform } from '@/schemas/platforms';
@@ -1799,11 +1800,7 @@ export class ArchiveModal extends Modal {
     }
 
     if (!isAuthenticated(this.plugin)) {
-      this.renderErrorState({
-        code: 'AUTH_REQUIRED',
-        message: 'Authentication required. Please authenticate in settings first.',
-        retryable: false,
-      });
+      showAccountRequiredNotice(this.plugin, 'archive');
       return;
     }
 
@@ -2026,11 +2023,7 @@ export class ArchiveModal extends Modal {
     }
 
     if (!isAuthenticated(this.plugin)) {
-      this.renderErrorState({
-        code: 'AUTH_REQUIRED',
-        message: 'Authentication required. Please authenticate in settings first.',
-        retryable: false,
-      });
+      showAccountRequiredNotice(this.plugin, 'archive');
       return;
     }
 
@@ -2157,11 +2150,7 @@ export class ArchiveModal extends Modal {
     }
 
     if (!isAuthenticated(this.plugin)) {
-      this.renderErrorState({
-        code: 'AUTH_REQUIRED',
-        message: 'Authentication required. Please authenticate in settings first.',
-        retryable: false,
-      });
+      showAccountRequiredNotice(this.plugin, 'subscriptions');
       return;
     }
 
@@ -2388,7 +2377,7 @@ export class ArchiveModal extends Modal {
 
     // Double-check authentication before proceeding
     if (!isAuthenticated(this.plugin)) {
-      new Notice('❌ authentication required. Please authenticate in settings first.', 8000);
+      showAccountRequiredNotice(this.plugin, 'archive');
       return;
     }
 
@@ -3768,15 +3757,16 @@ export class ArchiveModal extends Modal {
   }
 
   /**
-   * Render unauthenticated state UI
-   * Prompts user to authenticate before archiving
+   * Render unauthenticated state UI as a capability guide
+   * Explains why URL archiving needs an account and offers the
+   * anonymous browser-clip workflow as a first-class alternative
    */
   private renderUnauthenticatedState(contentEl: HTMLElement): void {
     // Apply centered layout style
     contentEl.addClass('am-unauth-content');
 
     // Title (no icon)
-    const title = contentEl.createEl('h2', { text: 'Sign in to archive' });
+    const title = contentEl.createEl('h2', { text: 'Archive needs a free account' });
     title.addClass('am-unauth-title');
 
     // Centered message
@@ -3784,7 +3774,7 @@ export class ArchiveModal extends Modal {
     messageContainer.addClass('am-unauth-message-container');
 
     const mainMessage = messageContainer.createEl('p', {
-      text: 'Archive your favorite social media posts'
+      text: 'Archiving by URL runs on the Social Archiver server. Create a free account to archive from any platform, sync with mobile, and share.'
     });
     mainMessage.addClass('am-unauth-main-message');
 
@@ -3811,6 +3801,16 @@ export class ArchiveModal extends Modal {
     createStep('1', 'Enter email & username');
     createStep('2', 'Click magic link in email');
     createStep('3', 'Start archiving');
+
+    // Anonymous alternative: browser clipping works without an account
+    const divider = contentEl.createDiv({ text: 'or' });
+    divider.addClass('am-unauth-divider');
+
+    const clipBtn = contentEl.createEl('button');
+    clipBtn.addClass('am-unauth-clip-btn');
+    clipBtn.createEl('span', { text: 'Clip from your browser instead', cls: 'am-unauth-clip-btn-title' });
+    clipBtn.createEl('span', { text: 'No account needed', cls: 'am-unauth-clip-btn-sub' });
+    clipBtn.addEventListener('click', () => { void this.openClipGuide(); });
 
     // Subtle disclaimer at bottom (no icon)
     const disclaimerContainer = contentEl.createDiv();
@@ -3843,6 +3843,16 @@ export class ArchiveModal extends Modal {
       this.close();
       return false;
     });
+  }
+
+  /**
+   * Open the shared browser-clip guide (install → clip → arrive) and close
+   * this modal — the anonymous alternative to server-side URL archiving
+   */
+  private async openClipGuide(): Promise<void> {
+    const { ClipGuideModal } = await import('./ClipGuideModal');
+    new ClipGuideModal(this.plugin).open();
+    this.close();
   }
 
   /**

@@ -10,6 +10,7 @@ import type { WorkersAPIClient } from '@/services/WorkersAPIClient';
 import type { SocialArchiverSettings } from '@/types/settings';
 import type { ArchiveLookupService } from '@/services/ArchiveLookupService';
 import type { BulkArchiveActionAccumulator } from './BulkArchiveActionAccumulator';
+import { isLocalOnlyFrontmatter } from './localOnlyNoteGuard';
 
 const DEBOUNCE_MS = 2000;
 const SUPPRESSION_TTL_MS = 10_000;
@@ -89,6 +90,11 @@ export class LikeStateOutboundService {
     const cache = this.app.metadataCache.getFileCache(file);
     const fm = cache?.frontmatter;
     if (!fm) return;
+
+    // Sync-exclusion contract (PRD S5.1): local-only notes (anonymous clips)
+    // never sync — the originalUrl fallback below could otherwise resolve an
+    // unrelated server archive and backfill its sourceArchiveId into the note.
+    if (isLocalOnlyFrontmatter(fm)) return;
 
     let archiveId = typeof fm['sourceArchiveId'] === 'string' && fm['sourceArchiveId']
       ? fm['sourceArchiveId']

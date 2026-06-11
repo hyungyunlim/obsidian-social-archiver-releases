@@ -7,6 +7,8 @@ export { VaultManager } from './VaultManager';
 export { VaultStorageService } from './VaultStorageService';
 export { ApiClient } from './ApiClient';
 export { ArchiveOrchestrator } from './ArchiveOrchestrator';
+export { ClipPayloadCodec } from './clip/ClipPayloadCodec';
+export { LocalClipService } from './clip/LocalClipService';
 export { ErrorHandler } from './ErrorHandler';
 export { PlatformDetector } from './PlatformDetector';
 export { URLExpander } from './URLExpander';

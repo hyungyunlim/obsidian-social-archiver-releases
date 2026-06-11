@@ -430,6 +430,14 @@ export interface ImportOrchestrator {
 // ============================================================================
 
 /**
+ * Import-job source identifier forwarded to the server-side allowlist
+ * (`import-finalize.ts`). `'instagram-saved-import'` is the Instagram Saved
+ * Posts ZIP flow; `'obsidian-local-import'` is the local-only note graduation
+ * flow (prd-plugin-anonymous-local-mode.md S4).
+ */
+export type ImportSource = 'instagram-saved-import' | 'obsidian-local-import';
+
+/**
  * Client-facing wrapper for the new import endpoints defined by Agent D in PRD §10.
  * Kept narrow so the core can be unit-tested against a fake.
  */
@@ -447,7 +455,7 @@ export interface ImportAPIClient {
     url: string;
     clientPostData: PostData;
     importContext: {
-      source: 'instagram-saved-import';
+      source: ImportSource;
       jobId: string;
       exportId: string;
       partNumber: number;
@@ -462,13 +470,13 @@ export interface ImportAPIClient {
    */
   createArchivesFromImportBatch?(args: {
     jobId: string;
-    source: 'instagram-saved-import';
+    source: ImportSource;
     sourceClientId?: string;
     items: Array<{
       url: string;
       clientPostData: PostData;
       importContext: {
-        source: 'instagram-saved-import';
+        source: ImportSource;
         jobId: string;
         exportId: string;
         partNumber: number;
@@ -483,7 +491,7 @@ export interface ImportAPIClient {
 
   startImportSession?(args: {
     jobId: string;
-    source: 'instagram-saved-import';
+    source: ImportSource;
     sourceClientId?: string;
     selectedCount: number;
   }): Promise<{ jobId: string; sessionId: string; expiresAt: number }>;
@@ -514,6 +522,8 @@ export interface ImportAPIClient {
     totalCount: number;
     partialMediaCount: number;
     failedCount: number;
+    /** Must match the session source; the server defaults an omitted value to the Instagram flow. */
+    source?: ImportSource;
     mode?: ImportMode;
     uploadedItemCount?: number;
     duplicateCount?: number;

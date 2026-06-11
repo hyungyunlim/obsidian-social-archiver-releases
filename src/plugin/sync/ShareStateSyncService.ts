@@ -16,6 +16,7 @@ import type { ActionUpdatedEventData } from '@/types/websocket';
 import type { SocialArchiverSettings } from '@/types/settings';
 import type { WorkersAPIClient } from '../../services/WorkersAPIClient';
 import type { ArchiveLookupService } from '../../services/ArchiveLookupService';
+import { isLocalOnlyNote } from './localOnlyNoteGuard';
 
 const SUPPRESSION_TTL_MS = 10_000;
 const LOG_PREFIX = '[Social Archiver] [ShareStateSyncService]';
@@ -73,7 +74,18 @@ export class ShareStateSyncService {
       if (originalUrl) {
         const candidates = this.archiveLookup.findByOriginalUrl(originalUrl);
         if (candidates.length === 1) {
-          file = candidates[0] ?? null;
+          const candidate = candidates[0] ?? null;
+          // Sync-exclusion contract (PRD S5.1): never adopt a local-only note
+          // (anonymous clip) via URL matching — backfill is import-flow-only.
+          if (candidate && isLocalOnlyNote(this.app, candidate)) {
+            console.debug(
+              LOG_PREFIX,
+              'URL matched a local-only note — skipping share state update:',
+              { archiveId, path: candidate.path },
+            );
+            return;
+          }
+          file = candidate;
           sourceArchiveIdMissing = true;
         } else if (candidates.length > 1) {
           console.warn(LOG_PREFIX, 'Ambiguous originalUrl match — skipping share state update.', {

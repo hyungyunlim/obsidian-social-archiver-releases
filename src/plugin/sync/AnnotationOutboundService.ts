@@ -23,6 +23,7 @@ import type { WorkersAPIClient } from '@/services/WorkersAPIClient';
 import type { SocialArchiverSettings } from '@/types/settings';
 import type { ArchiveLookupService } from '@/services/ArchiveLookupService';
 import type { UserNote } from '@/types/annotations';
+import { isLocalOnlyFrontmatter } from './localOnlyNoteGuard';
 
 // ============================================================================
 // AnnotationOutboundService
@@ -144,6 +145,11 @@ export class AnnotationOutboundService {
     const cache = this.app.metadataCache.getFileCache(file);
     const fm = cache?.frontmatter;
     if (!fm) return;
+
+    // Sync-exclusion contract (PRD S5.1): local-only notes (anonymous clips)
+    // never sync — the originalUrl fallback below could otherwise resolve an
+    // unrelated server archive and backfill its sourceArchiveId into the note.
+    if (isLocalOnlyFrontmatter(fm)) return;
 
     // Must be an archive note (has sourceArchiveId or originalUrl)
     let archiveId = fm['sourceArchiveId'] as string | undefined;

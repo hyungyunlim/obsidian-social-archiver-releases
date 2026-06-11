@@ -57,7 +57,10 @@ interface PostIndex {
   lastUpdated: number;
 }
 
-const INDEX_VERSION = 2;
+// v3: sentinel media markers (<!-- sa:media:start/end -->) are now stripped
+// from contentText — bump forces a rebuild so cached searchText/previewText
+// from marker-contaminated parses (3.10.0 sync) is discarded.
+const INDEX_VERSION = 3;
 const INDEX_FILE_NAME = 'post-index.json';
 const SAVE_DEBOUNCE_MS = 5_000;
 

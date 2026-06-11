@@ -13,6 +13,7 @@ import {
   refreshUserEmail,
 } from '../utils/auth';
 import { DEFAULT_BILLING_CAMPAIGN } from '../shared/billing/campaign';
+import { BROWSER_EXTENSION_LINKS } from '../constants';
 import NewsletterConsentBanner from './NewsletterConsentBanner.svelte';
 import NewsletterConsentToggle from './NewsletterConsentToggle.svelte';
 import BillingEventsSection from '../components/billing/BillingEventsSection.svelte';
@@ -128,6 +129,10 @@ function startCrossDeviceTimers(sessionId: string, expiresAt: string, pollMs: nu
               // Best-effort: sync can be enabled manually later
             });
           }
+
+          // Offer importing local-only clips into the account (fire-and-forget,
+          // PRD S3 graduation path; silent when there is nothing to import)
+          plugin.maybeOfferLocalArchiveImport();
         } else {
           crossDeviceState = 'error';
           crossDeviceError = completion.error || 'Authentication failed.';
@@ -251,6 +256,38 @@ let archiveQuotaExhausted = $derived(
   archiveQuota.limit !== -1 &&
   archiveQuota.remaining <= 0
 );
+
+// === Anonymous local mode (PRD S1.1) ===
+
+/**
+ * Anonymous-vs-free-account capability matrix row.
+ * The account column is always available; `accountNote` qualifies it (e.g. tier-gated).
+ */
+interface CapabilityMatrixRow {
+  label: string;
+  anonymous: boolean;
+  accountNote?: string;
+}
+
+const capabilityMatrix: readonly CapabilityMatrixRow[] = [
+  { label: 'Browser clips', anonymous: true },
+  { label: 'Local timeline & tags', anonymous: true },
+  { label: 'Archive by URL', anonymous: false },
+  { label: 'Mobile sync', anonymous: false },
+  { label: 'Share links', anonymous: false },
+  { label: 'Subscriptions', anonymous: false, accountNote: 'paid plans' },
+];
+
+// Clips received via the browser extension; drives the hero card done-state.
+// Live: handleClipProtocol increments + saves → 'settings-changed' refreshes `settings`.
+let localClipCount = $derived(settings.localClipCount);
+
+/**
+ * Open the Chrome Web Store listing for the browser extension
+ */
+function handleOpenWebStore(): void {
+  window.open(BROWSER_EXTENSION_LINKS.CHROME_WEB_STORE);
+}
 
 function formatBillingPlan(plan: string): string {
   if (!plan) return 'Free';
@@ -647,7 +684,7 @@ $effect(() => {
     {:else}
       <!-- Unauthenticated State -->
       <div class="auth-section">
-        <p class="auth-description">Authentication is required to archive social media posts. Magic link authentication - no password needed.</p>
+        <p class="auth-description">A free account unlocks archiving by URL, mobile sync, and sharing. Magic link authentication - no password needed.</p>
 
         <!-- Email Field (always shown) -->
         <div class="setting-item">
@@ -802,6 +839,64 @@ $effect(() => {
           </div>
         {/if}
       </div>
+
+      <!-- "Use without an account" hero card (PRD S1.1) — hidden while the cross-device flow is active -->
+      {#if crossDeviceState === 'idle'}
+        <div class="anon-hero-card">
+          {#if localClipCount > 0}
+            <!-- Done-state: clips already arriving via the extension -->
+            <div class="anon-hero-done">
+              <span class="anon-hero-done-check">✓</span>
+              <span>{localClipCount} {localClipCount === 1 ? 'clip' : 'clips'} saved locally</span>
+            </div>
+            <p class="anon-hero-upsell">Add an account for server archiving, mobile sync, and sharing — free.</p>
+          {:else}
+            <div class="anon-hero-title">Use without an account</div>
+            <p class="anon-hero-subtitle">Clip posts straight from your browser — no sign-up needed.</p>
+            <ol class="anon-hero-steps">
+              <li class="anon-hero-step">
+                <span>Install the browser extension</span>
+                <div class="anon-hero-step-actions">
+                  <button class="anon-hero-install-button sa-mobile-compact-btn" onclick={handleOpenWebStore}>
+                    Install from Chrome Web Store
+                  </button>
+                  <a class="anon-hero-guide-link" href={BROWSER_EXTENSION_LINKS.GUIDE} target="_blank" rel="noopener">Guide</a>
+                </div>
+              </li>
+              <li class="anon-hero-step">
+                <span>Open a post and click <em>Clip to Obsidian</em></span>
+              </li>
+              <li class="anon-hero-step">
+                <span>Clips appear in your timeline</span>
+              </li>
+            </ol>
+          {/if}
+
+          <!-- Compact anonymous-vs-account capability matrix -->
+          <div class="anon-capability-matrix">
+            <div class="anon-matrix-row anon-matrix-header">
+              <span class="anon-matrix-label"></span>
+              <span class="anon-matrix-cell">Without account</span>
+              <span class="anon-matrix-cell">With free account</span>
+            </div>
+            {#each capabilityMatrix as row (row.label)}
+              <div class="anon-matrix-row">
+                <span class="anon-matrix-label">{row.label}</span>
+                <span class="anon-matrix-cell">
+                  {#if row.anonymous}
+                    <span class="anon-matrix-check">✓</span>
+                  {:else}
+                    <span class="anon-matrix-cross">✗</span>
+                  {/if}
+                </span>
+                <span class="anon-matrix-cell">
+                  <span class="anon-matrix-check">✓</span>{#if row.accountNote}<span class="anon-matrix-note">({row.accountNote})</span>{/if}
+                </span>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
     {/if}
   {:else}
     <!-- Authenticated State -->
@@ -1395,6 +1490,162 @@ $effect(() => {
   color: var(--text-faint);
   margin: 0;
   line-height: 1.4;
+}
+
+/* Anonymous Local Mode Hero Card (PRD S1.1) */
+.anon-hero-card {
+  padding: 14px 16px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.anon-hero-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-normal);
+  margin-bottom: 2px;
+}
+
+.anon-hero-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+  line-height: 1.4;
+}
+
+.anon-hero-steps {
+  list-style: none;
+  counter-reset: anon-step;
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.anon-hero-step {
+  counter-increment: anon-step;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--text-normal);
+}
+
+.anon-hero-step::before {
+  content: counter(anon-step);
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.anon-hero-step-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding-left: 24px;
+}
+
+.anon-hero-install-button {
+  padding: 5px 12px;
+  font-size: 12px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  color: var(--text-normal);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.anon-hero-install-button:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--interactive-accent);
+}
+
+.anon-hero-guide-link {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.anon-hero-guide-link:hover {
+  color: var(--text-normal);
+}
+
+.anon-hero-done {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+.anon-hero-done-check {
+  color: var(--color-green);
+}
+
+.anon-hero-upsell {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 4px 0 12px;
+  line-height: 1.4;
+}
+
+.anon-capability-matrix {
+  padding-top: 10px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.anon-matrix-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px 84px;
+  align-items: center;
+  font-size: 11px;
+}
+
+.anon-matrix-header .anon-matrix-cell {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-faint);
+  line-height: 1.25;
+  padding-bottom: 4px;
+}
+
+.anon-matrix-label {
+  color: var(--text-muted);
+  padding: 3px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.anon-matrix-cell {
+  text-align: center;
+}
+
+.anon-matrix-check {
+  color: var(--text-muted);
+}
+
+.anon-matrix-cross {
+  color: var(--text-faint);
+}
+
+.anon-matrix-note {
+  font-size: 9px;
+  color: var(--text-faint);
+  margin-left: 2px;
 }
 
 /* Cross-Device Auth Styles */

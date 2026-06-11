@@ -331,6 +331,13 @@ const DEFAULT_TEMPLATES: Record<Platform, string> = {
 {{media}}
 {{/if}}
 
+{{#if quotedPost}}
+
+---
+
+{{quotedPost}}
+{{/if}}
+
 {{#if comments}}
 
 ---
@@ -532,6 +539,13 @@ const DEFAULT_TEMPLATES: Record<Platform, string> = {
 {{/if}}
 {{/if}}
 
+{{#if quotedPost}}
+
+---
+
+{{quotedPost}}
+{{/if}}
+
 {{#if ai}}
 
 ---
@@ -730,6 +744,15 @@ const DEFAULT_TEMPLATES: Record<Platform, string> = {
 ### Fact Checks
 {{ai.factCheck}}
 {{/if}}
+{{/if}}
+
+{{#if comments}}
+
+---
+
+## 💬 Comments
+
+{{comments}}
 {{/if}}
 
 ---
@@ -2204,9 +2227,9 @@ export class MarkdownConverter implements IService {
         const mediaResult = findMediaResultBySourceIndex(mediaResults, index);
         if (mediaResult?.localPath) {
           blogMediaUsedInline = true;
-          // Use Obsidian embed syntax with just filename
-          const filename = mediaResult.localPath.split('/').pop() || mediaResult.localPath;
-          return `\n\n![[${filename}]]\n\n`;
+          // Full-path embed: numbered media filenames repeat across archive
+          // folders, so a bare-name wikilink can resolve to another note's file
+          return `\n\n![[${mediaResult.localPath}]]\n\n`;
         }
         return '\n\n'; // Keep paragraph break if no media found
       });
@@ -2217,9 +2240,7 @@ export class MarkdownConverter implements IService {
         const mediaResult = findMediaResultBySourceIndex(mediaResults, index);
         if (mediaResult?.localPath) {
           blogMediaUsedInline = true;
-          // Use Obsidian embed syntax with just filename
-          const filename = mediaResult.localPath.split('/').pop() || mediaResult.localPath;
-          return `\n\n![[${filename}]]\n\n`;
+          return `\n\n![[${mediaResult.localPath}]]\n\n`;
         }
         return '\n\n'; // Keep paragraph break if no video found
       });
@@ -2240,11 +2261,14 @@ export class MarkdownConverter implements IService {
       blogMediaUsedInline = blogMediaUsedInline || replaced.usedInlineMedia;
     }
 
-    // For RSS-based platforms, also check if text already contains inline markdown images
-    // (e.g., Naver cafe posts already have ![Image](...) in text, not placeholders)
+    // For RSS-based platforms, also check if text already contains inline media
+    // embeds: markdown images (e.g., Naver cafe posts already have ![Image](...)
+    // in text, not placeholders) or wikilinks (local browser clips resolve
+    // their {{IMAGE_N}} placeholders to ![[file]] sender-side, since the
+    // plugin skips media download for mediaDelivery: 'local').
     if (isBlogLikeRss && !blogMediaUsedInline) {
-      // Check for markdown image syntax: ![alt](url) or ![](url)
-      const hasInlineMarkdownImages = /!\[[^\]]*\]\([^)]+\)/.test(baseText);
+      const hasInlineMarkdownImages =
+        /!\[[^\]]*\]\([^)]+\)/.test(baseText) || /!\[\[[^\]]+\]\]/.test(baseText);
       if (hasInlineMarkdownImages) {
         blogMediaUsedInline = true;
       }
@@ -2478,8 +2502,9 @@ export class MarkdownConverter implements IService {
           : undefined;
 
         if (mediaResult?.localPath) {
-          const filename = mediaResult.localPath.split('/').pop() || mediaResult.localPath;
-          return `\n\n![[${filename}]]\n\n`;
+          // Full-path embed: numbered media filenames repeat across archive
+          // folders, so a bare-name wikilink can resolve to another note's file
+          return `\n\n![[${mediaResult.localPath}]]\n\n`;
         }
 
         const alt = this.escapeInlineMediaAlt(item.altText || item.alt || `image ${index + 1}`);
@@ -2498,8 +2523,7 @@ export class MarkdownConverter implements IService {
           : undefined;
 
         if (mediaResult?.localPath) {
-          const filename = mediaResult.localPath.split('/').pop() || mediaResult.localPath;
-          return `\n\n![[${filename}]]\n\n`;
+          return `\n\n![[${mediaResult.localPath}]]\n\n`;
         }
 
         const label = item.duration
