@@ -24,7 +24,7 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
-  '3.11.0': {
+  '4.0.0': {
     title: 'Browser Clips & Local-Only Mode',
     date: '2026-06-11',
     notes: `## Browser clips & local-only mode
