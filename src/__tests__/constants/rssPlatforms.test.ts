@@ -16,4 +16,10 @@ describe('rss platform subscription constants', () => {
     expect(NEW_SUBSCRIPTION_PLATFORMS).not.toContain('kidsnote');
     expect(isGenericSubscriptionSupported('kidsnote')).toBe(false);
   });
+
+  it('enables Threads in the generic new-subscription UI list', () => {
+    expect(SUBSCRIPTION_SUPPORTED_PLATFORMS).toContain('threads');
+    expect(NEW_SUBSCRIPTION_PLATFORMS).toContain('threads');
+    expect(isGenericSubscriptionSupported('threads')).toBe(true);
+  });
 });

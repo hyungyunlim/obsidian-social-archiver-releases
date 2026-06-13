@@ -97,6 +97,18 @@ Shared post body that should only render once.
   });
 });
 
+describe('PostDataParser - metadata footer', () => {
+  const parser = new PostDataParser({} as any);
+
+  it('maps LinkedIn Reactions and Reposts footer labels to engagement metadata', () => {
+    const metadata = parser.extractMetadata(
+      '**Platform:** LinkedIn | **Published:** 2026-06-12 | **Reactions:** 55 | **Comments:** 12 | **Reposts:** 3'
+    );
+
+    expect(metadata).toEqual({ likes: 55, comments: 12, shares: 3 });
+  });
+});
+
 describe('PostDataParser - quoted post media excluded from main post', () => {
   const sharedPostMarkdown = `---
 platform: facebook

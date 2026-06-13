@@ -398,9 +398,8 @@ export class NoticesService {
       'Accept-Language': acceptLanguage,
     };
 
-    // Stable install id — settings.deviceId is currently vault-synced,
-    // which is acceptable for v2 because authenticated users are matched
-    // by userId. PRD §Request Headers covers the future migration path.
+    // Stable install id — settings.deviceId is per-device (localStorage-
+    // backed via DeviceScopedIdStorage; no longer vault-synced).
     if (settings.deviceId) {
       headers['X-Install-Id'] = settings.deviceId;
     }

@@ -542,8 +542,12 @@ export class TagStore {
   // ============================================================
 
   private async saveTagDefinitions(definitions: TagDefinition[]): Promise<void> {
-    this.plugin.settings.tagDefinitions = definitions;
-    await this.plugin.saveData(this.plugin.settings);
+    // Route through the plugin save path (not raw saveData) so per-device ids
+    // are stripped from data.json; skip service reinit and change events.
+    await this.plugin.saveSettingsPartial(
+      { tagDefinitions: definitions },
+      { reinitialize: false, notify: false }
+    );
   }
 
   private getNextColor(definitions: TagDefinition[]): string {

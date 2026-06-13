@@ -3,15 +3,20 @@ import {
   WorkspaceLeaf,
   Platform as ObsidianPlatform,
   debounce,
+  requestUrl,
   type Debouncer,
   type ViewStateResult,
 } from 'obsidian';
 import type SocialArchiverPlugin from '../main';
-import type { AuthorCatalogEntry } from '../types/author-catalog';
+import type { AuthorCatalogEntry, AuthorSubscribeOptions } from '../types/author-catalog';
 import type { Platform } from '../types/post';
+import { API_ENDPOINT } from '../types/settings';
 import { getAuthorCatalogStore, type AuthorCatalogStoreAPI } from '../services/AuthorCatalogStore';
 import { get } from 'svelte/store';
 import { AuthorDetailContainer } from '../components/author-detail/AuthorDetailContainer';
+import type { CreateSubscriptionInput, Subscription } from '../services/SubscriptionManager';
+import { isAuthenticated } from '../utils/auth';
+import { showAccountRequiredNotice } from '../utils/accountGate';
 
 // ============================================================================
 // Constants
@@ -253,6 +258,17 @@ export class AuthorDetailView extends ItemView {
       onViewAuthor: (author: AuthorCatalogEntry) => {
         void this.plugin.activateAuthorDetailView(author);
       },
+      isAuthenticated: () => isAuthenticated(this.plugin),
+      onAuthRequired: () => showAccountRequiredNotice(this.plugin, 'subscriptions'),
+      onSubscribe: (author: AuthorCatalogEntry, options: AuthorSubscribeOptions) => {
+        return this.subscribeToAuthor(author, options);
+      },
+      onUnsubscribe: (author: AuthorCatalogEntry) => {
+        return this.unsubscribeFromAuthor(author);
+      },
+      onManualRun: (author: AuthorCatalogEntry) => {
+        return this.runAuthorSubscription(author);
+      },
       onOpenNote: (author: AuthorCatalogEntry) => {
         if (author.noteFilePath) {
           const file = this.app.vault.getFileByPath(author.noteFilePath);
@@ -271,6 +287,172 @@ export class AuthorDetailView extends ItemView {
         }
       },
     });
+  }
+
+  private deriveHandle(author: AuthorCatalogEntry): string {
+    const isValidHandle = (value: string): boolean => /^[a-zA-Z0-9._-]+(@[a-zA-Z0-9._-]+)?$/.test(value);
+
+    if (author.handle) {
+      const cleanHandle = author.handle.replace(/^@/, '');
+      if (isValidHandle(cleanHandle)) return cleanHandle;
+    }
+
+    if (author.authorUrl) {
+      try {
+        const url = new URL(author.authorUrl);
+        const parts = url.pathname.split('/').filter(Boolean);
+        const last = parts[parts.length - 1] || '';
+        const urlHandle = last.replace(/^@/, '');
+        if (urlHandle && isValidHandle(urlHandle)) return urlHandle;
+      } catch {
+        // Fall through to author name.
+      }
+    }
+
+    const sanitized = (author.authorName || 'unknown').replace(/[^a-zA-Z0-9._-]/g, '').toLowerCase();
+    return sanitized || 'unknown';
+  }
+
+  private getWorkerUrl(): string {
+    return this.plugin.settings.workerUrl || API_ENDPOINT;
+  }
+
+  private getAuthHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (this.plugin.settings.authToken) {
+      headers.Authorization = `Bearer ${this.plugin.settings.authToken}`;
+    }
+
+    return headers;
+  }
+
+  private requireSubscriptionAuth(): boolean {
+    if (isAuthenticated(this.plugin)) return true;
+    showAccountRequiredNotice(this.plugin, 'subscriptions');
+    return false;
+  }
+
+  private getWorkerErrorMessage(response: { status: number; text?: string; json?: unknown }, fallback: string): string {
+    const body = response.json as Record<string, unknown> | undefined;
+    const error = body?.error as Record<string, unknown> | undefined;
+    if (typeof error?.message === 'string') return error.message;
+    if (typeof body?.message === 'string') return body.message;
+    return response.text || fallback;
+  }
+
+  private async refreshSubscriptionManagerCache(): Promise<void> {
+    const manager = this.plugin.subscriptionManager;
+    if (!manager?.isInitialized) return;
+    await manager.refresh().catch((error) => {
+      console.warn('[AuthorDetailView] Failed to refresh subscription cache:', error);
+    });
+  }
+
+  private async subscribeToAuthor(
+    author: AuthorCatalogEntry,
+    options: AuthorSubscribeOptions,
+  ): Promise<Subscription | undefined> {
+    if (!this.requireSubscriptionAuth()) {
+      throw new Error('Authentication required');
+    }
+
+    const input: CreateSubscriptionInput = {
+      name: author.authorName,
+      platform: author.platform as CreateSubscriptionInput['platform'],
+      target: {
+        handle: this.deriveHandle(author),
+        profileUrl: author.authorUrl,
+      },
+      schedule: {
+        cron: `0 ${options.startHour ?? new Date().getHours()} * * *`,
+        timezone: options.timezone,
+      },
+      destination: {
+        folder: options.destinationPath,
+        templateId: options.templateId || undefined,
+      },
+      options: {
+        maxPostsPerRun: options.maxPostsPerRun ?? 20,
+        backfillDays: options.backfillDays ?? 3,
+      },
+    };
+
+    if (author.platform === 'x') {
+      input.xMetadata = {
+        displayName: author.authorName || undefined,
+        avatar: author.avatar || undefined,
+        bio: author.bio || undefined,
+      };
+    }
+
+    const response = await requestUrl({
+      url: `${this.getWorkerUrl()}/api/subscriptions`,
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(input),
+      throw: false,
+    });
+
+    if (response.status !== 200 && response.status !== 201) {
+      throw new Error(this.getWorkerErrorMessage(response, `Subscription create failed: ${response.status}`));
+    }
+
+    const responseData = response.json as Record<string, unknown>;
+    const subscription = ((responseData.data as Subscription | undefined) ?? responseData) as Subscription;
+    if (!subscription?.id) {
+      throw new Error('Subscription create failed: missing subscription id');
+    }
+
+    author.subscriptionId = subscription.id;
+    author.status = subscription.enabled ? 'subscribed' : 'error';
+    this.getStore()?.updateAuthorStatus(author.authorUrl, author.platform, author.status, subscription.id, author.authorName);
+    await this.refreshSubscriptionManagerCache();
+    this.component?.setAuthor(author);
+    return subscription;
+  }
+
+  private async unsubscribeFromAuthor(author: AuthorCatalogEntry): Promise<void> {
+    const subscriptionId = author.subscriptionId;
+    if (!subscriptionId) {
+      throw new Error('Cannot unsubscribe: missing subscription ID');
+    }
+
+    const response = await requestUrl({
+      url: `${this.getWorkerUrl()}/api/subscriptions/${subscriptionId}`,
+      method: 'DELETE',
+      headers: this.getAuthHeaders(),
+      throw: false,
+    });
+
+    if (response.status !== 200 && response.status !== 404) {
+      throw new Error(this.getWorkerErrorMessage(response, `Failed to delete subscription: ${response.status}`));
+    }
+
+    author.subscriptionId = null;
+    author.status = 'not_subscribed';
+    this.getStore()?.updateAuthorStatus(author.authorUrl, author.platform, 'not_subscribed', null, author.authorName);
+    await this.refreshSubscriptionManagerCache();
+    this.component?.setAuthor(author);
+  }
+
+  private async runAuthorSubscription(author: AuthorCatalogEntry): Promise<void> {
+    if (!author.subscriptionId) {
+      throw new Error('Cannot run sync: missing subscription ID');
+    }
+
+    const response = await requestUrl({
+      url: `${this.getWorkerUrl()}/api/subscriptions/${author.subscriptionId}/run`,
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      throw: false,
+    });
+
+    if (response.status !== 200) {
+      throw new Error(this.getWorkerErrorMessage(response, `Failed to run subscription: ${response.status}`));
+    }
   }
 
   /**

@@ -64,6 +64,8 @@ describe('PlatformDetector', () => {
       // Feed update URLs
       ['https://www.linkedin.com/feed/update/urn:li:activity:1234567890', 'Activity URN'],
       ['https://www.linkedin.com/feed/update/urn:li:share:9876543210', 'Share URN'],
+      ['https://www.linkedin.com/feed/update/urn:li:ugcPost:9876543210', 'UGC post URN'],
+      ['https://www.linkedin.com/feed/update/urn:li:groupPost:8573821-7468391614433136641', 'Group post URN'],
 
       // Pulse/Article URLs
       ['https://www.linkedin.com/pulse/article-title-author-name', 'Pulse article'],
@@ -89,6 +91,7 @@ describe('PlatformDetector', () => {
     it('should extract LinkedIn post IDs', () => {
       expect(detector.extractPostId('https://linkedin.com/posts/user_activity-abc123')).toBe('activity-abc123');
       expect(detector.extractPostId('https://linkedin.com/feed/update/urn:li:activity:456')).toBe('456');
+      expect(detector.extractPostId('https://linkedin.com/feed/update/urn:li:groupPost:8573821-7468391614433136641')).toBe('7468391614433136641');
     });
   });
 

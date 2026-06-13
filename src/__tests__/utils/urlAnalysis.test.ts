@@ -248,6 +248,7 @@ describe('urlAnalysis', () => {
         const testCases = [
           { url: 'https://linkedin.com/posts/user_activity-123', expectedId: 'activity-123' },
           { url: 'https://linkedin.com/feed/update/urn:li:activity:123456', expectedId: '123456' },
+          { url: 'https://linkedin.com/feed/update/urn:li:groupPost:8573821-7468391614433136641', expectedId: '7468391614433136641' },
         ];
 
         for (const { url, expectedId } of testCases) {

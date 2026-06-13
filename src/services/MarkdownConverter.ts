@@ -141,7 +141,7 @@ const DEFAULT_TEMPLATES: Record<Platform, string> = {
 
 ---
 
-**Platform:** LinkedIn{{#if author.verified}} ✓{{/if}} | **Author:** [{{author.name}}]({{author.url}}) | **Published:** {{metadata.timestamp}}{{#if metadata.likes}} | **Reactions:** {{metadata.likes}}{{/if}}{{#if metadata.comments}} | **Comments:** {{metadata.comments}}{{/if}}
+**Platform:** LinkedIn{{#if author.verified}} ✓{{/if}} | **Author:** [{{author.name}}]({{author.url}}) | **Published:** {{metadata.timestamp}}{{#if metadata.likes}} | **Reactions:** {{metadata.likes}}{{/if}}{{#if metadata.comments}} | **Comments:** {{metadata.comments}}{{/if}}{{#if metadata.shares}} | **Reposts:** {{metadata.shares}}{{/if}}
 
 **Original URL:** {{url}}
 `,
@@ -2132,11 +2132,9 @@ export class MarkdownConverter implements IService {
     const transcriptBody = hasFormattedTranscript
       ? this.transcriptFormatter.formatBrightDataTranscript(transcriptEntries, postData.videoId)
       : undefined;
-    // Include raw transcript above formatted timestamps if available
-    const rawTranscript = postData.transcript?.raw?.trim();
-    const formattedTranscript = rawTranscript && transcriptBody
-      ? `**Full Transcript:**\n\n${rawTranscript}\n\n---\n\n${transcriptBody}`
-      : transcriptBody || (rawTranscript ? rawTranscript : undefined);
+    // Timestamped segments only — the raw text duplicates them word for word
+    // and doubles the note size. Raw is the fallback when no segments exist.
+    const formattedTranscript = transcriptBody || postData.transcript?.raw?.trim() || undefined;
 
     // Format media to string BEFORE spreading postData
     const rawFormattedMedia = this.mediaFormatter.formatMedia(

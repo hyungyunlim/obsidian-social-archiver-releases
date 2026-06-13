@@ -18,8 +18,10 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { App, TFile } from 'obsidian';
 import {
   IMPORT_MODE_FRONTMATTER_KEY,
+  IMPORT_SOURCE_FRONTMATTER_KEY,
   IMPORT_MODE_LOCAL_ONLY,
   IMPORT_MODE_IMPORTED,
+  LocalArchiveScanner,
 } from '../../../services/import/local/LocalArchiveScanner';
 import type { SocialArchiverSettings } from '../../../types/settings';
 import type { WorkersAPIClient, UserArchive } from '../../../services/WorkersAPIClient';
@@ -646,4 +648,137 @@ describe('ArchiveDeleteSyncService — outbound identity guard (PRD S5.1)', () =
       }
     });
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Clip-batch provenance (bulk import local vault mode PRD §9) — a note stamped
+// by ClipBatchService (`import_mode: 'local-only'` + `import_source:
+// 'reddit-saved-import'`) must behave exactly like every other local-only
+// note: excluded from sync, visible to the graduation scanner. The source
+// string is informational — exclusion/visibility key on import_mode only.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const CLIP_BATCH_SOURCE = 'reddit-saved-import';
+
+describe('Clip-batch provenance — sync exclusion (PRD §9)', () => {
+  for (const { mode, excluded } of [
+    { mode: IMPORT_MODE_LOCAL_ONLY, excluded: true },
+    { mode: IMPORT_MODE_IMPORTED, excluded: false },
+  ] as const) {
+    it(`outbound watcher ${excluded ? 'skips' : 'syncs'} a '${mode}' note with import_source '${CLIP_BATCH_SOURCE}'`, async () => {
+      const file = makeFile('Social Archives/reddit-saved.md');
+      const app = makeWatcherApp(
+        makeFrontmatter(mode, {
+          [IMPORT_SOURCE_FRONTMATTER_KEY]: CLIP_BATCH_SOURCE,
+          archive: true,
+        }),
+      );
+      const apiClient = makeOutboundApiClient();
+      const service = new ArchiveStateOutboundService(
+        app as unknown as App,
+        apiClient as unknown as WorkersAPIClient,
+        makeLookupWithoutIdentity(),
+        () => ({ syncClientId: 'client-1' }) as unknown as SocialArchiverSettings,
+      );
+
+      await fireWatcher(service, app, file);
+
+      if (excluded) {
+        expect(apiClient.getUserArchives).not.toHaveBeenCalled();
+        expect(apiClient.updateArchiveActions).not.toHaveBeenCalled();
+      } else {
+        expect(apiClient.getUserArchives).toHaveBeenCalledWith({ originalUrl: ORIGINAL_URL, limit: 1 });
+        expect(apiClient.updateArchiveActions).toHaveBeenCalledWith('srv-1', { isBookmarked: true });
+      }
+    });
+  }
+
+  it('inbound URL fallback never adopts a clip-batch local-only note', async () => {
+    const file = makeFile('Social Archives/reddit-saved.md');
+    const app = makeInboundApp(
+      makeFrontmatter(IMPORT_MODE_LOCAL_ONLY, {
+        [IMPORT_SOURCE_FRONTMATTER_KEY]: CLIP_BATCH_SOURCE,
+        archive: false,
+      }),
+    );
+    const service = new ArchiveStateSyncService(
+      app as unknown as App,
+      makeInboundApiClient(),
+      makeInboundLookup(file),
+      () => ({ syncClientId: 'client-1' }) as unknown as SocialArchiverSettings,
+    );
+
+    await service.handleRemoteArchiveState({
+      archiveId: 'archive-1',
+      sourceClientId: 'other-client',
+      changes: { isBookmarked: true },
+      updatedAt: '2026-06-11T00:00:00.000Z',
+      timestamp: Date.now(),
+    });
+
+    expect(app.fileManager.processFrontMatter).not.toHaveBeenCalled();
+  });
+});
+
+describe('Clip-batch provenance — LocalArchiveScanner visibility (PRD §9)', () => {
+  /** App stub for the scanner: markdown file list + frontmatter cache. */
+  function makeScannerApp(
+    notes: Array<{ file: TFile; frontmatter: Record<string, unknown> | undefined }>,
+  ): App {
+    return {
+      vault: { getMarkdownFiles: vi.fn().mockReturnValue(notes.map((note) => note.file)) },
+      metadataCache: {
+        getFileCache: vi.fn((file: TFile) => {
+          const note = notes.find((candidate) => candidate.file.path === file.path);
+          return note?.frontmatter ? { frontmatter: note.frontmatter } : null;
+        }),
+      },
+    } as unknown as App;
+  }
+
+  it("a 'local-only' clip-batch note is graduation-eligible, with its importSource surfaced", () => {
+    const localOnly = makeFile('Social Archives/reddit-saved.md');
+    const scanner = new LocalArchiveScanner(
+      makeScannerApp([
+        {
+          file: localOnly,
+          frontmatter: makeFrontmatter(IMPORT_MODE_LOCAL_ONLY, {
+            [IMPORT_SOURCE_FRONTMATTER_KEY]: CLIP_BATCH_SOURCE,
+          }),
+        },
+        // Neighbors that must stay invisible to the scanner.
+        {
+          file: makeFile('Social Archives/graduated.md'),
+          frontmatter: makeFrontmatter(IMPORT_MODE_IMPORTED, {
+            [IMPORT_SOURCE_FRONTMATTER_KEY]: CLIP_BATCH_SOURCE,
+          }),
+        },
+        { file: makeFile('Social Archives/regular.md'), frontmatter: makeFrontmatter(undefined) },
+        { file: makeFile('Social Archives/plain.md'), frontmatter: undefined },
+      ]),
+    );
+
+    const refs = scanner.scan();
+
+    expect(refs).toHaveLength(1);
+    expect(refs[0]?.file.path).toBe('Social Archives/reddit-saved.md');
+    // Source rides along as informational provenance for the import modal.
+    expect(refs[0]?.importSource).toBe(CLIP_BATCH_SOURCE);
+    expect(scanner.count()).toBe(1);
+  });
+
+  it("an 'imported' (graduated) clip-batch note is NOT rescanned for import", () => {
+    const scanner = new LocalArchiveScanner(
+      makeScannerApp([
+        {
+          file: makeFile('Social Archives/graduated.md'),
+          frontmatter: makeFrontmatter(IMPORT_MODE_IMPORTED, {
+            [IMPORT_SOURCE_FRONTMATTER_KEY]: CLIP_BATCH_SOURCE,
+          }),
+        },
+      ]),
+    );
+
+    expect(scanner.scan()).toEqual([]);
+  });
 });

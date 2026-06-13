@@ -297,6 +297,41 @@ export class ArchiveLookupService implements IService {
   }
 
   /**
+   * Whether the lazy index has been built. Doubles as a "MetadataCache
+   * initial resolve already happened" signal for late callers (clip-batch
+   * deep links): {@link initialize} gates the build on that exact event, so
+   * a built index proves the cache is past its initial parse even on
+   * Obsidian builds where the undocumented `metadataCache.resolved` flag is
+   * absent.
+   */
+  isIndexBuilt(): boolean {
+    return this.index.built;
+  }
+
+  /**
+   * Snapshot of every `clientPostId` frontmatter value in the vault.
+   *
+   * Bulk callers (clip-batch dedup) memoize this per run instead of paying
+   * {@link findByClientPostId}'s O(vault) MetadataCache scan once per post —
+   * one O(N) pass serves the whole batch. The set is a point-in-time
+   * snapshot; same matching semantics as findByClientPostId (string-typed
+   * frontmatter values only).
+   *
+   * Complexity: O(N) per call — callers cache the result.
+   */
+  getClientPostIdSet(): Set<string> {
+    const ids = new Set<string>();
+    for (const file of this.app.vault.getMarkdownFiles()) {
+      const clientPostId: unknown =
+        this.app.metadataCache.getFileCache(file)?.frontmatter?.clientPostId;
+      if (typeof clientPostId === 'string' && clientPostId.length > 0) {
+        ids.add(clientPostId);
+      }
+    }
+    return ids;
+  }
+
+  /**
    * Write `sourceArchiveId` into a file's frontmatter.
    *
    * Used to backfill the stable identifier on first successful annotation sync,

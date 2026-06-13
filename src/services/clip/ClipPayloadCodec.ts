@@ -64,6 +64,26 @@ export class ClipPayloadCodec {
     return this.parseEnvelopeJson(json);
   }
 
+  /**
+   * Decode an uncompressed envelope JSON string. Clip-batch inbox post files
+   * carry the same `ClipEnvelopeV1` shape as inline clips but skip lz-string
+   * (file transport has no URI budget) — version/envelope/PostData validation
+   * is identical to {@link decode}.
+   */
+  decodeUncompressedJson(text: string | undefined | null): ClipPayload {
+    const input = (text ?? '').trim();
+    if (!input) {
+      throw new ClipPayloadError('empty', 'Clip payload is empty');
+    }
+    if (input.length > ClipPayloadCodec.MAX_DECOMPRESSED_BYTES) {
+      throw new ClipPayloadError(
+        'too_large',
+        `Clip payload exceeds ${ClipPayloadCodec.MAX_DECOMPRESSED_BYTES} bytes`
+      );
+    }
+    return this.parseEnvelopeJson(input);
+  }
+
   /** Decode a clipboard handoff (`via=clipboard` deep links). */
   decodeClipboardText(text: string | undefined | null): ClipPayload {
     const input = (text ?? '').trim();

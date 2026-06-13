@@ -105,6 +105,8 @@ describe('Platform URL Schemas', () => {
 				// Activity update URLs
 				'https://linkedin.com/feed/update/urn:li:activity:1234567890',
 				'https://linkedin.com/feed/update/urn:li:share:9876543210',
+				'https://linkedin.com/feed/update/urn:li:ugcPost:9876543210',
+				'https://linkedin.com/feed/update/urn:li:groupPost:8573821-7468391614433136641',
 
 				// Pulse articles
 				'https://linkedin.com/pulse/my-article-slug',

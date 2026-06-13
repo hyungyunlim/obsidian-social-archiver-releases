@@ -99,7 +99,7 @@ export interface AuthorCatalogStoreAPI {
   setLoading: (isLoading: boolean) => void;
   setLoadingMessage: (message: string) => void;
   setError: (error: Error | null) => void;
-  updateAuthorStatus: (authorUrl: string, platform: Platform, status: AuthorCatalogEntry['status'], subscriptionId?: string, authorName?: string) => void;
+  updateAuthorStatus: (authorUrl: string, platform: Platform, status: AuthorCatalogEntry['status'], subscriptionId?: string | null, authorName?: string) => void;
   updateAuthorMetadata: (authorUrl: string, platform: Platform, metadata: AuthorMetadataUpdate, localAvatarPath?: string | null) => void;
   markVaultSnapshotStale: () => void;
   setFilter: (updates: Partial<AuthorCatalogFilter>) => void;
@@ -236,7 +236,7 @@ export function createAuthorCatalogStore(): AuthorCatalogStoreAPI {
     authorUrl: string,
     platform: Platform,
     status: AuthorCatalogEntry['status'],
-    subscriptionId?: string,
+    subscriptionId?: string | null,
     authorName?: string
   ): void {
     state.update((s) => {
@@ -249,7 +249,7 @@ export function createAuthorCatalogStore(): AuthorCatalogStoreAPI {
         // Update existing author
         const updatedAuthors = s.authors.map((a) =>
           a.authorUrl === authorUrl && a.platform === platform
-            ? { ...a, status, subscriptionId: subscriptionId ?? a.subscriptionId }
+            ? { ...a, status, subscriptionId: subscriptionId === undefined ? a.subscriptionId : subscriptionId }
             : a
         );
         return { ...s, authors: updatedAuthors };

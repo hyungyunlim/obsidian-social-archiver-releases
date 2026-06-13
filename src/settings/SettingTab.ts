@@ -2405,8 +2405,11 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.showReleaseNotes)
         .onChange(async (value) => {
-          this.plugin.settings.showReleaseNotes = value;
-          await this.plugin.saveData(this.plugin.settings);
+          // saveSettingsPartial (not raw saveData) keeps per-device ids out of data.json
+          await this.plugin.saveSettingsPartial(
+            { showReleaseNotes: value },
+            { reinitialize: false, notify: false }
+          );
           this.markDirty();
         }));
   }

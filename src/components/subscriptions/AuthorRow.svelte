@@ -44,6 +44,8 @@ interface AuthorRowProps {
   onViewDetail?: (author: AuthorCatalogEntry) => void;
   onOpenNote?: (author: AuthorCatalogEntry) => void;
   onCreateNote?: (author: AuthorCatalogEntry) => void;
+  isAuthenticated?: () => boolean;
+  onAuthRequired?: () => void;
 }
 
 let {
@@ -57,7 +59,9 @@ let {
   onViewArchives,
   onViewDetail,
   onOpenNote,
-  onCreateNote
+  onCreateNote,
+  isAuthenticated = () => true,
+  onAuthRequired
 }: AuthorRowProps = $props();
 
 // Derived status for reliable reactivity in conditionals
@@ -194,6 +198,12 @@ let noteBodyLoaded = $state(false);
 
 // Reddit modal state (no longer needed - using Obsidian native modal)
 
+function ensureSubscriptionAuth(): boolean {
+  if (isAuthenticated()) return true;
+  onAuthRequired?.();
+  return false;
+}
+
 /**
  * Format relative time
  */
@@ -265,11 +275,12 @@ $effect(() => {
  */
 async function handleSubscribe(): Promise<void> {
   if (!onSubscribe || isSubscribing) return;
+  if (!ensureSubscriptionAuth()) return;
 
   // X subscriptions disabled - BrightData returns non-chronological posts when not logged in
   // RSS-based platforms derive feed URL from author URL
   if (!checkSubscriptionSupported(author.platform)) {
-    new Notice('Subscriptions are available for Instagram, Facebook, LinkedIn, Reddit, TikTok, Pinterest, Bluesky, Mastodon, YouTube, and RSS-based platforms.');
+    new Notice('Subscriptions are available for Instagram, Facebook, Threads, LinkedIn, Reddit, TikTok, Pinterest, Bluesky, Mastodon, YouTube, and RSS-based platforms.');
     return;
   }
 
@@ -379,6 +390,8 @@ async function handleUnsubscribe(): Promise<void> {
  * Handle Reddit modal subscribe (both new and edit)
  */
 async function handleRedditSubscribe(modalOptions: RedditModalOptions, isEditMode: boolean): Promise<void> {
+  if (!ensureSubscriptionAuth()) return;
+
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const currentHour = new Date().getHours();
 
@@ -415,6 +428,8 @@ async function handleNaverSubscribe(
   isEditMode: boolean,
   subscriptionType: 'blog' | 'cafe-member'
 ): Promise<void> {
+  if (!ensureSubscriptionAuth()) return;
+
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const currentHour = new Date().getHours();
 
@@ -455,6 +470,8 @@ async function handleBrunchSubscribe(
   modalOptions: BrunchModalOptions,
   isEditMode: boolean
 ): Promise<void> {
+  if (!ensureSubscriptionAuth()) return;
+
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const currentHour = new Date().getHours();
 

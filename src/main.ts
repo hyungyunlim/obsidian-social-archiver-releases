@@ -2,6 +2,7 @@ import { Plugin, Notice, Platform as ObsidianPlatform, Events, TFile, TFolder, t
 import { SocialArchiverSettingTab } from './settings/SettingTab';
 import { SocialArchiverSettings, DEFAULT_SETTINGS, API_ENDPOINT, migrateSettings, getVaultOrganizationStrategy, resolveViewLocation } from './types/settings';
 import { WorkersAPIClient } from './services/WorkersAPIClient';
+import { DeviceScopedIdStorage } from './services/DeviceScopedIdStorage';
 import { ArchiveOrchestrator } from './services/ArchiveOrchestrator';
 import { VaultManager } from './services/VaultManager';
 import { MarkdownConverter } from './services/MarkdownConverter';
@@ -19,6 +20,7 @@ import { AuthorNoteService } from './services/AuthorNoteService';
 import { TagStore } from './services/TagStore';
 import type { PostData, Platform } from './types/post';
 import { ClipPayloadError } from './types/clip';
+import { CLIP_BATCH_MAX_POST_COUNT, ClipBatchError, isValidClipBatchId } from './types/clip-batch';
 import type { AuthorCatalogEntry } from './types/author-catalog';
 import type { UserArchive } from './services/WorkersAPIClient';
 import { TimelineView, VIEW_TYPE_TIMELINE } from './views/TimelineView';
@@ -129,6 +131,20 @@ export default class SocialArchiverPlugin extends Plugin {
   private apiClient?: WorkersAPIClient;
   private orchestrator?: ArchiveOrchestrator;
 
+  /**
+   * Per-device storage for `syncClientId`/`deviceId` (localStorage-backed).
+   * These ids must NOT travel through vault-synced data.json — see
+   * `DeviceScopedIdStorage` for the rationale. Lazily created so it is
+   * available from the first `loadSettings()` call.
+   */
+  private _deviceIdStorage?: DeviceScopedIdStorage;
+  private get deviceIdStorage(): DeviceScopedIdStorage {
+    if (!this._deviceIdStorage) {
+      this._deviceIdStorage = new DeviceScopedIdStorage(this.app);
+    }
+    return this._deviceIdStorage;
+  }
+
   /** Ribbon icon element for the Instagram Saved import feature (PRD §12.1 gate). */
   private instagramImportRibbonEl: HTMLElement | null = null;
 
@@ -145,6 +161,18 @@ export default class SocialArchiverPlugin extends Plugin {
    * notes. Set/cleared by ImportLocalArchivesModal around its run.
    */
   public localArchiveImportRunning = false;
+
+  /**
+   * In-flight guard for clip-batch inbox processing (PRD §5.3): one batch at
+   * a time, shared between the `op=clip-batch` deep link and the inbox sweep
+   * (startup + command). Concurrent triggers set `clipBatchSweepQueued` so a
+   * follow-up sweep drains whatever they referred to as soon as the active
+   * run finishes (PRD §5.3: "the deep-link handler queues a sweep if one is
+   * already running").
+   */
+  private clipBatchRunning = false;
+  /** Follow-up sweep requested while a clip-batch run was in flight. */
+  private clipBatchSweepQueued = false;
   public linkPreviewExtractor!: LinkPreviewExtractor; // Link preview URL extractor
   private settingTab?: SocialArchiverSettingTab; // Settings tab reference for refresh
   public events: Events = new Events();
@@ -154,6 +182,7 @@ export default class SocialArchiverPlugin extends Plugin {
   private annotationFallbackPoller?: AnnotationFallbackPoller; // Public-WS fallback polling (§5.8)
   public processingJobs: Set<string> = new Set(); // Track jobs being processed to prevent concurrent processing
   public subscriptionManager?: SubscriptionManager; // Subscription management service
+  private subscriptionManagerReadyPromise?: Promise<SubscriptionManager>; // Single-flight guard for startup/view restore races
   public naverPoller?: NaverSubscriptionPoller; // Naver Blog/Cafe local subscription poller
   public brunchPoller?: BrunchSubscriptionPoller; // Brunch local subscription poller
   public webtoonSyncService?: WebtoonSyncService; // Webtoon offline sync service
@@ -165,6 +194,41 @@ export default class SocialArchiverPlugin extends Plugin {
   /** Public accessor for author note lookups (e.g., tooltip preview). */
   public getAuthorNoteService(): AuthorNoteService | undefined {
     return this.authorNoteService;
+  }
+
+  public async ensureSubscriptionManagerReady(): Promise<SubscriptionManager> {
+    if (!this.settings.authToken) {
+      throw new Error('Sign in before creating subscriptions.');
+    }
+
+    if (this.subscriptionManager?.isInitialized) {
+      this.subscriptionManager.setAuthToken(this.settings.authToken);
+      return this.subscriptionManager;
+    }
+
+    if (!this.subscriptionManagerReadyPromise) {
+      this.subscriptionManagerReadyPromise = (async () => {
+        if (!this.subscriptionManager) {
+          this.subscriptionManager = new SubscriptionManager({
+            apiBaseUrl: API_ENDPOINT,
+            authToken: this.settings.authToken,
+            enablePolling: false,
+          });
+        } else {
+          this.subscriptionManager.setAuthToken(this.settings.authToken);
+        }
+
+        if (!this.subscriptionManager.isInitialized) {
+          await this.subscriptionManager.initialize();
+        }
+
+        return this.subscriptionManager;
+      })().finally(() => {
+        this.subscriptionManagerReadyPromise = undefined;
+      });
+    }
+
+    return this.subscriptionManagerReadyPromise;
   }
   private wsPostBatchTimer?: number; // Timer for batching WebSocket posts
   private recentlyArchivedUrls = new Set<string>(); // Dedup guard for ws:client_sync (tracks URLs archived locally)
@@ -934,6 +998,22 @@ export default class SocialArchiverPlugin extends Plugin {
     // Register protocol handler for mobile share
     this.registerProtocolHandler();
 
+    // Clip-batch inbox recovery sweep (PRD §5.2): processes batches committed
+    // while Obsidian was closed and GCs stale inbox dirs. Deferred to
+    // layout-ready so it never competes with startup indexing.
+    this.app.workspace.onLayoutReady(() => {
+      void this.runClipBatchSweep('startup');
+    });
+
+    // Manual inbox rescan — same sweep as startup recovery (PRD §5.2).
+    this.addCommand({
+      id: 'scan-clip-inbox',
+      name: 'Scan clip inbox',
+      callback: () => {
+        void this.runClipBatchSweep('command');
+      },
+    });
+
     // Catch up changes missed while Obsidian was backgrounded/suspended.
     this.registerForegroundSyncCatchUpHandlers();
 
@@ -1133,18 +1213,31 @@ export default class SocialArchiverPlugin extends Plugin {
         : false;
     this.settings = migrateSettings(savedData);
 
+    // Per-device id overlay: syncClientId/deviceId live in localStorage, not
+    // in vault-synced data.json (Syncthing/iCloud would copy one device's ids
+    // onto another, causing runtime-mismatch re-registration churn). Legacy
+    // data.json values are adopted into localStorage once, then stripped from
+    // data.json by the write-back below.
+    const resolved = this.deviceIdStorage.resolveOnLoad(
+      typeof savedData.syncClientId === 'string' ? savedData.syncClientId : '',
+      this.settings.deviceId
+    );
+    this.settings.syncClientId = resolved.syncClientId;
+    this.settings.deviceId = resolved.deviceId;
+    const needsDeviceIdStripWriteBack = Boolean(savedData.syncClientId || savedData.deviceId);
+
     // Rebuild naverCookie from individual fields (in case migration populated them)
     this.rebuildNaverCookie();
 
-    // Persist the Phase-3 annotation-sync default so subsequent loads see an
-    // explicit value. Idempotent: the next load sees the key present and
-    // skips this write-back.
-    if (needsAnnotationSyncDefaultWriteBack) {
+    // Persist the Phase-3 annotation-sync default (so subsequent loads see an
+    // explicit value) and/or strip legacy per-device ids from data.json.
+    // Idempotent: the next load sees the migrated state and skips this.
+    if (needsAnnotationSyncDefaultWriteBack || needsDeviceIdStripWriteBack) {
       try {
-        await this.saveData(this.settings);
+        await this.persistSettings();
       } catch (err) {
         console.warn(
-          '[Social Archiver] Failed to persist annotation-sync migration default:',
+          '[Social Archiver] Failed to persist settings migration write-back:',
           err instanceof Error ? err.message : String(err)
         );
       }
@@ -1174,7 +1267,7 @@ export default class SocialArchiverPlugin extends Plugin {
     options: { reinitialize?: boolean; notify?: boolean } = {}
   ): Promise<void> {
     this.settings = { ...this.settings, ...partial };
-    await this.saveData(this.settings);
+    await this.persistSettings();
 
     if (options.reinitialize) {
       await this.initializeServices();
@@ -1187,6 +1280,19 @@ export default class SocialArchiverPlugin extends Plugin {
         Object.keys(partial) as Array<keyof SocialArchiverSettings>
       );
     }
+  }
+
+  /**
+   * Persist settings to data.json with the per-device ids mirrored to
+   * localStorage and stripped from the synced payload. Every settings writer
+   * (registration, sign-out, unregister, settings UI) funnels through here,
+   * so `settings.syncClientId`/`settings.deviceId` stay readable in memory
+   * everywhere while data.json never carries them across devices.
+   */
+  private async persistSettings(): Promise<void> {
+    this.deviceIdStorage.setSyncClientId(this.settings.syncClientId || '');
+    this.deviceIdStorage.setDeviceId(this.settings.deviceId || '');
+    await this.saveData({ ...this.settings, syncClientId: '', deviceId: '' });
   }
 
   private async loadTranscriptionPendingUploads(): Promise<PendingTranscriptUploadRecord[]> {
@@ -2069,12 +2175,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
       // Initialize SubscriptionManager for pending posts sync
       if (this.settings.authToken && this.settings.username) {
-        this.subscriptionManager = new SubscriptionManager({
-          apiBaseUrl: API_ENDPOINT,
-          authToken: this.settings.authToken,
-          enablePolling: false
-        });
-        await this.subscriptionManager.initialize();
+        await this.ensureSubscriptionManagerReady();
 
         // Sync pending subscription posts on startup (delayed to not block UI)
         this.scheduleTrackedTimeout(() => { void this.syncSubscriptionPosts('startup'); }, 3000);
@@ -2555,6 +2656,14 @@ export default class SocialArchiverPlugin extends Plugin {
 
   private registerProtocolHandler(): void {
     this.registerObsidianProtocolHandler('social-archive', async (params) => {
+      // Clip-batch deep link (bulk import local vault mode) — checked before
+      // the single-clip branch; both key off `op` so the order is not
+      // semantically load-bearing, but batch stays first for clarity.
+      if (params.op === 'clip-batch') {
+        await this.handleClipBatchProtocol(params);
+        return;
+      }
+
       // Browser clip deep link (extension anonymous mode). Uses `op` rather
       // than `action` because ObsidianProtocolData.action is reserved for
       // the protocol action name itself.
@@ -2727,6 +2836,253 @@ export default class SocialArchiverPlugin extends Plugin {
     }
     const message = error instanceof Error ? error.message : 'Unknown error';
     return `Clip import failed: ${message}`;
+  }
+
+  /**
+   * Handle `obsidian://social-archive?op=clip-batch&v=1&id=<batch-id>` deep
+   * links (bulk import local vault mode). Plumbing only — filesystem access
+   * lives in ClipBatchInbox, per-post processing in ClipBatchService.
+   *
+   * Bulk UX, not clip UX (PRD §5.3 explicit non-behaviors): no per-note
+   * Notice, no workspace.openFile, no localClipCount increment (counter
+   * stays a single-clip onboarding signal), no maybeAutoUploadClip (a user
+   * who picked the local destination opted out of server upload —
+   * graduation remains the explicit path). One progress Notice, one summary
+   * Notice, one timeline refresh.
+   */
+  private async handleClipBatchProtocol(params: Record<string, string>): Promise<void> {
+    // Version gate first so an outdated plugin still shows a useful message
+    // when a future sender changes the inbox protocol (same as handleClipProtocol).
+    const uriVersion = params.v ?? '1';
+    if (uriVersion !== '1') {
+      new Notice(
+        'This import needs a newer version of Social Archiver. Please update the plugin.',
+        8000
+      );
+      return;
+    }
+
+    // Path traversal guard: the id becomes a vault folder name, so anything
+    // outside the safe charset is rejected before touching the filesystem.
+    const batchId = (params.id ?? '').trim();
+    if (!isValidClipBatchId(batchId)) {
+      new Notice('This link does not contain a valid Social Archiver clip batch.', 8000);
+      return;
+    }
+
+    if (this.clipBatchRunning) {
+      // PRD §5.3: queue a sweep instead of dropping the trigger — the batch
+      // is committed on disk, so the follow-up sweep will drain it.
+      this.clipBatchSweepQueued = true;
+      new Notice(
+        'A clip batch import is already running. This batch will be imported right after it.'
+      );
+      return;
+    }
+
+    this.clipBatchRunning = true;
+    // Distinct from the per-post "Importing N/M..." updates so a stall is
+    // attributable: stuck here = cache gate, stuck on a count = that post.
+    const progressNotice = new Notice('Preparing clip batch import...', 0);
+    try {
+      // Dedup correctness: the lookup index must not be built from a
+      // half-populated MetadataCache (a deep link can launch Obsidian, where
+      // getFileCache() still returns null for unparsed files).
+      await this.waitForMetadataCacheResolved();
+      const service = await this.createClipBatchService();
+      const receipt = await service.processBatch(batchId, {
+        onProgress: (progress) => {
+          progressNotice.setMessage(`Importing ${progress.processed}/${progress.total}...`);
+        },
+      });
+
+      progressNotice.hide();
+      new Notice(
+        this.describeClipBatchSummary(receipt.imported, receipt.duplicates, receipt.failed.length),
+        8000
+      );
+      this.refreshTimelineView();
+    } catch (error) {
+      progressNotice.hide();
+      new Notice(this.describeClipBatchError(error), 8000);
+      console.error('[Social Archiver] Clip batch import failed:', error);
+    } finally {
+      this.clipBatchRunning = false;
+      this.drainQueuedClipBatchSweep();
+    }
+  }
+
+  /**
+   * Clip-batch inbox recovery sweep (PRD §5.2): drains committed batches
+   * whose deep link never arrived (Obsidian closed during export, link lost,
+   * plugin updated mid-batch) and garbage-collects stale inbox dirs. Runs at
+   * startup (layout-ready) and via the "Scan clip inbox" command, sharing
+   * the deep-link path's concurrency guard.
+   */
+  private async runClipBatchSweep(trigger: 'startup' | 'command' | 'queued'): Promise<void> {
+    if (this.clipBatchRunning) {
+      // Queue a follow-up sweep (PRD §5.3) — runs when the active run ends.
+      this.clipBatchSweepQueued = true;
+      if (trigger === 'command') {
+        new Notice(
+          'A clip batch import is already running. The inbox will be rescanned right after it.'
+        );
+      }
+      return;
+    }
+
+    this.clipBatchRunning = true;
+    // Created lazily on first progress so an empty inbox stays silent at startup.
+    let progressNotice: Notice | undefined;
+    try {
+      // See handleClipBatchProtocol — dedup needs a fully populated cache.
+      await this.waitForMetadataCacheResolved();
+      const service = await this.createClipBatchService();
+      const result = await service.sweepInbox({
+        onProgress: (progress) => {
+          progressNotice = progressNotice ?? new Notice('Importing clip batch...', 0);
+          progressNotice.setMessage(`Importing ${progress.processed}/${progress.total}...`);
+        },
+      });
+
+      progressNotice?.hide();
+      if (result.receipts.length > 0) {
+        const imported = result.receipts.reduce((sum, r) => sum + r.imported, 0);
+        const duplicates = result.receipts.reduce((sum, r) => sum + r.duplicates, 0);
+        const failed = result.receipts.reduce((sum, r) => sum + r.failed.length, 0);
+        new Notice(this.describeClipBatchSummary(imported, duplicates, failed), 8000);
+        this.refreshTimelineView();
+      } else if (trigger === 'command') {
+        new Notice('Clip inbox is empty.');
+      }
+    } catch (error) {
+      progressNotice?.hide();
+      console.error('[Social Archiver] Clip inbox sweep failed:', error);
+      if (trigger === 'command') {
+        new Notice(this.describeClipBatchError(error), 8000);
+      }
+    } finally {
+      this.clipBatchRunning = false;
+      this.drainQueuedClipBatchSweep();
+    }
+  }
+
+  /**
+   * Run the follow-up sweep queued by triggers that hit the in-flight guard
+   * (PRD §5.3). Called from the `finally` of every clip-batch run, AFTER the
+   * guard is released — committed batches whose deep link landed mid-run are
+   * drained without waiting for the next launch or a manual rescan.
+   */
+  private drainQueuedClipBatchSweep(): void {
+    if (!this.clipBatchSweepQueued) return;
+    this.clipBatchSweepQueued = false;
+    void this.runClipBatchSweep('queued');
+  }
+
+  /**
+   * Resolve once the MetadataCache has finished its initial parse. Clip-batch
+   * dedup (`ArchiveLookupService.findByOriginalUrl`) lazily builds its index
+   * from `getFileCache()`; building before `resolved` would freeze a
+   * half-empty index and make existing archives invisible to dedup
+   * (duplicate notes on re-runs). Same gating contract as
+   * `ArchiveLookupService.initialize()`.
+   */
+  private waitForMetadataCacheResolved(): Promise<void> {
+    const cache = this.app.metadataCache as typeof this.app.metadataCache & {
+      resolved?: boolean;
+    };
+    if (cache.resolved) return Promise.resolve();
+    // The lookup index being built proves the initial resolve already
+    // happened: ArchiveLookupService.initialize() gates the build on the
+    // same signal at plugin load. Trusting it avoids burning the wait cap
+    // on every import in Obsidian builds where the undocumented `resolved`
+    // flag is absent (observed 2026-06-13: each deep link stalled 10s).
+    if (this.archiveLookupService?.isIndexBuilt()) return Promise.resolve();
+    // If the flag is absent while the initial resolve already happened, the
+    // event below never re-fires in an idle vault and an un-capped wait
+    // hangs the whole import behind a frozen progress notice. Past the cap
+    // we proceed — degraded dedup beats a dead import.
+    const WAIT_CAP_MS = 10_000;
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (timedOut: boolean): void => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        this.app.metadataCache.offref(ref);
+        if (timedOut) {
+          console.warn(
+            '[Social Archiver] MetadataCache `resolved` signal not observed within 10s — continuing clip-batch import (dedup may be degraded on a cold cache).'
+          );
+        }
+        resolve();
+      };
+      const ref = this.app.metadataCache.on('resolved', () => finish(false));
+      // Also detach on plugin unload (offref is a no-op the second time).
+      this.registerEvent(ref);
+      const timer = window.setTimeout(() => finish(true), WAIT_CAP_MS);
+    });
+  }
+
+  /**
+   * Build a ClipBatchService wired to live plugin state. Constructed per run
+   * — the dynamic imports keep batch modules off the startup path and the
+   * services themselves hold no state between runs.
+   */
+  private async createClipBatchService(): Promise<
+    import('./services/clip/ClipBatchService').ClipBatchService
+  > {
+    const [{ ClipBatchInbox }, { ClipBatchService }, { ClipPayloadCodec }] = await Promise.all([
+      import('./services/clip/ClipBatchInbox'),
+      import('./services/clip/ClipBatchService'),
+      import('./services/clip/ClipPayloadCodec'),
+    ]);
+
+    const inbox = new ClipBatchInbox({
+      // Inbox files are written externally by the extension — the vault index
+      // may lag, so adapter-level IO is authoritative for these paths.
+      adapter: this.app.vault.adapter,
+      getMediaPath: (): string => this.settings.mediaPath || 'attachments/social-archives',
+    });
+
+    return new ClipBatchService({
+      inbox,
+      codec: new ClipPayloadCodec(),
+      getOrchestrator: (): ArchiveOrchestrator | undefined => this.orchestrator,
+      getArchiveLookup: (): ArchiveLookupService | undefined => this.archiveLookupService,
+      // Freshly saved notes are registered in the lookup index right away so
+      // dedup inside the same run never races the MetadataCache.
+      getVaultFileByPath: (path: string): TFile | null => {
+        const file = this.app.vault.getAbstractFileByPath(path);
+        return file instanceof TFile ? file : null;
+      },
+    });
+  }
+
+  /** One summary Notice per batch run, e.g. "Imported 117 archives (2 duplicates, 1 failed)". */
+  private describeClipBatchSummary(imported: number, duplicates: number, failed: number): string {
+    const extras: string[] = [];
+    if (duplicates > 0) extras.push(`${duplicates} duplicate${duplicates === 1 ? '' : 's'}`);
+    if (failed > 0) extras.push(`${failed} failed`);
+    const suffix = extras.length > 0 ? ` (${extras.join(', ')})` : '';
+    return `Imported ${imported} archive${imported === 1 ? '' : 's'}${suffix}`;
+  }
+
+  private describeClipBatchError(error: unknown): string {
+    if (error instanceof ClipBatchError) {
+      switch (error.reason) {
+        case 'invalid_batch_id':
+          return 'This link does not contain a valid Social Archiver clip batch.';
+        case 'batch_not_found':
+          return 'Clip batch not found in this vault. Make sure the extension exported into this vault, then run "Scan clip inbox".';
+        case 'invalid_manifest':
+          return 'Could not read this clip batch. Try exporting again from the browser extension.';
+        case 'too_many_posts':
+          return `Clip batch exceeds the ${CLIP_BATCH_MAX_POST_COUNT}-post limit. Split the export into smaller batches.`;
+      }
+    }
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return `Clip batch import failed: ${message}`;
   }
 
   private async handleAuthCompletion(params: Record<string, string>): Promise<void> {

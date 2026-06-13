@@ -17,7 +17,7 @@
  */
 
 import { setIcon, TFile, Platform as ObsidianPlatform, type Vault, type App } from 'obsidian';
-import { mount, unmount } from 'svelte';
+import { mount, unmount, type ComponentProps } from 'svelte';
 import { get } from 'svelte/store';
 import type { PostData, Platform } from '../../types/post';
 import type SocialArchiverPlugin from '../../main';
@@ -25,6 +25,7 @@ import type {
   AuthorCatalogEntry,
   AuthorSubscribeOptions,
 } from '../../types/author-catalog';
+import { DEFAULT_ARCHIVE_PATH } from '@/shared/constants';
 import { PostIndexService } from '../../services/PostIndexService';
 import { AuthorDetailService } from '../../services/AuthorDetailService';
 import { getAuthorCatalogStore, type AuthorCatalogStoreAPI } from '../../services/AuthorCatalogStore';
@@ -64,7 +65,7 @@ export interface AuthorDetailContainerProps {
   /** Navigate to another author detail view */
   onViewAuthor?: (author: AuthorCatalogEntry) => void;
   /** Subscription callbacks (forwarded to AuthorProfileHeader) */
-  onSubscribe?: (author: AuthorCatalogEntry, options: AuthorSubscribeOptions) => Promise<void>;
+  onSubscribe?: (author: AuthorCatalogEntry, options: AuthorSubscribeOptions) => Promise<unknown>;
   onUpdateSubscription?: (author: AuthorCatalogEntry, options: AuthorSubscribeOptions) => Promise<void>;
   onUnsubscribe?: (author: AuthorCatalogEntry) => Promise<void>;
   onManualRun?: (author: AuthorCatalogEntry) => Promise<void>;
@@ -72,6 +73,8 @@ export interface AuthorDetailContainerProps {
   onOpenProfile?: (author: AuthorCatalogEntry) => void;
   onOpenNote?: (author: AuthorCatalogEntry) => void;
   onCreateNote?: (author: AuthorCatalogEntry) => void;
+  isAuthenticated?: () => boolean;
+  onAuthRequired?: () => void;
 }
 
 // ============================================================================
@@ -245,6 +248,7 @@ export class AuthorDetailContainer {
 
     // Wire PostCardRenderer callbacks
     this.setupRendererCallbacks();
+    this.syncSubscriptionCache();
 
     // Build the initial DOM structure (must come before store subscription
     // to avoid handleStoreUpdate running before headerTarget exists)
@@ -447,23 +451,34 @@ export class AuthorDetailContainer {
     }
   }
 
-  private buildProfileHeaderProps(): Record<string, unknown> {
+  private buildProfileHeaderProps(): ComponentProps<typeof AuthorProfileHeader> {
     return {
       app: this.app,
-      author: this.currentAuthor,
+      author: this.currentAuthor!,
       onGoBack: this.props.onGoBack,
       onOpenProfile: this.props.onOpenProfile ?? ((a: AuthorCatalogEntry) => {
         if (a.authorUrl) {
           window.open(a.authorUrl, '_blank');
         }
       }),
-      onSubscribe: this.props.onSubscribe,
+      onSubscribe: this.props.onSubscribe
+        ? (author: AuthorCatalogEntry, options: AuthorSubscribeOptions) => this.subscribeAuthorFromDetail(author, options)
+        : undefined,
       onUpdateSubscription: this.props.onUpdateSubscription,
-      onUnsubscribe: this.props.onUnsubscribe,
+      onUnsubscribe: this.props.onUnsubscribe
+        ? (author: AuthorCatalogEntry) => {
+            if (!author.subscriptionId) {
+              throw new Error('Cannot unsubscribe: missing subscription ID');
+            }
+            return this.unsubscribeAuthorFromDetail(author.subscriptionId, author.authorName, author.authorUrl, author.platform);
+          }
+        : undefined,
       onManualRun: this.props.onManualRun,
       onEditSubscription: this.props.onEditSubscription,
       onOpenNote: this.props.onOpenNote,
       onCreateNote: this.props.onCreateNote,
+      isAuthenticated: this.props.isAuthenticated,
+      onAuthRequired: this.props.onAuthRequired,
     };
   }
 
@@ -940,6 +955,7 @@ export class AuthorDetailContainer {
       return;
     }
 
+    this.syncSubscriptionCache();
     this.isLoading = true;
     this.renderLoadingState();
 
@@ -1424,10 +1440,167 @@ export class AuthorDetailContainer {
       await this.plugin.refreshAllTimelines();
     });
 
+    this.postCardRenderer.onSubscribeAuthor(async (author) => {
+      await this.subscribeAuthorFromDetail(author);
+    });
+
+    this.postCardRenderer.onUnsubscribeAuthor(async (subscriptionId, authorName, authorUrl, platform) => {
+      await this.unsubscribeAuthorFromDetail(subscriptionId, authorName, authorUrl, platform);
+    });
+
     // Reader mode: open ReaderModeOverlay with author's filtered posts
     this.postCardRenderer.onReaderMode((post) => {
       this.openReaderMode(post);
     });
+  }
+
+  private buildDefaultSubscribeOptions(): AuthorSubscribeOptions {
+    return {
+      cadence: 'daily',
+      destinationPath: DEFAULT_ARCHIVE_PATH,
+      templateId: null,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      startHour: new Date().getHours(),
+      maxPostsPerRun: 20,
+      backfillDays: 3,
+    };
+  }
+
+  private syncSubscriptionCache(): void {
+    const subscriptions = this.plugin.subscriptionManager?.getSubscriptions() ?? [];
+    this.postCardRenderer.setSubscriptionsCache(
+      subscriptions.map((sub) => ({
+        id: sub.id,
+        platform: sub.platform,
+        target: {
+          handle: sub.target.handle,
+          profileUrl: sub.target.profileUrl,
+        },
+      })),
+    );
+  }
+
+  private extractSubscriptionId(result: unknown): string | undefined {
+    if (!result || typeof result !== 'object') return undefined;
+    const record = result as Record<string, unknown>;
+    if (typeof record.id === 'string') return record.id;
+    const data = record.data;
+    if (data && typeof data === 'object' && typeof (data as Record<string, unknown>).id === 'string') {
+      return (data as Record<string, unknown>).id as string;
+    }
+    return undefined;
+  }
+
+  private deriveHandle(author: AuthorCatalogEntry): string {
+    const isValidHandle = (value: string): boolean => /^[a-zA-Z0-9._-]+(@[a-zA-Z0-9._-]+)?$/.test(value);
+
+    if (author.handle) {
+      const cleanHandle = author.handle.replace(/^@/, '');
+      if (isValidHandle(cleanHandle)) return cleanHandle;
+    }
+
+    if (author.authorUrl) {
+      try {
+        const url = new URL(author.authorUrl);
+        const parts = url.pathname.split('/').filter(Boolean);
+        const last = parts[parts.length - 1] || '';
+        const urlHandle = last.replace(/^@/, '');
+        if (urlHandle && isValidHandle(urlHandle)) return urlHandle;
+      } catch {
+        // Fall through to author name.
+      }
+    }
+
+    const sanitized = (author.authorName || 'unknown').replace(/[^a-zA-Z0-9._-]/g, '').toLowerCase();
+    return sanitized || 'unknown';
+  }
+
+  private buildAuthorFromPost(post: PostData): AuthorCatalogEntry {
+    return this.postCardRenderer.findAuthorEntry(post.author.url, post.platform) || {
+      authorName: post.author.name,
+      authorUrl: post.author.url,
+      platform: post.platform,
+      avatar: post.author.avatar || null,
+      lastSeenAt: new Date(),
+      archiveCount: 1,
+      subscriptionId: null,
+      status: 'not_subscribed' as const,
+      handle: post.author.handle,
+    };
+  }
+
+  private isCurrentAuthor(authorUrl: string, platform: Platform): boolean {
+    return this.currentAuthor?.authorUrl === authorUrl && this.currentAuthor?.platform === platform;
+  }
+
+  private updateCurrentAuthorSubscription(
+    author: AuthorCatalogEntry,
+    status: 'subscribed' | 'not_subscribed' | 'error',
+    subscriptionId: string | null,
+  ): void {
+    const updatedAuthor: AuthorCatalogEntry = {
+      ...author,
+      status,
+      subscriptionId,
+    };
+
+    if (this.isCurrentAuthor(author.authorUrl, author.platform)) {
+      this.currentAuthor = updatedAuthor;
+      this.remountProfileHeader();
+    }
+  }
+
+  private async subscribeAuthorFromDetail(
+    author: AuthorCatalogEntry,
+    options: AuthorSubscribeOptions = this.buildDefaultSubscribeOptions(),
+  ): Promise<unknown> {
+    if (!this.props.onSubscribe) return;
+
+    const result = await this.props.onSubscribe(author, options);
+    const subscriptionId = this.extractSubscriptionId(result) || author.subscriptionId || undefined;
+
+    if (subscriptionId) {
+      author.subscriptionId = subscriptionId;
+      author.status = 'subscribed';
+      this.postCardRenderer.addSubscriptionToCache({
+        id: subscriptionId,
+        platform: author.platform,
+        target: {
+          handle: this.deriveHandle(author),
+          profileUrl: author.authorUrl,
+        },
+      });
+      this.getStore()?.updateAuthorStatus(author.authorUrl, author.platform, 'subscribed', subscriptionId, author.authorName);
+      this.updateCurrentAuthorSubscription(author, 'subscribed', subscriptionId);
+    }
+
+    return result;
+  }
+
+  private async unsubscribeAuthorFromDetail(
+    subscriptionId: string,
+    authorName: string,
+    authorUrl: string,
+    platform: Platform,
+  ): Promise<void> {
+    if (!this.props.onUnsubscribe) return;
+
+    const author = this.postCardRenderer.findAuthorEntry(authorUrl, platform) || {
+      authorName,
+      authorUrl,
+      platform,
+      avatar: null,
+      lastSeenAt: new Date(),
+      archiveCount: 1,
+      subscriptionId,
+      status: 'subscribed' as const,
+    };
+
+    author.subscriptionId = subscriptionId;
+    await this.props.onUnsubscribe(author);
+    this.postCardRenderer.removeSubscriptionFromCache(subscriptionId);
+    this.getStore()?.updateAuthorStatus(authorUrl, platform, 'not_subscribed', null, authorName);
+    this.updateCurrentAuthorSubscription(author, 'not_subscribed', null);
   }
 
   // --------------------------------------------------------------------------
@@ -1481,10 +1654,15 @@ export class AuthorDetailContainer {
         return this.postCardRenderer.isAuthorSubscribed(authorUrl, platform as Platform);
       },
       onSubscribeAuthor: async (p) => {
-        // No-op in author detail — already viewing a single author
+        await this.subscribeAuthorFromDetail(this.buildAuthorFromPost(p));
+        this.postCardRenderer.updateBadgesForAuthor(p.author.url, p.platform, true);
       },
       onUnsubscribeAuthor: async (p) => {
-        // No-op in author detail
+        const subInfo = this.postCardRenderer.getSubscriptionFromCache(p.author.url, p.platform);
+        if (subInfo) {
+          await this.unsubscribeAuthorFromDetail(subInfo.subscriptionId, p.author.name, p.author.url, p.platform);
+          this.postCardRenderer.updateBadgesForAuthor(p.author.url, p.platform, false);
+        }
       },
     };
 

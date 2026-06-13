@@ -37,7 +37,7 @@ import { BrunchLocalService } from '@/services/BrunchLocalService';
 interface AuthorProfileHeaderProps {
   app: App;
   author: AuthorCatalogEntry;
-  onSubscribe?: (author: AuthorCatalogEntry, options: AuthorSubscribeOptions) => Promise<void>;
+  onSubscribe?: (author: AuthorCatalogEntry, options: AuthorSubscribeOptions) => Promise<unknown>;
   onUpdateSubscription?: (author: AuthorCatalogEntry, options: AuthorSubscribeOptions) => Promise<void>;
   onUnsubscribe?: (author: AuthorCatalogEntry) => Promise<void>;
   onManualRun?: (author: AuthorCatalogEntry) => Promise<void>;
@@ -46,6 +46,8 @@ interface AuthorProfileHeaderProps {
   onGoBack?: () => void;
   onOpenNote?: (author: AuthorCatalogEntry) => void;
   onCreateNote?: (author: AuthorCatalogEntry) => void;
+  isAuthenticated?: () => boolean;
+  onAuthRequired?: () => void;
 }
 
 let {
@@ -60,6 +62,8 @@ let {
   onGoBack,
   onOpenNote,
   onCreateNote,
+  isAuthenticated = () => true,
+  onAuthRequired,
 }: AuthorProfileHeaderProps = $props();
 
 // ============================================================================
@@ -228,6 +232,12 @@ let isRunning = $state(false);
 let showDropdown = $state(false);
 let noteBody = $state('');
 
+function ensureSubscriptionAuth(): boolean {
+  if (isAuthenticated()) return true;
+  onAuthRequired?.();
+  return false;
+}
+
 $effect(() => {
   // Try known noteFilePath first, then search by authorUrl
   const findAndReadNote = async () => {
@@ -267,7 +277,7 @@ function closeDropdown(): void {
 
 function handleClickOutside(event: MouseEvent): void {
   const target = event.target as HTMLElement;
-  if (!target.closest('.subscription-dropdown-wrapper')) {
+  if (!target.closest('.subscription-badge-wrapper')) {
     closeDropdown();
   }
 }
@@ -303,9 +313,10 @@ function handleOpenProfile(): void {
 
 async function handleSubscribe(): Promise<void> {
   if (!onSubscribe || isSubscribing) return;
+  if (!ensureSubscriptionAuth()) return;
 
   if (!checkSubscriptionSupported(author.platform)) {
-    new Notice('Subscriptions are available for Instagram, Facebook, LinkedIn, Reddit, TikTok, Pinterest, Bluesky, Mastodon, YouTube, and RSS-based platforms.');
+    new Notice('Subscriptions are available for Instagram, Facebook, Threads, LinkedIn, Reddit, TikTok, Pinterest, Bluesky, Mastodon, YouTube, and RSS-based platforms.');
     return;
   }
 
@@ -443,6 +454,8 @@ function handleEditSubscription(): void {
 // ============================================================================
 
 async function handleRedditSubscribe(modalOptions: RedditModalOptions, isEditMode: boolean): Promise<void> {
+  if (!ensureSubscriptionAuth()) return;
+
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const currentHour = new Date().getHours();
 
@@ -476,6 +489,8 @@ async function handleNaverSubscribe(
   isEditMode: boolean,
   subscriptionType: 'blog' | 'cafe-member',
 ): Promise<void> {
+  if (!ensureSubscriptionAuth()) return;
+
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const currentHour = new Date().getHours();
 
@@ -505,6 +520,8 @@ async function handleNaverSubscribe(
 }
 
 async function handleBrunchSubscribe(modalOptions: BrunchModalOptions, isEditMode: boolean): Promise<void> {
+  if (!ensureSubscriptionAuth()) return;
+
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const currentHour = new Date().getHours();
 
@@ -734,9 +751,27 @@ function renderNoteContent(node: HTMLElement, body: string) {
         <!-- Subscription badge — uses exact same pcr-badge classes as timeline PostCardRenderer -->
         {#if isSubscribed}
           <div class="subscription-badge-wrapper">
-            <div class="pcr-badge pcr-badge-subscribed" role="button" tabindex="0" title="Click to manage subscription" onclick={toggleDropdown} onkeydown={(e) => { if (e.key === 'Enter') toggleDropdown(); }}>
-              <div class="pcr-badge-icon"><svg class="pcr-badge-svg-subscribed" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
-              <span>Subscribed</span>
+            <div
+              class="pcr-badge pcr-badge-subscribed"
+              role="button"
+              tabindex="0"
+              title={isUnsubscribing ? 'Unsubscribing...' : 'Click to manage subscription'}
+              style:--pcr-badge-cursor={isUnsubscribing ? 'wait' : 'pointer'}
+              style:--pcr-badge-opacity={isUnsubscribing ? '0.7' : '1'}
+              onclick={() => { if (!isUnsubscribing) toggleDropdown(); }}
+              onkeydown={(e) => { if (e.key === 'Enter' && !isUnsubscribing) toggleDropdown(); }}
+            >
+              {#if isUnsubscribing}
+                <div class="pcr-badge-icon">
+                  <svg class="pcr-badge-svg-loading" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12a9 9 0 1 1-6.22-8.56"/>
+                  </svg>
+                </div>
+                <span>Unsubscribing...</span>
+              {:else}
+                <div class="pcr-badge-icon"><svg class="pcr-badge-svg-subscribed" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
+                <span>Subscribed</span>
+              {/if}
             </div>
             {#if showDropdown}
               <div class="sub-dropdown-menu">
@@ -749,7 +784,9 @@ function renderNoteContent(node: HTMLElement, body: string) {
                 <button class="sub-dropdown-item" onclick={() => { closeDropdown(); void handleManualRun(); }} disabled={isRunning}>Run Now</button>
                 <button class="sub-dropdown-item" onclick={() => { closeDropdown(); handleEditSubscription(); }}>Edit Settings</button>
                 <div class="sub-dropdown-divider"></div>
-                <button class="sub-dropdown-item danger" onclick={() => { closeDropdown(); void handleUnsubscribe(); }} disabled={isUnsubscribing}>Unsubscribe</button>
+                <button class="sub-dropdown-item danger" onclick={() => { void handleUnsubscribe(); }} disabled={isUnsubscribing}>
+                  {isUnsubscribing ? 'Unsubscribing...' : 'Unsubscribe'}
+                </button>
               </div>
             {/if}
           </div>
@@ -762,14 +799,34 @@ function renderNoteContent(node: HTMLElement, body: string) {
               <div class="sub-dropdown-menu">
                 <button class="sub-dropdown-item" onclick={() => { closeDropdown(); void handleManualRun(); }} disabled={isRunning}>Retry</button>
                 <div class="sub-dropdown-divider"></div>
-                <button class="sub-dropdown-item danger" onclick={() => { closeDropdown(); void handleUnsubscribe(); }} disabled={isUnsubscribing}>Unsubscribe</button>
+                <button class="sub-dropdown-item danger" onclick={() => { void handleUnsubscribe(); }} disabled={isUnsubscribing}>
+                  {isUnsubscribing ? 'Unsubscribing...' : 'Unsubscribe'}
+                </button>
               </div>
             {/if}
           </div>
         {:else if isNotSubscribed && isSubscriptionSupported}
-          <div class="pcr-badge pcr-badge-unsubscribed" role="button" tabindex="0" title="Click to subscribe" onclick={handleSubscribe} onkeydown={(e) => { if (e.key === 'Enter') void handleSubscribe(); }}>
-            <div class="pcr-badge-icon"><svg class="pcr-badge-svg-unsubscribed" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/><line x1="12" y1="2" x2="12" y2="5"/></svg></div>
-            <span>Subscribe</span>
+          <div
+            class="pcr-badge pcr-badge-unsubscribed"
+            role="button"
+            tabindex="0"
+            title={isSubscribing ? 'Subscribing...' : 'Click to subscribe'}
+            style:--pcr-badge-cursor={isSubscribing ? 'wait' : 'pointer'}
+            style:--pcr-badge-opacity={isSubscribing ? '0.7' : '1'}
+            onclick={handleSubscribe}
+            onkeydown={(e) => { if (e.key === 'Enter') void handleSubscribe(); }}
+          >
+            {#if isSubscribing}
+              <div class="pcr-badge-icon">
+                <svg class="pcr-badge-svg-loading" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 12a9 9 0 1 1-6.22-8.56"/>
+                </svg>
+              </div>
+              <span>Subscribing...</span>
+            {:else}
+              <div class="pcr-badge-icon"><svg class="pcr-badge-svg-unsubscribed" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/><line x1="12" y1="2" x2="12" y2="5"/></svg></div>
+              <span>Subscribe</span>
+            {/if}
           </div>
         {/if}
         <!-- Note Button: Open Note / Create Note -->

@@ -171,6 +171,8 @@ interface AuthorCatalogProps {
   enableAuthorNotes?: boolean;
   authorNotesPath?: string;
   viewMode?: 'list' | 'card';
+  isAuthenticated?: () => boolean;
+  onAuthRequired?: () => void;
 }
 
 let {
@@ -194,6 +196,8 @@ let {
   enableAuthorNotes = false,
   authorNotesPath = 'Social Authors',
   viewMode = 'list' as 'list' | 'card',
+  isAuthenticated = () => true,
+  onAuthRequired,
 }: AuthorCatalogProps = $props();
 
 // ============================================================================
@@ -1423,7 +1427,7 @@ async function handleUnsubscribe(author: AuthorCatalogEntry): Promise<void> {
   await onUnsubscribe(author);
 
   // Update store with new status
-  store.updateAuthorStatus(author.authorUrl, author.platform, 'not_subscribed', undefined);
+  store.updateAuthorStatus(author.authorUrl, author.platform, 'not_subscribed', null);
 
   // Update the author in the authors array (source of truth)
   const updatedAuthors = authors.map(a => {
@@ -1667,6 +1671,8 @@ const platformNames: Partial<Record<Platform | 'all', string>> = {
                   {onViewHistory}
                   onViewArchives={handleViewArchives}
                   {onViewDetail}
+                  {isAuthenticated}
+                  {onAuthRequired}
                   onOpenNote={(a) => {
                     const filePath = a.noteFilePath;
                     if (filePath) {

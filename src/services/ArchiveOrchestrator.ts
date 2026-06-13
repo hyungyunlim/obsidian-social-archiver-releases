@@ -58,6 +58,18 @@ export interface OrchestratorOptions extends ArchiveOptions {
    * @see prd-large-media-guard.md, section "Scope Guardrails"
    */
   isForeground?: boolean;
+  /**
+   * Keep quotedPost media (and its external link preview image) on their
+   * remote URLs even when `downloadMedia` is enabled.
+   *
+   * Used by local-only batch imports (clip-batch inbox, locked decision Q5
+   * of prd-bulk-import-local-vault-mode.md): graduated local-only notes are
+   * later validated by the obsidian-local-import server path, which rejects
+   * local media inside `quotedPost` — so quoted media must never be
+   * rewritten to vault paths in local mode. Defaults to `false` (download
+   * quoted media as before).
+   */
+  skipQuotedMediaDownload?: boolean;
 }
 
 /**
@@ -646,7 +658,9 @@ export class ArchiveOrchestrator implements IService {
       }
 
       // Quoted/Shared post media (for Facebook shared posts, X quoted tweets, etc.)
-      if (postData.quotedPost && postData.quotedPost.media) {
+      // skipQuotedMediaDownload (locked Q5, local batch imports): quoted media
+      // keeps its remote URLs so later graduation passes server validation.
+      if (!options.skipQuotedMediaDownload && postData.quotedPost && postData.quotedPost.media) {
         postData.quotedPost.media.forEach((media, mediaIndex) => {
           // Skip YouTube embeds (they use iframe, no download needed)
           if (postData.quotedPost?.platform === 'youtube' || postData.quotedPost?.platform === 'tiktok') {
@@ -658,7 +672,7 @@ export class ArchiveOrchestrator implements IService {
       }
 
       // Quoted post external link preview image (for Facebook shared posts with link attachments)
-      if (postData.quotedPost?.metadata.externalLinkImage) {
+      if (!options.skipQuotedMediaDownload && postData.quotedPost?.metadata.externalLinkImage) {
         allMediaToDownload.push({
           media: { type: 'image', url: postData.quotedPost.metadata.externalLinkImage },
           mediaIndex: -1, // Special index for external link image
@@ -1165,6 +1179,7 @@ export class ArchiveOrchestrator implements IService {
       // Fall back to postData for platforms that don't include raw data
       const rawData = postData.raw ?? postData;
       const profileData = ProfileDataMapper.mapPlatformData(platform, rawData);
+      const avatarUrl = profileData.avatarUrl ?? postData.author.avatar ?? null;
 
       // Update author metadata if enabled
       if (updateMetadata) {
@@ -1187,9 +1202,19 @@ export class ArchiveOrchestrator implements IService {
         postData.author.lastMetadataUpdate = new Date();
       }
 
-      // Download avatar if enabled and avatar URL exists
-      if (downloadAvatars && profileData.avatarUrl && this.authorAvatarService) {
-        const avatarUrl = profileData.avatarUrl;
+      // Download avatar if enabled and avatar URL exists. Skip when the
+      // sender already delivered a vault-local avatar (clip-batch local
+      // media handoff sets author.localAvatar) and when the URL is not
+      // remote — vault-relative paths would otherwise hit requestUrl as
+      // "Invalid URL" once per post (noisy at clip-batch scale).
+      const isRemoteAvatarUrl = typeof avatarUrl === 'string' && /^https?:\/\//i.test(avatarUrl);
+      if (
+        downloadAvatars &&
+        avatarUrl &&
+        isRemoteAvatarUrl &&
+        !postData.author.localAvatar &&
+        this.authorAvatarService
+      ) {
         const username = this.extractUsernameForAvatar(postData);
         const cacheKey = `${platform}-${username}`;
 

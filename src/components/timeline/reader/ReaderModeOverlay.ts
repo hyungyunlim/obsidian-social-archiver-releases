@@ -2412,6 +2412,7 @@ export class ReaderModeOverlay {
     const supported =
       post.platform === 'instagram' ||
       post.platform === 'facebook' ||
+      post.platform === 'threads' ||
       post.platform === 'linkedin' ||
       post.platform === 'tiktok' ||
       post.platform === 'pinterest' ||

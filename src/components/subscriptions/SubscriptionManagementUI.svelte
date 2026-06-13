@@ -28,6 +28,8 @@ interface SubscriptionManagementUIProps {
   triggerManualRun?: (subscriptionId: string) => Promise<void>;
   deleteSubscription?: (subscriptionId: string) => Promise<void>;
   fetchRunHistory?: (subscriptionId: string) => Promise<SubscriptionRun[]>;
+  isAuthenticated?: () => boolean;
+  onAuthRequired?: () => void;
 }
 
 let {
@@ -39,7 +41,9 @@ let {
   fetchSubscriptions,
   triggerManualRun,
   deleteSubscription,
-  fetchRunHistory
+  fetchRunHistory,
+  isAuthenticated = () => true,
+  onAuthRequired
 }: SubscriptionManagementUIProps = $props();
 
 /**
@@ -122,6 +126,8 @@ function closeHistoryPanel(): void {
       onManualRun={handleManualRun}
       onViewHistory={handleViewHistory}
       {onViewArchives}
+      {isAuthenticated}
+      {onAuthRequired}
     />
   </div>
 

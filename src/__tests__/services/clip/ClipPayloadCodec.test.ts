@@ -101,6 +101,31 @@ describe('ClipPayloadCodec', () => {
       expect('share' in (payload.postData as object)).toBe(false);
     });
 
+    it('preserves YouTube transcript data from local clip payloads', () => {
+      const payload = codec.decode(
+        makeCompressedEnvelope({
+          platform: 'youtube',
+          id: 'A_x_FLi_PnU',
+          url: 'https://www.youtube.com/watch?v=A_x_FLi_PnU',
+          videoId: 'A_x_FLi_PnU',
+          transcript: {
+            raw: 'Hello world',
+            formatted: [
+              { start_time: 1, end_time: 3, duration: 2, text: 'Hello world' },
+            ],
+            language: 'en',
+          },
+        })
+      );
+
+      expect(payload.postData.transcript).toEqual({
+        raw: 'Hello world',
+        formatted: [
+          { start_time: 1, end_time: 3, duration: 2, text: 'Hello world' },
+        ],
+      });
+    });
+
     it('revives publishedDate/archivedDate ISO strings into Date objects', () => {
       const payload = codec.decode(
         makeCompressedEnvelope({

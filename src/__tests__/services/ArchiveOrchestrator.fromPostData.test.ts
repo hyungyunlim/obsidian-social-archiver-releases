@@ -5,6 +5,7 @@ import type { MarkdownConverter } from '@/services/MarkdownConverter';
 import type { VaultManager } from '@/services/VaultManager';
 import type { MediaHandler } from '@/services/MediaHandler';
 import type { LinkPreviewExtractor } from '@/services/LinkPreviewExtractor';
+import type { AuthorAvatarService } from '@/services/AuthorAvatarService';
 import type { PostData } from '@/types/post';
 import type { TFile } from 'obsidian';
 
@@ -20,6 +21,8 @@ describe('ArchiveOrchestrator.orchestrateFromPostData', () => {
   let mockVaultManager: VaultManager;
   let mockMediaHandler: MediaHandler;
   let mockLinkPreviewExtractor: LinkPreviewExtractor;
+  let mockAuthorAvatarService: AuthorAvatarService;
+  let downloadedMediaInputs: Array<{ type: string; url: string }>;
 
   const notePath = 'Social Archives/Instagram/2026/06/2026-06-01 - Demo User - DEMO123.md';
   const mockFile: TFile = { path: notePath } as TFile;
@@ -47,6 +50,8 @@ describe('ArchiveOrchestrator.orchestrateFromPostData', () => {
   }
 
   beforeEach(() => {
+    downloadedMediaInputs = [];
+
     mockArchiveService = {
       initialize: vi.fn().mockResolvedValue(undefined),
       dispose: vi.fn().mockResolvedValue(undefined),
@@ -80,16 +85,19 @@ describe('ArchiveOrchestrator.orchestrateFromPostData', () => {
       initialize: vi.fn().mockResolvedValue(undefined),
       dispose: vi.fn().mockResolvedValue(undefined),
       isHealthy: vi.fn().mockResolvedValue(true),
-      downloadMedia: vi.fn().mockResolvedValue([
-        {
-          originalUrl: 'https://cdn.example.com/img.jpg',
-          localPath: mediaFile.path,
-          type: 'image' as const,
-          size: 1024,
-          file: mediaFile,
-          sourceIndex: 0,
-        },
-      ]),
+      downloadMedia: vi.fn().mockImplementation(async (items: Array<{ type: string; url: string }>) => {
+        downloadedMediaInputs = items.map(item => ({ type: item.type, url: item.url }));
+        return [
+          {
+            originalUrl: 'https://cdn.example.com/img.jpg',
+            localPath: mediaFile.path,
+            type: 'image' as const,
+            size: 1024,
+            file: mediaFile,
+            sourceIndex: 0,
+          },
+        ];
+      }),
       deleteMedia: vi.fn().mockResolvedValue(undefined),
     } as unknown as MediaHandler;
 
@@ -100,12 +108,17 @@ describe('ArchiveOrchestrator.orchestrateFromPostData', () => {
       extractUrls: vi.fn().mockReturnValue([]),
     } as unknown as LinkPreviewExtractor;
 
+    mockAuthorAvatarService = {
+      downloadAndSaveAvatar: vi.fn().mockResolvedValue('attachments/social-archives/authors/linkedin-demo-user.jpg'),
+    } as unknown as AuthorAvatarService;
+
     orchestrator = new ArchiveOrchestrator({
       archiveService: mockArchiveService,
       markdownConverter: mockMarkdownConverter,
       vaultManager: mockVaultManager,
       mediaHandler: mockMediaHandler,
       linkPreviewExtractor: mockLinkPreviewExtractor,
+      authorAvatarService: mockAuthorAvatarService,
       enableCache: true,
       maxRetries: 1,
       retryDelay: 1,
@@ -129,14 +142,34 @@ describe('ArchiveOrchestrator.orchestrateFromPostData', () => {
 
     expect(result.success).toBe(true);
     expect(mockMediaHandler.downloadMedia).toHaveBeenCalledTimes(1);
-    expect(mockMediaHandler.downloadMedia).toHaveBeenCalledWith(
-      [expect.objectContaining({ url: 'https://cdn.example.com/img.jpg' })],
-      'instagram',
-      'DEMO123',
-      'Demo User',
-      expect.any(Function)
-    );
+    expect(downloadedMediaInputs).toEqual([{ type: 'image', url: 'https://cdn.example.com/img.jpg' }]);
     expect(postData.media[0]?.url).toBe(mediaFile.path);
+  });
+
+  it('downloads author avatar from client-extracted PostData when mapper has no raw avatar field', async () => {
+    const postData = makePostData({
+      platform: 'linkedin',
+      id: '7468391614433136641',
+      url: 'https://www.linkedin.com/feed/update/urn:li:groupPost:8573821-7468391614433136641/',
+      author: {
+        name: 'Demo User',
+        url: 'https://www.linkedin.com/in/demo-user',
+        username: 'demo-user',
+        avatar: 'https://media.licdn.com/dms/image/v2/avatar/profile.jpg',
+      },
+      media: [],
+    });
+
+    const result = await orchestrator.orchestrateFromPostData(postData);
+
+    expect(result.success).toBe(true);
+    expect(mockAuthorAvatarService.downloadAndSaveAvatar).toHaveBeenCalledWith(
+      'https://media.licdn.com/dms/image/v2/avatar/profile.jpg',
+      'linkedin',
+      'demo-user',
+      false
+    );
+    expect(postData.author.localAvatar).toBe('attachments/social-archives/authors/linkedin-demo-user.jpg');
   });
 
   it('skips media download when downloadMedia is false', async () => {
@@ -150,6 +183,58 @@ describe('ArchiveOrchestrator.orchestrateFromPostData', () => {
 
     expect(result.success).toBe(true);
     expect(mockMediaHandler.downloadMedia).not.toHaveBeenCalled();
+  });
+
+  it('keeps quotedPost media remote when skipQuotedMediaDownload is set (locked Q5)', async () => {
+    const quoted = makePostData({
+      id: 'QUOTED1',
+      url: 'https://www.instagram.com/p/QUOTED1/',
+      media: [{ type: 'image', url: 'https://cdn.example.com/quoted.jpg' }],
+      metadata: {
+        timestamp: '2026-06-01T10:00:00.000Z',
+        externalLinkImage: 'https://cdn.example.com/preview.jpg',
+      },
+    });
+    const postData = makePostData({ quotedPost: quoted });
+
+    const result = await orchestrator.orchestrateFromPostData(postData, {
+      enableAI: false,
+      downloadMedia: true,
+      removeTracking: true,
+      generateShareLink: false,
+      deepResearch: false,
+      skipQuotedMediaDownload: true,
+    });
+
+    expect(result.success).toBe(true);
+    // Main post media still downloads and rewrites…
+    expect(downloadedMediaInputs).toEqual([
+      { type: 'image', url: 'https://cdn.example.com/img.jpg' },
+    ]);
+    expect(postData.media[0]?.url).toBe(mediaFile.path);
+    // …while quoted media (and its link preview image) keep remote URLs so
+    // graduated local-only notes pass the server import validation.
+    expect(postData.quotedPost?.media[0]?.url).toBe('https://cdn.example.com/quoted.jpg');
+    expect(postData.quotedPost?.metadata.externalLinkImage).toBe(
+      'https://cdn.example.com/preview.jpg'
+    );
+  });
+
+  it('still downloads quotedPost media by default (no skipQuotedMediaDownload)', async () => {
+    const quoted = makePostData({
+      id: 'QUOTED1',
+      url: 'https://www.instagram.com/p/QUOTED1/',
+      media: [{ type: 'image', url: 'https://cdn.example.com/quoted.jpg' }],
+    });
+    const postData = makePostData({ quotedPost: quoted });
+
+    const result = await orchestrator.orchestrateFromPostData(postData);
+
+    expect(result.success).toBe(true);
+    expect(downloadedMediaInputs).toEqual([
+      { type: 'image', url: 'https://cdn.example.com/img.jpg' },
+      { type: 'image', url: 'https://cdn.example.com/quoted.jpg' },
+    ]);
   });
 
   it('rejects post data missing identity fields', async () => {

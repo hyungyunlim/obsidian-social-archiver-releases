@@ -26,6 +26,7 @@ export { GracePeriodManager } from './licensing/GracePeriodManager';
 export { PendingJobsManager } from './PendingJobsManager';
 export { CrawlJobTracker } from './CrawlJobTracker';
 export { ClientRegistrationService } from './ClientRegistrationService';
+export { DeviceScopedIdStorage } from './DeviceScopedIdStorage';
 export { AuthorVaultScanner } from './AuthorVaultScanner';
 export { AuthorDeduplicator, normalizeAuthorUrl, normalizeAuthorName, generateAuthorKey } from './AuthorDeduplicator';
 export { SubscriptionManager } from './SubscriptionManager';

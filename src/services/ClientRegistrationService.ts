@@ -8,6 +8,11 @@
  * - Store and retrieve clientId from settings
  * - Unregister when plugin is unloaded or user requests
  * - Auto-register on plugin load if authToken exists
+ *
+ * Persistence note: `settings.syncClientId`/`settings.deviceId` are
+ * per-device. The injected `saveSettings` (plugin save path) mirrors them to
+ * localStorage via `DeviceScopedIdStorage` and strips them from the
+ * vault-synced data.json — this service only mutates the in-memory settings.
  */
 
 import { Platform as ObsidianPlatform, type App } from 'obsidian';

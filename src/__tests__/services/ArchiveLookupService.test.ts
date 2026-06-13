@@ -105,6 +105,17 @@ function createMockApp(fileConfigs: MockFileConfig[]): {
     getMarkdownFiles: vi.fn((): TFile[] => {
       return [...tFileMap.values()];
     }),
+    // Serialize the config's frontmatter into a real YAML block so raw-content
+    // inspection (readSourceArchiveIdState) stays consistent with getFileCache
+    read: vi.fn(async (file: TFile): Promise<string> => {
+      const config = fileMap.get(file.path);
+      if (!config?.frontmatter) return 'Body content\n';
+      const yaml = Object.entries(config.frontmatter)
+        .map(([key, value]) => `${key}: ${String(value)}`)
+        .join('\n');
+      return `---\n${yaml}\n---\n\nBody content\n`;
+    }),
+    modify: vi.fn(async (): Promise<void> => {}),
   } satisfies Partial<Vault> as unknown as Vault;
 
   const processFrontMatterMock = vi.fn(async (file: TFile, fn: (fm: Record<string, unknown>) => void) => {
@@ -306,6 +317,34 @@ describe('ArchiveLookupService', () => {
       expect(svc.findByOriginalUrl('https://reddit.com/r/all/comments/abc123/title/?param=sig')).toHaveLength(1);
       // Without sig param — different normalized URL, no match
       expect(svc.findByOriginalUrl('https://reddit.com/r/all/comments/abc123/title')).toHaveLength(0);
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  describe('getClientPostIdSet', () => {
+    it('snapshots every string clientPostId in one vault pass (bulk dedup memo)', () => {
+      const { app } = createMockApp([
+        { path: 'Social Archives/a.md', frontmatter: { clientPostId: 'post-a' } },
+        { path: 'Social Archives/b.md', frontmatter: { clientPostId: 'post-b' } },
+        // Same matching semantics as findByClientPostId: non-string and
+        // empty values never match, so they are not snapshotted either.
+        { path: 'Social Archives/numeric.md', frontmatter: { clientPostId: 123 } },
+        { path: 'Social Archives/empty.md', frontmatter: { clientPostId: '' } },
+        { path: 'Social Archives/none.md', frontmatter: { originalUrl: 'https://example.com/x' } },
+        { path: 'Social Archives/no-frontmatter.md' },
+      ]);
+      const svc = new ArchiveLookupService(app);
+      svc.initialize();
+
+      expect(svc.getClientPostIdSet()).toEqual(new Set(['post-a', 'post-b']));
+    });
+
+    it('returns an empty set for a vault without clientPostId frontmatter', () => {
+      const { app } = createMockApp([]);
+      const svc = new ArchiveLookupService(app);
+      svc.initialize();
+
+      expect(svc.getClientPostIdSet().size).toBe(0);
     });
   });
 

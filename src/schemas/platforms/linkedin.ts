@@ -40,7 +40,7 @@ const linkedInPostUrlSchema = z
 // Activity update URL: linkedin.com/feed/update/urn:li:activity:{id}
 const linkedInActivityUpdateSchema = z
 	.string()
-	.regex(/linkedin\.com\/feed\/update\/urn:li:(activity|share):\d+/i, {
+	.regex(/linkedin\.com\/feed\/update\/urn:li:(?:(activity|share|ugcPost):\d+|groupPost:\d+-\d+)/i, {
 		message: 'Invalid LinkedIn activity update URL format',
 	});
 

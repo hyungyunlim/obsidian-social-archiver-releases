@@ -212,6 +212,7 @@ describe('MarkdownConverter', () => {
 
       expect(result.content).toContain('LinkedIn');
       expect(result.content).toContain('Reactions:'); // LinkedIn-specific term
+      expect(result.content).toContain('Reposts:** 25');
     });
 
     it('should use Instagram template for Instagram posts', async () => {

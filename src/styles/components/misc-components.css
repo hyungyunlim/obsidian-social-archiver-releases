@@ -1487,9 +1487,9 @@
 }
 
 .tc-selection-action-btn-danger:hover:not(:disabled) {
-  background: var(--background-modifier-error);
+  background: var(--text-error);
   border-color: var(--text-error);
-  color: var(--text-error);
+  color: var(--text-on-accent);
 }
 
 /* Bulk operation progress bar */

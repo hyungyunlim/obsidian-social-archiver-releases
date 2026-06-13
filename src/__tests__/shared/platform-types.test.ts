@@ -80,8 +80,8 @@ describe('Platform Types', () => {
 			expect(PLATFORMS).toContain('post');
 		});
 
-		it('should have correct length (24 platforms)', () => {
-			expect(PLATFORMS).toHaveLength(24);
+		it('should have correct length (25 platforms)', () => {
+			expect(PLATFORMS).toHaveLength(25);
 		});
 	});
 
@@ -121,8 +121,8 @@ describe('Platform Types', () => {
 				expect(NEW_SUBSCRIPTION_PLATFORMS).toContain('x');
 			});
 
-			it('should NOT include threads until the user-facing rollout is enabled', () => {
-				expect(NEW_SUBSCRIPTION_PLATFORMS).not.toContain('threads');
+			it('should include threads for profile discovery subscription rollout', () => {
+				expect(NEW_SUBSCRIPTION_PLATFORMS).toContain('threads');
 			});
 
 			it('should NOT include linkedin (disabled for new)', () => {

@@ -169,6 +169,7 @@ export type CrawlSupportedPlatform = typeof CRAWL_SUPPORTED_PLATFORMS[number];
 export const NEW_SUBSCRIPTION_PLATFORMS = [
   'instagram',
   'facebook',
+  'threads',
   'x', // Re-enabled via xcancel RSS (free, no BrightData)
   'reddit',
   'tiktok',
@@ -188,7 +189,7 @@ export type NewSubscriptionPlatform = typeof NEW_SUBSCRIPTION_PLATFORMS[number];
  */
 export const SUBSCRIPTION_PLATFORMS = [
   'instagram',
-  'threads', // Feature-flagged server/API support; not exposed in new-subscription UI yet
+  'threads',
   'x', // Disabled but may have existing subscriptions
   'facebook',
   'linkedin', // Disabled for new but may have existing

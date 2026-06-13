@@ -31,7 +31,7 @@ export const RSS_PLATFORMS_FOR_SUBSCRIPTION_MATCH = ['medium', 'velog', 'substac
  * Note: X uses xcancel RSS feed (free, no BrightData needed)
  */
 export const SUBSCRIPTION_SUPPORTED_PLATFORMS = [
-  'instagram', 'facebook', 'linkedin', 'reddit', 'tiktok', 'pinterest',
+  'instagram', 'facebook', 'threads', 'linkedin', 'reddit', 'tiktok', 'pinterest',
   'bluesky', 'mastodon', 'youtube', 'x', 'naver-webtoon', 'webtoons',
   'kidsnote',
   ...RSS_BASED_PLATFORMS
@@ -75,7 +75,7 @@ export const PROFILE_ARCHIVE_SUPPORTED_PLATFORMS = [
  * Note: X re-enabled via xcancel RSS (free, no BrightData)
  */
 export const NEW_SUBSCRIPTION_PLATFORMS = [
-  'instagram', 'facebook', 'x', 'linkedin', 'reddit', 'tiktok', 'pinterest',
+  'instagram', 'facebook', 'threads', 'x', 'linkedin', 'reddit', 'tiktok', 'pinterest',
   'bluesky', 'mastodon', 'youtube',
   ...RSS_BASED_PLATFORMS
 ] as const;

@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/detection.ts
- * Generated: 2026-06-11T11:49:12.883Z
+ * Generated: 2026-06-13T01:31:35.495Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -348,12 +348,12 @@ export function extractPostIdFromUrl(platform: Platform, url: string): string | 
       }
 
       case 'linkedin': {
-        // /posts/{slug} or activity-{id} in URL
-        const activityMatch = url.match(/activity-(\d+)/);
+        // /posts/{slug} or activity/ugcPost/share IDs in URL
+        const activityMatch = url.match(/(?:activity|ugcPost|share)-(\d+)/);
         if (activityMatch) return activityMatch[1] ?? null;
 
-        // /feed/update/urn:li:activity:{id}
-        const urnMatch = pathname.match(/urn:li:(?:activity|ugcPost):(\d+)/);
+        // /feed/update/urn:li:activity:{id}, share:{id}, ugcPost:{id}, or groupPost:{groupId}-{id}
+        const urnMatch = pathname.match(/urn:li:(?:activity|share|ugcPost|groupPost):(?:\d+-)?(\d+)/);
         if (urnMatch) return urnMatch[1] ?? null;
 
         // /posts/{slug}

@@ -82,6 +82,8 @@ const PLATFORM_PATTERNS: URLPattern[] = [
       /linkedin\.com\/posts\/[^/]+_[a-zA-Z0-9-]+/i,
       /linkedin\.com\/feed\/update\/urn:li:activity:\d+/i,
       /linkedin\.com\/feed\/update\/urn:li:share:\d+/i,
+      /linkedin\.com\/feed\/update\/urn:li:ugcPost:\d+/i,
+      /linkedin\.com\/feed\/update\/urn:li:groupPost:\d+-\d+/i,
 
       // Pulse/Article URLs
       /linkedin\.com\/pulse\/[^/]+/i,
@@ -568,8 +570,8 @@ export class PlatformDetector implements IService {
     const postsMatch = urlObj.pathname.match(/\/posts\/[^_]+_([a-zA-Z0-9-]+)/);
     if (postsMatch) return postsMatch[1] || null;
 
-    // urn:li:activity:1234567890
-    const activityMatch = urlObj.pathname.match(/urn:li:activity:(\d+)/);
+    // urn:li:activity:1234567890, ugcPost:1234567890, or groupPost:GROUP-1234567890
+    const activityMatch = urlObj.pathname.match(/urn:li:(?:activity|share|ugcPost|groupPost):(?:\d+-)?(\d+)/);
     if (activityMatch) return activityMatch[1] || null;
 
     return null;

@@ -535,7 +535,7 @@ export class AuthorCatalogController {
 
     await onUnsubscribe(author);
 
-    store.updateAuthorStatus(author.authorUrl, author.platform, 'not_subscribed', undefined);
+    store.updateAuthorStatus(author.authorUrl, author.platform, 'not_subscribed', null);
 
     const currentAuthors = get(store.state).authors;
     const updatedAuthors = currentAuthors.map((a) => {

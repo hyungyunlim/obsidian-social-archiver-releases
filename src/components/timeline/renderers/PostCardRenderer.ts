@@ -1570,6 +1570,7 @@ export class PostCardRenderer extends Component {
     const showSubscriptionBadge = (
       post.platform === 'instagram' ||
       post.platform === 'facebook' ||
+      post.platform === 'threads' ||
       post.platform === 'linkedin' ||
       post.platform === 'tiktok' ||
       post.platform === 'pinterest' ||

@@ -338,12 +338,12 @@ export function extractPostIdFromUrl(platform: Platform, url: string): string | 
       }
 
       case 'linkedin': {
-        // /posts/{slug} or activity-{id} in URL
-        const activityMatch = url.match(/activity-(\d+)/);
+        // /posts/{slug} or activity/ugcPost/share IDs in URL
+        const activityMatch = url.match(/(?:activity|ugcPost|share)-(\d+)/);
         if (activityMatch) return activityMatch[1] ?? null;
 
-        // /feed/update/urn:li:activity:{id}
-        const urnMatch = pathname.match(/urn:li:(?:activity|ugcPost):(\d+)/);
+        // /feed/update/urn:li:activity:{id}, share:{id}, ugcPost:{id}, or groupPost:{groupId}-{id}
+        const urnMatch = pathname.match(/urn:li:(?:activity|share|ugcPost|groupPost):(?:\d+-)?(\d+)/);
         if (urnMatch) return urnMatch[1] ?? null;
 
         // /posts/{slug}

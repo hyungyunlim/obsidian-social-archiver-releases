@@ -1104,7 +1104,7 @@ export class PostDataParser {
     // Find metadata footer: **Likes:** 6 | **Comments:** 3 | **Shares:** 1
     // Also support LinkedIn format: **Reactions:** 163
     // Support comma-formatted numbers: **Likes:** 2,018
-    const metadataRegex = /\*\*(?:Likes|Reactions):\*\*\s*([\d,]+)|\*\*Comments:\*\*\s*([\d,]+)|\*\*Shares:\*\*\s*([\d,]+)|\*\*Views:\*\*\s*([\d,]+)/g;
+    const metadataRegex = /\*\*(?:Likes|Reactions):\*\*\s*([\d,]+)|\*\*Comments:\*\*\s*([\d,]+)|\*\*(?:Shares|Reposts):\*\*\s*([\d,]+)|\*\*Views:\*\*\s*([\d,]+)/g;
 
     let match;
     while ((match = metadataRegex.exec(markdown)) !== null) {

@@ -55,6 +55,7 @@ import type { AuthorMentionUrlParts } from '../../utils/note-mentions';
 import type { SubscriptionEvent } from '../../services/SubscriptionManager';
 import { AuthorDetailContainer } from '../author-detail/AuthorDetailContainer';
 import { showConfirmModal } from '../../utils/confirm-modal';
+import { showAccountRequiredNotice } from '../../utils/accountGate';
 import {
   getBulkSelectionSelectableFilePaths,
   getBulkSelectionSummary,
@@ -564,6 +565,12 @@ export class TimelineContainer {
     });
   }
 
+  private requireSubscriptionAuth(): boolean {
+    if (isAuthenticated(this.plugin)) return true;
+    showAccountRequiredNotice(this.plugin, 'subscriptions');
+    return false;
+  }
+
   /**
    * Build auth headers for API calls
    */
@@ -770,6 +777,9 @@ export class TimelineContainer {
   ): Promise<void> {
     if (!this.plugin.subscriptionManager) {
       throw new Error('Subscription manager not initialized');
+    }
+    if (!this.requireSubscriptionAuth()) {
+      throw new Error('Authentication required');
     }
 
     // Ensure seriesId is a string (may be number from YAML frontmatter)
@@ -4085,8 +4095,12 @@ export class TimelineContainer {
    * Subscribe to an author - reusable method for both AuthorCatalog and Timeline
    */
   private async subscribeToAuthor(author: AuthorCatalogEntry): Promise<void> {
+    if (!this.requireSubscriptionAuth()) {
+      throw new Error('Authentication required');
+    }
+
     if (!isSubscriptionSupported(author.platform)) {
-      new Notice('Subscriptions are only available for Instagram, Facebook, X (Twitter), LinkedIn, Reddit, TikTok, Pinterest, Bluesky, Mastodon, YouTube, Velog, Medium, and RSS-based platforms.');
+      new Notice('Subscriptions are only available for Instagram, Facebook, Threads, X (Twitter), LinkedIn, Reddit, TikTok, Pinterest, Bluesky, Mastodon, YouTube, Velog, Medium, and RSS-based platforms.');
       throw new Error('Platform not supported');
     }
 
@@ -4293,7 +4307,7 @@ export class TimelineContainer {
       // Update AuthorCatalogStore if authorUrl and platform are provided
       if (authorUrl && platform) {
         const store = await import('../../services/AuthorCatalogStore').then(m => m.getAuthorCatalogStore());
-        store.updateAuthorStatus(authorUrl, platform, 'not_subscribed', undefined);
+        store.updateAuthorStatus(authorUrl, platform, 'not_subscribed', null);
       }
 
       // Remove from PostCardRenderer's cache
@@ -4349,9 +4363,15 @@ export class TimelineContainer {
           onPlatformCountsChange: (counts: PlatformAuthorCounts) => {
             this.authorPlatformCounts = counts;
           },
+          isAuthenticated: () => isAuthenticated(this.plugin),
+          onAuthRequired: () => showAccountRequiredNotice(this.plugin, 'subscriptions'),
           onSubscribe: async (author: AuthorCatalogEntry, options: AuthorSubscribeOptions) => {
+            if (!this.requireSubscriptionAuth()) {
+              throw new Error('Authentication required');
+            }
+
             if (!isSubscriptionSupported(author.platform)) {
-              new Notice('Subscriptions are only available for Instagram, Facebook, X (Twitter), LinkedIn, Reddit, TikTok, Pinterest, Bluesky, Mastodon, YouTube, Velog, Medium, and RSS-based platforms.');
+              new Notice('Subscriptions are only available for Instagram, Facebook, Threads, X (Twitter), LinkedIn, Reddit, TikTok, Pinterest, Bluesky, Mastodon, YouTube, Velog, Medium, and RSS-based platforms.');
               return;
             }
 
@@ -7154,6 +7174,31 @@ export class TimelineContainer {
       author,
       onGoBack: () => this.hideAuthorDetail(),
       onViewAuthor: (a: AuthorCatalogEntry) => this.showAuthorDetail(a),
+      isAuthenticated: () => isAuthenticated(this.plugin),
+      onAuthRequired: () => showAccountRequiredNotice(this.plugin, 'subscriptions'),
+      onSubscribe: async (a: AuthorCatalogEntry) => {
+        await this.subscribeToAuthor(a);
+        return a.subscriptionId ? {
+          id: a.subscriptionId,
+          platform: a.platform,
+          target: {
+            handle: this.deriveHandle(a),
+            profileUrl: a.authorUrl,
+          },
+        } : undefined;
+      },
+      onUnsubscribe: async (a: AuthorCatalogEntry) => {
+        if (!a.subscriptionId) {
+          throw new Error('Cannot unsubscribe: missing subscription ID');
+        }
+        await this.unsubscribeFromAuthor(a.subscriptionId, a.authorName, a.authorUrl, a.platform);
+      },
+      onManualRun: async (a: AuthorCatalogEntry) => {
+        if (!a.subscriptionId) {
+          throw new Error('Cannot run sync: missing subscription ID');
+        }
+        await this.triggerManualRun(a.subscriptionId, a);
+      },
     });
   }
 

@@ -527,7 +527,14 @@ export interface SocialArchiverSettings {
   username: string; // Reserved username from signup
   email: string; // Verified email address
   isVerified: boolean; // Whether email/username is verified
-  deviceId: string; // Unique device identifier for multi-device support
+  /**
+   * Unique device identifier for multi-device support.
+   * Per-device: persisted in localStorage via `DeviceScopedIdStorage`, NOT in
+   * data.json (which travels across devices with vault sync). The in-memory
+   * value is overlaid from localStorage in `loadSettings()` and stripped to
+   * '' on every save.
+   */
+  deviceId: string;
   userAvatar: string; // Avatar URL for user-created posts (optional)
 
   // Anonymous (logged-out) local mode
@@ -606,7 +613,14 @@ export interface SocialArchiverSettings {
 
   // Multi-Device Sync Settings
   enableServerPendingJobs: boolean; // Enable server-side pending job sync for cross-device recovery (default: true)
-  syncClientId: string; // Registered sync client ID for multi-client sync
+  /**
+   * Registered sync client ID for multi-client sync.
+   * Per-device: persisted in localStorage via `DeviceScopedIdStorage`, NOT in
+   * data.json — a synced data.json would copy one device's client id onto
+   * another, causing endless runtime-mismatch re-registration. Overlaid from
+   * localStorage in `loadSettings()` and stripped to '' on every save.
+   */
+  syncClientId: string;
 
   // Mobile Annotation Sync Settings
   /** Sync highlights and notes from mobile app to vault (opt-in beta, default: false) */
