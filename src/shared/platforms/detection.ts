@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/detection.ts
- * Generated: 2026-06-13T01:31:35.495Z
+ * Generated: 2026-06-15T10:12:07.014Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
