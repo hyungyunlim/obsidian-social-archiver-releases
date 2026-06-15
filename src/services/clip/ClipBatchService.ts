@@ -410,6 +410,6 @@ export class ClipBatchService {
 
   /** Yield between posts so a long batch never freezes the UI thread. */
   private async yieldToEventLoop(): Promise<void> {
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
   }
 }

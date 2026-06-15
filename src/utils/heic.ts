@@ -76,80 +76,6 @@ export function isJPEG(data: ArrayBuffer): boolean {
 }
 
 /**
- * Try to convert HEIC using libheif-js directly (latest version with better codec support)
- */
-async function tryLibheifJsConversion(
-  data: ArrayBuffer,
-  quality: number
-): Promise<ArrayBuffer | null> {
-  try {
-    // Use the pre-bundled WASM version for browser compatibility
-    // libheif-js doesn't have TS declarations so we cast as needed
-    const libheif = await import('libheif-js/wasm-bundle') as Record<string, unknown>;
-    const HeifDecoderClass = libheif.HeifDecoder as new () => {
-      decode(data: Uint8Array): Array<{
-        get_width(): number;
-        get_height(): number;
-        display(imageData: ImageData, callback: (data: ImageData | null) => void): void;
-      }>;
-    };
-    const decoder = new HeifDecoderClass();
-
-    const heifData = decoder.decode(new Uint8Array(data));
-    if (!heifData || heifData.length === 0) {
-      return null;
-    }
-
-    const image = heifData[0];
-    if (!image) {
-      return null;
-    }
-
-    const width = image.get_width();
-    const height = image.get_height();
-
-    // Create canvas and draw the image
-    const canvas = activeDocument.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      return null;
-    }
-
-    // Get image data
-    const imageData = ctx.createImageData(width, height);
-    await new Promise<void>((resolve, reject) => {
-      image.display(imageData, (displayData: ImageData | null) => {
-        if (!displayData) {
-          reject(new Error('Failed to display HEIC image'));
-          return;
-        }
-        ctx.putImageData(displayData, 0, 0);
-        resolve();
-      });
-    });
-
-    // Convert to JPEG
-    return new Promise((resolve) => {
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            void blob.arrayBuffer().then(resolve);
-          } else {
-            resolve(null);
-          }
-        },
-        'image/jpeg',
-        quality
-      );
-    });
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Try to convert HEIC using browser's native decoder (canvas fallback)
  * Works on macOS/iOS where the OS provides native HEIC support
  */
@@ -162,11 +88,11 @@ async function tryNativeHEICConversion(
     const url = URL.createObjectURL(blob);
     const img = new Image();
 
-    const cleanup = () => {
+    const cleanup = (): void => {
       URL.revokeObjectURL(url);
     };
 
-    img.onload = () => {
+    img.onload = (): void => {
       try {
         const canvas = activeDocument.createElement('canvas');
         canvas.width = img.naturalWidth;
@@ -198,13 +124,13 @@ async function tryNativeHEICConversion(
       }
     };
 
-    img.onerror = () => {
+    img.onerror = (): void => {
       cleanup();
       resolve(null);
     };
 
     // Set a timeout in case the image never loads
-    window.setTimeout(() => {
+    window.setTimeout((): void => {
       cleanup();
       resolve(null);
     }, 10000);
@@ -214,8 +140,7 @@ async function tryNativeHEICConversion(
 }
 
 /**
- * Convert HEIC/HEIF format to JPEG using libheif-js
- * Falls back to native browser decoder if libheif-js fails
+ * Convert HEIC/HEIF format to JPEG using the runtime's native image decoder.
  *
  * @param data - HEIC image data as ArrayBuffer
  * @param quality - JPEG quality (0.0 to 1.0, default: 0.95)
@@ -226,13 +151,6 @@ export async function convertHEICtoJPEG(
   data: ArrayBuffer,
   quality: number = 0.95
 ): Promise<ArrayBuffer> {
-  // Try libheif-js (supports HDR HEIC)
-  const libheifResult = await tryLibheifJsConversion(data, quality);
-  if (libheifResult) {
-    return libheifResult;
-  }
-
-  // Try native browser decoder as fallback
   const nativeResult = await tryNativeHEICConversion(data, quality);
   if (nativeResult) {
     return nativeResult;
@@ -241,7 +159,7 @@ export async function convertHEICtoJPEG(
   // All methods failed
   const brandInfo = getHEICBrandInfo(data);
   throw new Error(
-    `Failed to convert HEIC image (brand: ${brandInfo?.brandName ?? 'unknown'}, size: ${data.byteLength}). Try converting to JPEG using Preview app.`
+    `Failed to convert HEIC image (brand: ${brandInfo?.brandName ?? 'unknown'}, size: ${data.byteLength}). Try converting to JPEG using Preview app or another image converter.`
   );
 }
 

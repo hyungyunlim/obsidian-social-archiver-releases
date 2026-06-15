@@ -179,6 +179,52 @@ describe('ClipPayloadCodec', () => {
       expect(payload.postData.comments?.[0]?.author.lastMetadataUpdate).toBeUndefined();
     });
 
+    it('preserves Facebook comments and Markdown mention links from extension clips', () => {
+      const payload = codec.decode(
+        makeCompressedEnvelope({
+          platform: 'facebook',
+          id: 'pfbid02MQRLDArQRqPSNeAXm22h9q6LJHy7fRjt7SHHDGuhXX8TBWbM5Mdc6idjApYQnRJml',
+          url: 'https://www.facebook.com/ray.blueengine/posts/pfbid02MQRLDArQRqPSNeAXm22h9q6LJHy7fRjt7SHHDGuhXX8TBWbM5Mdc6idjApYQnRJml',
+          author: {
+            name: 'Ray ChanKeun Park',
+            url: 'https://www.facebook.com/ray.blueengine',
+          },
+          content: { text: 'Facebook post body' },
+          media: [],
+          metadata: {
+            timestamp: '2026-06-15T00:00:00.000Z',
+            comments: 2,
+          },
+          comments: [
+            {
+              id: 'c1',
+              author: {
+                name: '신희봉',
+                url: 'https://www.facebook.com/DinoSoapShin',
+              },
+              content: '좋은 어른도 많지 않을까요?',
+              replies: [
+                {
+                  id: 'c1r1',
+                  author: {
+                    name: 'Ray ChanKeun Park',
+                    url: 'https://www.facebook.com/ray.blueengine',
+                  },
+                  content: '[신희봉](https://www.facebook.com/DinoSoapShin) 좋은 어른들이 많고, 좋은 학생들이 많으니 시스템은 무너지지 않는 것이겠지만.',
+                },
+              ],
+            },
+          ],
+        })
+      );
+
+      expect(payload.postData.comments).toHaveLength(1);
+      expect(payload.postData.comments?.[0]?.content).toBe('좋은 어른도 많지 않을까요?');
+      expect(payload.postData.comments?.[0]?.replies?.[0]?.content).toBe(
+        '[신희봉](https://www.facebook.com/DinoSoapShin) 좋은 어른들이 많고, 좋은 학생들이 많으니 시스템은 무너지지 않는 것이겠지만.'
+      );
+    });
+
     it('rejects empty payloads', () => {
       expectClipError(() => codec.decode(''), 'empty');
       expectClipError(() => codec.decode(undefined), 'empty');

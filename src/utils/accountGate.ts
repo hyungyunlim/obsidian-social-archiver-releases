@@ -56,10 +56,10 @@ export function showAccountRequiredNotice(
   plugin: SocialArchiverPlugin,
   capability: AccountCapability
 ): void {
-  const fragment = document.createDocumentFragment();
-  fragment.appendChild(document.createTextNode(CAPABILITY_COPY[capability] + ' '));
+  const fragment = activeDocument.createDocumentFragment();
+  fragment.appendChild(activeDocument.createTextNode(CAPABILITY_COPY[capability] + ' '));
 
-  const link = document.createElement('a');
+  const link = activeDocument.createElement('a');
   link.textContent = 'Sign in';
   link.addEventListener('click', (event) => {
     event.preventDefault();

@@ -100,10 +100,17 @@ export default defineConfig(({ mode }) => ({
       '@stores': path.resolve(__dirname, './src/stores'),
       '@hooks': path.resolve(__dirname, './src/hooks'),
       '@shared': path.resolve(__dirname, './src/shared'),
+      // Use jszip's module sources instead of its pre-browserified dist file
+      // so dependency aliases below can remove community-review false positives.
+      'jszip': path.resolve(__dirname, './node_modules/jszip/lib/index.js'),
       // Replace the `immediate` polyfill (pulled in transitively via jszip/lie)
       // with a tiny Promise-based shim so the dynamic <script>-element fallback
       // branch never reaches the bundle (community-bot "Code obfuscation" lint).
-      'immediate': path.resolve(__dirname, './src/shims/immediate.ts')
+      'immediate': path.resolve(__dirname, './src/shims/immediate.ts'),
+      // jszip imports `setimmediate` for side effects. Its browser polyfill
+      // supports string handlers via the Function constructor; this shim intentionally
+      // supports function handlers only, which is all jszip uses.
+      'setimmediate': path.resolve(__dirname, './src/shims/setimmediate.ts')
     }
   },
   optimizeDeps: {
