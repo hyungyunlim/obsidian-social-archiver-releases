@@ -294,6 +294,34 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
     expect(drainBacklog).not.toHaveBeenCalled();
   });
 
+  it('routes AI action job IDs to action processing even from legacy comment events', async () => {
+    const events = makeEvents();
+    const handleRequestedJob = vi.fn().mockResolvedValue(undefined);
+    const handleRequestedAIActionJob = vi.fn().mockResolvedValue(undefined);
+    const deps = makeDeps({
+      events: events as any,
+      aiCommentJobProcessor: {
+        drainBacklog: vi.fn().mockResolvedValue(undefined),
+        handleRequestedJob,
+        handleRequestedAIActionJob,
+        handleStatusEvent: vi.fn().mockResolvedValue(undefined),
+      },
+    });
+
+    const bridge = new RealtimeEventBridge(deps);
+    bridge.setup();
+
+    await events.trigger('ws:ai_comment_requested', {
+      data: { jobId: 'aiaj_comment-summary', targetClientId: 'my-client-id' },
+    });
+    await events.trigger('ws:ai_action_requested', {
+      data: { jobId: 'aicj_legacy-comment', targetClientId: 'my-client-id' },
+    });
+
+    expect(handleRequestedAIActionJob).toHaveBeenCalledWith('aiaj_comment-summary', 'my-client-id');
+    expect(handleRequestedJob).toHaveBeenCalledWith('aicj_legacy-comment', 'my-client-id');
+  });
+
   it('refreshes the timeline when an AI comment update arrives over WebSocket', async () => {
     const events = makeEvents();
     const refreshTimelineView = vi.fn();

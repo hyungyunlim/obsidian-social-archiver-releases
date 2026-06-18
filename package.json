@@ -1,6 +1,6 @@
 {
   "name": "obsidian-social-archiver",
-  "version": "4.1.1",
+  "version": "4.1.2",
   "description": "Save social media posts directly into your Obsidian vault",
   "main": "main.js",
   "type": "module",
@@ -58,6 +58,7 @@
     "vitest": "^1.0.0"
   },
   "dependencies": {
+    "@social-archiver/cli-core": "file:./packages/cli-core",
     "@codemirror/state": "^6.5.0",
     "@codemirror/view": "^6.38.1",
     "@tiptap/core": "^3.10.1",

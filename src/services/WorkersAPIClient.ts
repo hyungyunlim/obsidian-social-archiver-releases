@@ -2167,7 +2167,7 @@ export class WorkersAPIClient implements IService {
       `/api/ai-actions/jobs?targetClientId=${encodeURIComponent(targetClientId)}&state=available`,
       {
         method: 'GET',
-        headers: { 'X-Client-Capabilities': 'ai-actions-v1,tag-patch-v1,content-variants-v1' },
+        headers: { 'X-Client-Capabilities': 'ai-actions-v1,tag-patch-v1,content-variants-v1,content-translate-v1' },
       },
     );
   }
@@ -2213,7 +2213,7 @@ export class WorkersAPIClient implements IService {
     this.ensureInitialized();
     return this.request<AIActionClaimResponse>(`/api/ai-actions/jobs/${jobId}/claim`, {
       method: 'POST',
-      headers: { 'X-Client-Capabilities': 'ai-actions-v1,tag-patch-v1,content-variants-v1' },
+      headers: { 'X-Client-Capabilities': 'ai-actions-v1,tag-patch-v1,content-variants-v1,content-translate-v1' },
       body: JSON.stringify(request),
     });
   }

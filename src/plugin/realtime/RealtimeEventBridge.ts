@@ -356,10 +356,15 @@ export class RealtimeEventBridge {
   private setupAICommentJobListeners(): void {
     this.eventRefs.push(
       this.deps.events.on('ws:ai_comment_requested', (payload: unknown) => {
-        const message = payload as { data?: { jobId?: string; targetClientId?: string }; jobId?: string; targetClientId?: string };
+        const message = payload as { data?: { jobId?: string; targetClientId?: string | null }; jobId?: string; targetClientId?: string | null };
         const data = message.data ?? message;
-        if (!data.jobId || !data.targetClientId) return;
+        if (!data.jobId) return;
         if (!this.canExecuteAICommentJobs()) return;
+        if (this.isAIActionJobId(data.jobId)) {
+          void this.deps.aiCommentJobProcessor?.handleRequestedAIActionJob?.(data.jobId, data.targetClientId ?? null);
+          return;
+        }
+        if (!data.targetClientId) return;
         void this.deps.aiCommentJobProcessor?.handleRequestedJob(data.jobId, data.targetClientId);
       }),
       this.deps.events.on('ws:ai_comment_status_updated', (payload: unknown) => {
@@ -422,6 +427,11 @@ export class RealtimeEventBridge {
         const data = message.data ?? message;
         if (!data.jobId) return;
         if (!this.canExecuteAICommentJobs()) return;
+        if (this.isAICommentJobId(data.jobId)) {
+          if (!data.targetClientId) return;
+          void this.deps.aiCommentJobProcessor?.handleRequestedJob(data.jobId, data.targetClientId);
+          return;
+        }
         void this.deps.aiCommentJobProcessor?.handleRequestedAIActionJob?.(data.jobId, data.targetClientId ?? null);
       }),
     );
@@ -1691,6 +1701,14 @@ export class RealtimeEventBridge {
 
   private canExecuteAICommentJobs(): boolean {
     return this.deps.canExecuteAICommentJobs?.() ?? true;
+  }
+
+  private isAIActionJobId(jobId: string): boolean {
+    return jobId.startsWith('aiaj_');
+  }
+
+  private isAICommentJobId(jobId: string): boolean {
+    return jobId.startsWith('aicj_');
   }
 
   private canExecuteTranscriptionJobs(): boolean {

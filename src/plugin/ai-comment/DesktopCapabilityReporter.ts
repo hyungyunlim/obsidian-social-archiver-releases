@@ -99,7 +99,7 @@ export class DesktopCapabilityReporter {
     if (!commentCapability) return null;
     return {
       enabled: commentCapability.enabled,
-      capabilities: ['ai-actions-v1', 'tag-patch-v1', 'content-variants-v1'],
+      capabilities: ['ai-actions-v1', 'tag-patch-v1', 'content-variants-v1', 'content-translate-v1'],
       pluginVersion: this.deps.pluginVersion,
       updatedAt: commentCapability.updatedAt,
     };
