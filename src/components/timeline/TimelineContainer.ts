@@ -61,6 +61,11 @@ import {
   getBulkSelectionSummary,
   normalizeBulkSelection,
 } from './bulkSelection';
+import {
+  archiveAttemptToPostData,
+  isFailedArchiveAttemptPost,
+  mergeFailedAttemptPostData,
+} from '../../utils/archiveAttempts';
 
 /**
  * Raw subscription data returned by the Worker API.
@@ -215,6 +220,7 @@ export class TimelineContainer {
 
   // Parser for loading posts from vault
   private postDataParser: PostDataParser;
+  private failedAttemptPosts: PostData[] = [];
 
   // Search UI state
   private searchExpanded: boolean = false;
@@ -962,7 +968,7 @@ export class TimelineContainer {
     // FilterPanel callbacks
     this.filterPanel.onFilterChange((filter) => {
       this.filterSortManager.updateFilter(filter);
-      this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
+      this.filteredPosts = this.applyCurrentFiltersAndSort();
       this.persistFilterPreferences();
       this.updateTabButtonState?.();
       void this.refreshBulkSelectionPresentation();
@@ -988,7 +994,7 @@ export class TimelineContainer {
     // SortDropdown callbacks
     this.sortDropdown.onSortChange((sort) => {
       this.filterSortManager.updateSort(sort);
-      this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
+      this.filteredPosts = this.applyCurrentFiltersAndSort();
     });
 
     this.sortDropdown.onRerender(() => {
@@ -1033,6 +1039,70 @@ export class TimelineContainer {
     this.postCardRenderer.onReaderMode((post) => {
       this.openReaderMode(post);
     });
+
+    this.postCardRenderer.onFailedArchiveDismiss((post, rootElement) => {
+      void this.dismissFailedArchiveAttempt(post, rootElement);
+    });
+  }
+
+  private applyCurrentFiltersAndSort(): PostData[] {
+    const filtered = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
+    const filterState = this.filterSortManager.getFilterState();
+    if (filterState.activeTab !== 'inbox') {
+      return filtered;
+    }
+    const filteredFailedAttempts = this.filterSortManager.applyFiltersAndSort(this.failedAttemptPosts);
+    return mergeFailedAttemptPostData(
+      filtered,
+      filteredFailedAttempts,
+      this.filterSortManager.getSortState().order,
+    );
+  }
+
+  private async refreshFailedArchiveAttempts(): Promise<void> {
+    if (!isAuthenticated(this.plugin) || !this.plugin.workersApiClient) {
+      this.failedAttemptPosts = [];
+      return;
+    }
+
+    try {
+      const response = await this.plugin.workersApiClient.listArchiveAttempts({
+        status: 'failed',
+        limit: 50,
+      });
+      this.failedAttemptPosts = response.attempts.map(archiveAttemptToPostData);
+    } catch (error) {
+      console.warn('[TimelineContainer] Failed to load archive attempts:', error);
+      this.failedAttemptPosts = [];
+    }
+  }
+
+  private async dismissFailedArchiveAttempt(post: PostData, rootElement: HTMLElement): Promise<void> {
+    const attemptId = post.failedArchiveAttempt?.attemptId;
+    if (!attemptId || !this.plugin.workersApiClient) return;
+
+    rootElement.addClass('tc-card-removing');
+
+    try {
+      await this.plugin.workersApiClient.dismissArchiveAttempt(attemptId);
+      this.failedAttemptPosts = this.failedAttemptPosts.filter(item => item.failedArchiveAttempt?.attemptId !== attemptId);
+      this.filteredPosts = this.filteredPosts.filter(item => item.failedArchiveAttempt?.attemptId !== attemptId);
+      window.setTimeout(() => {
+        rootElement.remove();
+        if (this.filteredPosts.length === 0) {
+          if (this.posts.length === 0) {
+            this.renderEmpty();
+          } else {
+            this.renderFilteredEmptyState();
+          }
+        }
+      }, 200);
+      new Notice('Failed archive removed');
+    } catch (error) {
+      rootElement.removeClass('tc-card-removing');
+      console.warn('[TimelineContainer] Failed to dismiss archive attempt:', error);
+      new Notice('Failed to remove archive attempt');
+    }
   }
 
   /**
@@ -1521,7 +1591,7 @@ export class TimelineContainer {
 
     resetBtn.addEventListener('click', () => void (async () => {
       this.filterSortManager.resetFilters(this.getDefaultFilterState());
-      this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
+      this.filteredPosts = this.applyCurrentFiltersAndSort();
       this.persistFilterPreferences();
       this.updateTabButtonState?.();
       this.updateFilterButtonState?.();
@@ -1579,7 +1649,7 @@ export class TimelineContainer {
 
     archiveBtn.addEventListener('click', () => void (async () => {
       this.filterSortManager.updateFilter({ activeTab: 'archive' });
-      this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
+      this.filteredPosts = this.applyCurrentFiltersAndSort();
       this.persistFilterPreferences();
       this.updateTabButtonState?.();
       this.updateFilterButtonState?.();
@@ -1631,7 +1701,7 @@ export class TimelineContainer {
 
     includeBtn.addEventListener('click', () => void (async () => {
       this.filterSortManager.updateFilter({ activeTab: 'all' });
-      this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
+      this.filteredPosts = this.applyCurrentFiltersAndSort();
       this.persistFilterPreferences();
       this.updateTabButtonState?.();
       this.updateFilterButtonState?.();
@@ -1650,7 +1720,7 @@ export class TimelineContainer {
 
     resetBtn.addEventListener('click', () => void (async () => {
       this.filterSortManager.resetFilters(this.getDefaultFilterState());
-      this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
+      this.filteredPosts = this.applyCurrentFiltersAndSort();
       this.persistFilterPreferences();
       this.updateTabButtonState?.();
       this.updateFilterButtonState?.();
@@ -1703,7 +1773,7 @@ export class TimelineContainer {
     });
     includeBtn.addEventListener('click', () => void (async () => {
       this.filterSortManager.updateFilter({ activeTab: 'all' });
-      this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
+      this.filteredPosts = this.applyCurrentFiltersAndSort();
       this.persistFilterPreferences();
       this.updateTabButtonState?.();
       this.updateFilterButtonState?.();
@@ -3411,9 +3481,7 @@ export class TimelineContainer {
    */
   private switchTab(tab: TimelineArchiveTab): void {
     this.filterSortManager.updateFilter({ activeTab: tab });
-    this.filteredPosts = this.dedupePostsByFilePath(
-      this.filterSortManager.applyFiltersAndSort(this.posts)
-    );
+    this.filteredPosts = this.applyCurrentFiltersAndSort();
     this.persistFilterPreferences();
     this.updateTabButtonState?.();
     this.updateFilterButtonState?.();
@@ -5219,7 +5287,12 @@ export class TimelineContainer {
     this.filteredIndexEntries = newFiltered;
 
     // Also update legacy PostData filtered list
-    this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
+    this.filteredPosts = this.applyCurrentFiltersAndSort();
+
+    if (this.failedAttemptPosts.length > 0 && this.filterSortManager.getFilterState().activeTab === 'inbox') {
+      await this.renderPostsFeed();
+      return;
+    }
 
     if (this.selectionMode) {
       this.syncBulkSelectionState();
@@ -5489,8 +5562,10 @@ export class TimelineContainer {
         this.forceReload = false;
       }
 
+      await this.refreshFailedArchiveAttempts();
+
       // Use FilterSortManager to apply filters and sorting (always apply, even with cached data)
-      this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
+      this.filteredPosts = this.applyCurrentFiltersAndSort();
       // Also maintain index-based filtered list for incremental updates
       this.filteredIndexEntries = this.filterSortManager.applyFiltersAndSortIndex(this.indexEntries);
       // Initialize previous tracking for incremental diffing (full load = new baseline)
@@ -5922,9 +5997,7 @@ export class TimelineContainer {
       btn.addEventListener('click', () => {
         const current = this.filterSortManager.getFilterState()[qf.key];
         this.filterSortManager.updateFilter({ [qf.key]: !current });
-        this.filteredPosts = this.dedupePostsByFilePath(
-          this.filterSortManager.applyFiltersAndSort(this.posts),
-        );
+        this.filteredPosts = this.applyCurrentFiltersAndSort();
         this.persistFilterPreferences();
         this.updateFilterButtonState?.();
         void this.refreshBulkSelectionPresentation();
@@ -6387,9 +6460,7 @@ export class TimelineContainer {
     }
 
     // Incremental refresh: re-apply filters/sort in-memory instead of full loadPosts()
-    this.filteredPosts = this.dedupePostsByFilePath(
-      this.filterSortManager.applyFiltersAndSort(this.posts),
-    );
+    this.filteredPosts = this.applyCurrentFiltersAndSort();
     this.filteredIndexEntries = this.filterSortManager.applyFiltersAndSortIndex(this.indexEntries);
     this.filterSortManager.updatePreviousFiltered(
       this.filteredIndexEntries.map((entry) => entry.filePath),
@@ -6485,9 +6556,7 @@ export class TimelineContainer {
       // Incremental refresh: re-apply filters in-memory.
       // Archived posts may be filtered out depending on the active tab, so
       // a full re-filter is needed, but not a full disk loadPosts().
-      this.filteredPosts = this.dedupePostsByFilePath(
-        this.filterSortManager.applyFiltersAndSort(this.posts),
-      );
+      this.filteredPosts = this.applyCurrentFiltersAndSort();
       this.filteredIndexEntries = this.filterSortManager.applyFiltersAndSortIndex(this.indexEntries);
       this.filterSortManager.updatePreviousFiltered(
         this.filteredIndexEntries.map((entry) => entry.filePath),
@@ -6587,9 +6656,7 @@ export class TimelineContainer {
 
     if (unarchivedCount > 0) {
       // Incremental refresh: re-apply filters in-memory
-      this.filteredPosts = this.dedupePostsByFilePath(
-        this.filterSortManager.applyFiltersAndSort(this.posts),
-      );
+      this.filteredPosts = this.applyCurrentFiltersAndSort();
       this.filteredIndexEntries = this.filterSortManager.applyFiltersAndSortIndex(this.indexEntries);
       this.filterSortManager.updatePreviousFiltered(
         this.filteredIndexEntries.map((entry) => entry.filePath),
@@ -6687,9 +6754,7 @@ export class TimelineContainer {
       // Incremental refresh: remove deleted posts from in-memory collections
       this.posts = this.posts.filter((p) => !p.filePath || !deletedFilePaths.has(p.filePath));
       this.indexEntries = this.indexEntries.filter((e) => !deletedFilePaths.has(e.filePath));
-      this.filteredPosts = this.dedupePostsByFilePath(
-        this.filterSortManager.applyFiltersAndSort(this.posts),
-      );
+      this.filteredPosts = this.applyCurrentFiltersAndSort();
       this.filteredIndexEntries = this.filterSortManager.applyFiltersAndSortIndex(this.indexEntries);
       this.filterSortManager.updatePreviousFiltered(
         this.filteredIndexEntries.map((entry) => entry.filePath),
@@ -6818,7 +6883,7 @@ export class TimelineContainer {
     this.filterSortManager.updateFilter({ platforms: new Set(this.authorPlatformFilter) });
 
     // Apply filters and re-render
-    this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
+    this.filteredPosts = this.applyCurrentFiltersAndSort();
     this.persistFilterPreferences();
   }
 
@@ -7477,6 +7542,11 @@ export class TimelineContainer {
    * Creates a fullscreen overlay with the current filtered posts list
    */
   private openReaderMode(post: PostData): void {
+    if (isFailedArchiveAttemptPost(post)) {
+      window.open(post.url, '_blank');
+      return;
+    }
+
     // Close any existing reader
     if (this.readerModeOverlay?.isActive) {
       this.readerModeOverlay.close();
@@ -7504,7 +7574,7 @@ export class TimelineContainer {
                 await this.handleVaultFileChange('modify', path);
               }
             }
-            this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
+            this.filteredPosts = this.applyCurrentFiltersAndSort();
             await this.renderPostsFeed();
           };
           void refresh();
@@ -7582,7 +7652,7 @@ export class TimelineContainer {
 
       // Reload posts from vault
       this.posts = await this.postDataParser.loadFromVault(this.archivePath);
-      this.filteredPosts = this.dedupePostsByFilePath(this.filterSortManager.applyFiltersAndSort(this.posts));
+      this.filteredPosts = this.applyCurrentFiltersAndSort();
 
       // Re-build series groups to get updated episode list
       const { series: seriesGroups } = await this.seriesGroupingService.separateSeriesAndPosts(this.filteredPosts);

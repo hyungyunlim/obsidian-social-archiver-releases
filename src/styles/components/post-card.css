@@ -105,6 +105,49 @@
   border-top: 1px solid var(--background-modifier-border);
 }
 
+.pcr-failed-archive-card {
+  border-left: 3px solid var(--color-orange, var(--interactive-accent));
+}
+
+.pcr-failed-archive-status {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0 2px;
+}
+
+.pcr-failed-archive-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.pcr-failed-archive-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--color-orange, var(--interactive-accent));
+  flex: 0 0 auto;
+}
+
+.pcr-failed-archive-message {
+  padding: 8px 10px;
+  border-left: 2px solid var(--color-orange, var(--interactive-accent));
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
 .pcr-middle-section {
   min-width: 0;
   overflow: hidden;

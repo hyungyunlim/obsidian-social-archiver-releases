@@ -73,6 +73,7 @@ import {
   type GoogleMapsBusinessData,
   type FormattedBusinessHours,
 } from './PreviewableHelpers';
+import { isFailedArchiveAttemptPost } from '../../../utils/archiveAttempts';
 
 interface DeletePostOptions {
   skipConfirm?: boolean;
@@ -141,6 +142,9 @@ export class PostCardRenderer extends Component {
 
   // Callback for reader mode
   private onReaderModeCallback?: (post: PostData) => void;
+
+  // Callback for dismissing a synthetic failed archive attempt card
+  private onFailedArchiveDismissCallback?: (post: PostData, rootElement: HTMLElement) => void | Promise<void>;
 
   // Cached subscriptions for quick lookup (set by TimelineContainer)
   // Shape is SubscriptionLookupMap — see src/utils/subscription-matcher.ts
@@ -381,6 +385,13 @@ export class PostCardRenderer extends Component {
   }
 
   /**
+   * Set callback for synthetic failed archive attempt dismissal.
+   */
+  public onFailedArchiveDismiss(callback: (post: PostData, rootElement: HTMLElement) => void | Promise<void>): void {
+    this.onFailedArchiveDismissCallback = callback;
+  }
+
+  /**
    * Set subscriptions cache for quick subscription status lookup
    * Called by TimelineContainer after fetching subscriptions from API
    * Also propagates the lookup to CompactPostCardRenderer for passive indicators
@@ -504,6 +515,8 @@ export class PostCardRenderer extends Component {
    * Returns the root element (wrapper if comment exists, otherwise cardContainer)
    */
   public async render(container: HTMLElement, post: PostData, isEmbedded: boolean = false): Promise<HTMLElement> {
+    const isFailedAttempt = isFailedArchiveAttemptPost(post);
+
     // Check if post is in archiving state - show loading placeholder
     if (post.archiveStatus === 'archiving') {
       return this.renderArchivingPlaceholder(container, post);
@@ -521,7 +534,7 @@ export class PostCardRenderer extends Component {
     const userName = this.plugin.settings.username || 'You';
     const archivedTime = this.getRelativeTime(post.archivedDate);
 
-    if (post.comment) {
+    if (!isFailedAttempt && post.comment) {
       // Comment section container (editable)
       const commentSection = wrapper.createDiv({ cls: 'mb-3' });
       commentSection.addClass('sa-relative');
@@ -610,7 +623,7 @@ export class PostCardRenderer extends Component {
         }
         this.editCommentInline(post, commentSection);
       });
-    } else if (post.platform !== 'post') {
+    } else if (!isFailedAttempt && post.platform !== 'post') {
       // Saved header: "Jun saved this post/user · 2h ago" (clickable to add note inline)
       // Only show for archived social media posts, not user posts
       const savedSection = wrapper.createDiv({ cls: 'mb-3' });
@@ -696,6 +709,9 @@ export class PostCardRenderer extends Component {
       cls: 'relative rounded-lg bg-[var(--background-primary)]'
     });
     card.addClass('pcr-card');
+    if (isFailedAttempt) {
+      card.addClass('pcr-failed-archive-card');
+    }
 
     // Content area
     const contentArea = card.createDiv({ cls: 'post-content-area' });
@@ -719,6 +735,15 @@ export class PostCardRenderer extends Component {
       // Content (full text with expand/collapse), optionally switched to a
       // generated translation/content variant when one exists.
       await this.renderContentWithVariantControls(contentArea, post);
+    }
+
+    if (isFailedAttempt) {
+      this.renderFailedArchiveAttemptStatus(contentArea, post);
+      if (post.media.length > 0) {
+        this.mediaGalleryRenderer.render(contentArea, post.media, post);
+      }
+      this.renderFailedArchiveAttemptActions(contentArea, post, rootElement, isEmbedded);
+      return rootElement;
     }
 
     const hasRenderableTikTokVideo = post.platform === 'tiktok' && hasDirectTikTokVideoMedia(post.media);
@@ -3534,6 +3559,65 @@ export class PostCardRenderer extends Component {
       }
       this.renderDeleteButton(interactions, post, rootElement);
     }
+  }
+
+  private renderFailedArchiveAttemptStatus(contentArea: HTMLElement, post: PostData): void {
+    const attempt = post.failedArchiveAttempt;
+    if (!attempt) return;
+
+    const status = contentArea.createDiv({ cls: 'pcr-failed-archive-status' });
+    const pill = status.createSpan({ cls: 'pcr-failed-archive-pill' });
+    pill.createSpan({ cls: 'pcr-failed-archive-dot' });
+    pill.createSpan({ text: attempt.isLimitedArchive ? 'Limited archive' : 'Failed archive' });
+
+    const message = attempt.errorMessage?.trim();
+    if (message) {
+      status.createDiv({
+        cls: 'pcr-failed-archive-message',
+        text: message,
+      });
+    }
+  }
+
+  private renderFailedArchiveAttemptActions(
+    contentArea: HTMLElement,
+    post: PostData,
+    rootElement: HTMLElement,
+    isEmbedded: boolean,
+  ): void {
+    const actionsBar = contentArea.createDiv();
+    actionsBar.addClass('sa-flex');
+    actionsBar.addClass('sa-flex-row');
+    actionsBar.addClass('sa-gap-16');
+    actionsBar.addClass('sa-flex-wrap');
+    actionsBar.addClass('sa-py-8');
+    actionsBar.addClass('sa-mt-8');
+    actionsBar.addClass('sa-text-muted');
+    actionsBar.addClass('pcr-actions-end');
+    if (!isEmbedded) {
+      actionsBar.addClass('pcr-actions-border-top');
+    }
+
+    const originalUrl = post.originalUrl || post.url;
+    if (originalUrl) {
+      const openBtn = actionsBar.createDiv({ cls: 'pcr-action-btn' });
+      openBtn.setAttribute('title', 'Open original URL');
+      const openIcon = openBtn.createDiv({ cls: 'pcr-action-icon' });
+      setIcon(openIcon, 'external-link');
+      openBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        window.open(originalUrl, '_blank');
+      });
+    }
+
+    const dismissBtn = actionsBar.createDiv({ cls: 'pcr-action-btn pcr-action-btn-error' });
+    dismissBtn.setAttribute('title', 'Remove failed archive');
+    const dismissIcon = dismissBtn.createDiv({ cls: 'pcr-action-icon' });
+    setIcon(dismissIcon, 'trash-2');
+    dismissBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      void this.onFailedArchiveDismissCallback?.(post, rootElement);
+    });
   }
 
   /**

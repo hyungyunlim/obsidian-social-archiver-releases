@@ -2114,9 +2114,14 @@ export class MarkdownConverter implements IService {
     const rssMarkdownBody = isBlogLikeRss
       ? postData.content.rawMarkdown?.trim() || postData.content.markdown?.trim() || undefined
       : undefined;
-    const inlineMarkdownBody = (isWebArticle || isThreadsInlineArchive)
-      ? postData.content.markdown?.trim()
-      : rssMarkdownBody;
+    const webMarkdownBody = isWebArticle
+      ? postData.content.rawMarkdown?.trim() || postData.content.markdown?.trim() || undefined
+      : undefined;
+    const inlineMarkdownBody = isWebArticle
+      ? webMarkdownBody
+      : isThreadsInlineArchive
+        ? postData.content.markdown?.trim()
+        : rssMarkdownBody;
     let formattedSnippet = postData.content.snippet
       ? `> [!note]+ Threads Note\n> ${postData.content.snippet.replace(/\n/g, '\n> ')}`
       : undefined;

@@ -116,4 +116,58 @@ describe('convertUserArchiveToPostData', () => {
     });
     expect(postData.metadata.location).toBe('개나리반');
   });
+
+  it('preserves web article markdown after internal horizontal rules', () => {
+    const archive = makeArchive({
+      platform: 'web',
+      postId: 'wikidocs:@Allen:18956',
+      originalUrl: 'https://wikidocs.net/blog/@Allen/18956/',
+      title: 'Marp로 마크다운 슬라이드 만들기: 파워포인트 없이 발표 자료 끝내기',
+      authorName: 'wikidocs.net',
+      authorUrl: 'https://wikidocs.net/blog/@Allen/18956/',
+      previewText: '> **한 줄 결론:** Marp는 마크다운 한 파일로 발표 슬라이드를 만듭니다.',
+      fullContent: [
+        '> **한 줄 결론:** Marp는 마크다운 한 파일로 발표 슬라이드를 만들고 PDF·PPTX·HTML로 내보내는 도구입니다.',
+        '',
+        '---',
+        '',
+        '### 1. Marp란 무엇인가요?',
+        '',
+        'Marp는 마크다운 문서 하나를 슬라이드 덱으로 변환합니다.',
+      ].join('\n'),
+    });
+
+    const postData = convertUserArchiveToPostData(archive);
+
+    expect(postData.content.text).toContain('> **한 줄 결론:**');
+    expect(postData.content.text).toContain('---');
+    expect(postData.content.text).toContain('### 1. Marp란 무엇인가요?');
+    expect(postData.content.markdown).toBe(postData.content.text);
+    expect(postData.content.rawMarkdown).toBe(postData.content.text);
+  });
+
+  it('strips only generated web metadata footers after separators', () => {
+    const archive = makeArchive({
+      platform: 'web',
+      postId: 'web:legacy-footer',
+      originalUrl: 'https://example.com/article',
+      title: 'Example Article',
+      authorName: 'example.com',
+      fullContent: [
+        'Example Article',
+        '',
+        'Body before footer.',
+        '',
+        '---',
+        '',
+        '**Platform:** Web Article | **Author:** example.com',
+        '',
+        '**Original URL:** https://example.com/article',
+      ].join('\n'),
+    });
+
+    const postData = convertUserArchiveToPostData(archive);
+
+    expect(postData.content.text).toBe('Body before footer.');
+  });
 });

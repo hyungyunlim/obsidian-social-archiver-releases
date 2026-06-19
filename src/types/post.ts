@@ -236,6 +236,48 @@ export interface MultiLangTranscript {
  */
 export type DocumentType = 'post' | 'profile';
 
+export type ArchiveAttemptStatus = 'failed' | 'retrying' | 'resolved';
+
+export type ArchiveAttemptErrorCategory =
+  | 'validation'
+  | 'quota'
+  | 'paywall'
+  | 'network'
+  | 'crawler'
+  | 'parser'
+  | 'metadata'
+  | 'server'
+  | 'cancelled'
+  | 'unknown';
+
+export interface ArchiveAttempt {
+  id: string;
+  userId: string;
+  jobId: string | null;
+  sourceClient: string;
+  sourceSurface: string | null;
+  originalUrl: string;
+  normalizedUrl: string | null;
+  platform: string | null;
+  status: ArchiveAttemptStatus;
+  errorCode: string | null;
+  errorCategory: ArchiveAttemptErrorCategory;
+  errorMessage: string | null;
+  failureStage: string | null;
+  title: string | null;
+  description: string | null;
+  siteName: string | null;
+  imageUrl: string | null;
+  faviconUrl: string | null;
+  metadataFetchedAt: string | null;
+  retryCount: number;
+  latestRetryJobId: string | null;
+  resolvedArchiveId: string | null;
+  dismissedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PostData {
   schemaVersion?: '1.0.0'; // Schema version for validation
   /**
@@ -418,6 +460,20 @@ export interface PostData {
    * `sourceArchiveId`. Region keying prefers `sourceArchiveId ?? archiveId`.
    */
   archiveId?: string;
+
+  /**
+   * Synthetic timeline card for a failed/limited server archive attempt.
+   * It is not backed by a vault note; delete dismisses the server attempt log.
+   */
+  failedArchiveAttempt?: {
+    attemptId: string;
+    status: ArchiveAttemptStatus;
+    errorCode: string | null;
+    errorCategory: ArchiveAttemptErrorCategory | null;
+    errorMessage: string | null;
+    failureStage: string | null;
+    isLimitedArchive: boolean;
+  };
 
   /**
    * Expired media items detected during download (CDN expired, download failed)

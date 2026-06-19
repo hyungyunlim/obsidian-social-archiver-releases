@@ -381,6 +381,41 @@ describe('MarkdownConverter', () => {
       expect(result.content).not.toContain('https://example.com/og.jpg');
     });
 
+    it('should use web rawMarkdown instead of plain preview fallback', async () => {
+      const webPost: PostData = {
+        platform: 'web',
+        id: 'web-raw-markdown',
+        url: 'https://wikidocs.net/blog/@Allen/18956/',
+        title: 'Marp로 마크다운 슬라이드 만들기',
+        author: {
+          name: 'wikidocs.net',
+          url: 'https://wikidocs.net/blog/@Allen/18956/',
+        },
+        content: {
+          text: '> **한 줄 결론:** preview only.',
+          rawMarkdown: [
+            '> **한 줄 결론:** full opening block.',
+            '',
+            '---',
+            '',
+            '### 1. Marp란 무엇인가요?',
+            '',
+            'Full article body.',
+          ].join('\n'),
+        },
+        media: [],
+        metadata: {
+          timestamp: new Date('2024-03-20T09:30:00Z'),
+        },
+      };
+
+      const result = await converter.convert(webPost);
+
+      expect(result.content).toContain('### 1. Marp란 무엇인가요?');
+      expect(result.content).toContain('Full article body.');
+      expect(result.content).not.toContain('preview only');
+    });
+
     it('should keep the web media section when the article body has no inline images', async () => {
       const webPost: PostData = {
         platform: 'web',

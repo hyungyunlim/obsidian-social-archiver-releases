@@ -25,6 +25,9 @@ import { getPlatformName } from '../../shared/platforms';
 import { TimelineView, VIEW_TYPE_TIMELINE } from '../../views/TimelineView';
 import type { WsProfileMetadataMessage } from '../realtime/RealtimeEventBridge';
 
+const WEB_ARTICLE_SEPARATOR = '\n\n---\n\n';
+const GENERATED_METADATA_FOOTER_PATTERN = /^\*\*Platform:\*\*/i;
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -728,8 +731,9 @@ export class SubscriptionSyncService {
 
     const isLimited = this.isLimitedArchiveContent(existingContent);
     const hasRicherMedia = !isLimited && this.hasRicherMediaReplacement(existingContent, pendingPost.post);
-    if (!isLimited && !hasRicherMedia) {
-      return { status: 'existing', file, path: file.path, reason: 'not limited archive or media enrichment' };
+    const hasRicherText = !isLimited && this.hasTruncatedWebArticleReplacement(existingContent, pendingPost.post);
+    if (!isLimited && !hasRicherMedia && !hasRicherText) {
+      return { status: 'existing', file, path: file.path, reason: 'not limited archive or enrichment' };
     }
 
     if (isLimited && !this.hasMeaningfulReplacementContent(pendingPost.post)) {
@@ -741,6 +745,7 @@ export class SubscriptionSyncService {
 
   private hasMeaningfulReplacementContent(post: PostData): boolean {
     const candidates = [
+      post.content?.rawMarkdown,
       post.content?.markdown,
       post.content?.text,
       post.content?.html,
@@ -751,6 +756,82 @@ export class SubscriptionSyncService {
       ?.trim();
 
     return Boolean(content && !this.isLimitedArchiveContent(content));
+  }
+
+  private hasTruncatedWebArticleReplacement(existingContent: string, post: PostData): boolean {
+    if (post.platform !== 'web') return false;
+
+    const replacement = (
+      post.content?.rawMarkdown ||
+      post.content?.markdown ||
+      post.content?.text ||
+      ''
+    ).trim();
+    const separatorIndex = replacement.indexOf(WEB_ARTICLE_SEPARATOR);
+    if (separatorIndex < 0) return false;
+
+    const beforeSeparator = replacement.slice(0, separatorIndex).trim();
+    const afterSeparator = replacement.slice(separatorIndex + WEB_ARTICLE_SEPARATOR.length).trim();
+    if (!beforeSeparator || !afterSeparator) return false;
+
+    const existingComparable = this.normalizeComparableArticleText(existingContent, post.title);
+    const truncatedComparable = this.normalizeComparableArticleText(beforeSeparator, post.title);
+    const replacementComparable = this.normalizeComparableArticleText(replacement, post.title);
+    if (!existingComparable || !truncatedComparable || !replacementComparable) return false;
+
+    if (replacementComparable.length <= existingComparable.length + 80) return false;
+
+    return (
+      existingComparable === truncatedComparable ||
+      truncatedComparable.startsWith(existingComparable) ||
+      existingComparable.startsWith(truncatedComparable)
+    );
+  }
+
+  private normalizeComparableArticleText(content: string, title?: string): string {
+    return this.stripLeadingMatchingTitle(
+      this.stripGeneratedMetadataFooter(this.stripFrontmatter(content)).trim(),
+      title,
+    )
+      .replace(/!\[[\s\S]*?\]\([^)]+\)/g, '')
+      .replace(/\[([^\]]*)\]\(([^)]*)\)/g, '$1 $2')
+      .replace(/^#{1,6}\s*/gm, '')
+      .replace(/^\s*>\s?/gm, '')
+      .replace(/[\\`*_>#+-]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
+
+  private stripGeneratedMetadataFooter(content: string): string {
+    const separatorIndex = content.lastIndexOf(WEB_ARTICLE_SEPARATOR);
+    if (separatorIndex < 0) return content;
+
+    const before = content.slice(0, separatorIndex).trimEnd();
+    const after = content.slice(separatorIndex + WEB_ARTICLE_SEPARATOR.length).trim();
+
+    return GENERATED_METADATA_FOOTER_PATTERN.test(after) ? before : content;
+  }
+
+  private stripLeadingMatchingTitle(content: string, title?: string): string {
+    if (!title) return content.trim();
+
+    const normalizedTitle = this.normalizeTitle(title);
+    const lines = content.split('\n');
+    const firstMeaningfulIndex = lines.findIndex((line) => line.trim().length > 0);
+    if (firstMeaningfulIndex < 0) return content.trim();
+
+    const firstLine = lines[firstMeaningfulIndex]?.trim() ?? '';
+    const firstHeading = firstLine.replace(/^#{1,6}\s+/, '');
+    if (this.normalizeTitle(firstLine) === normalizedTitle || this.normalizeTitle(firstHeading) === normalizedTitle) {
+      return lines.slice(firstMeaningfulIndex + 1).join('\n').trimStart();
+    }
+
+    return content.trim();
+  }
+
+  private normalizeTitle(value: string): string {
+    return value.trim().replace(/\s+/g, ' ').toLowerCase();
   }
 
   private isLimitedArchiveContent(content: string): boolean {

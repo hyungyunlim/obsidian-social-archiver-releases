@@ -461,6 +461,70 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName('Archive').setHeading()
       .settingEl.addClass('sa-settings-section-header');
 
+    {
+      const failedArchiveSetting = new Setting(containerEl)
+        .setName('Keep failed archive attempts')
+        .setDesc('Save failed or limited archives with site metadata for later review.');
+
+      let loadedPreference = false;
+      let retainFailedArchiveAttempts = false;
+
+      failedArchiveSetting.addToggle(toggle => {
+        toggle.setDisabled(true);
+
+        if (!this.plugin.settings.authToken) {
+          failedArchiveSetting.setDesc('Sign in to sync failed archive behavior across clients.');
+          return toggle;
+        }
+
+        toggle.onChange(async (value) => {
+          if (!loadedPreference) return;
+
+          const previous = retainFailedArchiveAttempts;
+          retainFailedArchiveAttempts = value;
+          toggle.setDisabled(true);
+
+          try {
+            const preferences = await this.plugin.workersApiClient.updateArchivePreferences({
+              retainFailedArchiveAttempts: value,
+            });
+            retainFailedArchiveAttempts = preferences.retainFailedArchiveAttempts;
+            toggle.setValue(retainFailedArchiveAttempts);
+            new Notice('Archive behavior settings saved.');
+          } catch (error) {
+            retainFailedArchiveAttempts = previous;
+            toggle.setValue(previous);
+            new Notice(
+              error instanceof Error
+                ? `Failed to update archive behavior settings: ${error.message}`
+                : 'Failed to update archive behavior settings.'
+            );
+          } finally {
+            toggle.setDisabled(false);
+          }
+        });
+
+        void this.plugin.workersApiClient.getArchivePreferences()
+          .then((preferences) => {
+            if (generation !== this.displayGeneration) return;
+            retainFailedArchiveAttempts = preferences.retainFailedArchiveAttempts;
+            toggle.setValue(retainFailedArchiveAttempts);
+            loadedPreference = true;
+            toggle.setDisabled(false);
+          })
+          .catch((error) => {
+            if (generation !== this.displayGeneration) return;
+            failedArchiveSetting.setDesc(
+              error instanceof Error
+                ? `Failed to load archive behavior settings: ${error.message}`
+                : 'Failed to load archive behavior settings.'
+            );
+          });
+
+        return toggle;
+      });
+    }
+
     new Setting(containerEl)
       .setName('Archive folder')
       .setDesc('Folder where archived posts will be saved')

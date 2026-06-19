@@ -269,6 +269,72 @@ describe('SubscriptionSyncService', () => {
       expect(serviceMocks.vaultStorageSavePost).not.toHaveBeenCalled();
     });
 
+    it('updates a web article note truncated at the first horizontal rule', async () => {
+      const deps = makeDeps();
+      vi.mocked(deps.app.vault.read).mockResolvedValue([
+        '---',
+        'platform: web',
+        'sourceArchiveId: WQvuevjWqQ',
+        'originalUrl: https://wikidocs.net/blog/@Allen/18956/',
+        'title: "Marp로 마크다운 슬라이드 만들기"',
+        '---',
+        '',
+        '# Marp로 마크다운 슬라이드 만들기',
+        '',
+        '> **한 줄 결론:** Marp는 마크다운 한 파일로 발표 슬라이드를 만듭니다.',
+        '',
+        '---',
+        '',
+        '**Platform:** Web Article | **Author:** wikidocs.net',
+      ].join('\n'));
+
+      const fullBody = [
+        '> **한 줄 결론:** Marp는 마크다운 한 파일로 발표 슬라이드를 만듭니다.',
+        '',
+        '---',
+        '',
+        '### 1. Marp란 무엇인가요?',
+        '',
+        'Marp는 마크다운 문서 하나를 슬라이드 덱으로 변환합니다.',
+        '',
+        '발표 자료를 코드처럼 관리할 수 있고, PDF와 HTML로도 내보낼 수 있습니다.',
+        '',
+        '디자인보다 내용 흐름을 먼저 정리해야 하는 문서형 발표에 특히 유용합니다.',
+      ].join('\n');
+
+      const service = new SubscriptionSyncService(deps);
+      const file = { path: 'Social Archives/Web Article/2026/06/wikidocs.md' } as TFile;
+      const result = await service.replaceExistingLimitedArchiveFile(file, makePendingPost({
+        platform: 'web',
+        id: 'wikidocs:@Allen:18956',
+        url: 'https://wikidocs.net/blog/@Allen/18956/',
+        title: 'Marp로 마크다운 슬라이드 만들기',
+        author: { name: 'wikidocs.net', url: 'https://wikidocs.net/blog/@Allen/18956/' },
+        content: {
+          text: fullBody,
+          markdown: fullBody,
+          rawMarkdown: fullBody,
+        },
+        media: [],
+        quotedPost: undefined,
+        metadata: {
+          timestamp: '2026-06-19T05:14:00.000Z',
+        },
+      }));
+
+      expect(result.status).toBe('updated');
+      expect(serviceMocks.vaultStorageSavePost).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: expect.objectContaining({
+            rawMarkdown: expect.stringContaining('### 1. Marp란 무엇인가요?'),
+          }),
+        }),
+        undefined,
+        file.path,
+        undefined,
+      );
+    });
+
     it('updates a non-limited note when a later sync has more preserved media', async () => {
       const deps = makeDeps();
       vi.mocked(deps.app.vault.read).mockResolvedValue([

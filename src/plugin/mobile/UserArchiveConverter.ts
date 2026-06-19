@@ -13,6 +13,7 @@ import type { UserArchive, UserArchiveComment } from '../../services/WorkersAPIC
 const LEGACY_WEB_CLIP_SEPARATOR = '\n\n---\n\n';
 const LEADING_WEB_CLIP_SEPARATOR = '---\n\n';
 const EMPTY_MARKDOWN_LINK_LINE_PATTERN = /^(?:\s*\[\]\([^)]+\)\s*)+$/;
+const WEB_METADATA_FOOTER_PATTERN = /^\*\*Platform:\*\*/i;
 
 /**
  * Normalize a handle string by trimming whitespace and removing leading '@'.
@@ -144,18 +145,26 @@ function stripLeadingEmptyLinkLines(markdown: string): string {
   return (idx > 0 ? lines.slice(idx).join('\n') : markdown).trimStart();
 }
 
+function stripLegacyWebMetadataFooter(markdown: string): string {
+  const separatorIndex = markdown.lastIndexOf(LEGACY_WEB_CLIP_SEPARATOR);
+  if (separatorIndex < 0) return markdown;
+
+  const before = markdown.slice(0, separatorIndex).trimEnd();
+  const after = markdown.slice(separatorIndex + LEGACY_WEB_CLIP_SEPARATOR.length).trim();
+
+  return WEB_METADATA_FOOTER_PATTERN.test(after) ? before : markdown;
+}
+
 function extractWebArticleBody(archive: Pick<UserArchive, 'fullContent' | 'previewText' | 'title'>): string {
   const source = (archive.fullContent || archive.previewText || '').trim();
   if (!source) return '';
 
-  const separatorIndex = source.indexOf(LEGACY_WEB_CLIP_SEPARATOR);
   const body = source.startsWith(LEADING_WEB_CLIP_SEPARATOR)
     ? source.slice(LEADING_WEB_CLIP_SEPARATOR.length).trim()
-    : separatorIndex >= 0
-      ? source.slice(0, separatorIndex).trim() || source.slice(separatorIndex + LEGACY_WEB_CLIP_SEPARATOR.length).trim()
-      : source;
+    : source;
+  const withoutGeneratedFooter = stripLegacyWebMetadataFooter(body);
 
-  return stripLeadingEmptyLinkLines(stripLeadingMatchingTitle(body, archive.title)).trim();
+  return stripLeadingEmptyLinkLines(stripLeadingMatchingTitle(withoutGeneratedFooter, archive.title)).trim();
 }
 
 function normalizeComparableArticleText(value: string): string {
@@ -338,6 +347,10 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
     content: {
       text: normalizedWebBody,
       html: (archive.isArticle || archive.articleMarkdown) ? (archive.articleMarkdown ?? undefined) : undefined,
+      ...(platform === 'web' && normalizedWebBody ? {
+        markdown: normalizedWebBody,
+        rawMarkdown: normalizedWebBody,
+      } : {}),
       ...(kidsnoteCenterName ? {
         community: {
           name: kidsnoteCenterName,

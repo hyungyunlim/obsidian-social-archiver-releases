@@ -23,6 +23,7 @@ import type { AuthorProfileSystemUpsertInput, AuthorProfileUpsertInput, UserAuth
 import type { BillingEventApiPayload, BillingEventsResponse } from '@/types/billing-events';
 import type { AICommentType } from '@/types/ai-comment';
 import type { RelationWithSummary, RelationPullResponse } from '@/types/link-relations';
+import type { ArchiveAttempt, ArchiveAttemptStatus } from '@/types/post';
 
 // ============================================================================
 // Multi-Client Sync Types
@@ -701,6 +702,22 @@ export interface WorkersAPIConfig {
   clientId?: string;
 }
 
+export type AutoArchiveInboxDays = 0 | 7 | 14 | 30 | 60 | 90;
+
+export interface ArchivePreferences {
+  autoArchiveInboxDays: AutoArchiveInboxDays;
+  retainFailedArchiveAttempts: boolean;
+  failedArchiveAttemptRetentionDays: 30 | 90 | 180 | 365;
+  autoArchiveLastRunAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export type ArchivePreferencesPatch = Partial<Pick<
+  ArchivePreferences,
+  'autoArchiveInboxDays' | 'retainFailedArchiveAttempts' | 'failedArchiveAttemptRetentionDays'
+>>;
+
 export interface ArchiveRequest {
   url: string;
   options: {
@@ -1236,6 +1253,179 @@ export class WorkersAPIClient implements IService {
       return false;
     }
     return body.data?.dismissed === true;
+  }
+
+  async getArchivePreferences(): Promise<ArchivePreferences> {
+    this.ensureInitialized();
+    if (!this.config.authToken) {
+      throw new Error('Authentication required');
+    }
+
+    const response = await requestUrl({
+      url: `${this.config.endpoint}/api/user/archive-preferences`,
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getClientHeaders(),
+        Authorization: `Bearer ${this.config.authToken}`,
+      },
+      throw: false,
+    });
+
+    const body = response.json as {
+      success?: boolean;
+      preferences?: ArchivePreferences;
+      data?: { preferences?: ArchivePreferences };
+      error?: { code?: string; message?: string; details?: unknown };
+    } | undefined;
+    const preferences = body?.preferences ?? body?.data?.preferences;
+    if (response.status >= 200 && response.status < 300 && body?.success === true && preferences) {
+      return preferences;
+    }
+
+    const error = new Error(body?.error?.message || 'Failed to load archive preferences') as Error & {
+      code?: string;
+      details?: unknown;
+      status?: number;
+    };
+    error.code = body?.error?.code;
+    error.details = body?.error?.details;
+    error.status = response.status;
+    throw error;
+  }
+
+  async updateArchivePreferences(patch: ArchivePreferencesPatch): Promise<ArchivePreferences> {
+    this.ensureInitialized();
+    if (!this.config.authToken) {
+      throw new Error('Authentication required');
+    }
+
+    const response = await requestUrl({
+      url: `${this.config.endpoint}/api/user/archive-preferences`,
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getClientHeaders(),
+        Authorization: `Bearer ${this.config.authToken}`,
+      },
+      body: JSON.stringify(patch),
+      throw: false,
+    });
+
+    const body = response.json as {
+      success?: boolean;
+      preferences?: ArchivePreferences;
+      data?: { preferences?: ArchivePreferences };
+      error?: { code?: string; message?: string; details?: unknown };
+    } | undefined;
+    const preferences = body?.preferences ?? body?.data?.preferences;
+    if (response.status >= 200 && response.status < 300 && body?.success === true && preferences) {
+      return preferences;
+    }
+
+    const error = new Error(body?.error?.message || 'Failed to update archive preferences') as Error & {
+      code?: string;
+      details?: unknown;
+      status?: number;
+    };
+    error.code = body?.error?.code;
+    error.details = body?.error?.details;
+    error.status = response.status;
+    throw error;
+  }
+
+  async listArchiveAttempts(params: {
+    status?: ArchiveAttemptStatus;
+    includeDismissed?: boolean;
+    limit?: number;
+    cursor?: string | null;
+  } = {}): Promise<{ attempts: ArchiveAttempt[]; nextCursor: string | null }> {
+    this.ensureInitialized();
+    if (!this.config.authToken) {
+      throw new Error('Authentication required');
+    }
+
+    const searchParams = new URLSearchParams();
+    if (params.status) searchParams.set('status', params.status);
+    if (params.includeDismissed) searchParams.set('includeDismissed', 'true');
+    if (params.limit) searchParams.set('limit', String(params.limit));
+    if (params.cursor) searchParams.set('cursor', params.cursor);
+
+    const suffix = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    const response = await requestUrl({
+      url: `${this.config.endpoint}/api/user/archive-attempts${suffix}`,
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getClientHeaders(),
+        Authorization: `Bearer ${this.config.authToken}`,
+      },
+      throw: false,
+    });
+
+    const body = response.json as {
+      success?: boolean;
+      attempts?: ArchiveAttempt[];
+      nextCursor?: string | null;
+      data?: { attempts?: ArchiveAttempt[]; nextCursor?: string | null };
+      error?: { code?: string; message?: string; details?: unknown };
+    } | undefined;
+    if (response.status >= 200 && response.status < 300 && body?.success === true) {
+      return {
+        attempts: body.attempts ?? body.data?.attempts ?? [],
+        nextCursor: body.nextCursor ?? body.data?.nextCursor ?? null,
+      };
+    }
+
+    const error = new Error(body?.error?.message || 'Failed to load archive attempts') as Error & {
+      code?: string;
+      details?: unknown;
+      status?: number;
+    };
+    error.code = body?.error?.code;
+    error.details = body?.error?.details;
+    error.status = response.status;
+    throw error;
+  }
+
+  async dismissArchiveAttempt(attemptId: string): Promise<ArchiveAttempt> {
+    this.ensureInitialized();
+    if (!this.config.authToken) {
+      throw new Error('Authentication required');
+    }
+
+    const response = await requestUrl({
+      url: `${this.config.endpoint}/api/user/archive-attempts/${encodeURIComponent(attemptId)}`,
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getClientHeaders(),
+        Authorization: `Bearer ${this.config.authToken}`,
+      },
+      body: JSON.stringify({ dismissed: true }),
+      throw: false,
+    });
+
+    const body = response.json as {
+      success?: boolean;
+      attempt?: ArchiveAttempt;
+      data?: { attempt?: ArchiveAttempt };
+      error?: { code?: string; message?: string; details?: unknown };
+    } | undefined;
+    const attempt = body?.attempt ?? body?.data?.attempt;
+    if (response.status >= 200 && response.status < 300 && body?.success === true && attempt) {
+      return attempt;
+    }
+
+    const error = new Error(body?.error?.message || 'Failed to dismiss archive attempt') as Error & {
+      code?: string;
+      details?: unknown;
+      status?: number;
+    };
+    error.code = body?.error?.code;
+    error.details = body?.error?.details;
+    error.status = response.status;
+    throw error;
   }
 
   /**
