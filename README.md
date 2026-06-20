@@ -1,6 +1,6 @@
 # Social Archiver
 
-Save what matters - Archive social media posts, web pages, newsletters, podcasts, and other supported sources to your private Social Archiver library, with clients for web, mobile, Chrome, and Obsidian.
+Save what matters - Archive social media posts, web pages, newsletters, podcasts, and other supported sources to your private Social Archiver library, with clients for web, mobile, Chrome, Obsidian, and a macOS desktop app.
 
 [![release](https://img.shields.io/github/v/release/hyungyunlim/obsidian-social-archiver-releases)](https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases)
 [![license](https://img.shields.io/github/license/hyungyunlim/obsidian-social-archiver-releases)](LICENSE)
@@ -9,6 +9,7 @@ Save what matters - Archive social media posts, web pages, newsletters, podcasts
 [![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-Add_to_Chrome-4285F4?logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/social-archiver/gifddgdekeffpnadpdcgjaehmlblomaf)
 [![App Store](https://img.shields.io/badge/App_Store-Download-0D96F6?logo=apple&logoColor=white)](https://apps.apple.com/us/app/social-archiver/id6758323634)
 [![Google Play](https://img.shields.io/badge/Google_Play-Get_it-34A853?logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.socialarchiver.mobile)
+[![macOS Desktop](https://img.shields.io/badge/macOS-Download-000000?logo=apple&logoColor=white)](https://github.com/hyungyunlim/social-archiver-desktop-releases/releases/latest)
 
 > See [pricing plans →](https://docs.social-archive.org/en/guide/pricing) for current quotas, Premium tiers, and the beta-free sunset schedule.
 
@@ -165,6 +166,17 @@ Install the Social Archiver mobile app:
 - **Offline Reading**: Browse, search, and read cached archives locally
 - **Auto Sync**: Sync archives and supported state changes with your Social Archiver account
 - **Same Account**: Use the same email as your desktop plugin, Chrome extension, and web app
+
+### Desktop App (macOS)
+
+Install the standalone Social Archiver desktop app:
+
+- **Download**: [latest `.dmg`](https://github.com/hyungyunlim/social-archiver-desktop-releases/releases/latest) — requires an Apple Silicon Mac (M1 or later), macOS 13 (Ventura) or later
+- **Library, Offline**: Browse, read, search, and organize your archive library; cached archives are readable offline
+- **Quick Archive**: Archive a link from the macOS menu bar or a global shortcut
+- **Bundled CLI**: Ships the `sa` command-line tool for scripting and coding agents
+- **Auto-Updates**: Updates itself in the background
+- **Guide**: [Desktop App guide](https://docs.social-archive.org/en/guide/desktop-app)
 
 ### Web App
 
