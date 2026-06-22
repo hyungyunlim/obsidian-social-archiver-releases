@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { FilterSortManager } from '@/components/timeline/filters/FilterSortManager';
 import type { PostData } from '@/types/post';
+import type { PostIndexEntry } from '@/services/PostIndexService';
 
 function makePost(overrides: Partial<PostData> = {}): PostData {
   return {
@@ -88,6 +89,52 @@ describe('FilterSortManager', () => {
       const state = manager.getFilterState();
       expect(state.activeTab).toBe('all');
       expect(state.includeArchived).toBe(true);
+    });
+  });
+
+  describe('stable sorting', () => {
+    it('uses a stable key tie-breaker for posts with matching dates', () => {
+      const date = new Date('2026-04-20T10:00:00.000Z');
+      const posts = [
+        makePost({ id: 'a', shareId: 'share-a', filePath: 'a.md', archive: true, archivedDate: date }),
+        makePost({ id: 'c', shareId: 'share-c', filePath: 'c.md', archive: true, archivedDate: date }),
+        makePost({ id: 'b', shareId: 'share-b', filePath: 'b.md', archive: true, archivedDate: date }),
+      ];
+
+      const newest = new FilterSortManager({ activeTab: 'archive' }, { by: 'archived', order: 'newest' });
+      expect(newest.applyFiltersAndSort(posts).map((p) => p.id)).toEqual(['c', 'b', 'a']);
+
+      const oldest = new FilterSortManager({ activeTab: 'archive' }, { by: 'archived', order: 'oldest' });
+      expect(oldest.applyFiltersAndSort(posts).map((p) => p.id)).toEqual(['a', 'b', 'c']);
+    });
+
+    it('uses a stable key tie-breaker for index entries with matching dates', () => {
+      const entry = (id: string): PostIndexEntry => ({
+        id,
+        platform: 'x',
+        filePath: `${id}.md`,
+        fileModifiedTime: 0,
+        authorName: 'Author',
+        publishedDate: 0,
+        archivedDate: Date.parse('2026-04-20T10:00:00.000Z'),
+        tags: [],
+        hashtags: [],
+        like: false,
+        archive: true,
+        subscribed: false,
+        searchText: '',
+        url: `https://example.com/${id}`,
+        mediaCount: 0,
+        commentCount: 0,
+        metadataTimestamp: Date.parse('2026-04-20T10:00:00.000Z'),
+      });
+
+      const entries = [entry('a'), entry('c'), entry('b')];
+      const newest = new FilterSortManager({ activeTab: 'archive' }, { by: 'archived', order: 'newest' });
+      expect(newest.applyFiltersAndSortIndex(entries).map((e) => e.id)).toEqual(['c', 'b', 'a']);
+
+      const oldest = new FilterSortManager({ activeTab: 'archive' }, { by: 'archived', order: 'oldest' });
+      expect(oldest.applyFiltersAndSortIndex(entries).map((e) => e.id)).toEqual(['a', 'b', 'c']);
     });
   });
 

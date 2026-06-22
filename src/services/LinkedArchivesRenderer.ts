@@ -105,11 +105,12 @@ export class LinkedArchivesRenderer {
     const incoming: RenderRow[] = [];
 
     for (const entry of relations) {
-      const { relation } = entry;
+      const { relation, otherArchive } = entry;
 
       // Only fully-connected relations render. Pending/failed are skipped so
       // the section never shows half-resolved links.
       if (relation.status !== 'connected') continue;
+      if (!otherArchive) continue;
 
       const isOutgoing = relation.sourceArchiveId === selfArchiveId;
       const isIncoming = relation.targetArchiveId === selfArchiveId;
@@ -160,12 +161,13 @@ export class LinkedArchivesRenderer {
    *
    * Row format precedence:
    *   1. resolved target note → `- [[<link>|<title>]]`
-   *   2. unresolved but otherArchive present → `- [<title>](<originalUrl>)`
-   *   3. otherArchive null / no URL → `- <anchorText | targetUrl>` plain text
+   *   2. unresolved target note → `- [<title>](<originalUrl>)`
+   *   3. no original URL → `- <title>` plain text
    *
    * Title fallback: otherArchive.title → relation anchor → otherArchive preview
-   * text → normalized URL. Title-less social posts otherwise collapse to a bare
-   * domain/URL, which makes the relation section hard to scan.
+   * text → normalized URL. The public render loop filters out connected rows
+   * without `otherArchive` first; otherwise deleted targets would reappear as a
+   * stale URL/domain fallback.
    */
   private buildRow(
     entry: RelationWithSummary,

@@ -1,11 +1,11 @@
 type ImmediateHandle = number;
 type ImmediateCallback = (...args: unknown[]) => void;
-type ImmediateHost = {
+type ImmediateHost = Window & {
   setImmediate?: (handler: ImmediateCallback, ...args: unknown[]) => ImmediateHandle;
   clearImmediate?: (handle: ImmediateHandle) => void;
 };
 
-const host = globalThis as unknown as ImmediateHost;
+const host = (typeof activeWindow !== 'undefined' ? activeWindow : window) as ImmediateHost;
 const scheduled = new Map<ImmediateHandle, number>();
 let nextHandle = 1;
 
@@ -16,7 +16,7 @@ if (typeof host.setImmediate !== 'function') {
     }
 
     const handle = nextHandle++;
-    const timeout = window.setTimeout((): void => {
+    const timeout = host.setTimeout((): void => {
       scheduled.delete(handle);
       handler(...args);
     }, 0);
@@ -29,7 +29,7 @@ if (typeof host.clearImmediate !== 'function') {
   host.clearImmediate = (handle: ImmediateHandle): void => {
     const timeout = scheduled.get(handle);
     if (typeof timeout === 'number') {
-      window.clearTimeout(timeout);
+      host.clearTimeout(timeout);
       scheduled.delete(handle);
     }
   };

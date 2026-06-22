@@ -100,6 +100,11 @@ export function mergeFailedAttemptPostData(
       const aTime = new Date(a.publishedDate ?? a.archivedDate ?? a.metadata.timestamp).getTime();
       const bTime = new Date(b.publishedDate ?? b.archivedDate ?? b.metadata.timestamp).getTime();
       const delta = (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
-      return sortOrder === 'newest' ? delta : -delta;
+      if (delta !== 0) {
+        return sortOrder === 'newest' ? delta : -delta;
+      }
+      const keyDelta = (a.shareId || a.id || a.filePath || a.url || '')
+        .localeCompare(b.shareId || b.id || b.filePath || b.url || '');
+      return sortOrder === 'newest' ? -keyDelta : keyDelta;
     });
 }

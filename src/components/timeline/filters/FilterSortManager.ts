@@ -60,6 +60,19 @@ export interface DiffResult {
   largeChange: boolean;      // >50% change → full re-render recommended
 }
 
+function compareStableKeys(a: string, b: string, order: SortState['order']): number {
+  const delta = a.localeCompare(b);
+  return order === 'newest' ? -delta : delta;
+}
+
+function getPostStableKey(post: PostData): string {
+  return post.shareId || post.id || post.filePath || post.url || '';
+}
+
+function getIndexStableKey(entry: PostIndexEntry): string {
+  return entry.id || entry.filePath || entry.url || '';
+}
+
 /**
  * FilterSortManager - Manages filtering and sorting logic
  * Single Responsibility: Apply filters and sorting to post data
@@ -246,7 +259,10 @@ export class FilterSortManager {
       const aTime = getDateForSort(a);
       const bTime = getDateForSort(b);
 
-      return this.sortState.order === 'newest' ? bTime - aTime : aTime - bTime;
+      const dateDelta = this.sortState.order === 'newest' ? bTime - aTime : aTime - bTime;
+      if (dateDelta !== 0) return dateDelta;
+
+      return compareStableKeys(getPostStableKey(a), getPostStableKey(b), this.sortState.order);
     });
   }
 
@@ -367,7 +383,10 @@ export class FilterSortManager {
       const aTime = getDate(a);
       const bTime = getDate(b);
 
-      return this.sortState.order === 'newest' ? bTime - aTime : aTime - bTime;
+      const dateDelta = this.sortState.order === 'newest' ? bTime - aTime : aTime - bTime;
+      if (dateDelta !== 0) return dateDelta;
+
+      return compareStableKeys(getIndexStableKey(a), getIndexStableKey(b), this.sortState.order);
     });
   }
 

@@ -169,18 +169,23 @@ describe('LinkedArchivesRenderer', () => {
       expect(out).not.toContain('[https://example.com/post/1]');
     });
 
-    it('falls back to plain text when unresolved and otherArchive is null with no URL', () => {
+    it('skips connected rows whose other archive summary is gone', () => {
       const r = new LinkedArchivesRenderer(NO_RESOLVE);
       const out = r.render({
         relations: [
           entry(
-            { anchorText: 'just text', targetUrl: '', normalizedTargetUrl: 'norm', relationType: 'plain_url' },
+            {
+              anchorText: 'deleted target',
+              targetUrl: 'https://deleted.example.com/post/1',
+              normalizedTargetUrl: 'https://deleted.example.com/post/1',
+              relationType: 'plain_url',
+            },
             null,
           ),
         ],
         selfArchiveId: SELF,
       });
-      expect(out).toContain('- just text');
+      expect(out).toBe('');
     });
   });
 

@@ -293,10 +293,11 @@ export class LinkRelationSyncService {
     if (!lookup) return [];
 
     const targets: BodyWikilinkTarget[] = [];
-    for (const { relation } of relations) {
+    for (const { relation, otherArchive } of relations) {
       if (relation.sourceArchiveId !== archiveId) continue;
       if (relation.status !== 'connected') continue;
       if (relation.deletedAt) continue;
+      if (!otherArchive) continue;
       if (!relation.targetArchiveId) continue;
 
       const targetFile = lookup.findBySourceArchiveId(relation.targetArchiveId);

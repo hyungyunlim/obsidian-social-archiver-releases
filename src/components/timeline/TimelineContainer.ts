@@ -194,6 +194,13 @@ export interface TimelineContainerProps {
   onUIModify?: (filePath: string) => void; // Callback when post is modified via UI (toggle actions)
 }
 
+function compareTimelineStableKeys(a: TimelineItem, b: TimelineItem, order: 'newest' | 'oldest'): number {
+  const keyA = isSeriesGroup(a) ? a.seriesId : (a.shareId || a.id || a.filePath || a.url || '');
+  const keyB = isSeriesGroup(b) ? b.seriesId : (b.shareId || b.id || b.filePath || b.url || '');
+  const delta = keyA.localeCompare(keyB);
+  return order === 'newest' ? -delta : delta;
+}
+
 /**
  * Timeline Container - Pure TypeScript implementation
  * Renders archived social media posts in a chronological timeline
@@ -5738,9 +5745,12 @@ export class TimelineContainer {
         const dateA = getDate(a);
         const dateB = getDate(b);
 
-        return sortOrder === 'newest'
+        const dateDelta = sortOrder === 'newest'
           ? dateB.getTime() - dateA.getTime()
           : dateA.getTime() - dateB.getTime();
+        if (dateDelta !== 0) return dateDelta;
+
+        return compareTimelineStableKeys(a, b, sortOrder);
       });
     }
 
