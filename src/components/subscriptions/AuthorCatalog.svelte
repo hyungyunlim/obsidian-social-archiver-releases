@@ -1664,6 +1664,7 @@ const platformNames: Partial<Record<Platform | 'all', string>> = {
                 <AuthorRow
                   {app}
                   {author}
+                  {archivePath}
                   onSubscribe={handleSubscribe}
                   {onUpdateSubscription}
                   onUnsubscribe={handleUnsubscribe}

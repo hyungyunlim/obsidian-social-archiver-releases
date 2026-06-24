@@ -35,6 +35,7 @@ import { BrunchLocalService } from '@/services/BrunchLocalService';
 interface AuthorRowProps {
   app: App;
   author: AuthorCatalogEntry;
+  archivePath?: string;
   onSubscribe?: (author: AuthorCatalogEntry, options: AuthorSubscribeOptions) => Promise<void>;
   onUpdateSubscription?: (author: AuthorCatalogEntry, options: AuthorSubscribeOptions) => Promise<void>;
   onUnsubscribe?: (author: AuthorCatalogEntry) => Promise<void>;
@@ -51,6 +52,7 @@ interface AuthorRowProps {
 let {
   app,
   author,
+  archivePath = DEFAULT_ARCHIVE_PATH,
   onSubscribe,
   onUpdateSubscription,
   onUnsubscribe,
@@ -345,7 +347,7 @@ async function handleSubscribe(): Promise<void> {
     const currentHour = new Date().getHours();
     const options: AuthorSubscribeOptions = {
       cadence: 'daily',
-      destinationPath: DEFAULT_ARCHIVE_PATH,
+      destinationPath: archivePath || DEFAULT_ARCHIVE_PATH,
       templateId: null,
       timezone,
       startHour: currentHour,
@@ -397,7 +399,7 @@ async function handleRedditSubscribe(modalOptions: RedditModalOptions, isEditMod
 
   const options: AuthorSubscribeOptions = {
     cadence: 'daily',
-    destinationPath: DEFAULT_ARCHIVE_PATH,
+    destinationPath: archivePath || DEFAULT_ARCHIVE_PATH,
     templateId: null,
     timezone,
     startHour: currentHour,
@@ -435,7 +437,7 @@ async function handleNaverSubscribe(
 
   const options: AuthorSubscribeOptions = {
     cadence: 'daily',
-    destinationPath: DEFAULT_ARCHIVE_PATH,
+    destinationPath: archivePath || DEFAULT_ARCHIVE_PATH,
     templateId: null,
     timezone,
     startHour: currentHour,
@@ -500,7 +502,7 @@ async function handleBrunchSubscribe(
 
   const options: AuthorSubscribeOptions = {
     cadence: 'daily',
-    destinationPath: DEFAULT_ARCHIVE_PATH,
+    destinationPath: archivePath || DEFAULT_ARCHIVE_PATH,
     templateId: null,
     timezone,
     startHour: currentHour,

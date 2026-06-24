@@ -455,6 +455,7 @@ export class AuthorDetailContainer {
     return {
       app: this.app,
       author: this.currentAuthor!,
+      archivePath: this.archivePath || DEFAULT_ARCHIVE_PATH,
       onGoBack: this.props.onGoBack,
       onOpenProfile: this.props.onOpenProfile ?? ((a: AuthorCatalogEntry) => {
         if (a.authorUrl) {
@@ -1457,7 +1458,7 @@ export class AuthorDetailContainer {
   private buildDefaultSubscribeOptions(): AuthorSubscribeOptions {
     return {
       cadence: 'daily',
-      destinationPath: DEFAULT_ARCHIVE_PATH,
+      destinationPath: this.archivePath || DEFAULT_ARCHIVE_PATH,
       templateId: null,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       startHour: new Date().getHours(),

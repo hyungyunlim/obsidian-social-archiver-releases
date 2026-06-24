@@ -21,6 +21,7 @@ import type { MediaDownloadMode, SocialArchiverSettings } from '../../types/sett
 import { getVaultOrganizationStrategy } from '../../types/settings';
 import type { PostData, Platform, Media } from '../../types/post';
 import type { MediaExpiredResult } from '../../services/MediaPlaceholderGenerator';
+import { DEFAULT_ARCHIVE_PATH } from '../../shared/constants';
 import { getPlatformName } from '../../shared/platforms';
 import { TimelineView, VIEW_TYPE_TIMELINE } from '../../views/TimelineView';
 import type { WsProfileMetadataMessage } from '../realtime/RealtimeEventBridge';
@@ -122,6 +123,23 @@ export class SubscriptionSyncService {
       return mode;
     }
     return 'images-and-videos';
+  }
+
+  private resolveDestinationFolder(pendingPost: PendingPost): string {
+    const settingsPath = this.settings.archivePath?.trim() || DEFAULT_ARCHIVE_PATH;
+    const destinationFolder = pendingPost.destinationFolder?.trim();
+
+    if (
+      !destinationFolder ||
+      destinationFolder === DEFAULT_ARCHIVE_PATH ||
+      destinationFolder === '/' ||
+      destinationFolder === '.' ||
+      destinationFolder === './'
+    ) {
+      return settingsPath;
+    }
+
+    return destinationFolder;
   }
 
   private buildDownloadCandidates(
@@ -375,7 +393,7 @@ export class SubscriptionSyncService {
 
       const titlePart = title || 'Post';
 
-      const basePath = pendingPost.destinationFolder || this.settings.archivePath;
+      const basePath = this.resolveDestinationFolder(pendingPost);
       const pathVaultManager = new VaultManager({
         vault: this.app.vault,
         app: this.app,

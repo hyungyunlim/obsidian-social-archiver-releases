@@ -4172,7 +4172,7 @@ export class TimelineContainer {
   /**
    * Subscribe to an author - reusable method for both AuthorCatalog and Timeline
    */
-  private async subscribeToAuthor(author: AuthorCatalogEntry): Promise<void> {
+  private async subscribeToAuthor(author: AuthorCatalogEntry, options?: AuthorSubscribeOptions): Promise<void> {
     if (!this.requireSubscriptionAuth()) {
       throw new Error('Authentication required');
     }
@@ -4182,8 +4182,9 @@ export class TimelineContainer {
       throw new Error('Platform not supported');
     }
 
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const currentHour = new Date().getHours();
+    const timezone = options?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const currentHour = options?.startHour ?? new Date().getHours();
+    const destinationPath = options?.destinationPath || this.archivePath || DEFAULT_ARCHIVE_PATH;
 
     // Build request body
     const requestBody: SubscriptionRequestBody = {
@@ -4198,12 +4199,12 @@ export class TimelineContainer {
         timezone: timezone
       },
       destination: {
-        folder: DEFAULT_ARCHIVE_PATH,
-        templateId: undefined
+        folder: destinationPath,
+        templateId: options?.templateId || undefined
       },
       options: {
-        maxPostsPerRun: 20,
-        backfillDays: 3
+        maxPostsPerRun: options?.maxPostsPerRun ?? 20,
+        backfillDays: options?.backfillDays ?? 3
       }
     };
 
@@ -7262,8 +7263,8 @@ export class TimelineContainer {
       onViewAuthor: (a: AuthorCatalogEntry) => this.showAuthorDetail(a),
       isAuthenticated: () => isAuthenticated(this.plugin),
       onAuthRequired: () => showAccountRequiredNotice(this.plugin, 'subscriptions'),
-      onSubscribe: async (a: AuthorCatalogEntry) => {
-        await this.subscribeToAuthor(a);
+      onSubscribe: async (a: AuthorCatalogEntry, options?: AuthorSubscribeOptions) => {
+        await this.subscribeToAuthor(a, options);
         return a.subscriptionId ? {
           id: a.subscriptionId,
           platform: a.platform,
