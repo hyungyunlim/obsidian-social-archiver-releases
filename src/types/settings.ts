@@ -168,6 +168,7 @@ export interface TimelineFilterPreferences {
   likedOnly: boolean;
   commentedOnly: boolean;
   sharedOnly: boolean;
+  localOnlyOnly: boolean;
   includeArchived: boolean;
   searchQuery: string;
   dateRange: {
@@ -183,6 +184,7 @@ export function createDefaultTimelineFilters(): TimelineFilterPreferences {
     likedOnly: false,
     commentedOnly: false,
     sharedOnly: false,
+    localOnlyOnly: false,
     includeArchived: false,
     searchQuery: '',
     dateRange: {
@@ -667,6 +669,15 @@ export interface SocialArchiverSettings {
    * conversion pass). Unset/empty = pending; retried on foreground catch-up.
    */
   bodyWikilinkBackfillDoneAt?: string;
+
+  /**
+   * One-time full library reconcile marker for archive-state/delete drift.
+   * This forces existing vault notes to re-read server `isBookmarked` and
+   * apply server-deleted tombstones after fixes to degraded WS / startup delta
+   * behavior.
+   */
+  archiveStateReconcileBackfillDoneAt?: string;
+  archiveStateReconcileBackfillVersion?: number;
 
   // Delete Sync Settings
   deleteSync: DeleteSyncSettings;

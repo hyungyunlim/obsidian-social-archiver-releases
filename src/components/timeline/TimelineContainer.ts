@@ -1566,6 +1566,7 @@ export class TimelineContainer {
       !filterState.likedOnly &&
       !filterState.commentedOnly &&
       !filterState.sharedOnly &&
+      !filterState.localOnlyOnly &&
       !filterState.subscribedOnly;
     if (isPlainInboxEmpty) {
       const archivedCount = this.posts.filter((post) => post.archive === true).length;
@@ -5978,7 +5979,7 @@ export class TimelineContainer {
     const isMobile = ObsidianPlatform.isMobile;
 
     const quickFilters: Array<{
-      key: 'likedOnly' | 'sharedOnly' | 'commentedOnly' | 'subscribedOnly';
+      key: 'likedOnly' | 'sharedOnly' | 'commentedOnly' | 'localOnlyOnly' | 'subscribedOnly';
       icon: string;
       label: string;
       titleOn: string;
@@ -5987,6 +5988,7 @@ export class TimelineContainer {
       { key: 'likedOnly', icon: 'star', label: 'Starred', titleOn: 'Showing starred only', titleOff: 'Show starred only' },
       { key: 'commentedOnly', icon: 'message-square', label: 'Notes', titleOn: 'Showing with notes only', titleOff: 'Show with notes only' },
       { key: 'sharedOnly', icon: 'share-2', label: 'Shared', titleOn: 'Showing shared only', titleOff: 'Show shared only' },
+      { key: 'localOnlyOnly', icon: 'hard-drive', label: 'Local', titleOn: 'Showing local-only posts', titleOff: 'Show local-only posts' },
       { key: 'subscribedOnly', icon: isMobile ? 'rss' : 'bell', label: 'Subscribed', titleOn: 'Showing subscribed only', titleOff: 'Show subscribed only' },
     ];
 
@@ -6804,6 +6806,7 @@ export class TimelineContainer {
       likedOnly: false,
       commentedOnly: false,
       sharedOnly: false,
+      localOnlyOnly: false,
       subscribedOnly: false,
       includeArchived: false,
       activeTab: 'inbox',
@@ -6831,6 +6834,7 @@ export class TimelineContainer {
       likedOnly: prefs.likedOnly ?? defaults.likedOnly,
       commentedOnly: prefs.commentedOnly ?? defaults.commentedOnly,
       sharedOnly: prefs.sharedOnly ?? defaults.sharedOnly,
+      localOnlyOnly: prefs.localOnlyOnly ?? defaults.localOnlyOnly,
       includeArchived: activeTab !== 'inbox',
       activeTab,
       dateRange: {
@@ -6848,6 +6852,7 @@ export class TimelineContainer {
       likedOnly: state.likedOnly,
       commentedOnly: state.commentedOnly,
       sharedOnly: state.sharedOnly,
+      localOnlyOnly: state.localOnlyOnly,
       includeArchived: state.includeArchived,
       searchQuery: state.searchQuery,
       dateRange: {

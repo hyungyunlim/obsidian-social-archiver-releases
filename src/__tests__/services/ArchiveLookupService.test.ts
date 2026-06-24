@@ -70,6 +70,8 @@ const STUB_EVENT_REF: EventRef = {} as EventRef;
 function createMockApp(fileConfigs: MockFileConfig[]): {
   app: App;
   triggerChanged: (file: TFile, cache: CachedMetadata | null) => void;
+  triggerResolved: () => void;
+  setFrontmatter: (path: string, frontmatter: FrontmatterConfig | undefined) => void;
 } {
   const fileMap = new Map<string, MockFileConfig>();
   const tFileMap = new Map<string, TFile>();
@@ -81,12 +83,19 @@ function createMockApp(fileConfigs: MockFileConfig[]): {
 
   // Capture the `changed` handler registered by the service
   let changedHandler: ((file: TFile, data: string, cache: CachedMetadata) => void) | null = null;
+  let resolvedHandler: (() => void) | null = null;
+  let metadataResolved = false;
 
   const mockMetadataCache = {
-    resolved: false,
-    on: vi.fn((event: string, handler: (file: TFile, data: string, cache: CachedMetadata) => void): EventRef => {
+    get resolved(): boolean {
+      return metadataResolved;
+    },
+    on: vi.fn((event: string, handler: unknown): EventRef => {
       if (event === 'changed') {
-        changedHandler = handler;
+        changedHandler = handler as (file: TFile, data: string, cache: CachedMetadata) => void;
+      }
+      if (event === 'resolved') {
+        resolvedHandler = handler as () => void;
       }
       return STUB_EVENT_REF;
     }),
@@ -141,7 +150,22 @@ function createMockApp(fileConfigs: MockFileConfig[]): {
     changedHandler?.(file, '', cache as CachedMetadata);
   };
 
-  return { app, triggerChanged };
+  const triggerResolved = (): void => {
+    metadataResolved = true;
+    resolvedHandler?.();
+  };
+
+  const setFrontmatter = (path: string, frontmatter: FrontmatterConfig | undefined): void => {
+    const config = fileMap.get(path);
+    if (config) {
+      config.frontmatter = frontmatter;
+      return;
+    }
+    fileMap.set(path, { path, frontmatter });
+    tFileMap.set(path, makeTFile(path));
+  };
+
+  return { app, triggerChanged, triggerResolved, setFrontmatter };
 }
 
 // ============================================================================
@@ -212,6 +236,23 @@ describe('ArchiveLookupService', () => {
       svc.findBySourceArchiveId('archive_XYZ');
 
       expect(app.vault.getMarkdownFiles).toHaveBeenCalledOnce();
+    });
+
+    it('rebuilds the lookup index when MetadataCache resolves after an early lazy build', () => {
+      const path = 'Social Archives/Subscriptions/Facebook/post.md';
+      const { app, triggerResolved, setFrontmatter } = createMockApp([
+        { path /* MetadataCache has not parsed frontmatter yet */ },
+      ]);
+      const svc = new ArchiveLookupService(app);
+      svc.initialize();
+
+      expect(svc.findBySourceArchiveId('archive_123')).toBeNull();
+
+      setFrontmatter(path, { sourceArchiveId: 'archive_123' });
+      triggerResolved();
+
+      expect(svc.findBySourceArchiveId('archive_123')?.path).toBe(path);
+      expect(app.vault.getMarkdownFiles).toHaveBeenCalledTimes(2);
     });
 
     it('skips files with no frontmatter', () => {

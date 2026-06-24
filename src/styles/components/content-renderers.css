@@ -230,6 +230,12 @@
   --tr-radius: 6px;
 }
 
+.tr-reader-typography {
+  border-color: transparent;
+  background: transparent;
+  overflow: visible;
+}
+
 /* Header */
 .tr-header {
   padding: var(--tr-header-pad, 12px 16px);
@@ -239,6 +245,12 @@
 .tr-header-mobile {
   --tr-header-pad: 10px 12px;
   --tr-header-gap: 6px;
+}
+
+.tr-reader-typography .tr-header {
+  padding-left: 0;
+  padding-right: 0;
+  background: transparent;
 }
 
 /* Title */
@@ -341,6 +353,53 @@
   background: var(--background-modifier-hover);
 }
 
+.tr-reader-view .tr-segment-control {
+  display: none;
+}
+
+.tr-view-toggle {
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+}
+
+.tr-view-toggle-mobile {
+  gap: 2px;
+}
+
+.tr-view-btn {
+  gap: 4px;
+  padding: 4px 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.tr-view-btn:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.tr-view-btn-active {
+  color: var(--text-accent);
+  background: var(--background-modifier-active-hover);
+}
+
+.tr-view-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.tr-view-toggle-mobile .tr-view-btn {
+  width: 28px;
+  height: 26px;
+  justify-content: center;
+  padding: 0;
+}
+
 /* Speaker jump disabled state */
 .tr-speaker-disabled {
   cursor: not-allowed;
@@ -367,6 +426,34 @@
 .tr-segments-mobile {
   --tr-seg-pad: 0 10px 10px;
   --tr-seg-max-h: 300px;
+}
+
+.tr-reader-typography .transcript-content {
+  border-top: 0;
+}
+
+.tr-reader-text {
+  padding: 14px 16px 16px;
+  color: var(--text-normal);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.tr-reader-typography .tr-reader-text {
+  padding: 0;
+  font-family: var(--reader-font-family, var(--font-text));
+  font-size: var(--reader-font-size, var(--font-text-size));
+  line-height: var(--reader-line-height, 1.75);
+  letter-spacing: var(--reader-letter-spacing, 0em);
+}
+
+.tr-reader-text p {
+  margin: 0 0 1em;
+  white-space: pre-wrap;
+}
+
+.tr-reader-text p:last-child {
+  margin-bottom: 0;
 }
 
 /* Search bar */

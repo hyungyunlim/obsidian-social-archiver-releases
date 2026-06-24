@@ -343,6 +343,7 @@ export interface PostData {
   linkedArchives?: { linksTo: string[]; linkedFrom: string[] };
   like?: boolean;           // User's personal like (for sorting/filtering)
   archive?: boolean;        // Whether post is archived (hidden by default)
+  isLocalOnly?: boolean;    // True when the note has never been uploaded to the server
   share?: boolean;          // YAML frontmatter share flag (true when published to web)
   shareId?: string;         // Share ID from the web share service
   shareUrl?: string;        // Public share URL (if published)
@@ -658,7 +659,10 @@ export const PostDataSchema: z.ZodType<PostData> = z.lazy(() => z.object({
     // Episode/article subtitle (podcast itunes:subtitle, Brunch cover
     // subtitle). Without this the strip-mode clip codec drops it.
     subtitle: z.string().nullish(),
-    mediaSelectionSummary: z.array(z.string()).nullish()
+    mediaSelectionSummary: z.array(z.string()).nullish(),
+    socialArchiverImportMode: z.enum(['server-synced', 'local-only']).nullish(),
+    socialArchiverImportSource: z.string().nullish(),
+    socialArchiverServerArchiveId: z.string().nullish()
   }),
   comments: z.array(z.object({
     id: z.string(),
@@ -721,6 +725,7 @@ export const PostDataSchema: z.ZodType<PostData> = z.lazy(() => z.object({
   }).nullish(),
   like: z.boolean().nullish(),
   archive: z.boolean().nullish(),
+  isLocalOnly: z.boolean().nullish(),
   shareUrl: z.string().nullish(),
   shareMode: z.enum(['full', 'preview']).nullish(),
   publishedDate: z.date().nullish(),

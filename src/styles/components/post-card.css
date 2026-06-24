@@ -491,6 +491,34 @@ body.is-phone .pcr-content-variant-switch {
   animation: pcr-spin 1s linear infinite;
 }
 
+.pcr-local-only-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border: 1px solid rgba(var(--color-orange-rgb, 236, 117, 0), 0.35);
+  border-radius: 10px;
+  background-color: rgba(var(--color-orange-rgb, 236, 117, 0), 0.12);
+  color: var(--color-orange, var(--interactive-accent));
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.pcr-local-only-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 10px;
+  height: 10px;
+}
+
+.is-mobile .pcr-local-only-badge {
+  padding: 2px;
+  background-color: transparent;
+}
+
 /* ========================================
  * Content / titles
  * ======================================== */

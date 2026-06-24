@@ -64,6 +64,7 @@ describe('settings', () => {
           likedOnly: false,
           commentedOnly: false,
           sharedOnly: false,
+          localOnlyOnly: false,
           includeArchived: true,
           searchQuery: '',
           dateRange: { start: null, end: null },
@@ -73,6 +74,7 @@ describe('settings', () => {
       const migrated = migrateSettings(legacy);
 
       expect(migrated.timelineFilters.activeTab).toBe('all');
+      expect(migrated.timelineFilters.localOnlyOnly).toBe(false);
     });
 
     it('should derive activeTab "inbox" from legacy includeArchived false', () => {
@@ -82,6 +84,7 @@ describe('settings', () => {
           likedOnly: false,
           commentedOnly: false,
           sharedOnly: false,
+          localOnlyOnly: false,
           includeArchived: false,
           searchQuery: '',
           dateRange: { start: null, end: null },
@@ -91,6 +94,7 @@ describe('settings', () => {
       const migrated = migrateSettings(legacy);
 
       expect(migrated.timelineFilters.activeTab).toBe('inbox');
+      expect(migrated.timelineFilters.localOnlyOnly).toBe(false);
     });
 
     it('should preserve existing activeTab when already set', () => {
@@ -100,6 +104,7 @@ describe('settings', () => {
           likedOnly: false,
           commentedOnly: false,
           sharedOnly: false,
+          localOnlyOnly: true,
           includeArchived: true,
           searchQuery: '',
           dateRange: { start: null, end: null },
@@ -110,6 +115,7 @@ describe('settings', () => {
       const migrated = migrateSettings(settings);
 
       expect(migrated.timelineFilters.activeTab).toBe('archive');
+      expect(migrated.timelineFilters.localOnlyOnly).toBe(true);
     });
   });
 
@@ -160,6 +166,7 @@ describe('settings', () => {
 
       expect(defaults.activeTab).toBe('inbox');
       expect(defaults.includeArchived).toBe(false);
+      expect(defaults.localOnlyOnly).toBe(false);
     });
   });
 });

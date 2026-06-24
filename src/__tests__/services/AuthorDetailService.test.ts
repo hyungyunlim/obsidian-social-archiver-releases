@@ -80,6 +80,7 @@ function createPostEntry(overrides: Partial<PostIndexEntry> = {}): PostIndexEntr
     hashtags: [],
     like: false,
     archive: false,
+    isLocalOnly: false,
     subscribed: false,
     searchText: 'john doe x post content',
     url: 'https://x.com/johndoe/status/123',

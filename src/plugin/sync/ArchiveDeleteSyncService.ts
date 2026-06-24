@@ -564,6 +564,29 @@ export class ArchiveDeleteSyncService {
       return;
     }
 
+    await this.handleInboundDeleteFile(file, archiveId, source);
+  }
+
+  /**
+   * Apply an inbound server delete to a vault file that has already been
+   * resolved by a caller. Used by file-based backfills that intentionally do
+   * not depend on ArchiveLookupService / MetadataCache.
+   */
+  async handleInboundDeleteFile(
+    file: TFile,
+    archiveId: string,
+    source?: 'ws' | 'delta',
+  ): Promise<boolean> {
+    const settings = this.deps.settings();
+
+    if (!settings.deleteSync?.inboundEnabled) {
+      console.debug(`${LOG_PREFIX} Inbound delete disabled — skipping`, {
+        archiveId,
+        source,
+      });
+      return false;
+    }
+
     // Suppress the resulting vault delete event so it does NOT trigger an
     // outbound delete back to the server (loop guard).
     this.suppressInboundDelete(archiveId);
@@ -580,6 +603,7 @@ export class ArchiveDeleteSyncService {
         `Deleted from vault: "${file.basename}" (deleted on server)`,
         4000
       );
+      return true;
     } catch (error: unknown) {
       // If trash fails, clear the suppression so the user can retry manually
       this.suppressedInboundDeleteIds.delete(archiveId);
@@ -588,6 +612,7 @@ export class ArchiveDeleteSyncService {
         path: file.path,
         error,
       });
+      return false;
     }
   }
 

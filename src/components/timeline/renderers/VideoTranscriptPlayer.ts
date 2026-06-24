@@ -16,6 +16,12 @@ export interface VideoMediaContext {
   youtubeController?: YouTubePlayerController;
 }
 
+export interface VideoTranscriptRenderOptions {
+  startCollapsed?: boolean;
+  initialView?: 'reader' | 'segments';
+  readerTypography?: boolean;
+}
+
 /**
  * VideoTranscriptPlayer - Composition component for video + transcript sync
  * Single Responsibility: Bridge video playback with TranscriptRenderer
@@ -43,7 +49,8 @@ export class VideoTranscriptPlayer {
   render(
     container: HTMLElement,
     post: PostData,
-    mediaContext: VideoMediaContext
+    mediaContext: VideoMediaContext,
+    renderOptions: VideoTranscriptRenderOptions = {}
   ): boolean {
     // 1. Unify transcript data from different sources
     const segments = this.unifyTranscriptSegments(post);
@@ -86,7 +93,9 @@ export class VideoTranscriptPlayer {
       segments,
       adapter: this.adapter,
       language: this.currentLanguage,
-      startCollapsed: true,
+      startCollapsed: renderOptions.startCollapsed ?? true,
+      initialView: renderOptions.initialView,
+      readerTypography: renderOptions.readerTypography,
       showSpeakerDividers: true,
       onCaptionToggle: this.captionOverlay
         ? () => this.toggleCaptions()

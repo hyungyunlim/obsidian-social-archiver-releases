@@ -288,6 +288,25 @@
   text-decoration: underline;
 }
 
+.sa-reader-mode-transcript {
+  margin: 20px 0;
+}
+
+.sa-reader-mode-raw-transcript {
+  background: var(--background-primary);
+}
+
+.sa-reader-mode-raw-transcript-content {
+  border-top: 1px solid var(--background-modifier-border);
+  padding: 12px 16px;
+}
+
+.sa-reader-mode-raw-transcript-content p {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.7;
+}
+
 /* Initials avatar text */
 .rmcr-initials-text {
   color: var(--text-on-accent);

@@ -483,7 +483,11 @@ export class ArchiveCliService {
         skipped.push({ target: 'library', reason: 'service_unavailable' });
       } else {
         targets.push('library');
-        void libSync.startDeltaSync('delta-catch-up').catch(() => {});
+        void (async (): Promise<void> => {
+          await libSync.startDeltaSync('delta-catch-up');
+          await this.plugin.reconcileArchiveStatesFromServer('cli-sync');
+          await this.plugin.reconcileDeletedArchivesFromServer('cli-sync');
+        })().catch(() => {});
       }
     }
 
@@ -556,6 +560,8 @@ export class ArchiveCliService {
       } else {
         try {
           await libSync.startDeltaSync('delta-catch-up');
+          await this.plugin.reconcileArchiveStatesFromServer('cli-sync');
+          await this.plugin.reconcileDeletedArchivesFromServer('cli-sync');
           out.ran.push('library');
         } catch (error) {
           out.skipped.push({ target: 'library', reason: errorReason(error) });

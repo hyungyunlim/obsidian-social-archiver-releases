@@ -121,6 +121,7 @@ describe('FilterSortManager', () => {
         hashtags: [],
         like: false,
         archive: true,
+        isLocalOnly: false,
         subscribed: false,
         searchText: '',
         url: `https://example.com/${id}`,
@@ -152,6 +153,54 @@ describe('FilterSortManager', () => {
     it('returns true for all tab', () => {
       const manager = new FilterSortManager({ activeTab: 'all' });
       expect(manager.hasActiveFilters()).toBe(true);
+    });
+
+    it('returns true for local-only filter', () => {
+      const manager = new FilterSortManager({ activeTab: 'inbox', localOnlyOnly: true });
+      expect(manager.hasActiveFilters()).toBe(true);
+    });
+  });
+
+  describe('local-only filtering', () => {
+    it('filters full posts by local-only status', () => {
+      const localPost = makePost({ filePath: 'local.md', isLocalOnly: true });
+      const syncedPost = makePost({ filePath: 'synced.md', isLocalOnly: false });
+      const manager = new FilterSortManager({ activeTab: 'inbox', localOnlyOnly: true });
+
+      const result = manager.applyFiltersAndSort([localPost, syncedPost]);
+
+      expect(result.map((post) => post.filePath)).toEqual(['local.md']);
+    });
+
+    it('filters index entries by local-only status', () => {
+      const entry = (id: string, isLocalOnly: boolean): PostIndexEntry => ({
+        id,
+        platform: 'x',
+        filePath: `${id}.md`,
+        fileModifiedTime: 0,
+        authorName: 'Author',
+        publishedDate: Date.parse('2026-04-20T10:00:00.000Z'),
+        archivedDate: Date.parse('2026-04-20T10:00:00.000Z'),
+        tags: [],
+        hashtags: [],
+        like: false,
+        archive: false,
+        isLocalOnly,
+        subscribed: false,
+        searchText: '',
+        url: `https://example.com/${id}`,
+        mediaCount: 0,
+        commentCount: 0,
+        metadataTimestamp: Date.parse('2026-04-20T10:00:00.000Z'),
+      });
+      const manager = new FilterSortManager({ activeTab: 'inbox', localOnlyOnly: true });
+
+      const result = manager.applyFiltersAndSortIndex([
+        entry('synced', false),
+        entry('local', true),
+      ]);
+
+      expect(result.map((item) => item.filePath)).toEqual(['local.md']);
     });
   });
 });

@@ -39,6 +39,22 @@ const SUPPRESSION_TTL_MS = 10_000;
 /** Log prefix for consistent filtering in DevTools. */
 const LOG_PREFIX = '[Social Archiver] [ArchiveStateSyncService]';
 
+function parseArchiveStateFromMarkdown(content: string): boolean | null {
+  const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  const frontmatter = frontmatterMatch?.[1];
+  if (!frontmatter) return null;
+
+  const archiveMatch = frontmatter.match(/^archive:\s*(.*?)\s*$/m);
+  if (!archiveMatch) return false;
+
+  const rawValue = archiveMatch[1]
+    ?.trim()
+    .replace(/^['"]|['"]$/g, '')
+    .toLowerCase();
+
+  return rawValue === 'true' || rawValue === 'yes';
+}
+
 // ============================================================================
 // ArchiveStateSyncService
 // ============================================================================
@@ -183,9 +199,8 @@ export class ArchiveStateSyncService {
     }
 
     // Guard 4: no-op if frontmatter already matches the incoming value
-    const cache = this.app.metadataCache.getFileCache(file);
-    const currentArchive: unknown = cache?.frontmatter?.['archive'];
-    if (currentArchive === newArchiveState) {
+    const currentArchiveState = await this.readCurrentArchiveState(file);
+    if (currentArchiveState === newArchiveState) {
       console.debug(
         LOG_PREFIX,
         'fm.archive already matches incoming value — no-op:',
@@ -267,9 +282,7 @@ export class ArchiveStateSyncService {
     }
 
     // Guard 2: no-op if frontmatter already matches
-    const cache = this.app.metadataCache.getFileCache(file);
-    const currentArchive: unknown = cache?.frontmatter?.['archive'];
-    const currentBool: boolean = currentArchive === true;
+    const currentBool = await this.readCurrentArchiveState(file);
 
     if (currentBool === isBookmarked) {
       // Already in sync — skip disk write entirely
@@ -317,6 +330,27 @@ export class ArchiveStateSyncService {
 
       throw err; // propagate so the caller can log and absorb
     }
+  }
+
+  private async readCurrentArchiveState(file: TFile): Promise<boolean> {
+    try {
+      const content = await this.app.vault.cachedRead(file);
+      const archiveState = parseArchiveStateFromMarkdown(content);
+      if (archiveState !== null) {
+        return archiveState;
+      }
+    } catch (err) {
+      console.debug(
+        LOG_PREFIX,
+        'Could not read file content for archive-state no-op guard; falling back to MetadataCache:',
+        file.path,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+
+    const cache = this.app.metadataCache.getFileCache(file);
+    const currentArchive: unknown = cache?.frontmatter?.['archive'];
+    return currentArchive === true;
   }
 
   // --------------------------------------------------------------------------

@@ -22,6 +22,7 @@ export interface PostIndexEntry {
   hashtags: string[];
   like: boolean;
   archive: boolean;
+  isLocalOnly: boolean;
   subscribed: boolean;
   subscriptionId?: string;
 
@@ -57,10 +58,9 @@ interface PostIndex {
   lastUpdated: number;
 }
 
-// v3: sentinel media markers (<!-- sa:media:start/end -->) are now stripped
-// from contentText — bump forces a rebuild so cached searchText/previewText
-// from marker-contaminated parses (3.10.0 sync) is discarded.
-const INDEX_VERSION = 3;
+// v4: local-only provenance is projected into the lightweight index so the
+// timeline can filter those notes without loading every full card first.
+const INDEX_VERSION = 4;
 const INDEX_FILE_NAME = 'post-index.json';
 const SAVE_DEBOUNCE_MS = 5_000;
 
@@ -249,6 +249,7 @@ export class PostIndexService {
       hashtags: string[];
       like: boolean;
       archive: boolean;
+      isLocalOnly: boolean;
       subscribed: boolean;
       subscriptionId?: string;
       publishedDate?: Date;
@@ -291,6 +292,7 @@ export class PostIndexService {
       hashtags: metadata.hashtags,
       like: metadata.like,
       archive: metadata.archive,
+      isLocalOnly: metadata.isLocalOnly,
       subscribed: metadata.subscribed,
       subscriptionId: metadata.subscriptionId,
       searchText,

@@ -4,6 +4,8 @@ import type { PlaybackAdapter } from '../controllers/PlaybackAdapter';
 import { HtmlMediaPlaybackAdapter } from '../controllers/PlaybackAdapter';
 import { languageCodeToName } from '../../../constants/languages';
 
+type TranscriptViewMode = 'reader' | 'segments';
+
 /**
  * Options for TranscriptRenderer
  */
@@ -32,6 +34,10 @@ export interface TranscriptRendererOptions {
   multilangSegments?: Map<string, TranscriptionSegment[]>;
   /** Callback when language tab is selected */
   onLanguageChange?: (languageCode: string) => void;
+  /** Initial transcript view. Segment mode preserves timestamp/search controls. */
+  initialView?: TranscriptViewMode;
+  /** Apply reader-mode prose styling to the readable transcript view. */
+  readerTypography?: boolean;
 }
 
 /**
@@ -56,6 +62,8 @@ export class TranscriptRenderer {
   private autoScroll: boolean = true;
   private isCollapsed: boolean = true;
   private searchQuery: string = '';
+  private activeView: TranscriptViewMode = 'segments';
+  private transcriptSectionEl: HTMLElement | null = null;
   private onTimestampClick?: (time: number) => void;
   private contentEl: HTMLElement | null = null;
   private segmentsListEl: HTMLElement | null = null;
@@ -88,6 +96,7 @@ export class TranscriptRenderer {
     this.showSpeakerDividers = options.showSpeakerDividers ?? false;
     this.onCaptionToggle = options.onCaptionToggle;
     this.captionActive = options.captionActive ?? false;
+    this.activeView = options.initialView ?? 'segments';
     // Initialize multilang fields
     this.languages = options.languages || [];
     this.multilangSegments = options.multilangSegments || new Map<string, TranscriptionSegment[]>();
@@ -123,6 +132,11 @@ export class TranscriptRenderer {
 
     // Main container
     const transcriptSection = container.createDiv({ cls: 'podcast-transcript-viewer sa-border sa-overflow-hidden tr-section' });
+    this.transcriptSectionEl = transcriptSection;
+    this.syncViewClasses();
+    if (options.readerTypography) {
+      transcriptSection.addClass('tr-reader-typography');
+    }
     if (this.isMobile) {
       transcriptSection.addClass('tr-section-mobile');
     }
@@ -143,18 +157,7 @@ export class TranscriptRenderer {
       this.toggleCollapse();
     });
 
-    // Search bar (desktop only)
-    if (!this.isMobile) {
-      this.renderSearchBar(this.contentEl);
-    }
-
-    // Segments list
-    this.segmentsListEl = this.contentEl.createDiv({ cls: 'transcript-segments sa-overflow-y-auto tr-segments' });
-    if (this.isMobile) {
-      this.segmentsListEl.addClass('tr-segments-mobile');
-    }
-
-    this.renderSegments(this.segmentsListEl);
+    this.renderContentBody();
 
     // Bind playback events for sync
     if (this.adapter) {
@@ -208,6 +211,8 @@ export class TranscriptRenderer {
       this.renderCaptionToggleButton(header);
     }
 
+    this.renderViewToggle(header);
+
     // Speaker jump button (stopPropagation is handled inside renderSpeakerJumpButton)
     this.renderSpeakerJumpButton(header);
 
@@ -218,6 +223,154 @@ export class TranscriptRenderer {
     });
 
     return header;
+  }
+
+  private renderViewToggle(parent: HTMLElement): void {
+    const group = parent.createDiv({ cls: 'transcript-view-toggle sa-flex-row sa-rounded-4 tr-view-toggle' });
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', 'Transcript view');
+    if (this.isMobile) {
+      group.addClass('tr-view-toggle-mobile');
+    }
+
+    const readBtn = this.renderViewButton(group, 'reader', 'book-open', 'Read transcript', 'Read');
+    const segmentBtn = this.renderViewButton(group, 'segments', 'list', 'Show transcript segments', 'Segments');
+
+    readBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.switchView('reader');
+    });
+    segmentBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.switchView('segments');
+    });
+  }
+
+  private renderViewButton(
+    parent: HTMLElement,
+    view: TranscriptViewMode,
+    iconName: string,
+    label: string,
+    text: string
+  ): HTMLElement {
+    const button = parent.createDiv({ cls: 'transcript-view-button sa-flex-row sa-rounded-4 sa-clickable tr-view-btn' });
+    button.setAttribute('role', 'button');
+    button.setAttribute('tabindex', '0');
+    button.setAttribute('aria-label', label);
+    button.setAttribute('aria-pressed', String(this.activeView === view));
+    button.setAttribute('data-view', view);
+    if (this.activeView === view) {
+      button.addClass('tr-view-btn-active');
+    }
+
+    const icon = button.createSpan({ cls: 'tr-view-icon sa-flex-row' });
+    setIcon(icon, iconName);
+    if (!this.isMobile) {
+      button.createSpan({ text, cls: 'tr-view-label' });
+    }
+
+    button.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.switchView(view);
+      }
+    });
+
+    return button;
+  }
+
+  private switchView(view: TranscriptViewMode): void {
+    if (this.activeView === view) {
+      if (this.isCollapsed) this.toggleCollapse();
+      return;
+    }
+    this.activeView = view;
+    this.syncViewClasses();
+    this.syncViewButtons();
+    if (this.isCollapsed) {
+      this.toggleCollapse();
+    }
+    this.renderContentBody();
+  }
+
+  private syncViewClasses(): void {
+    if (!this.transcriptSectionEl) return;
+    this.transcriptSectionEl.toggleClass('tr-reader-view', this.activeView === 'reader');
+    this.transcriptSectionEl.toggleClass('tr-segments-view', this.activeView === 'segments');
+  }
+
+  private syncViewButtons(): void {
+    if (!this.container) return;
+    const buttons = this.container.querySelectorAll<HTMLElement>('.tr-view-btn');
+    buttons.forEach((button) => {
+      const isActive = button.dataset.view === this.activeView;
+      button.toggleClass('tr-view-btn-active', isActive);
+      button.setAttribute('aria-pressed', String(isActive));
+    });
+  }
+
+  private renderContentBody(): void {
+    if (!this.contentEl) return;
+    this.contentEl.empty();
+    this.segmentElements.clear();
+    this.segmentsListEl = null;
+
+    if (this.activeView === 'reader') {
+      this.renderReadableTranscript(this.contentEl);
+      return;
+    }
+
+    if (!this.isMobile) {
+      this.renderSearchBar(this.contentEl);
+    }
+
+    this.segmentsListEl = this.contentEl.createDiv({ cls: 'transcript-segments sa-overflow-y-auto tr-segments' });
+    if (this.isMobile) {
+      this.segmentsListEl.addClass('tr-segments-mobile');
+    }
+    this.renderSegments(this.segmentsListEl);
+  }
+
+  private renderReadableTranscript(parent: HTMLElement): void {
+    const readerEl = parent.createDiv({ cls: 'transcript-reader-text tr-reader-text' });
+    for (const block of this.buildReadableBlocks()) {
+      readerEl.createEl('p', { text: block });
+    }
+  }
+
+  private buildReadableBlocks(): string[] {
+    const blocks: string[] = [];
+    const current: string[] = [];
+    let currentLength = 0;
+
+    const flush = () => {
+      if (current.length === 0) return;
+      blocks.push(current.join(' ').replace(/\s+/g, ' ').trim());
+      current.length = 0;
+      currentLength = 0;
+    };
+
+    for (const segment of this.segments) {
+      const text = this.stripSpeakerMarker(segment.text).trim();
+      if (!text) continue;
+      if (this.hasSpeakerMarker(segment.text)) {
+        flush();
+      }
+      current.push(text);
+      currentLength += text.length + 1;
+      if ((/[.!?。！？]$/.test(text) && currentLength >= 420) || currentLength >= 720) {
+        flush();
+      }
+    }
+
+    flush();
+    return blocks;
+  }
+
+  private stripSpeakerMarker(text: string): string {
+    const rawText = text.trim();
+    return this.hasSpeakerMarker(rawText) ? rawText.replace(/^(>>|-)\s*/, '') : rawText;
   }
 
   /**
@@ -280,7 +433,7 @@ export class TranscriptRenderer {
    * Render auto-scroll toggle button
    */
   private renderAutoScrollToggle(parent: HTMLElement): HTMLElement {
-    const toggleBtn = parent.createDiv({ cls: 'transcript-autoscroll-toggle sa-flex-row sa-rounded-4 sa-clickable sa-transition tr-toggle-btn' });
+    const toggleBtn = parent.createDiv({ cls: 'transcript-autoscroll-toggle sa-flex-row sa-rounded-4 sa-clickable sa-transition tr-toggle-btn tr-segment-control' });
     if (this.isMobile) {
       toggleBtn.addClass('tr-toggle-btn-mobile');
     }
@@ -361,7 +514,7 @@ export class TranscriptRenderer {
   private renderSpeakerJumpButton(parent: HTMLElement): HTMLElement {
     const hasSpeakers = this.speakerSegmentIndices.length > 0;
 
-    const jumpBtn = parent.createDiv({ cls: 'transcript-speaker-jump sa-flex-row sa-rounded-4 sa-bg-transparent sa-transition tr-toggle-btn' });
+    const jumpBtn = parent.createDiv({ cls: 'transcript-speaker-jump sa-flex-row sa-rounded-4 sa-bg-transparent sa-transition tr-toggle-btn tr-segment-control' });
     if (this.isMobile) {
       jumpBtn.addClass('tr-toggle-btn-mobile');
     }
@@ -564,8 +717,7 @@ export class TranscriptRenderer {
   private renderSegment(parent: HTMLElement, segment: TranscriptionSegment, speakerIndex: number = 0): HTMLElement {
     // Check for speaker turn marker (>> for OpenAI Whisper, - for whisper.cpp)
     const rawText = segment.text.trim();
-    const hasSpeakerMarker = rawText.startsWith('>>') || rawText.startsWith('-');
-    const displayText = hasSpeakerMarker ? rawText.replace(/^(>>|-)\s*/, '') : rawText;
+    const displayText = this.stripSpeakerMarker(rawText);
 
     // Alternate colors for different speakers (using subtle, theme-friendly colors)
     const isEvenSpeaker = speakerIndex % 2 === 0;
@@ -663,6 +815,7 @@ export class TranscriptRenderer {
    * Update highlight based on current playback time
    */
   private updateHighlight(currentTime: number): void {
+    if (this.activeView !== 'segments') return;
     // Find current segment
     const segmentIndex = this.segments.findIndex(
       (s) => currentTime >= s.start && currentTime < s.end
@@ -910,7 +1063,11 @@ export class TranscriptRenderer {
     // Re-render segments list
     if (this.segmentsListEl) {
       this.segmentsListEl.empty();
-      this.renderSegments(this.segmentsListEl);
+      if (this.activeView === 'segments') {
+        this.renderSegments(this.segmentsListEl);
+      }
+    } else if (this.contentEl && this.activeView === 'reader') {
+      this.renderContentBody();
     }
 
     // Update tab active state in the header
@@ -959,6 +1116,7 @@ export class TranscriptRenderer {
 
     this.segmentElements.clear();
     this.container = null;
+    this.transcriptSectionEl = null;
     this.contentEl = null;
     this.segmentsListEl = null;
   }

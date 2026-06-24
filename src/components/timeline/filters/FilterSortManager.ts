@@ -14,6 +14,7 @@ export interface FilterState {
   likedOnly: boolean;
   commentedOnly: boolean;
   sharedOnly: boolean;
+  localOnlyOnly: boolean;
   subscribedOnly: boolean;
   includeArchived: boolean;
   activeTab: TimelineArchiveTab;
@@ -167,6 +168,11 @@ export class FilterSortManager {
       filtered = filtered.filter(post => post.shareUrl && post.shareUrl.trim().length > 0);
     }
 
+    // Filter by local-only notes
+    if (this.filterState.localOnlyOnly) {
+      filtered = filtered.filter(post => post.isLocalOnly === true);
+    }
+
     // Filter by subscribed only
     if (this.filterState.subscribedOnly) {
       filtered = filtered.filter(post => post.subscribed === true);
@@ -315,6 +321,9 @@ export class FilterSortManager {
     }
     if (this.filterState.sharedOnly) {
       filtered = filtered.filter(e => e.shareUrl && e.shareUrl.trim().length > 0);
+    }
+    if (this.filterState.localOnlyOnly) {
+      filtered = filtered.filter(e => e.isLocalOnly === true);
     }
     if (this.filterState.subscribedOnly) {
       filtered = filtered.filter(e => e.subscribed);
@@ -498,6 +507,7 @@ export class FilterSortManager {
       Boolean(this.filterState.likedOnly) ||
       Boolean(this.filterState.commentedOnly) ||
       Boolean(this.filterState.sharedOnly) ||
+      Boolean(this.filterState.localOnlyOnly) ||
       Boolean(this.filterState.subscribedOnly) ||
       this.filterState.activeTab !== 'inbox' ||
       this.filterState.dateRange.start !== null ||
@@ -518,6 +528,7 @@ export class FilterSortManager {
       likedOnly: initialFilterState?.likedOnly ?? false,
       commentedOnly: initialFilterState?.commentedOnly ?? false,
       sharedOnly: initialFilterState?.sharedOnly ?? false,
+      localOnlyOnly: initialFilterState?.localOnlyOnly ?? false,
       subscribedOnly: initialFilterState?.subscribedOnly ?? false,
       includeArchived: initialFilterState?.includeArchived ?? false,
       activeTab: initialFilterState?.activeTab ?? 'inbox' as const,

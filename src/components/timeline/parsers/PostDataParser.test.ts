@@ -252,6 +252,81 @@ Body text.
   });
 });
 
+describe('PostDataParser - local-only provenance', () => {
+  const makeFile = (basename: string) => ({
+    basename,
+    path: `Social Archives/Facebook/${basename}.md`,
+    stat: { ctime: Date.parse('2026-05-02T00:00:00.000Z') },
+  }) as any;
+
+  it('marks notes with local-only import mode', async () => {
+    const markdown = `---
+platform: facebook
+author: Test Author
+authorUrl: https://facebook.com/test
+originalUrl: https://facebook.com/test/posts/1
+published: 2026-05-01
+archived: 2026-05-02
+social_archiver_import_mode: local-only
+social_archiver_import_source: instagram-saved-import
+social_archiver_server_archive_id: none
+---
+
+Body text.
+`;
+    const parser = new PostDataParser({ cachedRead: vi.fn().mockResolvedValue(markdown) } as any);
+
+    const post = await parser.parseFile(makeFile('local-only'));
+
+    expect(post?.isLocalOnly).toBe(true);
+    expect(post?.metadata.socialArchiverImportMode).toBe('local-only');
+    expect(post?.metadata.socialArchiverImportSource).toBe('instagram-saved-import');
+    expect(post?.metadata.socialArchiverServerArchiveId).toBe('none');
+  });
+
+  it('treats sourceArchiveId as server-backed even when the marker remains', async () => {
+    const markdown = `---
+platform: facebook
+author: Test Author
+authorUrl: https://facebook.com/test
+originalUrl: https://facebook.com/test/posts/1
+published: 2026-05-01
+archived: 2026-05-02
+sourceArchiveId: arch_123
+social_archiver_import_mode: local-only
+---
+
+Body text.
+`;
+    const parser = new PostDataParser({ cachedRead: vi.fn().mockResolvedValue(markdown) } as any);
+
+    const post = await parser.parseFile(makeFile('server-backed'));
+
+    expect(post?.isLocalOnly).toBe(false);
+    expect(post?.sourceArchiveId).toBe('arch_123');
+  });
+
+  it('projects local-only status into the timeline index entry', async () => {
+    const markdown = `---
+platform: linkedin
+author: Test Author
+authorUrl: https://www.linkedin.com/in/test
+originalUrl: https://www.linkedin.com/posts/test-1
+published: 2026-05-01
+archived: 2026-05-02
+social_archiver_import_mode: local-only
+---
+
+Body text.
+`;
+    const parser = new PostDataParser({ cachedRead: vi.fn().mockResolvedValue(markdown) } as any);
+
+    const entry = await parser.buildIndexEntry(makeFile('local-index'));
+
+    expect(entry?.isLocalOnly).toBe(true);
+  });
+});
+
 describe('PostDataParser - Naver raw HTML fallback cleanup', () => {
   it('removes trailing Naver HTML document fallback from raw markdown previews', async () => {
     const markdown = `---

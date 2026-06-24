@@ -10,6 +10,11 @@ import { parseAnnotationBlock } from '../../../services/markdown/AnnotationBlock
 import { parseLinkedArchivesBlock } from '../../../services/markdown/LinkedArchivesBlockParser';
 import { mergeTagListsCaseInsensitive } from '../../../utils/tags';
 import { SentinelMediaRegionManager } from '../../../plugin/realtime/SentinelMediaRegionManager';
+import { isLocalOnlyFrontmatter } from '../../../plugin/sync/localOnlyNoteGuard';
+import {
+  IMPORT_MODE_FRONTMATTER_KEY,
+  IMPORT_SOURCE_FRONTMATTER_KEY,
+} from '../../../services/import/local/LocalArchiveScanner';
 
 /**
  * Vault folder node with children (Obsidian internal structure)
@@ -24,6 +29,8 @@ interface VaultFolder extends TAbstractFile {
  * are accessible via string indexing. This type alias documents them explicitly.
  */
 type ExtendedFrontmatter = YamlFrontmatter;
+
+const SERVER_ARCHIVE_ID_FRONTMATTER_KEY = 'social_archiver_server_archive_id';
 
 function readFrontmatterStringArray(value: unknown): string[] {
   return Array.isArray(value)
@@ -494,6 +501,10 @@ export class PostDataParser {
       const obsidianTags = readFrontmatterStringArray(frontmatter.tags);
       const archiveTags = readFrontmatterStringArray(frontmatter.archiveTags);
       const displayTags = mergeTagListsCaseInsensitive(obsidianTags, archiveTags);
+      const isLocalOnly = isLocalOnlyFrontmatter(frontmatter);
+      const importMode = frontmatter[IMPORT_MODE_FRONTMATTER_KEY];
+      const importSource = frontmatter[IMPORT_SOURCE_FRONTMATTER_KEY];
+      const serverArchiveId = frontmatter[SERVER_ARCHIVE_ID_FRONTMATTER_KEY];
 
       const postData: PostData = {
         platform: frontmatter.platform as Platform,
@@ -510,6 +521,7 @@ export class PostDataParser {
         linkedArchives, // Relation rows parsed from the linked-archives block (read-only)
         like: frontmatter.like, // User's personal like
         archive: frontmatter.archive, // Archive status
+        isLocalOnly,
         highlightCount: highlightCount > 0 ? highlightCount : undefined,
         shareUrl: frontmatter.shareUrl, // Public share URL
         crossPostId: frontmatter['crossPostId'] as string | undefined,
@@ -632,6 +644,11 @@ export class PostDataParser {
                 .map((item) => String(item || '').trim())
                 .filter((item) => item.length > 0)
             : undefined,
+          socialArchiverImportMode: importMode === 'local-only' || importMode === 'server-synced'
+            ? importMode
+            : undefined,
+          socialArchiverImportSource: typeof importSource === 'string' ? importSource : undefined,
+          socialArchiverServerArchiveId: typeof serverArchiveId === 'string' ? serverArchiveId : undefined,
         },
         comments: comments.length > 0 ? comments : undefined,
         quotedPost: quotedPost || undefined,
@@ -2160,6 +2177,7 @@ export class PostDataParser {
         (frontmatter['archived'] as string | undefined) ||
         file.stat.ctime
       );
+      const isLocalOnly = isLocalOnlyFrontmatter(frontmatter);
 
       // Lightweight content extraction for search (just first section)
       const contentText = this.extractContentText(content);
@@ -2194,6 +2212,7 @@ export class PostDataParser {
         hashtags: (frontmatter['hashtags'] as string[] | undefined) || [],
         like: frontmatter['like'] === true,
         archive: frontmatter['archive'] === true,
+        isLocalOnly,
         subscribed: frontmatter['subscribed'] === true,
         subscriptionId: frontmatter['subscriptionId'] as string | undefined,
         publishedDate,

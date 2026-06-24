@@ -174,6 +174,39 @@ describe('ArchiveDeleteSyncService', () => {
     expect(settings.pendingArchiveDeletes).toHaveLength(0);
   });
 
+  it('trashes a directly resolved inbound-deleted file without ArchiveLookupService', async () => {
+    const settings = makeSettings({
+      deleteSync: { outboundEnabled: true, inboundEnabled: true, confirmBeforeServerDelete: false },
+    });
+    const file = {
+      path: 'Social Archives/Naver/deleted.md',
+      basename: 'deleted',
+    };
+    const trashFile = vi.fn().mockResolvedValue(undefined);
+    const notify = vi.fn();
+
+    const service = new ArchiveDeleteSyncService({
+      apiClient: () => ({ deleteArchive: vi.fn(), getUserArchives: vi.fn() }) as any,
+      settings: () => settings,
+      saveSettings: vi.fn().mockResolvedValue(undefined),
+      app: { fileManager: { trashFile } } as any,
+      findBySourceArchiveId: vi.fn().mockReturnValue(null),
+      findByOriginalUrl: vi.fn().mockReturnValue([]),
+      isLibrarySyncRunning: () => false,
+      notify,
+    });
+
+    await expect(
+      service.handleInboundDeleteFile(file as any, 'archive-deleted', 'delta'),
+    ).resolves.toBe(true);
+
+    expect(trashFile).toHaveBeenCalledWith(file);
+    expect(notify).toHaveBeenCalledWith(
+      'Deleted from vault: "deleted" (deleted on server)',
+      4000,
+    );
+  });
+
   // ---------------------------------------------------------------------------
   // DeleteConfirmModal integration
   // ---------------------------------------------------------------------------

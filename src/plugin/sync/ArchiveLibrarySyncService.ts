@@ -681,9 +681,9 @@ export class ArchiveLibrarySyncService {
       // Tier 1: exact match by stable server ID
       const existingById = this.deps.findBySourceArchiveId(archive.id);
       if (existingById) {
+        await this.reconcileExistingActionState(existingById, archive);
         const updated = await this.replaceExistingLimitedArchive(existingById, archive);
-        await this.reconcileExistingArchiveState(existingById, archive);
-        await this.reconcileExistingLikeState(existingById, archive);
+        await this.reconcileExistingActionState(existingById, archive);
         await this.reconcileExistingAnnotationState(existingById, archive);
         await this.reconcileExistingTranscriptState(existingById, archive);
         await this.reconcileExistingCommentState(existingById, archive);
@@ -747,6 +747,10 @@ export class ArchiveLibrarySyncService {
         // since we are associating this file with its canonical server record.
         try {
           await this.deps.backfillFileIdentity(matched, archive.id);
+          this.deps.indexSavedFile(matched, {
+            sourceArchiveId: archive.id,
+            originalUrl: archive.originalUrl,
+          });
         } catch (error) {
           console.warn('[Social Archiver] [LibrarySync] backfillFileIdentity failed', {
             archiveId: archive.id,
@@ -754,9 +758,9 @@ export class ArchiveLibrarySyncService {
             error,
           });
         }
+        await this.reconcileExistingActionState(matched, archive);
         const updated = await this.replaceExistingLimitedArchive(matched, archive);
-        await this.reconcileExistingArchiveState(matched, archive);
-        await this.reconcileExistingLikeState(matched, archive);
+        await this.reconcileExistingActionState(matched, archive);
         await this.reconcileExistingAnnotationState(matched, archive);
         await this.reconcileExistingTranscriptState(matched, archive);
         await this.reconcileExistingCommentState(matched, archive);
@@ -807,6 +811,11 @@ export class ArchiveLibrarySyncService {
       fn,
       { signal },
     );
+  }
+
+  private async reconcileExistingActionState(file: TFile, archive: UserArchive): Promise<void> {
+    await this.reconcileExistingArchiveState(file, archive);
+    await this.reconcileExistingLikeState(file, archive);
   }
 
   /**
@@ -954,10 +963,20 @@ export class ArchiveLibrarySyncService {
   private async replaceExistingLimitedArchive(file: TFile, archive: UserArchive): Promise<boolean> {
     if (!this.deps.replaceExistingLimitedArchive) return false;
 
-    const result = await this.deps.replaceExistingLimitedArchive(
-      file,
-      this.buildPendingPost(archive, 'library-sync-update', 'Library Sync'),
-    );
+    let result: SavePendingPostResult;
+    try {
+      result = await this.deps.replaceExistingLimitedArchive(
+        file,
+        this.buildPendingPost(archive, 'library-sync-update', 'Library Sync'),
+      );
+    } catch (error) {
+      console.warn('[Social Archiver] [LibrarySync] limited archive replacement threw', {
+        archiveId: archive.id,
+        path: file.path,
+        error,
+      });
+      return false;
+    }
 
     if (result.status === 'updated' && result.file) {
       this.deps.indexSavedFile(result.file, {

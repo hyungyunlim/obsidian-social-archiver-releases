@@ -52,6 +52,8 @@ export class FilterPanel {
     this.panelEl.addClass('sa-absolute', 'sa-z-1000', 'sa-bg-primary', 'sa-border', 'sa-rounded-8', 'sa-p-16');
 
     this.renderPlatformFilters(this.panelEl, filterState, updateFilterButton);
+    this.renderDivider(this.panelEl);
+    this.renderLocalOnlyFilter(this.panelEl, filterState, updateFilterButton);
 
     this.attachOutsideClickHandler();
     this.isOpen = true;
@@ -409,6 +411,42 @@ export class FilterPanel {
       sharedCheckIcon.toggleClass('sa-hidden', !newSharedOnly);
 
       this.onFilterChangeCallback?.({ sharedOnly: newSharedOnly });
+      this.onRerenderCallback?.();
+      updateFilterButton();
+    });
+  }
+
+  /**
+   * Render local-only filter
+   */
+  private renderLocalOnlyFilter(panel: HTMLElement, filterState: FilterState, updateFilterButton: () => void): void {
+    const localOnlyOption = panel.createDiv();
+    localOnlyOption.addClass('sa-flex-row', 'sa-gap-8', 'sa-p-8', 'sa-rounded-6', 'sa-clickable', 'sa-transition', 'sa-mt-8');
+    if (filterState.localOnlyOnly) {
+      localOnlyOption.addClass('sa-bg-hover');
+    }
+
+    const localOnlyIcon = localOnlyOption.createDiv();
+    localOnlyIcon.addClass('sa-icon-16', 'sa-text-accent');
+    setIcon(localOnlyIcon, 'hard-drive');
+
+    const localOnlyLabel = localOnlyOption.createSpan({ text: 'Local-only posts' });
+    localOnlyLabel.addClass('sa-text-base', 'sa-flex-1', 'sa-leading-16');
+
+    const localOnlyCheckIcon = localOnlyOption.createDiv();
+    localOnlyCheckIcon.addClass('sa-icon-16', 'sa-flex-center');
+    if (!filterState.localOnlyOnly) {
+      localOnlyCheckIcon.addClass('sa-hidden');
+    }
+    setIcon(localOnlyCheckIcon, 'check');
+
+    localOnlyOption.addEventListener('click', () => {
+      const currentState = this.getFilterStateCallback?.() || filterState;
+      const newLocalOnlyOnly = !currentState.localOnlyOnly;
+      localOnlyOption.toggleClass('sa-bg-hover', newLocalOnlyOnly);
+      localOnlyCheckIcon.toggleClass('sa-hidden', !newLocalOnlyOnly);
+
+      this.onFilterChangeCallback?.({ localOnlyOnly: newLocalOnlyOnly });
       this.onRerenderCallback?.();
       updateFilterButton();
     });

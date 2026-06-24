@@ -52,12 +52,24 @@ function makeEventData(
 function makeApp(
   options: {
     currentFrontmatter?: Record<string, unknown>;
+    currentContent?: string;
     processFrontMatterError?: Error;
   } = {},
 ) {
   const capturedFm: Record<string, unknown>[] = [];
+  const serializeFrontmatter = (): string => {
+    if (options.currentContent !== undefined) return options.currentContent;
+    if (options.currentFrontmatter === undefined) return 'Body content\n';
+    const yaml = Object.entries(options.currentFrontmatter)
+      .map(([key, value]) => `${key}: ${String(value)}`)
+      .join('\n');
+    return `---\n${yaml}\n---\n\nBody content\n`;
+  };
 
   const app = {
+    vault: {
+      cachedRead: vi.fn(async () => serializeFrontmatter()),
+    },
     metadataCache: {
       getFileCache: vi.fn().mockReturnValue(
         options.currentFrontmatter !== undefined
@@ -473,7 +485,8 @@ describe('ArchiveStateSyncService', () => {
       // Expire suppression
       (service as any).suppressionMap.set('archive-abc', Date.now() - 11_000);
 
-      // Update mock to return the updated frontmatter so the no-op guard doesn't fire
+      // Update mocks to return the updated frontmatter so the no-op guard doesn't fire
+      (app.vault.cachedRead as any).mockResolvedValue('---\narchive: true\n---\n\nBody\n');
       (app.metadataCache.getFileCache as any).mockReturnValue({ frontmatter: { archive: true } });
 
       // Second write (isBookmarked: false — different from current true)
@@ -530,6 +543,22 @@ describe('ArchiveStateSyncService', () => {
       await service.reconcileFromLibrarySync(file, 'archive-abc', true);
 
       expect(app.fileManager.processFrontMatter).not.toHaveBeenCalled();
+    });
+
+    it('uses actual file frontmatter before MetadataCache when deciding no-op', async () => {
+      const file = makeFile('post.md');
+      const app = makeApp({
+        currentFrontmatter: { archive: true },
+        currentContent: '---\narchive: false\nsourceArchiveId: archive-abc\n---\n\nBody\n',
+      });
+      const { service } = makeService({
+        app,
+        archiveLookup: makeArchiveLookup({ byId: file }),
+      });
+
+      await service.reconcileFromLibrarySync(file, 'archive-abc', true);
+
+      expect(app.fileManager.processFrontMatter).toHaveBeenCalledOnce();
     });
 
     it('no-op when fm.archive is undefined (treated as false) and server value is false', async () => {

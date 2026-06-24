@@ -676,6 +676,13 @@ export interface GetUserArchiveResponse {
 export interface GetUserArchivesParams {
   limit?: number;
   offset?: number;
+  fields?: 'sync_metadata';
+  platform?: string;
+  platforms?: string[];
+  archiveSource?: string;
+  archived?: boolean;
+  liked?: boolean;
+  shared?: boolean;
   updatedAfter?: string;
   includeDeleted?: boolean;
   archivedBefore?: string;
@@ -690,6 +697,15 @@ export interface GetUserArchivesResponse {
   hasMore: boolean;
   serverTime: string;
   deletedIds?: string[];
+  deletedArchives?: DeletedArchiveRef[];
+}
+
+export interface DeletedArchiveRef {
+  id: string;
+  originalUrl: string | null;
+  platform: string | null;
+  postId: string | null;
+  deletedAt: string;
 }
 
 export interface WorkersAPIConfig {
@@ -2008,6 +2024,13 @@ export class WorkersAPIClient implements IService {
     const queryParams = new URLSearchParams();
     if (params.limit !== undefined) queryParams.set('limit', String(params.limit));
     if (params.offset !== undefined) queryParams.set('offset', String(params.offset));
+    if (params.fields !== undefined) queryParams.set('fields', params.fields);
+    if (params.platform !== undefined) queryParams.set('platform', params.platform);
+    if (params.platforms !== undefined) queryParams.set('platforms', params.platforms.join(','));
+    if (params.archiveSource !== undefined) queryParams.set('archiveSource', params.archiveSource);
+    if (params.archived !== undefined) queryParams.set('archived', String(params.archived));
+    if (params.liked !== undefined) queryParams.set('liked', String(params.liked));
+    if (params.shared !== undefined) queryParams.set('shared', String(params.shared));
     if (params.updatedAfter !== undefined) queryParams.set('updatedAfter', params.updatedAfter);
     if (params.includeDeleted !== undefined) queryParams.set('includeDeleted', String(params.includeDeleted));
     if (params.archivedBefore !== undefined) queryParams.set('archivedBefore', params.archivedBefore);

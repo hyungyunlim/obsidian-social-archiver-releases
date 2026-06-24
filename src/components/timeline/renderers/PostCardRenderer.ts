@@ -1619,6 +1619,10 @@ export class PostCardRenderer extends Component {
       this.renderSubscriptionBadge(authorNameRow, post, isSubscribed);
     }
 
+    if (post.isLocalOnly) {
+      this.renderLocalOnlyBadge(authorNameRow);
+    }
+
     // Relative time row (with subreddit for Reddit, title for YouTube)
     const timeRow = middleSection.createDiv();
     timeRow.addClass('pcr-time-row');
@@ -1782,6 +1786,19 @@ export class PostCardRenderer extends Component {
         e.stopPropagation();
         window.open(finalUrl, '_blank');
       });
+    }
+  }
+
+  private renderLocalOnlyBadge(container: HTMLElement): void {
+    const badge = container.createDiv({ cls: 'pcr-local-only-badge' });
+    badge.setAttribute('title', 'Local-only post');
+    badge.setAttribute('aria-label', 'Local-only post');
+
+    const icon = badge.createDiv({ cls: 'pcr-local-only-icon' });
+    setIcon(icon, 'hard-drive');
+
+    if (!ObsidianPlatform.isMobile) {
+      badge.createSpan({ text: 'Local only' });
     }
   }
 

@@ -98,6 +98,14 @@ import { CommentStateSyncService } from './plugin/sync/CommentStateSyncService';
 import { LikeStateOutboundService } from './plugin/sync/LikeStateOutboundService';
 import { BulkArchiveActionAccumulator } from './plugin/sync/BulkArchiveActionAccumulator';
 import { RemoteArchiveIngestService } from './plugin/sync/RemoteArchiveIngestService';
+import {
+  ArchiveStateBackfillService,
+  type ArchiveStateBackfillResult,
+} from './plugin/sync/ArchiveStateBackfillService';
+import {
+  ArchiveDeleteBackfillService,
+  type ArchiveDeleteBackfillResult,
+} from './plugin/sync/ArchiveDeleteBackfillService';
 import { MediaPlaceholderGenerator } from './services/MediaPlaceholderGenerator';
 import { NoticesService } from './services/NoticesService';
 import { NoticeTelemetryService } from './services/NoticeTelemetryService';
@@ -120,6 +128,8 @@ const FOREGROUND_SYNC_CATCH_UP_USER_BUSY_RETRY_MS = 10_000;
 const FOREGROUND_SYNC_CATCH_UP_MEDIA_MAX_DEFER_MS = 30 * 60 * 1000;
 const FOREGROUND_SYNC_CATCH_UP_MIN_INTERVAL_MS = 30_000;
 const ARCHIVE_LIBRARY_SYNC_MEDIA_RETRY_MS = 10_000;
+const ARCHIVE_STATE_RECONCILE_BACKFILL_VERSION = 6;
+const ARCHIVE_RECONCILE_TOMBSTONE_START = '1970-01-01T00:00:00.000Z';
 type ForegroundSyncCatchUpTrigger = 'focus' | 'visibilitychange' | 'online';
 
 function isUnknownArray(value: unknown): value is unknown[] {
@@ -558,8 +568,14 @@ export default class SocialArchiverPlugin extends Plugin {
   }
 
   private scheduleArchiveLibrarySyncWhenTimelineIdle(mode?: ArchiveLibrarySyncMode): void {
-    this.scheduleTrackedTimeout(() => {
+    this.scheduleTrackedTimeout((): void => {
       void this.startArchiveLibrarySyncWhenTimelineIdle(mode);
+    }, ARCHIVE_LIBRARY_SYNC_MEDIA_RETRY_MS);
+  }
+
+  private scheduleArchiveStateReconcileBackfillWhenTimelineIdle(): void {
+    this.scheduleTrackedTimeout((): void => {
+      void this.startArchiveStateReconcileBackfillWhenTimelineIdle();
     }, ARCHIVE_LIBRARY_SYNC_MEDIA_RETRY_MS);
   }
 
@@ -572,6 +588,134 @@ export default class SocialArchiverPlugin extends Plugin {
 
     await this.archiveDeleteSyncService?.flushPendingDeletes();
     await this.archiveLibrarySyncService?.startSync(mode);
+    await this.completeArchiveStateReconcileBackfillIfCompleted();
+  }
+
+  private async startArchiveStateReconcileBackfillWhenTimelineIdle(): Promise<void> {
+    if (this.shouldDelayArchiveLibrarySyncForMediaPlayback()) {
+      console.debug('[Social Archiver] [LibrarySync] Deferring archive-state reconcile backfill while timeline media is playing');
+      this.scheduleArchiveStateReconcileBackfillWhenTimelineIdle();
+      return;
+    }
+
+    await this.archiveDeleteSyncService?.flushPendingDeletes();
+    if (this.settings.archiveLibrarySync) {
+      this.settings.archiveLibrarySync.resumeOffset = 0;
+      this.settings.archiveLibrarySync.runAnchorTime = '';
+      await this.saveSettingsPartial({}, { reinitialize: false, notify: false });
+    }
+    await this.archiveLibrarySyncService?.startSync('manual-reconcile');
+    await this.completeArchiveStateReconcileBackfillIfCompleted();
+  }
+
+  private needsArchiveStateReconcileBackfill(): boolean {
+    return (this.settings.archiveStateReconcileBackfillVersion ?? 0) <
+      ARCHIVE_STATE_RECONCILE_BACKFILL_VERSION;
+  }
+
+  private async completeArchiveStateReconcileBackfillIfCompleted(): Promise<void> {
+    if (this.archiveLibrarySyncService?.getState().phase !== 'completed') return;
+    if (!this.needsArchiveStateReconcileBackfill()) return;
+    if (!await this.reconcileArchiveStatesFromServer('backfill')) return;
+    if (!await this.reconcileServerDeletedArchivesForBackfill()) return;
+
+    this.settings.archiveStateReconcileBackfillVersion = ARCHIVE_STATE_RECONCILE_BACKFILL_VERSION;
+    this.settings.archiveStateReconcileBackfillDoneAt = new Date().toISOString();
+    await this.saveSettingsPartial({}, { reinitialize: false, notify: false });
+  }
+
+  async reconcileArchiveStatesFromServer(
+    trigger: 'backfill' | 'cli-sync' | 'manual' = 'manual',
+  ): Promise<ArchiveStateBackfillResult | null> {
+    if (!this.apiClient || !this.archiveStateSyncService) {
+      console.warn('[Social Archiver] [ArchiveStateBackfill] Skipped: services not ready', {
+        trigger,
+      });
+      return null;
+    }
+
+    try {
+      const service = new ArchiveStateBackfillService({
+        app: this.app,
+        apiClient: () => this.apiClient,
+        reconcileArchiveState: async (file, archiveId, isBookmarked) => {
+          await this.localLockRegistry.withLocks(
+            [
+              { kind: 'archiveMaterialization', archiveId },
+              { kind: 'markdownWrite', archiveId },
+            ],
+            () => this.archiveStateSyncService!.reconcileFromLibrarySync(
+              file,
+              archiveId,
+              isBookmarked,
+            ),
+          );
+        },
+      });
+
+      const result = await service.reconcileFromServer();
+      console.debug('[Social Archiver] [ArchiveStateBackfill] Result', {
+        trigger,
+        ...result,
+      });
+      return result.failedCount === 0 ? result : null;
+    } catch (error) {
+      console.warn('[Social Archiver] [ArchiveStateBackfill] Failed', {
+        trigger,
+        error,
+      });
+      return null;
+    }
+  }
+
+  private async reconcileServerDeletedArchivesForBackfill(): Promise<boolean> {
+    if (!this.settings.deleteSync?.inboundEnabled) {
+      console.debug('[Social Archiver] [LibrarySync] Skipping deleted-archive reconcile because inbound delete sync is disabled');
+      return true;
+    }
+
+    return await this.reconcileDeletedArchivesFromServer('backfill') !== null;
+  }
+
+  async reconcileDeletedArchivesFromServer(
+    trigger: 'backfill' | 'cli-sync' | 'manual' = 'manual',
+  ): Promise<ArchiveDeleteBackfillResult | null> {
+    if (!this.settings.deleteSync?.inboundEnabled) {
+      console.debug('[Social Archiver] [ArchiveDeleteBackfill] Skipping because inbound delete sync is disabled', {
+        trigger,
+      });
+      return null;
+    }
+
+    if (!this.apiClient || !this.archiveDeleteSyncService) {
+      console.warn('[Social Archiver] [ArchiveDeleteBackfill] Skipped: services not ready', {
+        trigger,
+      });
+      return null;
+    }
+
+    try {
+      const service = new ArchiveDeleteBackfillService({
+        app: this.app,
+        apiClient: () => this.apiClient,
+        updatedAfter: ARCHIVE_RECONCILE_TOMBSTONE_START,
+        handleDeletedFile: (file, archiveId) =>
+          this.archiveDeleteSyncService!.handleInboundDeleteFile(file, archiveId, 'delta'),
+      });
+
+      const result = await service.reconcileFromServer();
+      console.debug('[Social Archiver] [ArchiveDeleteBackfill] Result', {
+        trigger,
+        ...result,
+      });
+      return result.failedCount === 0 ? result : null;
+    } catch (error) {
+      console.warn('[Social Archiver] [ArchiveDeleteBackfill] Failed', {
+        trigger,
+        error,
+      });
+      return null;
+    }
   }
 
   private currentObsidianRuntime(): 'desktop' | 'mobile' {
@@ -2066,23 +2210,53 @@ export default class SocialArchiverPlugin extends Plugin {
           const lookup = this.archiveLookupService;
           this.annotationFallbackPoller = new AnnotationFallbackPoller({
             apiClient,
-            onArchiveUpdate: (archive) => {
-              // Only reconcile archives that currently have annotations —
-              // otherwise we churn vault files for unrelated updates.
-              const hasAnnotations =
-                (archive.userHighlightCount ?? 0) > 0 ||
-                (archive.userNoteCount ?? 0) > 0 ||
-                (archive.userNotes?.length ?? 0) > 0 ||
-                (archive.userHighlights?.length ?? 0) > 0;
-              if (!hasAnnotations) return;
-
+            onArchiveUpdate: (archive): void => {
+              const urlMatches = lookup.findByOriginalUrl(archive.originalUrl);
               const file =
                 lookup.findBySourceArchiveId(archive.id)
-                ?? (lookup.findByOriginalUrl(archive.originalUrl).length === 1
-                  ? lookup.findByOriginalUrl(archive.originalUrl)[0]
+                ?? (urlMatches.length === 1
+                  ? (urlMatches[0] ?? null)
                   : null);
               if (!file) return;
-              void annotationSync.applyAnnotationState(file, archive);
+
+              void this.localLockRegistry.withLocks(
+                [
+                  { kind: 'archiveMaterialization', archiveId: archive.id },
+                  { kind: 'markdownWrite', archiveId: archive.id },
+                ],
+                async (): Promise<void> => {
+                  if (typeof archive.isBookmarked === 'boolean') {
+                    await this.archiveStateSyncService?.reconcileFromLibrarySync(
+                      file,
+                      archive.id,
+                      archive.isBookmarked,
+                    );
+                  }
+
+                  if (typeof archive.isLiked === 'boolean') {
+                    await this.likeStateSyncService?.reconcileFromLibrarySync(
+                      file,
+                      archive.id,
+                      archive.isLiked,
+                    );
+                  }
+
+                  const hasAnnotations =
+                    (archive.userHighlightCount ?? 0) > 0 ||
+                    (archive.userNoteCount ?? 0) > 0 ||
+                    (archive.userNotes?.length ?? 0) > 0 ||
+                    (archive.userHighlights?.length ?? 0) > 0;
+                  if (hasAnnotations) {
+                    await annotationSync.applyAnnotationState(file, archive);
+                  }
+                },
+              ).catch((error: unknown): void => {
+                console.warn(
+                  '[Social Archiver] Annotation fallback reconcile failed:',
+                  archive.id,
+                  error instanceof Error ? error.message : String(error),
+                );
+              });
             },
           });
           this.realtimeClient.onDegraded = () => {
@@ -2228,6 +2402,14 @@ export default class SocialArchiverPlugin extends Plugin {
         //      Real-time WebSocket delta covers most cases, but when the
         //      vault has been opened after a long gap, or when individual
         //      action broadcasts were missed, a full sweep catches up.
+        //   3. After the archive-state/delete sync fix, run one full reconcile once
+        //      even for recently completed libraries. This repairs users whose
+        //      delta cursor already advanced past missed inbox/archive flips or
+        //      server-side deletes.
+        //   4. Recently completed + backfill done → lightweight delta catch-up.
+        //      This closes the common gap where web/mobile moved inbox items
+        //      to archive while Obsidian was closed, so no private WS event or
+        //      foreground focus catch-up could fire.
         if (this.settings.syncClientId) {
           const LIBRARY_SYNC_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
           const libSync = this.settings.archiveLibrarySync;
@@ -2237,11 +2419,20 @@ export default class SocialArchiverPlugin extends Plugin {
             completedAtMs > 0 &&
             Date.now() - completedAtMs > LIBRARY_SYNC_MAX_AGE_MS;
           const shouldAutoStart = !libSync || !libSync.completedAt || stale;
+          const needsArchiveStateReconcileBackfill = this.needsArchiveStateReconcileBackfill();
 
           if (shouldAutoStart) {
             // Delay to let services fully initialise before starting sync
             this.scheduleTrackedTimeout(() => {
               void this.startArchiveLibrarySyncWhenTimelineIdle();
+            }, 8000);
+          } else if (needsArchiveStateReconcileBackfill) {
+            this.scheduleTrackedTimeout((): void => {
+              void this.startArchiveStateReconcileBackfillWhenTimelineIdle();
+            }, 8000);
+          } else {
+            this.scheduleTrackedTimeout((): void => {
+              void this.archiveLibrarySyncService?.startDeltaSync('delta-catch-up');
             }, 8000);
           }
         }

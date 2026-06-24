@@ -19,6 +19,7 @@ import type SocialArchiverPlugin from '../../../main';
 import { MediaGalleryRenderer } from '../renderers/MediaGalleryRenderer';
 import { LinkPreviewRenderer } from '../renderers/LinkPreviewRenderer';
 import { CommentRenderer } from '../renderers/CommentRenderer';
+import { VideoTranscriptPlayer } from '../renderers/VideoTranscriptPlayer';
 import {
   getPlatformSimpleIcon,
   getPlatformLucideIcon,
@@ -229,13 +230,16 @@ export class ReaderModeContentRenderer extends Component {
       this.renderMedia(content, post);
     }
 
-    // 8. Original URL link
+    // 8. Transcript
+    this.renderTranscript(content, post);
+
+    // 9. Original URL link
     this.renderSourceLink(content, post);
 
-    // 9. Action bar (engagement metrics + action buttons)
+    // 10. Action bar (engagement metrics + action buttons)
     this.renderActionBar(content, post, readerCallbacks);
 
-    // 10. TTS: connect body + scroll containers for highlighting/scroll sync
+    // 11. TTS: connect body + scroll containers for highlighting/scroll sync
     if (callbacks.ttsController) {
       callbacks.ttsController.setContentBody(content);
       callbacks.ttsController.setScrollContainer(scrollArea);
@@ -712,6 +716,60 @@ export class ReaderModeContentRenderer extends Component {
   private renderMedia(parent: HTMLElement, post: PostData): void {
     const mediaContainer = parent.createDiv({ cls: 'sa-reader-mode-media' });
     this.mediaGalleryRenderer.render(mediaContainer, post.media, post);
+  }
+
+  // ---------- Transcript ----------
+
+  private renderTranscript(parent: HTMLElement, post: PostData): void {
+    const hasSegmentTranscript = Boolean(
+      post.whisperTranscript?.segments?.length ||
+      post.transcript?.formatted?.length
+    );
+    const rawTranscript = post.transcript?.raw?.trim();
+    if (!hasSegmentTranscript && !rawTranscript) return;
+
+    const transcriptContainer = parent.createDiv({ cls: 'sa-reader-mode-transcript' });
+
+    if (hasSegmentTranscript) {
+      const player = new VideoTranscriptPlayer(this.app);
+      const didRender = player.render(transcriptContainer, post, {}, {
+        startCollapsed: false,
+        initialView: 'reader',
+        readerTypography: true,
+      });
+      if (didRender) {
+        this.register(() => player.destroy());
+        return;
+      }
+      player.destroy();
+    }
+
+    if (rawTranscript) {
+      this.renderRawTranscript(transcriptContainer, rawTranscript, post.transcriptionLanguage);
+      return;
+    }
+
+    transcriptContainer.remove();
+  }
+
+  private renderRawTranscript(parent: HTMLElement, transcript: string, language?: string): void {
+    const details = parent.createEl('details', {
+      cls: 'podcast-transcript-viewer sa-border sa-overflow-hidden tr-section sa-reader-mode-raw-transcript',
+    });
+
+    const summary = details.createEl('summary', {
+      cls: 'transcript-header sa-flex-row sa-bg-secondary sa-clickable sa-no-select tr-header',
+    });
+    summary.createSpan({ text: 'Transcript', cls: 'transcript-title sa-flex-1 sa-font-medium tr-title-desktop' });
+    if (language && language !== 'auto') {
+      summary.createSpan({
+        text: language.toUpperCase(),
+        cls: 'transcript-language sa-bg-hover sa-rounded-4 sa-text-muted sa-font-medium tr-lang-badge',
+      });
+    }
+
+    const content = details.createDiv({ cls: 'transcript-content sa-reader-mode-raw-transcript-content' });
+    content.createEl('p', { text: transcript });
   }
 
   // ---------- Engagement Metric Helper ----------

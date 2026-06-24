@@ -97,6 +97,7 @@ interface ArchiveIndex {
   /** Set of file paths already in index (for tracking deletions/renames) */
   indexedPaths: Set<string>;
   built: boolean;
+  builtFromResolvedCache: boolean;
 }
 
 // ============================================================================
@@ -122,6 +123,7 @@ export class ArchiveLookupService implements IService {
     byPath: new Map(),
     indexedPaths: new Set(),
     built: false,
+    builtFromResolvedCache: false,
   };
   private changedEventRef: EventRef | null = null;
   private renameEventRef: EventRef | null = null;
@@ -147,7 +149,7 @@ export class ArchiveLookupService implements IService {
       this.ensureIndexBuilt();
     } else {
       this.resolvedEventRef = this.app.metadataCache.on('resolved', () => {
-        this.ensureIndexBuilt();
+        this.buildIndex(true);
         if (this.resolvedEventRef) {
           this.app.metadataCache.offref(this.resolvedEventRef);
           this.resolvedEventRef = null;
@@ -238,6 +240,7 @@ export class ArchiveLookupService implements IService {
     this.index.byPath.clear();
     this.index.indexedPaths.clear();
     this.index.built = false;
+    this.index.builtFromResolvedCache = false;
     this.deleteHandlers.clear();
   }
 
@@ -255,6 +258,18 @@ export class ArchiveLookupService implements IService {
   findBySourceArchiveId(archiveId: string): TFile | null {
     this.ensureIndexBuilt();
     return this.index.bySourceArchiveId.get(archiveId) ?? null;
+  }
+
+  /**
+   * Return all stable server archive IDs currently indexed in the vault.
+   *
+   * Used by server-canonical reconcile passes to find local archive notes whose
+   * server row has been deleted while the plugin was offline or had already
+   * advanced its delta cursor.
+   */
+  listSourceArchiveIds(): string[] {
+    this.ensureIndexBuilt();
+    return [...this.index.bySourceArchiveId.keys()];
   }
 
   /**
@@ -297,15 +312,10 @@ export class ArchiveLookupService implements IService {
   }
 
   /**
-   * Whether the lazy index has been built. Doubles as a "MetadataCache
-   * initial resolve already happened" signal for late callers (clip-batch
-   * deep links): {@link initialize} gates the build on that exact event, so
-   * a built index proves the cache is past its initial parse even on
-   * Obsidian builds where the undocumented `metadataCache.resolved` flag is
-   * absent.
+   * Whether the lazy index has been built from a fully resolved MetadataCache.
    */
   isIndexBuilt(): boolean {
-    return this.index.built;
+    return this.index.built && this.index.builtFromResolvedCache;
   }
 
   /**
@@ -466,24 +476,34 @@ export class ArchiveLookupService implements IService {
 
   /**
    * Build the full index by scanning all markdown files via MetadataCache.
-   * Called at most once (lazy init on first lookup).
    */
-  private buildIndex(): void {
+  private buildIndex(builtFromResolvedCache = this.isMetadataCacheResolved()): void {
+    this.index.bySourceArchiveId.clear();
+    this.index.byOriginalUrl.clear();
+    this.index.byPath.clear();
+    this.index.indexedPaths.clear();
+
     const files = this.app.vault.getMarkdownFiles();
     for (const file of files) {
       const cache = this.app.metadataCache.getFileCache(file);
       this.addFileToIndex(file, cache);
     }
     this.index.built = true;
+    this.index.builtFromResolvedCache = builtFromResolvedCache;
   }
 
   /**
    * Ensure the index has been built.
    */
   private ensureIndexBuilt(): void {
-    if (!this.index.built) {
-      this.buildIndex();
+    const metadataResolved = this.isMetadataCacheResolved();
+    if (!this.index.built || (metadataResolved && !this.index.builtFromResolvedCache)) {
+      this.buildIndex(metadataResolved);
     }
+  }
+
+  private isMetadataCacheResolved(): boolean {
+    return Boolean((this.app.metadataCache as MetadataCache & { resolved?: boolean }).resolved);
   }
 
   /**

@@ -162,4 +162,56 @@ describe('ArchiveLibrarySyncService delta catch-up', () => {
       phase: 'completed',
     });
   });
+
+  it('reconciles existing action state even when limited archive replacement throws', async () => {
+    const settings = makeSettings();
+    const archive = makeArchive({ isBookmarked: true, isLiked: false });
+    const file = { path: 'Social Archives/example.md', extension: 'md' } as any;
+    const apiClient = {
+      getUserArchives: vi.fn().mockResolvedValue({
+        archives: [archive],
+        total: 1,
+        hasMore: false,
+        serverTime: '2026-05-09T00:00:00.000Z',
+      }),
+    };
+    const reconcileArchiveState = vi.fn().mockResolvedValue(undefined);
+    const reconcileLikeState = vi.fn().mockResolvedValue(undefined);
+    const replaceExistingLimitedArchive = vi.fn().mockRejectedValue(new Error('replacement failed'));
+
+    const service = new ArchiveLibrarySyncService({
+      apiClient: () => apiClient as any,
+      settings: () => settings,
+      saveSettings: vi.fn().mockResolvedValue(undefined),
+      findBySourceArchiveId: vi.fn().mockReturnValue(file),
+      findByOriginalUrl: vi.fn().mockReturnValue([]),
+      findByClientPostId: vi.fn().mockReturnValue(null),
+      indexSavedFile: vi.fn(),
+      backfillFileIdentity: vi.fn().mockResolvedValue(undefined),
+      saveSubscriptionPostDetailed: vi.fn().mockResolvedValue({ status: 'skipped' }),
+      replaceExistingLimitedArchive,
+      convertUserArchiveToPostData: vi.fn().mockReturnValue({
+        platform: 'x',
+        url: archive.originalUrl,
+        author: { name: 'Author' },
+        content: { text: 'Content' },
+      }),
+      notify: vi.fn(),
+      reconcileArchiveState,
+      reconcileLikeState,
+    });
+
+    await service.startDeltaSync();
+
+    expect(reconcileArchiveState).toHaveBeenCalledTimes(2);
+    expect(reconcileArchiveState).toHaveBeenCalledWith(file, archive.id, true);
+    expect(reconcileLikeState).toHaveBeenCalledTimes(2);
+    expect(reconcileLikeState).toHaveBeenCalledWith(file, archive.id, false);
+    expect(replaceExistingLimitedArchive).toHaveBeenCalledOnce();
+    expect(service.getState()).toMatchObject({
+      phase: 'completed',
+      failedCount: 0,
+      skippedCount: 1,
+    });
+  });
 });
