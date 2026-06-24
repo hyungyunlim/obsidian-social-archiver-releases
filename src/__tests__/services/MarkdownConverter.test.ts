@@ -226,6 +226,26 @@ describe('MarkdownConverter', () => {
       expect(result.content).toContain('Instagram');
     });
 
+    it('should not duplicate @ in Instagram author footer links', async () => {
+      const instagramPost = {
+        ...mockPostData,
+        platform: 'instagram' as Platform,
+        author: {
+          ...mockPostData.author,
+          name: 'Patrick Ng',
+          handle: '@patrickng',
+          url: 'https://instagram.com/patrickng',
+        },
+        media: [],
+      };
+
+      const result = await converter.convert(instagramPost);
+
+      expect(result.content).toContain('**Author:** [@patrickng](https://instagram.com/patrickng)');
+      expect(result.content).not.toContain('@@patrickng');
+      expect(result.content).not.toContain('instagram.com/@patrickng');
+    });
+
     it('should use TikTok template for TikTok posts', async () => {
       const tiktokPost = {
         ...mockPostData,

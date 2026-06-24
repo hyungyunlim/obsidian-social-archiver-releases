@@ -125,10 +125,12 @@ interface SubscriptionRequestBody {
   };
   naverOptions?: {
     subscriptionType: string;
+    authMode?: 'server-connection' | 'obsidian-local-cookie';
     blogId?: string;
     cafeId?: string;
     memberKey?: string;
     localFetchRequired?: boolean;
+    pausedByConnectionDisconnect?: boolean;
     keyword?: string;
   };
   naverWebtoonOptions?: {
@@ -4237,6 +4239,7 @@ export class TimelineContainer {
             requestBody.target.handle = `cafe:${cafeId}:${memberKey}`;
             requestBody.naverOptions = {
               subscriptionType: 'cafe-member',
+              authMode: 'obsidian-local-cookie',
               cafeId,
               memberKey,
               localFetchRequired: true,
@@ -4290,6 +4293,7 @@ export class TimelineContainer {
       if (blogId) {
         requestBody.naverOptions = {
           subscriptionType: 'blog',
+          authMode: 'obsidian-local-cookie',
           blogId,
           localFetchRequired: true, // Polled locally by NaverSubscriptionPoller
         };
@@ -4562,6 +4566,7 @@ export class TimelineContainer {
                       const naverCafeOpts = options.naverCafeOptions;
                       requestBody.naverOptions = {
                         subscriptionType: 'cafe-member',
+                        authMode: 'obsidian-local-cookie',
                         cafeId,
                         memberKey,
                         localFetchRequired: true,
@@ -4614,6 +4619,7 @@ export class TimelineContainer {
                   const naverBlogOpts = options.naverCafeOptions;
                   requestBody.naverOptions = {
                     subscriptionType: 'blog',
+                    authMode: 'obsidian-local-cookie',
                     blogId,
                     localFetchRequired: true, // Polled locally by NaverSubscriptionPoller
                     keyword: naverBlogOpts?.keyword || undefined,

@@ -85,6 +85,7 @@ export interface SubscriptionUsage {
 
 /** Naver-specific subscription options */
 export interface NaverSubscriptionOptions {
+  authMode?: 'server-connection' | 'obsidian-local-cookie';
   subscriptionType?: 'blog' | 'cafe-member';
   /** Blog ID for blog subscriptions */
   blogId?: string;
@@ -94,6 +95,7 @@ export interface NaverSubscriptionOptions {
   memberAvatar?: string;
   cafeName?: string;
   localFetchRequired?: boolean;
+  pausedByConnectionDisconnect?: boolean;
   keyword?: string;
 }
 
@@ -152,6 +154,8 @@ export interface YouTubeSubscriptionMetadata {
 export interface NaverSubscriptionOptions {
   /** Cookie for authentication (not stored in Worker for security) */
   cookie?: string;
+  /** Auth execution mode for Cafe member subscriptions */
+  authMode?: 'server-connection' | 'obsidian-local-cookie';
   /** Subscription type: 'blog' or 'cafe-member' */
   subscriptionType?: 'blog' | 'cafe-member';
   /** Blog ID for blog subscriptions */
@@ -168,6 +172,8 @@ export interface NaverSubscriptionOptions {
   cafeName?: string;
   /** When true, Plugin polls locally instead of Worker */
   localFetchRequired?: boolean;
+  /** Set when a server-auth subscription is paused because Naver was disconnected */
+  pausedByConnectionDisconnect?: boolean;
   /** Optional keyword filter for post titles */
   keyword?: string;
 }

@@ -226,6 +226,7 @@ function buildNaverCrawlOptions(
     const [, cafeId, memberKey] = handle.split(':');
     return {
       cookie: naver?.cookie,
+      authMode: 'obsidian-local-cookie',
       subscriptionType: 'cafe-member',
       cafeId,
       memberKey,
@@ -234,6 +235,7 @@ function buildNaverCrawlOptions(
   }
   return {
     cookie: naver?.cookie,
+    authMode: 'obsidian-local-cookie',
     subscriptionType: naver?.subscriptionType ?? 'blog',
     blogId: handle,
     localFetchRequired: true,

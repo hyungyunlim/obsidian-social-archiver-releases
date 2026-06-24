@@ -1453,6 +1453,12 @@ function cloneFrontmatterSettings(
   };
 }
 
+function formatInstagramAuthorMention(name: string, handle?: string): string {
+  const cleanHandle = handle?.trim().replace(/^@+/, '');
+  if (!cleanHandle) return name;
+  return `[@${cleanHandle}](https://instagram.com/${cleanHandle})`;
+}
+
 /**
  * MarkdownConverter - Transforms PostData into Markdown format
  *
@@ -2127,8 +2133,8 @@ export class MarkdownConverter implements IService {
       : undefined;
 
     // Generate author mention for Instagram
-    const authorMention = postData.platform === 'instagram' && postData.author.handle
-      ? `[@${postData.author.handle}](https://instagram.com/${postData.author.handle})`
+    const authorMention = postData.platform === 'instagram'
+      ? formatInstagramAuthorMention(postData.author.name, postData.author.handle)
       : postData.author.name;
 
     // Format transcript for YouTube (body only — template provides the ## heading)

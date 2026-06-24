@@ -180,6 +180,8 @@ export interface RedditCrawlOptions {
 export interface NaverCrawlOptions {
   /** NID_AUT + NID_SES cookies for private cafe access (NOT stored in Worker - Plugin only) */
   cookie?: string;
+  /** Auth execution mode for Cafe member subscriptions */
+  authMode?: 'server-connection' | 'obsidian-local-cookie';
   /** Subscription type: 'blog' (RSS+Direct) or 'cafe-member' (JSON API+Direct) */
   subscriptionType?: 'blog' | 'cafe-member';
   /** Blog ID for blog subscriptions (extracted from URL) */
@@ -192,6 +194,8 @@ export interface NaverCrawlOptions {
   memberNickname?: string;
   /** When true, Plugin performs local fetch instead of Worker (required for cafe-member with cookies) */
   localFetchRequired?: boolean;
+  /** Set when a server-auth subscription is paused because Naver was disconnected */
+  pausedByConnectionDisconnect?: boolean;
 }
 
 /**

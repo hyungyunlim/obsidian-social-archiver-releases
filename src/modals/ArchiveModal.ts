@@ -2387,6 +2387,17 @@ export class ArchiveModal extends Modal {
     }
 
     const archiveUrl = (this.resolvedUrl ?? this.url).trim();
+    if (NaverCafeLocalService.isCafeUrl(archiveUrl) && !this.plugin.settings.naverCookie) {
+      const shouldOpenSettings = window.confirm(
+        'Some Naver Cafe posts require login. Add your Naver cookies in Social Archiver settings so private Cafe posts can be archived.\n\nOpen settings now? Press Cancel to archive without cookies.'
+      );
+      if (shouldOpenSettings) {
+        this.close();
+        this.openPluginSettings();
+        return;
+      }
+    }
+
     const submissionLockKey = this.plugin.tryAcquireArchiveQueueLock(archiveUrl, this.detectedPlatform ?? undefined);
     if (!submissionLockKey) {
       new Notice('⏳ this URL is already being queued. Please wait.');
@@ -2466,6 +2477,15 @@ export class ArchiveModal extends Modal {
         this.archiveBtn.addClass('sa-opacity-100');
         this.updateArchiveButton();
       }
+    }
+  }
+
+  private openPluginSettings(): void {
+    // @ts-expect-error — app.setting is available at runtime but not in public Obsidian types
+    const appSetting = this.app.setting as { open?: () => void; openTabById?: (id: string) => void } | undefined;
+    if (appSetting?.open) {
+      appSetting.open();
+      appSetting.openTabById?.(this.plugin.manifest.id);
     }
   }
 
@@ -2841,6 +2861,7 @@ export class ArchiveModal extends Modal {
 
       return {
         cookie,
+        authMode: 'obsidian-local-cookie',
         subscriptionType: 'cafe-member',
         cafeId,
         memberKey,
@@ -2852,6 +2873,7 @@ export class ArchiveModal extends Modal {
     // handle is the blog ID for blog subscriptions
     return {
       cookie,
+      authMode: 'obsidian-local-cookie',
       subscriptionType: 'blog',
       blogId: handle, // Blog ID for RSS fetching
       localFetchRequired: true, // Polled locally by NaverSubscriptionPoller
@@ -3021,6 +3043,7 @@ export class ArchiveModal extends Modal {
             },
             naverOptions: {
               cookie: undefined,
+              authMode: 'obsidian-local-cookie',
               subscriptionType: 'cafe-member' as const,
               cafeId,
               memberKey,
@@ -3194,6 +3217,7 @@ export class ArchiveModal extends Modal {
             },
             naverOptions: {
               cookie: undefined,
+              authMode: 'obsidian-local-cookie',
               subscriptionType: 'blog' as const,
               blogId,
               localFetchRequired: true,
@@ -3584,6 +3608,7 @@ export class ArchiveModal extends Modal {
         },
         naverOptions: {
           cookie: undefined,
+          authMode: 'obsidian-local-cookie',
           subscriptionType: 'blog' as const,
           blogId,
           localFetchRequired: true,
@@ -3708,6 +3733,7 @@ export class ArchiveModal extends Modal {
         },
         naverOptions: {
           cookie: undefined,
+          authMode: 'obsidian-local-cookie',
           subscriptionType: 'cafe-member' as const,
           cafeId,
           memberKey,
