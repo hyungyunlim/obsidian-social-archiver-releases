@@ -186,6 +186,17 @@ export interface ArchiveTagsUpdatedEvent {
   data: ArchiveTagsUpdatedEventData;
 }
 
+export interface UserTagsUpdatedEventData {
+  updatedAt: string;
+  timestamp: number;
+  sourceClientId?: string;
+}
+
+export interface UserTagsUpdatedEvent {
+  type: 'user_tags_updated';
+  data: UserTagsUpdatedEventData;
+}
+
 // ============================================================================
 // Content Variant Updated Event (private channel)
 // ============================================================================
@@ -447,6 +458,7 @@ export type WebSocketEvent =
   | ShareDeletedEvent
   | ArchiveDeletedEvent
   | ArchiveTagsUpdatedEvent
+  | UserTagsUpdatedEvent
   | AuthorProfileUpdatedEvent
   | SubscriptionChangedEvent
   | MediaPreservedEvent

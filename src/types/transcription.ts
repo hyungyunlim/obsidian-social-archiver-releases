@@ -18,6 +18,7 @@ export interface TranscriptionSegment {
   end: number;
   /** Transcribed text */
   text: string;
+  speaker?: string;
   /** Word-level timestamps (if enabled) */
   words?: TranscriptionWord[];
 }

@@ -62,9 +62,13 @@ export class TranscriptFormatter {
       return '';
     }
 
+    let previousSpeaker: string | null = null;
     const lines = segments.map((segment) => {
       const ts = this.formatTimestampDisplay(segment.start);
-      return `[${ts}] ${segment.text.trim()}`;
+      const speaker = segment.speaker?.trim() || null;
+      const speakerPrefix = speaker && speaker !== previousSpeaker ? `${speaker}: ` : '';
+      previousSpeaker = speaker;
+      return `[${ts}] ${speakerPrefix}${segment.text.trim()}`;
     });
 
     return lines.join('\n\n');

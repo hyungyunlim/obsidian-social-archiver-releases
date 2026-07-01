@@ -170,4 +170,27 @@ describe('convertUserArchiveToPostData', () => {
 
     expect(postData.content.text).toBe('Body before footer.');
   });
+
+  it('preserves speaker labels from synced Whisper transcripts', () => {
+    const archive = makeArchive({
+      contentType: 'meeting-note',
+      platform: 'post',
+      originalUrl: 'social-archiver://meeting-note/archive-1',
+      whisperTranscript: {
+        language: 'ko',
+        segments: [
+          { id: 0, start: 0, end: 3, text: '안녕하세요.', speaker: 'Speaker 1' },
+          { id: 1, start: 3, end: 7, text: '반갑습니다.', speaker: 'Speaker 2' },
+        ],
+      },
+      transcriptionLanguage: 'ko',
+    });
+
+    const postData = convertUserArchiveToPostData(archive);
+
+    expect(postData.whisperTranscript?.segments).toEqual([
+      { id: 0, start: 0, end: 3, text: '안녕하세요.', speaker: 'Speaker 1' },
+      { id: 1, start: 3, end: 7, text: '반갑습니다.', speaker: 'Speaker 2' },
+    ]);
+  });
 });

@@ -162,6 +162,7 @@ export interface WebtoonStreamingSettings {
 }
 
 export type TimelineArchiveTab = 'inbox' | 'archive' | 'all';
+export type TimelineSortBy = 'published' | 'archived';
 
 export interface TimelineFilterPreferences {
   platforms: string[];
@@ -193,6 +194,10 @@ export function createDefaultTimelineFilters(): TimelineFilterPreferences {
     },
     activeTab: 'inbox',
   };
+}
+
+export function isTimelineSortBy(value: unknown): value is TimelineSortBy {
+  return value === 'published' || value === 'archived';
 }
 
 export interface FrontmatterFieldVisibility {
@@ -595,7 +600,8 @@ export interface SocialArchiverSettings {
   lastUsed: string; // Last archive timestamp
 
   // Timeline View Settings
-  timelineSortBy: 'published' | 'archived';
+  timelineSortBy: TimelineSortBy;
+  defaultTimelineSortBy: TimelineSortBy;
   timelineSortOrder: 'newest' | 'oldest';
   timelineViewMode: 'timeline' | 'gallery';
   timelineFilters: TimelineFilterPreferences;
@@ -839,6 +845,7 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
 
   // Timeline View Settings
   timelineSortBy: 'published',
+  defaultTimelineSortBy: 'published',
   timelineSortOrder: 'newest',
   timelineViewMode: 'timeline',
   timelineFilters: createDefaultTimelineFilters(),
@@ -1002,6 +1009,15 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
 
   if (!migrated.timelineViewMode) {
     migrated.timelineViewMode = 'timeline';
+  }
+
+  if (!isTimelineSortBy(migrated.timelineSortBy)) {
+    migrated.timelineSortBy = DEFAULT_SETTINGS.timelineSortBy;
+  }
+  if (!isTimelineSortBy(settings.defaultTimelineSortBy)) {
+    migrated.defaultTimelineSortBy = isTimelineSortBy(settings.timelineSortBy)
+      ? settings.timelineSortBy
+      : DEFAULT_SETTINGS.defaultTimelineSortBy;
   }
 
   if (!migrated.timelineFilters) {
@@ -1357,6 +1373,7 @@ export function needsMigration(settings: Partial<SocialArchiverSettings>): boole
   if (!settings.timingByPlatform) return true;
   if (!settings.archiveOrganization) return true;
   if (!settings.frontmatter) return true;
+  if (!settings.defaultTimelineSortBy) return true;
 
   return false;
 }

@@ -575,6 +575,7 @@ export interface UserArchive {
     thumbnail?: string;
     thumbnailUrl?: string;
     alt?: string;
+    duration?: number;
   }> | null;
   mediaPreserved?: Array<{
     originalUrl: string;
@@ -630,6 +631,7 @@ export interface UserArchive {
   archiveSource?: string | null;
   // X article (long-form post) derived fields
   isArticle?: boolean;
+  contentType?: 'post' | 'article' | 'meeting-note' | 'audio-note';
   articleMarkdown?: string | null;
   metadata: Record<string, unknown> | null;
   isLiked: boolean;
@@ -1700,14 +1702,19 @@ export class WorkersAPIClient implements IService {
 
       return data.data as T;
     } catch (error) {
-      console.error('[WorkersAPIClient] Request failed:', {
+      const failure = {
         url,
         error: error instanceof Error ? error.message : String(error),
         code: error instanceof Error ? (error as Error & { code?: string }).code : undefined,
         details: error instanceof Error ? (error as Error & { details?: unknown }).details : undefined,
         status: error instanceof Error ? (error as Error & { status?: number }).status : undefined,
         stack: error instanceof Error ? error.stack : undefined,
-      });
+      };
+      if (failure.code === 'ARCHIVE_NOT_FOUND' && failure.status === 404) {
+        console.debug('[WorkersAPIClient] Request failed:', failure);
+      } else {
+        console.error('[WorkersAPIClient] Request failed:', failure);
+      }
       throw error;
     }
   }

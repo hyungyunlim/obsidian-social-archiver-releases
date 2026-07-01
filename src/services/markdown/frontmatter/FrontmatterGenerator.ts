@@ -268,6 +268,7 @@ export class FrontmatterGenerator {
     if (postData.ai?.summary) frontmatter.ai_summary = postData.ai.summary;
     if (postData.ai?.sentiment) frontmatter.sentiment = postData.ai.sentiment;
     if (postData.ai?.topics) frontmatter.topics = postData.ai.topics;
+    if (postData.contentType) frontmatter.contentType = postData.contentType;
 
     // Subscription-related fields
     if (postData.subscribed) frontmatter.subscribed = true;

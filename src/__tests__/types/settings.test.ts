@@ -117,6 +117,20 @@ describe('settings', () => {
       expect(migrated.timelineFilters.activeTab).toBe('archive');
       expect(migrated.timelineFilters.localOnlyOnly).toBe(true);
     });
+
+    it('should seed defaultTimelineSortBy from existing timelineSortBy', () => {
+      const migrated = migrateSettings({ timelineSortBy: 'archived' });
+
+      expect(migrated.defaultTimelineSortBy).toBe('archived');
+    });
+
+    it('should normalize invalid defaultTimelineSortBy', () => {
+      const migrated = migrateSettings({
+        defaultTimelineSortBy: 'invalid',
+      } as Partial<SocialArchiverSettings>);
+
+      expect(migrated.defaultTimelineSortBy).toBe(DEFAULT_SETTINGS.defaultTimelineSortBy);
+    });
   });
 
   describe('enableMobileAnnotationSync (Phase 3 default-on migration)', () => {

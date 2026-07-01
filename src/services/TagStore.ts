@@ -5,6 +5,8 @@ import { mergeTagListsCaseInsensitive, normalizeTagName, validateTagName } from 
 import type SocialArchiverPlugin from '@/main';
 import type { WorkersAPIClient } from './WorkersAPIClient';
 
+type TagDefinitionApiClient = Pick<WorkersAPIClient, 'getUserTags'>;
+
 /**
  * TagStore - Manages user-defined tag definitions and tag-post assignments
  *
@@ -446,7 +448,7 @@ export class TagStore {
    * - Local-only tags (not on server) → keep as-is
    * - Deleted tags on server → remove from local
    */
-  async pullTagDefinitionsFromServer(apiClient: WorkersAPIClient): Promise<number> {
+  async pullTagDefinitionsFromServer(apiClient: TagDefinitionApiClient): Promise<number> {
     try {
       const response = await apiClient.getUserTags();
       const { tags: serverTags, deletedIds } = response;

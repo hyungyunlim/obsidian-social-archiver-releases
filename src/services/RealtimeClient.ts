@@ -19,6 +19,7 @@ export type RealtimeMessageType =
   | 'archive_added' // From new archive creation (subscription or manual)
   | 'archive_deleted' // From archive deletion
   | 'archive_tags_updated' // From tag changes (mobile/web)
+  | 'user_tags_updated'
   | 'author_profile_updated' // From editable author profile changes
   | 'archive_relation_updated' // From archive_link_relations create/update/soft-delete
   | 'subscription_changed' // From subscription create/update/delete

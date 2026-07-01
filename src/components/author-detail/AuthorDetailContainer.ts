@@ -212,7 +212,7 @@ export class AuthorDetailContainer {
     this.filterSortManager = new FilterSortManager(
       { activeTab: 'all' },
       {
-        by: this.plugin.settings.timelineSortBy,
+        by: this.plugin.settings.defaultTimelineSortBy,
         order: this.plugin.settings.timelineSortOrder,
       }
     );

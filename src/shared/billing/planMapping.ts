@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/billing/planMapping.ts
- * Generated: 2026-06-24T04:29:04.979Z
+ * Generated: 2026-07-01T12:19:48.661Z
  *
  * To modify, edit the source file in shared/billing/ and run:
  *   npm run sync:shared

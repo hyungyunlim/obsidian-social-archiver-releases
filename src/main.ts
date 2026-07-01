@@ -2291,6 +2291,7 @@ export default class SocialArchiverPlugin extends Plugin {
           commentStateSyncService: this.commentStateSyncService,
           archiveDeleteSyncService: this.archiveDeleteSyncService ?? undefined,
           archiveTagOutboundService: this.archiveTagOutboundService,
+          tagStore: this.tagStore,
           authorProfileOutboundService: this.authorProfileOutboundService,
           app: this.app,
           settings: () => this.settings,

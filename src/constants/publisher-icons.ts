@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/icons/publisher-icons.ts
- * Generated: 2026-06-24T04:30:55.949Z
+ * Generated: 2026-07-01T12:19:48.651Z
  *
  * To modify, edit the source file in shared/icons/ and run:
  *   npm run sync:shared

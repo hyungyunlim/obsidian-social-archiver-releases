@@ -7,7 +7,6 @@ import type { PostData } from '../../types/post';
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Retry transient archive lookup misses (replication lag). */
 const MOBILE_SYNC_ARCHIVE_FETCH_MAX_ATTEMPTS = 5;
 
 /** Base delay (ms) for archive lookup retries. */
@@ -86,7 +85,6 @@ export class MobileSyncService {
     try {
       this.scheduledMobileSyncRetries.delete(queueId);
 
-      // 1. Fetch full archive data from server (with retries for transient 404 replication lag)
       const archive = await this.fetchUserArchiveWithRetry(archiveId);
 
       // 2. Dedup guard: skip if we recently archived this URL locally
@@ -138,7 +136,7 @@ export class MobileSyncService {
         this.mobileSyncRetryCount.set(queueId, retryCount);
 
         if (retryCount >= MOBILE_SYNC_QUEUE_MAX_RETRIES) {
-          console.warn('[Social Archiver] Archive not found after max retries; giving up', {
+          console.warn('[Social Archiver] Archive not found during client sync; marking queue item failed', {
             queueId, archiveId, clientId, retryCount,
           });
           this.mobileSyncRetryCount.delete(queueId);
@@ -146,7 +144,7 @@ export class MobileSyncService {
           const apiClient = this.deps.apiClient();
           if (apiClient) {
             try {
-              await apiClient.failSyncItem(queueId, clientId, `Archive ${archiveId} not found after ${retryCount} retries`);
+              await apiClient.failSyncItem(queueId, clientId, `Archive ${archiveId} not found on server; it may have been deleted before sync`);
             } catch { /* non-fatal */ }
           }
           return false;
@@ -244,6 +242,15 @@ export class MobileSyncService {
     return enriched.status === 404 || enriched.code === 'ARCHIVE_NOT_FOUND' || /archive not found/i.test(enriched.message);
   }
 
+  private isTerminalArchiveNotFoundError(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+      return false;
+    }
+
+    const enriched = error as Error & { code?: string };
+    return enriched.code === 'ARCHIVE_NOT_FOUND';
+  }
+
   private async fetchUserArchiveWithRetry(archiveId: string): Promise<UserArchive> {
     const apiClient = this.deps.apiClient();
     if (!apiClient) {
@@ -261,7 +268,10 @@ export class MobileSyncService {
         return response.archive;
       } catch (error) {
         lastError = error;
-        const shouldRetry = this.isArchiveNotFoundError(error) && attempt < MOBILE_SYNC_ARCHIVE_FETCH_MAX_ATTEMPTS;
+        const shouldRetry =
+          this.isArchiveNotFoundError(error) &&
+          !this.isTerminalArchiveNotFoundError(error) &&
+          attempt < MOBILE_SYNC_ARCHIVE_FETCH_MAX_ATTEMPTS;
 
         if (!shouldRetry) {
           throw error;

@@ -10,6 +10,7 @@ import {
   getThreadsConnectionIssueFromStatus,
   isThreadsConnectionUsable,
 } from '@/utils/crosspostStatus';
+import { showConfirmModal } from '@/utils/confirm-modal';
 
 interface Props {
   plugin: SocialArchiverPlugin;
@@ -243,14 +244,14 @@ async function handleRefreshToken(): Promise<void> {
   }
 }
 
-// ============================================================================
-// Confirmation helper (browser-native modal, minimal)
-// ============================================================================
-
 function confirmDisconnect(): Promise<boolean> {
-  return Promise.resolve(
-    window.confirm('Disconnect your Threads account? You will need to re-authorize to cross-post again.')
-  );
+  return showConfirmModal(plugin.app, {
+    title: 'Disconnect Threads account?',
+    message: 'You will need to re-authorize to cross-post again.',
+    confirmText: 'Disconnect',
+    cancelText: 'Cancel',
+    confirmClass: 'warning',
+  });
 }
 
 // ============================================================================

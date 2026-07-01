@@ -26,6 +26,7 @@ describe('PostCreationService', () => {
       creditsRemaining: 10,
       creditResetDate: new Date().toISOString(),
       timelineSortBy: 'published',
+      defaultTimelineSortBy: 'published',
       timelineSortOrder: 'newest',
     };
 

@@ -132,6 +132,44 @@ function makeDeps(overrides: Partial<RealtimeEventBridgeDeps> = {}): RealtimeEve
 // ─── Tests ───────────────────────────────────────────────
 
 describe('RealtimeEventBridge — archive_tags_updated handling', () => {
+  it('pulls tag definitions and rebuilds outbound tag cache on user_tags_updated', async () => {
+    const apiClient = {};
+    const tagDefinitions = [
+      { id: 'tag-1', name: 'research' },
+      { id: 'tag-2', name: 'ai' },
+    ];
+    const tagStore = {
+      pullTagDefinitionsFromServer: vi.fn().mockResolvedValue(2),
+      getTagDefinitions: vi.fn().mockReturnValue(tagDefinitions),
+    };
+    const archiveTagOutboundService = {
+      rebuildTagCache: vi.fn(),
+    };
+
+    const events = makeEvents();
+    const deps = makeDeps({
+      events: events as unknown as RealtimeEventBridgeDeps['events'],
+      apiClient: () => apiClient as RealtimeEventBridgeDeps['apiClient'] extends () => infer T ? T : never,
+      tagStore: tagStore as RealtimeEventBridgeDeps['tagStore'],
+      archiveTagOutboundService: archiveTagOutboundService as unknown as RealtimeEventBridgeDeps['archiveTagOutboundService'],
+    });
+
+    const bridge = new RealtimeEventBridge(deps);
+    bridge.setup();
+
+    await events.trigger('ws:user_tags_updated', {
+      type: 'user_tags_updated',
+      data: {
+        updatedAt: '2026-01-01T00:00:00Z',
+        timestamp: Date.now(),
+        sourceClientId: 'other-client',
+      },
+    });
+
+    expect(tagStore.pullTagDefinitionsFromServer).toHaveBeenCalledWith(apiClient);
+    expect(archiveTagOutboundService.rebuildTagCache).toHaveBeenCalledWith(tagDefinitions);
+  });
+
   // ── Test 1: writes to archiveTags, not tags ──
 
   it('writes server tags to archiveTags frontmatter field (NOT tags)', async () => {

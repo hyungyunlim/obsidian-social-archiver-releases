@@ -34,6 +34,7 @@ import {
   getThreadsConnectionIssueFromStatus,
   isThreadsConnectionUsable,
 } from '@/utils/crosspostStatus';
+import { showConfirmModal } from '@/utils/confirm-modal';
 
 /**
  * Attached image data
@@ -190,7 +191,7 @@ let linkPreviewContainer: HTMLElement | undefined = $state();
 /**
  * Debounce timer for URL detection
  */
-let urlDetectionTimer: ReturnType<typeof setTimeout> | null = null;
+let urlDetectionTimer: number | null = null;
 
 /**
  * Editor reference
@@ -222,7 +223,7 @@ async function loadExistingPost(): Promise<void> {
     // Mark all processed URLs to skip re-archiving prompt
     for (const url of processedUrlsFromYaml) {
       const validation = validateAndDetectPlatform(url);
-      if (validation.isValid && validation.platform) {
+      if (validation.valid && validation.platform) {
         socialUrls.set(url, {
           url: url,
           platform: validation.platform,
@@ -434,9 +435,12 @@ async function handleSubmit(): Promise<void> {
 
   // Inform user about thread splitting when Threads cross-post exceeds 500 chars
   if (threadsEnabled && threadsConnected && crossPostOverLimit) {
-    const ok = window.confirm(
-      `Your text will be split into ${crossPostThreadCount} connected thread posts on Threads. Continue?`
-    );
+    const ok = await showConfirmModal(app, {
+      title: 'Create Threads post sequence?',
+      message: `Your text will be split into ${crossPostThreadCount} connected thread posts on Threads.`,
+      confirmText: 'Continue',
+      cancelText: 'Cancel',
+    });
     if (!ok) return;
   }
 
@@ -822,6 +826,7 @@ function detectUrls(text: string): string[] {
   let match;
   while ((match = markdownLinkPattern.exec(text)) !== null) {
     let url = match[2];
+    if (!url) continue;
     // Clean up common trailing punctuation and brackets that might be captured
     url = url.replace(/[.,;:!?)\]]+$/, '');
     urls.push(url);
@@ -836,6 +841,7 @@ function detectUrls(text: string): string[] {
   let plainMatch;
   while ((plainMatch = plainUrlPattern.exec(textWithoutMarkdown)) !== null) {
     let url = plainMatch[1];
+    if (!url) continue;
     // Clean up trailing punctuation and brackets
     url = url.replace(/[.,;:!?)\]]+$/, '');
     urls.push(url);
@@ -972,6 +978,7 @@ function extractUrlsFromText(text: string): string[] {
   let match;
   while ((match = markdownLinkPattern.exec(text)) !== null) {
     let url = match[2];
+    if (!url) continue;
     url = url.replace(/[.,;:!?)\]]+$/, '');
     urls.push(url);
   }
@@ -982,6 +989,7 @@ function extractUrlsFromText(text: string): string[] {
   let plainMatch;
   while ((plainMatch = plainUrlPattern.exec(textWithoutMarkdown)) !== null) {
     let url = plainMatch[1];
+    if (!url) continue;
     url = url.replace(/[.,;:!?)\]]+$/, '');
     urls.push(url);
   }

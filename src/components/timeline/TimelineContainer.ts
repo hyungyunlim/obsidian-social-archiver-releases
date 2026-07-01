@@ -395,7 +395,7 @@ export class TimelineContainer {
     this.filterSortManager = new FilterSortManager(
       this.getInitialFilterState(),
       {
-        by: props.plugin.settings.timelineSortBy,
+        by: props.plugin.settings.defaultTimelineSortBy,
         order: props.plugin.settings.timelineSortOrder
       }
     );

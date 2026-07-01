@@ -97,7 +97,7 @@ export interface RenderProfileArchiveInput {
     /** Platform slug (threads, x, facebook, ...). */
     platform?: string;
     /** Explicit content-type hint when the platform is ambiguous. */
-    contentType?: 'post' | 'article' | 'timeline' | 'note';
+    contentType?: 'post' | 'article' | 'timeline' | 'note' | 'meeting-note' | 'audio-note';
     /** Long-form article flag (X article, Naver blog, Brunch, etc). */
     isArticle?: boolean;
     /** Explicit X-article flag retained for parity with mobile's isXArticleArchive(). */

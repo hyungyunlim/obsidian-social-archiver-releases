@@ -11,6 +11,7 @@ import type {
   CustomFrontmatterProperty,
   FrontmatterPropertyType,
   LocalImportLastResult,
+  TimelineSortBy,
 } from '../types/settings';
 import {
   DEFAULT_FRONTMATTER_CUSTOMIZATION_SETTINGS,
@@ -289,6 +290,23 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.authorDetailLocation)
           .onChange((value) => {
             this.plugin.settings.authorDetailLocation = value as 'default' | 'sidebar' | 'main';
+            this.markDirty();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName('Default timeline sort')
+      .setDesc('Choose whether new timeline views start from archive date or publish date.')
+      .addDropdown(dropdown => {
+        dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
+        return dropdown
+          .addOption('archived', 'Archive date')
+          .addOption('published', 'Publish date')
+          .setValue(this.plugin.settings.defaultTimelineSortBy)
+          .onChange((value) => {
+            const sortBy = value as TimelineSortBy;
+            this.plugin.settings.defaultTimelineSortBy = sortBy;
+            this.plugin.settings.timelineSortBy = sortBy;
             this.markDirty();
           });
       });

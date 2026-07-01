@@ -223,6 +223,9 @@ function normalizeWhisperTranscript(archive: UserArchive): PostData['whisperTran
         start: segment.start,
         end: typeof segment.end === 'number' ? segment.end : segment.start + 1,
         text: segment.text,
+        ...(typeof segment.speaker === 'string' && segment.speaker.trim().length > 0
+          ? { speaker: segment.speaker.trim() }
+          : {}),
       };
     })
     .filter((segment): segment is NormalizedSegment => segment !== null);
@@ -326,6 +329,7 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
       thumbnailUrl: preservedThumb?.r2Url || m.thumbnailUrl || m.thumbnail,
       alt: m.alt,
       altText: m.alt,
+      duration: m.duration,
     };
   }) as Media[];
   const whisperTranscript = normalizeWhisperTranscript(archive);
@@ -335,6 +339,7 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
     id: archive.postId,
     url: archive.originalUrl,
     sourceArchiveId: archive.id,
+    ...(archive.contentType ? { contentType: archive.contentType } : {}),
     ...(archive.title ? { title: archive.title } : {}),
     author: {
       name: archive.authorName || 'Unknown',

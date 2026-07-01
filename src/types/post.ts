@@ -286,6 +286,7 @@ export interface PostData {
    * - 'profile': Profile-only card (compact profile info)
    */
   type?: DocumentType;
+  contentType?: 'post' | 'article' | 'timeline' | 'note' | 'meeting-note' | 'audio-note';
   /**
    * Content sub-type within a platform (PRD §22.1).
    *
@@ -440,6 +441,7 @@ export interface PostData {
       start: number;  // seconds
       end: number;
       text: string;
+      speaker?: string;
     }>;
     language: string;
   };
@@ -584,6 +586,7 @@ export interface PostData {
 // Use lazy() for recursive embeddedArchives field
 export const PostDataSchema: z.ZodType<PostData> = z.lazy(() => z.object({
   schemaVersion: z.literal('1.0.0').optional(),
+  contentType: z.enum(['post', 'article', 'timeline', 'note', 'meeting-note', 'audio-note']).nullish(),
   postType: z.enum(['note', 'article']).nullish(), // PRD §22.1: Substack note vs article
   platform: platformEnum,
   id: z.string(),
@@ -761,7 +764,8 @@ export const PostDataSchema: z.ZodType<PostData> = z.lazy(() => z.object({
       id: z.number(),
       start: z.number(),
       end: z.number(),
-      text: z.string()
+      text: z.string(),
+      speaker: z.string().nullish()
     })),
     language: z.string()
   }).nullish(),

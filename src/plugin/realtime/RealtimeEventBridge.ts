@@ -17,6 +17,8 @@ import type { CrawlJobTracker } from '../../services/CrawlJobTracker';
 import type { ArchiveJobTracker } from '../../services/ArchiveJobTracker';
 import type { ArchiveLookupService } from '../../services/ArchiveLookupService';
 import type { AnnotationSyncService } from '../../services/AnnotationSyncService';
+import type { TagStore } from '../../services/TagStore';
+import type { WorkersAPIClient } from '../../services/WorkersAPIClient';
 import type { LinkRelationSyncService } from '../sync/LinkRelationSyncService';
 import type { ArchiveDeleteSyncService } from '../sync/ArchiveDeleteSyncService';
 import type { ArchiveTagOutboundService } from '../sync/ArchiveTagOutboundService';
@@ -168,6 +170,7 @@ export interface WsProfileCrawlCompleteMessage {
 
 interface RealtimeApiClient {
   deletePendingJob(jobId: string): Promise<unknown>;
+  getUserTags(): ReturnType<WorkersAPIClient['getUserTags']>;
 }
 
 // ============================================================================
@@ -200,6 +203,7 @@ export interface RealtimeEventBridgeDeps {
   commentStateSyncService?: CommentStateSyncService | undefined;
   archiveDeleteSyncService?: ArchiveDeleteSyncService | undefined;
   archiveTagOutboundService?: ArchiveTagOutboundService | undefined;
+  tagStore?: TagStore | undefined;
   authorProfileOutboundService?: { addSuppression: (authorKey: string) => void; isSuppressed: (authorKey: string) => boolean } | undefined;
   app: App;
   settings: () => SocialArchiverSettings;
@@ -343,6 +347,7 @@ export class RealtimeEventBridge {
     this.setupShareDeletedListener();
     this.setupActionUpdatedListener();
     this.setupArchiveTagsUpdatedListener();
+    this.setupUserTagsUpdatedListener();
     this.setupContentVariantUpdatedListener();
     this.setupAuthorProfileUpdatedListener();
     this.setupArchiveRelationUpdatedListener();
@@ -1297,6 +1302,36 @@ export class RealtimeEventBridge {
           console.error(
             '[Social Archiver] Failed to update archiveTags frontmatter:',
             file.path,
+            err instanceof Error ? err.message : String(err),
+          );
+        }
+      }),
+    );
+  }
+
+  private setupUserTagsUpdatedListener(): void {
+    this.eventRefs.push(
+      this.deps.events.on('ws:user_tags_updated', async (_message: unknown) => {
+        const msg = _message as { type: string; data?: { sourceClientId?: string } } | undefined;
+        const settings = this.deps.settings();
+        if (msg?.data?.sourceClientId && msg.data.sourceClientId === settings.syncClientId) {
+          return;
+        }
+
+        const apiClient = this.deps.apiClient();
+        const tagStore = this.deps.tagStore;
+        if (!apiClient || !tagStore) return;
+
+        try {
+          await tagStore.pullTagDefinitionsFromServer(apiClient);
+          const definitions = tagStore.getTagDefinitions();
+          this.deps.archiveTagOutboundService?.rebuildTagCache(
+            definitions.map((definition) => ({ id: definition.id, name: definition.name }))
+          );
+          this.deps.refreshTimelineView();
+        } catch (err) {
+          console.warn(
+            '[Social Archiver] Failed to sync tag definitions from user_tags_updated:',
             err instanceof Error ? err.message : String(err),
           );
         }

@@ -48,6 +48,7 @@ import {
 } from '@/services/IconService';
 import type { CliMediaMode } from '@/plugin/cli/ArchiveCliService';
 import { attachAutosizingTextarea, resizeTextareaToContent } from '@/utils/textarea';
+import { showConfirmModal } from '@/utils/confirm-modal';
 import {
   isSubscriptionPaywallError,
   SUBSCRIPTION_PAYWALL_NOTICE_MESSAGE,
@@ -2388,9 +2389,13 @@ export class ArchiveModal extends Modal {
 
     const archiveUrl = (this.resolvedUrl ?? this.url).trim();
     if (NaverCafeLocalService.isCafeUrl(archiveUrl) && !this.plugin.settings.naverCookie) {
-      const shouldOpenSettings = window.confirm(
-        'Some Naver Cafe posts require login. Add your Naver cookies in Social Archiver settings so private Cafe posts can be archived.\n\nOpen settings now? Press Cancel to archive without cookies.'
-      );
+      const shouldOpenSettings = await showConfirmModal(this.app, {
+        title: 'Naver Cafe login may be required',
+        message:
+          'Some Naver Cafe posts require login. Add your Naver cookies in Social Archiver settings so private Cafe posts can be archived.',
+        confirmText: 'Open settings',
+        cancelText: 'Archive without cookies',
+      });
       if (shouldOpenSettings) {
         this.close();
         this.openPluginSettings();

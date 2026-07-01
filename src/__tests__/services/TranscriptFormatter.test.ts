@@ -137,5 +137,17 @@ describe('TranscriptFormatter', () => {
       expect(result).not.toContain('## Transcript');
       expect(result.startsWith('[')).toBe(true);
     });
+
+    it('formats speaker labels only when the speaker changes', () => {
+      const result = formatter.formatWhisperTranscript([
+        { id: 0, start: 0, end: 2, text: '첫 문장', speaker: 'Speaker 1' },
+        { id: 1, start: 2, end: 4, text: '이어서 말함', speaker: 'Speaker 1' },
+        { id: 2, start: 4, end: 6, text: '다른 화자', speaker: 'Speaker 2' },
+      ]);
+
+      expect(result).toContain('[00:00] Speaker 1: 첫 문장');
+      expect(result).toContain('[00:02] 이어서 말함');
+      expect(result).toContain('[00:04] Speaker 2: 다른 화자');
+    });
   });
 });
