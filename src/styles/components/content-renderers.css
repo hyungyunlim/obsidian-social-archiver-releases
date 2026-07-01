@@ -540,9 +540,24 @@
 }
 
 /* Segment text */
+.tr-text-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tr-speaker-label {
+  color: var(--tr-speaker-color, var(--text-accent));
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
 .tr-text {
   line-height: var(--tr-text-lh, 1.6);
   font-size: var(--tr-text-size, 14px);
+  min-width: 0;
 }
 
 .tr-text-mobile {

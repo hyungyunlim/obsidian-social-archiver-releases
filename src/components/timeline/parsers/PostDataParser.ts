@@ -38,6 +38,32 @@ function readFrontmatterStringArray(value: unknown): string[] {
     : [];
 }
 
+function readPostContentType(value: unknown): PostData['contentType'] {
+  switch (value) {
+    case 'post':
+    case 'article':
+    case 'timeline':
+    case 'note':
+    case 'meeting-note':
+    case 'audio-note':
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function isArchiveMediaNoteContentType(contentType: PostData['contentType']): boolean {
+  return contentType === 'meeting-note' || contentType === 'audio-note';
+}
+
+function shouldTreatAsAudioMediaNoteAttachment(
+  media: ParsedMediaItem,
+  contentType: PostData['contentType']
+): boolean {
+  if (!isArchiveMediaNoteContentType(contentType)) return false;
+  return media.type === 'audio' || media.type === 'video' || isAudioUrl(media.url) || isVideoUrl(media.url);
+}
+
 /**
  * Media item used during internal parsing before dedup/resolve
  */
@@ -284,6 +310,7 @@ export class PostDataParser {
 
       // Determine if this is a user-created post
       const isUserPost = frontmatter.platform === 'post';
+      const contentType = readPostContentType(frontmatter['contentType']);
 
       // Parse quotedPost if exists (Facebook shared posts, X quoted tweets, etc.)
       // When parsing user-created posts with embedded archives, limit search to the primary content
@@ -354,6 +381,7 @@ export class PostDataParser {
 
       mediaArray = mediaArray.map(media => ({
         ...media,
+        type: shouldTreatAsAudioMediaNoteAttachment(media, contentType) ? 'audio' : media.type,
         url: this.resolveMediaPath(media.url, file.path)
       }));
 
@@ -508,6 +536,7 @@ export class PostDataParser {
 
       const postData: PostData = {
         platform: frontmatter.platform as Platform,
+        contentType,
         id: file.basename,
         // For user posts, url is the vault file path; for archived posts, use originalUrl
         url: isUserPost ? file.path : originalUrl,

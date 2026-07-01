@@ -6,6 +6,11 @@ import { languageCodeToName } from '../../../constants/languages';
 
 type TranscriptViewMode = 'reader' | 'segments';
 
+interface SpeakerTextParts {
+  speakerLabel: string | null;
+  displayText: string;
+}
+
 /**
  * Options for TranscriptRenderer
  */
@@ -103,9 +108,7 @@ export class TranscriptRenderer {
     this.currentLanguage = options.language || 'en';
     this.onLanguageChange = options.onLanguageChange;
 
-    // Resolve adapter: prefer explicit adapter, fall back to wrapping audioElement
-    // Access legacy audioElement field via Record cast to avoid no-deprecated lint
-    const legacyAudioEl = (options as unknown as Record<string, unknown>)['audioElement'] as HTMLAudioElement | null | undefined;
+    const legacyAudioEl = options.audioElement;
     if (options.adapter) {
       this.adapter = options.adapter;
       this.audioElement = null;
@@ -123,9 +126,21 @@ export class TranscriptRenderer {
 
     // Pre-calculate speaker segment indices for the speaker jump button
     this.speakerSegmentIndices = [];
+    let previousSpeakerLabel: string | null = null;
     for (let i = 0; i < this.segments.length; i++) {
       const seg = this.segments[i];
-      if (seg && this.hasSpeakerMarker(seg.text)) {
+      if (!seg) continue;
+
+      const speakerLabel = this.getSpeakerLabel(seg);
+      if (speakerLabel) {
+        if (speakerLabel !== previousSpeakerLabel) {
+          this.speakerSegmentIndices.push(i);
+          previousSpeakerLabel = speakerLabel;
+        }
+        continue;
+      }
+
+      if (this.hasSpeakerMarker(seg.text)) {
         this.speakerSegmentIndices.push(i);
       }
     }
@@ -163,9 +178,7 @@ export class TranscriptRenderer {
     if (this.adapter) {
       this.bindAdapterEvents();
     } else if (this.audioElement) {
-      // Call legacy audio binding via Record cast to avoid no-deprecated lint
-      const bindLegacy = (this as unknown as Record<string, (() => void) | undefined>)['bindAudioEvents'];
-      if (bindLegacy) bindLegacy();
+      this.bindAudioEvents();
     }
   }
 
@@ -351,11 +364,15 @@ export class TranscriptRenderer {
       currentLength = 0;
     };
 
+    let previousSpeakerLabel: string | null = null;
     for (const segment of this.segments) {
-      const text = this.stripSpeakerMarker(segment.text).trim();
+      const text = this.getDisplayText(segment);
       if (!text) continue;
-      if (this.hasSpeakerMarker(segment.text)) {
+      const speakerLabel = this.getSpeakerLabel(segment);
+      const startsSpeakerTurn = this.startsSpeakerTurn(segment, previousSpeakerLabel);
+      if (startsSpeakerTurn) {
         flush();
+        previousSpeakerLabel = speakerLabel;
       }
       current.push(text);
       currentLength += text.length + 1;
@@ -371,6 +388,64 @@ export class TranscriptRenderer {
   private stripSpeakerMarker(text: string): string {
     const rawText = text.trim();
     return this.hasSpeakerMarker(rawText) ? rawText.replace(/^(>>|-)\s*/, '') : rawText;
+  }
+
+  private parseSpeakerPrefix(text: string): SpeakerTextParts | null {
+    const prefixedMatch = /^((?:Speaker|SPK)\s*[-_#]?\s*[A-Za-z0-9]+|화자\s*\d+|발화자\s*\d+)\s*[:：]\s*(.*)$/i.exec(text);
+    if (prefixedMatch) {
+      const speakerLabel = prefixedMatch[1]?.trim();
+      const displayText = prefixedMatch[2]?.trim() ?? '';
+      if (speakerLabel) {
+        return { speakerLabel, displayText };
+      }
+    }
+
+    const bracketMatch = /^\[((?:Speaker|SPK)\s*[-_#]?\s*[A-Za-z0-9]+|화자\s*\d+|발화자\s*\d+)\]\s*(.*)$/i.exec(text);
+    if (bracketMatch) {
+      const speakerLabel = bracketMatch[1]?.trim();
+      const displayText = bracketMatch[2]?.trim() ?? '';
+      if (speakerLabel) {
+        return { speakerLabel, displayText };
+      }
+    }
+
+    return null;
+  }
+
+  private stripStructuredSpeakerPrefix(text: string, speakerLabel: string): string {
+    const normalizedSpeaker = speakerLabel.toLowerCase();
+    const normalizedText = text.toLowerCase();
+    const colonPrefix = `${normalizedSpeaker}:`;
+    const fullWidthColonPrefix = `${normalizedSpeaker}：`;
+    const bracketPrefix = `[${normalizedSpeaker}]`;
+
+    if (normalizedText.startsWith(colonPrefix)) {
+      return text.slice(speakerLabel.length + 1).trim();
+    }
+    if (normalizedText.startsWith(fullWidthColonPrefix)) {
+      return text.slice(speakerLabel.length + 1).trim();
+    }
+    if (normalizedText.startsWith(bracketPrefix)) {
+      return text.slice(speakerLabel.length + 2).trim();
+    }
+
+    return text;
+  }
+
+  private getSpeakerTextParts(segment: TranscriptionSegment): SpeakerTextParts {
+    const rawText = this.stripSpeakerMarker(segment.text.trim()).trim();
+    const speaker = segment.speaker?.trim();
+    if (speaker && speaker.length > 0) {
+      return {
+        speakerLabel: speaker,
+        displayText: this.stripStructuredSpeakerPrefix(rawText, speaker),
+      };
+    }
+
+    return this.parseSpeakerPrefix(rawText) ?? {
+      speakerLabel: null,
+      displayText: rawText,
+    };
   }
 
   /**
@@ -524,8 +599,8 @@ export class TranscriptRenderer {
       jumpBtn.addClass('tr-speaker-disabled');
     }
     jumpBtn.title = hasSpeakers
-      ? `Jump to next speaker (${this.speakerSegmentIndices.length} speakers)`
-      : 'No speaker markers detected';
+      ? `Jump to next speaker turn (${this.speakerSegmentIndices.length})`
+      : 'No speaker turns detected';
 
     const icon = jumpBtn.createSpan({ cls: 'speaker-jump-icon sa-flex-row' });
     if (this.isMobile) {
@@ -620,6 +695,22 @@ export class TranscriptRenderer {
     return trimmed.startsWith('>>') || trimmed.startsWith('-');
   }
 
+  private getSpeakerLabel(segment: TranscriptionSegment): string | null {
+    return this.getSpeakerTextParts(segment).speakerLabel;
+  }
+
+  private startsSpeakerTurn(segment: TranscriptionSegment, previousSpeakerLabel: string | null): boolean {
+    const speakerLabel = this.getSpeakerLabel(segment);
+    if (speakerLabel) {
+      return speakerLabel !== previousSpeakerLabel;
+    }
+    return this.hasSpeakerMarker(segment.text);
+  }
+
+  private getDisplayText(segment: TranscriptionSegment): string {
+    return this.getSpeakerTextParts(segment).displayText;
+  }
+
   /**
    * Render search bar
    */
@@ -684,27 +775,26 @@ export class TranscriptRenderer {
     this.segmentElements.clear();
     // Note: speakerSegmentIndices is pre-calculated in render() for the speaker jump button
 
-    // Track speaker turns - alternate between speakers when >> or - is encountered
-    // OpenAI Whisper uses >> for speaker changes, whisper.cpp uses -
     let currentSpeakerIndex = 0;
-
-    let prevSpeakerIndex = 0;
+    let previousSpeakerLabel: string | null = null;
 
     for (let i = 0; i < this.segments.length; i++) {
       const segment = this.segments[i];
       if (!segment) continue;
 
-      // Check if this segment starts a new speaker turn
-      const rawText = segment.text.trim();
-      if (this.hasSpeakerMarker(rawText)) {
-        currentSpeakerIndex++;
-      }
+      const speakerLabel = this.getSpeakerLabel(segment);
+      const startsSpeakerTurn = this.startsSpeakerTurn(segment, previousSpeakerLabel);
 
       // Insert speaker divider when speaker changes
-      if (this.showSpeakerDividers && i > 0 && currentSpeakerIndex !== prevSpeakerIndex) {
+      if (this.showSpeakerDividers && i > 0 && startsSpeakerTurn) {
         this.renderSpeakerDivider(parent);
       }
-      prevSpeakerIndex = currentSpeakerIndex;
+      if (startsSpeakerTurn) {
+        if (i > 0) {
+          currentSpeakerIndex++;
+        }
+        previousSpeakerLabel = speakerLabel;
+      }
 
       const segmentEl = this.renderSegment(parent, segment, currentSpeakerIndex);
       this.segmentElements.set(segment.id, segmentEl);
@@ -715,9 +805,8 @@ export class TranscriptRenderer {
    * Render a single segment
    */
   private renderSegment(parent: HTMLElement, segment: TranscriptionSegment, speakerIndex: number = 0): HTMLElement {
-    // Check for speaker turn marker (>> for OpenAI Whisper, - for whisper.cpp)
-    const rawText = segment.text.trim();
-    const displayText = this.stripSpeakerMarker(rawText);
+    const displayText = this.getDisplayText(segment);
+    const speakerLabel = this.getSpeakerLabel(segment);
 
     // Alternate colors for different speakers (using subtle, theme-friendly colors)
     const isEvenSpeaker = speakerIndex % 2 === 0;
@@ -727,7 +816,8 @@ export class TranscriptRenderer {
       cls: `transcript-segment speaker-${speakerIndex % 2} sa-flex-row sa-transition-bg tr-segment tr-segment-hover`,
       attr: {
         'data-segment-id': String(segment.id),
-        'data-speaker': String(speakerIndex)
+        'data-speaker': String(speakerIndex),
+        ...(speakerLabel ? { 'data-speaker-label': speakerLabel } : {})
       }
     });
     segmentEl.setCssProps({ '--tr-speaker-color': speakerColor });
@@ -749,9 +839,18 @@ export class TranscriptRenderer {
       this.seekToTime(segment.start);
     });
 
-    // Text content (with >> marker stripped)
-    const textEl = segmentEl.createSpan({
-      cls: 'segment-text sa-flex-1 sa-text-normal tr-text'
+    const textWrapper = segmentEl.createSpan({
+      cls: 'segment-text-wrapper sa-flex-1 tr-text-wrap'
+    });
+    if (speakerLabel) {
+      textWrapper.createSpan({
+        text: speakerLabel,
+        cls: 'segment-speaker-label tr-speaker-label'
+      });
+    }
+
+    const textEl = textWrapper.createSpan({
+      cls: 'segment-text sa-text-normal tr-text'
     });
     if (this.isMobile) {
       textEl.addClass('tr-text-mobile');
@@ -874,11 +973,9 @@ export class TranscriptRenderer {
       const textEl = element.querySelector('.segment-text');
       if (!textEl) continue;
 
-      // Strip >> or - marker for display (OpenAI Whisper uses >>, whisper.cpp uses -)
-      const rawText = segment.text.trim();
-      const displayText = (rawText.startsWith('>>') || rawText.startsWith('-'))
-        ? rawText.replace(/^(>>|-)\s*/, '')
-        : rawText;
+      const displayText = this.getDisplayText(segment);
+      const speakerLabel = this.getSpeakerLabel(segment);
+      const searchableText = speakerLabel ? `${speakerLabel} ${displayText}` : displayText;
 
       if (this.searchQuery === '') {
         // Show all, remove highlighting
@@ -886,7 +983,7 @@ export class TranscriptRenderer {
         element.addClass('sa-flex');
         textEl.empty();
         textEl.textContent = displayText;
-      } else if (displayText.toLowerCase().includes(this.searchQuery)) {
+      } else if (searchableText.toLowerCase().includes(this.searchQuery)) {
         // Show and highlight matches
         element.removeClass('sa-hidden');
         element.addClass('sa-flex');

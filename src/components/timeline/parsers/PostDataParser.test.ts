@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { TFile, type Vault } from 'obsidian';
 import { PostDataParser } from './PostDataParser';
 
 describe('PostDataParser - Facebook shared posts inside embedded archives', () => {
@@ -106,6 +107,56 @@ describe('PostDataParser - metadata footer', () => {
     );
 
     expect(metadata).toEqual({ likes: 55, comments: 12, shares: 3 });
+  });
+});
+
+describe('PostDataParser - archive media notes', () => {
+  it('preserves contentType and routes mp4 meeting-note attachments through the audio player path', async () => {
+    const markdown = `---
+platform: post
+author: hyungyunlim
+authorUrl: composed://hyungyunlim/0HY5sGucFgSTskp2K87c5
+published: 2026-07-02 06:00
+originalUrl: composed://hyungyunlim/0HY5sGucFgSTskp2K87c5
+hasTranscript: true
+contentType: meeting-note
+---
+
+Ready to transcribe on this iPhone
+
+---
+
+<!-- sa:media:start id=0HY5sGucFgSTskp2K87c5 -->
+![[attachments/social-archives/post/0HY5sGucFgSTskp2K87c5/20260702-@hyungyunlim-0HY5sGucFgSTskp2K87c5-1.mp4]]
+<!-- sa:media:end -->
+
+---
+
+## Transcript
+
+[00:00] Speaker 2: 자 이제 미팅을 시작하겠습니다.
+
+[00:03] 박기현 씨 오늘 무슨 2day와 무슨 이슈가 있었나요?
+`;
+
+    const vault = {
+      cachedRead: vi.fn().mockResolvedValue(markdown),
+    } satisfies Pick<Vault, 'cachedRead'>;
+    const parser = new PostDataParser(vault as Vault);
+    type TestTFileConstructor = new (path: string) => TFile;
+    const TestTFile = TFile as TestTFileConstructor;
+    const file = new TestTFile('Social Archives/User Post/2026/07/meeting-note.md');
+
+    const post = await parser.parseFile(file);
+
+    expect(post).toBeTruthy();
+    expect(post?.contentType).toBe('meeting-note');
+    expect(post?.media).toHaveLength(1);
+    expect(post?.media[0]?.type).toBe('audio');
+    expect(post?.media[0]?.url).toBe(
+      'attachments/social-archives/post/0HY5sGucFgSTskp2K87c5/20260702-@hyungyunlim-0HY5sGucFgSTskp2K87c5-1.mp4'
+    );
+    expect(post?.whisperTranscript?.segments[0]?.text).toBe('Speaker 2: 자 이제 미팅을 시작하겠습니다.');
   });
 });
 
