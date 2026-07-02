@@ -175,6 +175,7 @@ export type AIActionType =
   | 'comment.summary'
   | 'comment.factcheck'
   | 'comment.glossary'
+  | 'comment.reformat'
   | 'comment.custom'
   | 'tags.suggest_apply'
   | 'content.translate_variant'
@@ -1020,6 +1021,9 @@ export interface CreateComposedPostRequest {
   clientPostId: string;
   content: string;
   platform: 'post';
+  title?: string | null;
+  previewText?: string | null;
+  fullContent?: string | null;
   publishedAt?: string;
   authorName?: string;
   authorUrl?: string;
@@ -1029,6 +1033,9 @@ export interface UpdateComposedPostRequest {
   clientPostId: string;
   content: string;
   platform: 'post';
+  title?: string | null;
+  previewText?: string | null;
+  fullContent?: string | null;
   publishedAt?: string;
   authorName?: string;
   authorUrl?: string;

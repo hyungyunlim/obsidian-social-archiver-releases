@@ -41,6 +41,15 @@ if (!('toggleClass' in HTMLElement.prototype)) {
   });
 }
 
+if (!('hasClass' in HTMLElement.prototype)) {
+  Object.defineProperty(HTMLElement.prototype, 'hasClass', {
+    configurable: true,
+    value(this: HTMLElement, className: string) {
+      return this.classList.contains(className);
+    },
+  });
+}
+
 if (!('instanceOf' in Element.prototype)) {
   Object.defineProperty(Element.prototype, 'instanceOf', {
     configurable: true,

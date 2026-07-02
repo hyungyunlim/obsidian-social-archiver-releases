@@ -450,10 +450,15 @@ export class ComposedPostSyncService {
     _mediaItems: ComposedMediaItem[]
   ): CreateComposedPostRequest {
     const fm = parsed.frontmatter;
+    const title = fm['title'] as string | undefined;
+    const previewText = parsed.body.trim().slice(0, 500) || title || undefined;
     return {
       clientPostId: entry.clientPostId,
       content: parsed.body,
       platform: 'post',
+      title,
+      previewText,
+      fullContent: parsed.body,
       publishedAt: fm['published'] as string | undefined,
       authorName: fm['author'] as string | undefined,
       authorUrl: fm['authorUrl'] as string | undefined,
@@ -466,10 +471,15 @@ export class ComposedPostSyncService {
     _mediaItems: ComposedMediaItem[]
   ): UpdateComposedPostRequest {
     const fm = parsed.frontmatter;
+    const title = fm['title'] as string | undefined;
+    const previewText = parsed.body.trim().slice(0, 500) || title || undefined;
     return {
       clientPostId: entry.clientPostId,
       content: parsed.body,
       platform: 'post',
+      title,
+      previewText,
+      fullContent: parsed.body,
       publishedAt: fm['published'] as string | undefined,
       authorName: fm['author'] as string | undefined,
       authorUrl: fm['authorUrl'] as string | undefined,

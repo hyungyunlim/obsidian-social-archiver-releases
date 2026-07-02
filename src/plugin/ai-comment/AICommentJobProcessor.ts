@@ -352,6 +352,25 @@ export class AICommentJobProcessor {
         return;
       }
 
+      const commentType = commentTypeForAIAction(context.job.actionType);
+      if (commentType) {
+        const existingPayload = await this.findExistingGeneratedActionComment(file, context, commentType);
+        const payload = existingPayload ?? await this.generateActionComment(context, inputContent, commentType);
+        if (!existingPayload) {
+          await this.appendResultToMarkdown(file, payload.comment.meta, payload.comment.content);
+        }
+        await this.enqueueActionProgress(context, 'uploading', 90, 'Generated locally. Uploading result...');
+        const response = await apiClient.uploadAIActionJobResult(context.job.jobId, {
+          clientId,
+          lockToken: context.lease.lockToken,
+          lockTokenVersion: context.lease.lockTokenVersion,
+          result: payload,
+        });
+        this.applySummaryToBanner(response.job);
+        this.deps.refreshTimelineView();
+        return;
+      }
+
       if (context.job.actionType === 'tags.suggest_apply') {
         const payload = await this.generateTagsPatch(context, inputContent);
         await this.enqueueActionProgress(context, 'uploading', 90, 'Generated locally. Uploading result...');
@@ -416,6 +435,41 @@ export class AICommentJobProcessor {
       .filter(Boolean))]
       .slice(0, 8);
     return { kind: 'tag_patch', addTags, removeTags: [] };
+  }
+
+  private async generateActionComment(
+    context: AIActionProcessingContext,
+    inputContent: string,
+    type: AICommentType,
+  ): Promise<{ kind: 'comment'; comment: { meta: AICommentMeta; content: string } }> {
+    const service = new AICommentService();
+    this.currentService = service;
+    const result = await service.generateComment(inputContent, {
+      cli: context.job.provider as AICli,
+      model: context.job.model ?? undefined,
+      type,
+      outputLanguage: (context.job.outputLanguage ?? 'auto') as AIOutputLanguage,
+      customPrompt: type === 'custom' && typeof context.job.customPrompt === 'string'
+        ? context.job.customPrompt
+        : undefined,
+      onProgress: (progress) => {
+        void this.handleLocalActionProgress(context, progress);
+      },
+    });
+    const canonicalMeta: AICommentMeta = {
+      ...result.meta,
+      id: this.resultActionCommentId(context.job, type),
+      cli: context.job.provider,
+      type,
+      ...(context.job.model ? { model: context.job.model } : {}),
+    };
+    return {
+      kind: 'comment',
+      comment: {
+        meta: canonicalMeta,
+        content: result.content,
+      },
+    };
   }
 
   private async generateTranslationVariant(
@@ -650,6 +704,25 @@ export class AICommentJobProcessor {
     return {
       meta: existing,
       content: parsed.commentTexts.get(id) ?? '',
+    };
+  }
+
+  private async findExistingGeneratedActionComment(
+    file: TFile,
+    context: AIActionProcessingContext,
+    type: AICommentType,
+  ): Promise<{ kind: 'comment'; comment: { meta: AICommentMeta; content: string } } | null> {
+    const content = await this.deps.app.vault.read(file);
+    const parsed = parseAIComments(content);
+    const id = this.resultActionCommentId(context.job, type);
+    const existing = parsed.comments.find((comment) => comment.id === id);
+    if (!existing) return null;
+    return {
+      kind: 'comment',
+      comment: {
+        meta: existing,
+        content: parsed.commentTexts.get(id) ?? '',
+      },
     };
   }
 
@@ -1013,6 +1086,10 @@ export class AICommentJobProcessor {
     return `${job.jobId}:${job.provider}:${job.type}`;
   }
 
+  private resultActionCommentId(job: AIActionExecutorJob, type: AICommentType): string {
+    return `${job.jobId}:${job.provider}:${type}`;
+  }
+
   private mapAICommentError(error: AICommentError): AICommentPublicJobErrorCode {
     switch (error.code) {
       case 'CLI_NOT_INSTALLED':
@@ -1056,6 +1133,23 @@ function readArchiveSnapshot(snapshot: unknown): { title?: string | null; previe
 function readActionParamString(params: Record<string, unknown> | null | undefined, key: string): string | null {
   const value = params?.[key];
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function commentTypeForAIAction(actionType: string): AICommentType | null {
+  switch (actionType) {
+    case 'comment.summary':
+      return 'summary';
+    case 'comment.factcheck':
+      return 'factcheck';
+    case 'comment.glossary':
+      return 'glossary';
+    case 'comment.reformat':
+      return 'reformat';
+    case 'comment.custom':
+      return 'custom';
+    default:
+      return null;
+  }
 }
 
 function describeAIActionOutputLanguage(language: string | null | undefined): string | null {

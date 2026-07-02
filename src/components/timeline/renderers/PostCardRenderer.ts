@@ -81,6 +81,12 @@ interface DeletePostOptions {
   suppressSuccessNotice?: boolean;
 }
 
+type AudioArchiveSuggestionPost = Pick<PostData, 'platform' | 'contentType'>;
+
+export function usesAudioArchiveSuggestionFlow(post: AudioArchiveSuggestionPost): boolean {
+  return post.platform === 'podcast' || post.contentType === 'meeting-note' || post.contentType === 'audio-note';
+}
+
 /**
  * PostCardRenderer - Renders individual post cards
  * Handles post card HTML generation, interactions, and state updates
@@ -1049,10 +1055,7 @@ export class PostCardRenderer extends Component {
       }
     }
 
-    // Archive suggestions for user posts with unprocessed social media URLs
-    // Also render download suggestions for TikTok/YouTube main posts and podcast audio
-    // Render after embedded archives/downloaded videos, before interaction bar
-    if (post.platform === 'post' || post.platform === 'youtube' || post.platform === 'tiktok' || post.platform === 'podcast') {
+    if (post.platform === 'post' || post.platform === 'youtube' || post.platform === 'tiktok' || usesAudioArchiveSuggestionFlow(post)) {
       await this.renderArchiveSuggestions(contentArea, post, rootElement, isEmbedded);
     }
 
@@ -6307,9 +6310,7 @@ export class PostCardRenderer extends Component {
       }
     }
 
-    // Check if main post is a podcast with audio to download
-    // Skip for embedded archives
-    if (!isEmbedded && post.platform === 'podcast') {
+    if (!isEmbedded && usesAudioArchiveSuggestionFlow(post)) {
       const audioUrl: string | undefined = post.audioUrl || post.media?.find(m => m.type === 'audio')?.url;
       const audioSize: number | undefined = post.audioSize;
 
