@@ -168,7 +168,7 @@ function readTranscriptionCapability(client: SyncClient): TranscriptionExecutorC
 }
 
 function normalizeModel(value: WhisperModelType | undefined): TranscriptionModel {
-  return value && MODEL_SET.has(value) ? (value as TranscriptionModel) : 'small';
+  return value && MODEL_SET.has(value) ? (value) : 'small';
 }
 
 function normalizeInstalledModels(models: WhisperModel[]): TranscriptionModelWithEnglish[] {

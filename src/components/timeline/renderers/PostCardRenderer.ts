@@ -3970,6 +3970,14 @@ export class PostCardRenderer extends Component {
             void this.handleTimelineAIActionRequest(post, 'tags.suggest_apply', cli);
           });
       });
+      menu.addItem((item) => {
+        item
+          .setIcon('chevron-right')
+          .setTitle('Tag language')
+          .onClick(() => {
+            this.openTimelineTagLanguageMenu(aiBtn);
+          });
+      });
       menu.addSeparator();
       this.addTimelineTranslationMenuItems(menu, post, cli, aiBtn);
 
@@ -4047,6 +4055,39 @@ export class PostCardRenderer extends Component {
 
     const rect = anchorEl.getBoundingClientRect();
     menu.showAtPosition({ x: rect.left, y: rect.bottom });
+  }
+
+  /**
+   * Open a menu to pick the sticky language for AI-suggested tags. Selecting a
+   * language persists it to settings.aiComment.tagLanguage; the "Suggest tags"
+   * item then fires with the remembered value.
+   */
+  private openTimelineTagLanguageMenu(anchorEl: HTMLElement): void {
+    const menu = new Menu();
+    const current = this.plugin.settings.aiComment.tagLanguage || 'auto';
+    for (const language of OUTPUT_LANGUAGE_OPTIONS) {
+      menu.addItem((item) => {
+        item
+          .setIcon('languages')
+          .setTitle(language.menuLabel)
+          .setChecked(language.code === current)
+          .onClick(() => {
+            void this.persistTagLanguage(language.code);
+          });
+      });
+    }
+
+    const rect = anchorEl.getBoundingClientRect();
+    menu.showAtPosition({ x: rect.left, y: rect.bottom });
+  }
+
+  /**
+   * Persist the sticky tag language. Uses a lightweight partial save so the
+   * choice survives restarts without reinitializing every plugin service.
+   */
+  private async persistTagLanguage(code: string): Promise<void> {
+    this.plugin.settings.aiComment.tagLanguage = code as AIOutputLanguage;
+    await this.plugin.saveSettingsPartial({}, { reinitialize: false, notify: false });
   }
 
   /**
@@ -6943,7 +6984,7 @@ export class PostCardRenderer extends Component {
     banner.dataset.transcriptionMode = mode;
 
     // Current selected model (mutable)
-    let selectedModel: WhisperModel = (this.plugin.settings.transcription?.preferredModel || 'medium') as WhisperModel;
+    let selectedModel: WhisperModel = (this.plugin.settings.transcription?.preferredModel || 'medium');
 
     // Helper to format estimated time
     const getTimeEstimate = (model: WhisperModel): string => {
@@ -7116,7 +7157,7 @@ export class PostCardRenderer extends Component {
     const transcriptionService = new TranscriptionService();
 
     // Use provided model or fall back to settings
-    const selectedModel: WhisperModel = (model || this.plugin.settings.transcription?.preferredModel || 'medium') as WhisperModel;
+    const selectedModel: WhisperModel = (model || this.plugin.settings.transcription?.preferredModel || 'medium');
 
     try {
       // Resolve full vault path
@@ -8548,7 +8589,7 @@ export class PostCardRenderer extends Component {
       comments: this.cloneComments(post.comments),
       embeddedArchives: post.embeddedArchives?.map(archive => this.serializePostForShare(archive)),
       quotedPost: post.quotedPost
-        ? this.serializePostForShare(post.quotedPost as PostData)
+        ? this.serializePostForShare(post.quotedPost)
         : undefined
     };
 
@@ -9150,6 +9191,10 @@ export class PostCardRenderer extends Component {
       multiAiSelection: !ObsidianPlatform.isMobile && multiAiSelection.length > 1 ? multiAiSelection : undefined,
       // Language settings
       outputLanguage: settings.outputLanguage || 'auto',
+      tagLanguage: settings.tagLanguage || 'auto',
+      onTagLanguageChange: (language: AIOutputLanguage) => {
+        void this.persistTagLanguage(language);
+      },
       // Transcript availability (enables translate-transcript type)
       hasTranscript,
     };
@@ -9273,7 +9318,7 @@ export class PostCardRenderer extends Component {
       actionType,
       targetClientId,
       provider: cli,
-      outputLanguage: this.resolveTimelineAIActionLanguage(language),
+      outputLanguage: this.resolveTimelineAIActionLanguage(actionType, language),
       sourceClientId: clientId,
     });
 
@@ -9455,8 +9500,13 @@ export class PostCardRenderer extends Component {
     }
   }
 
-  private resolveTimelineAIActionLanguage(language?: string): string | undefined {
+  private resolveTimelineAIActionLanguage(actionType: AIActionType, language?: string): string | undefined {
     if (language) return language;
+    // Tag suggestion has its own sticky language preference; other actions use
+    // the shared output-language setting.
+    if (actionType === 'tags.suggest_apply') {
+      return this.plugin.settings.aiComment.tagLanguage || 'auto';
+    }
     return this.plugin.settings.aiComment.outputLanguage || 'auto';
   }
 

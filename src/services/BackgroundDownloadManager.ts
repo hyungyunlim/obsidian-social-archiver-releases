@@ -389,7 +389,7 @@ export class BackgroundDownloadManager extends EventTarget {
       tempQueue.addEventListener('episode-failed', (() => {
         window.clearTimeout(timeoutId);
         resolve(null);
-      }) as EventListener);
+      }));
 
       // Start download (fire and forget - events will resolve the promise)
       void tempQueue.start(webtoonInfo, { streamFirst });

@@ -65,7 +65,7 @@ export class PromoCodeValidator implements IService {
       ...DEFAULT_CONFIG,
       ...config,
       accessToken: config.accessToken || '',
-    } as Required<PromoCodeValidatorConfig>;
+    };
 
     this.logger = logger;
   }

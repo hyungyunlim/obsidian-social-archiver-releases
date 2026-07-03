@@ -1,7 +1,7 @@
 import { Notice, TFile } from 'obsidian';
 import type { App } from 'obsidian';
 import { PostService } from '../../services/PostService';
-import type { PostData, Platform, Media } from '../../types/post';
+import type { PostData, Media } from '../../types/post';
 import type { ResolvedShareMediaItem } from '../../types/share';
 import { buildShareResolveHints } from '../../utils/shareResolveHints';
 import { TimelineView, VIEW_TYPE_TIMELINE } from '../../views/TimelineView';
@@ -101,7 +101,7 @@ export class PostShareService {
       const isReshare = !!existingArchiveId;
 
       const postData: PostData = {
-        platform: 'post' as Platform,
+        platform: 'post',
         id: (typeof frontmatter.originalPath === 'string' ? frontmatter.originalPath : null) || postedFile.path,
         url: '',
         title: postedFile.basename,

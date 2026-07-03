@@ -22,7 +22,7 @@
 import { TFile, type App } from 'obsidian';
 import type SocialArchiverPlugin from '../../main';
 import type { TagDefinition } from '../../types/tag';
-import type { PostData, Platform } from '../../types/post';
+import type { PostData } from '../../types/post';
 import { CliValidationError } from './CliParams';
 import {
   snapshotTranscriptionStatus,
@@ -133,7 +133,7 @@ export class LocalNoteCliService {
 
     const content = await this.plugin.app.vault.read(postedFile);
     const cache = this.plugin.app.metadataCache.getFileCache(postedFile);
-    const frontmatter = (cache?.frontmatter as Record<string, unknown> | undefined) || {};
+    const frontmatter: Record<string, unknown> = cache?.frontmatter || {};
 
     const media = this.buildMediaFromPaths(postResult.copiedMediaPaths);
 
@@ -164,7 +164,7 @@ export class LocalNoteCliService {
     }
 
     const postData: PostData = {
-      platform: 'post' as Platform,
+      platform: 'post',
       id:
         (typeof frontmatter.originalPath === 'string' ? frontmatter.originalPath : null) ||
         postedFile.path,

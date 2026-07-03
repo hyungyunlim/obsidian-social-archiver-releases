@@ -701,7 +701,7 @@ ${content}`;
         result[targetKey] = merged;
       }
 
-      Reflect.deleteProperty(result as Record<string, unknown>, sourceKey);
+      Reflect.deleteProperty(result, sourceKey);
     }
 
     return result;

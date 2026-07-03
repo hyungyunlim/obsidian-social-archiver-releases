@@ -70,7 +70,7 @@ export class CreditResetScheduler implements IService {
     this.config = {
       ...DEFAULT_CONFIG,
       ...config,
-    } as Required<CreditResetSchedulerConfig>;
+    };
     this.logger = logger;
   }
 

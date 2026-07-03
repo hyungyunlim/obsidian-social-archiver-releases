@@ -122,7 +122,17 @@ export class TemplateEngine {
       return JSON.stringify(value, null, 2);
     }
 
-    // At this point value is string | number | boolean | bigint | symbol
-    return String(value as string | number | boolean | bigint | symbol);
+    if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean' ||
+      typeof value === 'bigint' ||
+      typeof value === 'symbol'
+    ) {
+      return String(value);
+    }
+
+    // Remaining exotic values (functions) have no meaningful template output
+    return '';
   }
 }

@@ -28,7 +28,7 @@ const DEFAULT_BATCH_SIZE = 50;
  * Valid platforms for author extraction
  * Derived from centralized PLATFORMS constant, excluding 'post' (user-created)
  */
-const VALID_PLATFORMS: readonly Platform[] = PLATFORMS.filter(p => p !== 'post') as Platform[];
+const VALID_PLATFORMS: readonly Platform[] = PLATFORMS.filter(p => p !== 'post');
 
 // ============================================================================
 // AuthorVaultScanner Class
@@ -125,7 +125,7 @@ export class AuthorVaultScanner {
         if (result === null) {
           filesSkipped++;
         } else if ('error' in result && !Array.isArray(result)) {
-          errors.push((result as { error: VaultScanError }).error);
+          errors.push((result).error);
           filesSkipped++;
         } else if (Array.isArray(result)) {
           // Embedded archives: multiple authors from one file
@@ -398,7 +398,7 @@ export class AuthorVaultScanner {
       // Invalid URL, keep original platform
     }
 
-    return platform as Platform;
+    return platform;
   }
 
   /**

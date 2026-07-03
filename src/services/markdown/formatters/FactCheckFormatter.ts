@@ -3,9 +3,12 @@ import type { AIOutputLanguage, FormatLabels } from '@/types/ai-comment';
 import { getFormatLabels } from '@/types/ai-comment';
 
 /**
- * Confidence label translations
+ * Confidence label translations.
+ *
+ * Partial map: languages without a hand-written label (it/vi/th/id) fall back
+ * to English at the lookup site.
  */
-const CONFIDENCE_LABELS: Record<Exclude<AIOutputLanguage, 'auto'>, string> = {
+const CONFIDENCE_LABELS: Partial<Record<Exclude<AIOutputLanguage, 'auto'>, string>> = {
   en: 'Confidence',
   ko: '신뢰도',
   ja: '信頼度',
@@ -20,9 +23,12 @@ const CONFIDENCE_LABELS: Record<Exclude<AIOutputLanguage, 'auto'>, string> = {
 };
 
 /**
- * Evidence label translations
+ * Evidence label translations.
+ *
+ * Partial map: languages without a hand-written label (it/vi/th/id) fall back
+ * to English at the lookup site.
  */
-const EVIDENCE_LABELS: Record<Exclude<AIOutputLanguage, 'auto'>, string> = {
+const EVIDENCE_LABELS: Partial<Record<Exclude<AIOutputLanguage, 'auto'>, string>> = {
   en: 'Evidence',
   ko: '증거',
   ja: '証拠',
@@ -56,8 +62,8 @@ export class FactCheckFormatter {
 
     const labels = getFormatLabels(language);
     const lang = language === 'auto' ? 'en' : language;
-    const confidenceLabel = CONFIDENCE_LABELS[lang];
-    const evidenceLabel = EVIDENCE_LABELS[lang];
+    const confidenceLabel = CONFIDENCE_LABELS[lang] ?? CONFIDENCE_LABELS.en ?? 'Confidence';
+    const evidenceLabel = EVIDENCE_LABELS[lang] ?? EVIDENCE_LABELS.en ?? 'Evidence';
 
     return factChecks
       .map((check: FactCheckResult, index: number) => {

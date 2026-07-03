@@ -67,7 +67,7 @@ export function getPaywallRequiredDetails(error: unknown): PaywallRequiredDetail
   if (!isRecord(error)) return undefined;
 
   const details = readRecord(error, 'details') ?? readRecord(readRecord(error, 'apiError'), 'details');
-  if (details) return details as PaywallRequiredDetails;
+  if (details) return details;
 
   return getPaywallRequiredDetails(error.cause);
 }

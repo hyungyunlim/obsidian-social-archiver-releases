@@ -569,7 +569,7 @@ export class ArchiveCompletionService {
         pendingJob.url,
         pendingJob.metadata?.originalUrl,
         archivedData.url,
-      ].filter(Boolean) as string[],
+      ].filter(Boolean),
       normalizeUrlForDedup
     );
 
@@ -945,7 +945,7 @@ export class ArchiveCompletionService {
 
     // Add URL to processedUrls
     const processedUrls = uniqueStrings(
-      [pendingJob.url, pendingJob.metadata?.originalUrl].filter(Boolean) as string[],
+      [pendingJob.url, pendingJob.metadata?.originalUrl].filter(Boolean),
       normalizeUrlForDedup
     );
     markdown.frontmatter.processedUrls = processedUrls;
@@ -953,7 +953,7 @@ export class ArchiveCompletionService {
     // Mark archive as completed
     markdown.frontmatter.archiveStatus = 'completed';
     this.mediaPathResolver.applyVideoDownloadStatusFrontmatter(
-      markdown.frontmatter as Record<string, unknown>,
+      markdown.frontmatter,
       totalVideoMediaCount,
       failedVideoDownloads
     );

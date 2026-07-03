@@ -61,7 +61,8 @@ export class MediaPathResolver {
 
     const content = await this.app.vault.read(note);
     const cache = this.app.metadataCache.getFileCache(note);
-    const frontmatterMedia = (cache?.frontmatter as Record<string, unknown> | undefined)?.media;
+    const frontmatter: Record<string, unknown> | undefined = cache?.frontmatter;
+    const frontmatterMedia = frontmatter?.media;
 
     const candidates = uniqueStrings([
       ...this.extractVideoPathCandidatesFromContent(content),

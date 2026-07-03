@@ -41,6 +41,20 @@ export function isSeriesGroup(item: TimelineItem): item is SeriesGroup {
 }
 
 /**
+ * Normalize a frontmatter seriesId value into a string grouping key.
+ *
+ * seriesId is usually a scalar (number or string), but Obsidian's Properties
+ * UI can persist the property as a YAML list, in which case the first entry
+ * carries the id. Non-primitive values yield undefined (no grouping).
+ */
+export function normalizeSeriesId(value: unknown): string | undefined {
+  const scalar: unknown = Array.isArray(value) ? (value as unknown[])[0] : value;
+  return typeof scalar === 'string' || typeof scalar === 'number' || typeof scalar === 'boolean'
+    ? String(scalar)
+    : undefined;
+}
+
+/**
  * SeriesGroupingService - Manages series grouping for timeline display
  */
 export class SeriesGroupingService {
@@ -144,8 +158,7 @@ export class SeriesGroupingService {
       // - Instagram/others: series, episode
       // - Brunch: seriesTitle, seriesEpisode
       // Note: seriesId may be a number in YAML (e.g., 812354), so convert to string
-      const rawSeriesId = (frontmatter as Record<string, unknown>).seriesId;
-      const seriesId = rawSeriesId != null ? String(rawSeriesId as string | number | boolean) : undefined;
+      const seriesId = normalizeSeriesId((frontmatter as Record<string, unknown>).seriesId);
       const seriesTitle = ((frontmatter as Record<string, unknown>).series || (frontmatter as Record<string, unknown>).seriesTitle) as string | undefined;
       let seriesUrl = (frontmatter as Record<string, unknown>).seriesUrl as string | undefined;
       const episode = ((frontmatter as Record<string, unknown>).episode ?? (frontmatter as Record<string, unknown>).seriesEpisode) as number | undefined;

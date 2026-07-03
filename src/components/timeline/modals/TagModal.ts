@@ -15,7 +15,7 @@ function normalizeHexColor(value: string): string | null {
 
 function toColorPickerHex(value: string | null): string {
   const normalized = value ? normalizeHexColor(value) : null;
-  if (!normalized) return TAG_COLORS[0] as string;
+  if (!normalized) return TAG_COLORS[0];
   if (normalized.length === 4) {
     const [r, g, b] = [normalized[1], normalized[2], normalized[3]];
     return `#${r}${r}${g}${g}${b}${b}`;

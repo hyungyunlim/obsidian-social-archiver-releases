@@ -105,7 +105,7 @@ export class AnnotationFallbackPoller {
     this.setTimer = deps.setTimer
       ?? (hasWindow
         ? ((cb, ms) => window.setTimeout(cb, ms))
-        : ((cb, ms) => window.setTimeout(cb, ms) as unknown as number));
+        : ((cb, ms) => window.setTimeout(cb, ms)));
     this.clearTimer = deps.clearTimer
       ?? (hasWindow
         ? ((id) => window.clearTimeout(id))

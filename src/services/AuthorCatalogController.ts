@@ -145,7 +145,7 @@ export function buildSubscriptionMapFromApi(subscriptions: Subscription[]): Subs
       authorUrl = buildAuthorUrlFromHandle(sub.platform, handle, sub);
     }
 
-    const key = generateAuthorKey(authorUrl, sub.name, sub.platform as Platform);
+    const key = generateAuthorKey(authorUrl, sub.name, sub.platform);
 
     // Parse subscription metadata
     const lastRunAt = sub.state?.lastRunAt ? new Date(sub.state.lastRunAt) : null;
@@ -218,7 +218,7 @@ export function buildSubscriptionMapFromApi(subscriptions: Subscription[]): Subs
     // Add secondary key with handle-based URL for better matching
     const handleBasedUrl = buildHandleBasedUrl(sub.platform, handle, sub);
     if (handleBasedUrl) {
-      const handleKey = generateAuthorKey(handleBasedUrl, sub.name, sub.platform as Platform);
+      const handleKey = generateAuthorKey(handleBasedUrl, sub.name, sub.platform);
       if (handleKey !== key) {
         const handleEntry = buildSubscriptionEntry({
           sub,
@@ -424,7 +424,7 @@ export class AuthorCatalogController {
 
           if (scanIndex !== undefined && dedupeResult.authors[scanIndex]) {
             // Merge: scan data + note overrides
-            const scanEntry = dedupeResult.authors[scanIndex]!;
+            const scanEntry = dedupeResult.authors[scanIndex];
             dedupeResult.authors[scanIndex] = {
               ...scanEntry,
               hasNote: true,

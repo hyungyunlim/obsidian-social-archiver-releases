@@ -1,4 +1,4 @@
-import { Plugin, Notice, Platform as ObsidianPlatform, Events, TFile, TFolder, type WorkspaceLeaf } from 'obsidian';
+import { Plugin, Notice, Platform as ObsidianPlatform, Events, TFile, TFolder, type WorkspaceLeaf, type BasesAllOptions } from 'obsidian';
 import { SocialArchiverSettingTab } from './settings/SettingTab';
 import { SocialArchiverSettings, DEFAULT_SETTINGS, API_ENDPOINT, migrateSettings, getVaultOrganizationStrategy, resolveViewLocation } from './types/settings';
 import { WorkersAPIClient } from './services/WorkersAPIClient';
@@ -972,7 +972,7 @@ export default class SocialArchiverPlugin extends Plugin {
       factory: (controller, containerEl) => {
         return new MediaGalleryView(controller, containerEl);
       },
-      options: () => ([
+      options: (): BasesAllOptions[] => ([
         {
           type: 'dropdown' as const,
           displayName: 'Media type',
@@ -982,7 +982,7 @@ export default class SocialArchiverPlugin extends Plugin {
             'all': 'All media',
             'images': 'Images only',
             'videos': 'Videos only'
-          } as Record<string, string>
+          }
         },
         {
           type: 'dropdown' as const,
@@ -992,7 +992,7 @@ export default class SocialArchiverPlugin extends Plugin {
           options: {
             'grid': 'Grid',
             'masonry': 'Masonry'
-          } as Record<string, string>
+          }
         },
         {
           type: 'slider' as const,
@@ -1348,7 +1348,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
   async loadSettings(): Promise<void> {
     const rawData: unknown = await this.loadData();
-    const savedData: Partial<SocialArchiverSettings> = (rawData ?? {}) as Partial<SocialArchiverSettings>;
+    const savedData: Partial<SocialArchiverSettings> = (rawData ?? {});
     // Detect Phase-3 migration: enableMobileAnnotationSync key missing in persisted data.
     // If present, migrateSettings will respect the explicit value (including `false` opt-out).
     const needsAnnotationSyncDefaultWriteBack =
@@ -1421,7 +1421,7 @@ export default class SocialArchiverPlugin extends Plugin {
       this.events.trigger(
         'settings-changed',
         this.settings,
-        Object.keys(partial) as Array<keyof SocialArchiverSettings>
+        Object.keys(partial)
       );
     }
   }

@@ -357,7 +357,7 @@ export class ShareAPIClient implements IService {
       // Workers API returns { success: true, data: ShareAPIResponse }
       // Handle both wrapped and unwrapped formats
       if (result && typeof result === 'object' && 'success' in result && 'data' in result) {
-        return (result as { success: boolean; data: ShareAPIResponse }).data;
+        return (result).data;
       }
       return result;
     });
@@ -388,7 +388,7 @@ export class ShareAPIClient implements IService {
           updateRequest
         );
         if (result && typeof result === 'object' && 'success' in result && 'data' in result) {
-          return (result as { success: boolean; data: ShareAPIResponse }).data;
+          return (result).data;
         }
         return result;
       });

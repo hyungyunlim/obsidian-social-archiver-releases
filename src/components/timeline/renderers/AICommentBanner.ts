@@ -49,6 +49,15 @@ export interface AICommentBannerOptions {
   multiAiSelection?: AICli[];
   /** Output language for AI response */
   outputLanguage?: AIOutputLanguage;
+  /** Sticky language for the tags action; seeds the select when tags is chosen. */
+  tagLanguage?: AIOutputLanguage;
+  /**
+   * Persist a newly chosen tag language. Invoked when the language select
+   * changes while the tags action is selected, or when a tags run fires with
+   * an explicitly chosen language. The banner has no plugin access, so the
+   * caller wires this to settings persistence.
+   */
+  onTagLanguageChange?: (language: AIOutputLanguage) => void;
   /** Whether the post has a transcript (enables translate-transcript type) */
   hasTranscript?: boolean;
 }
@@ -91,10 +100,20 @@ const LANGUAGE_DISPLAY_NAMES: Record<AIOutputLanguage, string> = {
   fr: 'French',
   de: 'German',
   pt: 'Portuguese',
+  it: 'Italian',
+  vi: 'Vietnamese',
+  th: 'Thai',
+  id: 'Indonesian',
   ru: 'Russian',
   ar: 'Arabic',
   hi: 'Hindi',
 };
+
+// Full ordered language list for the inline banner select. 'auto' first, then
+// the concrete codes in the same order as AIOutputLanguage.
+const BANNER_LANGUAGE_OPTIONS: AIOutputLanguage[] = [
+  'auto', 'en', 'ko', 'ja', 'zh', 'es', 'fr', 'de', 'pt', 'it', 'vi', 'th', 'id', 'ru', 'ar', 'hi',
+];
 
 export class AICommentBanner {
   private container: HTMLElement | null = null;
@@ -120,7 +139,11 @@ export class AICommentBanner {
     this.selectedActionId = options.commentTypesEnabled === false && options.actionItems?.length
       ? options.defaultActionId ?? options.actionItems[0]?.id ?? null
       : null;
-    this.selectedLanguage = options.outputLanguage || 'auto';
+    // Seed the language select from the sticky tag language when the tags
+    // action is the initial selection; otherwise use the shared output language.
+    this.selectedLanguage = this.selectedActionId === 'tags.suggest_apply'
+      ? (options.tagLanguage || 'auto')
+      : (options.outputLanguage || 'auto');
 
     if (options.availableClis.length === 0 || this.state === 'dismissed') {
       return;
@@ -245,9 +268,14 @@ export class AICommentBanner {
 
     // Store reference to update custom prompt visibility later
     let customPromptRow: HTMLElement | null = null;
+    // Assigned once the language select is created below; used to re-seed the
+    // select when switching to/from the tags action (which has its own sticky
+    // language) without a full banner re-render.
+    let langSelectRef: HTMLSelectElement | null = null;
 
     typeSelect.addEventListener('change', () => {
       const wasAction = !!this.selectedActionId;
+      const wasTagAction = this.selectedActionId === 'tags.suggest_apply';
       const parsedValue = this.parseTypeSelectValue(typeSelect.value);
       if (parsedValue.kind === 'action') {
         this.selectedActionId = parsedValue.id;
@@ -256,6 +284,16 @@ export class AICommentBanner {
         this.selectedType = parsedValue.type;
       }
       adjustWidth(typeSelect);
+      // Re-seed the language select when the tags-action membership changes:
+      // tags uses its sticky tagLanguage, everything else uses outputLanguage.
+      const isTagAction = this.selectedActionId === 'tags.suggest_apply';
+      if (isTagAction !== wasTagAction && langSelectRef) {
+        this.selectedLanguage = isTagAction
+          ? (this.options?.tagLanguage || 'auto')
+          : (this.options?.outputLanguage || 'auto');
+        langSelectRef.value = this.selectedLanguage;
+        adjustWidth(langSelectRef);
+      }
       // Update custom prompt row visibility
       if (customPromptRow) {
         if (!this.selectedActionId && this.selectedType === 'custom') {
@@ -332,8 +370,7 @@ export class AICommentBanner {
     const langSelect = this.createMinimalSelect(langWrapper);
 
     // Add all available languages
-    const languages: AIOutputLanguage[] = ['auto', 'en', 'ko', 'ja', 'zh', 'es', 'fr', 'de', 'pt', 'ru', 'ar', 'hi'];
-    for (const lang of languages) {
+    for (const lang of BANNER_LANGUAGE_OPTIONS) {
       const option = langSelect.createEl('option', {
         value: lang,
         text: LANGUAGE_DISPLAY_NAMES[lang]
@@ -349,9 +386,16 @@ export class AICommentBanner {
 
     adjustWidth(langSelect);
 
+    langSelectRef = langSelect;
+
     langSelect.addEventListener('change', () => {
       this.selectedLanguage = langSelect.value as AIOutputLanguage;
       adjustWidth(langSelect);
+      // Persist an explicitly chosen language while the tags action is selected
+      // so the choice sticks for the next tag run.
+      if (this.selectedActionId === 'tags.suggest_apply') {
+        this.options?.onTagLanguageChange?.(this.selectedLanguage);
+      }
     });
 
     // "?" suffix at the end
@@ -671,6 +715,10 @@ export class AICommentBanner {
 
     try {
       if (isAction && this.selectedActionId && this.selectedCli && this.options.onRunAction) {
+        // Persist the tag language when a tags run fires so the choice sticks.
+        if (this.selectedActionId === 'tags.suggest_apply') {
+          this.options.onTagLanguageChange?.(this.selectedLanguage);
+        }
         await this.options.onRunAction(this.selectedActionId, this.selectedCli, this.selectedLanguage);
       } else if (isMultiAi && this.options.onGenerateMulti && this.options.multiAiSelection) {
         // Multi-AI parallel generation

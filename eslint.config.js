@@ -1,8 +1,14 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'eslint/config';
 import obsidianmd from 'eslint-plugin-obsidianmd';
 import svelte from 'eslint-plugin-svelte';
 import tseslint from 'typescript-eslint';
 import globals from 'globals';
+
+// import.meta.dirname is untyped (any) on @types/node < 20.11 — derive it
+// from import.meta.url so type-aware linting sees a plain string everywhere.
+const tsconfigRootDir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(
   // Global ignores
@@ -40,7 +46,7 @@ export default defineConfig(
     languageOptions: {
       parserOptions: {
         projectService: true,
-        tsconfigRootDir: import.meta.dirname,
+        tsconfigRootDir,
       },
     },
   },
@@ -114,7 +120,7 @@ export default defineConfig(
         parser: tseslint.parser,
         extraFileExtensions: ['.svelte'],
         projectService: true,
-        tsconfigRootDir: import.meta.dirname,
+        tsconfigRootDir,
       },
       globals: {
         $state: 'readonly',
@@ -159,7 +165,7 @@ export default defineConfig(
       parserOptions: {
         projectService: false,
         project: './tsconfig.test.json',
-        tsconfigRootDir: import.meta.dirname,
+        tsconfigRootDir,
       },
       globals: {
         ...globals.node,

@@ -205,13 +205,13 @@ export class WebtoonDownloadQueue extends EventTarget {
         if (!job || job.status !== 'pending') continue;
 
         job.status = 'downloading';
-        this.emit('episode-started', { job: { ...job } as EpisodeDownloadJob, index: i });
+        this.emit('episode-started', { job: { ...job }, index: i });
 
         try {
           const filePath = await this.downloadEpisode(webtoonInfo, job, signal);
           job.status = 'completed';
           job.filePath = filePath;
-          this.emit('episode-completed', { job: { ...job } as EpisodeDownloadJob, index: i, filePath });
+          this.emit('episode-completed', { job: { ...job }, index: i, filePath });
         } catch (error) {
           if (signal.aborted) {
             job.status = 'pending'; // Reset to pending on cancel
@@ -220,7 +220,7 @@ export class WebtoonDownloadQueue extends EventTarget {
 
           job.status = 'failed';
           job.error = error instanceof Error ? error.message : 'Unknown error';
-          this.emit('episode-failed', { job: { ...job } as EpisodeDownloadJob, index: i, error: job.error });
+          this.emit('episode-failed', { job: { ...job }, index: i, error: job.error });
         }
 
         // Delay between episodes (skip for last one)
@@ -936,8 +936,13 @@ export class WebtoonDownloadQueue extends EventTarget {
         }
       } else if (typeof value === 'string' && (value.includes(':') || value.includes('#'))) {
         lines.push(`${key}: "${value}"`);
+      } else if (
+        typeof value === 'string' || typeof value === 'number' ||
+        typeof value === 'boolean' || typeof value === 'bigint'
+      ) {
+        lines.push(`${key}: ${String(value)}`);
       } else {
-        lines.push(`${key}: ${String(value as string | number | boolean | bigint)}`);
+        lines.push(`${key}: ${JSON.stringify(value)}`);
       }
     }
     return lines.join('\n');

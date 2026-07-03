@@ -2,7 +2,6 @@ import { setIcon } from 'obsidian';
 import type { Media, PostData } from '../../../types/post';
 import { isVideoUrl, isAudioUrl } from '../../../utils/mediaType';
 import { TranscriptRenderer } from './TranscriptRenderer';
-import type { TranscriptionSegment } from '../../../types/transcription';
 import { maybeProxyCdnUrl } from '../../../utils/cdnProxy';
 
 /**
@@ -955,7 +954,7 @@ export class MediaGalleryRenderer {
       this.transcriptRenderers.push(transcriptRenderer);
 
       transcriptRenderer.render(transcriptContainer, {
-        segments: whisperTranscript.segments as TranscriptionSegment[],
+        segments: whisperTranscript.segments,
         language: whisperTranscript.language,
         audioElement: audioElement,
         startCollapsed: true,

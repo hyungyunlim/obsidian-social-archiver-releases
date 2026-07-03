@@ -405,7 +405,7 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
           externalLinkTitle: quoted.metadata?.externalLinkTitle,
           externalLinkImage: quoted.metadata?.externalLinkImage,
         },
-      } as Omit<PostData, 'quotedPost' | 'embeddedArchives'>,
+      },
     } : {}),
     ...(archive.mediaPreservationStatus ? { mediaPreservationStatus: archive.mediaPreservationStatus } : {}),
     ...(whisperTranscript ? { whisperTranscript } : {}),

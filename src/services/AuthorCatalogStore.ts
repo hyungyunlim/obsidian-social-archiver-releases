@@ -193,7 +193,7 @@ export function createAuthorCatalogStore(): AuthorCatalogStoreAPI {
       total++;
     }
 
-    return { ...counts, all: total } as PlatformAuthorCounts;
+    return { ...counts, all: total };
   });
 
   // ========== Derived: Subscription Stats ==========

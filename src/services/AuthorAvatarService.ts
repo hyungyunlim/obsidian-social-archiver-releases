@@ -207,7 +207,7 @@ export class AuthorAvatarService {
         try {
           const existingFile = this.vault.getAbstractFileByPath(existingPath);
           if (existingFile && this.app) {
-            await this.app.fileManager.trashFile(existingFile as import('obsidian').TFile);
+            await this.app.fileManager.trashFile(existingFile);
           }
         } catch {
           // Ignore deletion errors
@@ -591,7 +591,7 @@ export class AuthorAvatarService {
 
       const file = this.vault.getAbstractFileByPath(existingPath);
       if (file && this.app) {
-        await this.app.fileManager.trashFile(file as import('obsidian').TFile);
+        await this.app.fileManager.trashFile(file);
         return true;
       }
       return false;

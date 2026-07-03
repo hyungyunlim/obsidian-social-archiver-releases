@@ -693,7 +693,7 @@ export class ReaderModeContentRenderer extends Component {
     if (quoted.media && quoted.media.length > 0) {
       const mediaContainer = wrapper.createDiv();
       mediaContainer.addClass('sa-mt-12');
-      this.mediaGalleryRenderer.render(mediaContainer, quoted.media, quoted as PostData);
+      this.mediaGalleryRenderer.render(mediaContainer, quoted.media, quoted);
     }
 
     // Source link
@@ -1044,7 +1044,7 @@ export class ReaderModeContentRenderer extends Component {
       (post as PostData & { originalUrl?: string }).originalUrl,
       (post.metadata as unknown as Record<string, unknown>)?.['originalUrl'] as string | undefined,
       post.quotedPost?.url,
-      (post.quotedPost as (PostData & { originalUrl?: string }) | undefined)?.originalUrl,
+      (post.quotedPost)?.originalUrl,
       post.shareUrl,
     ];
     for (const candidate of candidates) {

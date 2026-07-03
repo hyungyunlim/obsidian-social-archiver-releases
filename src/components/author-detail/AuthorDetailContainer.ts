@@ -1049,7 +1049,7 @@ export class AuthorDetailContainer {
         const file = this.vault.getAbstractFileByPath(post.filePath);
         if (!(file instanceof TFile)) continue;
         const cache = this.app.metadataCache.getFileCache(file);
-        const fm = cache?.frontmatter as Record<string, unknown> | undefined;
+        const fm = cache?.frontmatter;
         if (!fm) continue;
 
         if (!author.bio) {

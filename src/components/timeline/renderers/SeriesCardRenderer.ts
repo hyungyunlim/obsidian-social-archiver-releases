@@ -2938,7 +2938,7 @@ export class SeriesCardRenderer extends Component {
         if (iconContainer) {
           // Swap icon to eye/eye-off
           iconContainer.empty();
-          setIcon(iconContainer as HTMLElement, isRead ? 'eye' : 'eye-off');
+          setIcon(iconContainer, isRead ? 'eye' : 'eye-off');
         }
         (btn as HTMLElement).setCssProps({ '--sa-color': isRead ? 'var(--interactive-accent)' : 'var(--text-muted)' });
         (btn as HTMLElement).addClass('sa-dynamic-color');
@@ -3103,7 +3103,7 @@ export class SeriesCardRenderer extends Component {
       for (const child of folder.children) {
         if (child instanceof TFile && child.extension === 'md') {
           const cache = this.app.metadataCache.getFileCache(child);
-          const fm = cache?.frontmatter as Record<string, unknown> | undefined;
+          const fm = cache?.frontmatter;
           if (fm && String(fm.seriesId) === String(series.seriesId) && fm.episode !== undefined) {
             const episodeNo = typeof fm.episode === 'number' ? fm.episode : Number(fm.episode);
 

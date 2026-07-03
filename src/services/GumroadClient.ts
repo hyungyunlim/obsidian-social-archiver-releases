@@ -56,7 +56,7 @@ export class GumroadClient implements IService {
       ...DEFAULT_CONFIG,
       ...config,
       licenseConfig: { ...DEFAULT_LICENSE_CONFIG, ...config.licenseConfig },
-    } as Required<GumroadClientConfig>;
+    };
 
     this.licenseConfig = {
       ...DEFAULT_LICENSE_CONFIG,

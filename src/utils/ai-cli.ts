@@ -479,7 +479,7 @@ export class AICliDetector {
       const hasEnvKey = (name: string): boolean => {
         return Object.prototype.hasOwnProperty.call(process.env, name)
           && typeof process.env[name] === 'string'
-          && process.env[name]!.length > 0;
+          && process.env[name].length > 0;
       };
 
       switch (cli) {

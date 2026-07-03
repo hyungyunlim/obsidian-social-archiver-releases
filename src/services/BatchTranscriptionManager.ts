@@ -266,7 +266,7 @@ export class BatchTranscriptionManager {
       if (this.cancelRequested) break;
 
       const cache = app.metadataCache.getFileCache(file);
-      const frontmatter = (cache?.frontmatter as Record<string, unknown> | undefined) || {};
+      const frontmatter: Record<string, unknown> = cache?.frontmatter || {};
 
       // Skip already-transcribed
       if (frontmatter.videoTranscribed === true) {
@@ -409,7 +409,7 @@ export class BatchTranscriptionManager {
 
         const fullVideoPath = this.deps.toAbsoluteVaultPath(item.videoPath);
         const cache = this.deps.app.metadataCache.getFileCache(rawFile);
-        const frontmatter = (cache?.frontmatter as Record<string, unknown> | undefined) || {};
+        const frontmatter: Record<string, unknown> = cache?.frontmatter || {};
         const durationValue = frontmatter.duration;
         const mediaDuration = typeof durationValue === 'number'
           ? durationValue
@@ -423,7 +423,7 @@ export class BatchTranscriptionManager {
           preferredVariant: settings.transcription.preferredVariant || 'auto',
           customWhisperPath: settings.transcription.customWhisperPath,
           forceEnableCustomPath: settings.transcription.forceEnableCustomPath,
-          audioDuration: Number.isFinite(mediaDuration as number) ? mediaDuration : undefined,
+          audioDuration: Number.isFinite(mediaDuration) ? mediaDuration : undefined,
           signal: this.abortController.signal,
         });
 
@@ -515,7 +515,7 @@ export class BatchTranscriptionManager {
       if (!(rawFile instanceof TFile)) return null;
 
       const cache = this.deps.app.metadataCache.getFileCache(rawFile);
-      const fm = (cache?.frontmatter as Record<string, unknown> | undefined) || {};
+      const fm: Record<string, unknown> = cache?.frontmatter || {};
       const platform = (typeof fm.platform === 'string' ? fm.platform : 'unknown');
       const author = (typeof fm.author === 'string' ? fm.author : 'unknown');
       const postId = rawFile.basename;
@@ -685,7 +685,7 @@ export class BatchTranscriptionManager {
 
   private resolveArchiveIdForFile(file: TFile): string {
     const cache = this.deps.app.metadataCache.getFileCache(file);
-    const frontmatter = (cache?.frontmatter as Record<string, unknown> | undefined) || {};
+    const frontmatter: Record<string, unknown> = cache?.frontmatter || {};
     const sourceArchiveId = frontmatter.sourceArchiveId;
     if (typeof sourceArchiveId === 'string' && sourceArchiveId.trim()) return sourceArchiveId;
     const archiveId = frontmatter.archiveId;
@@ -715,6 +715,6 @@ export class BatchTranscriptionManager {
   }
 
   private deletePersisted(): void {
-    this.deps.app.saveLocalStorage(STORAGE_KEY, null as unknown as string);
+    this.deps.app.saveLocalStorage(STORAGE_KEY, null);
   }
 }

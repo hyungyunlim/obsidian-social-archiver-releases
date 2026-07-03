@@ -11,13 +11,22 @@ import {
   getAICommentErrorMessage,
   generateCommentId,
   createContentHash,
+  getLanguageInstruction,
+  getFormatLabels,
+  OUTPUT_LANGUAGE_NAMES,
   DEFAULT_AI_COMMENT_SETTINGS,
   DEFAULT_PROMPTS,
   COMMENT_TYPE_DISPLAY_NAMES,
   COMMENT_TYPE_DESCRIPTIONS,
   type AICommentType,
   type AICommentErrorCode,
+  type AIOutputLanguage,
 } from '../../types/ai-comment';
+
+const ALL_OUTPUT_LANGUAGES: AIOutputLanguage[] = [
+  'auto', 'en', 'ko', 'ja', 'zh', 'es', 'fr', 'de', 'pt', 'it', 'vi', 'th', 'id', 'ru', 'ar', 'hi',
+];
+const NEW_OUTPUT_LANGUAGES: AIOutputLanguage[] = ['it', 'vi', 'th', 'id'];
 
 describe('AI Comment Types', () => {
   describe('AICommentError', () => {
@@ -198,11 +207,71 @@ describe('AI Comment Types', () => {
     });
   });
 
+  describe('Output Language coverage', () => {
+    it('should have a display name for every output language (including it/vi/th/id)', () => {
+      for (const lang of ALL_OUTPUT_LANGUAGES) {
+        expect(OUTPUT_LANGUAGE_NAMES[lang]).toBeTruthy();
+        expect(typeof OUTPUT_LANGUAGE_NAMES[lang]).toBe('string');
+      }
+    });
+
+    it('getLanguageInstruction should never throw and always return a string for all codes', () => {
+      for (const lang of ALL_OUTPUT_LANGUAGES) {
+        const instruction = getLanguageInstruction(lang);
+        expect(typeof instruction).toBe('string');
+        expect(instruction.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('getLanguageInstruction should name the target language for the new codes', () => {
+      expect(getLanguageInstruction('it')).toContain('Italian');
+      expect(getLanguageInstruction('vi')).toContain('Vietnamese');
+      expect(getLanguageInstruction('th')).toContain('Thai');
+      expect(getLanguageInstruction('id')).toContain('Indonesian');
+    });
+
+    it('getLanguageInstruction should not emit broken English label examples for label-less codes', () => {
+      // it/vi/th/id have no hand-written FORMAT_LABELS set; the instruction must
+      // still tell the AI to translate labels rather than embed undefined.
+      for (const lang of NEW_OUTPUT_LANGUAGES) {
+        const instruction = getLanguageInstruction(lang);
+        expect(instruction).not.toContain('undefined');
+      }
+    });
+
+    it('getLanguageInstruction("auto") should ask for content-language matching', () => {
+      const instruction = getLanguageInstruction('auto');
+      expect(instruction).toContain('same language as the content');
+    });
+
+    it('getFormatLabels should return a complete label set for every code (English fallback for label-less codes)', () => {
+      for (const lang of ALL_OUTPUT_LANGUAGES) {
+        const labels = getFormatLabels(lang);
+        expect(labels.factCheckResults).toBeTruthy();
+        expect(labels.claim).toBeTruthy();
+        expect(labels.verdict).toBeTruthy();
+        expect(labels.summary).toBeTruthy();
+      }
+    });
+
+    it('getFormatLabels should fall back to English labels for label-less codes', () => {
+      const english = getFormatLabels('en');
+      for (const lang of NEW_OUTPUT_LANGUAGES) {
+        expect(getFormatLabels(lang)).toEqual(english);
+      }
+    });
+  });
+
   describe('Default Settings', () => {
     it('should have valid default settings', () => {
       expect(DEFAULT_AI_COMMENT_SETTINGS.enabled).toBe(false);
       expect(isAICli(DEFAULT_AI_COMMENT_SETTINGS.defaultCli)).toBe(true);
       expect(isAICommentType(DEFAULT_AI_COMMENT_SETTINGS.defaultType)).toBe(true);
+    });
+
+    it('should default tagLanguage to "auto"', () => {
+      expect(DEFAULT_AI_COMMENT_SETTINGS.tagLanguage).toBe('auto');
+      expect(DEFAULT_AI_COMMENT_SETTINGS.outputLanguage).toBe('auto');
     });
 
     it('should have platform visibility settings', () => {

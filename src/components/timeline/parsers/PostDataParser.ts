@@ -130,7 +130,7 @@ export class PostDataParser {
         }
       }
     };
-    collectFiles(archiveFolder as VaultFolder);
+    collectFiles(archiveFolder);
 
     // Batch process files in parallel using Promise.all() for better performance
     // This leverages MetadataCache and cachedRead() optimizations
@@ -375,7 +375,7 @@ export class PostDataParser {
         // Fallback to markdown parsing (detect video/image/audio by extension)
         mediaArray = mediaUrls.map(url => {
           const type = detectMediaType(url);
-          return { type: (type === 'document' ? 'image' : type) as ParsedMediaItem['type'], url };
+          return { type: (type === 'document' ? 'image' : type), url };
         });
       }
 
@@ -2172,14 +2172,14 @@ export class PostDataParser {
       if (this.app?.metadataCache) {
         const cache = this.app.metadataCache.getFileCache(file);
         if (cache?.frontmatter) {
-          frontmatter = cache.frontmatter as Record<string, unknown>;
+          frontmatter = cache.frontmatter;
         }
       }
 
       if (!frontmatter) {
         const parsed = this.parseFrontmatter(content);
         if (!parsed) return null;
-        frontmatter = parsed as Record<string, unknown>;
+        frontmatter = parsed;
       }
 
       if (!frontmatter['platform']) return null;
@@ -2310,7 +2310,7 @@ export class PostDataParser {
         }
       }
     };
-    collect(archiveFolder as VaultFolder);
+    collect(archiveFolder);
     return files;
   }
 }

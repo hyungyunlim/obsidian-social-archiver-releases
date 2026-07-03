@@ -563,7 +563,7 @@ export class DetachedMediaService {
     const cache = this.app.metadataCache.getFileCache(file);
     const fm = cache?.frontmatter;
     if (!fm || typeof fm !== 'object') return null;
-    return fm as Record<string, unknown>;
+    return fm;
   }
 
   private normalizeStringArray(value: unknown): string[] {

@@ -30,7 +30,6 @@ import type {
   ProfileCrawlService,
   ProfileSubscribeOptionsInput,
   ProfileSubscribeResult,
-  CrawlRangePreset,
 } from '../services/ProfileCrawlService';
 import type { RedditSortBy, RedditSortByTime } from '@/types/profile-crawl';
 
@@ -107,7 +106,7 @@ export class ProfileCliService {
       min: 1,
       max: 100,
     });
-    const range = parseEnum(params, 'range', RANGE_VALUES) as CrawlRangePreset | undefined;
+    const range = parseEnum(params, 'range', RANGE_VALUES);
     const start = parseString(params, 'start');
     const end = parseString(params, 'end');
     if (range === 'custom' && (!start || !end)) {

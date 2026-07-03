@@ -336,7 +336,7 @@ export class SupertonicProvider implements PluginTTSProvider {
 
       this.process = child;
       this.processId = ProcessManager.register(
-        child as unknown as Parameters<typeof ProcessManager.register>[0],
+        child,
         'tts',
         'supertonic',
       );
@@ -497,7 +497,7 @@ export class SupertonicProvider implements PluginTTSProvider {
 
         // Handle `ready` message (FR-04/FR-05)
         if (response.type === 'ready') {
-          this.handleReady(response as IPCReadyResponse);
+          this.handleReady(response);
           continue;
         }
 

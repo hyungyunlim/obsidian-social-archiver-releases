@@ -1764,7 +1764,7 @@ export class RealtimeEventBridge {
 
   private resolveArchiveIdForFile(file: TFile): string {
     const cache = this.deps.app.metadataCache.getFileCache(file);
-    const frontmatter = (cache?.frontmatter as Record<string, unknown> | undefined) || {};
+    const frontmatter: Record<string, unknown> = cache?.frontmatter || {};
     const sourceArchiveId = frontmatter.sourceArchiveId;
     if (typeof sourceArchiveId === 'string' && sourceArchiveId.trim()) return sourceArchiveId;
     const archiveId = frontmatter.archiveId;

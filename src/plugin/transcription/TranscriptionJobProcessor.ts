@@ -1317,7 +1317,7 @@ export class TranscriptionJobProcessor {
     }
 
     const cached = this.deps.app.metadataCache.getFileCache(file)?.frontmatter;
-    return cached && typeof cached === 'object' ? cached as Record<string, unknown> : {};
+    return cached && typeof cached === 'object' ? cached : {};
   }
 
   private async progress(

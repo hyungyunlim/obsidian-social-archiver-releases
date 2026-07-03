@@ -16,7 +16,6 @@ import type { PendingJob } from '../../services/PendingJobsManager';
 import type { PendingJobsManager } from '../../services/PendingJobsManager';
 import type { ArchiveJobTracker } from '../../services/ArchiveJobTracker';
 import type { WorkersAPIClient } from '../../services/WorkersAPIClient';
-import type { Platform } from '../../types/post';
 import type { PendingJobArchiveOptions, ServerPendingJob } from '../../types/pending-job';
 import type { MediaDownloadMode, SocialArchiverSettings } from '../../types/settings';
 import { formatPaywallRequiredMessage, isPaywallRequiredError } from '../../utils/billingError';
@@ -181,7 +180,7 @@ export class PendingJobOrchestrator {
     const localJob: PendingJob = {
       id: serverJob.jobId,
       url: serverJob.url,
-      platform: serverJob.platform as unknown as Platform,
+      platform: serverJob.platform,
       status: 'completed' as const,
       timestamp: serverJob.createdAt,
       retryCount: 0,

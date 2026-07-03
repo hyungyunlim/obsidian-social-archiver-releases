@@ -73,7 +73,7 @@ export class GumroadWebhookHandler implements IService, IWebhookEventProcessor {
       ...config,
       queueConfig: { ...DEFAULT_WEBHOOK_QUEUE_CONFIG, ...config.queueConfig },
       enableEventLogging: config.enableEventLogging ?? true,
-    } as Required<GumroadWebhookHandlerConfig>;
+    };
 
     this.queueConfig = {
       ...DEFAULT_WEBHOOK_QUEUE_CONFIG,

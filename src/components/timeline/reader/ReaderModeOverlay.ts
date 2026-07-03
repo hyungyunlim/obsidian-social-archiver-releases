@@ -13,6 +13,7 @@ import { TFile, Notice, setIcon, Menu, Platform as ObsidianPlatform, type App, t
 import type { PostData } from '../../../types/post';
 import type SocialArchiverPlugin from '../../../main';
 import type { AIActionType, ContentVariant } from '../../../services/WorkersAPIClient';
+import type { AIOutputLanguage } from '../../../types/ai-comment';
 import type { ContentVariantUpdatedEventData } from '../../../types/websocket';
 import { MediaGalleryRenderer } from '../renderers/MediaGalleryRenderer';
 import { LinkPreviewRenderer } from '../renderers/LinkPreviewRenderer';
@@ -887,6 +888,13 @@ export class ReaderModeOverlay {
             void this.requestReaderAIAction(post, 'tags.suggest_apply');
           },
         },
+        {
+          icon: 'languages',
+          title: 'Tag language',
+          onSelect: () => {
+            this.openReaderTagLanguageSheet();
+          },
+        },
         ...this.buildReaderTranslationActionSheetItems(post),
       ]);
       return;
@@ -932,6 +940,14 @@ export class ReaderModeOverlay {
         .setTitle('Suggest tags')
         .onClick(() => {
           void this.requestReaderAIAction(post, 'tags.suggest_apply');
+        });
+    });
+    menu.addItem((item) => {
+      item
+        .setIcon('chevron-right')
+        .setTitle('Tag language')
+        .onClick(() => {
+          this.openReaderTagLanguageMenu(anchorEl);
         });
     });
     menu.addSeparator();
@@ -986,6 +1002,57 @@ export class ReaderModeOverlay {
         },
       })),
     );
+  }
+
+  /**
+   * Action-sheet variant of the sticky tag-language picker (mobile). Persists
+   * the choice to settings.aiComment.tagLanguage; "Suggest tags" fires with it.
+   */
+  private openReaderTagLanguageSheet(): void {
+    const current = this.context.plugin.settings.aiComment.tagLanguage || 'auto';
+    this.openReaderActionSheet(
+      'Tag language',
+      OUTPUT_LANGUAGE_OPTIONS.map((language) => ({
+        icon: 'languages',
+        title: language.menuLabel,
+        checked: language.code === current,
+        onSelect: () => {
+          void this.persistTagLanguage(language.code);
+        },
+      })),
+    );
+  }
+
+  /**
+   * Menu variant of the sticky tag-language picker (desktop). Persists the
+   * choice to settings.aiComment.tagLanguage; "Suggest tags" fires with it.
+   */
+  private openReaderTagLanguageMenu(anchorEl: HTMLElement): void {
+    const menu = new Menu();
+    const current = this.context.plugin.settings.aiComment.tagLanguage || 'auto';
+    for (const language of OUTPUT_LANGUAGE_OPTIONS) {
+      menu.addItem((item) => {
+        item
+          .setIcon('languages')
+          .setTitle(language.menuLabel)
+          .setChecked(language.code === current)
+          .onClick(() => {
+            void this.persistTagLanguage(language.code);
+          });
+      });
+    }
+
+    const rect = anchorEl.getBoundingClientRect();
+    menu.showAtPosition({ x: rect.left, y: rect.bottom });
+  }
+
+  /**
+   * Persist the sticky tag language. Uses a lightweight partial save so the
+   * choice survives restarts without reinitializing every plugin service.
+   */
+  private async persistTagLanguage(code: string): Promise<void> {
+    this.context.plugin.settings.aiComment.tagLanguage = code as AIOutputLanguage;
+    await this.context.plugin.saveSettingsPartial({}, { reinitialize: false, notify: false });
   }
 
   private addReaderTranslationMenuItems(menu: Menu, post: PostData, anchorEl: HTMLElement): void {
@@ -1308,7 +1375,7 @@ export class ReaderModeOverlay {
         return;
       }
 
-      const language = outputLanguage ?? this.resolveDefaultAIActionLanguage();
+      const language = outputLanguage ?? this.resolveDefaultAIActionLanguage(actionType);
       const response = await apiClient.createAIActionJob({
         archiveId,
         actionType,
@@ -1332,7 +1399,12 @@ export class ReaderModeOverlay {
     }
   }
 
-  private resolveDefaultAIActionLanguage(): string | undefined {
+  private resolveDefaultAIActionLanguage(actionType: AIActionType): string | undefined {
+    // Tag suggestion has its own sticky language preference; other actions use
+    // the shared output-language setting.
+    if (actionType === 'tags.suggest_apply') {
+      return this.context.plugin.settings.aiComment.tagLanguage || 'auto';
+    }
     return this.context.plugin.settings.aiComment.outputLanguage || 'auto';
   }
 

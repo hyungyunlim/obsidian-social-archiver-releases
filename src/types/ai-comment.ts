@@ -109,7 +109,23 @@ export interface VaultContextSettings {
  * - 'auto': Detect content language and respond in the same language
  * - 'en', 'ko', 'ja', etc.: Always respond in the specified language
  */
-export type AIOutputLanguage = 'auto' | 'en' | 'ko' | 'ja' | 'zh' | 'es' | 'fr' | 'de' | 'pt' | 'ru' | 'ar' | 'hi';
+export type AIOutputLanguage =
+  | 'auto'
+  | 'en'
+  | 'ko'
+  | 'ja'
+  | 'zh'
+  | 'es'
+  | 'fr'
+  | 'de'
+  | 'pt'
+  | 'it'
+  | 'vi'
+  | 'th'
+  | 'id'
+  | 'ru'
+  | 'ar'
+  | 'hi';
 
 /**
  * Display names for output languages
@@ -124,6 +140,10 @@ export const OUTPUT_LANGUAGE_NAMES: Record<AIOutputLanguage, string> = {
   fr: 'Français (French)',
   de: 'Deutsch (German)',
   pt: 'Português (Portuguese)',
+  it: 'Italiano (Italian)',
+  vi: 'Tiếng Việt (Vietnamese)',
+  th: 'ไทย (Thai)',
+  id: 'Bahasa Indonesia (Indonesian)',
   ru: 'Русский (Russian)',
   ar: 'العربية (Arabic)',
   hi: 'हिन्दी (Hindi)',
@@ -141,6 +161,10 @@ const LANGUAGE_FULL_NAMES: Record<Exclude<AIOutputLanguage, 'auto'>, string> = {
   fr: 'French',
   de: 'German',
   pt: 'Portuguese',
+  it: 'Italian',
+  vi: 'Vietnamese',
+  th: 'Thai',
+  id: 'Indonesian',
   ru: 'Russian',
   ar: 'Arabic',
   hi: 'Hindi',
@@ -188,32 +212,44 @@ export interface FormatLabels {
 }
 
 /**
- * Format labels translations for each supported language
+ * English format labels. Extracted as a standalone const so it can serve as a
+ * guaranteed non-null fallback for {@link getFormatLabels} even though
+ * {@link FORMAT_LABELS} is a partial map.
  */
-export const FORMAT_LABELS: Record<Exclude<AIOutputLanguage, 'auto'>, FormatLabels> = {
-  en: {
-    factCheckResults: 'Fact Check Results',
-    claim: 'Claim',
-    verdict: 'Verdict',
-    verdictVerified: 'Verified',
-    verdictPartiallyTrue: 'Partially True',
-    verdictFalse: 'False',
-    verdictUnverifiable: 'Unverifiable',
-    source: 'Source',
-    overallAssessment: 'Overall Assessment',
-    details: 'Details',
-    term: 'Term',
-    definition: 'Definition',
-    keyPoints: 'Key Points',
-    sentimentAnalysis: 'Sentiment Analysis',
-    overallTone: 'Overall Tone',
-    criticalAnalysis: 'Critical Analysis',
-    strengths: 'Strengths',
-    weaknesses: 'Weaknesses',
-    summary: 'Summary',
-    noteConnections: 'Note Connections',
-    relatedNotes: 'Related Notes',
-  },
+const EN_FORMAT_LABELS: FormatLabels = {
+  factCheckResults: 'Fact Check Results',
+  claim: 'Claim',
+  verdict: 'Verdict',
+  verdictVerified: 'Verified',
+  verdictPartiallyTrue: 'Partially True',
+  verdictFalse: 'False',
+  verdictUnverifiable: 'Unverifiable',
+  source: 'Source',
+  overallAssessment: 'Overall Assessment',
+  details: 'Details',
+  term: 'Term',
+  definition: 'Definition',
+  keyPoints: 'Key Points',
+  sentimentAnalysis: 'Sentiment Analysis',
+  overallTone: 'Overall Tone',
+  criticalAnalysis: 'Critical Analysis',
+  strengths: 'Strengths',
+  weaknesses: 'Weaknesses',
+  summary: 'Summary',
+  noteConnections: 'Note Connections',
+  relatedNotes: 'Related Notes',
+};
+
+/**
+ * Format labels translations for each supported language.
+ *
+ * This is a partial map: not every language in {@link AIOutputLanguage} has a
+ * hand-written label set (e.g. it/vi/th/id fall back to English labels while
+ * the AI is instructed to translate them). Consumers MUST tolerate a missing
+ * entry via {@link getFormatLabels} rather than indexing directly.
+ */
+export const FORMAT_LABELS: Partial<Record<Exclude<AIOutputLanguage, 'auto'>, FormatLabels>> = {
+  en: EN_FORMAT_LABELS,
   ko: {
     factCheckResults: '팩트 체크 결과',
     claim: '주장',
@@ -452,12 +488,23 @@ export const FORMAT_LABELS: Record<Exclude<AIOutputLanguage, 'auto'>, FormatLabe
  * @returns Format labels in the specified language, defaults to English
  */
 export function getFormatLabels(outputLanguage: AIOutputLanguage): FormatLabels {
+  const englishLabels = FORMAT_LABELS.en ?? EN_FORMAT_LABELS;
   if (outputLanguage === 'auto') {
     // For 'auto', return English labels but AI will be instructed to translate them
-    return FORMAT_LABELS.en;
+    return englishLabels;
   }
-  return FORMAT_LABELS[outputLanguage] || FORMAT_LABELS.en;
+  // Languages without a hand-written label set (it/vi/th/id) fall back to
+  // English labels; the language instruction still tells the AI to translate.
+  return FORMAT_LABELS[outputLanguage] ?? englishLabels;
 }
+
+/**
+ * Auto-style directive: instruct the AI to respond in the same language as the
+ * content, keeping all format labels in that language. Reused when a concrete
+ * language has no hand-written label set so we never emit a broken example.
+ */
+const AUTO_LANGUAGE_INSTRUCTION = `IMPORTANT: Respond in the same language as the content below. If the content is in Korean, respond in Korean. If in Japanese, respond in Japanese, etc.
+ALL format labels, headers, and section titles in your response MUST also be in the same language as the content. Do NOT use English labels like "Fact Check Results", "Claim", "Verdict" etc. if the content is in another language.`;
 
 /**
  * Generate language instruction for AI prompt
@@ -466,12 +513,22 @@ export function getFormatLabels(outputLanguage: AIOutputLanguage): FormatLabels 
  */
 export function getLanguageInstruction(outputLanguage: AIOutputLanguage): string {
   if (outputLanguage === 'auto') {
-    return `IMPORTANT: Respond in the same language as the content below. If the content is in Korean, respond in Korean. If in Japanese, respond in Japanese, etc.
-ALL format labels, headers, and section titles in your response MUST also be in the same language as the content. Do NOT use English labels like "Fact Check Results", "Claim", "Verdict" etc. if the content is in another language.`;
+    return AUTO_LANGUAGE_INSTRUCTION;
   }
 
   const langName = LANGUAGE_FULL_NAMES[outputLanguage];
+  if (!langName) {
+    // Unknown code (defensive): behave like 'auto' instead of throwing.
+    return AUTO_LANGUAGE_INSTRUCTION;
+  }
   const labels = FORMAT_LABELS[outputLanguage];
+  if (!labels) {
+    // Concrete language without a label set (it/vi/th/id): keep the primary
+    // "respond in <language>" directive but skip the English label examples,
+    // instructing the AI to translate all labels into the target language.
+    return `IMPORTANT: Respond in ${langName}.
+ALL format labels, headers, and section titles MUST also be written in ${langName}. Do NOT use English labels like "Fact Check Results", "Claim", "Verdict" etc.`;
+  }
   return `IMPORTANT: Respond in ${langName}.
 ALL format labels and headers MUST be in ${langName}. For example:
 - "Fact Check Results" → "${labels.factCheckResults}"
@@ -488,7 +545,7 @@ ALL format labels and headers MUST be in ${langName}. For example:
  */
 export function getFactCheckFormatSection(outputLanguage: AIOutputLanguage): string {
   // For 'auto', provide format in English but AI will translate based on content language
-  const labels = outputLanguage === 'auto' ? FORMAT_LABELS.en : FORMAT_LABELS[outputLanguage];
+  const labels = getFormatLabels(outputLanguage);
 
   return `Format:
 ## ${labels.factCheckResults}
@@ -509,7 +566,7 @@ export function getFactCheckFormatSection(outputLanguage: AIOutputLanguage): str
  * @returns Format section string to include in the glossary prompt
  */
 export function getGlossaryFormatSection(outputLanguage: AIOutputLanguage): string {
-  const labels = outputLanguage === 'auto' ? FORMAT_LABELS.en : FORMAT_LABELS[outputLanguage];
+  const labels = getFormatLabels(outputLanguage);
 
   return `## Output Format
 **${labels.term}**
@@ -522,7 +579,7 @@ ${labels.definition} (1-2 sentences). [${labels.source}](URL) if available.`;
  * @returns Format section string to include in the critique prompt
  */
 export function getCritiqueFormatSection(outputLanguage: AIOutputLanguage): string {
-  const labels = outputLanguage === 'auto' ? FORMAT_LABELS.en : FORMAT_LABELS[outputLanguage];
+  const labels = getFormatLabels(outputLanguage);
 
   return `Format your response with these sections:
 ## ${labels.criticalAnalysis}
@@ -536,7 +593,7 @@ export function getCritiqueFormatSection(outputLanguage: AIOutputLanguage): stri
  * @returns Format section string to include in the keypoints prompt
  */
 export function getKeyPointsFormatSection(outputLanguage: AIOutputLanguage): string {
-  const labels = outputLanguage === 'auto' ? FORMAT_LABELS.en : FORMAT_LABELS[outputLanguage];
+  const labels = getFormatLabels(outputLanguage);
 
   return `Format:
 ## ${labels.keyPoints}
@@ -551,7 +608,7 @@ export function getKeyPointsFormatSection(outputLanguage: AIOutputLanguage): str
  * @returns Format section string to include in the sentiment prompt
  */
 export function getSentimentFormatSection(outputLanguage: AIOutputLanguage): string {
-  const labels = outputLanguage === 'auto' ? FORMAT_LABELS.en : FORMAT_LABELS[outputLanguage];
+  const labels = getFormatLabels(outputLanguage);
 
   return `Format:
 ## ${labels.sentimentAnalysis}
@@ -596,7 +653,7 @@ Do not include a heading such as "## Summary" or "## 요약".`;
  * @returns Format section string to include in the connections prompt
  */
 export function getConnectionsFormatSection(outputLanguage: AIOutputLanguage): string {
-  const labels = outputLanguage === 'auto' ? FORMAT_LABELS.en : FORMAT_LABELS[outputLanguage];
+  const labels = getFormatLabels(outputLanguage);
 
   return `## ${labels.relatedNotes}`;
 }
@@ -652,6 +709,8 @@ export interface AICommentSettings {
   translationLanguage?: string;
   /** Output language for AI responses ('auto' = match content language) */
   outputLanguage: AIOutputLanguage;
+  /** Language for AI-suggested tags ('auto' = match content language) */
+  tagLanguage: AIOutputLanguage;
 }
 
 /**
@@ -818,6 +877,7 @@ export const DEFAULT_AI_COMMENT_SETTINGS: AICommentSettings = {
     maxContextNotes: 10,
   },
   outputLanguage: 'auto', // Default: match content language
+  tagLanguage: 'auto', // Default: match content language
 };
 
 /**

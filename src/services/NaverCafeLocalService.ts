@@ -621,8 +621,8 @@ export class NaverCafeLocalService {
         }
 
         // Check if there are more pages
-        const result = data?.result as (typeof data.result & { hasNext?: boolean }) | undefined;
-        if (result?.hasNext === false) {
+        const result = data?.result;
+        if (result && 'hasNext' in result && result.hasNext === false) {
           hasMore = false;
         }
 
@@ -651,11 +651,11 @@ export class NaverCafeLocalService {
     const commentsObj = result?.comments;
     if (commentsObj) {
       if (Array.isArray(commentsObj)) {
-        commentList = commentsObj as unknown as NaverCafeRawComment[];
+        commentList = commentsObj;
       } else if (typeof commentsObj === 'object' && commentsObj !== null && 'items' in commentsObj) {
         const items = (commentsObj as { items: unknown }).items;
         if (Array.isArray(items)) {
-          commentList = items as unknown as NaverCafeRawComment[];
+          commentList = items;
         }
       }
     }
@@ -663,7 +663,7 @@ export class NaverCafeLocalService {
     if (!commentList) {
       const directList = result?.commentList;
       if (directList && Array.isArray(directList)) {
-        commentList = directList as NaverCafeRawComment[];
+        commentList = directList;
       }
     }
 

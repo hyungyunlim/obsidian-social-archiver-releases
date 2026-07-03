@@ -43,7 +43,7 @@ import {
 import { WEBTOON_DAILY_CRON_LOCAL, WEBTOONS_PUBLISH_DAY_TO_CRON } from '@/shared/platforms/definitions';
 import { DEFAULT_ARCHIVE_PATH } from '@/shared/constants';
 import { getPlatformName } from '@/shared/platforms';
-import type { Subscription, SubscriptionPlatform } from '../services/SubscriptionManager';
+import type { Subscription } from '../services/SubscriptionManager';
 import { invalidateAuthorCatalogCache } from '../services/AuthorCatalogStore';
 
 // ============================================================================
@@ -2291,7 +2291,7 @@ export class WebtoonArchiveModal extends Modal {
 
     const subscription = await this.plugin.subscriptionManager.addSubscription({
       name: this.webtoonInfo.titleName,
-      platform: 'naver-webtoon' as SubscriptionPlatform,
+      platform: 'naver-webtoon',
       target: {
         handle: this.titleId,
         profileUrl: `https://comic.naver.com/webtoon/list?titleId=${this.titleId}`,
@@ -2331,7 +2331,7 @@ export class WebtoonArchiveModal extends Modal {
 
     const subscription = await this.plugin.subscriptionManager.addSubscription({
       name: this.webtoonsSeriesInfo.title,
-      platform: 'webtoons' as SubscriptionPlatform,
+      platform: 'webtoons',
       target: {
         handle: this.webtoonsUrlInfo.titleNo,
         profileUrl: this.webtoonsService.buildSeriesUrl(this.webtoonsUrlInfo),
@@ -2588,9 +2588,9 @@ export class WebtoonArchiveModal extends Modal {
       this.render();
     };
 
-    this.trackEventListener(this.downloadQueue, 'episode-started', updateNaverProgress as EventListener);
-    this.trackEventListener(this.downloadQueue, 'episode-progress', updateNaverProgress as EventListener);
-    this.trackEventListener(this.downloadQueue, 'episode-completed', updateNaverProgress as EventListener);
+    this.trackEventListener(this.downloadQueue, 'episode-started', updateNaverProgress);
+    this.trackEventListener(this.downloadQueue, 'episode-progress', updateNaverProgress);
+    this.trackEventListener(this.downloadQueue, 'episode-completed', updateNaverProgress);
 
     this.trackEventListener(this.downloadQueue, 'episode-failed', ((e: CustomEvent) => {
       updateNaverProgress();
@@ -2616,7 +2616,7 @@ export class WebtoonArchiveModal extends Modal {
       this.downloadProgress = null;
       this.render();
       new Notice('Download cancelled');
-    }) as EventListener);
+    }));
 
     // Naver Webtoon: markdown-created event for stream-first mode
     // First episode opens fullscreen, subsequent episodes just update timeline
@@ -2645,9 +2645,9 @@ export class WebtoonArchiveModal extends Modal {
       this.render();
     };
 
-    this.trackEventListener(this.webtoonsDownloadQueue, 'episode-started', updateWebtoonsProgress as EventListener);
-    this.trackEventListener(this.webtoonsDownloadQueue, 'episode-progress', updateWebtoonsProgress as EventListener);
-    this.trackEventListener(this.webtoonsDownloadQueue, 'episode-completed', updateWebtoonsProgress as EventListener);
+    this.trackEventListener(this.webtoonsDownloadQueue, 'episode-started', updateWebtoonsProgress);
+    this.trackEventListener(this.webtoonsDownloadQueue, 'episode-progress', updateWebtoonsProgress);
+    this.trackEventListener(this.webtoonsDownloadQueue, 'episode-completed', updateWebtoonsProgress);
 
     this.trackEventListener(this.webtoonsDownloadQueue, 'episode-failed', ((e: CustomEvent) => {
       updateWebtoonsProgress();
@@ -2673,7 +2673,7 @@ export class WebtoonArchiveModal extends Modal {
       this.downloadProgress = null;
       this.render();
       new Notice('Download cancelled');
-    }) as EventListener);
+    }));
 
     // WEBTOON Global: markdown-created event for stream-first mode
     // Only handle first episode - rest download in background

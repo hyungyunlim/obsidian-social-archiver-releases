@@ -521,7 +521,7 @@ export class FilterPanel {
       archiveOption.toggleClass('sa-bg-hover', newTab !== 'inbox');
       archiveCheckIcon.toggleClass('sa-hidden', newTab === 'inbox');
 
-      this.onFilterChangeCallback?.({ activeTab: newTab as FilterState['activeTab'] });
+      this.onFilterChangeCallback?.({ activeTab: newTab });
       this.onRerenderCallback?.();
       updateFilterButton();
     });

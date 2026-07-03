@@ -88,7 +88,7 @@ class ResponseTransformer {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructuring to exclude schemaVersion from the returned PostData
       const { schemaVersion: _schemaVersion, ...postData } = validated;
 
-      return postData as PostData;
+      return postData;
     } catch (error) {
       throw new Error(
         `Invalid post data format: ${error instanceof Error ? error.message : 'Unknown error'}`

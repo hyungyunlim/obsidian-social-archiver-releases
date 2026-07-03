@@ -20,7 +20,6 @@ import {
   type AIOutputLanguage,
   createContentHash,
 } from '../../types/ai-comment';
-import type { AICli } from '../../utils/ai-cli';
 import type { SocialArchiverSettings } from '../../types/settings';
 import type { LocalAICommentPendingUpload, AICommentPublicJobErrorCode } from '../../types/ai-comment-job';
 import { appendAIComment, parseAIComments, updateFrontmatterAIComments } from '../../services/ai-comment/markdown-handler';
@@ -419,12 +418,12 @@ export class AICommentJobProcessor {
     context: AIActionProcessingContext,
     inputContent: string,
   ): Promise<{ kind: 'tag_patch'; addTags: string[]; removeTags: string[] }> {
-    const outputLanguage = describeAIActionOutputLanguage(
+    const languageName = describeAIActionOutputLanguage(
       context.job.outputLanguage ?? readActionParamString(context.job.actionParams, 'targetLanguage'),
     );
     const json = await this.generateStructuredJSON(context, inputContent, [
       'Suggest up to 5 concise archive tags for this content.',
-      ...(outputLanguage ? [`Write all tag names in ${outputLanguage}.`] : []),
+      buildTagLanguageInstruction(languageName),
       'Return JSON only, with this exact shape: {"addTags":["tag"],"removeTags":[]}.',
       'Tags should be short noun phrases. Do not include hashtags or commentary.',
     ].join('\n'));
@@ -445,7 +444,7 @@ export class AICommentJobProcessor {
     const service = new AICommentService();
     this.currentService = service;
     const result = await service.generateComment(inputContent, {
-      cli: context.job.provider as AICli,
+      cli: context.job.provider,
       model: context.job.model ?? undefined,
       type,
       outputLanguage: (context.job.outputLanguage ?? 'auto') as AIOutputLanguage,
@@ -540,7 +539,7 @@ export class AICommentJobProcessor {
     const service = new AICommentService();
     this.currentService = service;
     const result = await service.generateComment(inputContent, {
-      cli: context.job.provider as AICli,
+      cli: context.job.provider,
       model: context.job.model ?? undefined,
       type: 'custom',
       outputLanguage: (context.job.outputLanguage ?? 'auto') as AIOutputLanguage,
@@ -592,7 +591,7 @@ export class AICommentJobProcessor {
       const service = new AICommentService();
       this.currentService = service;
       const result = await service.generateComment(inputContent, {
-        cli: context.job.provider as AICli,
+        cli: context.job.provider,
         model: context.job.model ?? undefined,
         type: context.job.type as AICommentType,
         outputLanguage: context.job.outputLanguage as AIOutputLanguage,
@@ -766,7 +765,7 @@ export class AICommentJobProcessor {
         resultCommentId: meta.id,
         meta,
         content,
-        provider: context.job.provider as AICli,
+        provider: context.job.provider,
         model: context.job.model ?? null,
         type: context.job.type as AICommentType,
         outputLanguage: context.job.outputLanguage as AIOutputLanguage,
@@ -987,7 +986,7 @@ export class AICommentJobProcessor {
 
   private resolveArchiveIdForFile(file: TFile): string {
     const cache = this.deps.app.metadataCache.getFileCache(file);
-    const frontmatter = (cache?.frontmatter as Record<string, unknown> | undefined) || {};
+    const frontmatter: Record<string, unknown> = cache?.frontmatter || {};
     const sourceArchiveId = frontmatter.sourceArchiveId;
     if (typeof sourceArchiveId === 'string' && sourceArchiveId.trim()) return sourceArchiveId;
     const archiveId = frontmatter.archiveId;
@@ -1127,7 +1126,7 @@ function readArchiveSnapshot(snapshot: unknown): { title?: string | null; previe
   if (!snapshot || typeof snapshot !== 'object') return null;
   const archive = (snapshot as { archive?: unknown }).archive;
   if (!archive || typeof archive !== 'object') return null;
-  return archive as { title?: string | null; previewText?: string | null };
+  return archive;
 }
 
 function readActionParamString(params: Record<string, unknown> | null | undefined, key: string): string | null {
@@ -1152,21 +1151,57 @@ function commentTypeForAIAction(actionType: string): AICommentType | null {
   }
 }
 
+const AI_ACTION_LANGUAGE_NAMES: Record<string, string> = {
+  ko: 'Korean',
+  ja: 'Japanese',
+  en: 'English',
+  zh: 'Chinese',
+  es: 'Spanish',
+  fr: 'French',
+  de: 'German',
+  pt: 'Portuguese',
+  it: 'Italian',
+  vi: 'Vietnamese',
+  th: 'Thai',
+  id: 'Indonesian',
+  ru: 'Russian',
+  ar: 'Arabic',
+  hi: 'Hindi',
+};
+
 function describeAIActionOutputLanguage(language: string | null | undefined): string | null {
   const primary = language?.trim().toLowerCase().split(/[-_]/)[0];
-  if (primary === 'ko') return 'Korean';
-  if (primary === 'ja') return 'Japanese';
-  if (primary === 'en') return 'English';
-  if (primary === 'zh') return 'Chinese';
-  if (primary === 'es') return 'Spanish';
-  if (primary === 'fr') return 'French';
-  if (primary === 'de') return 'German';
-  if (primary === 'pt') return 'Portuguese';
-  if (primary === 'it') return 'Italian';
-  if (primary === 'vi') return 'Vietnamese';
-  if (primary === 'th') return 'Thai';
-  if (primary === 'id') return 'Indonesian';
-  return null;
+  if (!primary || primary === 'auto') return null;
+  return AI_ACTION_LANGUAGE_NAMES[primary] ?? null;
+}
+
+/**
+ * Tag-language instruction for the tag-suggestion prompt.
+ *
+ * Mirrors the server semantics in
+ * workers/src/services/AIActionServerPrompts.ts (tagOutputLanguageInstruction):
+ * tag/translate actions run through the AICommentService type:'custom' path
+ * where the outputLanguage option is a NO-OP, so the language directive MUST
+ * live in the instruction text itself. Client-side script detection is not
+ * needed — the CLI models are strong enough that an explicit "same language as
+ * the content" directive suffices.
+ *
+ * @param languageName Resolved language name, or null for auto/unknown.
+ */
+function buildTagLanguageInstruction(languageName: string | null): string {
+  if (!languageName) {
+    return [
+      'Write every tag in the same language as the archive content.',
+      'Do not use English tags just because these instructions are written in English.',
+      'Do not use English tags unless the content is English or the tag is a proper noun, product name, or code token.',
+      'Use natural word spacing for that language; do not use kebab-case.',
+    ].join('\n');
+  }
+  return [
+    `Write every tag in ${languageName}.`,
+    `Translate source-language concepts into ${languageName} tags when needed.`,
+    `Do not use English tags unless ${languageName} is English or the term is a proper noun, product name, or code token.`,
+  ].join('\n');
 }
 
 function frontmatterMatchesArchiveId(frontmatter: unknown, archiveId: string): boolean {

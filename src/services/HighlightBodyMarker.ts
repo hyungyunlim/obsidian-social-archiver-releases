@@ -77,7 +77,7 @@ const DEFAULT_ARCHIVE_ID = 'plugin:local';
  * into the plugin's surface.
  */
 function toCoreHighlight(h: TextHighlight): CoreTextHighlight {
-  return h as unknown as CoreTextHighlight;
+  return h;
 }
 
 /**

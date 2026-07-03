@@ -3147,7 +3147,7 @@ export class TimelineContainer {
     }));
 
     platforms.forEach(platform => {
-      const isSelected = this.authorPlatformFilter.includes(platform.id as Platform);
+      const isSelected = this.authorPlatformFilter.includes(platform.id);
 
       // Check if this platform has any authors
       const authorCount = this.authorPlatformCounts[platform.id] || 0;
@@ -3218,7 +3218,7 @@ export class TimelineContainer {
           this.authorPlatformFilter = this.authorPlatformFilter.filter(p => p !== platform.id);
         } else {
           // Add to filter
-          this.authorPlatformFilter = [...this.authorPlatformFilter, platform.id as Platform];
+          this.authorPlatformFilter = [...this.authorPlatformFilter, platform.id];
         }
         this.filterSortManager.updateFilter({ platforms: new Set(this.authorPlatformFilter) });
         this.persistFilterPreferences();
@@ -5436,11 +5436,11 @@ export class TimelineContainer {
 
       // If we have a PostIndexEntry, load the full PostData
       if ('filePath' in postRef && !('content' in postRef)) {
-        const loaded = await this.postDataParser.loadFullPost((postRef as unknown as PostIndexEntry).filePath);
+        const loaded = await this.postDataParser.loadFullPost((postRef).filePath);
         if (!loaded) return;
         post = loaded;
       } else {
-        post = postRef as unknown as PostData;
+        post = postRef;
       }
 
       // Create temporary container for rendering
@@ -7031,7 +7031,7 @@ export class TimelineContainer {
               const fileForFm = this.vault.getFileByPath(filePath);
               if (fileForFm) {
                 const fileCache = this.app.metadataCache.getFileCache(fileForFm);
-                const fm = fileCache?.frontmatter as Record<string, unknown> | undefined;
+                const fm = fileCache?.frontmatter;
                 const clientPostId = fm?.['clientPostId'] as string | undefined;
                 const sourceArchiveId = fm?.['sourceArchiveId'] as string | undefined;
                 if (clientPostId && sourceArchiveId) {
@@ -7075,7 +7075,7 @@ export class TimelineContainer {
               });
 
               const fileCache = this.app.metadataCache.getFileCache(file);
-              const frontmatter = fileCache?.frontmatter as Record<string, unknown> | undefined;
+              const frontmatter = fileCache?.frontmatter;
 
               // Extract shareId from shareUrl if shareId is not present
               let shareId: string | null | undefined = typeof frontmatter?.shareId === 'string' ? frontmatter.shareId : null;

@@ -320,7 +320,7 @@ export class ProfileCrawlService {
     }
 
     const apiPlatform: Platform = isRss && !isRssPlatformWithOwnId(detectedPlatform)
-      ? ('blog' as Platform)
+      ? ('blog')
       : detectedPlatform;
 
     const folder = input.folder ?? this.deps.defaultFolder();
@@ -401,7 +401,7 @@ export class ProfileCrawlService {
     const hour = clampHour(input.hour ?? new Date().getHours());
 
     const apiPlatform: Platform = isRss && !isRssPlatformWithOwnId(detectedPlatform)
-      ? ('blog' as Platform)
+      ? ('blog')
       : detectedPlatform;
 
     const crawlOptions: ProfileCrawlOptions = {

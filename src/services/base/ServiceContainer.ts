@@ -23,7 +23,7 @@ export class ServiceContainer {
       );
     }
 
-    this.factories.set(token, factory as ServiceFactory<unknown>);
+    this.factories.set(token, factory);
     this.metadata.set(token, {
       token,
       lifecycle: ServiceLifecycle.UNINITIALIZED,

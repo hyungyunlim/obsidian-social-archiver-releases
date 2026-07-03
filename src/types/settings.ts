@@ -1227,7 +1227,7 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
     migrated.tts = {
       ...DEFAULT_TTS_SETTINGS,
       ...cleanTts,
-    } as typeof DEFAULT_TTS_SETTINGS;
+    };
 
     // Ensure supertonicQuality exists (FR-07 migration)
     if (!migrated.tts.supertonicQuality) {

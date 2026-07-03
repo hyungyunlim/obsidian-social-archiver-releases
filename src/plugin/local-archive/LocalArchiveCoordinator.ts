@@ -3,7 +3,7 @@ import type { App } from 'obsidian';
 import { VaultManager } from '../../services/VaultManager';
 import { getVaultOrganizationStrategy, type MediaDownloadMode } from '../../types/settings';
 import type { SocialArchiverSettings } from '../../types/settings';
-import type { PostData, Platform } from '../../types/post';
+import type { PostData } from '../../types/post';
 import { encodePathForMarkdownLink } from '../../utils/url';
 import type { BrunchComment } from '../../types/brunch';
 import type { BrunchLocalService as BrunchLocalServiceType } from '../../services/BrunchLocalService';
@@ -322,7 +322,7 @@ export class LocalArchiveCoordinator {
 
       // Create proper PostData for file path generation
       const properPostData: PostData = {
-        platform: 'naver' as Platform,
+        platform: 'naver',
         id: postData.id,
         url: postData.url,
         author: {
@@ -609,7 +609,7 @@ export class LocalArchiveCoordinator {
 
       // Create proper PostData for file path generation
       const properPostData: PostData = {
-        platform: 'naver' as Platform,
+        platform: 'naver',
         id: postData.id,
         url: postData.url,
         author: {
@@ -954,7 +954,7 @@ export class LocalArchiveCoordinator {
 
       // Create proper PostData for file path generation
       const properPostData: PostData = {
-        platform: 'brunch' as Platform,
+        platform: 'brunch',
         id: postData.id,
         url: postData.url,
         author: {
@@ -1182,7 +1182,7 @@ export class LocalArchiveCoordinator {
 
       // Create proper PostData for file path generation
       const properPostData: PostData = {
-        platform: 'naver-webtoon' as Platform,
+        platform: 'naver-webtoon',
         id: postData.id,
         url: postData.url,
         author: {

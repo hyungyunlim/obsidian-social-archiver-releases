@@ -93,7 +93,7 @@ export class CreditManager implements IService {
     tracker: CostTracker,
     logger?: Logger
   ) {
-    this.config = { ...DEFAULT_CONFIG, ...config } as CreditManagerConfig;
+    this.config = { ...DEFAULT_CONFIG, ...config };
     this.api = api;
     this.tracker = tracker;
     this.logger = logger;

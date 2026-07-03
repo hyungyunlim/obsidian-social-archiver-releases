@@ -64,13 +64,7 @@ import {
   TRANSCRIBE_FLAGS,
   type CommandId,
 } from './CliFlags';
-import type {
-  ArchiveCliOptions,
-  CliArchiveMode,
-  CliMediaMode,
-  JobStatusSource,
-  SyncTarget,
-} from './ArchiveCliService';
+import type { ArchiveCliOptions } from './ArchiveCliService';
 import { JobNotFoundError } from './ArchiveCliService';
 import { isPaywallRequiredError } from '../../utils/billingError';
 import { LocalNoteCliService } from './LocalNoteCliService';
@@ -202,10 +196,10 @@ export class CliRegistry {
       const url = parseString(params, 'url', { required: true });
       const mode = (parseEnum(params, 'mode', ['queue', 'sync', 'fetch'] as const, {
         default: 'queue',
-      }) ?? 'queue') as CliArchiveMode;
+      }) ?? 'queue');
       const mediaMode = (parseEnum(params, 'media', ['all', 'images', 'none'] as const, {
         default: 'all',
-      }) ?? 'all') as CliMediaMode;
+      }) ?? 'all');
       const includeComments = params['comments'] !== undefined
         ? parseBool(params, 'comments', false)
         : undefined;
@@ -276,7 +270,7 @@ export class CliRegistry {
       // then call `job source=local`.
       const source = (parseEnum(params, 'source', ['local', 'server', 'auto'] as const, {
         default: 'local',
-      }) ?? 'local') as JobStatusSource;
+      }) ?? 'local');
 
       const svc = this.plugin.archiveCliService;
       const result = await svc.getJobStatus(id, source);
@@ -331,7 +325,7 @@ export class CliRegistry {
         'target',
         ['subscriptions', 'library', 'pending', 'all'] as const,
         { default: 'all' },
-      ) ?? 'all') as SyncTarget;
+      ) ?? 'all');
       const syncServer = parseBool(params, 'syncServer', false);
 
       const svc = this.plugin.archiveCliService;
@@ -589,7 +583,7 @@ export class CliRegistry {
       }
       // Validate each path is absolute before we touch the filesystem.
       for (const candidate of filesCsv) {
-        parseAbsolutePath({ __tmp: candidate } as CliParams, '__tmp', { required: true });
+        parseAbsolutePath({ __tmp: candidate }, '__tmp', { required: true });
       }
       const destination = parseEnum(params, 'destination', ['inbox', 'archive'] as const) ?? undefined;
       const tags = parseCsv(params, 'tags');

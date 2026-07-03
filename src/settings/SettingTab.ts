@@ -1969,7 +1969,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       const customPath = this.plugin.settings.transcription?.customWhisperPath;
       const forceEnable = this.plugin.settings.transcription?.forceEnableCustomPath ?? false;
       const detection = await WhisperDetector.detect(
-        preferredVariant as 'auto' | 'faster-whisper' | 'openai-whisper' | 'whisper.cpp',
+        preferredVariant,
         customPath,
         forceEnable
       );
@@ -2623,6 +2623,22 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         dropdown.setValue(settings.outputLanguage || 'auto');
         dropdown.onChange((value: string) => {
           this.plugin.settings.aiComment.outputLanguage = value as AIOutputLanguage;
+          this.markDirty();
+        });
+      });
+
+    // Tag language setting
+    new Setting(containerEl)
+      .setName('Tag language')
+      .setDesc('Language for AI-suggested tags. "auto" matches the content language (e.g., Korean content → Korean tags)')
+      .addDropdown(dropdown => {
+        dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
+        for (const [lang, displayName] of Object.entries(OUTPUT_LANGUAGE_NAMES)) {
+          dropdown.addOption(lang, displayName);
+        }
+        dropdown.setValue(settings.tagLanguage || 'auto');
+        dropdown.onChange((value: string) => {
+          this.plugin.settings.aiComment.tagLanguage = value as AIOutputLanguage;
           this.markDirty();
         });
       });

@@ -770,7 +770,7 @@ export class AuthorNoteService {
   ): Promise<{ authorKey: string; legacyKeys: string[] } | null> {
     const cachedFrontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
     if (cachedFrontmatter) {
-      return this.extractAuthorIdentity(cachedFrontmatter as Record<string, unknown>);
+      return this.extractAuthorIdentity(cachedFrontmatter);
     }
 
     try {

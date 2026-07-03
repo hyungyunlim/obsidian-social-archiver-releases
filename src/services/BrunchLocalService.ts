@@ -1957,7 +1957,7 @@ export class BrunchLocalService {
       const totalEpisodes = articleList.length;
 
       for (let i = 0; i < Math.min(articleList.length, limit); i++) {
-        const articleItem = articleList[i] as Record<string, unknown> | undefined;
+        const articleItem = articleList[i];
         const article = articleItem?.article as Record<string, unknown> | undefined;
         if (!article || !article.no) continue;
 
