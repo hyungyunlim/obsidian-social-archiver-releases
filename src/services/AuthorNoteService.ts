@@ -142,34 +142,77 @@ export class AuthorNoteService {
   /**
    * Create a new author note file with YAML frontmatter + scaffold body.
    *
-   * @returns The created TFile
+   * Collision-safe and idempotent:
+   * - candidate paths are `{platform}-{slug}.md`, then `--{shortHash}.md`
+   * - a candidate is skipped when the vault index OR the adapter reports a
+   *   file there. The adapter probe catches differently-cased files on
+   *   case-insensitive file systems (macOS/Windows), where the exact-string
+   *   index lookup passes and `vault.create` then throws
+   *   'File already exists.' on every sync pass.
+   * - losing a create race to a concurrent writer (library sync's
+   *   upsertFromArchive runs alongside profile sync) adopts the winner's
+   *   file when it belongs to the same authorKey.
+   *
+   * @returns The created (or race-adopted) TFile, or null when no candidate
+   *          path could be safely created — callers degrade to a no-op and
+   *          the next sync pass retries.
    */
-  async createNote(data: AuthorNoteData): Promise<TFile> {
+  async createNote(data: AuthorNoteData): Promise<TFile | null> {
     const notesPath = this.getAuthorNotesPath();
     await this.ensureFolderExists(notesPath);
 
-    // Generate filename
-    let filename = this.generateFilename(data.platform, data.authorHandle, data.authorName);
-    let fullPath = normalizePath(`${notesPath}/${filename}`);
-
-    // Handle collision
-    if (this.app.vault.getFileByPath(fullPath)) {
-      const hash = this.shortHash(data.authorKey);
-      const base = filename.replace(/\.md$/, '');
-      filename = `${base}--${hash}.md`;
-      fullPath = normalizePath(`${notesPath}/${filename}`);
-    }
+    const filename = this.generateFilename(data.platform, data.authorHandle, data.authorName);
+    const base = filename.replace(/\.md$/, '');
+    const candidatePaths = [
+      normalizePath(`${notesPath}/${filename}`),
+      normalizePath(`${notesPath}/${base}--${this.shortHash(data.authorKey)}.md`),
+    ];
 
     // Build frontmatter YAML
     const frontmatter = this.buildFrontmatterYaml(data);
     const content = `---\n${frontmatter}---\n${DEFAULT_BODY}`;
 
-    const file = await this.app.vault.create(fullPath, content);
+    for (const fullPath of candidatePaths) {
+      const occupant = this.app.vault.getFileByPath(fullPath);
+      if (occupant) {
+        // Same author already has a note here (caller's lookup can miss on a
+        // stale key index) — adopt it instead of minting a hashed duplicate.
+        if (await this.matchesAuthorKey(occupant, data.authorKey)) {
+          return occupant;
+        }
+        continue;
+      }
+      try {
+        if (await this.app.vault.adapter.exists(fullPath)) continue;
+      } catch {
+        // Adapter probe failed — let vault.create decide below.
+      }
 
-    // Update index
-    this.invalidateIndex();
+      try {
+        const file = await this.app.vault.create(fullPath, content);
+        this.invalidateIndex();
+        return file;
+      } catch (error) {
+        if (!this.isAlreadyExistsError(error)) throw error;
+        // Lost a create race — adopt the winner if it is this author's note.
+        const winner = this.app.vault.getFileByPath(fullPath);
+        if (winner instanceof TFile && await this.matchesAuthorKey(winner, data.authorKey)) {
+          this.invalidateIndex();
+          return winner;
+        }
+        // Occupied by a different author (or unreadable) — try next candidate.
+      }
+    }
 
-    return file;
+    console.warn('[AuthorNoteService] No candidate path available — skipping note creation', {
+      authorKey: data.authorKey,
+      candidatePaths,
+    });
+    return null;
+  }
+
+  private isAlreadyExistsError(error: unknown): boolean {
+    return error instanceof Error && /already exists/i.test(error.message);
   }
 
   /**

@@ -1,14 +1,14 @@
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'eslint/config';
 import obsidianmd from 'eslint-plugin-obsidianmd';
 import svelte from 'eslint-plugin-svelte';
 import tseslint from 'typescript-eslint';
 import globals from 'globals';
 
-// import.meta.dirname is untyped (any) on @types/node < 20.11 — derive it
-// from import.meta.url so type-aware linting sees a plain string everywhere.
-const tsconfigRootDir = path.dirname(fileURLToPath(import.meta.url));
+// No Node builtin imports here (node:path/node:url trip the plugin-review
+// lint) and import.meta.dirname is untyped (any) on @types/node < 20.11 —
+// derive the root from import.meta.url via the web-standard URL global so
+// type-aware linting sees a plain string everywhere.
+const tsconfigRootDir = new URL('.', import.meta.url).pathname;
 
 export default defineConfig(
   // Global ignores

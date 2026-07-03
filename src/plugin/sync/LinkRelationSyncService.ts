@@ -15,6 +15,9 @@
  *   - WS `archive_relation_updated` (re-render source + target sides)
  *   - pull-sync delta (after library delta sync + on WS reconnect)
  *   - new-note hooks (library save / remote ingest) — late-resolution upgrade
+ *   - library sweeps (via applyForArchiveFromLibrarySweep) — gated behind a
+ *     bulk-primed relation index so a 2,500-archive sync does NOT issue 2,500
+ *     per-archive GETs against the shared server rate-limit bucket
  *
  * INBOUND-ONLY: this service never parses the section back, and never
  * POSTs/DELETEs a relation. It is fully fail-soft — every public entry point
@@ -32,6 +35,11 @@ import type { LinkedArchivesSectionManager } from '../../services/LinkedArchives
 import type { BodyWikilinkTarget } from '../../services/BodyLinkWikilinkMarker';
 import { BodyLinkWikilinkMarker } from '../../services/BodyLinkWikilinkMarker';
 import type { RelationWithSummary, ArchiveLinkRelation } from '@/types/link-relations';
+import {
+  isRateLimitError,
+  getRetryAfterMs,
+  type SyncRateLimitGate,
+} from './SyncRateLimitCoordinator';
 
 // ============================================================================
 // Coalescing state per archiveId (cloned from AnnotationSyncService)
@@ -49,6 +57,16 @@ const PULL_PAGE_LIMIT = 200;
 const PULL_APPLY_DELAY_MS = 50;
 /** Hard cap on pull pages per sweep — safety against an unexpected cursor loop. */
 const PULL_MAX_PAGES = 50;
+/** Max attempts for a per-archive relations GET (429s retried, others not). */
+const RELATION_FETCH_MAX_ATTEMPTS = 3;
+/**
+ * How long a successfully primed sweep relation index stays valid. Long
+ * library sweeps re-prime periodically; relations created mid-sweep still
+ * arrive via WS events and the pull-sync cursor, so staleness is benign.
+ */
+const SWEEP_INDEX_TTL_MS = 5 * 60_000;
+/** Re-prime much sooner after a failed prime (likely a transient server issue). */
+const SWEEP_INDEX_FAILURE_TTL_MS = 60_000;
 
 export interface LinkRelationSyncDeps {
   app: App;
@@ -58,6 +76,12 @@ export interface LinkRelationSyncDeps {
   sectionManager: LinkedArchivesSectionManager;
   settings: () => SocialArchiverSettings;
   saveSettings: () => Promise<void>;
+  /**
+   * Shared background-sync token bucket (SyncRateLimitCoordinator). Optional —
+   * when absent, requests are unthrottled (tests / legacy wiring) and 429
+   * retries fall back to explicit Retry-After delays.
+   */
+  rateLimiter?: SyncRateLimitGate;
 }
 
 // ============================================================================
@@ -75,6 +99,15 @@ export class LinkRelationSyncService {
 
   /** Guards against overlapping pull sweeps. */
   private pullInFlight = false;
+
+  /**
+   * Library-sweep relation index: archive ids that appear on EITHER side of
+   * any relation row, primed in bulk from the delta endpoint (single-flight).
+   * Resolves to null when priming failed — sweep callers then skip per-archive
+   * fetches entirely (fail-soft; pullSync/WS reconcile later).
+   */
+  private sweepIndexPromise: Promise<Set<string> | null> | null = null;
+  private sweepIndexExpiresAt = 0;
 
   /**
    * Callback invoked right before this service writes to a vault file, so
@@ -102,12 +135,40 @@ export class LinkRelationSyncService {
   }
 
   /**
+   * Re-render the `## Linked archives` section for one archive during a
+   * LIBRARY SWEEP (bootstrap / resume / delta catch-up in
+   * ArchiveLibrarySyncService). Unlike {@link applyForArchive}, this is gated
+   * behind a bulk-primed relation index so archives with no relations cost
+   * ZERO server round-trips — a 2,500-archive vault with an empty
+   * archive_link_relations table primes the index in one paged request instead
+   * of issuing 2,500 per-archive GETs against the shared rate-limit bucket.
+   *
+   * Fail-soft: when the index cannot be primed the per-archive fetch is
+   * SKIPPED (not fallen back to — that would recreate the flood). The
+   * pull-sync cursor sweep that runs after library sync and WS relation
+   * events reconcile any misses.
+   */
+  async applyForArchiveFromLibrarySweep(archiveId: string): Promise<void> {
+    if (!this.deps.settings().enableLinkedArchivesSection) return;
+    if (!archiveId) return;
+
+    const index = await this.getSweepRelationIndex();
+    if (!index || !index.has(archiveId)) return;
+
+    await this.coalesce(archiveId);
+  }
+
+  /**
    * Handle a WS `archive_relation_updated` event: re-render both ends of the
    * relation that resolve to a local file. Gated on the feature toggle.
    */
   async handleRelationUpdated(relation: ArchiveLinkRelation | undefined): Promise<void> {
     if (!this.deps.settings().enableLinkedArchivesSection) return;
     if (!relation) return;
+
+    // Keep an active sweep index current so archives touched by relations
+    // created mid-sweep still pass the library-sweep gate.
+    this.noteRelationTouched([relation.sourceArchiveId, relation.targetArchiveId]);
 
     await this.applyForArchive(relation.sourceArchiveId);
     if (relation.targetArchiveId) {
@@ -136,6 +197,7 @@ export class LinkRelationSyncService {
       let cursor = this.deps.settings().linkRelationsSync?.lastServerTime ?? '';
 
       for (let page = 0; page < PULL_MAX_PAGES; page++) {
+        await this.deps.rateLimiter?.acquire();
         const result = await apiClient.getLinkRelationsUpdatedAfter(cursor || null, PULL_PAGE_LIMIT);
         if (!result) {
           // Fail-soft: stop without advancing the cursor.
@@ -240,19 +302,11 @@ export class LinkRelationSyncService {
       return;
     }
 
-    let relations: RelationWithSummary[];
-    try {
-      const apiClient = this.deps.apiClient();
-      if (!apiClient) return;
-      relations = await apiClient.getArchiveLinkRelations(archiveId);
-    } catch (err) {
-      console.warn(
-        '[LinkRelationSyncService] Failed to fetch link relations for:',
-        archiveId,
-        err instanceof Error ? err.message : String(err),
-      );
-      return;
-    }
+    const apiClient = this.deps.apiClient();
+    if (!apiClient) return;
+
+    const relations = await this.fetchRelationsWithRetry(apiClient, archiveId);
+    if (relations === null) return;
 
     const block = this.deps.renderer.render({ relations, selfArchiveId: archiveId }, file.path);
 
@@ -277,6 +331,128 @@ export class LinkRelationSyncService {
         err instanceof Error ? err.message : String(err),
       );
     }
+  }
+
+  /**
+   * Fetch a single archive's relations through the shared token bucket,
+   * retrying rate-limit rejections with the server's Retry-After. Any other
+   * error (or exhausted retries) degrades to null — the caller no-ops.
+   * Never throws.
+   */
+  private async fetchRelationsWithRetry(
+    apiClient: WorkersAPIClient,
+    archiveId: string,
+  ): Promise<RelationWithSummary[] | null> {
+    for (let attempt = 1; attempt <= RELATION_FETCH_MAX_ATTEMPTS; attempt++) {
+      try {
+        await this.deps.rateLimiter?.acquire();
+        return await apiClient.getArchiveLinkRelations(archiveId);
+      } catch (err) {
+        if (isRateLimitError(err) && attempt < RELATION_FETCH_MAX_ATTEMPTS) {
+          // With a coordinator wired, reporting the 429 makes the next
+          // acquire() wait out the shared cooldown; without one, wait here.
+          if (this.deps.rateLimiter) {
+            this.deps.rateLimiter.reportRateLimited(err);
+          } else {
+            await this.delay(getRetryAfterMs(err));
+          }
+          continue;
+        }
+        console.warn(
+          '[LinkRelationSyncService] Failed to fetch link relations for:',
+          archiveId,
+          err instanceof Error ? err.message : String(err),
+        );
+        return null;
+      }
+    }
+    return null;
+  }
+
+  // --------------------------------------------------------------------------
+  // Library-sweep relation index
+  // --------------------------------------------------------------------------
+
+  /**
+   * Single-flight, TTL-cached prime of the sweep relation index. A resolved
+   * null (prime failure) is cached for a shorter TTL so a failing server is
+   * not re-hammered once per archive.
+   */
+  private getSweepRelationIndex(): Promise<Set<string> | null> {
+    const now = Date.now();
+    if (this.sweepIndexPromise && now < this.sweepIndexExpiresAt) {
+      return this.sweepIndexPromise;
+    }
+
+    const promise = this.buildSweepRelationIndex();
+    this.sweepIndexPromise = promise;
+    // Provisional expiry covers the in-flight window; refined on resolution.
+    this.sweepIndexExpiresAt = now + SWEEP_INDEX_TTL_MS;
+    void promise.then((index) => {
+      if (this.sweepIndexPromise !== promise) return;
+      this.sweepIndexExpiresAt =
+        Date.now() + (index ? SWEEP_INDEX_TTL_MS : SWEEP_INDEX_FAILURE_TTL_MS);
+    });
+    return promise;
+  }
+
+  /**
+   * Page the bulk delta endpoint from the epoch and collect every archive id
+   * on either side of a relation row (soft-deleted included — their local
+   * sections still need stale rows dropped). One request for users with no
+   * relations. Returns null on any failure. Never throws.
+   */
+  private async buildSweepRelationIndex(): Promise<Set<string> | null> {
+    const apiClient = this.deps.apiClient();
+    if (!apiClient) return null;
+
+    const index = new Set<string>();
+    let cursor: string | null = null;
+
+    try {
+      for (let page = 0; page < PULL_MAX_PAGES; page++) {
+        await this.deps.rateLimiter?.acquire();
+        const result = await apiClient.getLinkRelationsUpdatedAfter(cursor, PULL_PAGE_LIMIT);
+        if (!result) return null;
+
+        const { relations } = result;
+        for (const relation of relations) {
+          if (relation.sourceArchiveId) index.add(relation.sourceArchiveId);
+          if (relation.targetArchiveId) index.add(relation.targetArchiveId);
+        }
+
+        if (relations.length < PULL_PAGE_LIMIT) {
+          return index;
+        }
+
+        const lastUpdatedAt = relations[relations.length - 1]?.updatedAt;
+        if (!lastUpdatedAt || lastUpdatedAt === cursor) {
+          // Cannot advance — treat what we have as complete enough; misses
+          // are reconciled by pullSync/WS.
+          return index;
+        }
+        cursor = lastUpdatedAt;
+      }
+      return index;
+    } catch (err) {
+      console.warn(
+        '[LinkRelationSyncService] Failed to prime sweep relation index:',
+        err instanceof Error ? err.message : String(err),
+      );
+      return null;
+    }
+  }
+
+  /** Add archive ids to a primed sweep index (no-op while unprimed/failed). */
+  private noteRelationTouched(archiveIds: Array<string | null | undefined>): void {
+    const promise = this.sweepIndexPromise;
+    if (!promise) return;
+    void promise.then((index) => {
+      if (!index) return;
+      for (const id of archiveIds) {
+        if (id) index.add(id);
+      }
+    });
   }
 
   /**

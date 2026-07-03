@@ -20,16 +20,27 @@ export class AuthorProfileSyncService {
   }
 
   async applyProfiles(profiles: UserAuthorProfile[]): Promise<void> {
+    const failures: Array<{ authorKey: string; error: string }> = [];
+
     for (const profile of profiles) {
       try {
         this.beforeApply?.(profile.authorKey);
         await this.authorNoteService.upsertFromSyncedProfile(profile);
       } catch (error) {
-        console.error('[AuthorProfileSync] Failed to apply profile — skipping', {
+        failures.push({
           authorKey: profile.authorKey,
           error: error instanceof Error ? error.message : String(error),
         });
       }
+    }
+
+    // One summary line instead of one error per profile — a systemic cause
+    // (rate limit, folder problem) otherwise floods the console every sync.
+    if (failures.length > 0) {
+      console.warn(
+        `[AuthorProfileSync] ${failures.length}/${profiles.length} profile(s) failed to apply — skipped`,
+        failures.slice(0, 5),
+      );
     }
   }
 }

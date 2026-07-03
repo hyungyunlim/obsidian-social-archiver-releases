@@ -60,6 +60,7 @@ import { AnnotationRenderer } from './services/AnnotationRenderer';
 import { AnnotationSectionManager } from './services/AnnotationSectionManager';
 import { HighlightBodyMarker } from './services/HighlightBodyMarker';
 import { LinkRelationSyncService } from './plugin/sync/LinkRelationSyncService';
+import { SyncRateLimitCoordinator } from './plugin/sync/SyncRateLimitCoordinator';
 import { LinkedArchivesRenderer } from './services/LinkedArchivesRenderer';
 import { LinkedArchivesSectionManager } from './services/LinkedArchivesSectionManager';
 import { AnnotationFallbackPoller } from './services/AnnotationFallbackPoller';
@@ -1626,6 +1627,12 @@ export default class SocialArchiverPlugin extends Plugin {
       // Start listening for comment changes to sync outbound
       this.annotationOutboundService.start();
 
+      // Shared background-sync token bucket: library sync, link-relation sync,
+      // and mobile queue drains all hit the same server per-user rate-limit
+      // bucket (100 req/60s) — one coordinator keeps their combined traffic
+      // under it and propagates server 429 cooldowns to every consumer.
+      const syncRateLimitCoordinator = new SyncRateLimitCoordinator();
+
       // Initialize LinkRelationSyncService (renders the managed `## Linked
       // archives` section from server archive_link_relations → [[wikilinks]],
       // powering Obsidian graph view). The renderer's resolver reuses the same
@@ -1650,6 +1657,7 @@ export default class SocialArchiverPlugin extends Plugin {
         sectionManager: linkedArchivesSectionManager,
         settings: () => this.settings,
         saveSettings: () => this.saveSettingsPartial({}, { reinitialize: false, notify: false }),
+        rateLimiter: syncRateLimitCoordinator,
       });
       // Suppress the outbound comment echo when the linked-archives writer touches
       // a note (reuses the annotation outbound suppression, same as inbound sync).
@@ -1915,6 +1923,7 @@ export default class SocialArchiverPlugin extends Plugin {
         },
         schedule: (cb, delay) => this.scheduleTrackedTimeout(cb, delay),
         notify: (msg, timeout) => new Notice(msg, timeout),
+        rateLimiter: syncRateLimitCoordinator,
       });
 
       // Create RemoteArchiveIngestService (shared single-archive fetch+save for WS events)
@@ -2015,10 +2024,14 @@ export default class SocialArchiverPlugin extends Plugin {
         reconcileCommentState: (file, archive) =>
           this.commentStateSyncService?.reconcileFromLibrarySync(file, archive) ??
           Promise.resolve(),
+        // Library sweeps go through the sweep-index gate: archives with no
+        // relations cost zero per-archive GETs (2,500-archive vaults used to
+        // flood the shared rate-limit bucket with one GET per archive).
         reconcileLinkRelationState: (_file, archiveId) =>
-          this.linkRelationSyncService?.applyForArchive(archiveId) ??
+          this.linkRelationSyncService?.applyForArchiveFromLibrarySweep(archiveId) ??
           Promise.resolve(),
         localLockRegistry: this.localLockRegistry,
+        rateLimiter: syncRateLimitCoordinator,
       });
 
       this.aiCommentCapabilityReporter?.dispose();

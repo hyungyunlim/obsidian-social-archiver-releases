@@ -25,6 +25,11 @@ import type { PostData } from '../../types/post';
 import type { SocialArchiverSettings } from '../../types/settings';
 import type { LocalLockRegistry } from '../locks/LocalLockRegistry';
 import { isLocalOnlyNoteByContent } from './localOnlyNoteGuard';
+import {
+  isRateLimitError,
+  getRetryAfterMs,
+  type SyncRateLimitGate,
+} from './SyncRateLimitCoordinator';
 
 // ============================================================================
 // Constants
@@ -41,6 +46,13 @@ const LIBRARY_SYNC_MAX_PAGE_RETRIES = 3;
 
 /** Base delay for exponential backoff (ms). */
 const LIBRARY_SYNC_RETRY_BASE_DELAY_MS = 1000;
+
+/**
+ * Fallback delay for a 429 without a parseable Retry-After. The server's
+ * shared bucket window is 60s, so the 1s/2s/4s exponential ladder is far too
+ * short for rate limits.
+ */
+const LIBRARY_SYNC_RATE_LIMIT_FALLBACK_DELAY_MS = 15_000;
 
 // ============================================================================
 // Interface contracts (implemented by other agents / parallel modules)
@@ -224,6 +236,14 @@ export interface ArchiveLibrarySyncDeps {
 
   /** Shared local write lock registry used by plugin archive/materialization writers. */
   localLockRegistry?: LocalLockRegistry;
+
+  /**
+   * Shared background-sync token bucket (SyncRateLimitCoordinator) so page
+   * fetches don't blindly compete with LinkRelationSyncService and
+   * MobileSyncService for the server's per-user rate-limit bucket. Optional —
+   * absent in tests/legacy wiring.
+   */
+  rateLimiter?: SyncRateLimitGate;
 }
 
 // ============================================================================
@@ -1051,6 +1071,7 @@ export class ArchiveLibrarySyncService {
           throw new Error('API client not initialised');
         }
 
+        await this.deps.rateLimiter?.acquire(signal);
         const response = await apiClient.getUserArchives(params);
         return {
           archives: response.archives,
@@ -1072,7 +1093,15 @@ export class ArchiveLibrarySyncService {
         }
 
         if (attempt < LIBRARY_SYNC_MAX_PAGE_RETRIES) {
-          const delay = LIBRARY_SYNC_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+          // Honor the server's Retry-After on 429 — the fixed exponential
+          // ladder (1s/2s/4s) burns every retry inside the same 60s window.
+          const rateLimited = isRateLimitError(error);
+          const delay = rateLimited
+            ? getRetryAfterMs(error, LIBRARY_SYNC_RATE_LIMIT_FALLBACK_DELAY_MS)
+            : LIBRARY_SYNC_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+          if (rateLimited) {
+            this.deps.rateLimiter?.reportRateLimited(error);
+          }
           console.warn(
             `[Social Archiver] [LibrarySync] Page fetch failed (attempt ${attempt}/${LIBRARY_SYNC_MAX_PAGE_RETRIES}), retrying in ${delay}ms`,
             error

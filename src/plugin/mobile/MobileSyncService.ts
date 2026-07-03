@@ -2,6 +2,11 @@ import { Notice } from 'obsidian';
 import type { WorkersAPIClient, UserArchive } from '../../services/WorkersAPIClient';
 import type { PendingPost } from '../../services/SubscriptionManager';
 import type { PostData } from '../../types/post';
+import {
+  isRateLimitError,
+  getRetryAfterMs,
+  type SyncRateLimitGate,
+} from '../sync/SyncRateLimitCoordinator';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -20,6 +25,21 @@ const MOBILE_SYNC_PENDING_RETRY_DELAY = 30000;
  * Inner 5-attempt retry already covers replication lag.
  */
 const MOBILE_SYNC_QUEUE_MAX_RETRIES = 1;
+
+/**
+ * Outcome of a single queue-item sync attempt. Rate-limited items are
+ * deliberately NOT reported via failSyncItem: the server marks failed items
+ * 'failed', GET /api/sync/queue only returns 'pending' items, and the plugin
+ * never calls POST /api/sync/queue/retry — so a failed mark would orphan the
+ * item until its 7-day TTL. Leaving it pending lets the scheduled catch-up
+ * pick it up again.
+ */
+type SyncQueueItemOutcome =
+  | 'saved'
+  | 'acked-duplicate'
+  | 'rate-limited'
+  | 'retry-scheduled'
+  | 'failed';
 
 // ---------------------------------------------------------------------------
 // Dependency interface
@@ -55,6 +75,14 @@ export interface MobileSyncServiceDeps {
 
   /** Show a user-visible notification. */
   notify: (message: string, timeout?: number) => void;
+
+  /**
+   * Shared background-sync token bucket (SyncRateLimitCoordinator) so queue
+   * drains don't blindly compete with the library/link-relation sync for the
+   * server's per-user rate-limit bucket. Optional — absent in tests/legacy
+   * wiring.
+   */
+  rateLimiter?: SyncRateLimitGate;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,6 +110,18 @@ export class MobileSyncService {
    * Shared by real-time WebSocket handler and catch-up polling.
    */
   async processSyncQueueItem(queueId: string, archiveId: string, clientId: string): Promise<boolean> {
+    const outcome = await this.processQueueItemInternal(queueId, archiveId, clientId, {
+      suppressFailureNotice: false,
+    });
+    return outcome === 'saved' || outcome === 'acked-duplicate';
+  }
+
+  private async processQueueItemInternal(
+    queueId: string,
+    archiveId: string,
+    clientId: string,
+    options: { suppressFailureNotice: boolean },
+  ): Promise<SyncQueueItemOutcome> {
     try {
       this.scheduledMobileSyncRetries.delete(queueId);
 
@@ -96,7 +136,7 @@ export class MobileSyncService {
           throw new Error('API client not initialized');
         }
         await apiClient.ackSyncItem(queueId, clientId);
-        return true;
+        return 'acked-duplicate';
       }
 
       // 3. Convert UserArchive to PostData format
@@ -125,12 +165,29 @@ export class MobileSyncService {
         new Notice(`\u2705 Saved to vault: ${displayTitle}`, 3000);
         // Explicitly refresh timeline after single-item sync
         this.deps.refreshTimelineView();
-        return true;
+        return 'saved';
       } else {
         throw new Error('Failed to save to vault');
       }
 
     } catch (error) {
+      // Rate limit: leave the item PENDING on the server. failSyncItem would
+      // mark it 'failed' \u2014 a state GET /api/sync/queue never returns and the
+      // plugin never retries \u2014 so the item would silently expire after 7 days.
+      // A scheduled catch-up (honoring Retry-After) re-drains the queue instead.
+      if (isRateLimitError(error)) {
+        this.deps.rateLimiter?.reportRateLimited(error);
+        console.warn('[Social Archiver] Client sync rate-limited; leaving queue item pending', {
+          queueId, archiveId, clientId,
+        });
+        this.schedulePendingSyncRetry(
+          queueId,
+          archiveId,
+          Math.max(getRetryAfterMs(error), MOBILE_SYNC_PENDING_RETRY_DELAY),
+        );
+        return 'rate-limited';
+      }
+
       if (this.isArchiveNotFoundError(error)) {
         const retryCount = (this.mobileSyncRetryCount.get(queueId) ?? 0) + 1;
         this.mobileSyncRetryCount.set(queueId, retryCount);
@@ -147,18 +204,20 @@ export class MobileSyncService {
               await apiClient.failSyncItem(queueId, clientId, `Archive ${archiveId} not found on server; it may have been deleted before sync`);
             } catch { /* non-fatal */ }
           }
-          return false;
+          return 'failed';
         }
 
         console.warn('[Social Archiver] Archive not found during client sync; scheduling retry', {
           queueId, archiveId, clientId, retryCount, maxRetries: MOBILE_SYNC_QUEUE_MAX_RETRIES,
         });
         this.schedulePendingSyncRetry(queueId, archiveId);
-        return false;
+        return 'retry-scheduled';
       }
 
       console.error('[Social Archiver] Client sync failed:', error);
-      new Notice(`\u274C Failed to sync: ${error instanceof Error ? error.message : 'Unknown error'}`, 5000);
+      if (!options.suppressFailureNotice) {
+        new Notice(`\u274C Failed to sync: ${error instanceof Error ? error.message : 'Unknown error'}`, 5000);
+      }
 
       // Report failure to server
       const apiClient = this.deps.apiClient();
@@ -169,7 +228,7 @@ export class MobileSyncService {
           // Non-fatal
         }
       }
-      return false;
+      return 'failed';
     }
   }
 
@@ -201,10 +260,24 @@ export class MobileSyncService {
       this.deps.suppressTimelineRefresh();
 
       let successCount = 0;
+      let failedCount = 0;
+      let rateLimited = false;
       for (const item of pendingItems) {
-        const success = await this.processSyncQueueItem(item.queueId, item.archiveId, clientId);
-        if (success) {
+        const outcome = await this.processQueueItemInternal(item.queueId, item.archiveId, clientId, {
+          // Per-item failure notices flood during large catch-ups — one
+          // summary notice is emitted after the loop instead.
+          suppressFailureNotice: true,
+        });
+        if (outcome === 'saved' || outcome === 'acked-duplicate') {
           successCount++;
+        } else if (outcome === 'rate-limited') {
+          // The remaining items would hit the same exhausted server bucket —
+          // stop the batch. They stay 'pending' on the server and the retry
+          // scheduled for the rate-limited item re-drains the whole queue.
+          rateLimited = true;
+          break;
+        } else if (outcome === 'failed') {
+          failedCount++;
         }
       }
 
@@ -213,6 +286,20 @@ export class MobileSyncService {
 
       if (successCount > 0) {
         console.debug(`[Social Archiver] Catch-up complete: ${successCount}/${pendingItems.length} synced`);
+      }
+
+      if (rateLimited) {
+        const deferredCount = pendingItems.length - successCount - failedCount;
+        this.deps.notify(
+          `⏳ Mobile sync paused by server rate limit — ${deferredCount} archive(s) will retry automatically.`,
+          5000,
+        );
+      }
+      if (failedCount > 0) {
+        this.deps.notify(
+          `❌ Failed to sync ${failedCount} archive(s) from mobile. See console for details.`,
+          5000,
+        );
       }
     } catch (error) {
       console.error('[Social Archiver] Failed to process pending sync queue:', error);
@@ -261,6 +348,7 @@ export class MobileSyncService {
 
     for (let attempt = 1; attempt <= MOBILE_SYNC_ARCHIVE_FETCH_MAX_ATTEMPTS; attempt++) {
       try {
+        await this.deps.rateLimiter?.acquire();
         const response = await apiClient.getUserArchive(archiveId);
         if (!response.archive) {
           throw new Error('Failed to fetch archive data');
@@ -288,7 +376,11 @@ export class MobileSyncService {
     throw lastError instanceof Error ? lastError : new Error('Failed to fetch archive data');
   }
 
-  private schedulePendingSyncRetry(queueId: string, archiveId: string): void {
+  private schedulePendingSyncRetry(
+    queueId: string,
+    archiveId: string,
+    delayMs: number = MOBILE_SYNC_PENDING_RETRY_DELAY,
+  ): void {
     if (this.scheduledMobileSyncRetries.has(queueId)) {
       return;
     }
@@ -303,6 +395,6 @@ export class MobileSyncService {
           error,
         });
       });
-    }, MOBILE_SYNC_PENDING_RETRY_DELAY);
+    }, delayMs);
   }
 }
