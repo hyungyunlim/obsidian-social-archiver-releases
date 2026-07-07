@@ -20,7 +20,7 @@
  * Spec: `.taskmaster/docs/prd-in-app-notice-channel-plugin.md`
  */
 
-import { App, Modal, setIcon } from 'obsidian';
+import { App, Modal, Notice as ObsidianNotice, setIcon } from 'obsidian';
 import {
   executeCta,
   noticeLevelIcon,
@@ -112,6 +112,16 @@ export class NoticeDetailModal extends Modal {
     const actions = contentEl.createDiv({ cls: 'nb-modal-actions' });
     const cta = this.notice.cta;
 
+    if (this.deps.noticesService.canArchiveNotices()) {
+      const saveButton = actions.createEl('button', {
+        cls: 'nb-modal-button nb-modal-button-secondary mod-save',
+        text: 'Save to archive',
+      });
+      saveButton.addEventListener('click', () => {
+        void this.saveNotice(saveButton);
+      });
+    }
+
     if (cta) {
       const primary = actions.createEl('button', {
         cls: 'nb-modal-button nb-modal-button-primary mod-cta',
@@ -135,6 +145,26 @@ export class NoticeDetailModal extends Modal {
         this.close();
       });
       closeBtn.focus();
+    }
+  }
+
+  private async saveNotice(button: HTMLButtonElement): Promise<void> {
+    button.disabled = true;
+    button.textContent = 'Saving...';
+    try {
+      const result = await this.deps.noticesService.archiveNotice(this.notice.id);
+      new ObsidianNotice(result.created ? 'Saved to archive' : 'Already saved');
+    } catch (error) {
+      console.warn(
+        '[NoticeDetailModal] Failed to save notice:',
+        error instanceof Error ? error.message : String(error),
+      );
+      new ObsidianNotice('Failed to save notice');
+    } finally {
+      if (button.isConnected) {
+        button.disabled = false;
+        button.textContent = 'Save to archive';
+      }
     }
   }
 }

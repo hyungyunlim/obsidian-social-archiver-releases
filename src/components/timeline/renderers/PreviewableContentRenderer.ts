@@ -55,6 +55,7 @@
  *   the source for podcast metadata, so the visual is consistent.
  */
 
+import { MarkdownRenderer } from 'obsidian';
 import type { PostData } from '@/types/post';
 import {
   formatDuration,
@@ -800,24 +801,11 @@ export class PreviewableContentRenderer {
    * in `PreviewContext`.
    */
   private async renderMarkdownOrText(target: HTMLElement, source: string): Promise<void> {
-    const canRenderMarkdown = !!(this.context.app && this.context.component);
-    if (canRenderMarkdown) {
+    const { app, component } = this.context;
+    if (app && component) {
       try {
-        const obsidian = await import('obsidian');
-        const renderer = (
-          obsidian as unknown as {
-            MarkdownRenderer?: {
-              render: (
-                a: unknown,
-                md: string,
-                el: HTMLElement,
-                src: string,
-                c: unknown,
-              ) => Promise<void>;
-            };
-          }
-        ).MarkdownRenderer;
-        if (renderer && typeof renderer.render === 'function') {
+        const renderer = MarkdownRenderer;
+        if (typeof renderer.render === 'function') {
           // Escapes are markdown-only: they prepend backslashes that
           // MarkdownRenderer consumes during parsing. On the plain-text
           // branch below they would leak through as literal `\.` / `\===`
@@ -826,7 +814,7 @@ export class PreviewableContentRenderer {
           processed = PreviewableContentRenderer.escapeMarkdownHeadings(processed);
           processed = PreviewableContentRenderer.escapeOrderedListPatterns(processed);
           processed = PreviewableContentRenderer.escapeAngleBrackets(processed);
-          await renderer.render(this.context.app, processed, target, '', this.context.component);
+          await renderer.render(app, processed, target, '', component);
           return;
         }
       } catch {

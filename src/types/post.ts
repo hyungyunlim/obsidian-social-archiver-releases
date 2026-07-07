@@ -48,6 +48,11 @@ export interface Author {
   lastMetadataUpdate?: Date; // Timestamp of last metadata update
 }
 
+export interface ReaderChatTimelineSection {
+  headingLine: string;
+  section: string;
+}
+
 // Post metadata
 export interface PostMetadata {
   likes?: number;
@@ -336,6 +341,7 @@ export interface PostData {
    * local-formatted display string from `formatLocalTimestamp` (not ISO).
    */
   userNotes?: Array<{ content: string; createdAt: string | null }>;
+  readerChat?: ReaderChatTimelineSection;
   /**
    * Relation rows parsed from the managed `## Linked archives` block (reverse
    * of `LinkedArchivesRenderer`). Rows keep their markdown form — the card
@@ -588,6 +594,10 @@ export const PostDataSchema: z.ZodType<PostData> = z.lazy(() => z.object({
   schemaVersion: z.literal('1.0.0').optional(),
   contentType: z.enum(['post', 'article', 'timeline', 'note', 'meeting-note', 'audio-note']).nullish(),
   postType: z.enum(['note', 'article']).nullish(), // PRD §22.1: Substack note vs article
+  readerChat: z.object({
+    headingLine: z.string(),
+    section: z.string(),
+  }).nullish(),
   platform: platformEnum,
   id: z.string(),
   url: z.string(),

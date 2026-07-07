@@ -29,6 +29,8 @@ import type { WorkersAPIClient } from './WorkersAPIClient';
 import type { SocialArchiverSettings } from '../types/settings';
 import type {
   NoticePayloadV1,
+  NoticeArchiveEnvelopeV1,
+  NoticeArchiveResponseV1,
   NoticesResponseV1,
   NoticesEnvelopeV1,
   NoticesServiceState,
@@ -328,6 +330,35 @@ export class NoticesService {
    */
   getVisibleNotice(): NoticePayloadV1 | null {
     return selectVisibleFromState(this.state);
+  }
+
+  canArchiveNotices(): boolean {
+    return Boolean(this.deps.apiClient.getAuthToken());
+  }
+
+  async archiveNotice(noticeId: string): Promise<NoticeArchiveResponseV1> {
+    const id = noticeId.trim();
+    if (!id) {
+      throw new Error('Notice id is required');
+    }
+
+    const endpoint = this.deps.apiClient.getEndpoint().replace(/\/$/, '');
+    const response = await requestUrl({
+      url: `${endpoint}/api/app/notices/${encodeURIComponent(id)}/archive`,
+      method: 'POST',
+      headers: this.buildHeaders(),
+      throw: false,
+    });
+    const envelope = response.json as NoticeArchiveEnvelopeV1 | null;
+
+    if (response.status < 200 || response.status >= 300 || !envelope || envelope.success === false) {
+      const message = envelope && envelope.success === false
+        ? envelope.error?.message
+        : undefined;
+      throw new Error(message || 'Failed to save notice');
+    }
+
+    return envelope.data;
   }
 
   /**

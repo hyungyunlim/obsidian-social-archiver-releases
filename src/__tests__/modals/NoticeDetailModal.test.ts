@@ -53,12 +53,30 @@ function makeFakeTelemetry(): NoticeTelemetryService {
   } as unknown as NoticeTelemetryService;
 }
 
-function makeFakeNoticesService(): Pick<NoticesService, 'dismiss'> & { dismissMock: ReturnType<typeof vi.fn> } {
+function makeFakeNoticesService(): Pick<NoticesService, 'dismiss' | 'canArchiveNotices' | 'archiveNotice'> & {
+  dismissMock: ReturnType<typeof vi.fn>;
+  canArchiveNoticesMock: ReturnType<typeof vi.fn>;
+  archiveNoticeMock: ReturnType<typeof vi.fn>;
+} {
   const dismiss = vi.fn(async () => {});
+  const canArchiveNotices = vi.fn(() => false);
+  const archiveNotice = vi.fn(async () => ({
+    archiveId: 'notice-archive-1',
+    createdAt: new Date().toISOString(),
+    created: true,
+  }));
   return {
     dismiss,
+    canArchiveNotices,
+    archiveNotice,
     dismissMock: dismiss,
-  } as unknown as Pick<NoticesService, 'dismiss'> & { dismissMock: ReturnType<typeof vi.fn> };
+    canArchiveNoticesMock: canArchiveNotices,
+    archiveNoticeMock: archiveNotice,
+  } as unknown as Pick<NoticesService, 'dismiss' | 'canArchiveNotices' | 'archiveNotice'> & {
+    dismissMock: ReturnType<typeof vi.fn>;
+    canArchiveNoticesMock: ReturnType<typeof vi.fn>;
+    archiveNoticeMock: ReturnType<typeof vi.fn>;
+  };
 }
 
 describe('NoticeDetailModal', () => {
@@ -164,6 +182,31 @@ describe('NoticeDetailModal', () => {
       '.nb-modal-button-secondary',
     )!.click();
     expect(telemetry.trackCtaClicked).not.toHaveBeenCalled();
+  });
+
+  it('archives from the secondary action without dismissing or firing CTA telemetry', async () => {
+    const telemetry = makeFakeTelemetry();
+    const noticesService = makeFakeNoticesService();
+    noticesService.canArchiveNoticesMock.mockReturnValue(true);
+    const notice = makeNotice({ cta: undefined });
+    const modal = new NoticeDetailModal({}, notice, {
+      telemetry,
+      noticesService: noticesService as unknown as NoticesService,
+    });
+    const closeSpy = vi.spyOn(modal, 'close');
+    modal.open();
+
+    const save = Array.from(
+      modal.contentEl.querySelectorAll<HTMLButtonElement>('.nb-modal-button-secondary'),
+    ).find((button) => button.textContent === 'Save to archive')!;
+    save.click();
+    await Promise.resolve();
+
+    expect(noticesService.archiveNoticeMock).toHaveBeenCalledWith('modal-test-1');
+    expect(noticesService.dismissMock).not.toHaveBeenCalled();
+    expect(telemetry.trackCtaClicked).not.toHaveBeenCalled();
+    expect(closeSpy).not.toHaveBeenCalled();
+    modal.close();
   });
 
   it('header renders only the eyebrow chip (Obsidian Modal owns the X close)', () => {

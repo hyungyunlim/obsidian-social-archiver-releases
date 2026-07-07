@@ -70,6 +70,10 @@ export const PROFILE_ARCHIVE_SUPPORTED_PLATFORMS = [
   'bluesky', 'mastodon', 'youtube', 'naver', 'brunch'
 ] as const;
 
+export const IMMEDIATE_PROFILE_CRAWL_PLATFORMS = [
+  'bluesky', 'mastodon', 'youtube', 'x', 'instagram', 'threads'
+] as const;
+
 /**
  * Platforms that support new subscriptions in UI
  * Note: X re-enabled via xcancel RSS (free, no BrightData)
@@ -101,6 +105,13 @@ export function needsFeedUrlDerivation(platform: string): boolean {
 
 export function isSubscriptionSupported(platform: string): platform is SubscriptionSupportedPlatform {
   return SUBSCRIPTION_SUPPORTED_PLATFORMS.includes(platform as SubscriptionSupportedPlatform);
+}
+
+export function isImmediateProfileCrawlPlatform(platform: string | null | undefined): boolean {
+  return Boolean(
+    platform &&
+    IMMEDIATE_PROFILE_CRAWL_PLATFORMS.includes(platform as typeof IMMEDIATE_PROFILE_CRAWL_PLATFORMS[number])
+  );
 }
 
 export function isGenericSubscriptionSupported(

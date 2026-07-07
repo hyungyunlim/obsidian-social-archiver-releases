@@ -68,6 +68,12 @@ export interface NoticesResponseV1 {
   serverTime: string;
 }
 
+export interface NoticeArchiveResponseV1 {
+  archiveId: string;
+  createdAt: string;
+  created: boolean;
+}
+
 /**
  * Localizable copy bundle. Plugin does not consume this directly today
  * (server returns already-localized `title`/`body`/`cta.label`), but it is
@@ -136,4 +142,8 @@ export interface NoticesErrorEnvelopeV1 {
 
 export type NoticesEnvelopeV1 =
   | NoticesSuccessEnvelopeV1
+  | NoticesErrorEnvelopeV1;
+
+export type NoticeArchiveEnvelopeV1 =
+  | { success: true; data: NoticeArchiveResponseV1 }
   | NoticesErrorEnvelopeV1;

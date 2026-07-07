@@ -22,6 +22,7 @@ import {
   PROFILE_CRAWL_SUPPORTED_PLATFORMS,
   PROFILE_ARCHIVE_SUPPORTED_PLATFORMS,
   NEW_SUBSCRIPTION_PLATFORMS,
+  isImmediateProfileCrawlPlatform,
 } from '@/constants/rssPlatforms';
 import { getAuthorCatalogStore } from '@/services/AuthorCatalogStore';
 import {
@@ -1924,11 +1925,8 @@ export class ArchiveModal extends Modal {
         return;
       }
 
-      // Register job with CrawlJobTracker for real-time status banner display
-      // Skip for free API platforms (Fediverse, YouTube, X) - they complete synchronously
-      // and the WebSocket event will handle job completion before this code runs
-      const isFreeApiPlatform = request.platform === 'bluesky' || request.platform === 'mastodon' || request.platform === 'youtube' || request.platform === 'x' || request.platform === 'instagram';
-      if (!isFreeApiPlatform) {
+      const isImmediateProfileCrawl = isImmediateProfileCrawlPlatform(request.platform);
+      if (!isImmediateProfileCrawl) {
         this.plugin.crawlJobTracker.startJob(
           {
             jobId: response.jobId,
@@ -1940,10 +1938,7 @@ export class ArchiveModal extends Modal {
         );
       }
 
-      // Add job to PendingJobsManager
-      // For free API platforms (Fediverse, YouTube): skip adding since WebSocket handles everything synchronously
-      // For BrightData: use 'processing' status to prevent re-submission
-      if (!isFreeApiPlatform) {
+      if (!isImmediateProfileCrawl) {
         await this.plugin.pendingJobsManager.addJob({
           id: response.jobId,
           url: request.profileUrl,

@@ -32,6 +32,8 @@
 /* PostCardRenderer component styles */
 @import './components/post-card.css';
 
+@import './components/reader-chat-section.css';
+
 /* Editor TTS highlight and status bar player */
 @import './components/editor-tts.css';
 

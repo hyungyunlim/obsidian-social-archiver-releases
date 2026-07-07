@@ -11,6 +11,7 @@ import { parseLinkedArchivesBlock } from '../../../services/markdown/LinkedArchi
 import { mergeTagListsCaseInsensitive } from '../../../utils/tags';
 import { SentinelMediaRegionManager } from '../../../plugin/realtime/SentinelMediaRegionManager';
 import { isLocalOnlyFrontmatter } from '../../../plugin/sync/localOnlyNoteGuard';
+import { extractTrailingReaderChatSection } from '../../../utils/reader-chat-section';
 import {
   IMPORT_MODE_FRONTMATTER_KEY,
   IMPORT_SOURCE_FRONTMATTER_KEY,
@@ -522,6 +523,7 @@ export class PostDataParser {
       // Parse relation rows from the managed "## Linked archives" block — it
       // sits after the footer too, so the same raw-content rule applies.
       const linkedArchives = parseLinkedArchivesBlock(content) ?? undefined;
+      const readerChat = extractTrailingReaderChatSection(content) ?? undefined;
 
       const authorAvatarRaw = frontmatter['authorAvatar'] as string | undefined;
       const authorAvatarIsExternal = typeof authorAvatarRaw === 'string' && authorAvatarRaw.startsWith('http');
@@ -547,6 +549,7 @@ export class PostDataParser {
         archiveTags,
         comment: frontmatter.comment, // User's personal note
         userNotes, // Mobile user notes parsed from the annotation block (read-only)
+        readerChat,
         linkedArchives, // Relation rows parsed from the linked-archives block (read-only)
         like: frontmatter.like, // User's personal like
         archive: frontmatter.archive, // Archive status

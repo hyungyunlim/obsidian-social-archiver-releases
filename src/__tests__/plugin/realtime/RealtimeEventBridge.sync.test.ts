@@ -755,6 +755,76 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
     expect(syncSubscriptionPosts).not.toHaveBeenCalledWith('subscription-post-fallback');
   });
 
+  it('saves Threads profile discovery posts from profile_crawl_complete', async () => {
+    const saveSubscriptionPost = vi.fn().mockResolvedValue(true);
+    const crawlJobTracker = {
+      getJobByWorkerJobId: vi.fn(),
+      failJob: vi.fn(),
+      getJob: vi.fn(),
+      getInternalJobIdByWorkerJobId: vi.fn(),
+      getAllJobs: vi.fn().mockReturnValue([]),
+      startJob: vi.fn(),
+      completeJob: vi.fn(),
+      incrementProgressByWorkerJobId: vi.fn(),
+    };
+
+    const events = makeEvents();
+    const deps = makeDeps({
+      events: events as any,
+      saveSubscriptionPost,
+      crawlJobTracker: crawlJobTracker as any,
+      settings: () => ({ enableMobileAnnotationSync: true, syncClientId: 'my-client-id', archivePath: 'Threads Archive' } as any),
+    });
+
+    const bridge = new RealtimeEventBridge(deps);
+    bridge.setup();
+
+    await events.trigger('ws:profile_crawl_complete', {
+      type: 'profile_crawl_complete',
+      jobId: 'threads_crawl_123',
+      handle: 'fine.irean',
+      platform: 'threads',
+      stats: {
+        processedCount: 1,
+        totalPosts: 1,
+        skippedDuplicates: 0,
+        allDuplicates: false,
+      },
+      posts: [
+        {
+          platform: 'threads',
+          id: 'threads-post-1',
+          url: 'https://www.threads.net/@fine.irean/post/1',
+          content: { text: 'hello from threads' },
+          author: { name: 'fine.irean', username: 'fine.irean' },
+          media: [],
+          metadata: {},
+        },
+      ],
+      isThreadsOfficialApi: true,
+    });
+
+    expect(crawlJobTracker.startJob).toHaveBeenCalledWith(
+      {
+        jobId: 'threads_crawl_123',
+        handle: 'fine.irean',
+        platform: 'threads',
+        estimatedPosts: 1,
+      },
+      'threads_crawl_123',
+    );
+    expect(crawlJobTracker.completeJob).toHaveBeenCalledWith('threads_crawl_123', 1);
+    expect(saveSubscriptionPost).toHaveBeenCalledWith(expect.objectContaining({
+      subscriptionId: 'threads_crawl_123',
+      subscriptionName: 'Profile Crawl: @fine.irean',
+      destinationFolder: 'Threads Archive',
+      post: expect.objectContaining({
+        platform: 'threads',
+        id: 'threads-post-1',
+      }),
+    }));
+  });
+
   // --------------------------------------------------------------------------
   // Additional edge case: ws:connected also triggers processPendingSyncQueue
   // --------------------------------------------------------------------------

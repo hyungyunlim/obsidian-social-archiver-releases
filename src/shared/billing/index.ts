@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/billing/index.ts
- * Generated: 2026-07-03T14:00:12.562Z
+ * Generated: 2026-07-07T08:57:53.277Z
  *
  * To modify, edit the source file in shared/billing/ and run:
  *   npm run sync:shared

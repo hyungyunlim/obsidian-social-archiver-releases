@@ -51,7 +51,7 @@ describe('ProfileCrawlService.classify', () => {
     expect(out.supportedFlows.length).toBeGreaterThan(0);
   });
 
-  it('enables Threads profile crawl without exposing subscribe before rollout', () => {
+  it('enables Threads profile crawl and subscribe after Profile Discovery approval', () => {
     const { service } = makeService();
     const out = service.classify('https://www.threads.com/@di_1985_');
     expect(out).toMatchObject({
@@ -60,7 +60,7 @@ describe('ProfileCrawlService.classify', () => {
       handle: 'di_1985_',
     });
     expect(out.supportedFlows).toContain('profile-crawl');
-    expect(out.supportedFlows).not.toContain('subscribe');
+    expect(out.supportedFlows).toContain('subscribe');
   });
 });
 
@@ -156,6 +156,34 @@ describe('ProfileCrawlService.subscribe', () => {
     expect(result.subscriptionId).toBe('sub-789');
     const request = client.crawlProfile.mock.calls[0][0];
     expect(request.subscribeOptions).toMatchObject({ enabled: true, subscribeOnly: true });
+  });
+
+  it('submits Threads subscribe-only requests through the profile crawl endpoint', async () => {
+    const client = {
+      crawlProfile: vi.fn().mockResolvedValue({
+        jobId: 'job-threads-subscribe',
+        subscriptionId: 'sub-threads',
+        estimatedPosts: 0,
+        status: 'pending',
+      }),
+    };
+    const { service } = makeService({ client });
+    const result = await service.subscribe({ url: 'https://www.threads.com/@di_1985_' });
+
+    expect(result).toMatchObject({
+      subscriptionId: 'sub-threads',
+      platform: 'threads',
+      handle: 'di_1985_',
+    });
+    expect(client.crawlProfile.mock.calls[0][0]).toMatchObject({
+      platform: 'threads',
+      handle: 'di_1985_',
+      profileUrl: 'https://www.threads.com/@di_1985_',
+      subscribeOptions: {
+        enabled: true,
+        subscribeOnly: true,
+      },
+    });
   });
 
   it('throws when worker omits subscriptionId', async () => {

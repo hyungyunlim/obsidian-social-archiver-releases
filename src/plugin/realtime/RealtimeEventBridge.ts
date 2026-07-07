@@ -162,6 +162,22 @@ export interface WsProfileCrawlCompleteMessage {
   isXcancel?: boolean;
   isInstagramDirect?: boolean;
   isFacebookDirect?: boolean;
+  isThreadsOfficialApi?: boolean;
+  isRedditDirect?: boolean;
+}
+
+function isDirectProfileCrawlPayload(message: WsProfileCrawlCompleteMessage): boolean {
+  return Boolean(
+    message.isFediverse ||
+      message.isYouTube ||
+      message.isBlog ||
+      message.isXcancel ||
+      message.isInstagramDirect ||
+      message.isFacebookDirect ||
+      message.isThreadsOfficialApi ||
+      message.isRedditDirect ||
+      Array.isArray(message.posts)
+  );
 }
 
 // ============================================================================
@@ -933,10 +949,9 @@ export class RealtimeEventBridge {
     this.eventRefs.push(
       this.deps.events.on('ws:profile_crawl_complete', async (data: unknown) => {
         const message = data as WsProfileCrawlCompleteMessage;
-        const { jobId, handle, platform, posts, stats, isFediverse, isYouTube, isBlog, isXcancel, isInstagramDirect, isFacebookDirect } =
-          message;
+        const { jobId, handle, platform, posts, stats, isFediverse, isYouTube, isBlog } = message;
         // Direct API platforms: posts delivered via WebSocket (no BrightData webhook)
-        const isDirectApiPlatform = isFediverse || isYouTube || isBlog || isXcancel || isInstagramDirect || isFacebookDirect;
+        const isDirectApiPlatform = isDirectProfileCrawlPayload(message);
 
         // Update CrawlJobTracker status
         if (jobId) {
@@ -982,7 +997,7 @@ export class RealtimeEventBridge {
         }
 
         // Process posts from direct API crawl (free API platforms)
-        if (isDirectApiPlatform && posts && posts.length > 0) {
+        if (isDirectApiPlatform && Array.isArray(posts) && posts.length > 0) {
           // Get destination folder from pending job or use default
           const pendingJob = jobId ? await this.deps.pendingJobsManager?.getJob(jobId) : null;
           const settings = this.deps.settings();

@@ -51,6 +51,7 @@ import type { WhisperModel } from '../../../utils/whisper';
 import { maybeProxyCdnUrl } from '../../../utils/cdnProxy';
 import { truncatePreview } from '../../../utils/preview-truncate';
 import { PreviewableCardRenderer } from './PreviewableCardRenderer';
+import { renderReaderChatTimelineSection } from './ReaderChatSectionRenderer';
 import type { PreviewContext } from './PreviewableContext';
 import {
   MORE_TRANSLATION_LANGUAGE_OPTIONS,
@@ -2384,6 +2385,11 @@ export class PostCardRenderer extends Component {
         && post.content.rawMarkdown
         && !isSubstackNoteContent) {
       await this.renderBlogContent(contentContainer, post);
+      await renderReaderChatTimelineSection(contentContainer, post.readerChat, {
+        app: this.app,
+        component: this,
+        sourcePath: post.filePath || '',
+      });
       return;
     }
 
@@ -2516,6 +2522,12 @@ export class PostCardRenderer extends Component {
 
     // Normalize tag font sizes to match surrounding text
     this.normalizeTagFontSizes(contentText);
+
+    await renderReaderChatTimelineSection(contentContainer, post.readerChat, {
+      app: this.app,
+      component: this,
+      sourcePath: post.filePath || '',
+    });
 
     // Render external link preview card if exists (for quotedPost expanded view)
     // Use LinkPreviewRenderer to fetch metadata from Worker API

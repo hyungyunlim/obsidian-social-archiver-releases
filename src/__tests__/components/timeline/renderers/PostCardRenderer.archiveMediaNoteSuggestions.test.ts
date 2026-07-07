@@ -76,6 +76,7 @@ describe('PostCardRenderer archive media note audio suggestions', () => {
         exists: vi.fn(async () => false),
       },
       getFileByPath: vi.fn(() => null),
+      getAbstractFileByPath: vi.fn(() => null),
       read: vi.fn(async () => ''),
       modify: vi.fn(async () => undefined),
     } as Vault;
@@ -130,5 +131,80 @@ describe('PostCardRenderer archive media note audio suggestions', () => {
     expect(banner?.dataset.mediaPath).toBe('attachments/meeting-note.mp4');
     expect(banner?.dataset.transcriptionMode).toBe('audio');
     expect(banner?.textContent).toContain('Transcribe with whisper.cpp?');
+  });
+
+  it('renders reader AI chat as a separate timeline block', async () => {
+    const vault = {
+      adapter: {
+        exists: vi.fn(async () => false),
+      },
+      getFileByPath: vi.fn(() => null),
+      getAbstractFileByPath: vi.fn(() => null),
+      read: vi.fn(async () => ''),
+      modify: vi.fn(async () => undefined),
+    } as Vault;
+    const app = {
+      vault,
+      metadataCache: {
+        getFileCache: vi.fn(() => null),
+      },
+      workspace: {},
+      fileManager: {},
+    } as App;
+    const plugin = {
+      app,
+      manifest: { version: '4.1.9-test' },
+      settings: {
+        username: 'hyungyunlim',
+        workerUrl: 'https://social-archiver-api.social-archive.org',
+        transcription: {
+          enabled: false,
+          preferredModel: 'tiny',
+          preferredVariant: 'auto',
+        },
+      },
+    } as SocialArchiverPlugin;
+    const post: PostData = {
+      platform: 'instagram',
+      id: 'reader-chat',
+      url: 'https://www.instagram.com/p/reader-chat',
+      filePath: 'Social Archives/Instagram/2026/07/reader-chat.md',
+      author: { name: 'Social Archiver', url: 'https://www.instagram.com/socialarchiver' },
+      content: { text: 'This is the archived video summary.' },
+      media: [],
+      metadata: { timestamp: '2026-07-04T12:00:00.000Z' },
+      readerChat: {
+        headingLine: '## AI Chat — Claude Code (2026-07-04)',
+        section:
+          '## AI Chat — Claude Code (2026-07-04)\n\n' +
+          '> [!question] What should I remember?\n\n' +
+          'The reader chat should render as its own timeline block.',
+      },
+    };
+    const modal = new Modal(app);
+    document.body.appendChild(modal.contentEl);
+    const renderer = new PostCardRenderer(
+      vault,
+      app,
+      plugin,
+      new MediaGalleryRenderer((path) => path),
+      new CommentRenderer(),
+      new YouTubeEmbedRenderer(),
+      new LinkPreviewRenderer(),
+      new Map()
+    );
+
+    await renderer.render(modal.contentEl, post);
+
+    const block = modal.contentEl.querySelector<HTMLElement>('.pcr-reader-chat');
+    expect(block).toBeTruthy();
+    expect(block?.querySelector('.pcr-reader-chat-title')?.textContent).toBe('AI Chat');
+    expect(block?.querySelector('.pcr-reader-chat-meta')?.textContent).toBe(
+      'Claude Code · 2026-07-04',
+    );
+    expect(block?.querySelector('.pcr-reader-chat-body')?.textContent).toContain(
+      'The reader chat should render as its own timeline block.',
+    );
+    expect(modal.contentEl.querySelector('.pcr-content-text')?.textContent).not.toContain('AI Chat');
   });
 });

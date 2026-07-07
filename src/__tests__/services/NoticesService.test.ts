@@ -175,6 +175,68 @@ describe('NoticesService', () => {
     });
   });
 
+  describe('archiveNotice', () => {
+    it('POSTs to the notice archive endpoint with auth and client headers', async () => {
+      const h = makeHarness();
+      h.setResponse({
+        success: true,
+        data: {
+          archiveId: 'notice_archive_alice_notice-1',
+          createdAt: '2026-07-07T00:00:00.000Z',
+          created: true,
+        },
+      });
+
+      const result = await h.service.archiveNotice('notice-1');
+
+      expect(result).toEqual({
+        archiveId: 'notice_archive_alice_notice-1',
+        createdAt: '2026-07-07T00:00:00.000Z',
+        created: true,
+      });
+      expect(h.capturedRequests).toHaveLength(1);
+      const req = h.capturedRequests[0]!;
+      expect(req.url).toBe('https://api.example.com/api/app/notices/notice-1/archive');
+      expect(req.method).toBe('POST');
+      const headers = req.headers ?? {};
+      expect(headers['Authorization']).toBe('Bearer token-abc');
+      expect(headers['X-Client']).toBe('obsidian-plugin');
+      expect(headers['X-Client-Capabilities']).toBe('notices-v1,external_billing_handoff-v1');
+    });
+
+    it('returns created=false duplicate responses', async () => {
+      const h = makeHarness();
+      h.setResponse({
+        success: true,
+        data: {
+          archiveId: 'notice_archive_alice_notice-1',
+          createdAt: '2026-07-07T00:00:00.000Z',
+          created: false,
+        },
+      });
+
+      await expect(h.service.archiveNotice('notice-1')).resolves.toMatchObject({
+        archiveId: 'notice_archive_alice_notice-1',
+        created: false,
+      });
+    });
+
+    it('throws the server message on archive failure', async () => {
+      const h = makeHarness();
+      h.setResponse({
+        success: false,
+        error: { code: 'NOTICE_NOT_FOUND', message: 'Notice is not available' },
+      }, 404);
+
+      await expect(h.service.archiveNotice('notice-1')).rejects.toThrow('Notice is not available');
+    });
+
+    it('uses auth token presence for archive capability', () => {
+      expect(makeHarness().service.canArchiveNotices()).toBe(true);
+      expect(makeHarness({ authToken: '' }).service.canArchiveNotices()).toBe(false);
+    });
+  });
+
   describe('fetch validation', () => {
     it('drops responses with unsupported schemaVersion', async () => {
       const h = makeHarness();

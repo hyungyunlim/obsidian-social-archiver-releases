@@ -13,6 +13,7 @@ import { MediaPlaceholderGenerator } from './MediaPlaceholderGenerator';
 import { SentinelMediaRegionManager } from '@/plugin/realtime/SentinelMediaRegionManager';
 import { isRssBasedPlatform } from '@/constants/rssPlatforms';
 import { isSubstackNote } from '@/utils/substack';
+import { extractTrailingReaderChatSection, stripTrailingReaderChatSection } from '@/utils/reader-chat-section';
 import { getPlatformName } from '@/shared/platforms';
 import { encodePathForMarkdownLink } from '@/utils/url';
 import { toRelativeMediaPath } from '@/utils/path';
@@ -1566,6 +1567,17 @@ export class MarkdownConverter implements IService {
       content = `${content.replace(/\s+$/, '')}\n\n---\n\n## Transcript\n\n${whisperTranscriptBody}\n`;
     }
 
+    // Clip/Archive with Chat (extension): the transcript rides END-APPENDED in
+    // content.markdown, but most platform templates render content.text — pull
+    // the trailing section out and re-append it to the rendered note so it
+    // survives on X/YouTube/Reddit/… too. Bodies that already rendered
+    // content.markdown (web/Threads/RSS) contain the heading line, so the
+    // includes() guard prevents a double section.
+    const readerChat = extractTrailingReaderChatSection(normalizedPostData.content.markdown);
+    if (readerChat && !content.includes(readerChat.headingLine)) {
+      content = `${content.replace(/\s+$/, '')}\n\n---\n\n${readerChat.section}\n`;
+    }
+
     // Generate full document
     const fullDocument = this.frontmatterGenerator.generateFullDocument(frontmatter, content);
 
@@ -2128,6 +2140,32 @@ export class MarkdownConverter implements IService {
       : isThreadsInlineArchive
         ? postData.content.markdown?.trim()
         : rssMarkdownBody;
+
+    // Browser-clip imports (anonymous local clip / reader): the Chrome
+    // extension embeds reader highlights as `==marks==` — and, for code, ```
+    // fences — into `content.markdown` while leaving `content.text` plain so
+    // search/highlight coordinates stay stable. Article platforms
+    // (web/Threads/RSS) already render `content.markdown`, but social
+    // templates (X, YouTube, Reddit, Instagram, Facebook, Bluesky, Mastodon,
+    // LinkedIn, …) render `content.text` — so those marks silently vanish.
+    // Prefer the markdown body for browser clips whenever it carries markup
+    // the plain text does not. The trailing `## AI Chat` section is stripped
+    // first: convert() re-appends it at the END of the rendered note (after
+    // media/comments), matching where it lands on content.text platforms —
+    // and a chat-only body (no marks/fences) collapses back to content.text so
+    // its social-post escaping still applies. The `!inlineMarkdownBody` guard
+    // keeps this off the platforms that already render markdown.
+    const clipMarkdownSource =
+      !inlineMarkdownBody &&
+      typeof postData.metadata.socialArchiverImportSource === 'string' &&
+      postData.metadata.socialArchiverImportSource.startsWith('browser-clip:') &&
+      typeof postData.content.markdown === 'string'
+        ? stripTrailingReaderChatSection(postData.content.markdown).trim()
+        : '';
+    const clipMarkdownBody =
+      clipMarkdownSource && clipMarkdownSource !== (postData.content.text ?? '').trim()
+        ? clipMarkdownSource
+        : undefined;
     let formattedSnippet = postData.content.snippet
       ? `> [!note]+ Threads Note\n> ${postData.content.snippet.replace(/\n/g, '\n> ')}`
       : undefined;
@@ -2179,7 +2217,7 @@ export class MarkdownConverter implements IService {
 
     // For Tumblr: remove hashtags from content.text if they're in the hashtags array
     // (hashtags will be displayed separately in the hashtagsText section)
-    let contentText = inlineMarkdownBody || postData.content.text || '';
+    let contentText = inlineMarkdownBody || clipMarkdownBody || postData.content.text || '';
     if (postData.platform === 'tumblr' && uniqueHashtags && uniqueHashtags.length > 0 && contentText) {
       // Remove hashtags from text (they're displayed separately)
       // Match both plain hashtags (#tag) and markdown link format ([#tag](url))
@@ -2290,7 +2328,11 @@ export class MarkdownConverter implements IService {
     // For RSS-based platforms, web articles, and X Articles, preserve markdown headings and ordered lists
     // (they come from HTML/Draft.js conversion and are intentional)
     // For other platforms, escape headings and ordered lists to prevent rendering issues
-    const preserveMarkdown = isBlogLikeRss || isWebArticle || isXArticle || isThreadsInlineArchive;
+    // Browser-clip markdown bodies carry deliberate markup (==highlights==,
+    // ``` code fences); escaping leading #/N. would corrupt fenced code, so
+    // preserve them as-is. Mentions/hashtag linkify still run (those passes
+    // are gated on inlineMarkdownBody, which clip bodies deliberately are not).
+    const preserveMarkdown = isBlogLikeRss || isWebArticle || isXArticle || isThreadsInlineArchive || !!clipMarkdownBody;
     const sanitizedText = preserveMarkdown
       ? baseText
       : this.escapeOrderedListPatterns(this.escapeLeadingMarkdownHeadings(baseText));

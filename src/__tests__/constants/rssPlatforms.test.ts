@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   isGenericSubscriptionSupported,
+  isImmediateProfileCrawlPlatform,
   isSubscriptionSupported,
   NEW_SUBSCRIPTION_PLATFORMS,
   SUBSCRIPTION_SUPPORTED_PLATFORMS,
@@ -21,5 +22,15 @@ describe('rss platform subscription constants', () => {
     expect(SUBSCRIPTION_SUPPORTED_PLATFORMS).toContain('threads');
     expect(NEW_SUBSCRIPTION_PLATFORMS).toContain('threads');
     expect(isGenericSubscriptionSupported('threads')).toBe(true);
+  });
+});
+
+describe('rssPlatforms profile crawl helpers', () => {
+  it('treats Threads Profile Discovery crawls as immediate completions', () => {
+    expect(isImmediateProfileCrawlPlatform('threads')).toBe(true);
+  });
+
+  it('keeps BrightData-backed profile crawls on pending job tracking', () => {
+    expect(isImmediateProfileCrawlPlatform('facebook')).toBe(false);
   });
 });

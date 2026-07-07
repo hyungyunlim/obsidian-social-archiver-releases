@@ -1354,4 +1354,148 @@ describe('MarkdownConverter', () => {
       });
     });
   });
+
+  // Reader highlights ride along in content.markdown as ==marks==; content.text
+  // stays plain (search/coordinate stability). Social templates render
+  // content.text, so browser-clip imports must divert the body to
+  // content.markdown or those marks silently vanish.
+  describe('browser-clip reader highlight embedding', () => {
+    const clipBase: PostData = {
+      platform: 'x' as Platform,
+      id: 'clip-x-1',
+      url: 'https://x.com/someone/status/1',
+      author: { name: 'Someone', url: 'https://x.com/someone' },
+      content: { text: 'Plain body without marks and a takeaway.' },
+      media: [],
+      metadata: {
+        timestamp: new Date('2026-07-04T12:00:00Z'),
+        socialArchiverImportSource: 'browser-clip:reader',
+      },
+    };
+
+    it('renders the ==highlight== marks from content.markdown into the note body', async () => {
+      const result = await converter.convert({
+        ...clipBase,
+        content: {
+          text: 'Plain body without marks and a takeaway.',
+          markdown: 'Plain body without marks and a ==takeaway==.',
+        },
+      });
+
+      expect(result.content).toContain('==takeaway==');
+    });
+
+    it('keeps X @mention linkify working on the diverted markdown body', async () => {
+      const result = await converter.convert({
+        ...clipBase,
+        content: {
+          text: 'Reply to @jack about the thread.',
+          markdown: 'Reply to @jack about the ==thread==.',
+        },
+      });
+
+      expect(result.content).toContain('==thread==');
+      expect(result.content).toContain('[@jack](https://x.com/jack)');
+    });
+
+    it('does NOT escape leading #/ordered-list inside preserved code fences', async () => {
+      const markdown = [
+        'Highlighted intro ==matters==.',
+        '',
+        '```python',
+        '# a real comment',
+        '1. first step',
+        '```',
+      ].join('\n');
+      const result = await converter.convert({
+        ...clipBase,
+        content: { text: 'Highlighted intro matters.', markdown },
+      });
+
+      expect(result.content).toContain('# a real comment');
+      expect(result.content).toContain('1. first step');
+      expect(result.content).not.toContain('\\# a real comment');
+      expect(result.content).not.toContain('1\\. first step');
+    });
+
+    it('appends the trailing AI Chat section ONCE at the end, after the highlighted body', async () => {
+      const markdown = [
+        'Body with a ==highlight==.',
+        '',
+        '## AI Chat — Claude Code (2026-07-04)',
+        '',
+        '> [!question] What is the point?',
+        '',
+        'The point is **X**.',
+      ].join('\n');
+      const result = await converter.convert({
+        ...clipBase,
+        content: { text: 'Body with a highlight.', markdown },
+      });
+
+      // Highlight reaches the note body...
+      expect(result.content).toContain('==highlight==');
+      // ...and the chat section is present exactly once (no double-render)...
+      const headingMatches = result.content.match(/## AI Chat — Claude Code \(2026-07-04\)/g);
+      expect(headingMatches).toHaveLength(1);
+      // ...and lands AFTER the highlighted body.
+      expect(result.content.indexOf('==highlight==')).toBeLessThan(
+        result.content.indexOf('## AI Chat'),
+      );
+    });
+
+    it('does not divert the body for a chat-only clip (no marks) — content.text path stays', async () => {
+      // strip(content.markdown) === content.text → body is NOT promoted to
+      // markdown; convert() still re-appends the chat section at the end.
+      const markdown = [
+        'Plain body without marks and a takeaway.',
+        '',
+        '## AI Chat — Claude Code (2026-07-04)',
+        '',
+        '> [!question] q',
+        '',
+        'a',
+      ].join('\n');
+      const result = await converter.convert({
+        ...clipBase,
+        content: { text: 'Plain body without marks and a takeaway.', markdown },
+      });
+
+      const headingMatches = result.content.match(/## AI Chat — Claude Code \(2026-07-04\)/g);
+      expect(headingMatches).toHaveLength(1);
+      expect(result.content).toContain('Plain body without marks and a takeaway.');
+    });
+
+    it('ignores content.markdown for non-clip imports (no import source)', async () => {
+      const result = await converter.convert({
+        ...clipBase,
+        metadata: { timestamp: new Date('2026-07-04T12:00:00Z') },
+        content: {
+          text: 'Plain body without marks and a takeaway.',
+          markdown: 'Plain body without marks and a ==takeaway==.',
+        },
+      });
+
+      // Without the browser-clip provenance, the body stays content.text.
+      expect(result.content).not.toContain('==takeaway==');
+      expect(result.content).toContain('Plain body without marks and a takeaway.');
+    });
+
+    it('embeds highlights for other content.text platforms (Reddit)', async () => {
+      const result = await converter.convert({
+        ...clipBase,
+        platform: 'reddit' as Platform,
+        url: 'https://www.reddit.com/r/test/comments/1/example/',
+        title: 'Example',
+        content: {
+          text: 'A comment referencing r/test with a point.',
+          markdown: 'A comment referencing r/test with a ==point==.',
+        },
+      });
+
+      expect(result.content).toContain('==point==');
+      // Reddit reference linkify still applies to the diverted markdown body.
+      expect(result.content).toContain('[r/test](https://www.reddit.com/r/test/)');
+    });
+  });
 });

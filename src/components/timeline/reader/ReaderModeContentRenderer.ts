@@ -27,6 +27,13 @@ import {
 import { getPlatformName } from '@/shared/platforms';
 import { createCustomSVG } from '@/utils/dom-helpers';
 import { getAICommentDisplay } from '@/utils/ai-comment-display';
+import { stripTrailingReaderChatSection } from '@/utils/reader-chat-section';
+import {
+  countReaderAIChatTurns,
+  hasReaderAIChat,
+  renderReaderAIChatSection,
+} from './ReaderAIChatPanelRenderer';
+import { createReaderCollapsibleSection } from './ReaderCollapsibleSection';
 import type { ReaderTTSController } from './ReaderTTSController';
 
 export interface ReaderContentVariantOption {
@@ -270,15 +277,16 @@ export class ReaderModeContentRenderer extends Component {
     const rightGroup = header.createDiv({ cls: 'sa-reader-mode-header-right' });
 
     if (callbacks.hasReaderComments && callbacks.onToggleReaderComments) {
+      const commentsLabel = post.readerChat ? 'comments and AI chat' : 'comments';
       const commentsBtn = rightGroup.createDiv({ cls: 'sa-reader-mode-header-btn sa-reader-mode-comments-toggle' });
       const updateCommentsButtonState = () => {
         const open = callbacks.isReaderCommentsOpen?.() ?? false;
         commentsBtn.toggleClass('sa-reader-mode-comments-toggle-active', open);
         commentsBtn.setAttribute('aria-expanded', String(open));
-        commentsBtn.setAttribute('aria-label', open ? 'Hide comments' : 'Show comments');
-        commentsBtn.setAttribute('title', open ? 'Hide comments' : 'Show comments');
+        commentsBtn.setAttribute('aria-label', open ? `Hide ${commentsLabel}` : `Show ${commentsLabel}`);
+        commentsBtn.setAttribute('title', open ? `Hide ${commentsLabel}` : `Show ${commentsLabel}`);
       };
-      commentsBtn.setAttribute('aria-label', 'Show comments');
+      commentsBtn.setAttribute('aria-label', `Show ${commentsLabel}`);
       commentsBtn.setAttribute('aria-haspopup', 'region');
       setIcon(commentsBtn, 'message-circle');
       updateCommentsButtonState();
@@ -626,6 +634,9 @@ export class ReaderModeContentRenderer extends Component {
       source = source.replace(/\n*🔗\s*\*\*Link:\*\*\s*.*\n*/g, '\n');
     }
 
+    source = stripTrailingReaderChatSection(source);
+    if (!source.trim()) return null;
+
     // For social media text (not rawMarkdown), escape patterns that cause unwanted rendering
     if (!post.content.rawMarkdown) {
       // Escape Setext headings: standalone lines of - or = that make preceding text h1/h2
@@ -805,7 +816,8 @@ export class ReaderModeContentRenderer extends Component {
   // ---------- Reader Comments ----------
 
   private hasReaderComments(post: PostData): boolean {
-    return (post.aiComments?.length ?? 0) > 0 ||
+    return hasReaderAIChat(post) ||
+      (post.aiComments?.length ?? 0) > 0 ||
       !!post.comment?.trim() ||
       (post.comments?.length ?? 0) > 0;
   }
@@ -826,10 +838,11 @@ export class ReaderModeContentRenderer extends Component {
   }
 
   private async renderReaderComments(parent: HTMLElement, post: PostData): Promise<void> {
+    const readerChatCount = countReaderAIChatTurns(post);
     const aiCount = post.aiComments?.length ?? 0;
     const noteCount = post.comment?.trim() ? 1 : 0;
     const platformCommentCount = this.countCommentTree(post.comments);
-    const totalCount = aiCount + noteCount + platformCommentCount;
+    const totalCount = readerChatCount + aiCount + noteCount + platformCommentCount;
 
     const header = parent.createDiv({ cls: 'sa-reader-mode-comments-header' });
     const headingGroup = header.createDiv();
@@ -837,6 +850,10 @@ export class ReaderModeContentRenderer extends Component {
     headingGroup.createEl('span', {
       text: `${totalCount} saved item${totalCount === 1 ? '' : 's'}`,
     });
+
+    if (post.readerChat) {
+      await renderReaderAIChatSection(parent, post, { app: this.app, component: this });
+    }
 
     if (post.aiComments && post.aiComments.length > 0) {
       const section = this.createReaderCommentsSection(parent, 'AI Comments');
@@ -879,9 +896,7 @@ export class ReaderModeContentRenderer extends Component {
   }
 
   private createReaderCommentsSection(parent: HTMLElement, title: string): HTMLElement {
-    const section = parent.createDiv({ cls: 'sa-reader-mode-comments-section' });
-    section.createDiv({ cls: 'sa-reader-mode-comments-section-title', text: title });
-    return section;
+    return createReaderCollapsibleSection(parent, title);
   }
 
   private formatAICommentType(type: string): string {

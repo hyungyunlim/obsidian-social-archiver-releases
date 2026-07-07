@@ -160,6 +160,55 @@ Ready to transcribe on this iPhone
   });
 });
 
+describe('PostDataParser - reader AI chat section', () => {
+  it('extracts the trailing AI Chat section without mixing it into card text', async () => {
+    const markdown = `---
+platform: youtube
+author: Social Archiver
+authorUrl: https://youtube.com/@socialarchiver
+published: 2026-07-04 12:00
+originalUrl: https://www.youtube.com/watch?v=abc123
+title: Reader mode walkthrough
+videoId: abc123
+---
+
+# 📺 Reader mode walkthrough
+
+This is the archived video summary.
+
+---
+
+**Platform:** YouTube | **Author:** [Social Archiver](https://youtube.com/@socialarchiver) | **Published:** 2026-07-04 12:00
+
+**Original URL:** https://www.youtube.com/watch?v=abc123
+
+---
+
+## AI Chat — Claude Code (2026-07-04)
+
+> [!question] What should I remember?
+
+The reader chat should render as its own timeline block.
+`;
+
+    const vault = {
+      cachedRead: vi.fn().mockResolvedValue(markdown),
+    } satisfies Pick<Vault, 'cachedRead'>;
+    const parser = new PostDataParser(vault as Vault);
+    type TestTFileConstructor = new (path: string) => TFile;
+    const TestTFile = TFile as TestTFileConstructor;
+    const file = new TestTFile('Social Archives/YouTube/2026/07/reader-chat.md');
+
+    const post = await parser.parseFile(file);
+
+    expect(post).toBeTruthy();
+    expect(post?.readerChat?.headingLine).toBe('## AI Chat — Claude Code (2026-07-04)');
+    expect(post?.readerChat?.section).toContain('The reader chat should render as its own timeline block.');
+    expect(post?.content.text).toContain('This is the archived video summary.');
+    expect(post?.content.text).not.toContain('AI Chat');
+  });
+});
+
 describe('PostDataParser - quoted post media excluded from main post', () => {
   const sharedPostMarkdown = `---
 platform: facebook

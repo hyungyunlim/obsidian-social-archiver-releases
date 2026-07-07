@@ -1860,8 +1860,26 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     rebuildPropertyOrderFromMixedOrder(false);
     renderMixedPropertyRows();
 
+    const variablesNote = bodyContainer.createEl('div', {
+      text: 'Custom property values support these template variables: '
+        + '{{platform}}, {{author.name}}, {{author.handle}}, {{author.username}}, {{author.url}}, '
+        + '{{post.id}}, {{post.url}}, {{dates.published}}, {{dates.archived}}, {{dates.lastModified}}. '
+        + 'Use the dotted form exactly (e.g. {{post.url}}), not the property label. ',
+    });
+    variablesNote.addClass('sa-settings-desc-small', 'st-margin-custom');
+    variablesNote.setCssProps({ '--st-margin': '8px 0 4px 0' });
+    // Match the guide locale to Obsidian's UI language (docs exist for en/ko/ja only).
+    const obsidianLang = (window.localStorage.getItem('language') || '').toLowerCase();
+    const docsLocale = obsidianLang.startsWith('ko') ? 'ko' : obsidianLang.startsWith('ja') ? 'ja' : 'en';
+    const variablesGuideLink = variablesNote.createEl('a', {
+      text: 'View guide',
+      href: `https://docs.social-archive.org/${docsLocale}/guide/frontmatter-template-variables`,
+    });
+    variablesGuideLink.setAttr('target', '_blank');
+    variablesGuideLink.setAttr('rel', 'noopener');
+
     const coreLockedNote = bodyContainer.createEl('div', {
-      text: 'Core keys cannot be removed or overridden: platform, author, authorUrl, published, archived, lastModified, tags, archiveTags.',
+      text: 'Core keys cannot be removed, renamed, or replaced by a custom property with the same name: platform, author, authorUrl, published, archived, lastModified, tags, archiveTags.',
     });
     coreLockedNote.addClass('sa-settings-desc-small');
     coreLockedNote.setCssProps({ '--st-margin': '4px 0 12px 0' });
@@ -2222,10 +2240,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
               try {
                 // TODO: Implement actual sync trigger when Reddit API is approved
                 // For now, show a notice
-                const { Notice } = await import('obsidian');
                 new Notice('Reddit sync coming soon! Waiting for API approval.');
               } catch (error) {
-                const { Notice } = await import('obsidian');
                 new Notice(`Sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
               } finally {
                 button.setDisabled(false);
@@ -2278,8 +2294,6 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    */
   private async connectReddit(): Promise<void> {
     try {
-      const { Notice } = await import('obsidian');
-
       // Check if user is authenticated with Social Archiver
       if (!this.plugin.settings.authToken) {
         new Notice('Please sign in to Social Archiver first');
@@ -2298,7 +2312,6 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       // 5. Plugin receives OAuth confirmation and updates settings
 
     } catch (error) {
-      const { Notice } = await import('obsidian');
       new Notice(`Failed to connect Reddit: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -2308,8 +2321,6 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    */
   private async disconnectReddit(): Promise<void> {
     try {
-      const { Notice } = await import('obsidian');
-
       // TODO: Call /api/reddit/oauth/disconnect when API is approved
       // For now, just clear local settings
       this.plugin.settings.redditConnected = false;
@@ -2319,7 +2330,6 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
       new Notice('Reddit account disconnected');
     } catch (error) {
-      const { Notice } = await import('obsidian');
       new Notice(`Failed to disconnect: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
