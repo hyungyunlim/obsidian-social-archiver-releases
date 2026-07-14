@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/map-place-links.ts
- * Generated: 2026-07-13T15:16:05.364Z
+ * Generated: 2026-07-11T08:56:14.734Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared

@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/icons/publisher-lookup.ts
- * Generated: 2026-07-13T15:16:05.399Z
+ * Generated: 2026-07-07T04:01:02.550Z
  *
  * To modify, edit the source file in shared/icons/ and run:
  *   npm run sync:shared
