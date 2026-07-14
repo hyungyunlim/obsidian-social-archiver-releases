@@ -47,6 +47,47 @@ describe('URLExpander', () => {
       expect(expander.isShortener('bit.ly/test')).toBe(true);
       expect(expander.isShortener('example.com/test')).toBe(false);
     });
+
+    it('recognizes only the exact Kakao short-link host', () => {
+      // Given: the provider short host and host-confusion lookalikes
+      const urls = [
+        'https://kko.kakao.com/AbCdEf123',
+        'https://kko.kakao.com.evil.example/AbCdEf123',
+        'https://evil-kko.kakao.com/AbCdEf123',
+      ];
+
+      // When: shortener recognition runs before redirect expansion
+      const matches = urls.map((url) => expander.isShortener(url));
+
+      // Then: only Kakao's exact bounded host is eligible for expansion
+      expect(matches).toEqual([true, false, false]);
+    });
+
+    it('expands kko.kakao.com to the provider place URL', async () => {
+      // Given: a Kakao short link and a CORS-free redirect response
+      const shortUrl = 'https://kko.kakao.com/AbCdEf123';
+      const placeUrl = 'https://place.map.kakao.com/1784996243';
+      const response = {
+        status: 302,
+        headers: { location: placeUrl },
+        arrayBuffer: new ArrayBuffer(0),
+        json: {},
+        text: '',
+      };
+      const requestUrl = vi.fn(() => Object.assign(Promise.resolve(response), {
+        arrayBuffer: Promise.resolve(response.arrayBuffer),
+        json: Promise.resolve(response.json),
+        text: Promise.resolve(response.text),
+      }));
+      const kakaoExpander = new URLExpander({ requestUrl });
+
+      // When: the short URL crosses the redirect-expansion boundary
+      const expanded = await kakaoExpander.expandUrl(shortUrl);
+
+      // Then: the exact provider place URL is returned after one bounded request
+      expect(expanded).toBe(placeUrl);
+      expect(requestUrl).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('URL expansion', () => {

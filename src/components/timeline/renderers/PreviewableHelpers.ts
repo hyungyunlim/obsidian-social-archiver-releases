@@ -165,6 +165,18 @@ export interface GoogleMapsBusinessData {
   lng?: number;
 }
 
+const MAX_MAP_PLACE_REVIEW_COUNT = 1_000_000_000;
+
+function parseMapPlaceReviewCount(contentText: string): number | undefined {
+  const match = contentText.match(/\((\d{1,10}|\d{1,3}(?:,\d{3}){1,3})\s*(?:개\s*리뷰|reviews?)\)/i);
+  if (!match?.[1]) return undefined;
+
+  const value = Number(match[1].replaceAll(',', ''));
+  return Number.isSafeInteger(value) && value >= 0 && value <= MAX_MAP_PLACE_REVIEW_COUNT
+    ? value
+    : undefined;
+}
+
 /** Shape returned by `formatBusinessHours`. */
 export interface FormattedBusinessHours {
   summary: string;
@@ -222,7 +234,7 @@ export function parseGoogleMapsBusinessData(post: PostData): GoogleMapsBusinessD
   if (raw?.all_categories && Array.isArray(raw.all_categories)) {
     categories = raw.all_categories as string[];
   } else {
-    const catMatch = contentText.match(/Categories: ([^\n]+)/);
+    const catMatch = contentText.match(/(?:Categories|카테고리):\s*([^\n]+)/);
     if (catMatch?.[1]) categories = catMatch[1].split(', ').map((c) => c.trim());
   }
 
@@ -244,14 +256,26 @@ export function parseGoogleMapsBusinessData(post: PostData): GoogleMapsBusinessD
     if (webMatch?.[1]) website = webMatch[1].trim();
   }
 
+  const contentAddress = contentText.match(/^📍\s*([^\n]+)$/m)?.[1]?.trim();
+  const metadataAddress = post.metadata?.location;
+  const address = contentAddress || metadataAddress;
+
+  const metadataReviewCount = post.metadata?.comments;
+  const reviewsCount = typeof metadataReviewCount === 'number'
+    && Number.isSafeInteger(metadataReviewCount)
+    && metadataReviewCount >= 0
+    && metadataReviewCount <= MAX_MAP_PLACE_REVIEW_COUNT
+    ? metadataReviewCount
+    : parseMapPlaceReviewCount(contentText);
+
   return {
     name: post.author?.name || post.title || 'Unknown Place',
     rating,
-    reviewsCount: post.metadata?.comments,
+    reviewsCount,
     categories,
     phone,
     website,
-    address: post.metadata?.location,
+    address,
     hours,
     priceLevel: typeof raw?.price_level === 'string' ? raw.price_level : undefined,
     isVerified: post.author?.verified,

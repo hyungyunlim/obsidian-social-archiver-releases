@@ -222,6 +222,19 @@ export interface ArchiveLibrarySyncDeps {
   reconcileCommentState?: (file: TFile, archive: UserArchive) => Promise<void>;
 
   /**
+   * Reconcile the location frontmatter fields (`location`/`latitude`/
+   * `longitude`/`coordinates`) on an existing note against the server archive
+   * (Places P3c). Catches place confirms made on other devices while this
+   * client was offline (the live path is `ws:archives_bulk_updated`).
+   *
+   * These fields are server-owned: reconnect catch-up overwrites provisional
+   * values and clears detached values, while leaving note/comment/tag/content
+   * fields untouched. It must be a strict no-op when values already match.
+   * Wired to LocationFrontmatterSyncService.reconcileFromLibrarySync() in main.ts.
+   */
+  reconcileLocationState?: (file: TFile, archive: UserArchive) => Promise<void>;
+
+  /**
    * Reconcile the managed `## Linked archives` section on a vault file against
    * the server's archive_link_relations for `archiveId`. Idempotent + fail-soft.
    *
@@ -500,7 +513,9 @@ export class ArchiveLibrarySyncService {
   // -- Core sync algorithm ---------------------------------------------------
 
   private async runSync(initialOffset: number): Promise<void> {
-    const signal = this.abortController!.signal;
+    const abortController = this.abortController;
+    if (!abortController) return;
+    const signal = abortController.signal;
     let offset = initialOffset;
     let runAnchorTime: string | null = this.deps.settings().archiveLibrarySync?.runAnchorTime || null;
     let isFirstPage = !runAnchorTime;
@@ -707,6 +722,7 @@ export class ArchiveLibrarySyncService {
         await this.reconcileExistingAnnotationState(existingById, archive);
         await this.reconcileExistingTranscriptState(existingById, archive);
         await this.reconcileExistingCommentState(existingById, archive);
+        await this.reconcileExistingLocationState(existingById, archive);
         await this.reconcileLinkRelationState(existingById, archive);
         if (!updated) {
           this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
@@ -784,6 +800,7 @@ export class ArchiveLibrarySyncService {
         await this.reconcileExistingAnnotationState(matched, archive);
         await this.reconcileExistingTranscriptState(matched, archive);
         await this.reconcileExistingCommentState(matched, archive);
+        await this.reconcileExistingLocationState(matched, archive);
         await this.reconcileLinkRelationState(matched, archive);
         if (!updated) {
           this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
@@ -934,6 +951,25 @@ export class ArchiveLibrarySyncService {
       await this.deps.reconcileCommentState(file, archive);
     } catch (error) {
       console.warn('[Social Archiver] [LibrarySync] reconcileExistingCommentState failed', {
+        archiveId: archive.id,
+        path: file.path,
+        error,
+      });
+    }
+  }
+
+  /**
+   * Reconcile location frontmatter (Places P3c). Non-fatal — errors are
+   * logged and swallowed. A row with no place facts clears only the managed
+   * place fields so detaches converge after reconnect.
+   */
+  private async reconcileExistingLocationState(file: TFile, archive: UserArchive): Promise<void> {
+    if (!this.deps.reconcileLocationState) return;
+
+    try {
+      await this.deps.reconcileLocationState(file, archive);
+    } catch (error) {
+      console.warn('[Social Archiver] [LibrarySync] reconcileExistingLocationState failed', {
         archiveId: archive.id,
         path: file.path,
         error,

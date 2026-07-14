@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/definitions.ts
- * Generated: 2026-07-07T12:46:01.393Z
+ * Generated: 2026-07-13T15:16:05.341Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -27,6 +27,7 @@
  */
 
 import type { Platform } from './types';
+import { KAKAO_MAP_URL_PATTERN, NAVER_MAP_URL_PATTERN } from './map-places';
 
 /**
  * Platform feature flags
@@ -283,6 +284,32 @@ export const PLATFORM_DEFINITIONS: Record<Platform, PlatformDefinition> = {
     supportsMedia: true,
     supportsAI: true,
     maxMediaSize: 100 * 1024 * 1024, // 100MB
+    rateLimit: { requestsPerHour: 200, requestsPerDay: 2000 },
+    features: { stories: false, live: false, reels: false, threads: false },
+  },
+
+  navermap: {
+    id: 'navermap',
+    displayName: 'Naver Map',
+    emoji: '🗺️',
+    domains: ['map.naver.com', 'm.place.naver.com', 'pcmap.place.naver.com', 'naver.me'],
+    urlPattern: NAVER_MAP_URL_PATTERN,
+    supportsMedia: true,
+    supportsAI: false,
+    maxMediaSize: 100 * 1024 * 1024,
+    rateLimit: { requestsPerHour: 200, requestsPerDay: 2000 },
+    features: { stories: false, live: false, reels: false, threads: false },
+  },
+
+  kakaomap: {
+    id: 'kakaomap',
+    displayName: 'Kakao Map',
+    emoji: '📍',
+    domains: ['place.map.kakao.com', 'map.kakao.com', 'kko.kakao.com'],
+    urlPattern: KAKAO_MAP_URL_PATTERN,
+    supportsMedia: true,
+    supportsAI: false,
+    maxMediaSize: 100 * 1024 * 1024,
     rateLimit: { requestsPerHour: 200, requestsPerDay: 2000 },
     features: { stories: false, live: false, reels: false, threads: false },
   },
@@ -636,6 +663,18 @@ export const PLATFORM_AI_COMMENT_CONFIG: Record<Platform, PlatformAICommentConfi
   },
   googlemaps: {
     showBanner: false, // Location reviews don't benefit much from AI analysis
+    requiresTranscription: false,
+    defaultEnabled: false,
+    contentSource: 'text',
+  },
+  navermap: {
+    showBanner: false,
+    requiresTranscription: false,
+    defaultEnabled: false,
+    contentSource: 'text',
+  },
+  kakaomap: {
+    showBanner: false,
     requiresTranscription: false,
     defaultEnabled: false,
     contentSource: 'text',

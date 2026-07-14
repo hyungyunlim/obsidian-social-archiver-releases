@@ -87,6 +87,9 @@ function getPlatformName(platform: Platform): string {
     substack: 'Substack',
     mastodon: 'Mastodon',
     bluesky: 'Bluesky',
+    googlemaps: 'Google Maps',
+    navermap: 'Naver Map',
+    kakaomap: 'Kakao Map',
     kidsnote: 'Kidsnote',
     web: 'Web Article',
     post: 'Post'

@@ -51,12 +51,12 @@ describe('Platform Configuration', () => {
 	});
 
 	describe('Platform display names', () => {
-		const expectedDisplayNames: Record<Platform, string> = {
+		const expectedDisplayNames: Partial<Record<Platform, string>> = {
 			facebook: 'Facebook',
 			linkedin: 'LinkedIn',
 			instagram: 'Instagram',
 			tiktok: 'TikTok',
-			x: 'X (Twitter)',
+			x: 'X',
 			threads: 'Threads',
 			youtube: 'YouTube',
 			reddit: 'Reddit',
@@ -305,7 +305,7 @@ describe('Platform Configuration', () => {
 		it('should return configs for all platforms', () => {
 			const configs = getAllPlatformConfigs();
 
-			expect(configs).toHaveLength(platforms.length + 1);
+			expect(configs).toHaveLength(Object.keys(PLATFORM_CONFIGS).length);
 			expect(configs.map(c => c.platform)).toEqual(
 				expect.arrayContaining(platforms)
 			);
@@ -317,7 +317,7 @@ describe('Platform Configuration', () => {
 			configs.forEach((config) => {
 				expect(config.platform).toBeTruthy();
 				expect(config.displayName).toBeTruthy();
-				if (config.platform === 'post') {
+				if (config.platform === 'post' || config.platform === 'web') {
 					expect(config.domains.length).toBe(0);
 				} else {
 					expect(config.domains.length).toBeGreaterThan(0);

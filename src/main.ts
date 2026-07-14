@@ -92,6 +92,7 @@ import { ArchiveTagOutboundService } from './plugin/sync/ArchiveTagOutboundServi
 import { AuthorProfileOutboundService } from './plugin/sync/AuthorProfileOutboundService';
 import { AuthorProfileSyncService } from './plugin/sync/AuthorProfileSyncService';
 import { ArchiveStateSyncService } from './plugin/sync/ArchiveStateSyncService';
+import { LocationFrontmatterSyncService } from './plugin/sync/LocationFrontmatterSyncService';
 import { ArchiveStateOutboundService } from './plugin/sync/ArchiveStateOutboundService';
 import { LikeStateSyncService } from './plugin/sync/LikeStateSyncService';
 import { ShareStateSyncService } from './plugin/sync/ShareStateSyncService';
@@ -292,6 +293,7 @@ export default class SocialArchiverPlugin extends Plugin {
   private likeStateOutboundService?: LikeStateOutboundService; // Outbound fm.like → server isLiked sync
   private shareStateSyncService?: ShareStateSyncService; // Inbound shareUrl → fm.share/fm.shareUrl sync
   private commentStateSyncService?: CommentStateSyncService; // Inbound hasCommentUpdate → managed `## 💬 Comments` section sync
+  private locationFrontmatterSyncService?: LocationFrontmatterSyncService; // Inbound place confirms → location frontmatter (Places P3c)
   private bulkArchiveActionAccumulator?: BulkArchiveActionAccumulator; // Shared accumulator for batching outbound like/archive API calls
   private authorProfileSyncService?: AuthorProfileSyncService; // Inbound/startup synced author profile application
   private remoteArchiveIngestService?: RemoteArchiveIngestService; // Shared single-archive fetch+save for WS events
@@ -1324,6 +1326,8 @@ export default class SocialArchiverPlugin extends Plugin {
     this.likeStateSyncService = undefined;
     this.shareStateSyncService = undefined;
     this.commentStateSyncService = undefined;
+    this.locationFrontmatterSyncService?.dispose();
+    this.locationFrontmatterSyncService = undefined;
     this.bulkArchiveActionAccumulator?.destroy();
     this.bulkArchiveActionAccumulator = undefined;
     this.authorProfileSyncService = undefined;
@@ -1752,6 +1756,19 @@ export default class SocialArchiverPlugin extends Plugin {
         this.refreshTimelineView();
       };
 
+      // Inbound place confirms → location frontmatter reconcile (Places P3c)
+      this.locationFrontmatterSyncService?.dispose();
+      this.locationFrontmatterSyncService = new LocationFrontmatterSyncService({
+        app: this.app,
+        apiClient: () => this.apiClient,
+        findBySourceArchiveId: (id) => this.archiveLookupService?.findBySourceArchiveId(id) ?? null,
+        // Respect the user's frontmatter customization: skip entirely when the
+        // location field category is hidden (FrontmatterGenerator parity).
+        isLocationCategoryEnabled: () =>
+          !(this.settings.frontmatter?.enabled && this.settings.frontmatter.fieldVisibility?.location === false),
+        localLockRegistry: this.localLockRegistry,
+      });
+
       // Create shared accumulator for batching outbound like/archive API calls
       this.bulkArchiveActionAccumulator?.destroy();
       this.bulkArchiveActionAccumulator = new BulkArchiveActionAccumulator(this.apiClient);
@@ -2023,6 +2040,11 @@ export default class SocialArchiverPlugin extends Plugin {
           this.reconcileTranscriptFromLibrarySync(file, archive),
         reconcileCommentState: (file, archive) =>
           this.commentStateSyncService?.reconcileFromLibrarySync(file, archive) ??
+          Promise.resolve(),
+        // Places P3c: offline catch-up for location frontmatter — the caller
+        // (processArchive) already holds the archive write locks.
+        reconcileLocationState: (file, archive) =>
+          this.locationFrontmatterSyncService?.reconcileFromLibrarySync(file, archive) ??
           Promise.resolve(),
         // Library sweeps go through the sweep-index gate: archives with no
         // relations cost zero per-archive GETs (2,500-archive vaults used to
@@ -2302,6 +2324,7 @@ export default class SocialArchiverPlugin extends Plugin {
           likeStateSyncService: this.likeStateSyncService,
           shareStateSyncService: this.shareStateSyncService,
           commentStateSyncService: this.commentStateSyncService,
+          locationFrontmatterSyncService: this.locationFrontmatterSyncService,
           archiveDeleteSyncService: this.archiveDeleteSyncService ?? undefined,
           archiveTagOutboundService: this.archiveTagOutboundService,
           tagStore: this.tagStore,
@@ -2553,6 +2576,10 @@ export default class SocialArchiverPlugin extends Plugin {
         (view.refresh as () => void)();
       }
     }
+  }
+
+  public async reconcileArchiveLocation(archiveId: string): Promise<void> {
+    await this.locationFrontmatterSyncService?.reconcileArchiveIds([archiveId]);
   }
 
   /**

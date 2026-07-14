@@ -13,6 +13,37 @@
 export type { Platform } from './types';
 export { PLATFORMS, isPlatform } from './types';
 
+export type {
+  KoreanMapPlatform,
+  VerifiedMapPlaceSource,
+  MapPlaceProvider,
+  MapPlaceTarget,
+  MapProviderWebLink,
+} from './map-places';
+export type { MapPlaceCountryEvidence } from './map-place-policy';
+export {
+  VERIFIED_MAP_PLACE_SOURCES,
+  MAP_PLACE_NAME_MAX_LENGTH,
+  NAVER_MAP_URL_PATTERN,
+  KAKAO_MAP_URL_PATTERN,
+  isNaverMapShortUrl,
+  isKakaoMapShortUrl,
+  extractKoreanMapPlaceId,
+  isKoreanMapPlaceUrl,
+  isKoreanMapUrlCandidate,
+  canonicalizeKoreanMapPlaceUrl,
+  getMapPlaceProvider,
+  isMapPlaceCardEligible,
+  buildExactMapPlaceUrl,
+  getMapProviderWebLink,
+  encodeMapPlaceQuery,
+} from './map-places';
+export {
+  getMapPlaceProviderPriority,
+  isConservativelySouthKoreanPlace,
+} from './map-place-policy';
+export { getMapProviderWebLinks } from './map-place-links';
+
 // Subscription platform constants (Single Source of Truth)
 export type {
   RSSBasedPlatform,

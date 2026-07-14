@@ -65,6 +65,8 @@ export interface PostMetadata {
   location?: string;
   latitude?: number; // Google Maps place latitude
   longitude?: number; // Google Maps place longitude
+  locationSource?: string; // 'instagram' | 'googlemaps' | 'user'
+  locationExternalId?: string; // Provider-stable place id (IG location pk, Google place_id)
   music?: {
     title: string;
     author: string;

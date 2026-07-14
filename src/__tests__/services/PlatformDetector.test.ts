@@ -447,9 +447,9 @@ describe('PlatformDetector', () => {
       const platforms = detector.getSupportedPlatforms();
       // Platform count: facebook, linkedin, instagram, tiktok, x, threads, youtube,
       // reddit, pinterest, substack, tumblr, mastodon, bluesky, googlemaps, velog, medium, blog,
-      // podcast, naver, naver-webtoon, webtoons, brunch, web = 23
+      // podcast, naver, naver-webtoon, webtoons, brunch, maps, web = 26
       // Note: 'post' is excluded as it's the fallback for unknown URLs
-      expect(platforms).toHaveLength(23);
+      expect(platforms).toHaveLength(26);
       expect(platforms).toContain('facebook');
       expect(platforms).toContain('linkedin');
       expect(platforms).toContain('instagram');
@@ -464,6 +464,8 @@ describe('PlatformDetector', () => {
       expect(platforms).toContain('mastodon');
       expect(platforms).toContain('bluesky');
       expect(platforms).toContain('googlemaps');
+      expect(platforms).toContain('navermap');
+      expect(platforms).toContain('kakaomap');
       expect(platforms).toContain('velog');
       expect(platforms).toContain('medium');
       expect(platforms).toContain('blog');
@@ -802,6 +804,120 @@ describe('PlatformDetector', () => {
 
     it('should extract Bluesky post IDs', () => {
       expect(detector.extractPostId('https://bsky.app/profile/example.com/post/3m5abcxyz')).toBe('3m5abcxyz');
+    });
+  });
+
+  describe('Existing map and Naver content behavior', () => {
+    it('keeps Google Maps place and short URLs on the googlemaps platform', () => {
+      // Given: the canonical and current Google Maps share URL shapes
+      const urls = [
+        'https://www.google.com/maps/place/Seoul/@37.5665,126.9780,17z',
+        'https://maps.app.goo.gl/AbCdEf123',
+      ];
+
+      // When: each URL crosses the platform detection boundary
+      const platforms = urls.map((url) => detector.detectPlatform(url));
+
+      // Then: the existing Google Maps identity remains unchanged
+      expect(platforms).toEqual(['googlemaps', 'googlemaps']);
+    });
+
+    it('keeps Naver Blog and Cafe URLs on the naver content platform', () => {
+      // Given: existing non-map Naver archive URLs
+      const urls = [
+        'https://blog.naver.com/archive-user/223123456789',
+        'https://cafe.naver.com/archive-cafe/123456',
+      ];
+
+      // When: each URL crosses the platform detection boundary
+      const platforms = urls.map((url) => detector.detectPlatform(url));
+
+      // Then: map support cannot steal the established Naver content identity
+      expect(platforms).toEqual(['naver', 'naver']);
+    });
+  });
+
+  describe('Korean map place URLs', () => {
+    it('detects canonical Naver Map place URLs without stealing Naver content URLs', () => {
+      // Given: public Naver Map place URL shapes with provider-issued numeric IDs
+      const urls = [
+        'https://map.naver.com/p/entry/place/1197867572',
+        'https://map.naver.com/p/search/%EC%84%9C%EC%9A%B8/place/1197867572?placePath=%2Fhome',
+        'https://m.place.naver.com/place/1197867572/home',
+      ];
+
+      // When: the URLs cross the platform boundary
+      const platforms = urls.map((url) => detector.detectPlatform(url));
+
+      // Then: all supported place shapes use the first-class map identity
+      expect(platforms).toEqual(['navermap', 'navermap', 'navermap']);
+    });
+
+    it('detects canonical Kakao Map place URLs', () => {
+      // Given: Kakao's detail URL and official place-ID map-link URL
+      const urls = [
+        'https://place.map.kakao.com/1784996243',
+        'https://map.kakao.com/link/map/1784996243',
+      ];
+
+      // When: the URLs cross the platform boundary
+      const platforms = urls.map((url) => detector.detectPlatform(url));
+
+      // Then: both shapes use the first-class Kakao Map identity
+      expect(platforms).toEqual(['kakaomap', 'kakaomap']);
+    });
+
+    it('rejects lookalike hosts, unsupported paths, and nonnumeric place IDs', () => {
+      // Given: strings that resemble supported place URLs but fail the provider contract
+      const urls = [
+        'https://evil-map.naver.example/p/entry/place/1197867572',
+        'https://map.naver.com/p/entry/place/not-a-number',
+        'https://map.naver.com/p/search/%EC%84%9C%EC%9A%B8',
+        'https://map.naver.com/p/entry/place/1197867572/reviews',
+        'https://place.map.kakao.com.evil.example/1784996243',
+        'https://place.map.kakao.com/not-a-number',
+        'https://map.kakao.com/link/search/1784996243',
+        'https://place.map.kakao.com/1784996243/reviews',
+      ];
+
+      // When: the URLs cross the platform boundary
+      const platforms = urls.map((url) => detector.detectPlatform(url));
+
+      // Then: none are promoted to a verified map-place provider
+      expect(platforms).toEqual(['web', 'web', 'web', 'web', 'web', 'web', 'web', 'web']);
+    });
+
+    it('extracts numeric place IDs from supported provider URL shapes', () => {
+      // Given: two public ID-bearing URL shapes for each provider
+      const urls = [
+        'https://map.naver.com/p/entry/place/1197867572',
+        'https://m.place.naver.com/place/1197867572/home',
+        'https://place.map.kakao.com/1784996243',
+        'https://map.kakao.com/link/map/1784996243',
+      ];
+
+      // When: IDs are extracted by the public detector facade
+      const ids = urls.map((url) => detector.extractPostId(url));
+
+      // Then: only the exact numeric provider ID is returned
+      expect(ids).toEqual(['1197867572', '1197867572', '1784996243', '1784996243']);
+    });
+
+    it('canonicalizes every supported provider URL to the provider detail URL', () => {
+      // Given: alternate public place URL shapes with tracking data
+      const urls = [
+        'https://m.place.naver.com/place/1197867572/home?entry=pll',
+        'https://map.kakao.com/link/map/1784996243?ref=share',
+      ];
+
+      // When: URLs are canonicalized for archive identity
+      const canonicalUrls = urls.map((url) => detector.canonicalizeUrl(url));
+
+      // Then: provider IDs survive in one stable URL per provider
+      expect(canonicalUrls).toEqual([
+        'https://map.naver.com/p/entry/place/1197867572',
+        'https://place.map.kakao.com/1784996243',
+      ]);
     });
   });
 

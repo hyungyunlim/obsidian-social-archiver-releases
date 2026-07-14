@@ -17,6 +17,20 @@ import { MastodonURLSchema, MastodonPostIdSchema } from './mastodon';
 import { BlueskyURLSchema, BlueskyPostIdSchema } from './bluesky';
 import { TumblrURLSchema, TumblrPostIdSchema } from './tumblr';
 import { GoogleMapsURLSchema, GoogleMapsPlaceIdSchema } from './googlemaps';
+import {
+	NaverMapURLSchema,
+	NaverMapPlaceIdSchema,
+	extractNaverMapPlaceId,
+	canonicalizeNaverMapUrl,
+	isNaverMapShortUrl,
+} from './navermap';
+import {
+	KakaoMapURLSchema,
+	KakaoMapPlaceIdSchema,
+	extractKakaoMapPlaceId,
+	canonicalizeKakaoMapUrl,
+	isKakaoMapShortUrl,
+} from './kakaomap';
 import { VelogURLSchema, extractVelogUsername } from './velog';
 import { BlogURLSchema, isGitHubPagesBlogUrl } from './blog';
 import { MediumURLSchema, isMediumLikeUrl } from './medium';
@@ -99,6 +113,18 @@ export {
 	// Google Maps
 	GoogleMapsURLSchema,
 	GoogleMapsPlaceIdSchema,
+	// Naver Map
+	NaverMapURLSchema,
+	NaverMapPlaceIdSchema,
+	extractNaverMapPlaceId,
+	canonicalizeNaverMapUrl,
+	isNaverMapShortUrl,
+	// Kakao Map
+	KakaoMapURLSchema,
+	KakaoMapPlaceIdSchema,
+	extractKakaoMapPlaceId,
+	canonicalizeKakaoMapUrl,
+	isKakaoMapShortUrl,
 	// Velog
 	VelogURLSchema,
 	extractVelogUsername,
@@ -309,6 +335,8 @@ const PLATFORM_SCHEMA_MAP = {
 	mastodon: MastodonURLSchema,
 	bluesky: BlueskyURLSchema,
 	googlemaps: GoogleMapsURLSchema,
+	navermap: NaverMapURLSchema,
+	kakaomap: KakaoMapURLSchema,
 	velog: VelogURLSchema,
 	podcast: PodcastURLSchema,
 	blog: BlogURLSchema,
@@ -361,7 +389,7 @@ export const AnySocialMediaURLSchema = z
 			return schemas.some((schema) => schema.safeParse(url).success);
 		},
 		{
-			message: 'URL must be from a supported platform (Facebook, LinkedIn, Instagram, TikTok, X/Twitter, Threads, YouTube, Reddit, Pinterest, Substack, Tumblr, Mastodon, Bluesky, Google Maps, Velog, Naver, Naver Webtoon, Brunch, Blog)',
+			message: 'URL must be from a supported platform (Facebook, LinkedIn, Instagram, TikTok, X/Twitter, Threads, YouTube, Reddit, Pinterest, Substack, Tumblr, Mastodon, Bluesky, Google Maps, Naver Map, Kakao Map, Velog, Naver, Naver Webtoon, Brunch, Blog)',
 		}
 	);
 

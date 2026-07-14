@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { getPublisherIconEntry } from '@/services/IconService';
+import { getPlatformSimpleIcon, getPublisherIconEntry } from '@/services/IconService';
+
+describe('IconService - canonical map provider icons', () => {
+  it.each([
+    ['googlemaps', 'Google Maps'],
+    ['navermap', 'Naver Map'],
+    ['kakaomap', 'Kakao Map'],
+  ] as const)('returns a non-blank %s icon', (source, expectedTitle) => {
+    // Given: a canonical map provider source
+    // When: the centralized icon service resolves its Simple Icon
+    const icon = getPlatformSimpleIcon(source);
+
+    // Then: the renderer has a named, non-empty SVG path to display
+    expect(icon?.title).toBe(expectedTitle);
+    expect(icon?.path.length).toBeGreaterThan(0);
+  });
+});
 
 describe('IconService - getPublisherIconEntry', () => {
   it('returns image-source entry for known image-only publisher slug (newyorker)', () => {

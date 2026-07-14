@@ -106,6 +106,29 @@ describe('LinkedArchivesRenderer', () => {
       });
       expect(out).toBe('');
     });
+
+    it('never renders internal place assignments in either direction', () => {
+      const r = new LinkedArchivesRenderer(resolverFor({
+        'other-archive-id': 'Place',
+        'source-x': 'Source',
+      }));
+      const out = r.render({
+        relations: [
+          entry({ relationType: 'place_assignment' }),
+          entry(
+            {
+              id: 'incoming-place',
+              sourceArchiveId: 'source-x',
+              targetArchiveId: SELF,
+              relationType: 'place_assignment',
+            },
+            makeSummary({ id: 'source-x' }),
+          ),
+        ],
+        selfArchiveId: SELF,
+      });
+      expect(out).toBe('');
+    });
   });
 
   describe('markers + structure', () => {

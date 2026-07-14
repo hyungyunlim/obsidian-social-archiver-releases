@@ -7,6 +7,12 @@ import {
   getPlatformByDomain,
 } from '@/shared/platforms/detection';
 import { PLATFORM_DEFINITIONS } from '@/shared/platforms/definitions';
+import {
+  KAKAO_MAP_URL_PATTERN,
+  NAVER_MAP_URL_PATTERN,
+  canonicalizeKoreanMapPlaceUrl,
+  extractKoreanMapPlaceId,
+} from '@/shared/platforms/map-places';
 
 /**
  * URL pattern for platform detection
@@ -282,6 +288,16 @@ const PLATFORM_PATTERNS: URLPattern[] = [
     ],
   },
   {
+    platform: 'navermap',
+    domains: ['map.naver.com', 'm.place.naver.com', 'pcmap.place.naver.com'],
+    patterns: [NAVER_MAP_URL_PATTERN],
+  },
+  {
+    platform: 'kakaomap',
+    domains: ['place.map.kakao.com', 'map.kakao.com'],
+    patterns: [KAKAO_MAP_URL_PATTERN],
+  },
+  {
     platform: 'googlemaps',
     domains: ['google.com', 'maps.google.com', 'goo.gl', 'maps.app.goo.gl'],
     patterns: [
@@ -528,6 +544,9 @@ export class PlatformDetector implements IService {
           return this.extractBlueskyPostId(urlObj);
         case 'googlemaps':
           return this.extractGoogleMapsPlaceId(urlObj);
+        case 'navermap':
+        case 'kakaomap':
+          return extractKoreanMapPlaceId(platform, urlObj.href);
         case 'velog':
           return this.extractVelogPostId(urlObj);
         case 'medium':
@@ -781,6 +800,11 @@ export class PlatformDetector implements IService {
           return this.canonicalizeTumblrUrl(urlObj);
         case 'googlemaps':
           return this.canonicalizeGoogleMapsUrl(urlObj);
+        case 'navermap':
+        case 'kakaomap': {
+          const canonicalUrl = canonicalizeKoreanMapPlaceUrl(detectedPlatform, urlObj.href);
+          return canonicalUrl ?? this.basicCanonicalization(urlObj);
+        }
         default:
           return this.basicCanonicalization(urlObj);
       }

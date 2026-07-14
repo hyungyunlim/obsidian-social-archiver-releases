@@ -1,4 +1,4 @@
-import { Platform } from 'obsidian';
+import { Notice, Platform } from 'obsidian';
 import type { SocialArchiverSettings } from '../../types/settings';
 import type {
   AIActionExecutorCapabilityPayload,
@@ -36,6 +36,8 @@ export interface DesktopCapabilityReporterDeps {
 export class DesktopCapabilityReporter {
   private timer: number | null = null;
   private inFlight: Promise<void> | null = null;
+  /** Last-notified "chosen->advertised" degradation, to notify only on change. */
+  private lastDegradeKey: string | null = null;
 
   constructor(private readonly deps: DesktopCapabilityReporterDeps) {}
 
@@ -117,6 +119,7 @@ export class DesktopCapabilityReporter {
 
     const aiCommentExecutor = await this.buildCapabilityPayload();
     const aiActionExecutor = await this.buildAIActionCapabilityPayload();
+    this.maybeNotifyProviderDegradation(settings, aiCommentExecutor);
     await apiClient.refreshSyncClientCapabilities(
       clientId,
       {
@@ -124,6 +127,36 @@ export class DesktopCapabilityReporter {
         aiActionExecutor,
       },
       'desktop',
+    );
+  }
+
+  /**
+   * Surface the silent capability degradation from lines 74-77: when the chosen
+   * Default AI tool isn't installed/authenticated, we advertise a different
+   * ready provider as the executor default. Without this, the user's setting says
+   * one thing while every client (and this executor) runs another — the root of
+   * "I set Codex but Claude runs". Deduped so periodic refreshes don't spam.
+   */
+  private maybeNotifyProviderDegradation(
+    settings: SocialArchiverSettings,
+    capability: AICommentExecutorCapabilityPayload | null,
+  ): void {
+    const chosen = settings.aiComment.defaultCli;
+    const advertised = capability?.defaultProvider;
+    // Only meaningful while a provider is actually advertised as the executor
+    // default (some other provider IS ready). "No provider ready at all" is a
+    // different state handled by the settings UI, not this notice.
+    if (!settings.aiComment.enabled || !capability?.enabled || !advertised || advertised === chosen) {
+      this.lastDegradeKey = null;
+      return;
+    }
+    const key = `${chosen}->${advertised}`;
+    if (key === this.lastDegradeKey) return;
+    this.lastDegradeKey = key;
+    new Notice(
+      `Social Archiver: "${providerLabel(chosen)}" is set as your default AI tool but isn't installed/authenticated. ` +
+        `AI actions will run on "${providerLabel(advertised)}" instead.`,
+      8000,
     );
   }
 
@@ -143,6 +176,10 @@ export class DesktopCapabilityReporter {
     );
     return results;
   }
+}
+
+function providerLabel(provider: AICli): string {
+  return provider.charAt(0).toUpperCase() + provider.slice(1);
 }
 
 async function hashPlatformVisibility(settings: SocialArchiverSettings): Promise<string> {

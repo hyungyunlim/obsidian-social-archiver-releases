@@ -530,6 +530,34 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
     expect(syncSubscriptionPosts).not.toHaveBeenCalledWith('archive-added');
   });
 
+  it('reconciles an explicitly created provider archive without entering subscription sync', async () => {
+    // Given a provider-backed archive_added event and an existing vault note.
+    const syncSubscriptionPosts = vi.fn().mockResolvedValue(undefined);
+    const reconcileArchiveIds = vi.fn().mockResolvedValue(undefined);
+    const refreshTimelineView = vi.fn();
+    const events = makeEvents();
+    const deps = makeDeps({
+      events: events as any,
+      syncSubscriptionPosts,
+      refreshTimelineView,
+      locationFrontmatterSyncService: { reconcileArchiveIds },
+    });
+    const bridge = new RealtimeEventBridge(deps);
+    bridge.setup();
+
+    // When the provisional provider archive is created or explicitly revived.
+    await events.trigger('ws:archive_added', {
+      type: 'archive_added',
+      data: { archiveId: 'place-target', source: 'provider_search' },
+    });
+    await Promise.resolve();
+
+    // Then the exact provider target is reconciled and subscription KV is untouched.
+    expect(reconcileArchiveIds).toHaveBeenCalledWith(['place-target']);
+    expect(refreshTimelineView).toHaveBeenCalledOnce();
+    expect(syncSubscriptionPosts).not.toHaveBeenCalled();
+  });
+
   it('does NOT trigger sync on archive_added with no source field', async () => {
     const syncSubscriptionPosts = vi.fn().mockResolvedValue(undefined);
 

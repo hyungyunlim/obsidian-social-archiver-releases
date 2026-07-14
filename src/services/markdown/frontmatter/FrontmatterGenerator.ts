@@ -101,7 +101,14 @@ const CATEGORY_FIELDS: Record<keyof FrontmatterFieldVisibility, string[]> = {
     'externalLinkImage',
     'linkPreviews',
   ],
-  location: ['latitude', 'longitude', 'coordinates', 'location'],
+  location: [
+    'latitude',
+    'longitude',
+    'coordinates',
+    'location',
+    'locationSource',
+    'locationExternalId',
+  ],
   subscription: ['subscribed', 'subscriptionId'],
   seriesInfo: ['series', 'seriesUrl', 'seriesId', 'episode', 'totalEpisodes', 'starScore', 'genre', 'ageRating', 'finished', 'publishDay'],
   podcastInfo: ['channelTitle', 'audioUrl', 'audioSize', 'audioType', 'season', 'subtitle', 'hosts', 'guests', 'explicit'],
@@ -318,6 +325,10 @@ export class FrontmatterGenerator {
     if (postData.metadata.latitude !== undefined) frontmatter.latitude = postData.metadata.latitude;
     if (postData.metadata.longitude !== undefined) frontmatter.longitude = postData.metadata.longitude;
     if (postData.metadata.location) frontmatter.location = postData.metadata.location;
+    if (postData.metadata.locationSource) frontmatter.locationSource = postData.metadata.locationSource;
+    if (postData.metadata.locationExternalId) {
+      frontmatter.locationExternalId = postData.metadata.locationExternalId;
+    }
 
     // Bases Map View compatible coordinates format: "lat, lng"
     if (postData.metadata.latitude !== undefined && postData.metadata.longitude !== undefined) {

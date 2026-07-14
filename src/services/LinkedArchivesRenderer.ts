@@ -38,6 +38,10 @@ const OUTGOING_EXCLUDED_TYPES: ReadonlySet<LinkRelationType> = new Set([
   'note_author_mention',
 ]);
 
+const ALL_DIRECTIONS_EXCLUDED_TYPES: ReadonlySet<LinkRelationType> = new Set([
+  'place_assignment',
+]);
+
 // ─── Resolvers ───────────────────────────────────────────
 
 /**
@@ -110,6 +114,7 @@ export class LinkedArchivesRenderer {
       // Only fully-connected relations render. Pending/failed are skipped so
       // the section never shows half-resolved links.
       if (relation.status !== 'connected') continue;
+      if (ALL_DIRECTIONS_EXCLUDED_TYPES.has(relation.relationType)) continue;
       if (!otherArchive) continue;
 
       const isOutgoing = relation.sourceArchiveId === selfArchiveId;

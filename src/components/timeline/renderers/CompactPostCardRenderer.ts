@@ -552,6 +552,8 @@ export class CompactPostCardRenderer extends Component {
       mastodon: 'Mastodon',
       bluesky: 'Bluesky',
       googlemaps: 'Google Maps',
+      navermap: 'Naver Map',
+      kakaomap: 'Kakao Map',
       velog: 'Velog',
       podcast: 'Podcast',
       blog: 'Blog',

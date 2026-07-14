@@ -28,6 +28,8 @@ describe('Platform Types', () => {
 				'mastodon',
 				'bluesky',
 				'googlemaps',
+				'navermap',
+				'kakaomap',
 				'velog',
 				'podcast',
 				'blog',
@@ -75,13 +77,15 @@ describe('Platform Types', () => {
 			expect(PLATFORMS).toContain('instagram');
 			expect(PLATFORMS).toContain('x');
 			expect(PLATFORMS).toContain('naver');
+			expect(PLATFORMS).toContain('navermap');
+			expect(PLATFORMS).toContain('kakaomap');
 			expect(PLATFORMS).toContain('naver-webtoon');
 			expect(PLATFORMS).toContain('brunch');
 			expect(PLATFORMS).toContain('post');
 		});
 
-		it('should have correct length (25 platforms)', () => {
-			expect(PLATFORMS).toHaveLength(25);
+		it('should have correct length (27 platforms)', () => {
+			expect(PLATFORMS).toHaveLength(27);
 		});
 	});
 
@@ -106,6 +110,11 @@ describe('Platform Types', () => {
 			it('should NOT include googlemaps', () => {
 				expect(CRAWL_SUPPORTED_PLATFORMS).not.toContain('googlemaps');
 			});
+
+			it('should NOT include Korean map place platforms', () => {
+				expect(CRAWL_SUPPORTED_PLATFORMS).not.toContain('navermap');
+				expect(CRAWL_SUPPORTED_PLATFORMS).not.toContain('kakaomap');
+			});
 		});
 
 		describe('NEW_SUBSCRIPTION_PLATFORMS', () => {
@@ -127,6 +136,11 @@ describe('Platform Types', () => {
 
 			it('should NOT include linkedin (disabled for new)', () => {
 				expect(NEW_SUBSCRIPTION_PLATFORMS).not.toContain('linkedin');
+			});
+
+			it('should NOT include Korean map place platforms', () => {
+				expect(NEW_SUBSCRIPTION_PLATFORMS).not.toContain('navermap');
+				expect(NEW_SUBSCRIPTION_PLATFORMS).not.toContain('kakaomap');
 			});
 		});
 

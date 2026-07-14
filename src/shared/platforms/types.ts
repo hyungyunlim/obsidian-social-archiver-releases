@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/types.ts
- * Generated: 2026-07-07T12:46:01.396Z
+ * Generated: 2026-07-13T15:16:05.369Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -33,6 +33,8 @@ export type Platform =
   | 'mastodon'
   | 'bluesky'
   | 'googlemaps'
+  | 'navermap'
+  | 'kakaomap'
   | 'velog'
   | 'podcast'
   | 'blog'
@@ -64,6 +66,8 @@ export const PLATFORMS = [
   'mastodon',
   'bluesky',
   'googlemaps',
+  'navermap',
+  'kakaomap',
   'velog',
   'podcast',
   'blog',
@@ -100,6 +104,8 @@ export const PLATFORM_DETECTION_ORDER = [
   'tumblr',
   'bluesky',
   'googlemaps',
+  'navermap',
+  'kakaomap',
   'velog',
   'medium',
   'kidsnote',
@@ -280,6 +286,9 @@ export const MOBILE_PLATFORMS = [
   'tumblr',
   'web',
   'post',
+  'googlemaps',
+  'navermap',
+  'kakaomap',
 ] as const;
 
 export type MobilePlatform = typeof MOBILE_PLATFORMS[number];
@@ -310,6 +319,9 @@ export const MOBILE_PLATFORM_INFO: Record<MobilePlatform, { name: string; placeh
   tumblr: { name: 'Tumblr', placeholder: 'Tumblr post URL' },
   web: { name: 'Web Article', placeholder: 'Web page or article URL' },
   post: { name: 'My Post', placeholder: 'Your composed post' },
+  googlemaps: { name: 'Google Maps', placeholder: 'Google Maps place URL' },
+  navermap: { name: 'Naver Map', placeholder: 'Naver Map place URL' },
+  kakaomap: { name: 'Kakao Map', placeholder: 'Kakao Map place URL' },
 };
 
 // ============================================================================

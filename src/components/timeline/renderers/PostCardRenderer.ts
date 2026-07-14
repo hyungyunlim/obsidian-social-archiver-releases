@@ -16,7 +16,7 @@ import { CompactPostCardRenderer } from './CompactPostCardRenderer';
 import { YouTubePlayerController } from '../controllers/YouTubePlayerController';
 import { VideoTranscriptPlayer } from './VideoTranscriptPlayer';
 import { ShareAPIClient } from '../../../services/ShareAPIClient';
-import type { AIActionType, AICommentPayload, ContentVariant, TranscriptionJobMode, TranscriptionMediaRef, WorkersAPIClient } from '../../../services/WorkersAPIClient';
+import type { AIActionType, AICommentPayload, ContentVariant, PlaceCandidateConfirmResult, TranscriptionJobMode, TranscriptionMediaRef, WorkersAPIClient } from '../../../services/WorkersAPIClient';
 import { TextFormatter } from '../../../services/markdown/formatters/TextFormatter';
 import { TranscriptFormatter } from '../../../services/markdown/formatters/TranscriptFormatter';
 import { getAuthorCatalogStore } from '../../../services/AuthorCatalogStore';
@@ -26,10 +26,21 @@ import type { AuthorCatalogEntry } from '../../../types/author-catalog';
 import { isRssBasedPlatform } from '../../../constants/rssPlatforms';
 import { isSubstackNote } from '../../../utils/substack';
 import { INTERNAL_LINK_SCHEME, parseArchiveMentionUrl, parseAuthorMentionUrl, type AuthorMentionUrlParts } from '../../../utils/note-mentions';
-import { getPlatformName } from '@/shared/platforms';
+import {
+  buildExactMapPlaceUrl,
+  getMapPlaceProvider,
+  getMapProviderWebLink,
+  getMapProviderWebLinks,
+  isMapPlaceCardEligible,
+  getPlatformName,
+} from '@/shared/platforms';
 import { isSupportedPlatformUrl, validateAndDetectPlatform, isPinterestBoardUrl } from '../../../schemas/platforms';
 import { resolvePinterestUrl } from '../../../utils/pinterest';
 import { AICommentBanner, type AICommentBannerActionId, type AICommentBannerOptions } from './AICommentBanner';
+import { PlaceCandidateBanner } from './PlaceCandidateBanner';
+import { PlaceCandidateStore } from '../../../services/PlaceCandidateStore';
+import { PlaceCandidateModal } from '../../../modals/PlaceCandidateModal';
+import { ArchivePlacePickerModal } from '../modals/ArchivePlacePickerModal';
 import { AICommentRenderer, type AICommentRendererOptions } from './AICommentRenderer';
 import { AICliDetector, type AICli, type AICliDetectionResult } from '../../../utils/ai-cli';
 import { parseAIComments, appendAIComment, removeAIComment, updateFrontmatterAIComments } from '../../../services/ai-comment/markdown-handler';
@@ -163,6 +174,10 @@ export class PostCardRenderer extends Component {
   // AI Comment components
   private aiCommentBanners: Map<string, AICommentBanner> = new Map();
   private aiCommentRenderers: Map<string, AICommentRenderer> = new Map();
+
+  // Place candidate banner components (Places P3c)
+  private placeCandidateBanners: Map<string, PlaceCandidateBanner> = new Map();
+  private placeCandidateStore: PlaceCandidateStore;
   private cachedCliDetection: Map<AICli, AICliDetectionResult> | null = null;
   private cliDetectionTimestamp: number = 0;
   private readonly CLI_DETECTION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -227,6 +242,16 @@ export class PostCardRenderer extends Component {
     this.compactPostCardRenderer.setLinkPreviewRenderer(linkPreviewRenderer); // Set LinkPreviewRenderer for external links
     this.youtubeControllers = youtubeControllers;
     this.textFormatter = new TextFormatter();
+
+    // Shared batched fetcher for pending place candidates (Places P3c).
+    // The workersApiClient getter throws while unconfigured — treat as absent.
+    this.placeCandidateStore = new PlaceCandidateStore(() => {
+      try {
+        return this.plugin.workersApiClient;
+      } catch {
+        return undefined;
+      }
+    });
 
     // Build the previewable orchestrator with a vault-aware context.
     // `resolveMediaUrl` mirrors `getAvatarSrc`'s vault-then-CDN-proxy strategy
@@ -648,7 +673,7 @@ export class PostCardRenderer extends Component {
       let savedText = ' saved this post';
       if (post.type === 'profile') {
         savedText = ' saved this user';
-      } else if (post.platform === 'googlemaps') {
+      } else if (isMapPlaceCardEligible(post.platform)) {
         savedText = ' saved this place';
       }
       savedHeader.createSpan({ text: savedText });
@@ -731,8 +756,7 @@ export class PostCardRenderer extends Component {
       return rootElement;
     }
 
-    // Google Maps has a specialized card layout (Yelp/native style)
-    if (post.platform === 'googlemaps') {
+    if (isMapPlaceCardEligible(post.platform)) {
       this.renderGoogleMapsHeader(contentArea, post);
       this.renderGoogleMapsBusinessInfo(contentArea, post);
     } else {
@@ -815,11 +839,6 @@ export class PostCardRenderer extends Component {
       // when the URL is a short TikTok link that does not expose /video/{id}.
       this.youtubeEmbedRenderer.renderTikTok(contentArea, post.url || '', post.videoId || post.id);
     }
-    // Google Maps embed (show location map)
-    else if (post.platform === 'googlemaps') {
-      this.renderGoogleMapsEmbed(contentArea, post);
-    }
-
     // Media carousel (only show if no embedded archives exist AND not YouTube/TikTok)
     // YouTube and TikTok already have their video embeds rendered above
     // If embedded archives exist, media will be shown in the embedded cards instead
@@ -1098,6 +1117,7 @@ export class PostCardRenderer extends Component {
         if (this.shouldShowMobileAIActionButton(post, isEmbedded)) {
           this.renderMobileAIActionButton(actionsBar, post);
         }
+        if (!isEmbedded) this.renderPlaceButton(actionsBar, post);
         this.renderOverflowMenuButton(actionsBar, post, rootElement, isEmbedded);
       } else {
         // Personal Like button
@@ -1109,6 +1129,7 @@ export class PostCardRenderer extends Component {
         // Tag button
         if (!isEmbedded) {
           this.renderTagButton(actionsBar, post, rootElement);
+          this.renderPlaceButton(actionsBar, post);
         }
 
         // Archive button
@@ -1157,6 +1178,10 @@ export class PostCardRenderer extends Component {
           await this.renderAICommentBanner(contentArea, post, rootElement);
         }
       }
+
+      // 4. Place candidate banner (Places P3c) — fire-and-forget: the batched
+      // fetch resolves after the card is in the DOM and appends the banner then.
+      void this.renderPlaceCandidateBannerIfNeeded(contentArea, post, rootElement);
     } else {
       // For embedded posts, only render regular comments (no AI comments)
       if (post.platform !== 'post' && post.comments && post.comments.length > 0) {
@@ -3529,7 +3554,7 @@ export class PostCardRenderer extends Component {
     // Only show social interaction counts if no embedded archives and not a reblog
     // Reblogs show engagement on the original post, not the reblogger's card
     const metaGap = ObsidianPlatform.isMobile ? '4px' : '6px';
-    if (!hasEmbeddedArchives && !post.isReblog) {
+    if (!hasEmbeddedArchives && !post.isReblog && !isMapPlaceCardEligible(post.platform)) {
       // Likes - hover handled by CSS .pcr-action-btn:hover
       if (post.metadata.likes !== undefined) {
         const likeBtn = interactions.createDiv({ cls: 'pcr-action-btn' });
@@ -3575,6 +3600,7 @@ export class PostCardRenderer extends Component {
       if (this.shouldShowMobileAIActionButton(post, isEmbedded)) {
         this.renderMobileAIActionButton(interactions, post);
       }
+      if (!isEmbedded) this.renderPlaceButton(interactions, post);
       this.renderOverflowMenuButton(interactions, post, rootElement, isEmbedded);
     } else {
       // Desktop: show all buttons inline
@@ -3582,6 +3608,7 @@ export class PostCardRenderer extends Component {
       this.renderShareButton(interactions, post);
       if (!isEmbedded) {
         this.renderTagButton(interactions, post, rootElement);
+        this.renderPlaceButton(interactions, post);
       }
       this.renderArchiveButton(interactions, post, rootElement);
       this.renderReaderModeButton(interactions, post);
@@ -3656,8 +3683,12 @@ export class PostCardRenderer extends Component {
    * Render personal like button
    */
   private renderPersonalLikeButton(parent: HTMLElement, post: PostData): void {
-    const personalLikeBtn = parent.createDiv({ cls: 'pcr-action-btn' });
-    personalLikeBtn.setAttribute('title', post.like ? 'Remove from favorites' : 'Add to favorites');
+    const personalLikeBtn = parent.createEl('button', { cls: 'pcr-action-btn' });
+    personalLikeBtn.type = 'button';
+    const label = post.like ? 'Remove from favorites' : 'Add to favorites';
+    personalLikeBtn.setAttribute('title', label);
+    personalLikeBtn.setAttribute('aria-label', label);
+    personalLikeBtn.setAttribute('aria-pressed', String(!!post.like));
 
     const personalLikeIcon = personalLikeBtn.createDiv({ cls: 'pcr-action-icon' });
 
@@ -3685,8 +3716,12 @@ export class PostCardRenderer extends Component {
    * Render archive button
    */
   private renderArchiveButton(parent: HTMLElement, post: PostData, rootElement: HTMLElement): void {
-    const archiveBtn = parent.createDiv({ cls: 'pcr-action-btn' });
-    archiveBtn.setAttribute('title', post.archive ? 'Unarchive this post' : 'Archive this post');
+    const archiveBtn = parent.createEl('button', { cls: 'pcr-action-btn' });
+    archiveBtn.type = 'button';
+    const label = post.archive ? 'Unarchive this post' : 'Archive this post';
+    archiveBtn.setAttribute('title', label);
+    archiveBtn.setAttribute('aria-label', label);
+    archiveBtn.setAttribute('aria-pressed', String(!!post.archive));
 
     const archiveIcon = archiveBtn.createDiv({ cls: 'pcr-action-icon' });
 
@@ -3767,12 +3802,38 @@ export class PostCardRenderer extends Component {
     });
   }
 
+  private renderPlaceButton(parent: HTMLElement, post: PostData): void {
+    const archiveId = this.resolveArchiveIdForContentVariants(post);
+    if (!archiveId) return;
+    const actionLabel = post.metadata.location ? 'Change linked place' : 'Link place';
+    const button = parent.createEl('button', { cls: 'pcr-action-btn' });
+    button.type = 'button';
+    button.setAttribute('title', actionLabel);
+    button.setAttribute('aria-label', actionLabel);
+    const icon = button.createDiv({ cls: 'pcr-action-icon' });
+    setIcon(icon, 'map-pin-plus');
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      new ArchivePlacePickerModal(this.app, {
+        archiveId,
+        currentLocation: post.metadata.location ?? null,
+        api: this.plugin.workersApiClient,
+        onChanged: async () => {
+          await this.plugin.reconcileArchiveLocation(archiveId);
+          this.plugin.refreshTimelineView();
+        },
+      }).open();
+    });
+  }
+
   /**
    * Render open note button
    */
   private renderOpenNoteButton(parent: HTMLElement, post: PostData): void {
-    const openNoteBtn = parent.createDiv({ cls: 'pcr-action-btn' });
+    const openNoteBtn = parent.createEl('button', { cls: 'pcr-action-btn' });
+    openNoteBtn.type = 'button';
     openNoteBtn.setAttribute('title', 'Open note in Obsidian');
+    openNoteBtn.setAttribute('aria-label', 'Open note in Obsidian');
 
     const openNoteIcon = openNoteBtn.createDiv({ cls: 'pcr-action-icon' });
     setIcon(openNoteIcon, 'external-link');
@@ -3809,8 +3870,10 @@ export class PostCardRenderer extends Component {
    * Render delete button
    */
   private renderDeleteButton(parent: HTMLElement, post: PostData, rootElement: HTMLElement): void {
-    const deleteBtn = parent.createDiv({ cls: 'pcr-action-btn pcr-action-btn-error' });
+    const deleteBtn = parent.createEl('button', { cls: 'pcr-action-btn pcr-action-btn-error' });
+    deleteBtn.type = 'button';
     deleteBtn.setAttribute('title', 'Delete this post');
+    deleteBtn.setAttribute('aria-label', 'Delete this post');
 
     const deleteIcon = deleteBtn.createDiv({ cls: 'pcr-action-icon' });
     setIcon(deleteIcon, 'trash-2');
@@ -4266,13 +4329,17 @@ export class PostCardRenderer extends Component {
     // Check if user is logged in
     const isLoggedIn = this.plugin.settings.isVerified && this.plugin.settings.authToken;
 
-    const shareBtn = parent.createDiv({ cls: 'pcr-action-btn' });
+    const shareBtn = parent.createEl('button', { cls: 'pcr-action-btn' });
+    shareBtn.type = 'button';
 
     // Check if already shared
     const isShared = !!post.shareUrl;
 
     // Set tooltip based on login state
-    if (!isLoggedIn && !isShared) {
+    if (isMapPlaceCardEligible(post.platform)) {
+      shareBtn.setAttribute('title', 'Share this place');
+      shareBtn.setAttribute('aria-label', 'Share this place');
+    } else if (!isLoggedIn && !isShared) {
       shareBtn.setAttribute('title', 'Log in to share posts');
       shareBtn.addClass('pcr-action-btn-disabled');
     } else {
@@ -4293,6 +4360,11 @@ export class PostCardRenderer extends Component {
     shareBtn.addEventListener('click', (e) => {
       e.stopPropagation();
 
+      if (isMapPlaceCardEligible(post.platform)) {
+        this.showMapPlaceShareMenu(post, shareBtn, shareIcon);
+        return;
+      }
+
       // Check current share state dynamically (not from closure)
       const currentShareUrl = post.shareUrl;
       const currentlyShared = !!currentShareUrl;
@@ -4309,6 +4381,84 @@ export class PostCardRenderer extends Component {
     });
   }
 
+  private showMapPlaceShareMenu(post: PostData, shareBtn: HTMLElement, shareIcon: HTMLElement): void {
+    const menu = new Menu();
+    const currentShareUrl = post.shareUrl;
+
+    if (currentShareUrl) {
+      menu.addItem((item) => {
+        item
+          .setIcon('copy')
+          .setTitle('Copy share link')
+          .onClick(() => {
+            void navigator.clipboard.writeText(getShareUrlForClipboard(currentShareUrl, false));
+          });
+      });
+      menu.addItem((item) => {
+        item
+          .setIcon('link-off')
+          .setTitle('Unshare')
+          .setWarning(true)
+          .onClick(() => {
+            void this.unsharePost(post, shareBtn, shareIcon);
+          });
+      });
+    } else {
+      menu.addItem((item) => {
+        item
+          .setIcon('share-2')
+          .setTitle('Create share link')
+          .onClick(() => {
+            void this.createShare(post, shareBtn, shareIcon);
+          });
+      });
+    }
+
+    const provider = getMapPlaceProvider(post.metadata.locationSource ?? post.platform);
+    const providerLink = provider
+      ? getMapProviderWebLink(provider.source, {
+          name: post.metadata.location?.trim() || post.author.name?.trim() || 'Place',
+          latitude: post.metadata.latitude,
+          longitude: post.metadata.longitude,
+          locationSource: post.metadata.locationSource ?? post.platform,
+          locationExternalId: post.metadata.locationExternalId ?? post.id,
+        })
+      : null;
+
+    if (provider && providerLink) {
+      menu.addSeparator();
+      menu.addItem((item) => {
+        item
+          .setIcon('copy')
+          .setTitle(`Copy ${provider.displayLabel} link`)
+          .onClick(() => {
+            void navigator.clipboard.writeText(providerLink.url);
+          });
+      });
+      menu.addItem((item) => {
+        item
+          .setIcon('external-link')
+          .setTitle(`Open on ${provider.displayLabel}`)
+          .onClick(() => {
+            window.open(providerLink.url, '_blank', 'noopener,noreferrer');
+          });
+      });
+      if (typeof navigator.share === 'function') {
+        menu.addItem((item) => {
+          item
+            .setIcon('send')
+            .setTitle(`Share ${provider.displayLabel} place`)
+            .onClick(() => {
+              void navigator.share({ url: providerLink.url });
+            });
+        });
+      }
+    }
+
+    const rect = shareBtn.getBoundingClientRect();
+    menu.showAtPosition({ x: rect.left, y: rect.bottom });
+  }
+
   /**
    * Render tag button in the action bar (opens TagModal)
    */
@@ -4321,8 +4471,10 @@ export class PostCardRenderer extends Component {
 
     const hasTags = (post.tags?.length ?? 0) > 0;
 
-    const tagBtn = parent.createDiv({ cls: 'pcr-action-btn' });
+    const tagBtn = parent.createEl('button', { cls: 'pcr-action-btn' });
+    tagBtn.type = 'button';
     tagBtn.setAttribute('title', 'Manage tags');
+    tagBtn.setAttribute('aria-label', 'Manage tags');
 
     const tagIcon = tagBtn.createDiv({ cls: 'pcr-action-icon' });
     setIcon(tagIcon, 'tag');
@@ -5061,6 +5213,7 @@ export class PostCardRenderer extends Component {
 
       // Clean up AI comment components for this post
       this.cleanupAICommentComponents(post.id);
+      this.cleanupPlaceCandidateBanner(post.id);
 
       // Register UI delete to prevent double refresh from vault event
       if (this.onUIDeleteCallback) {
@@ -5143,7 +5296,10 @@ export class PostCardRenderer extends Component {
       post.like = newLikeStatus;
 
       // Update UI
-      btn.setAttribute('title', newLikeStatus ? 'Remove from favorites' : 'Add to favorites');
+      const label = newLikeStatus ? 'Remove from favorites' : 'Add to favorites';
+      btn.setAttribute('title', label);
+      btn.setAttribute('aria-label', label);
+      btn.setAttribute('aria-pressed', String(newLikeStatus));
       btn.toggleClass('pcr-action-btn-active', newLikeStatus);
 
       // Update star icon fill
@@ -5205,7 +5361,7 @@ export class PostCardRenderer extends Component {
       let savedText = ' saved this post';
       if (post.type === 'profile') {
         savedText = ' saved this user';
-      } else if (post.platform === 'googlemaps') {
+      } else if (isMapPlaceCardEligible(post.platform)) {
         savedText = ' saved this place';
       }
       savedHeader.createSpan({ text: savedText });
@@ -5480,7 +5636,10 @@ export class PostCardRenderer extends Component {
 
       // Update UI
       btn.toggleClass('pcr-action-btn-active', newArchiveStatus);
-      btn.setAttribute('title', newArchiveStatus ? 'Unarchive this post' : 'Archive this post');
+      const label = newArchiveStatus ? 'Unarchive this post' : 'Archive this post';
+      btn.setAttribute('title', label);
+      btn.setAttribute('aria-label', label);
+      btn.setAttribute('aria-pressed', String(newArchiveStatus));
 
       // Update archive icon fill (with internal details visible)
       const svgEl = icon.querySelector('svg');
@@ -8712,6 +8871,17 @@ export class PostCardRenderer extends Component {
    */
   private renderGoogleMapsHeader(container: HTMLElement, post: PostData): void {
     const data = this.parseGoogleMapsBusinessData(post);
+    const provider = getMapPlaceProvider(post.metadata.locationSource ?? post.platform);
+    const exactUrl = this.getExactMapPlaceUrl(post, data.name);
+    const providerLink = provider
+      ? getMapProviderWebLink(provider.source, {
+          name: data.name,
+          latitude: data.lat,
+          longitude: data.lng,
+          locationSource: post.metadata.locationSource ?? post.platform,
+          locationExternalId: post.metadata.locationExternalId ?? post.id,
+        })
+      : null;
 
     const header = container.createDiv({ cls: 'gmaps-header pcr-gmaps-header' });
 
@@ -8724,14 +8894,23 @@ export class PostCardRenderer extends Component {
     // Name row with verified badge
     const nameRow = infoSection.createDiv({ cls: 'pcr-gmaps-name-row' });
 
-    const nameEl = nameRow.createEl('strong', { cls: 'pcr-gmaps-name', text: data.name });
+    const nameEl = exactUrl
+      ? nameRow.createEl('a', {
+          cls: 'pcr-gmaps-name',
+          text: data.name,
+          href: exactUrl,
+          attr: { target: '_blank', rel: 'noopener noreferrer' },
+        })
+      : nameRow.createEl('strong', { cls: 'pcr-gmaps-name', text: data.name });
     if (ObsidianPlatform.isMobile) {
       nameEl.setCssStyles({ fontSize: '15px' });
     }
-    nameEl.addEventListener('click', () => window.open(post.url, '_blank'));
+    if (provider) {
+      infoSection.createSpan({ cls: 'pcr-gmaps-category', text: provider.sourceBadge });
+    }
 
     // Verified badge
-    if (data.isVerified) {
+    if (provider?.source === 'googlemaps' && data.isVerified) {
       const verifiedBadge = nameRow.createSpan({ cls: 'pcr-gmaps-verified', text: '✓' });
       verifiedBadge.setAttribute('title', 'Claimed business');
     }
@@ -8780,7 +8959,7 @@ export class PostCardRenderer extends Component {
         text: displayCategories.join(' · ')
       });
 
-      if (data.priceLevel) {
+      if (provider?.source === 'googlemaps' && data.priceLevel) {
         categoryRow.createSpan({ cls: 'pcr-gmaps-category', text: '·' });
         categoryRow.createSpan({ cls: 'pcr-gmaps-price', text: data.priceLevel });
       }
@@ -8799,18 +8978,64 @@ export class PostCardRenderer extends Component {
       callBtn.addEventListener('click', (e) => e.stopPropagation());
     }
 
-    // Directions button (compact)
-    const directionsUrl = this.buildGoogleMapsDirectionsUrl(data.lat, data.lng, data.address, data.name);
-    const dirBtn = rightSection.createEl('a', { cls: 'pcr-gmaps-action-btn' });
-    dirBtn.href = directionsUrl;
-    dirBtn.target = '_blank';
-    dirBtn.setAttribute('title', 'Get directions');
-    const dirIcon = dirBtn.createDiv({ cls: 'pcr-gmaps-action-icon' });
-    setIcon(dirIcon, 'navigation');
-    dirBtn.addEventListener('click', (e) => e.stopPropagation());
+    const mapLinks = getMapProviderWebLinks({
+      name: data.name,
+      latitude: data.lat,
+      longitude: data.lng,
+      locationSource: post.metadata.locationSource ?? post.platform,
+      locationExternalId: post.metadata.locationExternalId ?? post.id,
+    });
+    if (mapLinks.length > 0) {
+      const dirBtn = rightSection.createDiv({ cls: 'pcr-gmaps-action-btn' });
+      dirBtn.setAttribute('role', 'button');
+      dirBtn.setAttribute('tabindex', '0');
+      dirBtn.setAttribute('title', 'Open in map');
+      const dirIcon = dirBtn.createDiv({ cls: 'pcr-gmaps-action-icon' });
+      setIcon(dirIcon, 'navigation');
+      const openChooser = (event: Event) => {
+        event.stopPropagation();
+        const modal = new Modal(this.app);
+        modal.setTitle('Open in map');
+        for (const link of mapLinks) {
+          modal.contentEl.createEl('a', {
+            text: link.label,
+            href: link.url,
+            cls: 'mod-cta',
+            attr: { target: '_blank', rel: 'noopener noreferrer' },
+          });
+        }
+        modal.open();
+      };
+      dirBtn.addEventListener('click', openChooser);
+      dirBtn.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openChooser(event);
+        }
+      });
+    }
 
-    // Platform icon
-    this.renderOriginalPostLink(rightSection, post);
+    if (provider && providerLink) {
+      const providerActionLabel = `${providerLink.kind === 'exact' ? 'Open' : 'Search for'} ${data.name} on ${provider.displayLabel}`;
+      const providerAction = rightSection.createEl('a', { cls: 'pcr-gmaps-provider-link' });
+      providerAction.href = providerLink.url;
+      providerAction.target = '_blank';
+      providerAction.rel = 'noopener noreferrer';
+      providerAction.setAttribute('title', providerActionLabel);
+      providerAction.setAttribute('aria-label', providerActionLabel);
+      const providerIcon = getPlatformSimpleIcon(provider.source);
+      if (providerIcon) {
+        const providerIconElement = createSVGElement(providerIcon, {
+          fill: 'currentColor',
+          width: '18px',
+          height: '18px',
+        });
+        providerIconElement.setAttribute('aria-hidden', 'true');
+        providerIconElement.setAttribute('focusable', 'false');
+        providerAction.appendChild(providerIconElement);
+      }
+      providerAction.addEventListener('click', (event): void => event.stopPropagation());
+    }
   }
 
   /**
@@ -8818,13 +9043,24 @@ export class PostCardRenderer extends Component {
    */
   private renderGoogleMapsBusinessInfo(container: HTMLElement, post: PostData): void {
     const data = this.parseGoogleMapsBusinessData(post);
-    const directionsUrl = this.buildGoogleMapsDirectionsUrl(data.lat, data.lng, data.address, data.name);
+    const provider = getMapPlaceProvider(post.metadata.locationSource ?? post.platform);
+    const exactUrl = this.getExactMapPlaceUrl(post, data.name);
+    const directionsUrl = provider?.source === 'googlemaps'
+      ? this.buildGoogleMapsDirectionsUrl(data.lat, data.lng, data.address, data.name)
+      : exactUrl;
 
     // Address row (clickable to open in Maps)
-    if (data.address) {
-      const addressRow = container.createDiv({ cls: 'gmaps-address pcr-gmaps-address-row' });
-      addressRow.addEventListener('click', () => {
-        window.open(directionsUrl, '_blank');
+    if (data.address && directionsUrl) {
+      const addressRow = container.createEl('a', {
+        cls: 'gmaps-address pcr-gmaps-address-row',
+        href: directionsUrl,
+        attr: {
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          'aria-label': provider?.source === 'googlemaps'
+            ? `Get directions to ${data.name}`
+            : `Open ${data.name} on ${provider?.displayLabel ?? 'map'}`,
+        },
       });
 
       const addressIconWrapper = addressRow.createDiv({ cls: 'pcr-gmaps-address-icon' });
@@ -8837,14 +9073,19 @@ export class PostCardRenderer extends Component {
       const addressLabel = addressText.createDiv({ cls: 'pcr-gmaps-address-label', text: shortAddress });
       addressLabel.setAttribute('title', data.address); // Full address on hover
 
-      addressText.createDiv({ cls: 'pcr-gmaps-direction-hint', text: 'Tap for directions' });
+      addressText.createDiv({
+        cls: 'pcr-gmaps-direction-hint',
+        text: provider?.source === 'googlemaps'
+          ? 'Tap for directions'
+          : `Open on ${provider?.displayLabel ?? 'map'}`,
+      });
 
       const arrowIconWrapper = addressRow.createDiv({ cls: 'pcr-gmaps-arrow-icon' });
       setIcon(arrowIconWrapper, 'external-link');
     }
 
     // Hours section (collapsible)
-    if (data.hours && Object.keys(data.hours).length > 0) {
+    if (provider?.source === 'googlemaps' && data.hours && Object.keys(data.hours).length > 0) {
       const formattedHours = this.formatBusinessHours(data.hours);
 
       const hoursSection = container.createDiv({ cls: 'gmaps-hours pcr-gmaps-hours-section' });
@@ -8885,9 +9126,14 @@ export class PostCardRenderer extends Component {
 
     // Website button (if available)
     if (data.website) {
-      const websiteRow = container.createDiv({ cls: 'gmaps-website pcr-gmaps-website-row' });
-      websiteRow.addEventListener('click', () => {
-        window.open(data.website, '_blank');
+      const websiteRow = container.createEl('a', {
+        cls: 'gmaps-website pcr-gmaps-website-row',
+        href: data.website,
+        attr: {
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          'aria-label': `Open ${data.name} website`,
+        },
       });
 
       const websiteIconWrapper = websiteRow.createDiv({ cls: 'pcr-gmaps-website-icon' });
@@ -8937,14 +9183,22 @@ export class PostCardRenderer extends Component {
     // Map container
     const mapContainer = mapWrapper.createDiv({ cls: 'pcr-gmaps-map-container' });
 
-    // Touch overlay to prevent Leaflet from capturing scroll events
-    // This overlay intercepts all touch events and only allows clicks through
-    const touchOverlay = mapWrapper.createDiv({ cls: 'pcr-gmaps-map-touch-overlay' });
+    const exactUrl = this.getExactMapPlaceUrl(post, post.author.name);
+    const mapProvider = getMapPlaceProvider(post.metadata.locationSource ?? post.platform);
 
-    // Click on overlay opens Google Maps
-    touchOverlay.addEventListener('click', () => {
-      window.open(post.url || `https://www.google.com/maps?q=${lat},${lng}`, '_blank');
-    });
+    if (exactUrl) {
+      mapWrapper.createEl('a', {
+        cls: 'pcr-gmaps-map-touch-overlay',
+        href: exactUrl,
+        attr: {
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          'aria-label': `Open ${post.author.name} on ${mapProvider?.displayLabel ?? 'map'}`,
+        },
+      });
+    } else {
+      mapWrapper.createDiv({ cls: 'pcr-gmaps-map-touch-overlay' });
+    }
 
     // Use IntersectionObserver to lazy-load map when visible
     // This fixes rendering issues when the container isn't visible on initial load
@@ -9037,17 +9291,34 @@ export class PostCardRenderer extends Component {
     const linksDiv = linkContainer.createDiv({ cls: 'pcr-map-links' });
 
     // Directions link
-    const directionsUrl = this.buildGoogleMapsDirectionsUrl(lat, lng, post.metadata.location, post.author.name);
-    const directionsLink = linksDiv.createEl('a', { text: 'Directions', cls: 'pcr-map-link' });
-    directionsLink.href = directionsUrl;
-    directionsLink.target = '_blank';
-    directionsLink.addEventListener('click', (e) => e.stopPropagation());
+    const provider = getMapPlaceProvider(post.metadata.locationSource ?? post.platform);
+    if (provider?.source === 'googlemaps') {
+      const directionsUrl = this.buildGoogleMapsDirectionsUrl(lat, lng, post.metadata.location, post.author.name);
+      const directionsLink = linksDiv.createEl('a', { text: 'Directions', cls: 'pcr-map-link' });
+      directionsLink.href = directionsUrl;
+      directionsLink.target = '_blank';
+      directionsLink.addEventListener('click', (e) => e.stopPropagation());
+    }
 
-    // Google Maps link
-    const gmapLink = linksDiv.createEl('a', { text: 'Open in maps', cls: 'pcr-map-link' });
-    gmapLink.href = post.url || `https://www.google.com/maps?q=${lat},${lng}`;
-    gmapLink.target = '_blank';
-    gmapLink.addEventListener('click', (e) => e.stopPropagation());
+    if (exactUrl) {
+      const mapLink = linksDiv.createEl('a', {
+        text: `Open in ${provider?.displayLabel ?? 'maps'}`,
+        cls: 'pcr-map-link',
+      });
+      mapLink.href = exactUrl;
+      mapLink.target = '_blank';
+      mapLink.addEventListener('click', (e) => e.stopPropagation());
+    }
+  }
+
+  private getExactMapPlaceUrl(post: PostData, name: string): string | null {
+    return buildExactMapPlaceUrl({
+      name,
+      latitude: post.metadata.latitude,
+      longitude: post.metadata.longitude,
+      locationSource: post.metadata.locationSource ?? post.platform,
+      locationExternalId: post.metadata.locationExternalId ?? post.id,
+    });
   }
 
   // ============================================================================
@@ -9219,6 +9490,157 @@ export class PostCardRenderer extends Component {
       return [this.plugin.settings.aiComment.defaultCli ?? 'claude'];
     }
     return this.getAvailableClis();
+  }
+
+  // ============================================================================
+  // Place Candidate Banner (Places P3c)
+  // ============================================================================
+
+  /**
+   * Mount the place-candidate banner when the post's server archive has
+   * pending candidates. Fire-and-forget from render(): the store batches all
+   * archiveIds requested during a render pass into one API call, so the
+   * banner appears shortly after the card without blocking rendering.
+   */
+  private async renderPlaceCandidateBannerIfNeeded(
+    contentArea: HTMLElement,
+    post: PostData,
+    rootElement: HTMLElement
+  ): Promise<void> {
+    try {
+      if (!post.filePath) return;
+      if (!this.plugin.settings.authToken) return;
+      const archiveId = this.resolveArchiveIdForContentVariants(post);
+      if (!archiveId) return;
+
+      const pending = await this.placeCandidateStore.getPending(archiveId);
+      if (pending.length === 0) return;
+      // Card may have been re-rendered/removed while the batch was in flight.
+      if (!contentArea.isConnected) return;
+
+      // Replace any stale banner from a previous pass
+      this.removePlaceCandidateBanner(post, rootElement);
+
+      const bannerContainer = contentArea.createDiv({
+        cls: 'place-candidate-banner-container pcr-banner-mt-16',
+      });
+      const banner = new PlaceCandidateBanner();
+      this.placeCandidateBanners.set(post.id, banner);
+      banner.render(bannerContainer, {
+        pendingCount: pending.length,
+        // Data-driven, not evidenceType-driven: anchor candidates can carry
+        // addressText (anchor-v3) and are then directly confirmable.
+        hintOnly: pending.every(
+          (candidate) => !candidate.name && !candidate.addressText && !candidate.externalPlaceId,
+        ),
+        onReview: () => {
+          void this.openPlaceCandidateModal(post, archiveId, rootElement);
+        },
+      });
+    } catch (error) {
+      console.debug(
+        '[PostCardRenderer] Place candidate banner failed:',
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  }
+
+  /** Open the review modal for the post's pending place candidates. */
+  private async openPlaceCandidateModal(
+    post: PostData,
+    archiveId: string,
+    rootElement: HTMLElement
+  ): Promise<void> {
+    let apiClient: WorkersAPIClient;
+    try {
+      apiClient = this.plugin.workersApiClient;
+    } catch {
+      new Notice('Connect sync before reviewing places.');
+      return;
+    }
+
+    const candidates = await this.placeCandidateStore.getPending(archiveId);
+    if (candidates.length === 0) {
+      this.removePlaceCandidateBanner(post, rootElement);
+      return;
+    }
+
+    const modal = new PlaceCandidateModal(this.app, {
+      candidates: [...candidates],
+      currentLocation: this.readCurrentNoteLocation(post),
+      confirmCandidate: (candidateId, body) => apiClient.confirmPlaceCandidate(candidateId, body),
+      rejectCandidate: async (candidateId) => {
+        await apiClient.rejectPlaceCandidate(candidateId);
+      },
+      archiveMapsUrl: (url) => {
+        this.plugin.openArchiveModal(url);
+      },
+      onApplied: async (result) => {
+        await this.applyConfirmedPlaceToNote(post, result);
+        this.placeCandidateStore.invalidate(archiveId);
+        this.removePlaceCandidateBanner(post, rootElement);
+        void this.refreshPostCardFull(post, rootElement);
+      },
+      onRejectedAll: () => {
+        this.placeCandidateStore.invalidate(archiveId);
+        this.removePlaceCandidateBanner(post, rootElement);
+      },
+      onStale: () => {
+        this.placeCandidateStore.invalidate(archiveId);
+        this.removePlaceCandidateBanner(post, rootElement);
+      },
+    });
+    modal.open();
+  }
+
+  /** Current `location` frontmatter of the note, if any. */
+  private readCurrentNoteLocation(post: PostData): string | null {
+    if (!post.filePath) return null;
+    const file = this.vault.getAbstractFileByPath(post.filePath);
+    if (!(file instanceof TFile)) return null;
+    const frontmatter: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter;
+    const location = isRecord(frontmatter) ? frontmatter.location : undefined;
+    return typeof location === 'string' && location.length > 0 ? location : null;
+  }
+
+  /**
+   * Write the confirmed place into THIS note's frontmatter immediately
+   * (location, latitude, longitude, coordinates "lat, lng" — FrontmatterGenerator
+   * parity). Server sync for other clients rides ws:archives_bulk_updated.
+   */
+  private async applyConfirmedPlaceToNote(
+    post: PostData,
+    result: PlaceCandidateConfirmResult
+  ): Promise<void> {
+    if (!post.filePath) return;
+    const file = this.vault.getAbstractFileByPath(post.filePath);
+    if (!(file instanceof TFile)) return;
+
+    // Mark as UI modification to avoid a double timeline refresh
+    this.onUIModifyCallback?.(post.filePath);
+
+    await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+      const { location, latitude, longitude } = result.place;
+      if (location !== null) fm.location = location;
+      if (latitude !== null && longitude !== null) {
+        fm.latitude = latitude;
+        fm.longitude = longitude;
+        fm.coordinates = `${latitude}, ${longitude}`;
+      }
+    });
+  }
+
+  private removePlaceCandidateBanner(post: PostData, rootElement: HTMLElement): void {
+    rootElement.querySelector('.place-candidate-banner-container')?.remove();
+    this.cleanupPlaceCandidateBanner(post.id);
+  }
+
+  private cleanupPlaceCandidateBanner(postId: string): void {
+    const banner = this.placeCandidateBanners.get(postId);
+    if (banner) {
+      banner.destroy();
+      this.placeCandidateBanners.delete(postId);
+    }
   }
 
   /**
@@ -10158,6 +10580,7 @@ export class PostCardRenderer extends Component {
           this.videoTranscriptPlayers.delete(post.id);
         }
         this.cleanupAICommentComponents(post.id);
+        this.cleanupPlaceCandidateBanner(post.id);
         rootElement.empty();
         await this.render(rootElement, refreshedPost);
       }
@@ -10394,6 +10817,13 @@ export class PostCardRenderer extends Component {
       renderer.destroy();
     }
     this.aiCommentRenderers.clear();
+
+    // Destroy and clear place candidate banners + cached candidate lookups
+    for (const banner of this.placeCandidateBanners.values()) {
+      banner.destroy();
+    }
+    this.placeCandidateBanners.clear();
+    this.placeCandidateStore.clear();
 
     // Cleanup video transcript players
     for (const player of this.videoTranscriptPlayers.values()) {

@@ -11,6 +11,16 @@ import {
 	SubstackURLSchema,
 	TumblrURLSchema,
 	NaverWebtoonURLSchema,
+	NaverMapURLSchema,
+	NaverMapPlaceIdSchema,
+	extractNaverMapPlaceId,
+	canonicalizeNaverMapUrl,
+	isNaverMapShortUrl,
+	KakaoMapURLSchema,
+	KakaoMapPlaceIdSchema,
+	extractKakaoMapPlaceId,
+	canonicalizeKakaoMapUrl,
+	isKakaoMapShortUrl,
 	extractNaverWebtoonInfo,
 	AnySocialMediaURLSchema,
 	getPlatformSchema,
@@ -766,6 +776,97 @@ describe('SubstackURLSchema', () => {
 				expect(result.success).toBe(false);
 			});
 		});
+	});
+});
+
+describe('Korean map place URL schemas', () => {
+	it('accepts canonical and provider-documented ID-bearing URLs', () => {
+		// Given: two public URL shapes per Korean map provider
+		const cases = [
+			[NaverMapURLSchema, 'https://map.naver.com/p/entry/place/1197867572'],
+			[NaverMapURLSchema, 'https://m.place.naver.com/place/1197867572/home'],
+			[KakaoMapURLSchema, 'https://place.map.kakao.com/1784996243'],
+			[KakaoMapURLSchema, 'https://map.kakao.com/link/map/1784996243'],
+		] as const;
+
+		// When: each URL is parsed by its provider schema
+		const results = cases.map(([schema, url]) => schema.safeParse(url).success);
+
+		// Then: every exact provider URL is accepted
+		expect(results).toEqual([true, true, true, true]);
+	});
+
+	it('recognizes bounded short links without inventing a place ID', () => {
+		// Given: exact provider short hosts and host-confusion lookalikes
+		const naverShort = 'https://naver.me/FqW0LLx9';
+		const kakaoShort = 'https://kko.kakao.com/AbCdEf123';
+
+		// When: schemas, short recognizers, and ID extractors inspect them
+		const result = {
+			naverSchema: NaverMapURLSchema.safeParse(naverShort).success,
+			kakaoSchema: KakaoMapURLSchema.safeParse(kakaoShort).success,
+			naverShort: isNaverMapShortUrl(naverShort),
+			kakaoShort: isKakaoMapShortUrl(kakaoShort),
+			naverId: extractNaverMapPlaceId(naverShort),
+			kakaoId: extractKakaoMapPlaceId(kakaoShort),
+		};
+
+		// Then: candidates are recognized, but expansion remains required for IDs
+		expect(result).toEqual({
+			naverSchema: true,
+			kakaoSchema: true,
+			naverShort: true,
+			kakaoShort: true,
+			naverId: null,
+			kakaoId: null,
+		});
+		expect(isNaverMapShortUrl('https://naver.me.evil.example/FqW0LLx9')).toBe(false);
+		expect(isKakaoMapShortUrl('https://kko.kakao.com.evil.example/AbCdEf123')).toBe(false);
+	});
+
+	it('extracts and canonicalizes only numeric provider place IDs', () => {
+		// Given: alternate valid public URLs
+		const naverUrl = 'https://map.naver.com/p/search/%EC%84%9C%EC%9A%B8/place/1197867572';
+		const kakaoUrl = 'https://map.kakao.com/link/map/1784996243';
+
+		// When: IDs and canonical URLs are derived
+		const result = {
+			naverId: extractNaverMapPlaceId(naverUrl),
+			kakaoId: extractKakaoMapPlaceId(kakaoUrl),
+			naverUrl: canonicalizeNaverMapUrl(naverUrl),
+			kakaoUrl: canonicalizeKakaoMapUrl(kakaoUrl),
+		};
+
+		// Then: stable detail URLs retain only the provider numeric ID
+		expect(result).toEqual({
+			naverId: '1197867572',
+			kakaoId: '1784996243',
+			naverUrl: 'https://map.naver.com/p/entry/place/1197867572',
+			kakaoUrl: 'https://place.map.kakao.com/1784996243',
+		});
+		expect(NaverMapPlaceIdSchema.safeParse('not-a-number').success).toBe(false);
+		expect(KakaoMapPlaceIdSchema.safeParse('123abc').success).toBe(false);
+	});
+
+	it('rejects lookalike hosts, content URLs, nonnumeric IDs, and unsupported paths', () => {
+		// Given: malformed or ambiguous URLs that must never become verified places
+		const cases = [
+			NaverMapURLSchema.safeParse('https://evil-map.naver.example/p/entry/place/1197867572'),
+			NaverMapURLSchema.safeParse('https://map.naver.com/p/entry/place/not-a-number'),
+			NaverMapURLSchema.safeParse('https://map.naver.com/p/entry/place/1197867572/reviews'),
+			NaverMapURLSchema.safeParse('https://blog.naver.com/archive-user/1197867572'),
+			NaverMapURLSchema.safeParse('https://cafe.naver.com/archive-cafe/1197867572'),
+			KakaoMapURLSchema.safeParse('https://place.map.kakao.com.evil.example/1784996243'),
+			KakaoMapURLSchema.safeParse('https://place.map.kakao.com/not-a-number'),
+			KakaoMapURLSchema.safeParse('https://place.map.kakao.com/1784996243/reviews'),
+			KakaoMapURLSchema.safeParse('https://map.kakao.com/link/search/1784996243'),
+		];
+
+		// When: schema results are reduced to acceptance flags
+		const accepted = cases.map((result) => result.success);
+
+		// Then: every adversarial input is rejected
+		expect(accepted).toEqual([false, false, false, false, false, false, false, false, false]);
 	});
 });
 

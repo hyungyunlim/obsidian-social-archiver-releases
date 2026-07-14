@@ -24,6 +24,19 @@ import type { BillingEventApiPayload, BillingEventsResponse } from '@/types/bill
 import type { AICommentType } from '@/types/ai-comment';
 import type { RelationWithSummary, RelationPullResponse } from '@/types/link-relations';
 import type { ArchiveAttempt, ArchiveAttemptStatus } from '@/types/post';
+import {
+  InvalidPlaceApiResponseError,
+  ProviderPlaceSelectionResponseSchema,
+  ProviderSearchResponseSchema,
+  type ProviderPlaceSelectionResponse,
+  type ProviderSearchResponse,
+} from '@/types/place-search';
+
+export type {
+  ProviderPlaceSelectionResponse,
+  ProviderSearchCandidate,
+  ProviderSearchResponse,
+} from '@/types/place-search';
 
 // ============================================================================
 // Multi-Client Sync Types
@@ -601,6 +614,12 @@ export interface UserArchive {
   externalLink?: string | null;
   externalLinkTitle?: string | null;
   externalLinkImage?: string | null;
+  // Structured location (workers migration 0123)
+  location?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  locationSource?: string | null;
+  locationExternalId?: string | null;
   quotedPost?: {
     platform: string;
     id: string;
@@ -674,6 +693,64 @@ export interface AICommentPayload {
 
 export interface GetUserArchiveResponse {
   archive: UserArchive;
+}
+
+// ============================================================================
+// Place Candidates types (Places P3 — server contract, mirrors mobile
+// mapPlacesApi.ts)
+// ============================================================================
+
+/**
+ * Place candidate row from the review queue
+ * (`GET /api/user/place-candidates`). `evidenceType` is intentionally a
+ * plain string — P3a ships 'maps_url' | 'jsonld' | 'anchor' and later phases
+ * add more; unknown types must degrade to the text-confirm flow instead of
+ * being silently dropped.
+ */
+export interface PlaceCandidate {
+  id: string;
+  archiveId: string;
+  name: string | null;
+  addressText: string | null;
+  cityHint: string | null;
+  evidenceType: string;
+  evidenceText: string;
+  confidenceBucket: string | null;
+  score: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  externalSource: string | null;
+  externalPlaceId: string | null;
+  state: string;
+  createdAt: string;
+}
+
+export interface PlaceCandidatesResponse {
+  items: PlaceCandidate[];
+  pendingCount: number;
+}
+
+export type PlaceCandidatesQuery =
+  | { archiveIds: string[] }
+  | { state: 'pending'; limit?: number };
+
+export interface PlaceCandidateConfirmBody {
+  targetArchiveId?: string;
+  /** Manual override: place name written to the archive's `location`. */
+  location?: string;
+  /** Manual override: free-text address. */
+  addressText?: string;
+}
+
+export interface PlaceCandidateConfirmResult {
+  archiveId: string;
+  place: {
+    locationSource: string;
+    locationExternalId: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    location: string | null;
+  };
 }
 
 export interface GetUserArchivesParams {
@@ -1888,6 +1965,64 @@ export class WorkersAPIClient implements IService {
   }
 
   // ============================================================================
+  // Place Candidates API (Places P3)
+  // ============================================================================
+
+  /**
+   * Fetch place candidates, either for a specific set of archive IDs (≤50,
+   * banner batching) or the global pending review queue.
+   */
+  async getPlaceCandidates(query: PlaceCandidatesQuery): Promise<PlaceCandidatesResponse> {
+    this.ensureInitialized();
+
+    const params = new URLSearchParams();
+    if ('archiveIds' in query) {
+      if (query.archiveIds.length === 0) {
+        return { items: [], pendingCount: 0 };
+      }
+      params.set('archiveIds', query.archiveIds.slice(0, 50).join(','));
+    } else {
+      params.set('state', query.state);
+      if (typeof query.limit === 'number') {
+        params.set('limit', String(query.limit));
+      }
+    }
+
+    return await this.request<PlaceCandidatesResponse>(
+      `/api/user/place-candidates?${params.toString()}`,
+      { method: 'GET' },
+    );
+  }
+
+  /**
+   * Confirm a place candidate — applies it to its archive on the server.
+   * Optional body carries manual overrides (`location`, `addressText`) or a
+   * `targetArchiveId`. Throws with `code === 'CANDIDATE_NOT_PENDING'` (409)
+   * when another device already reviewed the candidate.
+   */
+  async confirmPlaceCandidate(
+    candidateId: string,
+    body: PlaceCandidateConfirmBody = {},
+  ): Promise<PlaceCandidateConfirmResult> {
+    this.ensureInitialized();
+
+    return await this.request<PlaceCandidateConfirmResult>(
+      `/api/user/place-candidates/${encodeURIComponent(candidateId)}/confirm`,
+      { method: 'POST', body: JSON.stringify(body) },
+    );
+  }
+
+  /** Permanently reject (suppress) a place candidate. */
+  async rejectPlaceCandidate(candidateId: string): Promise<{ ok: true }> {
+    this.ensureInitialized();
+
+    return await this.request<{ ok: true }>(
+      `/api/user/place-candidates/${encodeURIComponent(candidateId)}/reject`,
+      { method: 'POST', body: JSON.stringify({}) },
+    );
+  }
+
+  // ============================================================================
   // Multi-Client Sync API
   // ============================================================================
 
@@ -2245,6 +2380,47 @@ export class WorkersAPIClient implements IService {
       method: 'DELETE',
       headers: extraHeaders,
     });
+  }
+
+  async setArchivePlace(archiveId: string, targetArchiveId: string | null): Promise<void> {
+    this.ensureInitialized();
+    const extraHeaders: Record<string, string> = {};
+    if (this.config.clientId) extraHeaders['X-Client-Id'] = this.config.clientId;
+    await this.request(`/api/user/archives/${encodeURIComponent(archiveId)}/place`, {
+      method: 'PUT',
+      headers: extraHeaders,
+      body: JSON.stringify({ targetArchiveId }),
+    });
+  }
+
+  async searchProviderPlaces(queryValue: string): Promise<ProviderSearchResponse> {
+    this.ensureInitialized();
+    const query = queryValue.trim();
+    const response = await this.request<unknown>('/api/user/places/provider-search', {
+      method: 'POST',
+      body: JSON.stringify({ provider: 'kakaomap', query, page: 1, size: 15 }),
+    });
+    const parsed = ProviderSearchResponseSchema.safeParse(response);
+    if (!parsed.success) throw new InvalidPlaceApiResponseError('search');
+    return parsed.data;
+  }
+
+  async selectProviderPlace(
+    archiveId: string,
+    selectionToken: string,
+    idempotencyKey: string,
+  ): Promise<ProviderPlaceSelectionResponse> {
+    this.ensureInitialized();
+    const response = await this.request<unknown>(
+      `/api/user/archives/${encodeURIComponent(archiveId)}/place-from-provider`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ selectionToken, idempotencyKey }),
+      },
+    );
+    const parsed = ProviderPlaceSelectionResponseSchema.safeParse(response);
+    if (!parsed.success) throw new InvalidPlaceApiResponseError('selection');
+    return parsed.data;
   }
 
   /**

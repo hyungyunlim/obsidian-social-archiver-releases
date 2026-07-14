@@ -816,6 +816,58 @@ const DEFAULT_TEMPLATES: Record<Platform, string> = {
 **Original URL:** {{url}}
 `,
 
+  navermap: `{{#if comment}}
+> **My Note:**
+> {{comment}}
+
+---
+
+{{/if}}# {{title}}
+
+{{content.text}}
+
+{{#if media}}
+
+---
+
+## Photos
+
+{{media}}
+{{/if}}
+
+---
+
+**Platform:** Naver Map | **Place:** {{author.name}}{{#if metadata.location}} | **Location:** {{metadata.location}}{{/if}}
+
+**Original URL:** {{url}}
+`,
+
+  kakaomap: `{{#if comment}}
+> **My Note:**
+> {{comment}}
+
+---
+
+{{/if}}# {{title}}
+
+{{content.text}}
+
+{{#if media}}
+
+---
+
+## Photos
+
+{{media}}
+{{/if}}
+
+---
+
+**Platform:** Kakao Map | **Place:** {{author.name}}{{#if metadata.location}} | **Location:** {{metadata.location}}{{/if}}
+
+**Original URL:** {{url}}
+`,
+
   blog: `{{#if comment}}
 > **My Note:**
 > {{comment}}
@@ -2057,6 +2109,8 @@ export class MarkdownConverter implements IService {
       mastodon: '🐘',
       bluesky: '🌌',
       googlemaps: '📍',
+      navermap: '🗺️',
+      kakaomap: '📍',
       velog: '🌱',
       podcast: '🎙️',
       blog: '📝',

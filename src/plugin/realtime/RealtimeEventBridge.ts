@@ -127,7 +127,7 @@ export interface WsArchiveAddedMessage {
     platform?: string;
     url?: string;
     title?: string | null;
-    source?: 'subscription';
+    source?: 'subscription' | 'provider_search';
     subscriptionId?: string;
     updatedAt?: string;
     timestamp?: number;
@@ -253,6 +253,11 @@ export interface RealtimeEventBridgeDeps {
   /** Record that we've already shown a Notice for `eventId` this session. */
   markBillingEventNoticed?: (eventId: string) => void;
   refreshTimelineView: () => void;
+  /**
+   * Location frontmatter reconciliation for `ws:archives_bulk_updated`
+   * (Places P3c). Wired to LocationFrontmatterSyncService in main.ts.
+   */
+  locationFrontmatterSyncService?: { reconcileArchiveIds(archiveIds: string[]): Promise<void> } | undefined;
   canExecuteAICommentJobs?: () => boolean;
   aiCommentJobProcessor?: {
     drainBacklog?: () => Promise<void>;
@@ -325,6 +330,8 @@ export class RealtimeEventBridge {
   private eventRefs: EventRef[] = [];
   private readonly deps: RealtimeEventBridgeDeps;
   private subscriptionArchiveAddedSyncTimer?: number;
+  private archivesBulkUpdatedTimer?: number;
+  private pendingBulkUpdatedArchiveIds = new Set<string>();
 
   constructor(deps: RealtimeEventBridgeDeps) {
     this.deps = deps;
@@ -341,6 +348,12 @@ export class RealtimeEventBridge {
       window.clearTimeout(this.subscriptionArchiveAddedSyncTimer);
       this.subscriptionArchiveAddedSyncTimer = undefined;
     }
+
+    if (this.archivesBulkUpdatedTimer !== undefined) {
+      window.clearTimeout(this.archivesBulkUpdatedTimer);
+      this.archivesBulkUpdatedTimer = undefined;
+    }
+    this.pendingBulkUpdatedArchiveIds.clear();
   }
 
   /**
@@ -367,6 +380,7 @@ export class RealtimeEventBridge {
     this.setupContentVariantUpdatedListener();
     this.setupAuthorProfileUpdatedListener();
     this.setupArchiveRelationUpdatedListener();
+    this.setupArchivesBulkUpdatedListener();
     this.setupArchiveDeletedListener();
     this.setupMediaPreservedListener();
     this.setupBillingStatusUpdatedListener();
@@ -892,6 +906,18 @@ export class RealtimeEventBridge {
     this.eventRefs.push(
       this.deps.events.on('ws:archive_added', (data: unknown) => {
         const message = data as WsArchiveAddedMessage;
+        if (message.data?.source === 'provider_search' && message.data.archiveId) {
+          void this.deps.locationFrontmatterSyncService
+            ?.reconcileArchiveIds([message.data.archiveId])
+            .then(() => this.deps.refreshTimelineView())
+            .catch((error) => {
+              console.debug(
+                '[Social Archiver] provider archive location reconcile failed:',
+                error instanceof Error ? error.message : String(error),
+              );
+            });
+          return;
+        }
         if (message.data?.source !== 'subscription') return;
 
         // Debounce: subscription runs produce multiple posts rapidly.
@@ -1445,6 +1471,72 @@ export class RealtimeEventBridge {
         // Re-render the affected `## Linked archives` sections (both ends of the
         // relation). Feature-gating + fail-soft handled inside the service.
         await this.deps.linkRelationSyncService?.handleRelationUpdated(relation);
+      }),
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // ws:archives_bulk_updated (Places P3c — location frontmatter reconcile)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Aggregated archive-row mutation broadcast (place confirms, place
+   * upgrades). Accumulate archiveIds and debounce 2s, then hand the batch to
+   * LocationFrontmatterSyncService which fetches each archive and reconciles
+   * ONLY the location frontmatter fields (strict no-op when unchanged).
+   *
+   * Bulk NOTE-action batches (`hasAnnotationUpdate: true`, workers
+   * user.ts — up to 100-200 ids) are skipped entirely: they never change
+   * location, and fanning out per-archive GETs for them would burn the
+   * SYNC_READ budget the aggregate event exists to protect. Place
+   * confirm/upgrade broadcasts never set that marker.
+   */
+  private setupArchivesBulkUpdatedListener(): void {
+    this.eventRefs.push(
+      this.deps.events.on('ws:archives_bulk_updated', (_message: unknown) => {
+        const msg = _message as {
+          type?: string;
+          data?: { archiveIds?: unknown; sourceClientId?: string; hasAnnotationUpdate?: boolean };
+        } | undefined;
+        const data = msg?.data;
+        if (!data || !Array.isArray(data.archiveIds)) return;
+
+        // Bulk note-action broadcast — no location change possible.
+        if (data.hasAnnotationUpdate === true) return;
+
+        // Echo suppression: our own confirms already wrote the frontmatter
+        // directly — skip the N archive fetches.
+        const settings = this.deps.settings();
+        if (data.sourceClientId && data.sourceClientId === settings.syncClientId) {
+          console.debug('[Social Archiver] Skipping own archives_bulk_updated echo');
+          return;
+        }
+
+        for (const id of data.archiveIds) {
+          if (typeof id === 'string' && id.length > 0) {
+            this.pendingBulkUpdatedArchiveIds.add(id);
+          }
+        }
+        if (this.pendingBulkUpdatedArchiveIds.size === 0) return;
+
+        if (this.archivesBulkUpdatedTimer !== undefined) {
+          window.clearTimeout(this.archivesBulkUpdatedTimer);
+        }
+        this.archivesBulkUpdatedTimer = this.deps.schedule(() => {
+          this.archivesBulkUpdatedTimer = undefined;
+          const archiveIds = [...this.pendingBulkUpdatedArchiveIds];
+          this.pendingBulkUpdatedArchiveIds.clear();
+
+          void this.deps.locationFrontmatterSyncService
+            ?.reconcileArchiveIds(archiveIds)
+            .then(() => this.deps.refreshTimelineView())
+            .catch((error) => {
+              console.debug(
+                '[Social Archiver] archives_bulk_updated location reconcile failed:',
+                error instanceof Error ? error.message : String(error),
+              );
+            });
+        }, 2000);
       }),
     );
   }

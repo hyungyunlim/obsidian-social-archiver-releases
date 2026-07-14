@@ -228,6 +228,111 @@ describe('PreviewableHelpers', () => {
       const data = parseGoogleMapsBusinessData(post);
       expect(data.rating).toBe(4.8);
     });
+
+    it('parses Korean map core fields without treating the place name as its address', () => {
+      const post = makePost({
+        platform: 'navermap',
+        id: '1234567890',
+        url: 'https://map.naver.com/p/entry/place/1234567890',
+        author: {
+          name: '블루보틀 성수',
+          url: 'https://map.naver.com/p/entry/place/1234567890',
+        },
+        content: {
+          text: [
+            '카테고리: 카페',
+            '📍 서울 성동구 아차산로 7',
+            '지번: 서울 성동구 성수동1가 656-1091',
+            '⭐ 4.6/5 (321개 리뷰)',
+            '📞 02-123-4567',
+            '🌐 https://example.com',
+          ].join('\n'),
+        },
+        metadata: {
+          timestamp: new Date(),
+          location: '블루보틀 성수',
+          latitude: 37.5446,
+          longitude: 127.0559,
+          locationSource: 'navermap',
+          locationExternalId: '1234567890',
+          likes: 92,
+        },
+      });
+
+      const data = parseGoogleMapsBusinessData(post);
+      expect(data.name).toBe('블루보틀 성수');
+      expect(data.address).toBe('서울 성동구 아차산로 7');
+      expect(data.categories).toEqual(['카페']);
+      expect(data.rating).toBe(4.6);
+      expect(data.reviewsCount).toBe(321);
+      expect(data.phone).toBe('02-123-4567');
+      expect(data.website).toBe('https://example.com');
+      expect(data.lat).toBe(37.5446);
+      expect(data.lng).toBe(127.0559);
+    });
+
+    it.each(['googlemaps', 'navermap', 'kakaomap'] as const)(
+      'restores the bounded aggregate review count for persisted %s content without comments metadata',
+      (platform) => {
+        const post = makePost({
+          platform,
+          content: { text: '⭐ 4.6/5 (321개 리뷰)' },
+          metadata: { timestamp: new Date(), likes: 92 },
+        });
+
+        expect(parseGoogleMapsBusinessData(post).reviewsCount).toBe(321);
+      },
+    );
+
+    it('preserves Google core business parsing while recovering persisted aggregate reviews', () => {
+      const post = makePost({
+        platform: 'googlemaps',
+        id: 'ChIJ123',
+        author: { name: 'Google Cafe', url: 'https://www.google.com/maps/place/?q=place_id:ChIJ123' },
+        content: {
+          text: [
+            'Categories: Cafe',
+            '📍 123 Main St, Seoul',
+            '⭐ 4.6/5 (321 reviews)',
+            '📞 +82 2-123-4567',
+          ].join('\n'),
+        },
+        metadata: { timestamp: new Date(), likes: 92, locationSource: 'googlemaps', locationExternalId: 'ChIJ123' },
+      });
+
+      const data = parseGoogleMapsBusinessData(post);
+      expect(data.name).toBe('Google Cafe');
+      expect(data.address).toBe('123 Main St, Seoul');
+      expect(data.categories).toEqual(['Cafe']);
+      expect(data.rating).toBe(4.6);
+      expect(data.reviewsCount).toBe(321);
+      expect(data.phone).toBe('+82 2-123-4567');
+    });
+
+    it.each([
+      '⭐ 4.6/5 (999999999999개 리뷰)',
+      '⭐ 4.6/5 (12,34개 리뷰)',
+      '⭐ 4.6/5 (-1 reviews)',
+    ])('ignores malformed or unbounded review aggregates: %s', (text) => {
+      const post = makePost({ content: { text }, metadata: { timestamp: new Date() } });
+      expect(parseGoogleMapsBusinessData(post).reviewsCount).toBeUndefined();
+    });
+
+    it.each([
+      '⭐ 4.6/5 (1000000000개 리뷰)',
+      '⭐ 4.6/5 (1,000,000,000 reviews)',
+    ])('accepts the exact bounded review maximum: %s', (text) => {
+      const post = makePost({ content: { text }, metadata: { timestamp: new Date() } });
+      expect(parseGoogleMapsBusinessData(post).reviewsCount).toBe(1_000_000_000);
+    });
+
+    it.each([
+      '⭐ 4.6/5 (1000000001개 리뷰)',
+      '⭐ 4.6/5 (1,000,000,000,000 reviews)',
+    ])('rejects review counts beyond the bounded maximum: %s', (text) => {
+      const post = makePost({ content: { text }, metadata: { timestamp: new Date() } });
+      expect(parseGoogleMapsBusinessData(post).reviewsCount).toBeUndefined();
+    });
   });
 
   describe('formatBusinessHours', () => {

@@ -28,7 +28,8 @@ export type LinkRelationType =
   | 'plain_url'
   | 'reader_block'
   | 'note_mention'
-  | 'note_author_mention';
+  | 'note_author_mention'
+  | 'place_assignment';
 
 /** C2 — relation lifecycle status. Only `connected` rows are rendered. */
 export type ArchiveLinkRelationStatus = 'pending' | 'connected' | 'failed';

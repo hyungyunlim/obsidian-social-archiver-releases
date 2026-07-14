@@ -347,6 +347,35 @@ describe('FrontmatterGenerator', () => {
     });
   });
 
+  describe('authoritative place identity fields', () => {
+    it('writes provider identity with location coordinates for reconnect catch-up', () => {
+      // Given a provider-backed place projection.
+      const postData = createTestPostData({
+        metadata: {
+          timestamp: new Date('2026-07-13T00:00:00.000Z'),
+          location: '희작 부암점',
+          latitude: 37.5978,
+          longitude: 126.9642,
+          locationSource: 'kakaomap',
+          locationExternalId: '12345',
+        },
+      });
+
+      // When the initial vault frontmatter is generated.
+      const frontmatter = generator.generateFrontmatter(postData);
+
+      // Then all server-owned place identity fields are persisted together.
+      expect(frontmatter).toMatchObject({
+        location: '희작 부암점',
+        latitude: 37.5978,
+        longitude: 126.9642,
+        coordinates: '37.5978, 126.9642',
+        locationSource: 'kakaomap',
+        locationExternalId: '12345',
+      });
+    });
+  });
+
   describe('all author fields populated', () => {
     it('should generate frontmatter with all author fields', () => {
       const postData = createTestPostData({

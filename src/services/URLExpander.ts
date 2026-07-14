@@ -59,6 +59,7 @@ const SHORTENER_DOMAINS = new Set([
   'fb.me',
   'youtu.be',
   'pin.it',
+  'kko.kakao.com',
 ]);
 
 /**

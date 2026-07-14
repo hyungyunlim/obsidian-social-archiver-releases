@@ -7,6 +7,7 @@
 
 import type { Platform } from './types';
 import { PLATFORM_DEFINITIONS, type PlatformDefinition } from './definitions';
+import { extractKoreanMapPlaceId } from './map-places';
 
 function extractRedditCommentIdFromPathname(pathname: string): string | null {
   const segments = pathname.split('/').filter(Boolean);
@@ -44,10 +45,12 @@ const DETECTION_ORDER: Platform[] = [
   'kidsnote', // Korean daycare report service (account-connected)
   'webtoons', // Global webtoons.com - must be before naver-webtoon (different domain)
   'naver-webtoon', // Must be before 'naver' - more specific pattern (comic.naver.com)
+  'navermap', // Must be before 'naver' - map place URLs are a distinct archive identity
   'naver', // Korean portal - blog, cafe, news (must be before blog/mastodon)
   'brunch', // Korean publishing platform by Kakao
   'bluesky',
   'googlemaps',
+  'kakaomap',
   'podcast', // Podcast RSS feeds (feeds.simplecast.com, etc.) - must be before blog
   'blog', // GitHub Pages / Jekyll blogs (*.github.io)
   'mastodon', // Must be last - generic pattern
@@ -385,6 +388,10 @@ export function extractPostIdFromUrl(platform: Platform, url: string): string | 
         if (!m?.[1] || !m?.[2]) return null;
         return `${m[1]}/${m[2]}`;
       }
+
+      case 'navermap':
+      case 'kakaomap':
+        return extractKoreanMapPlaceId(platform, url);
 
       default:
         return null;

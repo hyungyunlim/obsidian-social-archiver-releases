@@ -373,7 +373,13 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
       externalLink: archive.externalLink ?? undefined,
       externalLinkTitle: archive.externalLinkTitle ?? undefined,
       externalLinkImage: archive.externalLinkImage ?? undefined,
-      location: metadataString(archive.metadata, 'location'),
+      // Top-level columns (workers migration 0123) win over the legacy
+      // metadata bag, which the server never actually populated.
+      location: archive.location ?? metadataString(archive.metadata, 'location'),
+      latitude: archive.latitude ?? undefined,
+      longitude: archive.longitude ?? undefined,
+      locationSource: archive.locationSource ?? undefined,
+      locationExternalId: archive.locationExternalId ?? undefined,
     },
     ...(quoted ? {
       quotedPost: {
