@@ -2,9 +2,9 @@
  * MockArchiverCliHost — in-memory host for tests and `--host=mock` demo runs.
  * Lets the full argv → dispatch → envelope chain be exercised without a backend.
  */
-import { HostError, } from './core/host';
-import { ErrorCode } from './core/response';
-import { COMMANDS } from './core/flags';
+import { HostError, } from './core/host.js';
+import { ErrorCode } from './core/response.js';
+import { COMMANDS } from './core/flags.js';
 const SLICE_COMMANDS = new Set([
     COMMANDS.DEFAULT,
     COMMANDS.ARCHIVE,

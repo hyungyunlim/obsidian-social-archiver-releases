@@ -6,9 +6,9 @@
  * exit code. The executable shim (`desktop-app/cli/social-archiver.ts`) only
  * wires stdout/exit and constructs the host.
  */
-import { COMMANDS, COMMAND_DESCRIPTIONS } from './core/flags';
-import { dispatch, isKnownCommand } from './core/registry';
-import { err, ErrorCode, format } from './core/response';
+import { COMMANDS, COMMAND_DESCRIPTIONS } from './core/flags.js';
+import { dispatch, isKnownCommand } from './core/registry.js';
+import { err, ErrorCode, format } from './core/response.js';
 const HELP_TOKENS = new Set(['help', '--help', '-h']);
 /**
  * Resolve a user-facing subcommand to a full command id.

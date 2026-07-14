@@ -12,7 +12,7 @@
  * Remaining commands are gated through `supports()` until their host methods
  * land.
  */
-import type { PathResolver } from './params';
+import type { PathResolver } from './params.js';
 export interface HostStatus {
     /** Client identifier, e.g. "desktop-cli", "obsidian-plugin". */
     client: string;

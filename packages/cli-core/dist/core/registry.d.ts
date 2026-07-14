@@ -4,10 +4,10 @@
  * structured `CliResponse` (never throws). This is the desktop analog of the
  * plugin's `CliRegistry`, but free of any host binding.
  */
-import { type CliResponse } from './response';
-import type { CliParams } from './params';
-import { type CommandId } from './flags';
-import { type HandlerContext } from './handlers';
+import { type CliResponse } from './response.js';
+import type { CliParams } from './params.js';
+import { type CommandId } from './flags.js';
+import { type HandlerContext } from './handlers.js';
 /** All known command ids (the full surface, even if not yet implemented). */
 export declare const KNOWN_COMMANDS: Set<string>;
 export declare function isKnownCommand(command: string): command is CommandId;

@@ -6,10 +6,10 @@
  * exit code. The executable shim (`desktop-app/cli/social-archiver.ts`) only
  * wires stdout/exit and constructs the host.
  */
-import { type CommandId } from './core/flags';
-import { type CliFormat } from './core/response';
-import type { CliParams } from './core/params';
-import type { ArchiverCliHost } from './core/host';
+import { type CommandId } from './core/flags.js';
+import { type CliFormat } from './core/response.js';
+import type { CliParams } from './core/params.js';
+import type { ArchiverCliHost } from './core/host.js';
 export interface ParsedArgv {
     command: CommandId;
     params: CliParams;

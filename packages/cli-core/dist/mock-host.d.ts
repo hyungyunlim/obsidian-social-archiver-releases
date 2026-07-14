@@ -2,8 +2,8 @@
  * MockArchiverCliHost — in-memory host for tests and `--host=mock` demo runs.
  * Lets the full argv → dispatch → envelope chain be exercised without a backend.
  */
-import type { PathResolver } from './core/params';
-import { type ArchiveCliOptions, type ArchiveCliResult, type ArchiverCliHost, type AuthorNotesResult, type HostStatus, type JobSource, type JobStatusInfo, type BookmarkCliOptions, type BookmarkCliResult, type NoteTargetOptions, type PostNoteResult, type SearchCliOptions, type SearchCliResult, type ShareNoteResult, type SubscribeCliOptions, type SubscribeCliResult, type SyncResult, type SyncTarget, type TagApplyResult, type TagInfo } from './core/host';
+import type { PathResolver } from './core/params.js';
+import { type ArchiveCliOptions, type ArchiveCliResult, type ArchiverCliHost, type AuthorNotesResult, type HostStatus, type JobSource, type JobStatusInfo, type BookmarkCliOptions, type BookmarkCliResult, type NoteTargetOptions, type PostNoteResult, type SearchCliOptions, type SearchCliResult, type ShareNoteResult, type SubscribeCliOptions, type SubscribeCliResult, type SyncResult, type SyncTarget, type TagApplyResult, type TagInfo } from './core/host.js';
 export interface MockHostOptions {
     authenticated?: boolean;
     username?: string;

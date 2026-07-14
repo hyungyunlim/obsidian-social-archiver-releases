@@ -9,10 +9,10 @@
  * share, and author-notes. Remaining commands are registered as not-yet-
  * implemented in `registry.ts` until their host methods land.
  */
-import { BILLING_FALLBACK_MESSAGE, ErrorCode, err, ok, } from './response';
-import { CliValidationError, parseBool, parseCsv, parseEnum, parseNumber, parseString, parseWorkspacePath, } from './params';
-import { COMMANDS } from './flags';
-import { HostError } from './host';
+import { BILLING_FALLBACK_MESSAGE, ErrorCode, err, ok, } from './response.js';
+import { CliValidationError, parseBool, parseCsv, parseEnum, parseNumber, parseString, parseWorkspacePath, } from './params.js';
+import { COMMANDS } from './flags.js';
+import { HostError } from './host.js';
 // -----------------------------------------------------------------------------
 // Error mapping
 // -----------------------------------------------------------------------------

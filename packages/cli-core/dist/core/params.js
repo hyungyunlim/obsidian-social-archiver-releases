@@ -14,7 +14,7 @@
  *   - All parsers throw `CliValidationError` on bad input so handlers can
  *     surface a structured `INVALID_ARGUMENT` response.
  */
-import { ErrorCode } from './response';
+import { ErrorCode } from './response.js';
 // -----------------------------------------------------------------------------
 // Error type
 // -----------------------------------------------------------------------------

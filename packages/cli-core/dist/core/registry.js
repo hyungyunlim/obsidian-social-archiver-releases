@@ -4,9 +4,9 @@
  * structured `CliResponse` (never throws). This is the desktop analog of the
  * plugin's `CliRegistry`, but free of any host binding.
  */
-import { err, ErrorCode } from './response';
-import { COMMANDS, COMMAND_DESCRIPTIONS } from './flags';
-import { authorNotesHandler, archiveHandler, jobHandler, jobsCheckHandler, jobsHandler, postHandler, shareHandler, statusHandler, subscribeHandler, syncHandler, searchHandler, bookmarkHandler, tagApplyHandler, tagCreateHandler, tagsHandler, toErrorResponse, } from './handlers';
+import { err, ErrorCode } from './response.js';
+import { COMMANDS, COMMAND_DESCRIPTIONS } from './flags.js';
+import { authorNotesHandler, archiveHandler, jobHandler, jobsCheckHandler, jobsHandler, postHandler, shareHandler, statusHandler, subscribeHandler, syncHandler, searchHandler, bookmarkHandler, tagApplyHandler, tagCreateHandler, tagsHandler, toErrorResponse, } from './handlers.js';
 /** Commands implemented in the PR-1/PR-3 vertical slice. */
 const HANDLERS = {
     [COMMANDS.DEFAULT]: statusHandler,

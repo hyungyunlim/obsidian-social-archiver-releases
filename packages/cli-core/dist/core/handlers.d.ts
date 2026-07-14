@@ -9,9 +9,9 @@
  * share, and author-notes. Remaining commands are registered as not-yet-
  * implemented in `registry.ts` until their host methods land.
  */
-import { type CliResponse } from './response';
-import { type CliParams } from './params';
-import { type ArchiverCliHost } from './host';
+import { type CliResponse } from './response.js';
+import { type CliParams } from './params.js';
+import { type ArchiverCliHost } from './host.js';
 export interface HandlerContext {
     host: ArchiverCliHost;
     version: string;
