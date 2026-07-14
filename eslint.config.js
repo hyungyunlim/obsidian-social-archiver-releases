@@ -79,7 +79,7 @@ export default defineConfig(
           'ffmpeg', 'faster-whisper', 'openai-whisper', 'whisper.cpp',
           'TTS',
           // Map services
-          'Google Maps',
+          'Google Maps', 'Kakao',
           // Browser extension distribution
           'Chrome', 'Chrome Web Store',
           // Social Archiver product name
