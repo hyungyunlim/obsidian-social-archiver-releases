@@ -13,7 +13,7 @@
  * land.
  */
 
-import type { PathResolver } from './params';
+import type { PathResolver } from './params.js';
 
 // -----------------------------------------------------------------------------
 // Result shapes

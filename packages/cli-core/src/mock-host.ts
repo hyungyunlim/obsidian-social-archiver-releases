@@ -3,7 +3,7 @@
  * Lets the full argv → dispatch → envelope chain be exercised without a backend.
  */
 
-import type { PathResolver } from './core/params';
+import type { PathResolver } from './core/params.js';
 import {
   HostError,
   type ArchiveCliOptions,
@@ -26,9 +26,9 @@ import {
   type SyncTarget,
   type TagApplyResult,
   type TagInfo,
-} from './core/host';
-import { ErrorCode } from './core/response';
-import { COMMANDS } from './core/flags';
+} from './core/host.js';
+import { ErrorCode } from './core/response.js';
+import { COMMANDS } from './core/flags.js';
 
 const SLICE_COMMANDS = new Set<string>([
   COMMANDS.DEFAULT,

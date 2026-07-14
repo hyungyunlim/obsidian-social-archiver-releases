@@ -5,9 +5,9 @@
  * plugin's `CliRegistry`, but free of any host binding.
  */
 
-import { err, ErrorCode, type CliResponse } from './response';
-import type { CliParams } from './params';
-import { COMMANDS, COMMAND_DESCRIPTIONS, type CommandId } from './flags';
+import { err, ErrorCode, type CliResponse } from './response.js';
+import type { CliParams } from './params.js';
+import { COMMANDS, COMMAND_DESCRIPTIONS, type CommandId } from './flags.js';
 import {
   authorNotesHandler,
   archiveHandler,
@@ -27,7 +27,7 @@ import {
   toErrorResponse,
   type Handler,
   type HandlerContext,
-} from './handlers';
+} from './handlers.js';
 
 /** Commands implemented in the PR-1/PR-3 vertical slice. */
 const HANDLERS: Partial<Record<CommandId, Handler>> = {

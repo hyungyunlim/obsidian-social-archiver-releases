@@ -7,11 +7,11 @@
  * wires stdout/exit and constructs the host.
  */
 
-import { COMMANDS, COMMAND_DESCRIPTIONS, type CommandId } from './core/flags';
-import { dispatch, isKnownCommand } from './core/registry';
-import { err, ErrorCode, format, type CliFormat } from './core/response';
-import type { CliParams } from './core/params';
-import type { ArchiverCliHost } from './core/host';
+import { COMMANDS, COMMAND_DESCRIPTIONS, type CommandId } from './core/flags.js';
+import { dispatch, isKnownCommand } from './core/registry.js';
+import { err, ErrorCode, format, type CliFormat } from './core/response.js';
+import type { CliParams } from './core/params.js';
+import type { ArchiverCliHost } from './core/host.js';
 
 export interface ParsedArgv {
   command: CommandId;
@@ -96,7 +96,7 @@ export function helpText(): string {
   ];
   for (const id of Object.values(COMMANDS)) {
     const sub = id === COMMANDS.DEFAULT ? 'status' : id.replace('social-archiver:', '');
-    lines.push(`  ${sub.padEnd(20)} ${COMMAND_DESCRIPTIONS[id as CommandId]}`);
+    lines.push(`  ${sub.padEnd(20)} ${COMMAND_DESCRIPTIONS[id]}`);
   }
   lines.push('', 'Global flags:', '  --format <json|text>   Output format (default json)');
   return lines.join('\n');

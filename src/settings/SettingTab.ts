@@ -1,4 +1,4 @@
-import { App, Notice, PluginSettingTab, Setting, Platform, setIcon } from 'obsidian';
+import { App, getLanguage, Notice, PluginSettingTab, Setting, Platform, setIcon } from 'obsidian';
 import nodeRequire from '../utils/nodeRequire';
 import type SocialArchiverPlugin from '../main';
 import { FolderSuggest } from './FolderSuggest';
@@ -1869,7 +1869,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     variablesNote.addClass('sa-settings-desc-small', 'st-margin-custom');
     variablesNote.setCssProps({ '--st-margin': '8px 0 4px 0' });
     // Match the guide locale to Obsidian's UI language (docs exist for en/ko/ja only).
-    const obsidianLang = (window.localStorage.getItem('language') || '').toLowerCase();
+    const obsidianLang = getLanguage().toLowerCase();
     const docsLocale = obsidianLang.startsWith('ko') ? 'ko' : obsidianLang.startsWith('ja') ? 'ja' : 'en';
     const variablesGuideLink = variablesNote.createEl('a', {
       text: 'View guide',

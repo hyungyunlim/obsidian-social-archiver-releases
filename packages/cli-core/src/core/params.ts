@@ -15,7 +15,7 @@
  *     surface a structured `INVALID_ARGUMENT` response.
  */
 
-import { ErrorCode } from './response';
+import { ErrorCode } from './response.js';
 
 export type CliParamValue = string | undefined;
 export type CliParams = Record<string, CliParamValue>;

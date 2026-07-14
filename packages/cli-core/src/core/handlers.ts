@@ -16,7 +16,7 @@ import {
   err,
   ok,
   type CliResponse,
-} from './response';
+} from './response.js';
 import {
   CliValidationError,
   parseBool,
@@ -26,9 +26,9 @@ import {
   parseString,
   parseWorkspacePath,
   type CliParams,
-} from './params';
-import { COMMANDS } from './flags';
-import { HostError, type ArchiverCliHost, type ArchiveMode, type MediaMode, type SyncTarget } from './host';
+} from './params.js';
+import { COMMANDS } from './flags.js';
+import { HostError, type ArchiverCliHost } from './host.js';
 
 export interface HandlerContext {
   host: ArchiverCliHost;
@@ -79,12 +79,12 @@ export const statusHandler: Handler = async (_params, { host, version }) => {
 
 export const archiveHandler: Handler = async (params, { host, version }) => {
   const url = parseString(params, 'url', { required: true });
-  const mode = (parseEnum(params, 'mode', ['queue', 'sync', 'fetch'] as const, {
+  const mode = (parseEnum(params, 'mode', ['queue', 'sync', 'fetch'], {
     default: 'queue',
-  }) ?? 'queue') as ArchiveMode;
-  const mediaMode = (parseEnum(params, 'media', ['all', 'images', 'none'] as const, {
+  }) ?? 'queue');
+  const mediaMode = (parseEnum(params, 'media', ['all', 'images', 'none'], {
     default: 'all',
-  }) ?? 'all') as MediaMode;
+  }) ?? 'all');
   const includeComments = params['comments'] !== undefined ? parseBool(params, 'comments', false) : undefined;
   const includeTranscript = params['transcript'] !== undefined ? parseBool(params, 'transcript', false) : undefined;
   const includeFormattedTranscript =
@@ -115,7 +115,7 @@ export const subscribeHandler: Handler = async (params, { host, version }) => {
   const naverSubscriptionType = parseEnum(params, 'naverSubscriptionType', [
     'blog',
     'cafe-member',
-  ] as const);
+  ]);
 
   const result = await host.subscribe({
     url,
@@ -153,9 +153,9 @@ export const shareHandler: Handler = async (params, { host, version }) => {
 
 export const jobHandler: Handler = async (params, { host, version }) => {
   const id = parseString(params, 'id', { required: true });
-  const source = (parseEnum(params, 'source', ['local', 'server', 'auto'] as const, {
+  const source = (parseEnum(params, 'source', ['local', 'server', 'auto'], {
     default: 'auto',
-  }) ?? 'auto') as 'local' | 'server' | 'auto';
+  }) ?? 'auto');
   const job = await host.getJob(id, source);
   return ok(COMMANDS.JOB, version, job);
 };
@@ -174,9 +174,9 @@ export const jobsCheckHandler: Handler = async (params, { host, version }) => {
 };
 
 export const syncHandler: Handler = async (params, { host, version }) => {
-  const target = (parseEnum(params, 'target', ['subscriptions', 'library', 'pending', 'all'] as const, {
+  const target = (parseEnum(params, 'target', ['subscriptions', 'library', 'pending', 'all'], {
     default: 'all',
-  }) ?? 'all') as SyncTarget;
+  }) ?? 'all');
   const syncServer = parseBool(params, 'syncServer', false);
   const result = await host.sync({ target, syncServer });
   return ok(COMMANDS.SYNC, version, result);
@@ -198,9 +198,9 @@ export const tagCreateHandler: Handler = async (params, { host, version }) => {
 export const tagApplyHandler: Handler = async (params, { host, version }) => {
   const path = parseWorkspacePath(params, 'path', { required: true }, host.pathResolver);
   const tag = parseString(params, 'tag', { required: true });
-  const action = (parseEnum(params, 'action', ['add', 'remove', 'toggle'] as const, {
+  const action = (parseEnum(params, 'action', ['add', 'remove', 'toggle'], {
     default: 'toggle',
-  }) ?? 'toggle') as 'add' | 'remove' | 'toggle';
+  }) ?? 'toggle');
   const result = await host.applyTag({ path, tag, action });
   return ok(COMMANDS.TAG_APPLY, version, result);
 };

@@ -1,4 +1,3 @@
-/* eslint-disable obsidianmd/ui/sentence-case -- Kakao is a proper brand name and must retain capitalization in UI copy. */
 import { Modal, Notice, type App } from 'obsidian';
 import {
   dedupeExistingPlaceArchives,
