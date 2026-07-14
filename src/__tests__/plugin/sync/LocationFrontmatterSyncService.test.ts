@@ -10,8 +10,8 @@
  *   location/provider fields while preserving unrelated user frontmatter
  *   processFrontMatter entirely when nothing is missing (no mtime churn)
  * - reconcileArchiveIds (WS, AUTHORITATIVE): overwrites differing values,
- *   skips ids without a vault note, survives per-id failures, caps batches
- *   at MAX_WS_RECONCILE_BATCH, aborts after dispose()
+ *   skips ids without a vault note, reports per-id failures, processes every
+ *   ID in bounded chunks, aborts after dispose()
  * - fieldVisibility: location category disabled → full no-op
  *
  * All Obsidian API surfaces are replaced with vi.fn() stubs.
@@ -311,13 +311,19 @@ describe('LocationFrontmatterSyncService.reconcileArchiveIds', () => {
     // 'archive-a' has no vault note → never fetched.
     // 'archive-b' fetch throws → logged, batch continues.
     // 'archive-c' fetched + written. Duplicate id deduped.
-    await service.reconcileArchiveIds(['archive-a', 'archive-b', 'archive-c', 'archive-c']);
+    const result = await service.reconcileArchiveIds([
+      'archive-a',
+      'archive-b',
+      'archive-c',
+      'archive-c',
+    ]);
 
     expect(getUserArchive).toHaveBeenCalledTimes(2);
     expect(getUserArchive).toHaveBeenCalledWith('archive-b');
     expect(getUserArchive).toHaveBeenCalledWith('archive-c');
     expect(processFrontMatter).toHaveBeenCalledTimes(1);
     expect(processFrontMatter.mock.calls[0]?.[0]).toBe(fileC);
+    expect(result.failedArchiveIds).toEqual(['archive-b']);
   });
 
   it('AUTHORITATIVE mode: overwrites differing existing values (unlike the sweep)', async () => {
@@ -419,7 +425,7 @@ describe('LocationFrontmatterSyncService.reconcileArchiveIds', () => {
     expect(writtenFrontmatters[0]).toEqual({ tags: ['cafe'] });
   });
 
-  it('caps a single batch at MAX_WS_RECONCILE_BATCH ids', async () => {
+  it('processes every unique ID when the reconcile spans more than one bounded chunk', async () => {
     const { app } = makeApp({});
     const getUserArchive = vi.fn(
       async (archiveId: string): Promise<{ archive: RemoteArchiveLocationSource }> => ({
@@ -434,9 +440,11 @@ describe('LocationFrontmatterSyncService.reconcileArchiveIds', () => {
     });
 
     const ids = Array.from({ length: MAX_WS_RECONCILE_BATCH + 50 }, (_, i) => `archive-${i}`);
-    await service.reconcileArchiveIds(ids);
+    const result = await service.reconcileArchiveIds([...ids, ids[0] ?? 'archive-0']);
 
-    expect(getUserArchive).toHaveBeenCalledTimes(MAX_WS_RECONCILE_BATCH);
+    expect(getUserArchive).toHaveBeenCalledTimes(ids.length);
+    expect(getUserArchive.mock.calls.map(([archiveId]) => archiveId)).toEqual(ids);
+    expect(result.failedArchiveIds).toEqual([]);
   });
 
   it('aborts the loop once dispose() is called', async () => {
@@ -455,11 +463,12 @@ describe('LocationFrontmatterSyncService.reconcileArchiveIds', () => {
       isLocationCategoryEnabled: () => true,
     });
 
-    await service.reconcileArchiveIds(['archive-1', 'archive-2', 'archive-3']);
+    const result = await service.reconcileArchiveIds(['archive-1', 'archive-2', 'archive-3']);
 
     // Disposed during the first fetch → no write, no further iterations.
     expect(getUserArchive).toHaveBeenCalledTimes(1);
     expect(processFrontMatter).not.toHaveBeenCalled();
+    expect(result.failedArchiveIds).toEqual(['archive-1', 'archive-2', 'archive-3']);
   });
 
   it('is a no-op when the API client is unavailable', async () => {

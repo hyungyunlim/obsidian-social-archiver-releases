@@ -12,9 +12,51 @@ import {
   type ArchivePlacePickerTabs,
   type ArchivePlacePickerView,
 } from './archivePlacePickerTabs';
+import type { ProviderSearchCandidate, ProviderSearchResponse } from '@/services/WorkersAPIClient';
+
+type ProviderSelectionAuthority = {
+  readonly externalId: string;
+  readonly idempotencyKey: string;
+  readonly generation: number;
+};
+
+const providerSelectionAuthorities = new Map<string, ProviderSelectionAuthority>();
+
+function beginProviderSelection(archiveId: string, externalId: string): ProviderSelectionAuthority {
+  const current = providerSelectionAuthorities.get(archiveId);
+  const authority = {
+    externalId,
+    idempotencyKey: current?.externalId === externalId
+      ? current.idempotencyKey
+      : `obsidian:${archiveId}:${externalId}:${crypto.randomUUID()}`,
+    generation: current?.externalId === externalId ? current.generation + 1 : 1,
+  };
+  providerSelectionAuthorities.set(archiveId, authority);
+  return authority;
+}
+
+function isProviderSelectionCurrent(archiveId: string, authority: ProviderSelectionAuthority): boolean {
+  const current = providerSelectionAuthorities.get(archiveId);
+  return current?.externalId === authority.externalId
+    && current.idempotencyKey === authority.idempotencyKey
+    && current.generation === authority.generation;
+}
+
+function completeProviderSelection(archiveId: string, authority: ProviderSelectionAuthority): boolean {
+  const current = providerSelectionAuthorities.get(archiveId);
+  if (current?.externalId !== authority.externalId || current.idempotencyKey !== authority.idempotencyKey) return false;
+  providerSelectionAuthorities.delete(archiveId);
+  return true;
+}
 
 export { dedupeExistingPlaceArchives, getArchivePlacePickerError } from './archivePlacePickerModel';
 export type { ArchivePlacePickerApi, ArchivePlacePickerChange } from './archivePlacePickerModel';
+
+type ProviderSearchSnapshot = {
+  readonly query: string;
+  readonly results: readonly ProviderSearchCandidate[];
+  readonly attribution: ProviderSearchResponse['attribution'] | null;
+};
 
 export class ArchivePlacePickerModal extends Modal {
   private readonly options: ArchivePlacePickerOptions;
@@ -24,6 +66,15 @@ export class ArchivePlacePickerModal extends Modal {
   private requestVersion = 0;
   private searchTimer: number | null = null;
   private busy = false;
+  private searchQuery = '';
+  private searchResults: readonly ProviderSearchCandidate[] = [];
+  private searchAttribution: ProviderSearchResponse['attribution'] | null = null;
+  private pendingSelection: {
+    readonly candidate: ProviderSearchCandidate;
+    readonly authority: ProviderSelectionAuthority;
+    readonly errorMessage: string | null;
+    readonly search: ProviderSearchSnapshot;
+  } | null = null;
 
   constructor(app: App, options: ArchivePlacePickerOptions) {
     super(app);
@@ -43,9 +94,17 @@ export class ArchivePlacePickerModal extends Modal {
     this.panel = this.contentEl.createDiv({ cls: 'sa-place-picker-panel' });
     this.panel.id = 'sa-place-picker-panel';
     this.panel.setAttribute('role', 'tabpanel');
-    this.panel.setAttribute('aria-labelledby', 'sa-place-picker-tab-existing');
     this.scope.register([], 'Escape', () => this.close());
-    void this.showExisting();
+    if (this.pendingSelection?.errorMessage) {
+      this.activeView = 'search';
+      this.tabs.setActive('search');
+      this.panel.setAttribute('aria-labelledby', 'sa-place-picker-tab-search');
+      this.showSearch();
+    } else {
+      this.activeView = 'existing';
+      this.panel.setAttribute('aria-labelledby', 'sa-place-picker-tab-existing');
+      void this.showExisting();
+    }
   }
 
   onClose(): void {
@@ -138,6 +197,27 @@ export class ArchivePlacePickerModal extends Modal {
     const submit = row.createEl('button', { text: 'Search' });
     submit.type = 'button';
     const results = panel.createDiv({ cls: 'sa-place-picker-results', attr: { 'aria-live': 'polite' } });
+    const recovery = this.pendingSelection;
+    if (recovery?.errorMessage) {
+      input.value = recovery.search.query;
+      this.searchQuery = recovery.search.query;
+      this.searchResults = recovery.search.results;
+      this.searchAttribution = recovery.search.attribution;
+      results.createEl('p', { text: recovery.errorMessage, cls: 'sa-place-picker-status mod-error' });
+      for (const candidate of recovery.search.results) this.renderProviderCandidate(results, candidate);
+      if (recovery.search.attribution) {
+        results.createEl('a', {
+          text: recovery.search.attribution.label,
+          href: recovery.search.attribution.url,
+          cls: 'sa-place-picker-attribution',
+          attr: { target: '_blank', rel: 'noopener noreferrer' },
+        });
+      }
+    } else {
+      this.searchQuery = '';
+      this.searchResults = [];
+      this.searchAttribution = null;
+    }
     const search = (): void => {
       if (this.searchTimer !== null) window.clearTimeout(this.searchTimer);
       this.searchTimer = null;
@@ -150,6 +230,7 @@ export class ArchivePlacePickerModal extends Modal {
       search();
     });
     input.addEventListener('input', () => {
+      this.searchQuery = input.value;
       if (this.searchTimer !== null) window.clearTimeout(this.searchTimer);
       this.searchTimer = window.setTimeout(search, 300);
     });
@@ -159,24 +240,23 @@ export class ArchivePlacePickerModal extends Modal {
   private async runSearch(queryValue: string, results: HTMLElement): Promise<void> {
     const query = queryValue.trim();
     const requestVersion = ++this.requestVersion;
+    this.searchQuery = queryValue;
+    this.searchResults = [];
+    this.searchAttribution = null;
     results.empty();
     if (!query) return;
     results.createEl('p', { text: 'Searching places on Kakao…', cls: 'sa-place-picker-status' });
     try {
       const response = await this.options.api.searchProviderPlaces(query);
       if (requestVersion !== this.requestVersion || this.activeView !== 'search') return;
+      this.searchResults = response.results;
+      this.searchAttribution = response.attribution;
       results.empty();
       if (response.results.length === 0) {
         results.createEl('p', { text: 'No places found on Kakao', cls: 'sa-place-picker-status' });
       }
       for (const candidate of response.results) {
-        const button = results.createEl('button', { cls: 'sa-place-picker-result' });
-        button.type = 'button';
-        button.createEl('strong', { text: candidate.name, cls: 'sa-place-picker-result-name' });
-        const facts = [candidate.categoryGroupName || candidate.categoryName, candidate.roadAddress || candidate.address]
-          .filter(Boolean).join(' · ');
-        button.createEl('span', { text: facts, cls: 'sa-place-picker-result-meta' });
-        button.addEventListener('click', () => void this.selectProvider(candidate.selectionToken, button, results));
+        this.renderProviderCandidate(results, candidate);
       }
       const attribution = results.createEl('a', {
         text: response.attribution.label,
@@ -188,29 +268,72 @@ export class ArchivePlacePickerModal extends Modal {
     } catch (error) {
       if (!(error instanceof Error)) throw error;
       if (requestVersion !== this.requestVersion) return;
+      this.searchResults = [];
+      this.searchAttribution = null;
       results.empty();
       results.createEl('p', { text: getArchivePlacePickerError(error, 'search'), cls: 'sa-place-picker-status mod-error' });
     }
   }
 
-  private async selectProvider(token: string, button: HTMLButtonElement, results: HTMLElement): Promise<void> {
+  private renderProviderCandidate(results: HTMLElement, candidate: ProviderSearchCandidate): void {
+    const button = results.createEl('button', { cls: 'sa-place-picker-result' });
+    button.type = 'button';
+    button.createEl('strong', { text: candidate.name, cls: 'sa-place-picker-result-name' });
+    const facts = [candidate.categoryGroupName || candidate.categoryName, candidate.roadAddress || candidate.address]
+      .filter(Boolean).join(' · ');
+    button.createEl('span', { text: facts, cls: 'sa-place-picker-result-meta' });
+    button.addEventListener('click', () => void this.selectProvider(candidate, button));
+  }
+
+  private async selectProvider(candidate: ProviderSearchCandidate, button: HTMLButtonElement): Promise<void> {
     if (this.busy) return;
     this.busy = true;
     button.disabled = true;
+    const authority = beginProviderSelection(this.options.archiveId, candidate.externalId);
+    const selection = {
+      candidate,
+      authority,
+      errorMessage: null,
+      search: {
+        query: this.searchQuery,
+        results: [...this.searchResults],
+        attribution: this.searchAttribution,
+      },
+    } satisfies {
+      readonly candidate: ProviderSearchCandidate;
+      readonly authority: ProviderSelectionAuthority;
+      readonly errorMessage: string | null;
+      readonly search: ProviderSearchSnapshot;
+    };
+    this.pendingSelection = selection;
+    this.close();
     try {
-      const key = `obsidian:${this.options.archiveId}:${crypto.randomUUID()}`;
-      const response = await this.options.api.selectProviderPlace(this.options.archiveId, token, key);
-      this.close();
+      const response = await this.options.api.selectProviderPlace(
+        this.options.archiveId,
+        candidate.selectionToken,
+        selection.authority.idempotencyKey,
+      );
+      const publishesCompletion = completeProviderSelection(this.options.archiveId, selection.authority);
+      if (this.pendingSelection === selection) {
+        this.pendingSelection = null;
+        this.busy = false;
+      }
+      if (!publishesCompletion) return;
       new Notice('Place linked. Details will update in the background.');
       void Promise.resolve(this.options.onChanged({ targetArchiveId: response.targetArchiveId, enrichment: 'queued' }));
     } catch (error) {
       if (!(error instanceof Error)) throw error;
+      if (this.pendingSelection !== selection) return;
+      if (!isProviderSelectionCurrent(this.options.archiveId, selection.authority)) {
+        this.pendingSelection = null;
+        this.busy = false;
+        return;
+      }
       this.busy = false;
-      button.disabled = false;
-      results.prepend(Object.assign(document.createElement('p'), {
-        className: 'sa-place-picker-status mod-error',
-        textContent: getArchivePlacePickerError(error, 'selection'),
-      }));
+      const errorMessage = getArchivePlacePickerError(error, 'selection');
+      this.pendingSelection = { ...selection, errorMessage };
+      new Notice(errorMessage);
+      this.open();
     }
   }
 

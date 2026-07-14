@@ -2325,6 +2325,16 @@ export default class SocialArchiverPlugin extends Plugin {
           shareStateSyncService: this.shareStateSyncService,
           commentStateSyncService: this.commentStateSyncService,
           locationFrontmatterSyncService: this.locationFrontmatterSyncService,
+          recoverLocationFrontmatterSync: async (): Promise<boolean> => {
+            const librarySync = this.archiveLibrarySyncService;
+            if (!librarySync || librarySync.isRunning) return false;
+            if (this.settings.archiveLibrarySync) {
+              this.settings.archiveLibrarySync.resumeOffset = 0;
+              this.settings.archiveLibrarySync.runAnchorTime = '';
+            }
+            await librarySync.startSync('manual-reconcile');
+            return librarySync.getState().phase === 'completed';
+          },
           archiveDeleteSyncService: this.archiveDeleteSyncService ?? undefined,
           archiveTagOutboundService: this.archiveTagOutboundService,
           tagStore: this.tagStore,

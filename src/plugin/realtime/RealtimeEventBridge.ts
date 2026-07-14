@@ -45,6 +45,7 @@ import type {
 import type { BillingEventApiPayload } from '../../types/billing-events';
 import type { IngestResult } from '../sync/RemoteArchiveIngestService';
 import type { LocalLockRegistry } from '../locks/LocalLockRegistry';
+import type { LocationReconcileResult } from '../sync/LocationFrontmatterSyncService';
 import { SentinelMediaRegionManager } from './SentinelMediaRegionManager';
 import { UnavailableMediaBlockGenerator } from '../../services/markdown/UnavailableMediaBlockGenerator';
 import { isLocalSentinel, stripLocalpathPrefix } from '../../services/markdown/formatters/LocalpathGuard';
@@ -257,7 +258,11 @@ export interface RealtimeEventBridgeDeps {
    * Location frontmatter reconciliation for `ws:archives_bulk_updated`
    * (Places P3c). Wired to LocationFrontmatterSyncService in main.ts.
    */
-  locationFrontmatterSyncService?: { reconcileArchiveIds(archiveIds: string[]): Promise<void> } | undefined;
+  locationFrontmatterSyncService?: {
+    reconcileArchiveIds(archiveIds: readonly string[]): Promise<LocationReconcileResult>;
+  } | undefined;
+  recoverLocationFrontmatterSync: (archiveIds: readonly string[]) => Promise<boolean>;
+  random?: () => number;
   canExecuteAICommentJobs?: () => boolean;
   aiCommentJobProcessor?: {
     drainBacklog?: () => Promise<void>;
@@ -325,6 +330,10 @@ export interface RealtimeEventBridgeDeps {
  * callout so the media-repair pass can detect (and avoid duplicating) it.
  */
 const REVIEW_NEEDED_MARKER = '<!-- sa:media:review-needed -->';
+const BULK_LOCATION_DEBOUNCE_MS = 2000;
+const BULK_LOCATION_MAX_ATTEMPTS = 3;
+const BULK_LOCATION_RETRY_MAX_MS = 30_000;
+const BULK_LOCATION_RETRY_JITTER_RATIO = 0.2;
 
 export class RealtimeEventBridge {
   private eventRefs: EventRef[] = [];
@@ -332,6 +341,11 @@ export class RealtimeEventBridge {
   private subscriptionArchiveAddedSyncTimer?: number;
   private archivesBulkUpdatedTimer?: number;
   private pendingBulkUpdatedArchiveIds = new Set<string>();
+  private readonly bulkLocationRetryAttempts = new Map<string, number>();
+  private readonly bulkLocationRecoveryArchiveIds = new Set<string>();
+  private bulkLocationReconcileGeneration = 0;
+  private bulkLocationReconcileInFlight = false;
+  private bulkLocationRecoveryInFlight = false;
 
   constructor(deps: RealtimeEventBridgeDeps) {
     this.deps = deps;
@@ -341,6 +355,7 @@ export class RealtimeEventBridge {
    * Remove all registered event listeners.
    */
   clear(): void {
+    this.bulkLocationReconcileGeneration += 1;
     this.eventRefs.forEach(ref => this.deps.events.offref(ref));
     this.eventRefs = [];
 
@@ -354,6 +369,9 @@ export class RealtimeEventBridge {
       this.archivesBulkUpdatedTimer = undefined;
     }
     this.pendingBulkUpdatedArchiveIds.clear();
+    this.bulkLocationRetryAttempts.clear();
+    this.bulkLocationReconcileInFlight = false;
+    this.bulkLocationRecoveryInFlight = false;
   }
 
   /**
@@ -711,6 +729,7 @@ export class RealtimeEventBridge {
   private setupConnectionStatusListeners(): void {
     this.eventRefs.push(
       this.deps.events.on('ws:connected', () => {
+        this.retryBulkLocationRecovery();
         // REMOVED: Auto-flushing pending deletes on reconnect caused mass deletion
         // when accumulated vault file removals were all sent at once.
         // void this.deps.archiveDeleteSyncService?.flushPendingDeletes();
@@ -1517,28 +1536,133 @@ export class RealtimeEventBridge {
             this.pendingBulkUpdatedArchiveIds.add(id);
           }
         }
-        if (this.pendingBulkUpdatedArchiveIds.size === 0) return;
-
-        if (this.archivesBulkUpdatedTimer !== undefined) {
-          window.clearTimeout(this.archivesBulkUpdatedTimer);
-        }
-        this.archivesBulkUpdatedTimer = this.deps.schedule(() => {
-          this.archivesBulkUpdatedTimer = undefined;
-          const archiveIds = [...this.pendingBulkUpdatedArchiveIds];
-          this.pendingBulkUpdatedArchiveIds.clear();
-
-          void this.deps.locationFrontmatterSyncService
-            ?.reconcileArchiveIds(archiveIds)
-            .then(() => this.deps.refreshTimelineView())
-            .catch((error) => {
-              console.debug(
-                '[Social Archiver] archives_bulk_updated location reconcile failed:',
-                error instanceof Error ? error.message : String(error),
-              );
-            });
-        }, 2000);
+        this.scheduleBulkLocationReconcile();
       }),
     );
+  }
+
+  private scheduleBulkLocationReconcile(): void {
+    if (this.pendingBulkUpdatedArchiveIds.size === 0 || this.bulkLocationReconcileInFlight) return;
+    if (this.archivesBulkUpdatedTimer !== undefined) {
+      window.clearTimeout(this.archivesBulkUpdatedTimer);
+    }
+    const generation = this.bulkLocationReconcileGeneration;
+    const delay = this.getBulkLocationReconcileDelay();
+    this.archivesBulkUpdatedTimer = this.deps.schedule(() => {
+      this.archivesBulkUpdatedTimer = undefined;
+      if (generation !== this.bulkLocationReconcileGeneration) return;
+      const service = this.deps.locationFrontmatterSyncService;
+      const archiveIds = [...this.pendingBulkUpdatedArchiveIds];
+      this.pendingBulkUpdatedArchiveIds.clear();
+      if (!service) {
+        this.transferBulkLocationRecovery(archiveIds, generation);
+        return;
+      }
+      this.bulkLocationReconcileInFlight = true;
+
+      void service.reconcileArchiveIds(archiveIds)
+        .then((result) => {
+          if (generation !== this.bulkLocationReconcileGeneration) return;
+          this.bulkLocationReconcileInFlight = false;
+          this.deps.refreshTimelineView();
+          this.finishBulkLocationReconcile(archiveIds, result.failedArchiveIds, generation);
+        })
+        .catch((error) => {
+          if (generation === this.bulkLocationReconcileGeneration) {
+            this.bulkLocationReconcileInFlight = false;
+            this.finishBulkLocationReconcile(archiveIds, archiveIds, generation);
+          }
+          console.debug(
+            '[Social Archiver] archives_bulk_updated location reconcile failed:',
+            error instanceof Error ? error.message : String(error),
+          );
+        });
+    }, delay);
+  }
+
+  private finishBulkLocationReconcile(
+    attemptedArchiveIds: readonly string[],
+    failedArchiveIds: readonly string[],
+    generation: number,
+  ): void {
+    const failed = new Set(failedArchiveIds);
+    const terminalArchiveIds: string[] = [];
+    for (const archiveId of attemptedArchiveIds) {
+      if (!failed.has(archiveId)) {
+        this.bulkLocationRetryAttempts.delete(archiveId);
+        continue;
+      }
+      const attempts = (this.bulkLocationRetryAttempts.get(archiveId) ?? 0) + 1;
+      if (attempts >= BULK_LOCATION_MAX_ATTEMPTS) {
+        this.bulkLocationRetryAttempts.delete(archiveId);
+        terminalArchiveIds.push(archiveId);
+      } else {
+        this.bulkLocationRetryAttempts.set(archiveId, attempts);
+        this.pendingBulkUpdatedArchiveIds.add(archiveId);
+      }
+    }
+    this.transferBulkLocationRecovery(terminalArchiveIds, generation);
+    this.scheduleBulkLocationReconcile();
+  }
+
+  private transferBulkLocationRecovery(
+    archiveIds: readonly string[],
+    generation: number,
+  ): void {
+    if (archiveIds.length === 0 || generation !== this.bulkLocationReconcileGeneration) return;
+    for (const archiveId of archiveIds) {
+      this.bulkLocationRecoveryArchiveIds.add(archiveId);
+    }
+    this.retryBulkLocationRecovery();
+  }
+
+  private retryBulkLocationRecovery(): void {
+    if (this.bulkLocationRecoveryInFlight || this.bulkLocationRecoveryArchiveIds.size === 0) return;
+    const generation = this.bulkLocationReconcileGeneration;
+    const archiveIds = [...this.bulkLocationRecoveryArchiveIds];
+    this.bulkLocationRecoveryInFlight = true;
+    void this.deps.recoverLocationFrontmatterSync(archiveIds)
+      .then((recovered) => {
+        if (generation !== this.bulkLocationReconcileGeneration) return;
+        if (!recovered) {
+          this.bulkLocationRecoveryInFlight = false;
+          return;
+        }
+        for (const archiveId of archiveIds) {
+          this.bulkLocationRecoveryArchiveIds.delete(archiveId);
+        }
+        this.bulkLocationRecoveryInFlight = false;
+        this.retryBulkLocationRecovery();
+      })
+      .catch((error) => {
+        if (generation === this.bulkLocationReconcileGeneration) {
+          this.bulkLocationRecoveryInFlight = false;
+        }
+        console.debug(
+          '[Social Archiver] terminal location recovery failed:',
+          error instanceof Error ? error.message : String(error),
+        );
+      });
+  }
+
+  private getBulkLocationReconcileDelay(): number {
+    let minimumAttempts = Number.POSITIVE_INFINITY;
+    for (const archiveId of this.pendingBulkUpdatedArchiveIds) {
+      minimumAttempts = Math.min(
+        minimumAttempts,
+        this.bulkLocationRetryAttempts.get(archiveId) ?? 0,
+      );
+    }
+    if (!Number.isFinite(minimumAttempts) || minimumAttempts === 0) {
+      return BULK_LOCATION_DEBOUNCE_MS;
+    }
+    const baseDelay = Math.min(
+      BULK_LOCATION_RETRY_MAX_MS,
+      BULK_LOCATION_DEBOUNCE_MS * (2 ** (minimumAttempts - 1)),
+    );
+    const random = this.deps.random?.() ?? Math.random();
+    const jitter = Math.round(baseDelay * BULK_LOCATION_RETRY_JITTER_RATIO * ((random * 2) - 1));
+    return Math.max(BULK_LOCATION_DEBOUNCE_MS, baseDelay + jitter);
   }
 
   // --------------------------------------------------------------------------

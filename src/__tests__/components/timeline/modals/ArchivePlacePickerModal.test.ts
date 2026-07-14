@@ -1,5 +1,5 @@
 import { Modal, type App } from 'obsidian';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ArchivePlacePickerModal,
   dedupeExistingPlaceArchives,
@@ -12,17 +12,35 @@ import type {
   UserArchive,
 } from '@/services/WorkersAPIClient';
 
+const noticeMessages = vi.hoisted((): string[] => []);
+
+vi.mock('obsidian', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('obsidian')>();
+  return {
+    ...actual,
+    Notice: class Notice {
+      constructor(message: string) {
+        noticeMessages.push(message);
+      }
+    },
+  };
+});
+
 function deferred<T>(): {
   readonly promise: Promise<T>;
   readonly resolve: (value: T) => void;
+  readonly reject: (error: Error) => void;
 } {
   let resolvePromise: ((value: T) => void) | undefined;
-  const promise = new Promise<T>((resolve) => {
+  let rejectPromise: ((error: Error) => void) | undefined;
+  const promise = new Promise<T>((resolve, reject) => {
     resolvePromise = resolve;
+    rejectPromise = reject;
   });
   return {
     promise,
     resolve: (value) => resolvePromise?.(value),
+    reject: (error) => rejectPromise?.(error),
   };
 }
 
@@ -137,6 +155,10 @@ function openModal(api: ArchivePlacePickerApi, currentLocation: string | null = 
 }
 
 describe('ArchivePlacePickerModal', () => {
+  beforeEach(() => {
+    noticeMessages.length = 0;
+  });
+
   it('deduplicates only by canonical provider identity and keeps duplicate display names', () => {
     // Given: same identity twice, same name with another identity, and an unkeyed location.
     const archives = [
@@ -270,7 +292,8 @@ describe('ArchivePlacePickerModal', () => {
 
   it('submits the selection token, closes immediately, and reports queued enrichment', async () => {
     // Given: a visible signed search result.
-    const selectProviderPlace = vi.fn(async () => selectionResponse());
+    const selection = deferred<ProviderPlaceSelectionResponse>();
+    const selectProviderPlace = vi.fn(() => selection.promise);
     const onChanged = vi.fn(async () => undefined);
     const api = makeApi({ selectProviderPlace });
     const modal = new ArchivePlacePickerModal({} as App, {
@@ -287,11 +310,111 @@ describe('ArchivePlacePickerModal', () => {
     modal.contentEl.querySelector<HTMLButtonElement>('.sa-place-picker-result')?.click();
     await vi.waitFor(() => expect(selectProviderPlace).toHaveBeenCalled());
 
-    // Then: the signed token is submitted and the modal closes without enrichment polling.
+    // Then: the signed token is submitted and the modal closes before the server settles.
     expect(selectProviderPlace.mock.calls[0]?.[0]).toBe('source-1');
     expect(selectProviderPlace.mock.calls[0]?.[1]).toBe('token-101');
-    await vi.waitFor(() => expect(document.body.contains(modal.modalEl)).toBe(false));
+    expect(document.body.contains(modal.modalEl)).toBe(false);
+    expect(onChanged).not.toHaveBeenCalled();
+    selection.resolve(selectionResponse());
+    await vi.waitFor(() => expect(onChanged).toHaveBeenCalled());
     expect(onChanged).toHaveBeenCalledWith({ targetArchiveId: 'place-1', enrichment: 'queued' });
+  });
+
+  it('reopens a failed optimistic selection and retries it with the same idempotency key', async () => {
+    // Given: one delayed failure followed by a successful retry.
+    const first = deferred<ProviderPlaceSelectionResponse>();
+    const baseResponse = searchResponse('희작', '101');
+    const primaryResult = baseResponse.results[0];
+    if (!primaryResult) throw new TypeError('Missing primary search result');
+    const recoveryResponse: ProviderSearchResponse = {
+      ...baseResponse,
+      pageableCount: 2,
+      totalCount: 2,
+      results: [primaryResult, {
+        ...primaryResult,
+        externalId: '202',
+        name: '희작 별관',
+        selectionToken: 'token-202',
+      }],
+    };
+    const selectProviderPlace = vi.fn()
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce(selectionResponse());
+    const modal = openModal(makeApi({
+      searchProviderPlaces: vi.fn(async () => recoveryResponse),
+      selectProviderPlace,
+    }));
+    modal.contentEl.querySelector<HTMLButtonElement>('[data-view="search"]')?.click();
+    const input = modal.contentEl.querySelector<HTMLInputElement>('.sa-place-picker-search-input');
+    if (input) input.value = '희작';
+    input?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await vi.waitFor(() => expect(modal.contentEl.querySelector('.sa-place-picker-result')).toBeTruthy());
+
+    // When: a double activation occurs, then the first request fails.
+    const result = modal.contentEl.querySelector<HTMLButtonElement>('.sa-place-picker-result');
+    result?.click();
+    result?.click();
+    expect(selectProviderPlace).toHaveBeenCalledTimes(1);
+    expect(document.body.contains(modal.modalEl)).toBe(false);
+    const firstKey = selectProviderPlace.mock.calls[0]?.[2];
+    first.reject(new Error('offline'));
+    await vi.waitFor(() => expect(document.body.contains(modal.modalEl)).toBe(true));
+
+    // Then: failure is visible and retry reuses the exact key.
+    expect(modal.contentEl.textContent).toContain('You appear to be offline');
+    expect(modal.contentEl.querySelector<HTMLInputElement>('.sa-place-picker-search-input')?.value).toBe('희작');
+    expect(modal.contentEl.querySelectorAll('.sa-place-picker-result')).toHaveLength(2);
+    expect(modal.contentEl.textContent).toContain('희작 별관');
+    expect(modal.contentEl.textContent).toContain('Search results provided by Kakao');
+    modal.contentEl.querySelector<HTMLButtonElement>('.sa-place-picker-result')?.click();
+    await vi.waitFor(() => expect(selectProviderPlace).toHaveBeenCalledTimes(2));
+    expect(selectProviderPlace.mock.calls[1]?.[2]).toBe(firstKey);
+  });
+
+  it('ignores an older modal failure after a newer same-key selection succeeds', async () => {
+    // Given: modal A has a pending selection for the same archive and provider place used by modal B.
+    const first = deferred<ProviderPlaceSelectionResponse>();
+    const selectProviderPlace = vi.fn()
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce(selectionResponse());
+    const api = makeApi({ selectProviderPlace });
+    const onChangedA = vi.fn(async () => undefined);
+    const onChangedB = vi.fn(async () => undefined);
+    const modalA = new ArchivePlacePickerModal({} as App, {
+      archiveId: 'source-1', currentLocation: null, api, onChanged: onChangedA,
+    });
+    const modalB = new ArchivePlacePickerModal({} as App, {
+      archiveId: 'source-1', currentLocation: null, api, onChanged: onChangedB,
+    });
+
+    const searchAndSelect = async (modal: ArchivePlacePickerModal): Promise<void> => {
+      modal.open();
+      modal.contentEl.querySelector<HTMLButtonElement>('[data-view="search"]')?.click();
+      const input = modal.contentEl.querySelector<HTMLInputElement>('.sa-place-picker-search-input');
+      if (input) input.value = '희작';
+      input?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await vi.waitFor(() => expect(modal.contentEl.querySelector('.sa-place-picker-result')).toBeTruthy());
+      modal.contentEl.querySelector<HTMLButtonElement>('.sa-place-picker-result')?.click();
+    };
+
+    // When: B completes first with A's shared key, then A rejects out of order.
+    await searchAndSelect(modalA);
+    await vi.waitFor(() => expect(selectProviderPlace).toHaveBeenCalledTimes(1));
+    await searchAndSelect(modalB);
+    await vi.waitFor(() => expect(onChangedB).toHaveBeenCalledTimes(1));
+    expect(selectProviderPlace.mock.calls[1]?.[2]).toBe(selectProviderPlace.mock.calls[0]?.[2]);
+    const noticesAfterSuccess = [...noticeMessages];
+    expect(noticesAfterSuccess).toEqual(['Place linked. Details will update in the background.']);
+    first.reject(new Error('offline'));
+    await first.promise.catch(() => undefined);
+    await Promise.resolve();
+
+    // Then: A cannot reopen or publish a stale failure after B's authoritative success.
+    expect(document.body.contains(modalA.modalEl)).toBe(false);
+    expect(modalA.contentEl.textContent).toBe('');
+    expect(noticeMessages).toEqual(noticesAfterSuccess);
+    expect(onChangedA).not.toHaveBeenCalled();
+    expect(onChangedB).toHaveBeenCalledTimes(1);
   });
 
   it('retains detach and exposes keyboard/focus semantics', async () => {

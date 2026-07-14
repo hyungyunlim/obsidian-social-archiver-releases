@@ -98,6 +98,7 @@ function makeDeps(overrides: Partial<RealtimeEventBridgeDeps> = {}): RealtimeEve
     syncSubscriptionPosts: vi.fn().mockResolvedValue({ total: 0, saved: 0, failed: 0 }),
     createProfileNote: vi.fn().mockResolvedValue(undefined),
     refreshTimelineView: vi.fn(),
+    recoverLocationFrontmatterSync: vi.fn().mockResolvedValue(true),
     processPendingSyncQueue: vi.fn().mockResolvedValue(undefined),
     processSyncQueueItem: vi.fn().mockResolvedValue(false),
     ingestRemoteArchive: vi.fn().mockResolvedValue('skipped'),

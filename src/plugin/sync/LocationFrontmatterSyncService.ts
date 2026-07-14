@@ -25,6 +25,10 @@ export interface DesiredLocationFrontmatter {
   readonly locationExternalId?: string;
 }
 
+export interface LocationReconcileResult {
+  readonly failedArchiveIds: readonly string[];
+}
+
 export interface LocationFrontmatterSyncDeps {
   readonly app: App;
   readonly apiClient: () => {
@@ -125,32 +129,41 @@ export class LocationFrontmatterSyncService {
     this.disposed = true;
   }
 
-  async reconcileArchiveIds(archiveIds: readonly string[]): Promise<void> {
+  async reconcileArchiveIds(archiveIds: readonly string[]): Promise<LocationReconcileResult> {
+    const uniqueIds = [...new Set(archiveIds)];
     const apiClient = this.deps.apiClient();
-    if (!apiClient || this.disposed) return;
-    const uniqueIds = [...new Set(archiveIds)].slice(0, MAX_WS_RECONCILE_BATCH);
-    if (uniqueIds.length < new Set(archiveIds).size) {
-      console.debug(LOG_PREFIX, 'Capped authoritative reconcile batch', {
-        requested: new Set(archiveIds).size,
-        accepted: uniqueIds.length,
-      });
-    }
+    if (!apiClient) return { failedArchiveIds: uniqueIds };
+    if (this.disposed) return { failedArchiveIds: uniqueIds };
+    const failedArchiveIds: string[] = [];
 
-    for (const archiveId of uniqueIds) {
-      if (this.disposed) return;
-      const file = this.deps.findBySourceArchiveId(archiveId);
-      if (!file) continue;
-      try {
-        const { archive } = await apiClient.getUserArchive(archiveId);
-        if (this.disposed) return;
-        await this.withWriteLocks(archiveId, () => this.reconcileFile(file, archive));
-      } catch (error) {
-        console.debug(LOG_PREFIX, 'Authoritative reconcile failed', {
-          archiveId,
-          error: error instanceof Error ? error.message : String(error),
-        });
+    for (let start = 0; start < uniqueIds.length; start += MAX_WS_RECONCILE_BATCH) {
+      const chunk = uniqueIds.slice(start, start + MAX_WS_RECONCILE_BATCH);
+      for (let offset = 0; offset < chunk.length; offset += 1) {
+        const archiveId = chunk[offset];
+        if (!archiveId) continue;
+        const absoluteIndex = start + offset;
+        if (this.disposed) {
+          return { failedArchiveIds: [...failedArchiveIds, ...uniqueIds.slice(absoluteIndex)] };
+        }
+        const file = this.deps.findBySourceArchiveId(archiveId);
+        if (!file) continue;
+        try {
+          const { archive } = await apiClient.getUserArchive(archiveId);
+          if (this.disposed) {
+            return { failedArchiveIds: [...failedArchiveIds, ...uniqueIds.slice(absoluteIndex)] };
+          }
+          await this.withWriteLocks(archiveId, () => this.reconcileFile(file, archive));
+        } catch (error) {
+          failedArchiveIds.push(archiveId);
+          console.debug(LOG_PREFIX, 'Authoritative reconcile failed', {
+            archiveId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
     }
+
+    return { failedArchiveIds };
   }
 
   async reconcileFromLibrarySync(

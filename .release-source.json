@@ -1,0 +1,8 @@
+{
+  "source_commit": "49c5f9fe000c3b59729cd62e164fee17ed662a3d",
+  "source_tree": "44a742c77e8af66a41e531265e6fc48c8eeedaef",
+  "source_manifest": ".release-source-manifest.sha256",
+  "source_manifest_sha256": "e63ed73fe4f64569c39b2da5867802f7a992346ddf69384a398a04b15064870e",
+  "artifact_manifest": ".release-artifact-manifest.sha256",
+  "artifact_manifest_sha256": "5667473cd5952299d716ad27e2003ca8e55f6046b0ef4ba0fd07fd0d28d13dad"
+}

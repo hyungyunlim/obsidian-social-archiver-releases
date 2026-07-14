@@ -14,6 +14,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { EventRef, Events } from 'obsidian';
 
 // Mock TimelineView (and its deep imports that require Obsidian Component) before importing RealtimeEventBridge
 vi.mock('../../../views/TimelineView', () => ({
@@ -33,31 +34,48 @@ import type { RealtimeEventBridgeDeps } from '../../../plugin/realtime/RealtimeE
  * Minimal Events implementation that supports on/offref/trigger.
  * Matches what RealtimeEventBridge requires.
  */
-function makeEvents() {
-  type Listener = (data: unknown) => void;
-  const map = new Map<string, Set<Listener>>();
-  let refCount = 0;
-  const refToEventName = new Map<number, string>();
+type TestEventListener = (...data: unknown[]) => unknown;
 
-  return {
-    on(name: string, cb: Listener) {
-      if (!map.has(name)) map.set(name, new Set());
-      map.get(name)!.add(cb);
-      const ref = refCount++;
-      refToEventName.set(ref, name);
-      return ref;
-    },
-    offref(ref: number) {
-      refToEventName.delete(ref);
-    },
-    async trigger(name: string, data: unknown) {
-      const listeners = map.get(name);
-      if (!listeners) return;
-      for (const listener of listeners) {
-        await (listener as (data: unknown) => Promise<void> | void)(data);
-      }
-    },
-  };
+class TestEvents implements Events {
+  private readonly listeners = new Map<string, Set<TestEventListener>>();
+  private readonly refs = new Map<EventRef, { readonly name: string; readonly listener: TestEventListener }>();
+
+  on(name: string, listener: TestEventListener): EventRef {
+    const listeners = this.listeners.get(name) ?? new Set<TestEventListener>();
+    listeners.add(listener);
+    this.listeners.set(name, listeners);
+    const ref: EventRef = {};
+    this.refs.set(ref, { name, listener });
+    return ref;
+  }
+
+  off(name: string, listener: TestEventListener): void {
+    this.listeners.get(name)?.delete(listener);
+  }
+
+  offref(ref: EventRef): void {
+    const entry = this.refs.get(ref);
+    if (!entry) return;
+    this.off(entry.name, entry.listener);
+    this.refs.delete(ref);
+  }
+
+  async trigger(name: string, ...data: unknown[]): Promise<void> {
+    const listeners = this.listeners.get(name);
+    if (!listeners) return;
+    for (const listener of listeners) {
+      await listener(...data);
+    }
+  }
+
+  tryTrigger(ref: EventRef, args: unknown[]): void {
+    const listener = this.refs.get(ref)?.listener;
+    if (listener) void listener(...args);
+  }
+}
+
+function makeEvents(): TestEvents {
+  return new TestEvents();
 }
 
 function makeApp() {
@@ -81,7 +99,7 @@ function makeApp() {
 
 function makeDeps(overrides: Partial<RealtimeEventBridgeDeps> = {}): RealtimeEventBridgeDeps {
   return {
-    events: makeEvents() as any,
+    events: makeEvents(),
     app: makeApp() as any,
     pendingJobsManager: { getJobByWorkerJobId: vi.fn(), getJob: vi.fn(), updateJob: vi.fn(), removeJob: vi.fn() },
     archiveJobTracker: { completeJob: vi.fn(), failJob: vi.fn() } as any,
@@ -109,6 +127,7 @@ function makeDeps(overrides: Partial<RealtimeEventBridgeDeps> = {}): RealtimeEve
     createProfileNote: vi.fn().mockResolvedValue(undefined),
     refreshBillingUsage: vi.fn().mockResolvedValue(true),
     refreshTimelineView: vi.fn(),
+    recoverLocationFrontmatterSync: vi.fn().mockResolvedValue(true),
     processPendingSyncQueue: vi.fn().mockResolvedValue(undefined),
     processSyncQueueItem: vi.fn().mockResolvedValue(false),
     ingestRemoteArchive: vi.fn().mockResolvedValue('skipped'),
@@ -168,7 +187,7 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
 
     const events = makeEvents();
     const deps = makeDeps({
-      events: events as any,
+      events,
       syncSubscriptionPosts,
       schedule: scheduleFn,
     });
@@ -206,7 +225,7 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
 
     const events = makeEvents();
     const deps = makeDeps({
-      events: events as any,
+      events,
       schedule: scheduleFn,
       aiCommentJobProcessor: {
         drainBacklog,
@@ -244,7 +263,7 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
 
     const events = makeEvents();
     const deps = makeDeps({
-      events: events as any,
+      events,
       schedule: scheduleFn,
       canExecuteAICommentJobs: () => false,
       aiCommentJobProcessor: {
@@ -299,7 +318,7 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
     const handleRequestedJob = vi.fn().mockResolvedValue(undefined);
     const handleRequestedAIActionJob = vi.fn().mockResolvedValue(undefined);
     const deps = makeDeps({
-      events: events as any,
+      events,
       aiCommentJobProcessor: {
         drainBacklog: vi.fn().mockResolvedValue(undefined),
         handleRequestedJob,
@@ -326,7 +345,7 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
     const events = makeEvents();
     const refreshTimelineView = vi.fn();
     const deps = makeDeps({
-      events: events as any,
+      events,
       refreshTimelineView,
     });
 
@@ -357,7 +376,7 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
 
     const events = makeEvents();
     const deps = makeDeps({
-      events: events as any,
+      events,
       schedule: scheduleFn,
       canExecuteAICommentJobs: () => false,
       canExecuteTranscriptionJobs: () => false,
@@ -427,7 +446,7 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
 
     const events = makeEvents();
     const deps = makeDeps({
-      events: events as any,
+      events,
       syncSubscriptionPosts,
       ingestRemoteArchive,
       schedule: vi.fn().mockImplementation((cb: () => void, delay: number) => {
@@ -466,7 +485,7 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
 
     const events = makeEvents();
     const deps = makeDeps({
-      events: events as any,
+      events,
       syncSubscriptionPosts,
       ingestRemoteArchive,
       schedule: vi.fn().mockImplementation((cb: () => void, delay: number) => {
@@ -503,7 +522,7 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
 
     const events = makeEvents();
     const deps = makeDeps({
-      events: events as any,
+      events,
       syncSubscriptionPosts,
       schedule: vi.fn().mockImplementation((cb: () => void, delay: number) => {
         return window.setTimeout(cb, delay);
@@ -537,7 +556,7 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
     const refreshTimelineView = vi.fn();
     const events = makeEvents();
     const deps = makeDeps({
-      events: events as any,
+      events,
       syncSubscriptionPosts,
       refreshTimelineView,
       locationFrontmatterSyncService: { reconcileArchiveIds },
@@ -563,7 +582,7 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
 
     const events = makeEvents();
     const deps = makeDeps({
-      events: events as any,
+      events,
       syncSubscriptionPosts,
       schedule: vi.fn().mockImplementation((cb: () => void, delay: number) => {
         return window.setTimeout(cb, delay);
@@ -594,7 +613,7 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
 
     const events = makeEvents();
     const deps = makeDeps({
-      events: events as any,
+      events,
       syncSubscriptionPosts,
       schedule: vi.fn().mockImplementation((cb: () => void, delay: number) => {
         return window.setTimeout(cb, delay);
@@ -637,7 +656,7 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
 
     const events = makeEvents();
     const deps = makeDeps({
-      events: events as any,
+      events,
       syncSubscriptionPosts,
       schedule: vi.fn().mockImplementation((cb: () => void, delay: number) => {
         return window.setTimeout(cb, delay);
@@ -677,7 +696,7 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
 
     const events = makeEvents();
     const deps = makeDeps({
-      events: events as any,
+      events,
       acknowledgePendingPosts,
       saveSubscriptionPost,
     });
@@ -710,7 +729,7 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
 
     const events = makeEvents();
     const deps = makeDeps({
-      events: events as any,
+      events,
       acknowledgePendingPosts,
       saveSubscriptionPost,
     });
@@ -746,7 +765,7 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
 
     const events = makeEvents();
     const deps = makeDeps({
-      events: events as any,
+      events,
       acknowledgePendingPosts,
       saveSubscriptionPost,
       syncSubscriptionPosts,
@@ -798,7 +817,7 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
 
     const events = makeEvents();
     const deps = makeDeps({
-      events: events as any,
+      events,
       saveSubscriptionPost,
       crawlJobTracker: crawlJobTracker as any,
       settings: () => ({ enableMobileAnnotationSync: true, syncClientId: 'my-client-id', archivePath: 'Threads Archive' } as any),
@@ -865,7 +884,7 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
 
     const events = makeEvents();
     const deps = makeDeps({
-      events: events as any,
+      events,
       processPendingSyncQueue,
       schedule: scheduleFn,
       settings: () => ({ enableMobileAnnotationSync: true, syncClientId: 'client-1' } as any),
@@ -881,5 +900,202 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
       (call: [() => void, number]) => call[1] === 2000
     );
     expect(syncQueueCall).toBeDefined();
+  });
+});
+
+describe('RealtimeEventBridge -- bulk location convergence', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('retries failed IDs together with IDs received while the cleared batch is in flight', async () => {
+    let finishFirstReconcile: ((result: { failedArchiveIds: readonly string[] }) => void) | undefined;
+    const firstReconcile = new Promise<{ failedArchiveIds: readonly string[] }>((resolve) => {
+      finishFirstReconcile = resolve;
+    });
+    const reconcileArchiveIds = vi.fn()
+      .mockReturnValueOnce(firstReconcile)
+      .mockResolvedValueOnce({ failedArchiveIds: [] });
+    const events = makeEvents();
+    const deps = makeDeps({
+      events,
+      locationFrontmatterSyncService: { reconcileArchiveIds },
+      random: () => 0.5,
+    });
+    const bridge = new RealtimeEventBridge(deps);
+    const initialIds = Array.from({ length: 65 }, (_, index) => `archive-${index}`);
+    bridge.setup();
+
+    await events.trigger('ws:archives_bulk_updated', {
+      type: 'archives_bulk_updated',
+      data: { archiveIds: initialIds, sourceClientId: 'remote-client' },
+    });
+    await vi.advanceTimersByTimeAsync(2000);
+    await events.trigger('ws:archives_bulk_updated', {
+      type: 'archives_bulk_updated',
+      data: { archiveIds: ['archive-new'], sourceClientId: 'remote-client' },
+    });
+    finishFirstReconcile?.({ failedArchiveIds: ['archive-31'] });
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(reconcileArchiveIds).toHaveBeenNthCalledWith(1, initialIds);
+    expect(reconcileArchiveIds).toHaveBeenNthCalledWith(2, ['archive-new', 'archive-31']);
+    expect(deps.refreshTimelineView).toHaveBeenCalledTimes(2);
+  });
+
+  it('requeues the entire cleared batch when the reconcile operation rejects', async () => {
+    const reconcileArchiveIds = vi.fn()
+      .mockRejectedValueOnce(new Error('temporary outage'))
+      .mockResolvedValueOnce({ failedArchiveIds: [] });
+    const events = makeEvents();
+    const deps = makeDeps({
+      events,
+      locationFrontmatterSyncService: { reconcileArchiveIds },
+      random: () => 0.5,
+    });
+    const bridge = new RealtimeEventBridge(deps);
+    const archiveIds = ['archive-1', 'archive-2'];
+    bridge.setup();
+
+    await events.trigger('ws:archives_bulk_updated', {
+      type: 'archives_bulk_updated',
+      data: { archiveIds, sourceClientId: 'remote-client' },
+    });
+    await vi.advanceTimersByTimeAsync(4000);
+
+    expect(reconcileArchiveIds).toHaveBeenNthCalledWith(1, archiveIds);
+    expect(reconcileArchiveIds).toHaveBeenNthCalledWith(2, archiveIds);
+  });
+
+  it('stops direct retries after three attempts and hands exact IDs to library recovery', async () => {
+    const reconcileArchiveIds = vi.fn().mockResolvedValue({
+      failedArchiveIds: ['archive-persistent'],
+    });
+    const recoverLocationFrontmatterSync = vi.fn().mockResolvedValue(true);
+    const schedule = vi.fn().mockImplementation((callback: () => void, delay: number) =>
+      window.setTimeout(callback, delay));
+    const events = makeEvents();
+    const deps = makeDeps({
+      events,
+      locationFrontmatterSyncService: { reconcileArchiveIds },
+      recoverLocationFrontmatterSync,
+      random: () => 0.5,
+      schedule,
+    });
+    const bridge = new RealtimeEventBridge(deps);
+    bridge.setup();
+
+    await events.trigger('ws:archives_bulk_updated', {
+      type: 'archives_bulk_updated',
+      data: { archiveIds: ['archive-persistent'], sourceClientId: 'remote-client' },
+    });
+    await vi.advanceTimersByTimeAsync(8000);
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(reconcileArchiveIds).toHaveBeenCalledTimes(3);
+    expect(schedule.mock.calls.map(([, delay]) => delay)).toEqual([2000, 2000, 4000]);
+    expect(recoverLocationFrontmatterSync).toHaveBeenCalledOnce();
+    expect(recoverLocationFrontmatterSync).toHaveBeenCalledWith(['archive-persistent']);
+  });
+
+  it('retains terminal IDs when recovery rejects and retries the handoff on reconnect', async () => {
+    const reconcileArchiveIds = vi.fn().mockResolvedValue({
+      failedArchiveIds: ['archive-recovery'],
+    });
+    const recoverLocationFrontmatterSync = vi.fn()
+      .mockRejectedValueOnce(new Error('library sync unavailable'))
+      .mockResolvedValueOnce(true);
+    const events = makeEvents();
+    const deps = makeDeps({
+      events,
+      locationFrontmatterSyncService: { reconcileArchiveIds },
+      recoverLocationFrontmatterSync,
+      random: () => 0.5,
+    });
+    const bridge = new RealtimeEventBridge(deps);
+    bridge.setup();
+
+    await events.trigger('ws:archives_bulk_updated', {
+      type: 'archives_bulk_updated',
+      data: { archiveIds: ['archive-recovery'], sourceClientId: 'remote-client' },
+    });
+    await vi.advanceTimersByTimeAsync(8000);
+    await Promise.resolve();
+    await events.trigger('ws:connected');
+    await Promise.resolve();
+
+    expect(recoverLocationFrontmatterSync).toHaveBeenCalledTimes(2);
+    expect(recoverLocationFrontmatterSync).toHaveBeenLastCalledWith(['archive-recovery']);
+  });
+
+  it('keeps a slow reconcile single-flight and drains later arrivals after it settles', async () => {
+    let finishFirstReconcile: ((result: { failedArchiveIds: readonly string[] }) => void) | undefined;
+    const firstReconcile = new Promise<{ failedArchiveIds: readonly string[] }>((resolve) => {
+      finishFirstReconcile = resolve;
+    });
+    const reconcileArchiveIds = vi.fn()
+      .mockReturnValueOnce(firstReconcile)
+      .mockResolvedValueOnce({ failedArchiveIds: [] });
+    const events = makeEvents();
+    const deps = makeDeps({
+      events,
+      locationFrontmatterSyncService: { reconcileArchiveIds },
+    });
+    const bridge = new RealtimeEventBridge(deps);
+    bridge.setup();
+
+    await events.trigger('ws:archives_bulk_updated', {
+      type: 'archives_bulk_updated',
+      data: { archiveIds: ['archive-slow'], sourceClientId: 'remote-client' },
+    });
+    await vi.advanceTimersByTimeAsync(2000);
+    await events.trigger('ws:archives_bulk_updated', {
+      type: 'archives_bulk_updated',
+      data: { archiveIds: ['archive-later'], sourceClientId: 'remote-client' },
+    });
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(reconcileArchiveIds).toHaveBeenCalledTimes(1);
+    finishFirstReconcile?.({ failedArchiveIds: [] });
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(reconcileArchiveIds).toHaveBeenNthCalledWith(2, ['archive-later']);
+  });
+
+  it('does not requeue or recover a stale in-flight result after clear changes generation', async () => {
+    let finishReconcile: ((result: { failedArchiveIds: readonly string[] }) => void) | undefined;
+    const reconcile = new Promise<{ failedArchiveIds: readonly string[] }>((resolve) => {
+      finishReconcile = resolve;
+    });
+    const reconcileArchiveIds = vi.fn().mockReturnValue(reconcile);
+    const recoverLocationFrontmatterSync = vi.fn().mockResolvedValue(true);
+    const events = makeEvents();
+    const deps = makeDeps({
+      events,
+      locationFrontmatterSyncService: { reconcileArchiveIds },
+      recoverLocationFrontmatterSync,
+    });
+    const bridge = new RealtimeEventBridge(deps);
+    bridge.setup();
+
+    await events.trigger('ws:archives_bulk_updated', {
+      type: 'archives_bulk_updated',
+      data: { archiveIds: ['archive-stale'], sourceClientId: 'remote-client' },
+    });
+    await vi.advanceTimersByTimeAsync(2000);
+    bridge.clear();
+    finishReconcile?.({ failedArchiveIds: ['archive-stale'] });
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(reconcileArchiveIds).toHaveBeenCalledOnce();
+    expect(recoverLocationFrontmatterSync).not.toHaveBeenCalled();
+    expect(deps.refreshTimelineView).not.toHaveBeenCalled();
   });
 });
