@@ -83,6 +83,7 @@ export interface SubscriptionSyncServiceDeps {
   refreshTimelineView: () => void;
   ensureFolderExists: (path: string) => Promise<void>;
   notify: (message: string, timeout?: number) => void;
+  withArchiveWriteLocks: <T>(archiveId: string, fn: () => Promise<T>) => Promise<T>;
 }
 
 // ============================================================================
@@ -206,7 +207,13 @@ export class SubscriptionSyncService {
     try {
       const result = await subscriptionManager.syncPendingPosts(
         async (pendingPost: PendingPost) => {
-          return this.saveSubscriptionPost(pendingPost);
+          const archiveId = pendingPost.archiveId ?? pendingPost.post.sourceArchiveId;
+          return archiveId
+            ? this.deps.withArchiveWriteLocks(
+                archiveId,
+                () => this.saveSubscriptionPost(pendingPost),
+              )
+            : this.saveSubscriptionPost(pendingPost);
         }
       );
 

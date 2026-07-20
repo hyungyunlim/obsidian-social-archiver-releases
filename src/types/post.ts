@@ -4,6 +4,7 @@ import { z } from 'zod';
 export type { Platform } from '@shared/platforms/types';
 import type { Platform } from '@shared/platforms/types';
 import { PLATFORMS } from '@shared/platforms/types';
+import type { ArchiveLocation } from './archive-location';
 
 type ExtensibleString = string & Record<never, never>;
 
@@ -67,6 +68,11 @@ export interface PostMetadata {
   longitude?: number; // Google Maps place longitude
   locationSource?: string; // 'instagram' | 'googlemaps' | 'user'
   locationExternalId?: string; // Provider-stable place id (IG location pk, Google place_id)
+  locationAddress?: string;
+  locationUrl?: string;
+  locationCategory?: string;
+  locations?: readonly ArchiveLocation[];
+  locationCount?: number;
   music?: {
     title: string;
     author: string;

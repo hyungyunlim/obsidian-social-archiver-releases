@@ -67,6 +67,9 @@ import {
 import type {
   SubscriptionSyncServiceDeps,
 } from '../../../plugin/subscriptions/SubscriptionSyncService';
+import { LocalLockRegistry } from '../../../plugin/locks/LocalLockRegistry';
+import { SubscriptionManager } from '../../../services/SubscriptionManager';
+import type { PendingPost } from '../../../services/SubscriptionManager';
 
 // ---- Mock SubscriptionManager -----------------------------------------------
 
@@ -121,6 +124,7 @@ function makeDeps(overrides: Partial<SubscriptionSyncServiceDeps> = {}): Subscri
     refreshTimelineView: vi.fn(),
     ensureFolderExists: vi.fn().mockResolvedValue(undefined),
     notify: vi.fn(),
+    withArchiveWriteLocks: <T>(_archiveId: string, fn: () => Promise<T>): Promise<T> => fn(),
     ...overrides,
   };
 }
@@ -517,6 +521,66 @@ describe('SubscriptionSyncService', () => {
 
       // Second call should eventually have been invoked via debounce
       expect(manager.syncPendingPosts).toHaveBeenCalledTimes(2);
+    });
+
+    it('waits behind an in-flight direct archive materialization before saving the same pending archive', async () => {
+      // Given
+      const archiveId = 'archive-1';
+      const registry = new LocalLockRegistry();
+      const pendingPost = { ...makePendingPost(), archiveId };
+      const manager = new SubscriptionManager({ apiBaseUrl: 'https://api.example.com' });
+      vi.spyOn(manager, 'isInitialized', 'get').mockReturnValue(true);
+      vi.spyOn(manager, 'syncPendingPosts').mockImplementation(
+        async (savePost: (post: PendingPost) => Promise<boolean>) => {
+          const saved = await savePost(pendingPost);
+          return { total: 1, saved: saved ? 1 : 0, failed: saved ? 0 : 1 };
+        },
+      );
+
+      let markDirectWriterEntered: (() => void) | undefined;
+      const directWriterEntered = new Promise<void>((resolve) => {
+        markDirectWriterEntered = resolve;
+      });
+      let releaseDirectWriter: (() => void) | undefined;
+      const directWriterRelease = new Promise<void>((resolve) => {
+        releaseDirectWriter = resolve;
+      });
+      const directWriter = registry.withLocks(
+        [
+          { kind: 'archiveMaterialization', archiveId },
+          { kind: 'markdownWrite', archiveId },
+        ],
+        async () => {
+          markDirectWriterEntered?.();
+          await directWriterRelease;
+        },
+      );
+      await directWriterEntered;
+
+      const deps = {
+        ...makeDeps({ subscriptionManager: () => manager }),
+        withArchiveWriteLocks: <T>(lockedArchiveId: string, fn: () => Promise<T>): Promise<T> =>
+          registry.withLocks(
+            [
+              { kind: 'archiveMaterialization', archiveId: lockedArchiveId },
+              { kind: 'markdownWrite', archiveId: lockedArchiveId },
+            ],
+            fn,
+          ),
+      };
+      const service = new SubscriptionSyncService(deps);
+      const savePost = vi.spyOn(service, 'saveSubscriptionPost').mockResolvedValue(true);
+
+      // When
+      const sync = service.syncSubscriptionPosts('race-regression');
+      await Promise.resolve();
+
+      // Then
+      expect(savePost).not.toHaveBeenCalled();
+
+      releaseDirectWriter?.();
+      await Promise.all([directWriter, sync]);
+      expect(savePost).toHaveBeenCalledOnce();
     });
   });
 

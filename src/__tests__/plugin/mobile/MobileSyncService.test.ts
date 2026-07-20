@@ -113,4 +113,30 @@ describe('MobileSyncService', () => {
     expect(deps.schedule).not.toHaveBeenCalled();
     expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('not available yet'));
   });
+
+  // v1.5 must stay unchanged for two stable releases while v2 draining ships
+  // additively (Todo 34). This characterizes the legacy drain: an unpaged full
+  // getSyncQueue list and a token-less ackSyncItem — no v2 pagination, no
+  // per-item version token, no mutation id on the legacy path.
+  it('maintains the v1.5 legacy drain: unpaged full list + token-less ack', async () => {
+    const apiClient = makeApiClient({
+      getSyncQueue: vi.fn().mockResolvedValue({
+        items: [
+          { queueId: 'queue-1', archiveId: 'archive-1', status: 'pending', clientId: 'client-1' },
+        ],
+      }),
+    });
+    const deps = makeDeps(apiClient);
+    const service = new MobileSyncService(deps);
+
+    const drain = service.processPendingSyncQueue();
+    await vi.runAllTimersAsync();
+    await drain;
+
+    // Legacy read is the full unpaged list — no protocolVersion / cursor / limit.
+    expect(apiClient.getSyncQueue).toHaveBeenCalledWith('client-1');
+    expect((apiClient.getSyncQueue as ReturnType<typeof vi.fn>).mock.calls[0]).toHaveLength(1);
+    // Legacy ack is queueId + clientId only — no version token, no mutation id.
+    expect(apiClient.ackSyncItem).toHaveBeenCalledWith('queue-1', 'client-1');
+  });
 });

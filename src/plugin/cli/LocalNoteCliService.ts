@@ -188,10 +188,18 @@ export class LocalNoteCliService {
       },
     };
 
-    const createResponse = await shareClient.createShare({
+    // Todo 17 (PRD AD-3): first shares declare a durable post-import linkage
+    // intent so create/media/import replay stable identities across retries
+    // and restarts. Re-shares are archive-backed and skip the linkage flow.
+    const createRequest = {
       postData: { ...postData, media: [] },
       options: shareOptions,
-    });
+    };
+    const createResponse = !isReshare && settings.username
+      ? await shareClient.createShare(createRequest, {
+          intentKey: `${settings.username}:${postData.id}`,
+        })
+      : await shareClient.createShare(createRequest);
 
     let shareResponse = createResponse;
     if (media.length > 0) {

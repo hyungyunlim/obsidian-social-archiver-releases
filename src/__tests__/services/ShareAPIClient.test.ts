@@ -514,4 +514,214 @@ describe('ShareAPIClient', () => {
       await expect(client.cleanup()).resolves.toBeUndefined();
     });
   });
+
+  // Public share write contract — kv-read-optimization Todo 17 (PRD AD-2/AD-3).
+  // Headers/bodies are derived from fixed input and asserted byte-exactly.
+  describe('public share write contract (Todo 17)', () => {
+    interface CapturedRequest {
+      url: string;
+      method?: string;
+      headers?: Record<string, string>;
+      body?: string;
+    }
+
+    let captured: CapturedRequest[];
+
+    function capture(responses: Array<Record<string, unknown> | number>) {
+      let call = 0;
+      __setRequestUrlHandler(async (params) => {
+        captured.push(params as CapturedRequest);
+        const next = responses[Math.min(call, responses.length - 1)];
+        call++;
+        if (typeof next === 'number') {
+          return { status: next, headers: {}, json: { success: false }, text: '', arrayBuffer: new ArrayBuffer(0) };
+        }
+        return { status: 200, headers: {}, json: next, text: '', arrayBuffer: new ArrayBuffer(0) };
+      });
+    }
+
+    const createResponse = wrap({
+      shareId: 'share_c1',
+      shareUrl: 'https://share.test.com/user/share_c1',
+      passwordProtected: false,
+    });
+
+    beforeEach(() => {
+      captured = [];
+    });
+
+    it('normalizes epoch-milliseconds expiry to canonical epoch seconds on the wire', async () => {
+      capture([createResponse]);
+      await client.createShare({
+        content: 'Test',
+        options: { username: 'user', expiry: 1_786_000_000_000 },
+      });
+      const body = JSON.parse(captured[0].body ?? '{}');
+      expect(body.options.expiry).toBe(1_786_000_000);
+    });
+
+    it('passes canonical epoch-seconds expiry through unchanged', async () => {
+      capture([createResponse]);
+      await client.createShare({
+        content: 'Test',
+        options: { username: 'user', expiry: 1_786_000_000 },
+      });
+      const body = JSON.parse(captured[0].body ?? '{}');
+      expect(body.options.expiry).toBe(1_786_000_000);
+    });
+
+    it('sends Bearer principal plus X-Client identity on username-bearing writes', async () => {
+      capture([createResponse]);
+      await client.createShare({ content: 'Test', options: { username: 'user' } });
+      const headers = captured[0].headers ?? {};
+      expect(headers['Authorization']).toBe('Bearer test-api-key');
+      expect(headers['X-Client']).toBe('obsidian-plugin');
+      expect(headers['X-Client-Version']).toBe('0.0.0');
+    });
+
+    it('promotes archive-backed shares to top-level archiveId', async () => {
+      capture([createResponse]);
+      await client.createShare({
+        content: 'Test',
+        options: { username: 'user', sourceArchiveId: 'arch-9', shareId: 'arch-9' },
+      });
+      const body = JSON.parse(captured[0].body ?? '{}');
+      expect(body.archiveId).toBe('arch-9');
+      expect(body.options.sourceArchiveId).toBe('arch-9');
+    });
+
+    it('sends the post-import linkage headers on first-share creates and reuses them across retries', async () => {
+      capture([500, createResponse]);
+      await client.createShare(
+        { content: 'Test', options: { username: 'user' } },
+        { intentKey: 'user:note-retry.md' },
+      );
+      expect(captured).toHaveLength(2);
+      const first = captured[0].headers ?? {};
+      const second = captured[1].headers ?? {};
+      expect(first['X-Share-Linkage-Mode']).toBe('post-import');
+      expect(first['X-Share-Create-Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/);
+      expect(first['X-Share-Mutation-Id']).toMatch(/^[0-9a-f-]{36}$/);
+      expect(second['X-Share-Create-Idempotency-Key']).toBe(first['X-Share-Create-Idempotency-Key']);
+      expect(second['X-Share-Mutation-Id']).toBe(first['X-Share-Mutation-Id']);
+    });
+
+    it('replays the same create identity after a restart (new client, same persisted state)', async () => {
+      capture([createResponse, createResponse]);
+      await client.createShare(
+        { content: 'Test', options: { username: 'user' } },
+        { intentKey: 'user:note-restart.md' },
+      );
+      const restarted = new ShareAPIClient({
+        baseURL: 'https://api.test.com',
+        apiKey: 'test-api-key',
+      });
+      await restarted.createShare(
+        { content: 'Test', options: { username: 'user' } },
+        { intentKey: 'user:note-restart.md' },
+      );
+      const first = captured[0].headers ?? {};
+      const second = captured[1].headers ?? {};
+      expect(second['X-Share-Create-Idempotency-Key']).toBe(first['X-Share-Create-Idempotency-Key']);
+      expect(second['X-Share-Mutation-Id']).toBe(first['X-Share-Mutation-Id']);
+    });
+
+    it('threads linkage id + If-Match-Projection-Revision into media updates and import bodies', async () => {
+      const linkedCreate = {
+        success: true,
+        data: {
+          shareId: 'share_lnk',
+          shareUrl: 'https://share.test.com/user/share_lnk',
+          passwordProtected: false,
+          linkage: { id: 'lnk-1', state: 'linkage_pending', projectionRevision: 1 },
+        },
+      };
+      const linkedUpdate = {
+        success: true,
+        data: {
+          shareId: 'share_lnk',
+          shareUrl: 'https://share.test.com/user/share_lnk',
+          passwordProtected: false,
+          linkage: { id: 'lnk-1', state: 'linkage_pending', projectionRevision: 2 },
+        },
+      };
+      const importResponse = { success: true, data: { archiveId: 'share_lnk', created: true } };
+      capture([linkedCreate, linkedUpdate, importResponse]);
+
+      await client.createShare(
+        { content: 'Test', options: { username: 'user' } },
+        { intentKey: 'user:note-linkage.md' },
+      );
+      await client.updateShare('share_lnk', { content: 'Test v2', options: { username: 'user' } });
+      await client.importShareArchive('share_lnk');
+
+      const updateHeaders = captured[1].headers ?? {};
+      expect(updateHeaders['X-Share-Linkage-Id']).toBe('lnk-1');
+      expect(updateHeaders['If-Match-Projection-Revision']).toBe('1');
+      expect(updateHeaders['X-Share-Mutation-Id']).toMatch(/^[0-9a-f-]{36}$/);
+      expect(updateHeaders['X-Share-Mutation-Id']).not.toBe(captured[0].headers?.['X-Share-Mutation-Id']);
+
+      const importBody = JSON.parse(captured[2].body ?? '{}');
+      expect(importBody.linkageId).toBe('lnk-1');
+      expect(importBody.mutationId).toMatch(/^[0-9a-f-]{36}$/);
+      expect(importBody.expectedProjectionRevision).toBe(2);
+    });
+
+    it('tolerates responses without data.linkage (current server) and still finalizes import', async () => {
+      const fallbackCreate = {
+        success: true,
+        data: {
+          shareId: 'share_fb',
+          shareUrl: 'https://share.test.com/user/share_fb',
+          passwordProtected: false,
+        },
+      };
+      const importResponse = { success: true, data: { archiveId: 'share_fb', created: true } };
+      capture([fallbackCreate, importResponse, fallbackCreate]);
+      await client.createShare(
+        { content: 'Test', options: { username: 'user' } },
+        { intentKey: 'user:note-fallback.md' },
+      );
+      const importResult = await client.importShareArchive('share_fb');
+      expect(importResult.archiveId).toBe('share_fb');
+      const importBody = JSON.parse(captured[1].body ?? 'null');
+      // No server linkage id yet — client sends its durable mutation identity only.
+      expect(importBody?.linkageId).toBeUndefined();
+      expect(importBody?.mutationId).toMatch(/^[0-9a-f-]{36}$/);
+      expect(importBody?.expectedProjectionRevision).toBe(1);
+
+      // Import success clears pending state: the same intent gets a fresh create key.
+      await client.createShare(
+        { content: 'Test', options: { username: 'user' } },
+        { intentKey: 'user:note-fallback.md' },
+      );
+      expect(captured[2].headers?.['X-Share-Create-Idempotency-Key']).not.toBe(
+        captured[0].headers?.['X-Share-Create-Idempotency-Key'],
+      );
+    });
+
+    it('prefers explicit passwordProtected/RFC3339 expiresAt and falls back to legacy fields', async () => {
+      capture([
+        wrap({
+          shareId: 's1',
+          shareUrl: 'https://share.test.com/user/s1',
+          passwordProtected: true,
+          expiresAt: '2026-08-01T00:00:00.000Z',
+          options: {},
+        }),
+        wrap({
+          shareId: 's2',
+          shareUrl: 'https://share.test.com/user/s2',
+          options: { password: 'legacy-secret', expiry: 1_786_000_000_000 },
+        }),
+      ]);
+      const explicit = await client.getShareInfo('s1');
+      expect(explicit.passwordProtected).toBe(true);
+      expect(explicit.expiresAt).toBe(Math.floor(Date.parse('2026-08-01T00:00:00.000Z') / 1000));
+
+      const legacy = await client.getShareInfo('s2');
+      expect(legacy.passwordProtected).toBe(true);
+      expect(legacy.expiresAt).toBe(1_786_000_000);
+    });
+  });
 });

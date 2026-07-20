@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/map-places.ts
- * Generated: 2026-07-13T15:16:05.366Z
+ * Generated: 2026-07-14T20:38:59.845Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -16,6 +16,14 @@
  */
 
 export type KoreanMapPlatform = 'navermap' | 'kakaomap';
+
+export {
+  MAP_SEARCH_PROVIDERS,
+  buildCanonicalMapSearchProviderUrl,
+  isCanonicalMapSearchProviderUrl,
+  isMapSearchProviderExternalId,
+  type MapSearchProvider,
+} from './map-search-provider';
 
 export const VERIFIED_MAP_PLACE_SOURCES = [
   'googlemaps',

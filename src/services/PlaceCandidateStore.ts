@@ -13,7 +13,12 @@
  * the TTL so an auth failure can't request-loop on every card render).
  */
 
-import type { PlaceCandidate, PlaceCandidatesQuery, PlaceCandidatesResponse } from './WorkersAPIClient';
+import type {
+  PlaceCandidate,
+  PlaceCandidateAttachmentResult,
+  PlaceCandidatesQuery,
+  PlaceCandidatesResponse,
+} from './WorkersAPIClient';
 
 /** Minimal API surface — keeps the store testable without the full client. */
 export interface PlaceCandidateApi {
@@ -25,15 +30,22 @@ const CACHE_TTL_MS = 60 * 1000;
 const MAX_IDS_PER_REQUEST = 50;
 
 interface CacheEntry {
-  items: PlaceCandidate[];
+  items: readonly PlaceCandidate[];
   fetchedAt: number;
+}
+
+function orderPending(items: readonly PlaceCandidate[]): readonly PlaceCandidate[] {
+  return [...items]
+    .filter((item) => item.state === 'pending')
+    .sort((left, right) => left.ordinal - right.ordinal || left.id.localeCompare(right.id));
 }
 
 export class PlaceCandidateStore {
   private readonly cache = new Map<string, CacheEntry>();
   private queue = new Set<string>();
-  private waiters = new Map<string, Array<(items: PlaceCandidate[]) => void>>();
+  private waiters = new Map<string, Array<(items: readonly PlaceCandidate[]) => void>>();
   private timer: number | null = null;
+  private globalPendingCount: number | null = null;
 
   constructor(private readonly getApiClient: () => PlaceCandidateApi | undefined) {}
 
@@ -41,13 +53,13 @@ export class PlaceCandidateStore {
    * Resolve the PENDING candidates for one archive ID. Batched with other
    * calls arriving within {@link BATCH_WINDOW_MS}.
    */
-  getPending(archiveId: string): Promise<PlaceCandidate[]> {
+  getPending(archiveId: string): Promise<readonly PlaceCandidate[]> {
     const cached = this.cache.get(archiveId);
     if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
       return Promise.resolve(cached.items);
     }
 
-    return new Promise<PlaceCandidate[]>((resolve) => {
+    return new Promise<readonly PlaceCandidate[]>((resolve) => {
       const list = this.waiters.get(archiveId);
       if (list) {
         list.push(resolve);
@@ -69,9 +81,36 @@ export class PlaceCandidateStore {
     this.cache.delete(archiveId);
   }
 
+  refresh(archiveId: string): Promise<readonly PlaceCandidate[]> {
+    this.invalidate(archiveId);
+    return this.getPending(archiveId);
+  }
+
+  reconcileAttachment(result: PlaceCandidateAttachmentResult): void {
+    const items = orderPending(result.remainingPendingCandidates);
+    this.cache.set(result.archiveId, { items, fetchedAt: Date.now() });
+    this.globalPendingCount = result.globalPendingCount;
+  }
+
+  removePending(archiveId: string, candidateId: string): readonly PlaceCandidate[] {
+    const cached = this.cache.get(archiveId);
+    if (!cached) return [];
+    const items = cached.items.filter((candidate) => candidate.id !== candidateId);
+    this.cache.set(archiveId, { items, fetchedAt: Date.now() });
+    if (this.globalPendingCount !== null && items.length !== cached.items.length) {
+      this.globalPendingCount = Math.max(0, this.globalPendingCount - 1);
+    }
+    return items;
+  }
+
+  getGlobalPendingCount(): number | null {
+    return this.globalPendingCount;
+  }
+
   /** Clear cache and cancel any pending batch (resolving waiters empty). */
   clear(): void {
     this.cache.clear();
+    this.globalPendingCount = null;
     if (this.timer !== null) {
       window.clearTimeout(this.timer);
       this.timer = null;
@@ -99,6 +138,7 @@ export class PlaceCandidateStore {
         const apiClient = this.getApiClient();
         if (apiClient) {
           const response = await apiClient.getPlaceCandidates({ archiveIds: chunk });
+          this.globalPendingCount = response.pendingCount;
           for (const item of response.items) {
             if (item.state !== 'pending') continue;
             const list = byArchive.get(item.archiveId);
@@ -119,7 +159,7 @@ export class PlaceCandidateStore {
 
       const now = Date.now();
       for (const archiveId of chunk) {
-        const items = byArchive.get(archiveId) ?? [];
+        const items = orderPending(byArchive.get(archiveId) ?? []);
         this.cache.set(archiveId, { items, fetchedAt: now });
         const resolvers = waiters.get(archiveId) ?? [];
         for (const resolve of resolvers) resolve(items);

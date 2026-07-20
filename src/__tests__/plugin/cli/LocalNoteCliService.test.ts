@@ -312,6 +312,42 @@ describe('LocalNoteCliService', () => {
         CliValidationError,
       );
     });
+
+    // Todo 17 — Obsidian first-share must finalize import via the linkage
+    // protocol: the CLI passes a durable linkage intent to ShareAPIClient.
+    it('passes a post-import linkage intent to createShare on first shares', async () => {
+      const file = new TFile('Note.md');
+      const plugin = makePlugin({
+        files: { 'Note.md': file },
+        authToken: 'tok',
+        workerUrl: 'https://example.com',
+      });
+      const svc = new LocalNoteCliService(plugin);
+      await svc.share('Note.md', { reader: false });
+      expect(fakeShare.createShare).toHaveBeenCalledTimes(1);
+      const linkageArg = fakeShare.createShare.mock.calls[0]?.[1] as
+        | { intentKey?: string }
+        | undefined;
+      expect(linkageArg?.intentKey).toBe('me:Note.md');
+      expect(fakeShare.importShareArchive).toHaveBeenCalledWith('share-123');
+    });
+
+    it('does not pass a linkage intent for re-shares (existing archive identity)', async () => {
+      const file = new TFile('Note.md');
+      const plugin = makePlugin({
+        files: { 'Note.md': file },
+        authToken: 'tok',
+        workerUrl: 'https://example.com',
+      });
+      plugin.app.metadataCache.getFileCache = () => ({
+        frontmatter: { sourceArchiveId: 'arch-1' },
+      });
+      const svc = new LocalNoteCliService(plugin);
+      await svc.share('Note.md', { reader: false });
+      const linkageArg = fakeShare.createShare.mock.calls[0]?.[1];
+      expect(linkageArg).toBeUndefined();
+      expect(fakeShare.importShareArchive).not.toHaveBeenCalled();
+    });
   });
 
   describe('tagApply', () => {

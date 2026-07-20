@@ -7,6 +7,14 @@
 
 export type KoreanMapPlatform = 'navermap' | 'kakaomap';
 
+export {
+  MAP_SEARCH_PROVIDERS,
+  buildCanonicalMapSearchProviderUrl,
+  isCanonicalMapSearchProviderUrl,
+  isMapSearchProviderExternalId,
+  type MapSearchProvider,
+} from './map-search-provider';
+
 export const VERIFIED_MAP_PLACE_SOURCES = [
   'googlemaps',
   'navermap',

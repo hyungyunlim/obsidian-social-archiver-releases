@@ -14,6 +14,37 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// PostShareService statically imports TimelineView, whose renderer chain
+// extends the Obsidian `Component` class that the test mock does not provide.
+// Stub the view module — these tests never render a timeline.
+vi.mock('@/views/TimelineView', () => ({
+  TimelineView: class {},
+  VIEW_TYPE_TIMELINE: 'social-archiver-timeline',
+}));
+
+// PostService is vault-I/O heavy; the share-flow test below cans its result.
+const postNoteMock = vi.hoisted(() => vi.fn());
+vi.mock('@/services/PostService', () => ({
+  PostService: class {
+    postNote = postNoteMock;
+  },
+}));
+
+// ShareAPIClient spy set for the share-flow delegation contract (Todo 17).
+const fakeShare = vi.hoisted(() => ({
+  createShare: vi.fn(),
+  updateShareWithMedia: vi.fn(),
+  importShareArchive: vi.fn(),
+}));
+vi.mock('@/services/ShareAPIClient', () => ({
+  ShareAPIClient: class {
+    createShare = fakeShare.createShare;
+    updateShareWithMedia = fakeShare.updateShareWithMedia;
+    importShareArchive = fakeShare.importShareArchive;
+  },
+}));
+
 import { PostShareService } from '@/plugin/session/PostShareService';
 import type { ShareAPIClient } from '@/services/ShareAPIClient';
 import type { Media } from '@/types/post';
@@ -222,5 +253,78 @@ describe('PostShareService.resolveArchiveMedia', () => {
     expect(spy).toHaveBeenCalledTimes(1);
 
     warn.mockRestore();
+  });
+});
+
+// ─── Todo 17: first-share linkage delegation contract ─────────────────
+
+describe('PostShareService.postAndShareCurrentNote linkage delegation', () => {
+  function makeShareablePlugin(frontmatter: Record<string, unknown>) {
+    const file = { path: 'Note.md', basename: 'Note' };
+    return new PostShareService({
+      app: {
+        workspace: { getActiveFile: () => file },
+        vault: {
+          getFileByPath: () => file,
+          read: async () => '---\nplatform: post\n---\nbody',
+        },
+        metadataCache: { getFileCache: () => ({ frontmatter }) },
+        fileManager: {
+          processFrontMatter: async (
+            _f: unknown,
+            mut: (fm: Record<string, unknown>) => void,
+          ) => mut({}),
+        },
+      } as never,
+      settings: () =>
+        ({
+          workerUrl: 'https://example.com',
+          authToken: 'tok',
+          username: 'me',
+          tier: 'free',
+          shareMode: 'preview',
+          copyShareLinkAsReaderMode: false,
+        }) as never,
+      manifest: { version: '0.0.0-test' },
+      refreshTimelineView: () => undefined,
+    });
+  }
+
+  beforeEach(() => {
+    fakeShare.createShare.mockReset().mockResolvedValue({
+      shareId: 'share-1',
+      shareUrl: 'https://share.example/me/share-1',
+      passwordProtected: false,
+    });
+    fakeShare.updateShareWithMedia.mockReset();
+    fakeShare.importShareArchive
+      .mockReset()
+      .mockResolvedValue({ archiveId: 'share-1', created: true });
+    postNoteMock.mockReset().mockResolvedValue({
+      success: true,
+      copiedFilePath: 'Note.md',
+      copiedMediaPaths: [],
+    });
+  });
+
+  it('passes a durable post-import linkage intent on first shares', async () => {
+    const service = makeShareablePlugin({});
+    await service.postAndShareCurrentNote();
+
+    expect(fakeShare.createShare).toHaveBeenCalledTimes(1);
+    const linkageArg = fakeShare.createShare.mock.calls[0]?.[1] as
+      | { intentKey?: string }
+      | undefined;
+    expect(linkageArg?.intentKey).toBe('me:Note.md');
+    expect(fakeShare.importShareArchive).toHaveBeenCalledWith('share-1');
+  });
+
+  it('omits the linkage intent on re-shares backed by an existing archive', async () => {
+    const service = makeShareablePlugin({ sourceArchiveId: 'arch-1' });
+    await service.postAndShareCurrentNote();
+
+    expect(fakeShare.createShare).toHaveBeenCalledTimes(1);
+    expect(fakeShare.createShare.mock.calls[0]?.[1]).toBeUndefined();
+    expect(fakeShare.importShareArchive).not.toHaveBeenCalled();
   });
 });

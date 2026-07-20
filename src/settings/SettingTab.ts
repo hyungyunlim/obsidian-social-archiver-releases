@@ -46,6 +46,11 @@ import { getPlatformDefinition } from '../shared/platforms/definitions';
 import { isAuthenticated, isPaidPlan } from '../utils/auth';
 import { getAccountRequiredMessage } from '../utils/accountGate';
 import { LocalArchiveScanner } from '../services/import/local/LocalArchiveScanner';
+import {
+  MapSearchProviderPreferenceController,
+  MapSearchProviderSaveError,
+} from './MapSearchProviderPreferenceController';
+import { isMapSearchProviderPreference } from '../shared/platforms/map-search-provider';
 
 const PERSONAL_GITHUB_URL = 'https://github.com/hyungyunlim';
 const RELEASE_NOTES_URL = 'https://social-archive.org/release-notes?platform=obsidian&utm_source=obsidian-plugin&utm_medium=settings';
@@ -540,6 +545,72 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           });
 
         return toggle;
+      });
+    }
+
+    {
+      const providerSetting = new Setting(containerEl)
+        .setName('Default place search')
+        .setDesc('Auto uses Kakao for Korean and Google Maps for other app languages. This account setting syncs across clients.');
+      const controller = new MapSearchProviderPreferenceController(
+        this.plugin.workersApiClient,
+        () => window.localStorage.getItem('language') || window.navigator.language,
+      );
+
+      providerSetting.addDropdown(dropdown => {
+        dropdown
+          .addOption('auto', 'Auto (app language)')
+          .addOption('kakaomap', 'Kakao Maps')
+          .addOption('googlemaps', 'Google Maps')
+          .setValue('auto')
+          .setDisabled(true);
+
+        if (!this.plugin.settings.authToken) {
+          providerSetting.setDesc('Sign in to sync the default place search provider across clients.');
+          return dropdown;
+        }
+
+        dropdown.onChange(async value => {
+          if (!isMapSearchProviderPreference(value)) {
+            dropdown.setValue(controller.current);
+            return;
+          }
+          const preference = value;
+          dropdown.setDisabled(true);
+          try {
+            const state = await controller.save(preference);
+            dropdown.setValue(state.preference);
+            new Notice('Default place search provider saved.');
+          } catch (error) {
+            if (error instanceof MapSearchProviderSaveError) {
+              dropdown.setValue(error.previousPreference);
+            }
+            new Notice(
+              error instanceof Error
+                ? `Failed to update place search provider: ${error.message}`
+                : 'Failed to update place search provider.'
+            );
+          } finally {
+            dropdown.setDisabled(false);
+          }
+        });
+
+        void controller.load()
+          .then(state => {
+            if (generation !== this.displayGeneration) return;
+            dropdown.setValue(state.preference);
+            dropdown.setDisabled(false);
+          })
+          .catch(error => {
+            if (generation !== this.displayGeneration) return;
+            providerSetting.setDesc(
+              error instanceof Error
+                ? `Failed to load place search provider: ${error.message}`
+                : 'Failed to load place search provider.'
+            );
+          });
+
+        return dropdown;
       });
     }
 

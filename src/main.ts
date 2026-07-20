@@ -49,6 +49,8 @@ import { detectPlatform } from '@/shared/platforms';
 import type { TranscriptionResult } from './types/transcription';
 import { TranscriptFormatter } from './services/markdown/formatters/TranscriptFormatter';
 import { parseTranscriptSections } from './services/markdown/TranscriptSectionManager';
+import { LocationBodyBlock } from './services/markdown/LocationBodyBlock';
+import { ArchiveLocationSchema, type ArchiveLocation } from './types/archive-location';
 import { BatchTranscriptionManager, type BatchTranscriptionManagerDeps } from './services/BatchTranscriptionManager';
 import { BatchTranscriptionNotice } from './ui/BatchTranscriptionNotice';
 import type { BatchMode } from './types/batch-transcription';
@@ -71,6 +73,7 @@ import { CliRegistry } from './plugin/cli/CliRegistry';
 import { ArchiveCliService } from './plugin/cli/ArchiveCliService';
 import { RealtimeEventBridge, type WsProfileMetadataMessage } from './plugin/realtime/RealtimeEventBridge';
 import { MobileSyncService } from './plugin/mobile/MobileSyncService';
+import { SyncQueueConsumer } from './plugin/sync/SyncQueueConsumer';
 import { LocalArchiveCoordinator } from './plugin/local-archive/LocalArchiveCoordinator';
 import { MediaPathResolver } from './plugin/media/MediaPathResolver';
 import { LargeMediaGuardService } from './plugin/media/LargeMediaGuardService';
@@ -302,6 +305,7 @@ export default class SocialArchiverPlugin extends Plugin {
   // Extracted module instances
   private realtimeEventBridge?: RealtimeEventBridge;
   private mobileSyncService?: MobileSyncService;
+  private syncQueueConsumer?: SyncQueueConsumer;
   private localArchiveCoordinator?: LocalArchiveCoordinator;
   public archiveLibrarySyncService?: ArchiveLibrarySyncService;
   private mediaPathResolver!: MediaPathResolver;
@@ -423,7 +427,7 @@ export default class SocialArchiverPlugin extends Plugin {
       );
 
       await this.runForegroundSyncStep('pending mobile sync queue', () =>
-        this.mobileSyncService?.processPendingSyncQueue() ?? Promise.resolve()
+        this.syncQueueConsumer?.consume() ?? Promise.resolve()
       );
 
       await this.runForegroundSyncStep('subscription pending posts', () =>
@@ -470,6 +474,12 @@ export default class SocialArchiverPlugin extends Plugin {
       // archives never converge on their own). Re-sync those files once.
       await this.runForegroundSyncStep('mention wikilink backfill', () =>
         this.runMentionWikilinkBackfill()
+      );
+
+      // One-time LOCAL migration: relocate legacy `locations` object-arrays from
+      // frontmatter (Obsidian flags them as invalid) into the hidden body block.
+      await this.runForegroundSyncStep('location body-block migration', () =>
+        this.runLocationBlockMigration()
       );
     } finally {
       this.foregroundSyncCatchUpInFlight = false;
@@ -518,6 +528,53 @@ export default class SocialArchiverPlugin extends Plugin {
 
     this.settings.mentionWikilinkBackfillVersion = BACKFILL_VERSION;
     this.settings.mentionWikilinkBackfillDoneAt = new Date().toISOString();
+    await this.saveSettings();
+  }
+
+  /**
+   * One-time, LOCAL migration: move the legacy `locations` object-array out of
+   * note frontmatter (Obsidian's Properties editor flags object-arrays as
+   * invalid) and into the hidden `%% sa:locations %%` body block. No server call
+   * — the array is already in the note. Idempotent + version-gated.
+   */
+  private async runLocationBlockMigration(): Promise<void> {
+    const MIGRATION_VERSION = 1;
+    if ((this.settings.locationBodyBlockMigrationVersion ?? 0) >= MIGRATION_VERSION) return;
+
+    const archivePath = this.settings.archivePath;
+    let migrated = 0;
+    for (const file of this.app.vault.getMarkdownFiles()) {
+      if (!file.path.startsWith(`${archivePath}/`)) continue;
+      const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+      const legacy = fm?.['locations'];
+      if (!Array.isArray(legacy) || legacy.length === 0) continue;
+
+      const locations = legacy
+        .map((item) => ArchiveLocationSchema.safeParse(item))
+        .filter((r): r is { success: true; data: ArchiveLocation } => r.success)
+        .map((r) => r.data);
+
+      try {
+        if (locations.length > 0) {
+          await this.app.vault.process(file, (content) => LocationBodyBlock.upsert(content, locations));
+        }
+        // Strip the object-array (and its count) from frontmatter regardless — an
+        // all-invalid legacy array is just cleaned up.
+        await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
+          delete frontmatter['locations'];
+          delete frontmatter['locationCount'];
+        });
+        migrated += 1;
+      } catch (error) {
+        console.warn('[Social Archiver] Location block migration failed for', file.path,
+          error instanceof Error ? error.message : String(error));
+      }
+    }
+
+    if (migrated > 0) {
+      console.debug(`[Social Archiver] Location block migration: moved ${migrated} note(s) to the body block`);
+    }
+    this.settings.locationBodyBlockMigrationVersion = MIGRATION_VERSION;
     await this.saveSettings();
   }
 
@@ -1303,6 +1360,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
     // Clear mobile sync state
     this.mobileSyncService?.clearState();
+    this.syncQueueConsumer?.clearState();
 
     // Cancel archive library sync (preserve checkpoint for next startup)
     this.archiveLibrarySyncService?.cancel();
@@ -1943,6 +2001,22 @@ export default class SocialArchiverPlugin extends Plugin {
         rateLimiter: syncRateLimitCoordinator,
       });
 
+      // Route the sync-queue entry point through the v2 drain when the server
+      // serves it (D1 read mode); byte-identical v1 catch-up fallback otherwise.
+      this.syncQueueConsumer = new SyncQueueConsumer({
+        apiClient: () => this.apiClient,
+        clientId: () => this.settings.syncClientId,
+        archivePath: () => this.settings.archivePath,
+        localStorage: this.app,
+        saveSubscriptionPost: (post) => this.saveSubscriptionPost(post),
+        convertUserArchiveToPostData: (archive) => this.convertUserArchiveToPostData(archive),
+        hasRecentlyArchivedUrl: (url) => this.hasRecentlyArchivedUrl(url),
+        refreshTimelineView: () => this.refreshTimelineView(),
+        schedule: (cb, delay) => this.scheduleTrackedTimeout(cb, delay),
+        runV1Fallback: () => this.mobileSyncService?.processPendingSyncQueue() ?? Promise.resolve(),
+        rateLimiter: syncRateLimitCoordinator,
+      });
+
       // Create RemoteArchiveIngestService (shared single-archive fetch+save for WS events)
       this.remoteArchiveIngestService = new RemoteArchiveIngestService({
         apiClient: () => this.apiClient,
@@ -1980,6 +2054,14 @@ export default class SocialArchiverPlugin extends Plugin {
         refreshTimelineView: () => this.refreshTimelineView(),
         ensureFolderExists: (path) => this.ensureFolderExists(path),
         notify: (msg, timeout) => new Notice(msg, timeout),
+        withArchiveWriteLocks: <T>(archiveId: string, fn: () => Promise<T>): Promise<T> =>
+          this.localLockRegistry.withLocks(
+            [
+              { kind: 'archiveMaterialization', archiveId },
+              { kind: 'markdownWrite', archiveId },
+            ],
+            fn,
+          ),
       });
 
       // Create BatchGoogleMapsArchiver
@@ -2364,7 +2446,7 @@ export default class SocialArchiverPlugin extends Plugin {
           aiCommentJobProcessor: this.aiCommentJobProcessor,
           canExecuteTranscriptionJobs: () => !ObsidianPlatform.isMobile,
           transcriptionJobProcessor: this.transcriptionJobProcessor,
-          processPendingSyncQueue: () => this.mobileSyncService?.processPendingSyncQueue() ?? Promise.resolve(),
+          processPendingSyncQueue: () => this.syncQueueConsumer?.consume() ?? Promise.resolve(),
           processSyncQueueItem: (queueId, archiveId, clientId) =>
             this.mobileSyncService?.processSyncQueueItem(queueId, archiveId, clientId) ?? Promise.resolve(false),
           getReadableErrorMessage: (code, msg) => this.getReadableErrorMessage(code, msg),
@@ -2430,7 +2512,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
         // Catch up on pending mobile sync queue items missed while offline
         if (this.settings.syncClientId) {
-          this.scheduleTrackedTimeout(() => { void this.mobileSyncService?.processPendingSyncQueue(); }, 5000);
+          this.scheduleTrackedTimeout(() => { void this.syncQueueConsumer?.consume(); }, 5000);
         }
 
         if (this.settings.syncClientId) {
@@ -3835,6 +3917,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
     // 7. Clear runtime sync state
     this.mobileSyncService?.clearState();
+    this.syncQueueConsumer?.clearState();
 
     // Clear billing-events state and Notice dedupe so prior account events
     // don't leak across account swaps.

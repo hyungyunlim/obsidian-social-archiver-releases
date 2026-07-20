@@ -471,25 +471,29 @@ export class NaverSubscriptionPoller {
       const newPosts = posts.filter(p => newPostIds.has(p.id));
 
 
-      // 4. Archive new posts to vault
+      // 4. Archive new posts to vault (track ONLY the ones that succeed)
+      const archivedPosts: typeof newPosts = [];
       for (const post of newPosts) {
         try {
           await this.archiveBlogPost(post, sub);
           result.postsArchived++;
+          archivedPosts.push(post);
         } catch (error) {
           console.error(`[NaverPoller] Failed to archive blog post ${post.id}:`, error);
         }
       }
 
-      // 5. Update Worker state
+      // 5. Update Worker state — a failed local archive must NOT be marked seen,
+      // otherwise it is never retried. Only successfully archived posts count.
+      const archivedIds = new Set(archivedPosts.map(p => p.id));
       const archivedPostHashes = postHashes
-        .filter(h => newPostIds.has(h.id))
+        .filter(h => archivedIds.has(h.id))
         .map(h => h.textHash);
 
       await this.updateWorkerState(sub.id, {
         cursor: nextCursor || undefined,
         lastRunAt: new Date().toISOString(),
-        archivedPostIds: newPosts.map(p => p.id),
+        archivedPostIds: archivedPosts.map(p => p.id),
         archivedPostHashes: archivedPostHashes,
         postsArchived: result.postsArchived,
         creditsUsed: 0, // Naver local fetch is free
@@ -578,25 +582,29 @@ export class NaverSubscriptionPoller {
       const newPosts = posts.filter(p => newPostIds.has(p.id));
 
 
-      // 4. Archive new posts to vault
+      // 4. Archive new posts to vault (track ONLY the ones that succeed)
+      const archivedPosts: typeof newPosts = [];
       for (const post of newPosts) {
         try {
           await this.archiveCafePost(post, sub);
           result.postsArchived++;
+          archivedPosts.push(post);
         } catch (error) {
           console.error(`[NaverPoller] Failed to archive cafe post ${post.id}:`, error);
         }
       }
 
-      // 5. Update Worker state
+      // 5. Update Worker state — a failed local archive must NOT be marked seen,
+      // otherwise it is never retried. Only successfully archived posts count.
+      const archivedIds = new Set(archivedPosts.map(p => p.id));
       const archivedPostHashes = postHashes
-        .filter(h => newPostIds.has(h.id))
+        .filter(h => archivedIds.has(h.id))
         .map(h => h.textHash);
 
       await this.updateWorkerState(sub.id, {
         cursor: nextCursor || undefined,
         lastRunAt: new Date().toISOString(),
-        archivedPostIds: newPosts.map(p => p.id),
+        archivedPostIds: archivedPosts.map(p => p.id),
         archivedPostHashes: archivedPostHashes,
         postsArchived: result.postsArchived,
         creditsUsed: 0, // Naver local fetch is free
@@ -1100,25 +1108,28 @@ export class NaverSubscriptionPoller {
       return 0;
     }
 
-    // Archive new posts
-    let archivedCount = 0;
+    // Archive new posts (track ONLY the ones that succeed)
+    const archivedPosts: typeof postsToArchive = [];
     for (const post of postsToArchive) {
       try {
         await this.archiveBlogPost(post, sub);
-        archivedCount++;
+        archivedPosts.push(post);
       } catch (error) {
         console.error(`[NaverPoller] Failed to archive catch-up blog post ${post.id}:`, error);
       }
     }
+    const archivedCount = archivedPosts.length;
 
-    // Update state with archived post IDs
+    // Update state — only successfully archived posts are marked seen so a
+    // failed local archive stays eligible for retry next run.
     if (archivedCount > 0) {
+      const archivedIds = new Set(archivedPosts.map(p => p.id));
       const archivedPostHashes = postHashes
-        .filter(h => newPostIds.has(h.id))
+        .filter(h => archivedIds.has(h.id))
         .map(h => h.textHash);
 
       await this.updateWorkerState(sub.id, {
-        archivedPostIds: postsToArchive.map(p => p.id),
+        archivedPostIds: archivedPosts.map(p => p.id),
         archivedPostHashes,
         postsArchived: archivedCount,
         creditsUsed: 0, // Local fetch is free
@@ -1185,25 +1196,28 @@ export class NaverSubscriptionPoller {
       return 0;
     }
 
-    // Archive new posts
-    let archivedCount = 0;
+    // Archive new posts (track ONLY the ones that succeed)
+    const archivedPosts: typeof postsToArchive = [];
     for (const post of postsToArchive) {
       try {
         await this.archiveCafePost(post, sub);
-        archivedCount++;
+        archivedPosts.push(post);
       } catch (error) {
         console.error(`[NaverPoller] Failed to archive catch-up cafe post ${post.id}:`, error);
       }
     }
+    const archivedCount = archivedPosts.length;
 
-    // Update state with archived post IDs
+    // Update state — only successfully archived posts are marked seen so a
+    // failed local archive stays eligible for retry next run.
     if (archivedCount > 0) {
+      const archivedIds = new Set(archivedPosts.map(p => p.id));
       const archivedPostHashes = postHashes
-        .filter(h => newPostIds.has(h.id))
+        .filter(h => archivedIds.has(h.id))
         .map(h => h.textHash);
 
       await this.updateWorkerState(sub.id, {
-        archivedPostIds: postsToArchive.map(p => p.id),
+        archivedPostIds: archivedPosts.map(p => p.id),
         archivedPostHashes,
         postsArchived: archivedCount,
         creditsUsed: 0, // Local fetch is free

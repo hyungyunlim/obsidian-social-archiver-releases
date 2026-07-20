@@ -27,6 +27,11 @@ vi.mock('../../../views/TimelineView', () => ({
 
 import { RealtimeEventBridge } from '../../../plugin/realtime/RealtimeEventBridge';
 import type { RealtimeEventBridgeDeps } from '../../../plugin/realtime/RealtimeEventBridge';
+import {
+  SyncQueueDrainService,
+  type SyncQueueDrainItem,
+  type SyncQueueListOutcome,
+} from '../../../plugin/sync/SyncQueueDrainService';
 
 // ---- Helpers ---------------------------------------------------------------
 
@@ -900,6 +905,72 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
       (call: [() => void, number]) => call[1] === 2000
     );
     expect(syncQueueCall).toBeDefined();
+  });
+
+  // --------------------------------------------------------------------------
+  // WS + poll share ONE single-flight drain processor / idempotency store
+  // --------------------------------------------------------------------------
+
+  it('routes ws:connected and a concurrent poll through one single-flight drain (no double-processing)', async () => {
+    // The shared processor is a real SyncQueueDrainService. Both the bridge's
+    // ws:connected path and an explicit poll invoke the SAME drainOnce, so a
+    // race must collapse to a single in-flight processor and ACK each item once.
+    let releaseGate!: () => void;
+    const gate = new Promise<void>((resolve) => { releaseGate = resolve; });
+    let active = 0;
+    let maxActive = 0;
+    const processed: string[] = [];
+    let remaining = ['q1', 'q2', 'q3'];
+
+    const drain = new SyncQueueDrainService({
+      listPage: async ({ cursor }): Promise<SyncQueueListOutcome> => {
+        const start = cursor === null ? 0 : Number(cursor);
+        const items: SyncQueueDrainItem[] = remaining
+          .slice(start)
+          .map((queueId) => ({ queueId, archiveId: `a-${queueId}`, clientId: 'client-1', versionToken: `v-${queueId}` }));
+        return { kind: 'page', items, nextCursor: null, hasMore: false };
+      },
+      processItem: async (item) => {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        await gate;
+        remaining = remaining.filter((id) => id !== item.queueId);
+        processed.push(item.queueId);
+        active -= 1;
+        return 'saved';
+      },
+      scheduleContinuation: () => undefined,
+      limits: { pageLimit: 10 },
+    });
+    const processPendingSyncQueue = () => drain.drainOnce().then(() => undefined);
+
+    const events = makeEvents();
+    const deps = makeDeps({
+      events,
+      processPendingSyncQueue,
+      schedule: vi.fn().mockImplementation((cb: () => void, delay: number) => window.setTimeout(cb, delay)),
+      settings: () => ({ enableMobileAnnotationSync: true, syncClientId: 'client-1' } as any),
+    });
+    const bridge = new RealtimeEventBridge(deps);
+    bridge.setup();
+
+    // Poll starts first and blocks inside processItem on the gate.
+    const poll = processPendingSyncQueue();
+    await Promise.resolve();
+
+    // WS reconnect fires its scheduled drain WHILE the poll is still in flight.
+    await events.trigger('ws:connected', undefined);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    // The ws-triggered drain saw inFlight and became a no-op — never a 2nd processor.
+    expect(maxActive).toBe(1);
+
+    releaseGate();
+    await poll;
+    await vi.runAllTimersAsync();
+
+    // Each item processed exactly once by the single shared processor.
+    expect(processed.sort()).toEqual(['q1', 'q2', 'q3']);
   });
 });
 

@@ -34,8 +34,12 @@ function makeFile(path: string): TFile {
   return { path, extension: 'md' } as unknown as TFile;
 }
 
-function makeApp(currentFrontmatter: Record<string, unknown> | undefined = undefined) {
+function makeApp(
+  currentFrontmatter: Record<string, unknown> | undefined = undefined,
+  currentBody = '',
+) {
   const writtenFrontmatters: Record<string, unknown>[] = [];
+  const processedBodies: string[] = [];
   const processFrontMatter = vi.fn(
     async (_file: TFile, updater: (fm: Record<string, unknown>) => void) => {
       const fm: Record<string, unknown> = { ...(currentFrontmatter ?? {}) };
@@ -43,6 +47,11 @@ function makeApp(currentFrontmatter: Record<string, unknown> | undefined = undef
       writtenFrontmatters.push(fm);
     },
   );
+  const process = vi.fn(async (_file: TFile, updater: (content: string) => string) => {
+    const result = updater(currentBody);
+    processedBodies.push(result);
+    return result;
+  });
   const app = {
     metadataCache: {
       getFileCache: vi.fn(() =>
@@ -50,8 +59,9 @@ function makeApp(currentFrontmatter: Record<string, unknown> | undefined = undef
       ),
     },
     fileManager: { processFrontMatter },
+    vault: { cachedRead: vi.fn(async () => currentBody), process },
   } as unknown as App;
-  return { app, processFrontMatter, writtenFrontmatters };
+  return { app, processFrontMatter, writtenFrontmatters, process, processedBodies };
 }
 
 function makeArchive(overrides: Partial<RemoteArchiveLocationSource> = {}): RemoteArchiveLocationSource {
@@ -102,6 +112,29 @@ describe('buildDesiredLocationFrontmatter', () => {
       locationSource: 'kakaomap',
       locationExternalId: '12345',
     });
+  });
+
+  it('projects only flat primary-place fields — the locations array is NOT a frontmatter field', () => {
+    const location = {
+      id: 'location-1', archiveId: 'archive-1', placeKey: 'kakaomap:12345',
+      name: 'Blue Bottle Seongsu', address: '서울 성동구', latitude: 37.5446,
+      longitude: 127.0559, source: 'kakaomap', externalId: '12345',
+      url: 'https://place.map.kakao.com/12345', category: '카페', isPrimary: true,
+      sortOrder: 0, placeArchiveId: null, promotionStatus: 'metadata_only' as const,
+      createdAt: '2026-07-15T00:00:00Z', updatedAt: '2026-07-15T00:00:00Z',
+    };
+    const desired = buildDesiredLocationFrontmatter(makeArchive({
+      locationAddress: location.address,
+      locationUrl: location.url,
+      locationCategory: location.category,
+      locations: [location],
+      locationCount: 1,
+    }));
+    // Flat fields present; the object-array stays OUT of frontmatter (it rides in
+    // the hidden %% sa:locations %% body block instead).
+    expect(desired).toMatchObject({ location: 'Blue Bottle Seongsu', locationAddress: '서울 성동구' });
+    expect(desired).not.toHaveProperty('locations');
+    expect(desired).not.toHaveProperty('locationCount');
   });
 
   it('ignores non-finite coordinate values', () => {
@@ -174,6 +207,14 @@ describe('applyLocationFrontmatter', () => {
     };
     applyLocationFrontmatter(fm, { location: 'New' });
     expect(fm).toEqual({ title: 'Note', location: 'New', tags: ['keep'] });
+  });
+
+  it('removes stale full arrays on an authoritative empty projection', () => {
+    const fm: Record<string, unknown> = {
+      title: 'Note', location: 'Old', locations: [{ id: 'stale' }], locationCount: 1,
+    };
+    applyLocationFrontmatter(fm, {});
+    expect(fm).toEqual({ title: 'Note' });
   });
 });
 
@@ -280,6 +321,64 @@ describe('LocationFrontmatterSyncService.reconcileFromLibrarySync', () => {
     await service.reconcileFromLibrarySync(makeFile('a.md'), makeArchive());
 
     expect(processFrontMatter).not.toHaveBeenCalled();
+  });
+
+  it('writes the locations array into the hidden body block, never frontmatter', async () => {
+    const location = {
+      id: 'loc-1', archiveId: 'archive-1', placeKey: 'kakaomap:12345',
+      name: 'Blue Bottle Seongsu', address: '서울 성동구', latitude: 37.5446,
+      longitude: 127.0559, source: 'kakaomap', externalId: '12345',
+      url: 'https://place.map.kakao.com/12345', category: '카페', isPrimary: true,
+      sortOrder: 0, placeArchiveId: null, promotionStatus: 'metadata_only' as const,
+      createdAt: '2026-07-15T00:00:00Z', updatedAt: '2026-07-15T00:00:00Z',
+    };
+    const { app, writtenFrontmatters, process, processedBodies } = makeApp(
+      { location: 'Blue Bottle Seongsu', latitude: 37.5446, longitude: 127.0559 },
+      '---\nlocation: Blue Bottle Seongsu\n---\n\nBody text.\n',
+    );
+    const service = makeService(app);
+
+    await service.reconcileFromLibrarySync(
+      makeFile('a.md'),
+      makeArchive({ locations: [location], locationCount: 1 }),
+    );
+
+    // Body block written; frontmatter carries flat fields but NOT the array.
+    expect(process).toHaveBeenCalledTimes(1);
+    expect(processedBodies[0]).toContain('%% sa:locations');
+    expect(processedBodies[0]).toContain('Blue Bottle Seongsu');
+    for (const fm of writtenFrontmatters) {
+      expect(fm).not.toHaveProperty('locations');
+      expect(fm).not.toHaveProperty('locationCount');
+    }
+  });
+
+  it('migrates a legacy frontmatter locations array into the body block', async () => {
+    const location = {
+      id: 'loc-1', archiveId: 'archive-1', placeKey: 'kakaomap:12345',
+      name: 'Blue Bottle Seongsu', address: '서울 성동구', latitude: 37.5446,
+      longitude: 127.0559, source: 'kakaomap', externalId: '12345',
+      url: 'https://place.map.kakao.com/12345', category: '카페', isPrimary: true,
+      sortOrder: 0, placeArchiveId: null, promotionStatus: 'metadata_only' as const,
+      createdAt: '2026-07-15T00:00:00Z', updatedAt: '2026-07-15T00:00:00Z',
+    };
+    // Legacy note: array lives in frontmatter, no body block yet.
+    const { app, writtenFrontmatters, process, processedBodies } = makeApp(
+      { location: 'Blue Bottle Seongsu', latitude: 37.5446, longitude: 127.0559, locations: [location], locationCount: 1 },
+      '---\nlocation: Blue Bottle Seongsu\nlocations:\n  - id: loc-1\n---\n\nBody text.\n',
+    );
+    const service = makeService(app);
+
+    await service.reconcileFromLibrarySync(
+      makeFile('a.md'),
+      makeArchive({ locations: [location], locationCount: 1 }),
+    );
+
+    // Frontmatter array stripped, block written.
+    expect(writtenFrontmatters[0]).not.toHaveProperty('locations');
+    expect(writtenFrontmatters[0]).not.toHaveProperty('locationCount');
+    expect(process).toHaveBeenCalledTimes(1);
+    expect(processedBodies[0]).toContain('%% sa:locations');
   });
 });
 

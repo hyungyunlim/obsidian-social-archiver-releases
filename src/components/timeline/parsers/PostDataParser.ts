@@ -1,6 +1,8 @@
 import { TFile, type TAbstractFile, type Vault, type App } from 'obsidian';
 import type { PostData, Comment, Media, MultiLangTranscript } from '../../../types/post';
 import type { YamlFrontmatter } from '../../../types/archive';
+import { ArchiveLocationSchema, type ArchiveLocation } from '../../../types/archive-location';
+import { LocationBodyBlock } from '../../../services/markdown/LocationBodyBlock';
 import { isRssBasedPlatform } from '../../../constants/rssPlatforms';
 import { detectMediaType, isImageUrl, isVideoUrl, isAudioUrl } from '../../../utils/mediaType';
 import { PostIndexService, type PostIndexEntry } from '../../../services/PostIndexService';
@@ -37,6 +39,15 @@ function readFrontmatterStringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')
     : [];
+}
+
+function readArchiveLocations(value: unknown): readonly ArchiveLocation[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const locations = value
+    .map((item) => ArchiveLocationSchema.safeParse(item))
+    .filter((item) => item.success)
+    .map((item) => item.data);
+  return locations.length > 0 ? locations : undefined;
 }
 
 function readPostContentType(value: unknown): PostData['contentType'] {
@@ -165,7 +176,12 @@ export class PostDataParser {
     try {
       // Use cachedRead for better performance (display-only purpose)
       // Falls back to vault.read if cache is stale
-      const content = await this.vault.cachedRead(file);
+      const rawContent = await this.vault.cachedRead(file);
+      // Attached-place `locations` live in a hidden `%% sa:locations %%` body
+      // block (Obsidian can't render an object-array frontmatter property).
+      // Parse it out, then strip it so it never appears in content.text / shares.
+      const bodyLocations = LocationBodyBlock.parse(rawContent);
+      const content = bodyLocations ? LocationBodyBlock.strip(rawContent) : rawContent;
 
       // Try to use MetadataCache for frontmatter if available
       let frontmatter: ExtendedFrontmatter | null = null;
@@ -661,6 +677,19 @@ export class PostDataParser {
           latitude: frontmatter['latitude'] as number | undefined,
           longitude: frontmatter['longitude'] as number | undefined,
           location: frontmatter['location'] as string | undefined,
+          locationSource: frontmatter['locationSource'] as string | undefined,
+          locationExternalId: frontmatter['locationExternalId'] as string | undefined,
+          locationAddress: frontmatter['locationAddress'] as string | undefined,
+          locationUrl: frontmatter['locationUrl'] as string | undefined,
+          locationCategory: frontmatter['locationCategory'] as string | undefined,
+          // Prefer the hidden body block; fall back to the legacy frontmatter
+          // array for notes not yet rewritten to the block format.
+          locations: bodyLocations ?? readArchiveLocations(frontmatter['locations']),
+          locationCount: bodyLocations
+            ? bodyLocations.length
+            : (typeof frontmatter['locationCount'] === 'number'
+              ? frontmatter['locationCount']
+              : undefined),
           // Podcast-specific metadata
           duration: frontmatter.duration,
           episode: frontmatter.episode,
@@ -901,7 +930,12 @@ export class PostDataParser {
     // These images are rendered via MediaGalleryRenderer, so strip from rawMarkdown to avoid duplicates
     // Matches both external URLs (https://...) and local paths (attachments/...)
     // Handles single or multiple images in the trailing section
-    content = content.replace(/\n*---\n+(?:!\[[^\]]*\]\([^)]+\)\s*\n*)+$/, '');
+    // NOTE: `\s*` already matches newlines; a trailing `\n*` here overlaps it and
+    // makes `(?:…\s*\n*)+$` catastrophically backtrack (exponential) when the tail
+    // is a multi-image gallery followed by non-image content — e.g. Places notes
+    // with several map images + a caption line. That froze the main thread. Keep a
+    // single non-overlapping `\s*`.
+    content = content.replace(/\n*---\n+(?:!\[[^\]]*\]\([^)]+\)\s*)+$/, '');
 
     // Clean up excessive leading/trailing whitespace
     content = content.trim();
@@ -1087,7 +1121,9 @@ export class PostDataParser {
 
     // Remove trailing media gallery (standalone image blocks at the end)
     // These are the media array images that are redundant with inline article images
-    content = content.replace(/\n+(?:!\[.*?\]\(.*?\)\s*\n*)+$/, '');
+    // NOTE: single `\s*` only — a trailing `\n*` overlaps it and causes catastrophic
+    // backtracking on multi-image tails (Places notes). See stripTrailingMedia above.
+    content = content.replace(/\n+(?:!\[.*?\]\(.*?\)\s*)+$/, '');
 
     // Remove H1 title at the start (rendered separately in the card)
     // Handle both escaped (\# Title) and normal (# Title)

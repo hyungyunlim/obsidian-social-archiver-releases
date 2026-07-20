@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/billing/campaign.ts
- * Generated: 2026-07-07T04:01:02.558Z
+ * Generated: 2026-07-14T20:38:59.865Z
  *
  * To modify, edit the source file in shared/billing/ and run:
  *   npm run sync:shared
@@ -60,11 +60,11 @@ export const DEFAULT_BILLING_CAMPAIGN: BillingCampaignConfig = {
   defaultLabel: '',
   priceDisclaimer:
     'Prices may vary by country, currency, store, and taxes. The final price is shown before purchase. Premium still has rate limits, but they are more generous than the free plan.',
-  updatedAt: '2026-05-25T07:31:42Z',
+  updatedAt: '2026-07-14T00:00:00Z',
   plans: {
     monthly: {
       label: null,
-      shortDescription: 'Premium includes unlimited archiving and monthly Cloud AI credits.',
+      shortDescription: 'Premium includes unlimited archiving and monthly Cloud credits for AI and supported paid cloud services.',
       detail: null,
       limitedAvailability: false,
       showCompareAtPrice: false,
@@ -75,7 +75,7 @@ export const DEFAULT_BILLING_CAMPAIGN: BillingCampaignConfig = {
     },
     annual: {
       label: null,
-      shortDescription: 'Premium includes unlimited archiving and monthly Cloud AI credits.',
+      shortDescription: 'Premium includes unlimited archiving and monthly Cloud credits for AI and supported paid cloud services.',
       detail: null,
       limitedAvailability: false,
       showCompareAtPrice: false,
@@ -86,7 +86,7 @@ export const DEFAULT_BILLING_CAMPAIGN: BillingCampaignConfig = {
     },
     lifetime: {
       label: null,
-      shortDescription: 'Premium includes unlimited archiving and monthly Cloud AI credits.',
+      shortDescription: 'Premium includes unlimited archiving and monthly Cloud credits for AI and supported paid cloud services.',
       detail: null,
       limitedAvailability: false,
       showCompareAtPrice: false,

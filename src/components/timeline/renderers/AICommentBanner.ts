@@ -21,7 +21,12 @@ export type AICommentBannerState =
   | 'authRequired'
   | 'dismissed';
 
-export type AICommentBannerActionId = 'tags.suggest_apply' | 'content.translate_variant';
+export type AICommentBannerActionId =
+  | 'tags.suggest_apply'
+  | 'content.translate_variant'
+  // Not a CLI run: the card handler opens the place-candidate modal instead
+  // (server-side extraction). CLI/language args are ignored for this id.
+  | 'places.extract_candidates';
 
 export interface AICommentBannerActionItem {
   id: AICommentBannerActionId;

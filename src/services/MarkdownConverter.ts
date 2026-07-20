@@ -9,6 +9,7 @@ import { TranscriptFormatter } from './markdown/formatters/TranscriptFormatter';
 import { CommentFormatter } from './markdown/formatters/CommentFormatter';
 import { FactCheckFormatter } from './markdown/formatters/FactCheckFormatter';
 import { FrontmatterGenerator } from './markdown/frontmatter/FrontmatterGenerator';
+import { LocationBodyBlock } from './markdown/LocationBodyBlock';
 import { MediaPlaceholderGenerator } from './MediaPlaceholderGenerator';
 import { SentinelMediaRegionManager } from '@/plugin/realtime/SentinelMediaRegionManager';
 import { isRssBasedPlatform } from '@/constants/rssPlatforms';
@@ -1628,6 +1629,14 @@ export class MarkdownConverter implements IService {
     const readerChat = extractTrailingReaderChatSection(normalizedPostData.content.markdown);
     if (readerChat && !content.includes(readerChat.headingLine)) {
       content = `${content.replace(/\s+$/, '')}\n\n---\n\n${readerChat.section}\n`;
+    }
+
+    // Attached-place locations ride in a hidden `%% sa:locations %%` body block
+    // (not frontmatter — Obsidian can't render an object-array property). The
+    // parser strips it, so it never renders on a card or leaks into shares.
+    const locations = normalizedPostData.metadata.locations;
+    if (Array.isArray(locations) && locations.length > 0) {
+      content = `${content.replace(/\s+$/, '')}\n\n${LocationBodyBlock.serialize(locations)}\n`;
     }
 
     // Generate full document

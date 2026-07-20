@@ -81,7 +81,8 @@ export function isPaywallRequiredError(error: unknown): boolean {
     message.includes('paywall_required') ||
     message.includes('paywall required') ||
     message.includes('monthly archive limit reached') ||
-    message.includes('monthly ai credit limit reached')
+    message.includes('monthly ai credit limit reached') ||
+    message.includes('monthly cloud credit limit reached')
   ) {
     return true;
   }
@@ -114,7 +115,7 @@ export function formatPaywallRequiredMessage(error: unknown): string {
   const resetText = reset ? ` Resets ${reset}.` : '';
 
   if (isAIQuota) {
-    return `Monthly AI credit limit reached${quota}.${pending}${resetText} Upgrade your Social Archiver plan, then retry.`;
+    return `Monthly Cloud credit limit reached${quota}.${pending}${resetText} Upgrade your Social Archiver plan, then retry.`;
   }
 
   return `Monthly archive limit reached${quota}.${resetText} Upgrade your Social Archiver plan, then retry.`;

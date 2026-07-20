@@ -1,7 +1,7 @@
 /**
  * PlaceCandidateBanner - UI component for pending place-candidate suggestions
  *
- * Single Responsibility: display the "a place was found in this post" banner
+ * Single Responsibility: display the "N places found in this post" banner
  * on timeline cards whose server archive has pending place candidates.
  * Structure mirrors AICommentBanner (render(container, options) / destroy()).
  */
@@ -13,7 +13,7 @@ import { setIcon } from 'obsidian';
 // ============================================================================
 
 export interface PlaceCandidateBannerOptions {
-  /** Number of pending candidates for the archive. */
+  /** Number of pending NON-hint candidates (address-less weak hints excluded). */
   pendingCount: number;
   /**
    * True when no pending candidate carries applyable data (name /
@@ -47,12 +47,13 @@ export class PlaceCandidateBanner {
     setIcon(pinIcon, 'map-pin');
 
     // Copy mirrors mobile (places.bannerFound / places.bannerAnchor);
-    // hardcoded English per plugin string convention.
+    // hardcoded English per plugin string convention. pendingCount excludes
+    // address-less weak hints, so hint-only keeps the question copy.
     const text = options.hintOnly
       ? 'Look for a place in this post?'
-      : options.pendingCount > 1
-        ? `${options.pendingCount} places were found in this post — want to review them?`
-        : 'A place was found in this post — want to review it?';
+      : options.pendingCount === 1
+        ? 'A place found in this post'
+        : `${options.pendingCount} places found in this post`;
     const message = messageSection.createSpan({ text });
     message.addClass('sa-text-base', 'sa-text-normal');
 

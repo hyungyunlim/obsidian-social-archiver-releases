@@ -7,6 +7,7 @@
  */
 
 import { requestUrl, RequestUrlParam, Platform } from 'obsidian';
+import { z } from 'zod';
 import type { IService } from './base/IService';
 import type { ProfileArchiveRequest, ProfileCrawlResponse } from '../types/profile-crawl';
 import type { Platform as PlatformType } from '@/shared/platforms/types';
@@ -25,18 +26,89 @@ import type { AICommentType } from '@/types/ai-comment';
 import type { RelationWithSummary, RelationPullResponse } from '@/types/link-relations';
 import type { ArchiveAttempt, ArchiveAttemptStatus } from '@/types/post';
 import {
+  ArchivePreferencesApiError,
+  parseArchivePreferencesResponse,
+  type ArchivePreferences,
+  type ArchivePreferencesPatch,
+} from '@/types/archive-preferences';
+import {
   InvalidPlaceApiResponseError,
-  ProviderPlaceSelectionResponseSchema,
-  ProviderSearchResponseSchema,
+  parseProviderPlaceSelectionResponse,
+  parseProviderSearchResponse,
+  ProviderPlaceSelectionRequestSchema,
+  ProviderSearchRequestSchema,
   type ProviderPlaceSelectionResponse,
+  type ProviderPlaceSelectionRequest,
+  type ProviderSearchRequest,
   type ProviderSearchResponse,
 } from '@/types/place-search';
+import {
+  ArchiveLocationSchema,
+  LocationAttachmentResultSchema,
+  LocationPromotionResultSchema,
+  type ArchiveLocation,
+  type LocationAttachmentResult,
+  type LocationPromotionResult,
+} from '@/types/archive-location';
+import {
+  AttachPlaceCandidateExistingBodySchema,
+  AttachPlaceCandidateProviderBodySchema,
+  AttachPlaceCandidatesBatchBodySchema,
+  ExtractPlaceCandidatesResultSchema,
+  InvalidPlaceCandidateAttachmentResponseError,
+  PLACE_EXTRACT_CAPABILITY,
+  PlaceCandidateAttachmentApiError,
+  PlaceCandidatesResponseSchema,
+  parsePlaceCandidateAttachmentError,
+  parsePlaceCandidateAttachmentResult,
+  type AttachPlaceCandidateExistingBody,
+  type AttachPlaceCandidateProviderBody,
+  type AttachPlaceCandidatesBatchBody,
+  type ExtractPlaceCandidatesBody,
+  type ExtractPlaceCandidatesResult,
+  type PlaceCandidateAttachmentExpectation,
+  type PlaceCandidateAttachmentResult,
+  type PlaceCandidatesResponse,
+} from '@/types/place-candidate-attachment';
 
 export type {
   ProviderPlaceSelectionResponse,
+  ProviderPlaceSelectionRequest,
+  ProviderSearchCandidateContext,
   ProviderSearchCandidate,
+  ProviderSearchRequest,
   ProviderSearchResponse,
 } from '@/types/place-search';
+export type {
+  ArchiveLocation,
+  LocationAttachmentResult,
+  LocationPromotionResult,
+  PlaceArchiveState,
+} from '@/types/archive-location';
+export type {
+  AttachPlaceCandidateExistingBody,
+  AttachPlaceCandidateProviderBody,
+  AttachPlaceCandidatesBatchBody,
+  DirectCandidateAttachment,
+  ExtractPlaceCandidatesBody,
+  ExtractPlaceCandidatesExecutionPreference,
+  ExtractPlaceCandidatesReplay,
+  ExtractPlaceCandidatesResult,
+  ExtractPlaceCandidatesRunning,
+  PlaceCandidate,
+  PlaceCandidateAttachmentItemResult,
+  PlaceCandidateAttachmentOperation,
+  PlaceCandidateAttachmentOutcome,
+  PlaceCandidateAttachmentResult,
+  PlaceCandidateRole,
+  PlaceCandidatesResponse,
+} from '@/types/place-candidate-attachment';
+export type {
+  ArchivePreferences,
+  ArchivePreferencesPatch,
+  AutoArchiveInboxDays,
+  MapSearchProviderPreference,
+} from '@/types/archive-preferences';
 
 // ============================================================================
 // Multi-Client Sync Types
@@ -534,6 +606,46 @@ export interface GetSyncQueueResponse {
 }
 
 /**
+ * Client-advertised sync-queue capabilities (Todo 34, Release-A). `version-token-v1`
+ * + `mutation-id-v1` unlock the v1.5 bounded legacy read; `v2-pagination-v1` unlocks
+ * the signed-cursor v2 draining loop. Sent as the `X-Sync-Queue-Capabilities` header.
+ */
+export const SYNC_QUEUE_CLIENT_CAPABILITIES = ['version-token-v1', 'mutation-id-v1', 'v2-pagination-v1'] as const;
+
+/**
+ * Registry capabilities advertised at client registration. `executor: unified-v1`
+ * is the Todo 28 deferred advertisement folded in here. FORWARD-COMPATIBLE signal
+ * only: today's server settings sanitizer (ai-comment-capability.ts) rebuilds
+ * capabilities for obsidian/tauri-desktop from three executor booleans and DROPS
+ * `executor`/`syncQueue` — server-side consumption (sanitizer allowlist) is a
+ * deferred follow-up tracked for the Wave-6 P4 gate owner.
+ */
+export const SYNC_CLIENT_REGISTRY_ADVERTISEMENT = {
+  syncQueue: [...SYNC_QUEUE_CLIENT_CAPABILITIES],
+  executor: ['unified-v1'],
+} as const;
+
+/** One pending item as projected by the v2 list endpoint. */
+export interface SyncQueueV2Item {
+  queueId: string;
+  archiveId: string;
+  userId?: string;
+  clientId?: string;
+  clientType?: SyncClientType;
+  status?: string;
+  retryCount?: number;
+  createdAt?: number;
+  versionToken: string;
+  error?: string;
+}
+
+export interface GetSyncQueueV2Response {
+  items: SyncQueueV2Item[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+/**
  * User archive data returned from server
  */
 /**
@@ -620,6 +732,12 @@ export interface UserArchive {
   longitude?: number | null;
   locationSource?: string | null;
   locationExternalId?: string | null;
+  locationAddress?: string | null;
+  locationUrl?: string | null;
+  locationCategory?: string | null;
+  locationUpdatedAt?: string | null;
+  locations?: readonly ArchiveLocation[];
+  locationCount?: number;
   quotedPost?: {
     platform: string;
     id: string;
@@ -707,31 +825,8 @@ export interface GetUserArchiveResponse {
  * add more; unknown types must degrade to the text-confirm flow instead of
  * being silently dropped.
  */
-export interface PlaceCandidate {
-  id: string;
-  archiveId: string;
-  name: string | null;
-  addressText: string | null;
-  cityHint: string | null;
-  evidenceType: string;
-  evidenceText: string;
-  confidenceBucket: string | null;
-  score: number | null;
-  latitude: number | null;
-  longitude: number | null;
-  externalSource: string | null;
-  externalPlaceId: string | null;
-  state: string;
-  createdAt: string;
-}
-
-export interface PlaceCandidatesResponse {
-  items: PlaceCandidate[];
-  pendingCount: number;
-}
-
 export type PlaceCandidatesQuery =
-  | { archiveIds: string[] }
+  | { archiveIds: readonly string[] }
   | { state: 'pending'; limit?: number };
 
 export interface PlaceCandidateConfirmBody {
@@ -797,22 +892,6 @@ export interface WorkersAPIConfig {
   /** Registered sync client ID, sent as X-Client-Id header for echo suppression */
   clientId?: string;
 }
-
-export type AutoArchiveInboxDays = 0 | 7 | 14 | 30 | 60 | 90;
-
-export interface ArchivePreferences {
-  autoArchiveInboxDays: AutoArchiveInboxDays;
-  retainFailedArchiveAttempts: boolean;
-  failedArchiveAttemptRetentionDays: 30 | 90 | 180 | 365;
-  autoArchiveLastRunAt: string | null;
-  createdAt: string | null;
-  updatedAt: string | null;
-}
-
-export type ArchivePreferencesPatch = Partial<Pick<
-  ArchivePreferences,
-  'autoArchiveInboxDays' | 'retainFailedArchiveAttempts' | 'failedArchiveAttemptRetentionDays'
->>;
 
 export interface ArchiveRequest {
   url: string;
@@ -976,7 +1055,16 @@ export interface AIActionQuotaSummary {
   remaining: number;
   resetAt: string;
   unlimited?: boolean;
+  breakdown?: readonly CloudCreditBreakdownItem[];
 }
+
+export interface CloudCreditBreakdownItem {
+  actionType: string;
+  used: number;
+  reserved: number;
+}
+
+export type CloudCreditQuotaSummary = AIActionQuotaSummary;
 
 export interface BillingPolicySummary {
   betaFreeSunsetAt?: string | null;
@@ -987,6 +1075,7 @@ export interface BillingUsageResponse {
   plan: string;
   archiveQuota: ArchiveQuotaSummary;
   aiActionQuota?: AIActionQuotaSummary;
+  cloudCreditQuota?: CloudCreditQuotaSummary;
   billing?: {
     entitlementActive?: boolean;
     source?: string;
@@ -1374,26 +1463,9 @@ export class WorkersAPIClient implements IService {
       throw: false,
     });
 
-    const body = response.json as {
-      success?: boolean;
-      preferences?: ArchivePreferences;
-      data?: { preferences?: ArchivePreferences };
-      error?: { code?: string; message?: string; details?: unknown };
-    } | undefined;
-    const preferences = body?.preferences ?? body?.data?.preferences;
-    if (response.status >= 200 && response.status < 300 && body?.success === true && preferences) {
-      return preferences;
-    }
-
-    const error = new Error(body?.error?.message || 'Failed to load archive preferences') as Error & {
-      code?: string;
-      details?: unknown;
-      status?: number;
-    };
-    error.code = body?.error?.code;
-    error.details = body?.error?.details;
-    error.status = response.status;
-    throw error;
+    const preferences = parseArchivePreferencesResponse(response.json);
+    if (response.status >= 200 && response.status < 300 && preferences) return preferences;
+    throw new ArchivePreferencesApiError('load', response.status, response.json);
   }
 
   async updateArchivePreferences(patch: ArchivePreferencesPatch): Promise<ArchivePreferences> {
@@ -1414,26 +1486,9 @@ export class WorkersAPIClient implements IService {
       throw: false,
     });
 
-    const body = response.json as {
-      success?: boolean;
-      preferences?: ArchivePreferences;
-      data?: { preferences?: ArchivePreferences };
-      error?: { code?: string; message?: string; details?: unknown };
-    } | undefined;
-    const preferences = body?.preferences ?? body?.data?.preferences;
-    if (response.status >= 200 && response.status < 300 && body?.success === true && preferences) {
-      return preferences;
-    }
-
-    const error = new Error(body?.error?.message || 'Failed to update archive preferences') as Error & {
-      code?: string;
-      details?: unknown;
-      status?: number;
-    };
-    error.code = body?.error?.code;
-    error.details = body?.error?.details;
-    error.status = response.status;
-    throw error;
+    const preferences = parseArchivePreferencesResponse(response.json);
+    if (response.status >= 200 && response.status < 300 && preferences) return preferences;
+    throw new ArchivePreferencesApiError('update', response.status, response.json);
   }
 
   async listArchiveAttempts(params: {
@@ -1735,6 +1790,45 @@ export class WorkersAPIClient implements IService {
     return Platform.isIosApp ? 'ios' : 'android';
   }
 
+  private async requestPlaceCandidateAttachment(input: {
+    readonly path: string;
+    readonly body: AttachPlaceCandidatesBatchBody
+      | AttachPlaceCandidateProviderBody
+      | AttachPlaceCandidateExistingBody;
+    readonly expected: PlaceCandidateAttachmentExpectation;
+  }): Promise<PlaceCandidateAttachmentResult> {
+    this.ensureInitialized();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      // Opt into caption_llm candidates + the `role` field on attach responses
+      // (Places P3b §5.5). Tolerant parser lands in the same release.
+      'X-Client-Capabilities': PLACE_EXTRACT_CAPABILITY,
+      ...this.getClientHeaders(),
+    };
+    if (this.config.authToken) headers.Authorization = `Bearer ${this.config.authToken}`;
+    const response = await requestUrl({
+      url: `${this.config.endpoint}${input.path}`,
+      method: 'POST',
+      headers,
+      body: JSON.stringify(input.body),
+      throw: false,
+    });
+    const payload: unknown = response.json;
+    const result = parsePlaceCandidateAttachmentResult(payload, input.expected);
+    if (response.status >= 200 && response.status < 300 && result) return result;
+    const failure = parsePlaceCandidateAttachmentError(payload);
+    if (failure) {
+      throw new PlaceCandidateAttachmentApiError(
+        failure.code,
+        failure.message,
+        response.status,
+        failure.retryable,
+        failure.requestId,
+      );
+    }
+    throw new InvalidPlaceCandidateAttachmentResponseError();
+  }
+
   /**
    * Make HTTP request
    */
@@ -1988,10 +2082,96 @@ export class WorkersAPIClient implements IService {
       }
     }
 
-    return await this.request<PlaceCandidatesResponse>(
+    const response = await this.request<unknown>(
       `/api/user/place-candidates?${params.toString()}`,
-      { method: 'GET' },
+      {
+        method: 'GET',
+        // Opt into caption_llm candidates + the `role` field (Places P3b §5.5).
+        headers: { 'X-Client-Capabilities': PLACE_EXTRACT_CAPABILITY },
+      },
     );
+    const parsed = PlaceCandidatesResponseSchema.safeParse(response);
+    if (!parsed.success) throw new InvalidPlaceCandidateAttachmentResponseError();
+    return parsed.data;
+  }
+
+  /**
+   * Trigger LLM place extraction for an archive (Places P3b §5.1). The server
+   * returns 202 (`status:'running'`) for a fresh/joined run, or 200
+   * (`status:'completed'`, `replayed:true`) when a prior run with the same
+   * content hash already produced candidates. Billing/consent/capacity failures
+   * surface via {@link request}'s thrown `Error` carrying `.code`/`.status`
+   * (e.g. `SERVER_AI_CONSENT_REQUIRED`, `PAYWALL_REQUIRED`,
+   * `CANDIDATE_CAPACITY_EXCEEDED`, `INSUFFICIENT_CONTENT`).
+   */
+  async extractPlaceCandidates(
+    archiveId: string,
+    body: ExtractPlaceCandidatesBody,
+  ): Promise<ExtractPlaceCandidatesResult> {
+    this.ensureInitialized();
+    const raw = await this.request<unknown>(
+      `/api/user/archives/${encodeURIComponent(archiveId)}/place-candidates/extract`,
+      {
+        method: 'POST',
+        headers: { 'X-Client-Capabilities': PLACE_EXTRACT_CAPABILITY },
+        body: JSON.stringify(body),
+      },
+    );
+    const parsed = ExtractPlaceCandidatesResultSchema.safeParse(raw);
+    if (!parsed.success) throw new InvalidPlaceCandidateAttachmentResponseError();
+    return parsed.data;
+  }
+
+  async attachPlaceCandidatesBatch(
+    archiveId: string,
+    body: AttachPlaceCandidatesBatchBody,
+  ): Promise<PlaceCandidateAttachmentResult> {
+    const parsed = AttachPlaceCandidatesBatchBodySchema.safeParse(body);
+    if (!parsed.success) throw new InvalidPlaceCandidateAttachmentResponseError();
+    return this.requestPlaceCandidateAttachment({
+      path: `/api/user/archives/${encodeURIComponent(archiveId)}/place-candidates/attach-batch`,
+      body: parsed.data,
+      expected: {
+        operation: 'attach_batch',
+        idempotencyKey: parsed.data.idempotencyKey,
+        archiveId,
+        candidateIds: parsed.data.candidates.map((candidate) => candidate.candidateId),
+      },
+    });
+  }
+
+  async attachPlaceCandidateFromProvider(
+    candidateId: string,
+    body: AttachPlaceCandidateProviderBody,
+  ): Promise<PlaceCandidateAttachmentResult> {
+    const parsed = AttachPlaceCandidateProviderBodySchema.safeParse(body);
+    if (!parsed.success) throw new InvalidPlaceCandidateAttachmentResponseError();
+    return this.requestPlaceCandidateAttachment({
+      path: `/api/user/place-candidates/${encodeURIComponent(candidateId)}/attach-from-provider`,
+      body: parsed.data,
+      expected: {
+        operation: 'attach_provider',
+        idempotencyKey: parsed.data.idempotencyKey,
+        candidateId,
+      },
+    });
+  }
+
+  async attachPlaceCandidateFromExisting(
+    candidateId: string,
+    body: AttachPlaceCandidateExistingBody,
+  ): Promise<PlaceCandidateAttachmentResult> {
+    const parsed = AttachPlaceCandidateExistingBodySchema.safeParse(body);
+    if (!parsed.success) throw new InvalidPlaceCandidateAttachmentResponseError();
+    return this.requestPlaceCandidateAttachment({
+      path: `/api/user/place-candidates/${encodeURIComponent(candidateId)}/attach-from-existing`,
+      body: parsed.data,
+      expected: {
+        operation: 'attach_existing',
+        idempotencyKey: parsed.data.idempotencyKey,
+        candidateId,
+      },
+    });
   }
 
   /**
@@ -2139,6 +2319,76 @@ export class WorkersAPIClient implements IService {
     await this.request<undefined>('/api/sync/queue/fail', {
       method: 'POST',
       body: JSON.stringify({ queueId, clientId, error }),
+    });
+  }
+
+  /**
+   * v2 signed-cursor page of pending items (Todo 34). Advertises the client's
+   * sync-queue capabilities so the server may serve the D1-backed v2 window; the
+   * legacy v1.5 methods above stay untouched for the two-release overlap.
+   */
+  async getSyncQueueV2(
+    clientId: string,
+    options: { cursor?: string | null; limit?: number } = {},
+  ): Promise<GetSyncQueueV2Response> {
+    this.ensureInitialized();
+    const params = new URLSearchParams({ clientId, protocolVersion: '2' });
+    if (options.cursor) params.set('cursor', options.cursor);
+    if (options.limit !== undefined) params.set('limit', String(options.limit));
+    return await this.request<GetSyncQueueV2Response>(`/api/sync/queue?${params.toString()}`, {
+      method: 'GET',
+      headers: { 'X-Sync-Queue-Capabilities': SYNC_QUEUE_CLIENT_CAPABILITIES.join(',') },
+    });
+  }
+
+  /**
+   * Idempotent ACK carrying the item's per-item version token and a stable
+   * mutation id, so a lost response can be replayed to the same version instead
+   * of double-applying. Returns the server's next version token.
+   */
+  async ackSyncItemV2(
+    queueId: string,
+    clientId: string,
+    versionToken: string,
+    mutationId: string,
+  ): Promise<{ versionToken?: string }> {
+    this.ensureInitialized();
+    const result = await this.request<{ versionToken?: string } | undefined>('/api/sync/queue/ack', {
+      method: 'POST',
+      headers: { 'X-Sync-Version-Token': versionToken, 'X-Sync-Mutation-Id': mutationId },
+      body: JSON.stringify({ queueId, clientId }),
+    });
+    return { versionToken: result?.versionToken };
+  }
+
+  /**
+   * Register (or re-register) this client with a durable idempotency key
+   * (`X-Idempotency-Key` header + `idempotencyKey` body) plus the
+   * sync-queue/executor capability advertisement (Todo 28 unified-v1).
+   *
+   * FORWARD-COMPATIBLE signals only: today's `/api/sync/clients` POST ignores
+   * the idempotency key (same-clientId dedupe is identity-based via
+   * vaultName+deviceId), and its settings sanitizer drops the
+   * `executor`/`syncQueue` capabilities. Server-side consumption (Todo 25
+   * deterministic-id path + sanitizer allowlist) is a deferred follow-up
+   * tracked for the Wave-6 P4 gate owner.
+   */
+  async registerSyncClientWithIdempotency(
+    request: RegisterSyncClientRequest,
+    idempotencyKey: string,
+  ): Promise<RegisterSyncClientResponse> {
+    this.ensureInitialized();
+    const settings = {
+      ...(request.settings ?? {}),
+      capabilities: {
+        ...((request.settings?.capabilities as Record<string, unknown> | undefined) ?? {}),
+        ...SYNC_CLIENT_REGISTRY_ADVERTISEMENT,
+      },
+    };
+    return await this.request<RegisterSyncClientResponse>('/api/sync/clients', {
+      method: 'POST',
+      headers: { 'X-Idempotency-Key': idempotencyKey },
+      body: JSON.stringify({ ...request, settings, idempotencyKey }),
     });
   }
 
@@ -2393,33 +2643,180 @@ export class WorkersAPIClient implements IService {
     });
   }
 
-  async searchProviderPlaces(queryValue: string): Promise<ProviderSearchResponse> {
+  async searchProviderPlaces(request: ProviderSearchRequest): Promise<ProviderSearchResponse> {
     this.ensureInitialized();
-    const query = queryValue.trim();
+    const normalized = ProviderSearchRequestSchema.safeParse(request);
+    if (!normalized.success) throw new InvalidPlaceApiResponseError('search');
     const response = await this.request<unknown>('/api/user/places/provider-search', {
       method: 'POST',
-      body: JSON.stringify({ provider: 'kakaomap', query, page: 1, size: 15 }),
+      body: JSON.stringify(normalized.data),
     });
-    const parsed = ProviderSearchResponseSchema.safeParse(response);
-    if (!parsed.success) throw new InvalidPlaceApiResponseError('search');
-    return parsed.data;
+    const parsed = parseProviderSearchResponse(response, normalized.data);
+    if (!parsed) throw new InvalidPlaceApiResponseError('search');
+    return parsed;
   }
 
-  async selectProviderPlace(
+  async selectProviderPlace(request: ProviderPlaceSelectionRequest): Promise<ProviderPlaceSelectionResponse> {
+    this.ensureInitialized();
+    const normalized = ProviderPlaceSelectionRequestSchema.safeParse(request);
+    if (!normalized.success) throw new InvalidPlaceApiResponseError('selection');
+    const response = await this.request<unknown>(
+      `/api/user/archives/${encodeURIComponent(normalized.data.archiveId)}/place-from-provider`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          selectionToken: normalized.data.selectionToken,
+          idempotencyKey: normalized.data.idempotencyKey,
+        }),
+      },
+    );
+    const parsed = parseProviderPlaceSelectionResponse(response, normalized.data);
+    if (!parsed) throw new InvalidPlaceApiResponseError('selection');
+    return parsed;
+  }
+
+  async getArchiveLocations(archiveId: string): Promise<readonly ArchiveLocation[]> {
+    this.ensureInitialized();
+    const response = await this.request<unknown>(
+      `/api/user/archives/${encodeURIComponent(archiveId)}/locations`,
+    );
+    const parsed = z.object({
+      archiveId: z.literal(archiveId),
+      locations: z.array(ArchiveLocationSchema).max(20),
+    }).strict().safeParse(response);
+    if (!parsed.success) throw new InvalidPlaceApiResponseError('selection');
+    return parsed.data.locations;
+  }
+
+  async attachProviderLocation(
     archiveId: string,
     selectionToken: string,
     idempotencyKey: string,
-  ): Promise<ProviderPlaceSelectionResponse> {
+  ): Promise<LocationAttachmentResult> {
     this.ensureInitialized();
     const response = await this.request<unknown>(
-      `/api/user/archives/${encodeURIComponent(archiveId)}/place-from-provider`,
+      `/api/user/archives/${encodeURIComponent(archiveId)}/location-from-provider`,
       {
         method: 'POST',
+        headers: { 'Idempotency-Key': idempotencyKey },
         body: JSON.stringify({ selectionToken, idempotencyKey }),
       },
     );
-    const parsed = ProviderPlaceSelectionResponseSchema.safeParse(response);
+    const parsed = LocationAttachmentResultSchema.safeParse(response);
+    if (!parsed.success
+      || parsed.data.sourceArchiveId !== archiveId
+      || parsed.data.locationId !== parsed.data.location.id) {
+      throw new InvalidPlaceApiResponseError('selection');
+    }
+    return parsed.data;
+  }
+
+  async attachExistingLocation(
+    archiveId: string,
+    representativeArchiveId: string,
+    placeKey: string,
+    idempotencyKey: string,
+  ): Promise<LocationAttachmentResult> {
+    this.ensureInitialized();
+    const response = await this.request<unknown>(
+      `/api/user/archives/${encodeURIComponent(archiveId)}/location-from-existing`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ representativeArchiveId, placeKey, idempotencyKey }),
+      },
+    );
+    const parsed = LocationAttachmentResultSchema.safeParse(response);
+    if (!parsed.success || parsed.data.sourceArchiveId !== archiveId) {
+      throw new InvalidPlaceApiResponseError('selection');
+    }
+    return parsed.data;
+  }
+
+  async patchArchiveLocation(
+    archiveId: string,
+    locationId: string,
+    patch: {
+      readonly isPrimary?: boolean;
+      readonly sortOrder?: number;
+      readonly name?: string;
+      readonly address?: string | null;
+      readonly url?: string | null;
+      readonly category?: string | null;
+    },
+  ): Promise<ArchiveLocation> {
+    this.ensureInitialized();
+    const response = await this.request<unknown>(
+      `/api/user/archives/${encodeURIComponent(archiveId)}/locations/${encodeURIComponent(locationId)}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+    );
+    const parsed = z.object({
+      archiveId: z.literal(archiveId),
+      location: ArchiveLocationSchema,
+    }).strict().safeParse(response);
+    if (!parsed.success || parsed.data.location.id !== locationId) {
+      throw new InvalidPlaceApiResponseError('selection');
+    }
+    return parsed.data.location;
+  }
+
+  async replaceProviderLocation(
+    archiveId: string,
+    locationId: string,
+    selectionToken: string,
+    idempotencyKey: string,
+  ): Promise<ArchiveLocation> {
+    this.ensureInitialized();
+    const response = await this.request<unknown>(
+      `/api/user/archives/${encodeURIComponent(archiveId)}/locations/${encodeURIComponent(locationId)}/replace-from-provider`,
+      {
+        method: 'POST',
+        headers: { 'Idempotency-Key': idempotencyKey },
+        body: JSON.stringify({ selectionToken, idempotencyKey }),
+      },
+    );
+    const parsed = z.object({
+      archiveId: z.literal(archiveId),
+      location: ArchiveLocationSchema,
+    }).strict().safeParse(response);
+    if (!parsed.success || parsed.data.location.id !== locationId) {
+      throw new InvalidPlaceApiResponseError('selection');
+    }
+    return parsed.data.location;
+  }
+
+  async deleteArchiveLocation(archiveId: string, locationId: string): Promise<void> {
+    this.ensureInitialized();
+    const response = await this.request<unknown>(
+      `/api/user/archives/${encodeURIComponent(archiveId)}/locations/${encodeURIComponent(locationId)}`,
+      { method: 'DELETE' },
+    );
+    const parsed = z.object({
+      archiveId: z.literal(archiveId),
+      locationId: z.literal(locationId),
+    }).strict().safeParse(response);
     if (!parsed.success) throw new InvalidPlaceApiResponseError('selection');
+  }
+
+  async promoteArchiveLocation(
+    archiveId: string,
+    locationId: string,
+    idempotencyKey: string,
+  ): Promise<LocationPromotionResult> {
+    this.ensureInitialized();
+    const response = await this.request<unknown>(
+      `/api/user/archives/${encodeURIComponent(archiveId)}/locations/${encodeURIComponent(locationId)}/promote`,
+      {
+        method: 'POST',
+        headers: { 'Idempotency-Key': idempotencyKey },
+        body: JSON.stringify({ intent: 'archive_place', idempotencyKey }),
+      },
+    );
+    const parsed = LocationPromotionResultSchema.safeParse(response);
+    if (!parsed.success
+      || parsed.data.sourceArchiveId !== archiveId
+      || parsed.data.location.id !== locationId) {
+      throw new InvalidPlaceApiResponseError('selection');
+    }
     return parsed.data;
   }
 

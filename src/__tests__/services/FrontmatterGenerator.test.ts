@@ -1172,4 +1172,30 @@ describe('FrontmatterGenerator', () => {
       expect(generator.generateFrontmatter(archivedPost).archive).toBe(true);
     });
   });
+
+  it('writes all location attachments as YAML-safe data while retaining primary legacy fields', () => {
+    const location = {
+      id: 'location-1', archiveId: 'archive-1', placeKey: 'kakaomap:101', name: '희작',
+      address: '서울 종로구', latitude: 37.1, longitude: 126.9, source: 'kakaomap', externalId: '101',
+      url: 'https://place.map.kakao.com/101', category: '카페', isPrimary: true, sortOrder: 0,
+      placeArchiveId: null, promotionStatus: 'metadata_only' as const,
+      createdAt: '2026-07-15T00:00:00.000Z', updatedAt: '2026-07-15T00:00:00.000Z',
+    };
+    const frontmatter = generator.generateFrontmatter(createTestPostData({
+      metadata: {
+        timestamp: new Date('2026-07-15T00:00:00.000Z'), location: '희작', latitude: 37.1,
+        longitude: 126.9, locationSource: 'kakaomap', locationExternalId: '101',
+        locationAddress: '서울 종로구', locationUrl: location.url, locationCategory: '카페',
+        locations: [location], locationCount: 1,
+      },
+    }));
+
+    expect(frontmatter).toMatchObject({
+      location: '희작', locationAddress: '서울 종로구', locationCount: 1,
+      locations: [expect.objectContaining({ id: 'location-1', archiveId: 'archive-1' })],
+    });
+    const document = generator.generateFullDocument(frontmatter, 'Body');
+    expect(document).toContain('locations:\n  - {"id":"location-1","archiveId":"archive-1"');
+    expect(document).not.toContain('[object Object]');
+  });
 });

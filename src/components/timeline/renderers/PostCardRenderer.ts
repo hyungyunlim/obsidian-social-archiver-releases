@@ -16,7 +16,7 @@ import { CompactPostCardRenderer } from './CompactPostCardRenderer';
 import { YouTubePlayerController } from '../controllers/YouTubePlayerController';
 import { VideoTranscriptPlayer } from './VideoTranscriptPlayer';
 import { ShareAPIClient } from '../../../services/ShareAPIClient';
-import type { AIActionType, AICommentPayload, ContentVariant, PlaceCandidateConfirmResult, TranscriptionJobMode, TranscriptionMediaRef, WorkersAPIClient } from '../../../services/WorkersAPIClient';
+import type { AIActionType, AICommentPayload, ContentVariant, ExtractPlaceCandidatesResult, PlaceCandidate, PlaceCandidateAttachmentResult, TranscriptionJobMode, TranscriptionMediaRef, WorkersAPIClient } from '../../../services/WorkersAPIClient';
 import { TextFormatter } from '../../../services/markdown/formatters/TextFormatter';
 import { TranscriptFormatter } from '../../../services/markdown/formatters/TranscriptFormatter';
 import { getAuthorCatalogStore } from '../../../services/AuthorCatalogStore';
@@ -39,8 +39,14 @@ import { resolvePinterestUrl } from '../../../utils/pinterest';
 import { AICommentBanner, type AICommentBannerActionId, type AICommentBannerOptions } from './AICommentBanner';
 import { PlaceCandidateBanner } from './PlaceCandidateBanner';
 import { PlaceCandidateStore } from '../../../services/PlaceCandidateStore';
-import { PlaceCandidateModal } from '../../../modals/PlaceCandidateModal';
+import { PlaceCandidateModal, type PlaceExtractionModalOutcome } from '../../../modals/PlaceCandidateModal';
+import { countNonHintPending, isWeakHintCandidate } from '../../../modals/placeCandidateReviewModel';
+import { BILLING_FALLBACK_MESSAGE } from '@social-archiver/cli-core';
 import { ArchivePlacePickerModal } from '../modals/ArchivePlacePickerModal';
+import {
+  applyPrimaryCandidateLocationFrontmatter,
+  getNewlyAttachedPrimaryLocation,
+} from './placeCandidateFrontmatterProjection';
 import { AICommentRenderer, type AICommentRendererOptions } from './AICommentRenderer';
 import { AICliDetector, type AICli, type AICliDetectionResult } from '../../../utils/ai-cli';
 import { parseAIComments, appendAIComment, removeAIComment, updateFrontmatterAIComments } from '../../../services/ai-comment/markdown-handler';
@@ -178,6 +184,11 @@ export class PostCardRenderer extends Component {
   // Place candidate banner components (Places P3c)
   private placeCandidateBanners: Map<string, PlaceCandidateBanner> = new Map();
   private placeCandidateStore: PlaceCandidateStore;
+  /** Open review modals keyed by server archive ID (Places P3b — WS refresh injection). */
+  private readonly openPlaceModals = new Map<string, PlaceCandidateModal>();
+  /** One-shot resolvers for in-flight extraction runs keyed by ai-action job id. */
+  private readonly placeExtractionWaiters = new Map<string, () => void>();
+  private placeExtractionListenerRegistered = false;
   private cachedCliDetection: Map<AICli, AICliDetectionResult> | null = null;
   private cliDetectionTimestamp: number = 0;
   private readonly CLI_DETECTION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -252,6 +263,12 @@ export class PostCardRenderer extends Component {
         return undefined;
       }
     });
+
+    // Places P3b: listen on the shared ai-action status stream so a terminal
+    // `places.extract_candidates` event refreshes the candidate store and any
+    // open review modal — even when the run finishes after the poll stopped or
+    // was triggered from another surface. `registerEvent` (Component) auto-cleans.
+    this.registerPlaceExtractionStatusListener();
 
     // Build the previewable orchestrator with a vault-aware context.
     // `resolveMediaUrl` mirrors `getAvatarSrc`'s vault-then-CDN-proxy strategy
@@ -1149,6 +1166,13 @@ export class PostCardRenderer extends Component {
         // Delete button
         this.renderDeleteButton(actionsBar, post, rootElement);
       }
+    }
+
+    // Attached-place chips (multi-location parity with desktop): a wrapping
+    // strip of per-place chips below the action bar. Non-embedded only; skipped
+    // for map-place archives (those ARE the place and render a map card).
+    if (!isEmbedded) {
+      this.renderLocationStrip(contentArea, post);
     }
 
     // Linked archives (relation connections) — end of the card body, before
@@ -3818,12 +3842,70 @@ export class PostCardRenderer extends Component {
         archiveId,
         currentLocation: post.metadata.location ?? null,
         api: this.plugin.workersApiClient,
+        hostLocale: window.localStorage.getItem('language') || window.navigator.language,
+        archiveMapsUrl: url => this.plugin.openArchiveModal(url),
         onChanged: async () => {
           await this.plugin.reconcileArchiveLocation(archiveId);
           this.plugin.refreshTimelineView();
         },
       }).open();
     });
+  }
+
+  /**
+   * Attached-place chip strip (desktop parity). Renders one map-pin chip per
+   * attached location below the action bar; each chip opens its map-provider
+   * page. Skipped for map-place archives (the archive IS the place → map card).
+   * ponytail: opens the provider URL instead of an in-plugin place view — the
+   * plugin has no place-detail surface yet.
+   */
+  private renderLocationStrip(parent: HTMLElement, post: PostData): void {
+    if (isMapPlaceCardEligible(post.platform)) return;
+
+    const locations = (post.metadata.locations ?? []).filter(
+      (loc) => loc.name?.trim() && loc.placeKey,
+    );
+    if (locations.length === 0) return;
+
+    const CAP = 8;
+    const strip = parent.createDiv({ cls: 'pcr-place-strip' });
+
+    const renderChips = (expanded: boolean): void => {
+      strip.empty();
+      const visible = expanded ? locations : locations.slice(0, CAP);
+      for (const loc of visible) {
+        const chip = strip.createEl('button', { cls: 'pcr-place-chip' });
+        chip.type = 'button';
+        chip.setAttribute('title', loc.name);
+        chip.setAttribute('aria-label', loc.name);
+        const icon = chip.createSpan({ cls: 'pcr-place-chip-icon' });
+        setIcon(icon, 'map-pin');
+        chip.createSpan({ cls: 'pcr-place-chip-name', text: loc.name });
+        const url = loc.url?.trim();
+        if (url) {
+          chip.addEventListener('click', (event) => {
+            event.stopPropagation();
+            window.open(url, '_blank', 'noopener,noreferrer');
+          });
+        } else {
+          chip.addClass('pcr-place-chip-static');
+        }
+      }
+
+      const hidden = locations.length - CAP;
+      if (!expanded && hidden > 0) {
+        const more = strip.createEl('button', { cls: 'pcr-place-chip pcr-place-chip-more' });
+        more.type = 'button';
+        more.setAttribute('aria-label', `Show ${hidden} more place(s)`);
+        more.createSpan({ text: `+${hidden}` });
+        more.addEventListener('click', (event) => {
+          event.stopPropagation();
+          renderChips(true);
+        });
+      }
+    };
+
+    renderChips(false);
   }
 
   /**
@@ -4302,6 +4384,26 @@ export class PostCardRenderer extends Component {
         }
       }
 
+      // Find places with AI (Places P3b §7.1): entry point for archives with no
+      // place suggestions yet. Archives that already have candidates surface the
+      // review banner instead, so this only shows when the store is empty.
+      if (!isEmbedded && this.plugin.settings.authToken) {
+        const placeArchiveId = this.resolveArchiveIdForContentVariants(post);
+        if (placeArchiveId) {
+          const pending = await this.placeCandidateStore.getPending(placeArchiveId).catch(() => []);
+          if (pending.length === 0) {
+            menu.addItem((item) => {
+              item
+                .setIcon('map-pin')
+                .setTitle('Find places with AI')
+                .onClick(() => {
+                  void this.openPlaceCandidateModal(post, placeArchiveId, rootElement, { allowEmpty: true });
+                });
+            });
+          }
+        }
+      }
+
       menu.addSeparator();
 
       // Delete button
@@ -4600,40 +4702,29 @@ export class PostCardRenderer extends Component {
       const combinedLinkPreviews = Array.from(new Set(validLinkPreviews));
       postData.linkPreviews = combinedLinkPreviews;
 
-      // Create share request with full post data
-      const shareRequest = {
+      // Todo 17: delegate to ShareAPIClient so this username-bearing write
+      // carries the Bearer principal + X-Client identity, canonical
+      // epoch-seconds expiry, a stable mutation ID, and — when the post is
+      // archive-backed — the top-level archiveId.
+      const rendererSourceArchiveId = this.resolveSourceArchiveId(post, file) ?? undefined;
+      const shareClient = new ShareAPIClient({
+        baseURL: workerUrl,
+        apiKey: this.plugin.settings.authToken,
+        vault: this.vault,
+        pluginVersion: this.plugin.manifest.version,
+      });
+      const shareData = await shareClient.createShare({
         postData,
         options: {
-          expiry: Date.now() + (30 * 24 * 60 * 60 * 1000), // 30 days for free tier
-          username: username  // Username for URL generation
+          expiry: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60, // 30 days, epoch seconds
+          username: username, // Username for URL generation
           // NOTE: Do not include shareId - let Workers generate it for new shares
-        }
-      };
-
-      // Call Worker API to create share
-      const response = await requestUrl({
-        url: `${workerUrl}/api/share`,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+          ...(rendererSourceArchiveId ? { sourceArchiveId: rendererSourceArchiveId } : {}),
         },
-        body: JSON.stringify(shareRequest),
-        throw: false
       });
 
-      if (response.status < 200 || response.status >= 300) {
-        throw new Error(`Share creation failed: ${response.status}`);
-      }
-
-      const resultRaw = response.json as Record<string, unknown>;
-      if (!resultRaw.success || !resultRaw.data) {
-        throw new Error('Invalid share response');
-      }
-
-      const shareData = resultRaw.data as Record<string, unknown>;
-      // Extract shareId and shareUrl from Worker API response
-      const shareId = shareData.shareId as string;
-      const shareUrl = shareData.shareUrl as string;
+      const shareId = shareData.shareId;
+      const shareUrl = shareData.shareUrl;
 
       // Register UI modify to prevent double refresh
       if (this.onUIModifyCallback) {
@@ -9458,6 +9549,14 @@ export class PostCardRenderer extends Component {
         await this.handleAICommentGenerateMulti(post, clis, type, banner, rootElement, customPrompt, language);
       },
       onRunAction: async (actionId: AICommentBannerActionId, cli: AICli, language?: AIOutputLanguage) => {
+        // Places is not a CLI action: hand off to the place-candidate modal,
+        // which owns the whole extraction flow (server lane, consent, spinner).
+        if (actionId === 'places.extract_candidates') {
+          const placeArchiveId = this.resolveArchiveIdForContentVariants(post);
+          if (!placeArchiveId) return;
+          await this.openPlaceCandidateModal(post, placeArchiveId, rootElement, { allowEmpty: true });
+          return;
+        }
         await this.handleTimelineAIActionRequest(post, actionId, cli, language);
       },
       onDecline: () => {
@@ -9466,6 +9565,7 @@ export class PostCardRenderer extends Component {
       actionItems: [
         { id: 'tags.suggest_apply', label: 'Suggest Tags' },
         { id: 'content.translate_variant', label: 'Translate Content' },
+        { id: 'places.extract_candidates', label: 'Find Places' },
       ],
       commentTypesEnabled: !ObsidianPlatform.isMobile,
       defaultActionId: 'content.translate_variant',
@@ -9527,12 +9627,10 @@ export class PostCardRenderer extends Component {
       const banner = new PlaceCandidateBanner();
       this.placeCandidateBanners.set(post.id, banner);
       banner.render(bannerContainer, {
-        pendingCount: pending.length,
-        // Data-driven, not evidenceType-driven: anchor candidates can carry
-        // addressText (anchor-v3) and are then directly confirmable.
-        hintOnly: pending.every(
-          (candidate) => !candidate.name && !candidate.addressText && !candidate.externalPlaceId,
-        ),
+        // Non-hint count drives the title; address-less weak hints are excluded
+        // so hint-only cards keep the question copy.
+        pendingCount: countNonHintPending(pending),
+        hintOnly: pending.every(isWeakHintCandidate),
         onReview: () => {
           void this.openPlaceCandidateModal(post, archiveId, rootElement);
         },
@@ -9545,11 +9643,17 @@ export class PostCardRenderer extends Component {
     }
   }
 
-  /** Open the review modal for the post's pending place candidates. */
+  /**
+   * Open the review modal for the post's pending place candidates.
+   *
+   * `allowEmpty` opens the modal even with zero candidates so the card-menu
+   * "Find places with AI" entry lands on the empty-state extract CTA (§7.1).
+   */
   private async openPlaceCandidateModal(
     post: PostData,
     archiveId: string,
-    rootElement: HTMLElement
+    rootElement: HTMLElement,
+    { allowEmpty = false }: { allowEmpty?: boolean } = {}
   ): Promise<void> {
     let apiClient: WorkersAPIClient;
     try {
@@ -9560,58 +9664,249 @@ export class PostCardRenderer extends Component {
     }
 
     const candidates = await this.placeCandidateStore.getPending(archiveId);
-    if (candidates.length === 0) {
+    if (candidates.length === 0 && !allowEmpty) {
       this.removePlaceCandidateBanner(post, rootElement);
       return;
     }
 
+    const currentLocations = await apiClient.getArchiveLocations(archiveId).catch(() => []);
     const modal = new PlaceCandidateModal(this.app, {
-      candidates: [...candidates],
-      currentLocation: this.readCurrentNoteLocation(post),
-      confirmCandidate: (candidateId, body) => apiClient.confirmPlaceCandidate(candidateId, body),
-      rejectCandidate: async (candidateId) => {
+      candidates,
+      currentLocations,
+      attachBatch: (body): Promise<PlaceCandidateAttachmentResult> => (
+        apiClient.attachPlaceCandidatesBatch(archiveId, body)
+      ),
+      rejectCandidate: async (candidateId): Promise<void> => {
         await apiClient.rejectPlaceCandidate(candidateId);
       },
-      archiveMapsUrl: (url) => {
-        this.plugin.openArchiveModal(url);
+      refetchCandidates: (): Promise<readonly PlaceCandidate[]> => (
+        this.placeCandidateStore.refresh(archiveId)
+      ),
+      openPlacePicker: (request): void => {
+        new ArchivePlacePickerModal(this.app, {
+          archiveId,
+          api: apiClient,
+          hostLocale: window.localStorage.getItem('language') || window.navigator.language,
+          candidateContext: { archiveId, candidateId: request.candidate.id },
+          initialView: request.initialView,
+          onCandidateAttached: request.onAttached,
+          onClosed: request.onClosed,
+        }).open();
       },
-      onApplied: async (result) => {
-        await this.applyConfirmedPlaceToNote(post, result);
-        this.placeCandidateStore.invalidate(archiveId);
-        this.removePlaceCandidateBanner(post, rootElement);
-        void this.refreshPostCardFull(post, rootElement);
+      onReconciled: async (result): Promise<void> => {
+        this.placeCandidateStore.reconcileAttachment(result);
+        await this.applyAttachedPrimaryPlaceToNote(post, result);
+        if (result.remainingPendingCount === 0) {
+          this.removePlaceCandidateBanner(post, rootElement);
+        }
+        await this.refreshPostCardFull(post, rootElement);
       },
-      onRejectedAll: () => {
-        this.placeCandidateStore.invalidate(archiveId);
-        this.removePlaceCandidateBanner(post, rootElement);
+      onCandidatesChanged: async (remaining): Promise<void> => {
+        const remainingIds = new Set(remaining.map((candidate) => candidate.id));
+        const cached = await this.placeCandidateStore.getPending(archiveId);
+        for (const candidate of cached) {
+          if (!remainingIds.has(candidate.id)) {
+            this.placeCandidateStore.removePending(archiveId, candidate.id);
+          }
+        }
+        if (remaining.length === 0) this.removePlaceCandidateBanner(post, rootElement);
+        await this.refreshPostCardFull(post, rootElement);
       },
-      onStale: () => {
-        this.placeCandidateStore.invalidate(archiveId);
-        this.removePlaceCandidateBanner(post, rootElement);
+      focusExtractCta: candidates.every(isWeakHintCandidate),
+      onExtract: (signal): Promise<PlaceExtractionModalOutcome> => (
+        this.runPlaceExtraction(post, archiveId, rootElement, signal)
+      ),
+      onModalClosed: (): void => {
+        if (this.openPlaceModals.get(archiveId) === modal) {
+          this.openPlaceModals.delete(archiveId);
+        }
       },
     });
+    this.openPlaceModals.set(archiveId, modal);
     modal.open();
   }
 
-  /** Current `location` frontmatter of the note, if any. */
-  private readCurrentNoteLocation(post: PostData): string | null {
-    if (!post.filePath) return null;
-    const file = this.vault.getAbstractFileByPath(post.filePath);
-    if (!(file instanceof TFile)) return null;
-    const frontmatter: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter;
-    const location = isRecord(frontmatter) ? frontmatter.location : undefined;
-    return typeof location === 'string' && location.length > 0 ? location : null;
+  // ---------------------------------------------------------------------------
+  // Places P3b — LLM extraction run state (§7.2)
+  // ---------------------------------------------------------------------------
+
+  /** Terminal ai-action job statuses (see AICommentJobStatus). */
+  private static readonly PLACE_EXTRACT_TERMINAL_STATUSES: ReadonlySet<string> = new Set([
+    'completed', 'failed', 'cancelled', 'expired',
+  ]);
+
+  private static readonly PLACE_EXTRACT_ACTION_TYPE = 'places.extract_candidates';
+  private static readonly PLACE_EXTRACT_POLL_INTERVAL_MS = 5000;
+
+  /**
+   * Drive one extraction run for an archive and return the refreshed candidate
+   * list. Handles the 200-replay path (immediate) and the 202-running path
+   * (WS terminal event races a 5s poll). All user-facing toasts fire here; the
+   * modal only shows the spinner and folds in the returned candidates.
+   */
+  private async runPlaceExtraction(
+    post: PostData,
+    archiveId: string,
+    rootElement: HTMLElement,
+    signal: AbortSignal,
+  ): Promise<PlaceExtractionModalOutcome> {
+    const apiClient = this.plugin.workersApiClient;
+    const beforeIds = new Set(
+      (await this.placeCandidateStore.getPending(archiveId)).map((candidate) => candidate.id),
+    );
+    let result: ExtractPlaceCandidatesResult;
+    try {
+      result = await apiClient.extractPlaceCandidates(archiveId, {
+        idempotencyKey: `place-extract:${crypto.randomUUID()}`,
+        includeOcr: true,
+      });
+    } catch (error) {
+      this.reportPlaceExtractionError(error);
+      throw error;
+    }
+
+    if (result.status === 'completed') {
+      // 200 replay — a prior run with the same content hash already produced these.
+      new Notice('Already analyzed — showing existing results');
+      const candidates = await this.placeCandidateStore.refresh(archiveId);
+      await this.refreshPostCardFull(post, rootElement);
+      return {
+        candidates,
+        message: candidates.length === 0
+          ? 'No places found in this post.'
+          : 'Already analyzed — showing existing results.',
+      };
+    }
+
+    // 202 running — wait for the terminal ai-action signal (WS or poll), then refresh.
+    await this.waitForPlaceExtractionTerminal(result.jobId, signal);
+    const candidates = await this.placeCandidateStore.refresh(archiveId);
+    const added = candidates.some((candidate) => !beforeIds.has(candidate.id));
+    if (!added) new Notice('No places found in this post');
+    await this.refreshPostCardFull(post, rootElement);
+    return {
+      candidates,
+      message: added ? 'Analysis complete.' : 'No places found in this post.',
+    };
   }
 
   /**
-   * Write the confirmed place into THIS note's frontmatter immediately
-   * (location, latitude, longitude, coordinates "lat, lng" — FrontmatterGenerator
-   * parity). Server sync for other clients rides ws:archives_bulk_updated.
+   * Resolve when the extraction job reaches a terminal state — whichever fires
+   * first between the shared WS ai-action status stream and a 5s poll — or when
+   * `signal` aborts (modal closed). Cleans up both on settle.
    */
-  private async applyConfirmedPlaceToNote(
+  private waitForPlaceExtractionTerminal(jobId: string, signal: AbortSignal): Promise<void> {
+    return new Promise<void>((resolve) => {
+      if (signal.aborted) { resolve(); return; }
+      let settled = false;
+      const poll = window.setInterval(() => {
+        void (async () => {
+          try {
+            const { job } = await this.plugin.workersApiClient.getAIActionJob(jobId);
+            if (PostCardRenderer.PLACE_EXTRACT_TERMINAL_STATUSES.has(job.status)) finish();
+          } catch {
+            // Transient poll failure — keep waiting; WS or a later poll settles it.
+          }
+        })();
+      }, PostCardRenderer.PLACE_EXTRACT_POLL_INTERVAL_MS);
+      const onAbort = (): void => finish();
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        this.placeExtractionWaiters.delete(jobId);
+        window.clearInterval(poll);
+        signal.removeEventListener('abort', onAbort);
+        resolve();
+      };
+      // The persistent WS listener resolves this waiter on a terminal event.
+      this.placeExtractionWaiters.set(jobId, finish);
+      signal.addEventListener('abort', onAbort);
+    });
+  }
+
+  /**
+   * Subscribe once to the shared ai-action status stream. A terminal
+   * `places.extract_candidates` event resolves any in-flight extraction waiter
+   * and refreshes the store + open review modal for the affected archive.
+   */
+  private registerPlaceExtractionStatusListener(): void {
+    if (this.placeExtractionListenerRegistered) return;
+    this.placeExtractionListenerRegistered = true;
+    this.registerEvent(
+      this.plugin.events.on('ws:ai_comment_status_updated', (payload: unknown) => {
+        const message = payload as {
+          data?: { jobId?: string; archiveId?: string; actionType?: string; status?: string };
+          jobId?: string; archiveId?: string; actionType?: string; status?: string;
+        };
+        const data = message.data ?? message;
+        if (data.actionType !== PostCardRenderer.PLACE_EXTRACT_ACTION_TYPE) return;
+        if (!data.status || !PostCardRenderer.PLACE_EXTRACT_TERMINAL_STATUSES.has(data.status)) return;
+        if (data.jobId) {
+          const waiter = this.placeExtractionWaiters.get(data.jobId);
+          if (waiter) { this.placeExtractionWaiters.delete(data.jobId); waiter(); }
+        }
+        if (data.archiveId) void this.refreshPlaceCandidatesAfterExtraction(data.archiveId);
+      }),
+    );
+  }
+
+  /** Refresh the store for `archiveId` and inject the result into any open modal. */
+  private async refreshPlaceCandidatesAfterExtraction(archiveId: string): Promise<void> {
+    try {
+      const candidates = await this.placeCandidateStore.refresh(archiveId);
+      this.openPlaceModals.get(archiveId)?.applyExtractionResult(candidates);
+    } catch (error) {
+      console.debug(
+        '[PostCardRenderer] Place extraction refresh failed:',
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+
+  /** Map an extract-endpoint failure to the right toast (§7.2 error handling). */
+  private reportPlaceExtractionError(error: unknown): void {
+    const code = error instanceof Error
+      ? (error as Error & { code?: string }).code
+      : undefined;
+    switch (code) {
+      case 'SERVER_AI_CONSENT_REQUIRED':
+        new Notice('Cloud AI must be enabled in plugin settings to find places.');
+        return;
+      case 'SERVER_AI_LOCAL_ONLY':
+        new Notice('Cloud AI place extraction is unavailable on this account.');
+        return;
+      case 'PAYWALL_REQUIRED':
+      case 'INSUFFICIENT_CREDITS':
+        new Notice(BILLING_FALLBACK_MESSAGE);
+        return;
+      case 'CANDIDATE_CAPACITY_EXCEEDED':
+        new Notice('Review the pending place suggestions first.');
+        return;
+      case 'INSUFFICIENT_CONTENT':
+        new Notice('This post has too little text to find places.');
+        return;
+      case 'RATE_LIMIT_EXCEEDED':
+        new Notice('Too many AI requests. Try again in a minute.');
+        return;
+      default:
+        new Notice(
+          error instanceof Error && error.message
+            ? `Could not find places: ${error.message}`
+            : 'Could not find places.',
+        );
+    }
+  }
+
+  /**
+   * Project only a newly attached primary into this note. Secondary locations
+   * remain server-canonical and never replace primary scalar frontmatter.
+   */
+  private async applyAttachedPrimaryPlaceToNote(
     post: PostData,
-    result: PlaceCandidateConfirmResult
+    result: PlaceCandidateAttachmentResult
   ): Promise<void> {
+    const primary = getNewlyAttachedPrimaryLocation(result);
+    if (!primary) return;
     if (!post.filePath) return;
     const file = this.vault.getAbstractFileByPath(post.filePath);
     if (!(file instanceof TFile)) return;
@@ -9620,13 +9915,7 @@ export class PostCardRenderer extends Component {
     this.onUIModifyCallback?.(post.filePath);
 
     await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-      const { location, latitude, longitude } = result.place;
-      if (location !== null) fm.location = location;
-      if (latitude !== null && longitude !== null) {
-        fm.latitude = latitude;
-        fm.longitude = longitude;
-        fm.coordinates = `${latitude}, ${longitude}`;
-      }
+      applyPrimaryCandidateLocationFrontmatter(fm, primary);
     });
   }
 
@@ -10824,6 +11113,10 @@ export class PostCardRenderer extends Component {
     }
     this.placeCandidateBanners.clear();
     this.placeCandidateStore.clear();
+    this.openPlaceModals.clear();
+    // Unblock any waiters so in-flight extraction promises settle on teardown.
+    for (const resolve of this.placeExtractionWaiters.values()) resolve();
+    this.placeExtractionWaiters.clear();
 
     // Cleanup video transcript players
     for (const player of this.videoTranscriptPlayers.values()) {

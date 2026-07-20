@@ -35,6 +35,33 @@ function makeArchive(overrides: Partial<UserArchive> = {}): UserArchive {
 }
 
 describe('convertUserArchiveToPostData', () => {
+  it('preserves the full location attachment array and the legacy primary projection', () => {
+    const locations = [{
+      id: 'location-1', archiveId: 'archive-1', placeKey: 'kakaomap:101', name: '희작',
+      address: '서울 종로구', latitude: 37.1, longitude: 126.9, source: 'kakaomap',
+      externalId: '101', url: 'https://place.map.kakao.com/101', category: '카페',
+      isPrimary: true, sortOrder: 0, placeArchiveId: null, promotionStatus: 'metadata_only' as const,
+      createdAt: '2026-07-15T00:00:00.000Z', updatedAt: '2026-07-15T00:00:00.000Z',
+    }, {
+      id: 'location-2', archiveId: 'archive-1', placeKey: 'googlemaps:ChIJ2', name: 'Second Cafe',
+      address: 'Seoul', latitude: 37.2, longitude: 127, source: 'googlemaps', externalId: 'ChIJ2',
+      url: 'https://www.google.com/maps/search/?api=1&query_place_id=ChIJ2', category: 'cafe',
+      isPrimary: false, sortOrder: 1, placeArchiveId: 'place-2', promotionStatus: 'archived' as const,
+      createdAt: '2026-07-15T00:01:00.000Z', updatedAt: '2026-07-15T00:02:00.000Z',
+    }];
+    const post = convertUserArchiveToPostData(makeArchive({
+      location: '희작', locationAddress: '서울 종로구', latitude: 37.1, longitude: 126.9,
+      locationSource: 'kakaomap', locationExternalId: '101', locationUrl: locations[0]?.url,
+      locationCategory: '카페', locations, locationCount: 2,
+    }));
+
+    expect(post.metadata).toMatchObject({
+      location: '희작', locationAddress: '서울 종로구', locationSource: 'kakaomap',
+      locationExternalId: '101', locationCount: 2,
+    });
+    expect(post.metadata.locations).toEqual(locations);
+  });
+
   it('does not duplicate X article body when articleMarkdown already contains the intro link block', () => {
     const articleMarkdown = [
       '## 1',

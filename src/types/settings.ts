@@ -106,7 +106,16 @@ export interface AIActionQuotaSummary {
   remaining: number;
   resetAt: string;
   unlimited?: boolean;
+  breakdown?: readonly CloudCreditBreakdownItem[];
 }
+
+export interface CloudCreditBreakdownItem {
+  actionType: string;
+  used: number;
+  reserved: number;
+}
+
+export type CloudCreditQuotaSummary = AIActionQuotaSummary;
 
 export interface BillingPolicySummary {
   betaFreeSunsetAt?: string | null;
@@ -117,6 +126,7 @@ export interface BillingUsageSummary {
   plan: string;
   archiveQuota: ArchiveQuotaSummary;
   aiActionQuota?: AIActionQuotaSummary;
+  cloudCreditQuota?: CloudCreditQuotaSummary;
   billing?: {
     entitlementActive?: boolean;
     source?: string;
@@ -675,6 +685,13 @@ export interface SocialArchiverSettings {
    * conversion pass). Unset/empty = pending; retried on foreground catch-up.
    */
   bodyWikilinkBackfillDoneAt?: string;
+
+  /**
+   * One-time migration marker: moves the legacy `locations` object-array out of
+   * frontmatter (which Obsidian's Properties editor flags as invalid) and into
+   * the hidden `%% sa:locations %%` body block. Bumped when the migration runs.
+   */
+  locationBodyBlockMigrationVersion?: number;
 
   /**
    * One-time full library reconcile marker for archive-state/delete drift.

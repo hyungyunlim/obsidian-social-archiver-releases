@@ -6,6 +6,11 @@ export interface ArchivePlacePickerTabs {
 
 const VIEWS: readonly ArchivePlacePickerView[] = ['existing', 'search'];
 
+const VIEW_LABELS = {
+  existing: 'Existing',
+  search: 'Search',
+} as const satisfies Record<ArchivePlacePickerView, string>;
+
 export function createArchivePlacePickerTabs(
   parent: HTMLElement,
   onSelect: (view: ArchivePlacePickerView) => void,
@@ -31,7 +36,7 @@ export function createArchivePlacePickerTabs(
 
   for (const view of VIEWS) {
     const tab = tablist.createEl('button', {
-      text: view === 'existing' ? 'Existing' : 'Search Kakao',
+      text: VIEW_LABELS[view],
       cls: 'sa-place-picker-tab',
     });
     tab.type = 'button';

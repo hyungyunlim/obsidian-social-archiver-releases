@@ -108,6 +108,11 @@ const CATEGORY_FIELDS: Record<keyof FrontmatterFieldVisibility, string[]> = {
     'location',
     'locationSource',
     'locationExternalId',
+    'locationAddress',
+    'locationUrl',
+    'locationCategory',
+    'locations',
+    'locationCount',
   ],
   subscription: ['subscribed', 'subscriptionId'],
   seriesInfo: ['series', 'seriesUrl', 'seriesId', 'episode', 'totalEpisodes', 'starScore', 'genre', 'ageRating', 'finished', 'publishDay'],
@@ -329,6 +334,14 @@ export class FrontmatterGenerator {
     if (postData.metadata.locationExternalId) {
       frontmatter.locationExternalId = postData.metadata.locationExternalId;
     }
+    if (postData.metadata.locationAddress) frontmatter.locationAddress = postData.metadata.locationAddress;
+    if (postData.metadata.locationUrl) frontmatter.locationUrl = postData.metadata.locationUrl;
+    if (postData.metadata.locationCategory) frontmatter.locationCategory = postData.metadata.locationCategory;
+    // NOTE: the full `locations` array is NOT written to frontmatter — Obsidian's
+    // Properties editor cannot render an array-of-objects and flags it as invalid.
+    // It rides in a hidden `%% sa:locations %%` body block instead (appended in
+    // MarkdownConverter.convert / reconciled by LocationFrontmatterSyncService).
+    // Only the flat primary-place fields above stay in frontmatter.
 
     // Bases Map View compatible coordinates format: "lat, lng"
     if (postData.metadata.latitude !== undefined && postData.metadata.longitude !== undefined) {
@@ -490,6 +503,10 @@ ${content}`;
   private formatYamlValue(value: unknown): string {
     if (value instanceof Date) {
       return value.toISOString();
+    }
+
+    if (typeof value === 'object' && value !== null) {
+      return JSON.stringify(value);
     }
 
     // Quote strings that contain YAML special characters or start with @

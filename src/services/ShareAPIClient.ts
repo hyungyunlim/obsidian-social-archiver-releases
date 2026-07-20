@@ -94,12 +94,169 @@ export interface ShareAPIResponse {
   shareId: string;
   shareUrl: string;
   passwordProtected: boolean;
+  /** Expiry as canonical epoch seconds (normalized from RFC3339 or legacy numbers). */
   expiresAt?: number;
+  /** Additive AD-3 linkage envelope; absent on servers that predate it. */
+  linkage?: ShareLinkageInfo;
   /**
    * Populated only by `updateShareWithMedia`. Other endpoints
    * (`createShare`, `getShareInfo`) leave this `undefined`.
    */
   mediaStats?: ShareMediaStats;
+}
+
+// ─── Public share write contract (kv-read-optimization Todo 17, PRD AD-2/AD-3) ───
+
+/** Finite epoch values at/above this threshold are milliseconds; below, seconds. */
+export const EPOCH_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
+
+/** Normalize a legacy seconds-or-milliseconds epoch value to canonical epoch seconds. */
+export function normalizeExpiryToEpochSeconds(expiry: number): number {
+  if (!Number.isFinite(expiry)) return expiry;
+  return Math.floor(expiry >= EPOCH_MILLISECONDS_THRESHOLD ? expiry / 1000 : expiry);
+}
+
+/** Additive linkage envelope returned by servers that implement PRD AD-3. */
+export interface ShareLinkageInfo {
+  id: string;
+  state?: string;
+  projectionRevision?: number;
+}
+
+/** Marks a create as an Obsidian first-share that will finalize via post-import. */
+export interface ShareLinkageIntent {
+  /** Durable identity of one first-share intent, e.g. `${username}:${noteId}`. */
+  intentKey: string;
+}
+
+interface PendingShareLinkage {
+  createIdempotencyKey: string;
+  createMutationId: string;
+  mediaMutationId?: string;
+  importMutationId?: string;
+  linkageId?: string;
+  projectionRevision: number;
+  shareId?: string;
+}
+
+function generateUuidV4(): string {
+  const cryptoApi = globalThis.crypto;
+  if (cryptoApi && typeof cryptoApi.randomUUID === 'function') {
+    return cryptoApi.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => {
+    const r = (Math.random() * 16) | 0;
+    return (ch === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+/** Read explicit `passwordProtected`, falling back to legacy `options.password` for one release. */
+export function readSharePasswordProtected(data: Record<string, unknown>): boolean {
+  if (typeof data['passwordProtected'] === 'boolean') return data['passwordProtected'];
+  const options = data['options'] as Record<string, unknown> | undefined;
+  return typeof options?.['password'] === 'string' && options['password'].length > 0;
+}
+
+/** Read RFC3339 `expiresAt` (preferred) or legacy numeric expiry as epoch seconds. */
+export function readShareExpiresAtEpochSeconds(data: Record<string, unknown>): number | undefined {
+  const explicit = data['expiresAt'];
+  if (typeof explicit === 'string') {
+    const parsed = Date.parse(explicit);
+    if (!Number.isNaN(parsed)) return Math.floor(parsed / 1000);
+  }
+  if (typeof explicit === 'number') return normalizeExpiryToEpochSeconds(explicit);
+  const options = data['options'] as Record<string, unknown> | undefined;
+  const legacy = options?.['expiry'];
+  if (typeof legacy === 'number') return normalizeExpiryToEpochSeconds(legacy);
+  return undefined;
+}
+
+function readShareLinkage(data: Record<string, unknown>): ShareLinkageInfo | undefined {
+  const raw = data['linkage'] as Record<string, unknown> | undefined;
+  if (!raw || typeof raw['id'] !== 'string') return undefined;
+  return {
+    id: raw['id'],
+    ...(typeof raw['state'] === 'string' ? { state: raw['state'] } : {}),
+    ...(typeof raw['projectionRevision'] === 'number'
+      ? { projectionRevision: raw['projectionRevision'] }
+      : {}),
+  };
+}
+
+const LINKAGE_STORAGE_KEY = 'social-archiver:pending-share-linkage:v1';
+
+/**
+ * Durable pending-share linkage state (PRD AD-3): the create idempotency key
+ * and every mutation ID must survive network/5xx retries AND app restarts.
+ * Persists to localStorage (available in the Obsidian renderer) with a
+ * module-level in-memory fallback for headless environments.
+ */
+class PendingShareLinkageStore {
+  private static memory: Record<string, PendingShareLinkage> = {};
+
+  private readAll(): Record<string, PendingShareLinkage> {
+    try {
+      const raw = globalThis.localStorage?.getItem(LINKAGE_STORAGE_KEY);
+      if (raw) return JSON.parse(raw) as Record<string, PendingShareLinkage>;
+    } catch (error) {
+      // Corrupt or unavailable storage — fall back to the in-memory copy.
+      console.warn('[ShareAPIClient] pending-share linkage state unreadable:', error instanceof Error ? error.message : error);
+      return PendingShareLinkageStore.memory;
+    }
+    return PendingShareLinkageStore.memory;
+  }
+
+  private writeAll(all: Record<string, PendingShareLinkage>): void {
+    PendingShareLinkageStore.memory = all;
+    try {
+      globalThis.localStorage?.setItem(LINKAGE_STORAGE_KEY, JSON.stringify(all));
+    } catch (error) {
+      // The in-memory fallback above already holds the state.
+      console.warn('[ShareAPIClient] pending-share linkage state not persisted:', error instanceof Error ? error.message : error);
+    }
+  }
+
+  getOrCreate(intentKey: string): PendingShareLinkage {
+    const all = this.readAll();
+    const existing = all[intentKey];
+    if (existing) return existing;
+    const created: PendingShareLinkage = {
+      createIdempotencyKey: generateUuidV4(),
+      createMutationId: generateUuidV4(),
+      projectionRevision: 1,
+    };
+    all[intentKey] = created;
+    this.writeAll(all);
+    return created;
+  }
+
+  update(intentKey: string, patch: Partial<PendingShareLinkage>): void {
+    const all = this.readAll();
+    const existing = all[intentKey];
+    if (!existing) return;
+    all[intentKey] = { ...existing, ...patch };
+    this.writeAll(all);
+  }
+
+  findByShareId(shareId: string): { intentKey: string; state: PendingShareLinkage } | null {
+    const all = this.readAll();
+    for (const [intentKey, state] of Object.entries(all)) {
+      if (state.shareId === shareId) return { intentKey, state };
+    }
+    return null;
+  }
+
+  clearByShareId(shareId: string): void {
+    const all = this.readAll();
+    let changed = false;
+    for (const [intentKey, state] of Object.entries(all)) {
+      if (state.shareId === shareId) {
+        delete all[intentKey];
+        changed = true;
+      }
+    }
+    if (changed) this.writeAll(all);
+  }
 }
 
 /**
@@ -251,6 +408,11 @@ export class ShareAPIClient implements IService {
   // promise settles.
   private static inflightUpdateWithMedia: Map<string, Promise<ShareAPIResponse>> = new Map();
 
+  // Durable pending first-share linkage state shared across client instances
+  // (Todo 17). Static so every code path (timeline, session, CLI) replays the
+  // same persisted identities.
+  private static linkageStore = new PendingShareLinkageStore();
+
   constructor(config: ShareAPIConfig) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.vault = config.vault;
@@ -306,13 +468,26 @@ export class ShareAPIClient implements IService {
       console.debug('[ShareAPIClient] Request:', { method, url, headers, body });
     }
 
-    const response = await requestUrl({
-      url,
-      method,
-      headers,
-      body: serializedBody,
-      throw: false,
-    });
+    let response;
+    try {
+      response = await requestUrl({
+        url,
+        method,
+        headers,
+        body: serializedBody,
+        throw: false,
+      });
+    } catch (error) {
+      // requestUrl throwing means the network layer itself failed (DNS,
+      // connection reset, …) — surface it as a retryable NetworkError.
+      if (error instanceof HttpError) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      throw new NetworkError(
+        `Network request failed: ${message}`,
+        undefined,
+        error instanceof Error ? error : undefined
+      );
+    }
 
     if (this.config.debug) {
       console.debug('[ShareAPIClient] Response:', {
@@ -345,21 +520,93 @@ export class ShareAPIClient implements IService {
   }
 
   /**
-   * Create a share link for a post
+   * Serialize a share request into the canonical wire payload (Todo 17):
+   * - `options.expiry` is normalized to epoch seconds (dual-unit adapter)
+   * - archive-backed shares promote their archive ID to top-level `archiveId`
+   * - client-only fields are stripped
+   * Requests without options are passed through byte-identically.
    */
-  async createShare(request: ShareAPIRequest): Promise<ShareAPIResponse> {
+  private toWirePayload(request: ShareAPIRequest): Record<string, unknown> {
+    if (!request.options) return { ...request };
+    const options: Record<string, unknown> = { ...request.options };
+    delete options['mediaSourceUrls']; // client-side hint, never serialized
+    if (typeof options['expiry'] === 'number') {
+      options['expiry'] = normalizeExpiryToEpochSeconds(options['expiry']);
+    }
+    const payload: Record<string, unknown> = { ...request, options };
+    const backing = request.options.sourceArchiveId ?? request.options.archiveId;
+    if (typeof backing === 'string' && backing.length > 0 && payload['archiveId'] === undefined) {
+      payload['archiveId'] = backing;
+    }
+    return payload;
+  }
+
+  /** Normalize a raw share response into the narrow client contract. */
+  private toShareResponse(data: Record<string, unknown>): ShareAPIResponse {
+    const expiresAt = readShareExpiresAtEpochSeconds(data);
+    const linkage = readShareLinkage(data);
+    return {
+      shareId: data['shareId'] as string,
+      shareUrl: (data['shareUrl'] || '') as string,
+      passwordProtected: readSharePasswordProtected(data),
+      ...(expiresAt !== undefined ? { expiresAt } : {}),
+      ...(linkage ? { linkage } : {}),
+    };
+  }
+
+  private unwrapShareData(
+    result: { success: boolean; data: Record<string, unknown> } | Record<string, unknown>
+  ): Record<string, unknown> {
+    if (result && typeof result === 'object' && 'success' in result && 'data' in result) {
+      return result.data as Record<string, unknown>;
+    }
+    return result;
+  }
+
+  /**
+   * Create a share link for a post.
+   *
+   * Pass `linkage` for Obsidian first-shares (no archive backing yet): the
+   * create then carries the AD-3 post-import headers with a durable UUIDv4
+   * idempotency key + mutation ID that survive retries and app restarts.
+   */
+  async createShare(request: ShareAPIRequest, linkage?: ShareLinkageIntent): Promise<ShareAPIResponse> {
+    const payload = this.toWirePayload(request);
+    let intentKey: string | undefined;
+    let linkageHeaders: Record<string, string> | undefined;
+    if (linkage?.intentKey && request.options?.username && payload['archiveId'] === undefined) {
+      intentKey = linkage.intentKey;
+      const pending = ShareAPIClient.linkageStore.getOrCreate(intentKey);
+      linkageHeaders = {
+        'X-Share-Linkage-Mode': 'post-import',
+        'X-Share-Create-Idempotency-Key': pending.createIdempotencyKey,
+        'X-Share-Mutation-Id': pending.createMutationId,
+      };
+    }
     return this.executeWithRetry(async () => {
-      const result = await this.httpRequest<{ success: boolean; data: ShareAPIResponse } | ShareAPIResponse>(
+      const result = await this.httpRequest<{ success: boolean; data: Record<string, unknown> } | Record<string, unknown>>(
         'POST',
         '/api/share',
-        request
+        payload,
+        linkageHeaders
       );
-      // Workers API returns { success: true, data: ShareAPIResponse }
-      // Handle both wrapped and unwrapped formats
-      if (result && typeof result === 'object' && 'success' in result && 'data' in result) {
-        return (result).data;
+      const data = this.unwrapShareData(result);
+      const response = this.toShareResponse(data);
+      if (intentKey) {
+        // Bind the server share identity (and, when present, the additive
+        // linkage envelope) to the durable pending state. Absence of
+        // `data.linkage` is tolerated: current servers do not return it yet.
+        ShareAPIClient.linkageStore.update(intentKey, {
+          shareId: response.shareId,
+          ...(response.linkage
+            ? {
+                linkageId: response.linkage.id,
+                projectionRevision: response.linkage.projectionRevision ?? 1,
+              }
+            : {}),
+        });
       }
-      return result;
+      return response;
     });
   }
 
@@ -377,20 +624,48 @@ export class ShareAPIClient implements IService {
       }
     };
 
+    // Todo 17: every update carries a mutation ID that is stable across
+    // retries. For pending first-share linkages the media mutation ID is
+    // persisted (restart replay) together with the linkage fence headers.
+    const pending = ShareAPIClient.linkageStore.findByShareId(shareId);
+    const mutationHeaders: Record<string, string> = {};
+    if (pending) {
+      let mediaMutationId = pending.state.mediaMutationId;
+      if (!mediaMutationId) {
+        mediaMutationId = generateUuidV4();
+        ShareAPIClient.linkageStore.update(pending.intentKey, { mediaMutationId });
+      }
+      mutationHeaders['X-Share-Mutation-Id'] = mediaMutationId;
+      if (pending.state.linkageId) {
+        mutationHeaders['X-Share-Linkage-Id'] = pending.state.linkageId;
+      }
+      mutationHeaders['If-Match-Projection-Revision'] = String(pending.state.projectionRevision);
+    } else {
+      mutationHeaders['X-Share-Mutation-Id'] = generateUuidV4();
+    }
+
     // Serialize requests for the same shareId to prevent race conditions
     const existingQueue = ShareAPIClient.updateQueues.get(shareId) || Promise.resolve({} as ShareAPIResponse);
 
     const newRequest = existingQueue.then(async () => {
       return this.executeWithRetry(async () => {
-        const result = await this.httpRequest<{ success: boolean; data: ShareAPIResponse } | ShareAPIResponse>(
+        const result = await this.httpRequest<{ success: boolean; data: Record<string, unknown> } | Record<string, unknown>>(
           'POST',
           '/api/share',
-          updateRequest
+          this.toWirePayload(updateRequest),
+          mutationHeaders
         );
-        if (result && typeof result === 'object' && 'success' in result && 'data' in result) {
-          return (result).data;
+        const response = this.toShareResponse(this.unwrapShareData(result));
+        if (pending) {
+          // Advance the projection fence. Servers without AD-3 return no
+          // linkage envelope; assume the canonical single increment then.
+          ShareAPIClient.linkageStore.update(pending.intentKey, {
+            projectionRevision:
+              response.linkage?.projectionRevision ?? pending.state.projectionRevision + 1,
+            ...(response.linkage ? { linkageId: response.linkage.id } : {}),
+          });
         }
-        return result;
+        return response;
       });
     }).finally(() => {
       // Clean up queue entry after completion
@@ -421,23 +696,10 @@ export class ShareAPIClient implements IService {
         'GET',
         `/api/share/${shareId}`
       );
-      // Workers API returns { success: true, data: shareData }
-      if (result && typeof result === 'object' && 'success' in result && 'data' in result) {
-        const data = result.data as Record<string, unknown>;
-        return {
-          shareId: data.shareId as string,
-          shareUrl: (data.shareUrl || '') as string,
-          passwordProtected: !!(data.options as Record<string, unknown> | undefined)?.password,
-        };
-      }
-      // Unwrapped format (tests return response directly)
-      const r = result;
-      return {
-        shareId: r.shareId as string,
-        shareUrl: (r.shareUrl || '') as string,
-        passwordProtected: !!(r.options as Record<string, unknown> | undefined)?.password,
-        expiresAt: r.expiresAt != null ? Number(r.expiresAt) : undefined,
-      };
+      // Prefers explicit `passwordProtected` / RFC3339 `expiresAt` (AD-2) and
+      // falls back to legacy `options.password` / numeric expiry for one
+      // stable release.
+      return this.toShareResponse(this.unwrapShareData(result));
     });
   }
 
@@ -1242,12 +1504,35 @@ export class ShareAPIClient implements IService {
    * @returns archiveId and whether a new archive was created
    */
   async importShareArchive(shareId: string): Promise<{ archiveId: string; created: boolean }> {
+    // Todo 17 (PRD AD-3): when this import finalizes a pending first-share
+    // linkage, send the durable {linkageId, mutationId,
+    // expectedProjectionRevision} triple. The current server ignores the
+    // body; AD-3 servers use it for exact one-time finalize/replay.
+    const pending = ShareAPIClient.linkageStore.findByShareId(shareId);
+    let body: Record<string, unknown> | undefined;
+    if (pending) {
+      let importMutationId = pending.state.importMutationId;
+      if (!importMutationId) {
+        importMutationId = generateUuidV4();
+        ShareAPIClient.linkageStore.update(pending.intentKey, { importMutationId });
+      }
+      body = {
+        ...(pending.state.linkageId ? { linkageId: pending.state.linkageId } : {}),
+        mutationId: importMutationId,
+        expectedProjectionRevision: pending.state.projectionRevision,
+      };
+    }
     return this.executeWithRetry(async () => {
       const result = await this.httpRequest<{
         success: boolean;
         data: { archiveId: string; created: boolean };
-      }>('POST', `/api/user/posts/import-share/${shareId}`);
+      }>('POST', `/api/user/posts/import-share/${shareId}`, body);
 
+      if (pending) {
+        // Import succeeded — the linkage is finalized; drop the pending state
+        // so the next share of the same note starts a fresh intent.
+        ShareAPIClient.linkageStore.clearByShareId(shareId);
+      }
       return result.data;
     });
   }
@@ -1262,14 +1547,14 @@ export class ShareAPIClient implements IService {
   /**
    * Initialize the service
    */
-  initialize(): void {
+  async initialize(): Promise<void> {
     // No initialization needed
   }
 
   /**
    * Cleanup resources
    */
-  cleanup(): void {
+  async cleanup(): Promise<void> {
     // No cleanup needed
   }
 }

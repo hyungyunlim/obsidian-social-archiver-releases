@@ -162,10 +162,18 @@ export class PostShareService {
       );
 
       const postDataWithoutMedia = { ...postData, media: [] };
-      const createResponse = await shareClient.createShare({
+      // Todo 17 (PRD AD-3): first shares have no archive backing yet, so the
+      // create declares a durable post-import linkage intent; the media update
+      // and import-share finalize replay the same persisted identities.
+      const createRequest = {
         postData: postDataWithoutMedia,
         options: shareOptions,
-      });
+      };
+      const createResponse = !isReshare && settings.username
+        ? await shareClient.createShare(createRequest, {
+            intentKey: `${settings.username}:${postData.id}`,
+          })
+        : await shareClient.createShare(createRequest);
 
       let shareResponse = createResponse;
       if (media.length > 0) {

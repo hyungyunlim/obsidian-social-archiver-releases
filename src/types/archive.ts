@@ -110,6 +110,17 @@ export interface YamlFrontmatter {
    * the registry.
    */
   publisherName?: string;
+  location?: string;
+  latitude?: number;
+  longitude?: number;
+  coordinates?: string;
+  locationSource?: string;
+  locationExternalId?: string;
+  locationAddress?: string;
+  locationUrl?: string;
+  locationCategory?: string;
+  locations?: Array<Record<string, unknown>>;
+  locationCount?: number;
   // Mobile Annotation Sync fields
   /** Stable server archive ID used as primary lookup key for annotation sync */
   sourceArchiveId?: string;

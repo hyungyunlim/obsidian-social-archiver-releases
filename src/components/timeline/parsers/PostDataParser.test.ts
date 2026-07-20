@@ -978,3 +978,49 @@ Content body
     expect(post?.media?.[0]?.url).toBe('attachments/duplicate.jpg');
   });
 });
+
+describe('PostDataParser - trailing media gallery stripping is not catastrophic', () => {
+  const parser = new PostDataParser({} as any);
+
+  const images = (n: number): string => {
+    let out = '';
+    for (let i = 0; i < n; i++) {
+      out += `![map${i}](attachments/social-archives/googlemaps/pic${i}.jpg)\n\n`;
+    }
+    return out;
+  };
+
+  // Catastrophic case: many images followed by a NON-image caption, so the `$`
+  // anchor fails. The old `(?:…\s*\n*)+$` form backtracked exponentially and froze
+  // the main thread; the fixed `\s*` form fails fast. The gallery is (correctly)
+  // NOT stripped here because it is not the trailing block — we only guard timing.
+  const galleryThenCaption = (n: number): string =>
+    `Place note body.\n\n---\n${images(n)}trailing caption line that is not an image`;
+
+  // Genuinely-trailing gallery (no caption) → SHOULD be stripped.
+  const trailingGallery = (n: number): string =>
+    `Place note body.\n\n---\n${images(n)}`;
+
+  it('extractBlogContentWithImages does not hang on a 30-image + caption tail', () => {
+    const t0 = performance.now();
+    const out = (parser as any).extractBlogContentWithImages(galleryThenCaption(30)) as string;
+    // Catastrophic form takes many seconds even at ~18 images; a 1s ceiling flags
+    // a regression without being flaky.
+    expect(performance.now() - t0).toBeLessThan(1000);
+    expect(out).toContain('trailing caption line that is not an image');
+  });
+
+  it('extractBlogContentWithImages still strips a genuinely-trailing gallery', () => {
+    const out = (parser as any).extractBlogContentWithImages(trailingGallery(30)) as string;
+    expect(out).not.toContain('pic29.jpg');
+    expect(out).toContain('Place note body.');
+  });
+
+  it('extractXArticleContent does not hang on a 30-image + caption tail', () => {
+    const input = `---\nplatform: x\n---\n\n${images(30)}trailing caption line that is not an image`;
+    const t0 = performance.now();
+    const out = (parser as any).extractXArticleContent(input) as string;
+    expect(performance.now() - t0).toBeLessThan(1000);
+    expect(out).toContain('trailing caption line that is not an image');
+  });
+});

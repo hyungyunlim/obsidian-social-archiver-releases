@@ -380,6 +380,11 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
       longitude: archive.longitude ?? undefined,
       locationSource: archive.locationSource ?? undefined,
       locationExternalId: archive.locationExternalId ?? undefined,
+      locationAddress: archive.locationAddress ?? undefined,
+      locationUrl: archive.locationUrl ?? undefined,
+      locationCategory: archive.locationCategory ?? undefined,
+      locations: archive.locations,
+      locationCount: archive.locationCount ?? archive.locations?.length,
     },
     ...(quoted ? {
       quotedPost: {

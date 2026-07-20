@@ -989,6 +989,11 @@ button.pcr-action-btn {
   appearance: none;
   padding: 0;
   border: 0;
+  border-radius: 0;
+  /* Obsidian's default <button> chrome adds a raised box-shadow. Some action
+     items are real <button>s (Places async-linking rework), so strip it or the
+     icons read as embossed chips. */
+  box-shadow: none;
   background: transparent;
   font: inherit;
 }
@@ -1028,6 +1033,74 @@ button.pcr-action-btn {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Attached-place chip strip (multi-location parity with desktop). */
+.pcr-place-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.pcr-place-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 220px;
+  padding: 2px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font: inherit;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+
+.pcr-place-chip:hover {
+  border-color: var(--interactive-accent);
+  color: var(--text-normal);
+}
+
+.pcr-place-chip:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 1px;
+}
+
+.pcr-place-chip-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.pcr-place-chip-icon .svg-icon {
+  width: 11px;
+  height: 11px;
+}
+
+.pcr-place-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pcr-place-chip-static {
+  cursor: default;
+}
+
+.pcr-place-chip-static:hover {
+  border-color: var(--background-modifier-border);
+  color: var(--text-muted);
+}
+
+.pcr-place-chip-more {
+  color: var(--text-normal);
+  font-variant-numeric: tabular-nums;
 }
 
 .pcr-action-count {
@@ -2446,16 +2519,78 @@ a.pcr-gmaps-map-touch-overlay {
   line-height: 1.45;
 }
 
+.sa-place-picker-current {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 240px;
+  margin-top: 16px;
+  overflow-y: auto;
+}
+
+.sa-place-picker-current h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.sa-place-picker-current-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+}
+
+.sa-place-picker-current-details {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sa-place-picker-current-details strong,
+.sa-place-picker-current-details span {
+  overflow-wrap: anywhere;
+}
+
+.sa-place-picker-current-details span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.sa-place-picker-current-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.sa-place-picker-current-actions button {
+  min-height: 30px;
+  padding-inline: 8px;
+  font-size: 12px;
+}
+
+.sa-place-picker-add-heading {
+  margin: 16px 0 0;
+  font-size: 13px;
+}
+
 .sa-place-picker-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
-  margin: 16px 0 12px;
+  margin: 8px 0 12px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--background-modifier-border);
 }
 
 .sa-place-picker-tab {
-  flex: 1;
+  flex: 1 1 104px;
   min-height: 36px;
   border: 1px solid transparent;
   border-radius: var(--radius-s);
@@ -2486,6 +2621,15 @@ a.pcr-gmaps-map-touch-overlay {
   outline-offset: 2px;
 }
 
+.sa-place-picker-load-more:focus-visible,
+.sa-place-picker-manual-action:focus-visible,
+.sa-place-picker-manual-input:focus-visible,
+.sa-place-picker-manual-submit:focus-visible,
+.sa-place-picker-recovery button:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}
+
 .sa-place-picker-panel,
 .sa-place-picker-results {
   display: flex;
@@ -2499,21 +2643,42 @@ a.pcr-gmaps-map-touch-overlay {
   align-items: flex-start;
   gap: 4px;
   width: 100%;
+  height: auto;
+  min-height: 56px;
   padding: 12px;
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-s);
   background: var(--background-primary);
   color: var(--text-normal);
   text-align: start;
+  white-space: normal;
 }
 
 .sa-place-picker-result:hover {
   background: var(--background-modifier-hover);
 }
 
+.sa-place-picker-result.is-added,
+.sa-place-picker-result.is-added:hover {
+  cursor: default;
+  opacity: 0.72;
+  background: var(--background-secondary);
+}
+
+.sa-place-picker-result-added {
+  color: var(--interactive-accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .sa-place-picker-result-name {
+  min-width: 0;
+  max-width: 100%;
   font-size: 14px;
   line-height: 1.5;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+  text-wrap: balance;
 }
 
 .sa-place-picker-result-meta,
@@ -2522,6 +2687,13 @@ a.pcr-gmaps-map-touch-overlay {
   font-size: 12px;
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+
+.sa-place-picker-result-meta {
+  min-width: 0;
+  width: 100%;
+  word-break: keep-all;
+  text-wrap: pretty;
 }
 
 .sa-place-picker-detach {
@@ -2550,19 +2722,57 @@ a.pcr-gmaps-map-touch-overlay {
   font-weight: 500;
 }
 
+.sa-place-picker-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
 .sa-place-picker-search-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 40px;
+  overflow: hidden;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+}
+
+.sa-place-picker-search-row:focus-within {
+  border-color: var(--interactive-accent);
+}
+
+.sa-place-picker-provider-select {
+  max-width: 124px;
+  min-height: 40px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-normal);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sa-place-picker-search-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--background-modifier-border);
 }
 
 .sa-place-picker-search-row button {
-  min-height: 36px;
+  min-height: 32px;
+  margin: 4px;
 }
 
 .sa-place-picker-search-input {
   min-width: 0;
-  min-height: 36px;
+  min-height: 40px;
+  border: 0;
+  background: transparent;
 }
 
 .sa-place-picker-attribution {
@@ -2574,8 +2784,269 @@ a.pcr-gmaps-map-touch-overlay {
   color: var(--text-error);
 }
 
-@media (max-width: 480px) {
-  .sa-place-picker-search-row {
-    grid-template-columns: 1fr;
+.sa-place-picker-credit {
+  font-size: 12px;
+}
+
+.sa-place-picker-recovery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sa-place-picker-manual-action {
+  align-self: flex-start;
+  height: auto;
+  min-height: 32px;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.sa-place-picker-manual-action:hover {
+  background: transparent;
+  color: var(--text-normal);
+}
+
+.sa-place-picker-manual-input,
+.sa-place-picker-manual-submit,
+.sa-place-picker-load-more {
+  min-height: 36px;
+}
+
+.sa-place-candidate-modal {
+  width: min(640px, calc(100vw - var(--size-4-4) - var(--size-4-4)));
+  max-block-size: calc(100dvb - var(--size-4-4) - var(--size-4-4));
+}
+
+.sa-place-candidate-modal .modal-content {
+  display: flex;
+  min-width: 0;
+  min-block-size: 0;
+  max-block-size: calc(100dvb - var(--size-4-4) - var(--size-4-4));
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sa-place-candidate-modal h3 {
+  margin: 0 0 var(--size-4-1);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.sa-place-candidate-intro,
+.sa-place-candidate-current,
+.sa-place-candidate-live,
+.sa-place-candidate-address,
+.sa-place-candidate-evidence,
+.sa-place-candidate-meta {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.sa-place-candidate-current {
+  margin-top: var(--size-4-2);
+  padding: var(--size-4-2) var(--size-4-3);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+}
+
+.sa-place-candidate-live {
+  min-height: 20px;
+  margin-top: var(--size-4-1);
+  color: var(--text-normal);
+}
+
+.sa-place-candidate-list {
+  display: flex;
+  min-width: 0;
+  min-block-size: 0;
+  max-height: none;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--size-4-2);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.sa-place-candidate-card {
+  min-width: 0;
+  max-inline-size: 100%;
+  padding: var(--size-4-3);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-primary);
+}
+
+.sa-place-candidate-card.is-selected {
+  border-color: var(--interactive-accent);
+  background: var(--background-secondary);
+}
+
+.sa-place-candidate-header {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: var(--size-4-2);
+}
+
+.sa-place-candidate-select {
+  display: inline-flex;
+  min-width: 40px;
+  min-height: 40px;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.sa-place-candidate-select input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}
+
+.sa-place-candidate-title {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--size-4-2);
+}
+
+.sa-place-candidate-title strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.sa-place-candidate-confidence {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* Places P3b: semantic role chip (visited/recommended/…). Display hint only. */
+.sa-place-candidate-role {
+  flex: 0 0 auto;
+  padding: 1px var(--size-4-1);
+  border-radius: var(--radius-s);
+  background: var(--background-modifier-hover);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* Places P3b: "Find (more) places with AI" CTA. */
+.sa-place-candidate-extract {
+  min-height: 36px;
+}
+
+.sa-place-candidate-extract.is-loading {
+  opacity: 0.75;
+}
+
+.sa-place-candidate-address,
+.sa-place-candidate-evidence,
+.sa-place-candidate-meta {
+  margin-top: var(--size-4-1);
+}
+
+.sa-place-candidate-evidence,
+.sa-place-candidate-meta {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.sa-place-candidate-correction {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: var(--size-4-2);
+  margin-top: var(--size-4-3);
+}
+
+.sa-place-candidate-correction input,
+.sa-place-candidate-correction button {
+  min-width: 0;
+  min-height: 36px;
+}
+
+.sa-place-candidate-actions,
+.sa-place-candidate-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--size-4-2);
+}
+
+.sa-place-candidate-actions {
+  margin-top: var(--size-4-3);
+}
+
+.sa-place-candidate-actions button,
+.sa-place-candidate-footer button {
+  min-width: 0;
+  min-height: 36px;
+  overflow-wrap: anywhere;
+}
+
+.sa-place-candidate-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-4-3);
+  margin-top: var(--size-4-3);
+  padding-top: var(--size-4-3);
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.sa-place-candidate-empty {
+  margin: var(--size-4-3) 0;
+  padding: var(--size-4-4);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  text-align: center;
+}
+
+.sa-place-candidate-card :is(button, input):focus-visible,
+.sa-place-candidate-footer button:focus-visible,
+.sa-place-candidate-empty + button:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 520px) {
+  .sa-place-candidate-correction {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sa-place-candidate-title,
+  .sa-place-candidate-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .sa-place-candidate-actions,
+  .sa-place-candidate-footer-actions {
+    justify-content: stretch;
+  }
+
+  .sa-place-candidate-actions button,
+  .sa-place-candidate-footer-actions button {
+    min-height: 40px;
+    flex: 1 1 160px;
   }
 }

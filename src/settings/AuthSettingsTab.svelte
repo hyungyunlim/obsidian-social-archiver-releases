@@ -3,6 +3,7 @@ import { Notice, Platform } from 'obsidian';
 import QRCode from 'qrcode';
 import type SocialArchiverPlugin from '../main';
 import type { BillingUsageSummary, SocialArchiverSettings, PlatformTiming } from '../types/settings';
+import { getCloudCreditBreakdown, resolveCloudCreditQuota } from '../services/CloudCreditUsage';
 import { AuthService } from '../services/AuthService';
 import {
   completeAuthentication,
@@ -243,12 +244,13 @@ $effect(() => {
 
 // Computed states
 let archiveQuota = $derived(billingUsage?.archiveQuota ?? settings.billingUsage?.archiveQuota);
-let aiActionQuota = $derived(billingUsage?.aiActionQuota ?? settings.billingUsage?.aiActionQuota);
+let cloudCreditQuota = $derived(resolveCloudCreditQuota(billingUsage ?? settings.billingUsage));
+let cloudCreditBreakdown = $derived(getCloudCreditBreakdown(cloudCreditQuota));
 let rawBillingPlan = $derived(billingUsage?.plan ?? settings.billingUsage?.plan ?? settings.tier);
 let billingPlanDisplay = $derived(formatBillingPlan(rawBillingPlan));
 let betaFreeSunsetLine = $derived(getBetaFreeSunsetLine(rawBillingPlan, billingUsage?.policy ?? settings.billingUsage?.policy));
 let archiveQuotaProgress = $derived(getArchiveQuotaProgress(archiveQuota));
-let aiActionQuotaProgress = $derived(getAIActionQuotaProgress(aiActionQuota));
+let cloudCreditQuotaProgress = $derived(getCloudCreditQuotaProgress(cloudCreditQuota));
 let isLifetimePlan = $derived(rawBillingPlan === 'lifetime');
 let archiveQuotaExhausted = $derived(
   !!archiveQuota &&
@@ -328,7 +330,7 @@ function getArchiveQuotaProgress(quota: BillingUsageSummary['archiveQuota'] | un
   return Math.max(0, Math.min(100, (quota.used / quota.limit) * 100));
 }
 
-function getAIActionQuotaProgress(quota: BillingUsageSummary['aiActionQuota'] | undefined): number {
+function getCloudCreditQuotaProgress(quota: BillingUsageSummary['cloudCreditQuota'] | undefined): number {
   if (!quota || quota.limit <= 0 || quota.limit === -1 || quota.unlimited) return 0;
   return Math.max(0, Math.min(100, ((quota.used + quota.reserved) / quota.limit) * 100));
 }
@@ -1012,31 +1014,35 @@ $effect(() => {
           <div class="billing-usage-muted">Archive usage will appear after sync.</div>
         {/if}
 
-        {#if aiActionQuota}
+        {#if cloudCreditQuota}
           <div class="billing-usage-subsection">
-            <div class="billing-usage-label">AI credits</div>
-            {#if aiActionQuota.unlimited || aiActionQuota.limit === -1}
+            <div class="billing-usage-label">Cloud credits</div>
+            {#if cloudCreditQuota.unlimited || cloudCreditQuota.limit === -1}
               <div class="billing-usage-main">
                 <span class="billing-usage-value">No monthly limit</span>
-                <span class="billing-usage-muted">{aiActionQuota.used} used this month</span>
+                <span class="billing-usage-muted">{cloudCreditQuota.used} used this month</span>
               </div>
             {:else}
               <div class="billing-usage-main">
-                <span class="billing-usage-value">{aiActionQuota.used}</span>
+                <span class="billing-usage-value">{cloudCreditQuota.used}</span>
                 <span class="billing-usage-separator">/</span>
-                <span class="billing-usage-limit">{aiActionQuota.limit}</span>
-                <span class="billing-usage-muted">({aiActionQuota.remaining} left)</span>
+                <span class="billing-usage-limit">{cloudCreditQuota.limit}</span>
+                <span class="billing-usage-muted">({cloudCreditQuota.remaining} left)</span>
               </div>
-              {#if aiActionQuota.reserved > 0}
-                <div class="billing-usage-reset">{aiActionQuota.reserved} AI credits pending</div>
+              {#if cloudCreditQuota.reserved > 0}
+                <div class="billing-usage-reset">{cloudCreditQuota.reserved} Cloud credits pending</div>
               {/if}
               <div class="billing-progress-track" aria-hidden="true">
-                <div class="billing-progress-bar" style={`width: ${aiActionQuotaProgress}%`}></div>
+                <div class="billing-progress-bar" style={`width: ${cloudCreditQuotaProgress}%`}></div>
               </div>
-              {#if aiActionQuota.resetAt}
-                <div class="billing-usage-reset">AI credits reset {formatDate(aiActionQuota.resetAt)}</div>
+              {#if cloudCreditQuota.resetAt}
+                <div class="billing-usage-reset">Cloud credits reset {formatDate(cloudCreditQuota.resetAt)}</div>
               {/if}
             {/if}
+            <div class="billing-usage-reset">
+              AI: {cloudCreditBreakdown.ai.used} used{cloudCreditBreakdown.ai.reserved > 0 ? `, ${cloudCreditBreakdown.ai.reserved} pending` : ''}
+              · Google Maps: {cloudCreditBreakdown.googleMaps.used} used{cloudCreditBreakdown.googleMaps.reserved > 0 ? `, ${cloudCreditBreakdown.googleMaps.reserved} pending` : ''}
+            </div>
           </div>
         {/if}
       </div>

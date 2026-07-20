@@ -222,6 +222,12 @@ export class TimelineContainer {
   private softRefreshInProgress: boolean = false;
   private softRefreshPending: boolean = false;
 
+  // Full-load mutex: coalesce concurrent loadPosts() calls. Multiple refresh
+  // triggers (sync-queue drain, WS events, refreshTimelineView fan-out) can
+  // otherwise stack N full vault reparses on the main thread and freeze/crash.
+  private loadPostsInProgress: boolean = false;
+  private loadPostsPending: boolean = false;
+
   // View mode: 'timeline' or 'gallery'
   private viewMode: 'timeline' | 'gallery' = 'timeline';
   private isViewSwitching: boolean = false;
@@ -5499,6 +5505,13 @@ export class TimelineContainer {
   }
 
   private async loadPosts(): Promise<void> {
+    // Single-flight: if a full load is already running, coalesce this request
+    // into one pending re-run instead of launching a parallel vault reparse.
+    if (this.loadPostsInProgress) {
+      this.loadPostsPending = true;
+      return;
+    }
+    this.loadPostsInProgress = true;
     try {
       // Performance optimization: Skip full reload if cached data exists and not forced
       // This dramatically improves UI transitions (Author Catalog <-> Timeline)
@@ -5615,6 +5628,14 @@ export class TimelineContainer {
 
     } catch (err) {
       this.renderError(err instanceof Error ? err.message : 'Failed to load posts');
+    } finally {
+      this.loadPostsInProgress = false;
+      // Another trigger arrived while we were loading — run exactly one more
+      // pass so the latest vault/forceReload state is reflected.
+      if (this.loadPostsPending) {
+        this.loadPostsPending = false;
+        window.setTimeout(() => void this.loadPosts(), 150);
+      }
     }
   }
 
