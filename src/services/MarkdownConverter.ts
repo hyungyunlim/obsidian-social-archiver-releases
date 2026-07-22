@@ -1504,6 +1504,9 @@ function cloneFrontmatterSettings(
     tagOrganization: isArchiveOrganizationMode(source.tagOrganization)
       ? source.tagOrganization
       : DEFAULT_FRONTMATTER_CUSTOMIZATION_SETTINGS.tagOrganization,
+    archiveTagRuleHistory: Array.isArray(source.archiveTagRuleHistory)
+      ? source.archiveTagRuleHistory.map((rule) => ({ ...rule }))
+      : [],
   };
 }
 

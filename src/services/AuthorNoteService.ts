@@ -10,7 +10,7 @@
  *   - Identity is `authorKey` in frontmatter, NOT the filename.
  *   - Lookup scans `authorNotesPath` and reads `type: social-archiver-author`.
  *   - Body (markdown below frontmatter) is NEVER auto-modified after creation.
- *   - User-owned fields (`displayNameOverride`, `bioOverride`, `aliases`) are NEVER overwritten.
+ *   - User-owned fields (`displayNameOverride`, `bioOverride`, `aliases`, `tags`) are NEVER overwritten.
  *   - Uses `app.fileManager.processFrontMatter` for atomic frontmatter updates.
  */
 
@@ -26,6 +26,7 @@ import {
   type AuthorNoteData,
 } from '@/types/author-note';
 import { normalizeAuthorUrl, normalizeAuthorName } from '@/services/AuthorDeduplicator';
+import { buildAuthorNoteLinkForPost } from '@/utils/author-note-links';
 
 // ============================================================================
 // Constants
@@ -559,6 +560,26 @@ export class AuthorNoteService {
   }
 
   /**
+   * Upsert the author note and prepare its vault-local wikilink on PostData.
+   * The converter later emits this value as the dedicated `authorNote` field.
+   */
+  async upsertFromArchiveAndAttachLink(
+    postData: PostData,
+    options: { linkEnabled: boolean; aliasFormat: string },
+  ): Promise<TFile | null> {
+    const file = await this.upsertFromArchive(postData);
+    if (!file || !options.linkEnabled) return file;
+
+    postData.authorNoteLink = buildAuthorNoteLinkForPost(
+      postData,
+      file.path,
+      this.readNote(file),
+      options.aliasFormat,
+    );
+    return file;
+  }
+
+  /**
    * Upsert author note from an AuthorCatalogEntry (for bulk generation).
    */
   async upsertFromCatalogEntry(entry: AuthorCatalogEntry): Promise<TFile | null> {
@@ -932,6 +953,9 @@ export class AuthorNoteService {
       aliases: Array.isArray(fm.aliases)
         ? fm.aliases.filter((a): a is string => typeof a === 'string')
         : undefined,
+      tags: Array.isArray(fm.tags)
+        ? fm.tags.filter((tag): tag is string => typeof tag === 'string')
+        : undefined,
     };
   }
 
@@ -993,6 +1017,7 @@ export class AuthorNoteService {
     addField('lastSeenAt', data.lastSeenAt);
     addField('lastMetadataUpdate', data.lastMetadataUpdate);
     addField('aliases', data.aliases);
+    addField('tags', data.tags);
 
     return lines.join('\n') + '\n';
   }

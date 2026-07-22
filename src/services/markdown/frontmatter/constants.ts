@@ -25,6 +25,8 @@ export const USER_CONTROLLED_FRONTMATTER_FIELDS = [
   'comment',
   'tags',
   'archiveTags',
+  // Vault-local relationship to an author note
+  'authorNote',
   // Per-URL download/transcription decisions
   'downloadedUrls',
   'transcribedUrls',

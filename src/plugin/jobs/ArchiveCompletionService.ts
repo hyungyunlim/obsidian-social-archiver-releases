@@ -88,6 +88,14 @@ export class ArchiveCompletionService {
     return this.deps.tagStore;
   }
 
+  async upsertAuthorNote(postData: PostData): Promise<void> {
+    if (!this.settings.enableAuthorNotes || !this.authorNoteService) return;
+    await this.authorNoteService.upsertFromArchiveAndAttachLink(postData, {
+      linkEnabled: this.settings.enableAuthorNoteLinks,
+      aliasFormat: this.settings.authorNoteLinkAliasFormat,
+    });
+  }
+
   // ─── processCompletedJob ──────────────────────────────────────────
 
   /**
@@ -528,12 +536,10 @@ export class ArchiveCompletionService {
     await this.enrichAuthorMetadata(archivedData, archivedData.platform);
 
     // ========== STEP 4.6: Upsert Author Note ==========
-    if (this.settings.enableAuthorNotes && this.authorNoteService) {
-      try {
-        await this.authorNoteService.upsertFromArchive(archivedData);
-      } catch (e) {
-        console.warn('[Social Archiver] Failed to upsert author note (embedded):', e);
-      }
+    try {
+      await this.upsertAuthorNote(archivedData);
+    } catch (e) {
+      console.warn('[Social Archiver] Failed to upsert author note (embedded):', e);
     }
 
     // ========== STEP 5: Check YouTube Local Video ==========
@@ -898,12 +904,10 @@ export class ArchiveCompletionService {
     await this.enrichAuthorMetadata(postData, postData.platform);
 
     // Upsert author note (if feature enabled)
-    if (this.settings.enableAuthorNotes && this.authorNoteService) {
-      try {
-        await this.authorNoteService.upsertFromArchive(postData);
-      } catch (e) {
-        console.warn('[Social Archiver] Failed to upsert author note:', e);
-      }
+    try {
+      await this.upsertAuthorNote(postData);
+    } catch (e) {
+      console.warn('[Social Archiver] Failed to upsert author note:', e);
     }
 
     // Filter comments based on user option

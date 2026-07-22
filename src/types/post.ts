@@ -300,6 +300,8 @@ export interface PostData {
    */
   type?: DocumentType;
   contentType?: 'post' | 'article' | 'timeline' | 'note' | 'meeting-note' | 'audio-note';
+  /** Local-only Obsidian wikilink prepared for archive frontmatter output. */
+  authorNoteLink?: string;
   /**
    * Content sub-type within a platform (PRD §22.1).
    *
@@ -601,6 +603,7 @@ export interface PostData {
 export const PostDataSchema: z.ZodType<PostData> = z.lazy(() => z.object({
   schemaVersion: z.literal('1.0.0').optional(),
   contentType: z.enum(['post', 'article', 'timeline', 'note', 'meeting-note', 'audio-note']).nullish(),
+  authorNoteLink: z.string().nullish(),
   postType: z.enum(['note', 'article']).nullish(), // PRD §22.1: Substack note vs article
   readerChat: z.object({
     headingLine: z.string(),

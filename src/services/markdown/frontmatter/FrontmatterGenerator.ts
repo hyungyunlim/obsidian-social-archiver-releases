@@ -18,6 +18,7 @@ import { TemplateEngine } from '../template/TemplateEngine';
 import { USER_CONTROLLED_FRONTMATTER_FIELDS } from './constants';
 import { uniqueStrings } from '@/utils/array';
 import { normalizeUrlForDedup } from '@/utils/url';
+import { buildManagedArchiveTag } from '@/utils/archive-tag-rules';
 
 /**
  * Normalize author URL for consistent storage
@@ -190,6 +191,7 @@ export class FrontmatterGenerator {
       platform: postData.platform,
       author: postData.author.name,
       authorUrl: normalizedAuthorUrl,
+      ...(postData.authorNoteLink && { authorNote: postData.authorNoteLink }),
       // Extended author metadata (conditional inclusion)
       ...(postData.author.handle && { authorHandle: postData.author.handle }),
       // Store author avatar: prefer local path (as wikilink), fallback to external URL
@@ -445,6 +447,11 @@ export class FrontmatterGenerator {
     const existingFmRecord = options?.existingFrontmatter;
     if (existingFmRecord && typeof existingFmRecord === 'object') {
       for (const field of USER_CONTROLLED_FRONTMATTER_FIELDS) {
+        // A newly prepared author-note link is an explicit forward-facing
+        // update (for example after changing the alias template). When the
+        // feature is disabled, no new value is prepared and the old link is
+        // preserved like the other user-visible fields.
+        if (field === 'authorNote' && postData.authorNoteLink) continue;
         const preservedValue = existingFmRecord[field];
         if (preservedValue !== undefined) {
           frontmatter[field] = preservedValue;
@@ -654,43 +661,36 @@ ${content}`;
     postData: PostData,
     customization: FrontmatterCustomizationSettings
   ): YamlFrontmatter {
-    const baseTag = this.normalizeTagPath(customization.tagRoot);
-    if (!baseTag) {
-      return frontmatter;
-    }
-
     const tagOrganization = isArchiveOrganizationMode(customization.tagOrganization)
       ? customization.tagOrganization
       : 'flat';
-    const platformSegment = this.normalizeTagSegment(postData.platform || 'unknown') || 'unknown';
-    const tags: string[] = [baseTag];
-
-    if (tagOrganization === 'platform-only' || tagOrganization === 'platform-year-month') {
-      tags.push(platformSegment);
-    }
-
-    if (tagOrganization === 'platform-year-month') {
-      const timestamp = postData.metadata.timestamp instanceof Date
-        ? postData.metadata.timestamp
-        : new Date(postData.metadata.timestamp);
-      if (!Number.isNaN(timestamp.getTime())) {
-        tags.push(String(timestamp.getFullYear()));
-        tags.push(String(timestamp.getMonth() + 1).padStart(2, '0'));
-      }
-    }
-
-    const archiveTag = tags.join('/');
-    if (!archiveTag) {
-      return frontmatter;
-    }
-
+    const source = { platform: postData.platform, published: postData.metadata.timestamp };
+    const archiveTag = buildManagedArchiveTag(
+      { tagRoot: customization.tagRoot || '', tagOrganization },
+      source,
+    );
     const existingTags = Array.isArray(frontmatter.tags)
       ? frontmatter.tags.map((tag) => String(tag || '').trim()).filter(Boolean)
       : [];
+    const previousManagedTags = new Set(
+      (customization.archiveTagRuleHistory || [])
+        .map((rule) => buildManagedArchiveTag(rule, source))
+        .filter((tag): tag is string => Boolean(tag))
+        .map((tag) => tag.toLowerCase())
+        .filter((tag) => !archiveTag || tag !== archiveTag.toLowerCase()),
+    );
+    const retainedTags = existingTags.filter(
+      (item) => !previousManagedTags.has(item.toLowerCase())
+    );
+    if (!archiveTag) {
+      return previousManagedTags.size > 0
+        ? { ...frontmatter, tags: retainedTags }
+        : frontmatter;
+    }
 
     const mergedTags: string[] = [];
     const seen = new Set<string>();
-    for (const tag of [...existingTags, archiveTag]) {
+    for (const tag of [...retainedTags, archiveTag]) {
       const normalized = tag.toLowerCase();
       if (seen.has(normalized)) continue;
       seen.add(normalized);
@@ -763,24 +763,6 @@ ${content}`;
     }
 
     return result;
-  }
-
-  private normalizeTagPath(rawPath: string | undefined): string {
-    if (!rawPath) return '';
-    const segments = rawPath
-      .split('/')
-      .map((segment) => this.normalizeTagSegment(segment))
-      .filter(Boolean);
-
-    return segments.join('/');
-  }
-
-  private normalizeTagSegment(segment: string): string {
-    return String(segment || '')
-      .trim()
-      .replace(/^#+/, '')
-      .replace(/[\\/]+/g, '-')
-      .replace(/\s+/g, '-');
   }
 
   private resolveCustomPropertyValue(

@@ -45,6 +45,47 @@ export function isArchiveOrganizationMode(value: unknown): value is ArchiveOrgan
   return value === 'platform-year-month' || value === 'platform-only' || value === 'flat';
 }
 
+export interface ManagedArchiveTagRule {
+  tagRoot: string;
+  tagOrganization: ArchiveOrganizationMode;
+}
+
+function normalizeManagedArchiveTagRoot(value: string): string {
+  return value
+    .split('/')
+    .map((segment) => segment
+      .trim()
+      .replace(/^#+/, '')
+      .replace(/[\\/]+/g, '-')
+      .replace(/\s+/g, '-'))
+    .filter(Boolean)
+    .join('/');
+}
+
+export function normalizeArchiveTagRuleHistory(value: unknown): ManagedArchiveTagRule[] {
+  if (!Array.isArray(value)) return [];
+
+  const normalized: ManagedArchiveTagRule[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const record = item as Record<string, unknown>;
+    const tagRoot = typeof record.tagRoot === 'string'
+      ? normalizeManagedArchiveTagRoot(record.tagRoot)
+      : '';
+    const tagOrganization = isArchiveOrganizationMode(record.tagOrganization)
+      ? record.tagOrganization
+      : null;
+    if (!tagRoot || !tagOrganization) continue;
+    const key = `${tagRoot.toLowerCase()}\u0000${tagOrganization}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push({ tagRoot, tagOrganization });
+    if (normalized.length >= 20) break;
+  }
+  return normalized;
+}
+
 export function getVaultOrganizationStrategy(mode?: ArchiveOrganizationMode): 'platform' | 'platform-only' | 'flat' {
   switch (mode) {
     case 'platform-only':
@@ -242,6 +283,7 @@ export const FRONTMATTER_CORE_LOCKED_FIELDS = [
   'platform',
   'author',
   'authorUrl',
+  'authorNote',
   'published',
   'archived',
   'lastModified',
@@ -257,6 +299,7 @@ export const DEFAULT_FRONTMATTER_PROPERTY_ORDER: string[] = [
   'platform',
   'author',
   'authorUrl',
+  'authorNote',
   'authorHandle',
   'authorAvatar',
   'authorFollowers',
@@ -413,6 +456,7 @@ export interface FrontmatterCustomizationSettings {
   propertyOrder?: string[];
   tagRoot?: string;
   tagOrganization?: ArchiveOrganizationMode;
+  archiveTagRuleHistory?: ManagedArchiveTagRule[];
 }
 
 export const DEFAULT_FRONTMATTER_CUSTOMIZATION_SETTINGS: FrontmatterCustomizationSettings = {
@@ -435,6 +479,7 @@ export const DEFAULT_FRONTMATTER_CUSTOMIZATION_SETTINGS: FrontmatterCustomizatio
   propertyOrder: [...DEFAULT_FRONTMATTER_PROPERTY_ORDER],
   tagRoot: '',
   tagOrganization: 'flat',
+  archiveTagRuleHistory: [],
 };
 
 export interface DeleteSyncSettings {
@@ -738,6 +783,8 @@ export interface SocialArchiverSettings {
   // Author Notes Settings (Experimental)
   enableAuthorNotes: boolean; // Create vault-native author note files (default: false)
   authorNotesPath: string; // Folder for author note files (default: 'Social Authors')
+  enableAuthorNoteLinks: boolean; // Add author-note wikilinks to archive note frontmatter
+  authorNoteLinkAliasFormat: string; // Alias template for author-note wikilinks
 
   // Instagram Saved Import Settings (Experimental — PRD §12.1)
   /**
@@ -953,6 +1000,8 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
   // Author Notes Settings (Experimental)
   enableAuthorNotes: false, // Disabled by default (experimental)
   authorNotesPath: 'Social Authors', // Default: outside archivePath
+  enableAuthorNoteLinks: false, // Existing vaults remain unchanged until explicitly enabled
+  authorNoteLinkAliasFormat: '{author}',
 
   // Instagram Saved Import Settings (Experimental — PRD §12.1)
   instagramImportEnabled: false, // Disabled by default (experimental)
@@ -1194,6 +1243,7 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
       propertyOrder: [...DEFAULT_FRONTMATTER_PROPERTY_ORDER],
       tagRoot: '',
       tagOrganization: DEFAULT_FRONTMATTER_CUSTOMIZATION_SETTINGS.tagOrganization,
+      archiveTagRuleHistory: [],
     };
   } else {
     const normalizedCustomProperties = Array.isArray(migrated.frontmatter.customProperties)
@@ -1228,8 +1278,17 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
       tagOrganization: isArchiveOrganizationMode(migrated.frontmatter.tagOrganization)
         ? migrated.frontmatter.tagOrganization
         : DEFAULT_FRONTMATTER_CUSTOMIZATION_SETTINGS.tagOrganization,
+      archiveTagRuleHistory: normalizeArchiveTagRuleHistory(
+        migrated.frontmatter.archiveTagRuleHistory
+      ),
     };
   }
+
+  migrated.enableAuthorNoteLinks = migrated.enableAuthorNoteLinks === true;
+  migrated.authorNoteLinkAliasFormat = typeof migrated.authorNoteLinkAliasFormat === 'string'
+    && migrated.authorNoteLinkAliasFormat.trim()
+    ? migrated.authorNoteLinkAliasFormat
+    : DEFAULT_SETTINGS.authorNoteLinkAliasFormat;
 
   // Initialize TTS settings if missing (migration)
   if (!migrated.tts) {

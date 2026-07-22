@@ -28,6 +28,7 @@ export { CrawlJobTracker } from './CrawlJobTracker';
 export { ClientRegistrationService } from './ClientRegistrationService';
 export { DeviceScopedIdStorage } from './DeviceScopedIdStorage';
 export { AuthorVaultScanner } from './AuthorVaultScanner';
+export { ArchiveNoteBackfillService } from './ArchiveNoteBackfillService';
 export { AuthorDeduplicator, normalizeAuthorUrl, normalizeAuthorName, generateAuthorKey } from './AuthorDeduplicator';
 export { SubscriptionManager } from './SubscriptionManager';
 export { AuthorAvatarService } from './AuthorAvatarService';

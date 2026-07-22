@@ -1953,6 +1953,7 @@ export default class SocialArchiverPlugin extends Plugin {
         app: this.app,
         settings: () => this.settings,
         authorAvatarService: () => this.authorAvatarService,
+        authorNoteService: () => this.authorNoteService,
         archiveJobTracker: this.archiveJobTracker,
         refreshTimelineView: () => this.refreshTimelineView(),
         ensureFolderExists: (path) => this.ensureFolderExists(path),

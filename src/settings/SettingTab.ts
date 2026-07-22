@@ -19,6 +19,7 @@ import {
   DEFAULT_SETTINGS,
   FRONTMATTER_CORE_LOCKED_FIELDS,
   isArchiveOrganizationMode,
+  normalizeArchiveTagRuleHistory,
   normalizeFrontmatterFieldAliases,
   normalizeFrontmatterPropertyOrder,
 } from '../types/settings';
@@ -51,6 +52,12 @@ import {
   MapSearchProviderSaveError,
 } from './MapSearchProviderPreferenceController';
 import { isMapSearchProviderPreference } from '../shared/platforms/map-search-provider';
+import { showConfirmModal } from '../utils/confirm-modal';
+import { rememberManagedArchiveTagRule } from '../utils/archive-tag-rules';
+import {
+  DEFAULT_AUTHOR_NOTE_LINK_ALIAS_FORMAT,
+  renderAuthorNoteLinkAlias,
+} from '../utils/author-note-links';
 
 const PERSONAL_GITHUB_URL = 'https://github.com/hyungyunlim';
 const RELEASE_NOTES_URL = 'https://social-archive.org/release-notes?platform=obsidian&utm_source=obsidian-plugin&utm_medium=settings';
@@ -125,6 +132,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       tagOrganization: isArchiveOrganizationMode(current?.tagOrganization)
         ? current.tagOrganization
         : defaults.tagOrganization,
+      archiveTagRuleHistory: normalizeArchiveTagRuleHistory(current?.archiveTagRuleHistory),
     };
   }
 
@@ -381,6 +389,142 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           });
         new FolderSuggest(this.app, text.inputEl);
       });
+
+    const authorLinkControls = authorNotesContainer.createDiv();
+    const updateAuthorLinkControls = (): void => {
+      authorLinkControls.toggle(this.plugin.settings.enableAuthorNoteLinks === true);
+    };
+
+    new Setting(authorNotesContainer)
+      .setName('Link archive notes to author notes')
+      .setDesc('Add an authorNote wikilink to new archive notes so Obsidian backlinks and graph connections are created automatically.')
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.enableAuthorNoteLinks === true)
+        .onChange((value) => {
+          this.plugin.settings.enableAuthorNoteLinks = value;
+          this.markDirty();
+          updateAuthorLinkControls();
+        }));
+
+    {
+      const aliasSetting = new Setting(authorLinkControls)
+        .setName('Author link alias')
+        .setDesc('Template used for the visible wikilink label. Click a token to insert it.');
+      aliasSetting.settingEl.addClass('st-fn-header-setting');
+      const blockEl = aliasSetting.settingEl.createDiv();
+      blockEl.addClass('st-fn-block');
+      const inputRowEl = blockEl.createDiv();
+      inputRowEl.addClass('st-fn-input-row');
+      const inputEl = inputRowEl.createEl('input', { type: 'text' });
+      inputEl.addClass('st-fn-input');
+      inputEl.placeholder = DEFAULT_AUTHOR_NOTE_LINK_ALIAS_FORMAT;
+      inputEl.value = this.plugin.settings.authorNoteLinkAliasFormat
+        || DEFAULT_AUTHOR_NOTE_LINK_ALIAS_FORMAT;
+
+      const previewEl = blockEl.createDiv();
+      previewEl.addClass('st-fn-preview');
+      const updatePreview = (): void => {
+        const alias = renderAuthorNoteLinkAlias(inputEl.value, {
+          author: 'Jane Doe',
+          displayName: 'Jane',
+          handle: '@janedoe',
+          platform: 'instagram',
+        });
+        previewEl.empty();
+        const label = previewEl.createSpan({ text: 'Preview: ' });
+        label.addClass('st-fn-preview-label');
+        previewEl.createEl('code', { text: `[[Social Authors/instagram-janedoe|${alias}]]` });
+      };
+
+      inputEl.addEventListener('input', () => {
+        this.plugin.settings.authorNoteLinkAliasFormat = inputEl.value
+          || DEFAULT_AUTHOR_NOTE_LINK_ALIAS_FORMAT;
+        this.markDirty();
+        updatePreview();
+      });
+
+      const resetBtn = inputRowEl.createDiv({
+        cls: 'clickable-icon',
+        attr: { 'aria-label': 'Reset to default' },
+      });
+      resetBtn.title = 'Reset to default';
+      setIcon(resetBtn, 'rotate-ccw');
+      resetBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        inputEl.value = DEFAULT_AUTHOR_NOTE_LINK_ALIAS_FORMAT;
+        this.plugin.settings.authorNoteLinkAliasFormat = DEFAULT_AUTHOR_NOTE_LINK_ALIAS_FORMAT;
+        this.markDirty();
+        updatePreview();
+      });
+
+      const chipsEl = blockEl.createDiv();
+      chipsEl.addClass('st-fn-chips');
+      const tokens = [
+        { token: 'author', label: 'Author' },
+        { token: 'display_name', label: 'Display name' },
+        { token: 'handle', label: 'Handle' },
+        { token: 'platform', label: 'Platform' },
+      ];
+      for (const { token, label } of tokens) {
+        const chip = chipsEl.createEl('button', { text: label });
+        chip.addClass('st-fn-chip');
+        chip.title = `Insert {${token}}`;
+        chip.addEventListener('click', (event) => {
+          event.preventDefault();
+          const start = inputEl.selectionStart ?? inputEl.value.length;
+          const end = inputEl.selectionEnd ?? start;
+          const value = `{${token}}`;
+          inputEl.value = inputEl.value.slice(0, start) + value + inputEl.value.slice(end);
+          this.plugin.settings.authorNoteLinkAliasFormat = inputEl.value;
+          this.markDirty();
+          updatePreview();
+          const nextPosition = start + value.length;
+          inputEl.setSelectionRange(nextPosition, nextPosition);
+          inputEl.focus();
+        });
+      }
+      updatePreview();
+    }
+
+    new Setting(authorLinkControls)
+      .setName('Apply author links to existing notes')
+      .setDesc('Preview and add or update authorNote links across the current archive folder. Other frontmatter and author note bodies are preserved.')
+      .addButton((button) => button
+        .setButtonText('Preview & Apply')
+        .onClick(async () => {
+          button.setDisabled(true).setButtonText('Scanning...');
+          try {
+            await this.plugin.saveSettings();
+            const { ArchiveNoteBackfillService } = await import('../services/ArchiveNoteBackfillService');
+            const { AuthorNoteService } = await import('../services/AuthorNoteService');
+            const backfill = new ArchiveNoteBackfillService(this.app, this.plugin.settings.archivePath);
+            const noteService = new AuthorNoteService({
+              app: this.app,
+              getAuthorNotesPath: () => this.plugin.settings.authorNotesPath || 'Social Authors',
+              isEnabled: () => true,
+            });
+            const preview = await backfill.previewAuthorLinks(noteService);
+            const confirmed = await showConfirmModal(this.app, {
+              title: 'Apply author links to existing notes?',
+              message: `Scanned ${preview.scanned} notes and found ${preview.authors} authors across ${preview.eligibleFiles} eligible notes. ${preview.missingAuthorNotes} author notes will be created if needed.`,
+              confirmText: 'Apply links',
+            });
+            if (!confirmed) return;
+            button.setButtonText('Applying...');
+            const result = await backfill.applyAuthorLinks(
+              noteService,
+              this.plugin.settings.authorNoteLinkAliasFormat || DEFAULT_AUTHOR_NOTE_LINK_ALIAS_FORMAT,
+            );
+            new Notice(`Author links: ${result.updated} updated, ${result.unchanged} unchanged, ${result.authorNotesCreated} author notes created, ${result.failed} failed.`);
+          } catch (error) {
+            console.error('[Social Archiver] Author link backfill failed:', error);
+            new Notice('Failed to apply author links. Check console for details.');
+          } finally {
+            button.setDisabled(false).setButtonText('Preview & Apply');
+          }
+        }));
+
+    updateAuthorLinkControls();
 
     const scanSetting = new Setting(authorNotesContainer)
       .setName('Generate author notes')
@@ -1301,6 +1445,19 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   private renderFrontmatterSettings(containerEl: HTMLElement): void {
     this.ensureFrontmatterSettings();
     const frontmatterSettings = this.plugin.settings.frontmatter;
+    const archiveTagRuleAtOpen = {
+      tagRoot: frontmatterSettings.tagRoot || '',
+      tagOrganization: frontmatterSettings.tagOrganization || 'flat' as ArchiveOrganizationMode,
+    };
+    let archiveTagRuleRemembered = false;
+    const rememberArchiveTagRuleAtOpen = (): void => {
+      if (archiveTagRuleRemembered) return;
+      frontmatterSettings.archiveTagRuleHistory = rememberManagedArchiveTagRule(
+        normalizeArchiveTagRuleHistory(frontmatterSettings.archiveTagRuleHistory),
+        archiveTagRuleAtOpen,
+      );
+      archiveTagRuleRemembered = true;
+    };
     const syncPropertyOrder = (markAsDirty = false): void => {
       const normalizedOrder = normalizeFrontmatterPropertyOrder(
         frontmatterSettings.propertyOrder,
@@ -1950,7 +2107,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     variablesGuideLink.setAttr('rel', 'noopener');
 
     const coreLockedNote = bodyContainer.createEl('div', {
-      text: 'Core keys cannot be removed, renamed, or replaced by a custom property with the same name: platform, author, authorUrl, published, archived, lastModified, tags, archiveTags.',
+      text: 'Core keys cannot be removed, renamed, or replaced by a custom property with the same name: platform, author, authorUrl, authorNote, published, archived, lastModified, tags, archiveTags.',
     });
     coreLockedNote.addClass('sa-settings-desc-small');
     coreLockedNote.setCssProps({ '--st-margin': '4px 0 12px 0' });
@@ -1967,6 +2124,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         .setPlaceholder('Maintag')
         .setValue(frontmatterSettings.tagRoot || '')
         .onChange((value) => {
+          rememberArchiveTagRuleAtOpen();
           frontmatterSettings.tagRoot = value.trim();
           this.markDirty();
         }));
@@ -1982,10 +2140,47 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           .addOption('platform-year-month', '#maintag/socialnetwork/year/month')
           .setValue(frontmatterSettings.tagOrganization || 'flat')
           .onChange((value: string) => {
+            rememberArchiveTagRuleAtOpen();
             frontmatterSettings.tagOrganization = value as ArchiveOrganizationMode;
             this.markDirty();
           });
       });
+
+    new Setting(bodyContainer)
+      .setName('Apply main tag to existing notes')
+      .setDesc('Preview and replace only known plugin-managed main tags in the current archive folder. Unrelated tags and archiveTags are preserved.')
+      .addButton((button) => button
+        .setButtonText('Preview & Apply')
+        .onClick(async () => {
+          button.setDisabled(true).setButtonText('Scanning...');
+          try {
+            await this.plugin.saveSettings();
+            const { ArchiveNoteBackfillService } = await import('../services/ArchiveNoteBackfillService');
+            const service = new ArchiveNoteBackfillService(this.app, this.plugin.settings.archivePath);
+            const options = {
+              currentRule: {
+                tagRoot: frontmatterSettings.tagRoot || '',
+                tagOrganization: frontmatterSettings.tagOrganization || 'flat' as ArchiveOrganizationMode,
+              },
+              history: normalizeArchiveTagRuleHistory(frontmatterSettings.archiveTagRuleHistory),
+            };
+            const preview = await service.previewMainTag(options);
+            const confirmed = await showConfirmModal(this.app, {
+              title: 'Apply main tag to existing notes?',
+              message: `Scanned ${preview.scanned} notes. ${preview.updated} will change, ${preview.unchanged} are already current, and ${preview.skipped} will be skipped.`,
+              confirmText: 'Apply tag rule',
+            });
+            if (!confirmed) return;
+            button.setButtonText('Applying...');
+            const result = await service.applyMainTag(options);
+            new Notice(`Main tag: ${result.updated} updated, ${result.unchanged} unchanged, ${result.skipped} skipped, ${result.failed} failed.`);
+          } catch (error) {
+            console.error('[Social Archiver] Main tag backfill failed:', error);
+            new Notice('Failed to apply the main tag. Check console for details.');
+          } finally {
+            button.setDisabled(false).setButtonText('Preview & Apply');
+          }
+        }));
 
     new Setting(bodyContainer)
       .setName('Mirror archive tags to Obsidian tags')
@@ -2009,6 +2204,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         .setButtonText('Reset all')
         .setWarning()
         .onClick(() => {
+          rememberArchiveTagRuleAtOpen();
           this.plugin.settings.frontmatter = {
             ...DEFAULT_FRONTMATTER_CUSTOMIZATION_SETTINGS,
             fieldVisibility: { ...DEFAULT_FRONTMATTER_CUSTOMIZATION_SETTINGS.fieldVisibility },
@@ -2017,6 +2213,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             propertyOrder: [...DEFAULT_FRONTMATTER_PROPERTY_ORDER],
             tagRoot: '',
             tagOrganization: DEFAULT_FRONTMATTER_CUSTOMIZATION_SETTINGS.tagOrganization,
+            archiveTagRuleHistory: frontmatterSettings.archiveTagRuleHistory || [],
           };
           this.markDirty();
           this.display();

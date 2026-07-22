@@ -31,6 +31,8 @@ export interface YamlFrontmatter {
   originalPath?: string; // Original note path for duplicate detection
   author: string;
   authorUrl: string;
+  /** Vault-local Obsidian wikilink to the matching author note. */
+  authorNote?: string;
   originalUrl: string;
   published: string; // Original post date in YYYY-MM-DD HH:mm format
   archived: string; // Date when archived (YYYY-MM-DD format)

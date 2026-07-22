@@ -88,6 +88,8 @@ export interface AuthorNoteData {
   bioOverride?: string;
   /** User-defined aliases */
   aliases?: string[];
+  /** User-defined Obsidian tags for the author note */
+  tags?: string[];
 }
 
 // ============================================================================
@@ -125,4 +127,5 @@ export const USER_OWNED_FIELDS: ReadonlySet<keyof AuthorNoteData> = new Set([
   'displayNameOverride',
   'bioOverride',
   'aliases',
+  'tags',
 ]);

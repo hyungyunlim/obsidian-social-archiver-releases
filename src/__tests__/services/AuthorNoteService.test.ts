@@ -651,7 +651,8 @@ describe('AuthorNoteService', () => {
       expect(USER_OWNED_FIELDS).toContain('displayNameOverride');
       expect(USER_OWNED_FIELDS).toContain('aliases');
       expect(USER_OWNED_FIELDS).toContain('tags');
-      expect(USER_OWNED_FIELDS.size).toBe(3);
+      expect(USER_OWNED_FIELDS).toContain('bioOverride');
+      expect(USER_OWNED_FIELDS.size).toBe(4);
     });
   });
 
@@ -888,6 +889,34 @@ describe('AuthorNoteService', () => {
   // upsertFromArchive -- create + update flows
   // --------------------------------------------------------------------------
   describe('upsertFromArchive', () => {
+    it('attaches a configurable wikilink after the author note is upserted', async () => {
+      const ctx = createMockApp();
+      ctx.folderMap.set('Authors', makeTFolder('Authors'));
+      const service = createService(ctx.mockApp);
+      const postData = {
+        platform: 'instagram',
+        id: 'p1',
+        url: 'https://instagram.com/p/1',
+        author: {
+          name: 'Jane Doe',
+          handle: '@janedoe',
+          url: 'https://instagram.com/janedoe',
+        },
+        content: { text: 'Text' },
+        media: [],
+        metadata: { timestamp: new Date() },
+      };
+
+      const file = await service.upsertFromArchiveAndAttachLink(postData as any, {
+        linkEnabled: true,
+        aliasFormat: '@{handle}',
+      });
+
+      expect(file?.path).toBe('Authors/instagram-janedoe.md');
+      expect((postData as any).authorNoteLink)
+        .toBe('[[Authors/instagram-janedoe|@janedoe]]');
+    });
+
     it('should return null when disabled', async () => {
       const { mockApp } = createMockApp();
       const service = createService(mockApp, { enabled: false });

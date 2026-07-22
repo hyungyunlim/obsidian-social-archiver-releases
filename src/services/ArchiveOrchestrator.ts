@@ -559,7 +559,10 @@ export class ArchiveOrchestrator implements IService {
       // Stage 3.5.1: Upsert author note (if feature enabled)
       if (this.settings?.enableAuthorNotes && this.authorNoteService) {
         try {
-          await this.authorNoteService.upsertFromArchive(postData);
+          await this.authorNoteService.upsertFromArchiveAndAttachLink(postData, {
+            linkEnabled: this.settings.enableAuthorNoteLinks,
+            aliasFormat: this.settings.authorNoteLinkAliasFormat,
+          });
         } catch (e) {
           console.warn('[ArchiveOrchestrator] Failed to upsert author note:', e);
         }
@@ -1119,7 +1122,10 @@ export class ArchiveOrchestrator implements IService {
       // Stage 4.1: Upsert author note (if feature enabled)
       if (this.settings?.enableAuthorNotes && this.authorNoteService) {
         try {
-          await this.authorNoteService.upsertFromArchive(postData);
+          await this.authorNoteService.upsertFromArchiveAndAttachLink(postData, {
+            linkEnabled: this.settings.enableAuthorNoteLinks,
+            aliasFormat: this.settings.authorNoteLinkAliasFormat,
+          });
         } catch (e) {
           console.warn('[ArchiveOrchestrator] Failed to upsert author note:', e);
         }

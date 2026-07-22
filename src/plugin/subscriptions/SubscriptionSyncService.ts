@@ -79,6 +79,7 @@ export interface SubscriptionSyncServiceDeps {
   archiveLookupService?: () => ArchiveLookupService | undefined;
   archiveCompletionService: {
     enrichAuthorMetadata: (postData: PostData, platform: Platform) => Promise<void>;
+    upsertAuthorNote?: (postData: PostData) => Promise<void>;
   } | undefined;
   refreshTimelineView: () => void;
   ensureFolderExists: (path: string) => Promise<void>;
@@ -700,6 +701,11 @@ export class SubscriptionSyncService {
 
       // Enrich author metadata (avatar download, followers, bio, etc.)
       await this.deps.archiveCompletionService?.enrichAuthorMetadata(post, post.platform);
+      try {
+        await this.deps.archiveCompletionService?.upsertAuthorNote?.(post);
+      } catch (error) {
+        console.warn('[Social Archiver] Failed to upsert subscription author note:', error);
+      }
 
       // Filter comments based on global setting
       if (!this.settings.includeComments) {

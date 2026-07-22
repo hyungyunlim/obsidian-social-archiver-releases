@@ -11,6 +11,11 @@ describe('settings', () => {
     it('should have includeHashtagsAsObsidianTags set to true', () => {
       expect(DEFAULT_SETTINGS.includeHashtagsAsObsidianTags).toBe(true);
     });
+
+    it('keeps author-note linking opt-in with a stable default alias', () => {
+      expect(DEFAULT_SETTINGS.enableAuthorNoteLinks).toBe(false);
+      expect(DEFAULT_SETTINGS.authorNoteLinkAliasFormat).toBe('{author}');
+    });
   });
 
   describe('migrateSettings', () => {
@@ -55,6 +60,27 @@ describe('settings', () => {
       const migrated = migrateSettings(settingsWithUndefined);
 
       expect(migrated.includeHashtagsAsObsidianTags).toBe(true);
+    });
+
+    it('migrates author links and archive tag history safely', () => {
+      const migrated = migrateSettings({
+        enableAuthorNoteLinks: undefined,
+        authorNoteLinkAliasFormat: ' ',
+        frontmatter: {
+          ...DEFAULT_SETTINGS.frontmatter,
+          archiveTagRuleHistory: [
+            { tagRoot: 'Old', tagOrganization: 'flat' },
+            { tagRoot: 'old', tagOrganization: 'flat' },
+            { tagRoot: '', tagOrganization: 'flat' },
+          ],
+        },
+      });
+
+      expect(migrated.enableAuthorNoteLinks).toBe(false);
+      expect(migrated.authorNoteLinkAliasFormat).toBe('{author}');
+      expect(migrated.frontmatter.archiveTagRuleHistory).toEqual([
+        { tagRoot: 'Old', tagOrganization: 'flat' },
+      ]);
     });
 
     it('should derive activeTab "all" from legacy includeArchived true', () => {

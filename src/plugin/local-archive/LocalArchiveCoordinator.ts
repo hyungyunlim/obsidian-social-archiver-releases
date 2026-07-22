@@ -9,6 +9,8 @@ import type { BrunchComment } from '../../types/brunch';
 import type { BrunchLocalService as BrunchLocalServiceType } from '../../services/BrunchLocalService';
 import type { ArchiveJobTracker } from '../../services/ArchiveJobTracker';
 import type { AuthorAvatarService } from '../../services/AuthorAvatarService';
+import type { AuthorNoteService } from '../../services/AuthorNoteService';
+import { buildManagedArchiveTag } from '../../utils/archive-tag-rules';
 
 /**
  * Dependencies required by LocalArchiveCoordinator.
@@ -18,6 +20,7 @@ export interface LocalArchiveCoordinatorDeps {
   app: App;
   settings: () => SocialArchiverSettings;
   authorAvatarService: () => AuthorAvatarService | undefined;
+  authorNoteService?: () => AuthorNoteService | undefined;
   archiveJobTracker: ArchiveJobTracker;
   refreshTimelineView: () => void;
   ensureFolderExists: (path: string) => Promise<void>;
@@ -38,6 +41,7 @@ export class LocalArchiveCoordinator {
   private readonly app: App;
   private readonly getSettings: () => SocialArchiverSettings;
   private readonly getAuthorAvatarService: () => AuthorAvatarService | undefined;
+  private readonly getAuthorNoteService: () => AuthorNoteService | undefined;
   private readonly archiveJobTracker: ArchiveJobTracker;
   private readonly refreshTimelineView: () => void;
   private readonly ensureFolderExists: (path: string) => Promise<void>;
@@ -46,9 +50,52 @@ export class LocalArchiveCoordinator {
     this.app = deps.app;
     this.getSettings = deps.settings;
     this.getAuthorAvatarService = deps.authorAvatarService;
+    this.getAuthorNoteService = deps.authorNoteService ?? (() => undefined);
     this.archiveJobTracker = deps.archiveJobTracker;
     this.refreshTimelineView = deps.refreshTimelineView;
     this.ensureFolderExists = deps.ensureFolderExists;
+  }
+
+  private async attachAuthorNoteLink(postData: PostData): Promise<void> {
+    const settings = this.getSettings();
+    const noteService = this.getAuthorNoteService();
+    if (!settings.enableAuthorNotes || !noteService) return;
+    try {
+      await noteService.upsertFromArchiveAndAttachLink(postData, {
+        linkEnabled: settings.enableAuthorNoteLinks,
+        aliasFormat: settings.authorNoteLinkAliasFormat,
+      });
+    } catch (error) {
+      console.warn('[Social Archiver] Failed to prepare local archive author link:', error);
+    }
+  }
+
+  private applyMainArchiveTag(
+    frontmatter: Record<string, unknown>,
+    postData: PostData,
+  ): void {
+    const settings = this.getSettings().frontmatter;
+    const archiveTag = buildManagedArchiveTag(
+      {
+        tagRoot: settings.tagRoot || '',
+        tagOrganization: settings.tagOrganization || 'flat',
+      },
+      { platform: postData.platform, published: postData.metadata.timestamp },
+    );
+    if (!archiveTag) return;
+
+    const rawTags = Array.isArray(frontmatter.tags)
+      ? frontmatter.tags
+      : typeof frontmatter.tags === 'string'
+        ? [frontmatter.tags]
+        : [];
+    const tags = rawTags
+      .map((tag) => typeof tag === 'string' ? tag.trim() : '')
+      .filter(Boolean);
+    if (!tags.some((tag) => tag.toLowerCase() === archiveTag.toLowerCase())) {
+      tags.push(archiveTag);
+    }
+    frontmatter.tags = tags;
   }
 
   // --------------------------------------------------------------------------
@@ -270,8 +317,6 @@ export class LocalArchiveCoordinator {
       if (postData.commentCount > 0) frontmatterObj.comments = postData.commentCount;
       if (linkPreviews.length > 0) frontmatterObj.linkPreviews = linkPreviews;
       if (options?.comment) frontmatterObj.comment = options.comment;
-      const frontmatter = `---\n${stringifyYaml(frontmatterObj)}---`;
-
       // Build comments section if there are comments (matching other platforms format)
       let commentsSection = '';
       if (postData.comments && postData.comments.length > 0) {
@@ -302,13 +347,6 @@ export class LocalArchiveCoordinator {
           commentsSection = '\n\n## 💬 Comments\n\n' + formattedComments.join('\n\n---\n\n');
         }
       }
-
-      // Build full document
-      const fullDocument = [
-        frontmatter,
-        content,
-        commentsSection,
-      ].join('\n');
 
       // Generate correct file path using actual post data
       const vaultManager = new VaultManager({
@@ -342,6 +380,11 @@ export class LocalArchiveCoordinator {
         },
         title: postData.title,
       };
+      await this.attachAuthorNoteLink(properPostData);
+      this.applyMainArchiveTag(frontmatterObj, properPostData);
+      if (properPostData.authorNoteLink) frontmatterObj.authorNote = properPostData.authorNoteLink;
+      const frontmatter = `---\n${stringifyYaml(frontmatterObj)}---`;
+      const fullDocument = [frontmatter, content, commentsSection].join('\n');
 
       // Delete the preliminary file if it exists (backward compat with older jobs)
       if (filePath) {
@@ -589,14 +632,6 @@ export class LocalArchiveCoordinator {
       if (postData.tags && postData.tags.length > 0) frontmatterObj.tags = postData.tags;
       if (linkPreviews.length > 0) frontmatterObj.linkPreviews = linkPreviews;
       if (options?.comment) frontmatterObj.comment = options.comment;
-      const frontmatter = `---\n${stringifyYaml(frontmatterObj)}---`;
-
-      // Build full document
-      const fullDocument = [
-        frontmatter,
-        content,
-      ].join('\n');
-
       // Generate correct file path using actual post data
       const vaultManager = new VaultManager({
         vault: this.app.vault,
@@ -629,6 +664,11 @@ export class LocalArchiveCoordinator {
         },
         title: postData.title,
       };
+      await this.attachAuthorNoteLink(properPostData);
+      this.applyMainArchiveTag(frontmatterObj, properPostData);
+      if (properPostData.authorNoteLink) frontmatterObj.authorNote = properPostData.authorNoteLink;
+      const frontmatter = `---\n${stringifyYaml(frontmatterObj)}---`;
+      const fullDocument = [frontmatter, content].join('\n');
 
       // Delete the preliminary file if it exists (backward compat with older jobs)
       if (filePath) {
@@ -934,14 +974,6 @@ export class LocalArchiveCoordinator {
       if (postData.tags && postData.tags.length > 0) frontmatterObj.tags = postData.tags;
       if (linkPreviews.length > 0) frontmatterObj.linkPreviews = linkPreviews;
       if (options?.comment) frontmatterObj.comment = options.comment;
-      const frontmatter = `---\n${stringifyYaml(frontmatterObj)}---`;
-
-      // Build full document
-      const fullDocument = [
-        frontmatter,
-        content,
-      ].join('\n');
-
       // Generate correct file path using actual post data
       const vaultManager = new VaultManager({
         vault: this.app.vault,
@@ -974,6 +1006,11 @@ export class LocalArchiveCoordinator {
         },
         title: postData.title,
       };
+      await this.attachAuthorNoteLink(properPostData);
+      this.applyMainArchiveTag(frontmatterObj, properPostData);
+      if (properPostData.authorNoteLink) frontmatterObj.authorNote = properPostData.authorNoteLink;
+      const frontmatter = `---\n${stringifyYaml(frontmatterObj)}---`;
+      const fullDocument = [frontmatter, content].join('\n');
 
       // Delete the preliminary file if it exists (backward compat with older jobs)
       if (filePath) {
@@ -1154,8 +1191,6 @@ export class LocalArchiveCoordinator {
         processedUrls: [url, options?.originalUrl].filter(Boolean),
       };
 
-      const frontmatterYaml = stringifyYaml(frontmatterData);
-
       // Build content
       const contentParts: string[] = [];
 
@@ -1167,8 +1202,6 @@ export class LocalArchiveCoordinator {
       contentParts.push(`\n*${postData.series.publishDay}*${postData.series.finished ? ' | **완결**' : ''}`);
       contentParts.push(`\n\n---\n\n`);
       contentParts.push(imageGallery);
-
-      const fullDocument = `---\n${frontmatterYaml}---\n\n${contentParts.join('')}\n`;
 
       // Generate correct file path using VaultManager
       const vaultManager = new VaultManager({
@@ -1201,6 +1234,11 @@ export class LocalArchiveCoordinator {
         },
         title: postData.title,
       };
+      await this.attachAuthorNoteLink(properPostData);
+      this.applyMainArchiveTag(frontmatterData, properPostData);
+      if (properPostData.authorNoteLink) frontmatterData.authorNote = properPostData.authorNoteLink;
+      const frontmatterYaml = stringifyYaml(frontmatterData);
+      const fullDocument = `---\n${frontmatterYaml}---\n\n${contentParts.join('')}\n`;
 
       // Delete the preliminary file if it exists (backward compat with older jobs)
       if (filePath) {

@@ -51,6 +51,31 @@ describe('FrontmatterGenerator', () => {
   }
 
   describe('extended author metadata fields', () => {
+    it('emits a prepared authorNote wikilink without changing author', () => {
+      const postData = createTestPostData({
+        authorNoteLink: '[[Social Authors/x-testuser|Test User]]',
+      });
+
+      const frontmatter = generator.generateFrontmatter(postData);
+      expect(frontmatter.author).toBe('Test User');
+      expect(frontmatter.authorNote).toBe('[[Social Authors/x-testuser|Test User]]');
+    });
+
+    it('updates a prepared authorNote link but preserves it when no new link is supplied', () => {
+      const existingFrontmatter = {
+        authorNote: '[[Social Authors/x-testuser|Old alias]]',
+      };
+      const updated = generator.generateFrontmatter(createTestPostData({
+        authorNoteLink: '[[Social Authors/x-testuser|New alias]]',
+      }), { existingFrontmatter });
+      const preserved = generator.generateFrontmatter(createTestPostData(), {
+        existingFrontmatter,
+      });
+
+      expect(updated.authorNote).toBe('[[Social Authors/x-testuser|New alias]]');
+      expect(preserved.authorNote).toBe('[[Social Authors/x-testuser|Old alias]]');
+    });
+
     describe('authorHandle', () => {
       it('should include authorHandle when handle is provided', () => {
         const postData = createTestPostData({
@@ -1133,6 +1158,45 @@ describe('FrontmatterGenerator', () => {
 
         expect(frontmatter.tags).toEqual(['maintag/x/2024/03']);
       });
+
+      it('replaces an exact historical managed tag on a future note update', () => {
+        const postData = createTestPostData();
+        const frontmatter = generator.generateFrontmatter(postData, {
+          existingFrontmatter: {
+            tags: ['old-root/x', 'Personal'],
+          },
+          customization: {
+            enabled: true,
+            fieldVisibility: createVisibility(),
+            customProperties: [],
+            tagRoot: 'new-root',
+            tagOrganization: 'platform-only',
+            archiveTagRuleHistory: [
+              { tagRoot: 'old-root', tagOrganization: 'platform-only' },
+            ],
+          },
+        });
+
+        expect(frontmatter.tags).toEqual(['Personal', 'new-root/x']);
+      });
+
+      it('removes an exact historical managed tag after auto tags are disabled', () => {
+        const frontmatter = generator.generateFrontmatter(createTestPostData(), {
+          existingFrontmatter: { tags: ['old-root/x', 'Personal'] },
+          customization: {
+            enabled: true,
+            fieldVisibility: createVisibility(),
+            customProperties: [],
+            tagRoot: '',
+            tagOrganization: 'flat',
+            archiveTagRuleHistory: [
+              { tagRoot: 'old-root', tagOrganization: 'platform-only' },
+            ],
+          },
+        });
+
+        expect(frontmatter.tags).toEqual(['Personal']);
+      });
     });
   });
 
@@ -1173,7 +1237,7 @@ describe('FrontmatterGenerator', () => {
     });
   });
 
-  it('writes all location attachments as YAML-safe data while retaining primary legacy fields', () => {
+  it('keeps primary location fields flat and omits unsupported object arrays', () => {
     const location = {
       id: 'location-1', archiveId: 'archive-1', placeKey: 'kakaomap:101', name: '희작',
       address: '서울 종로구', latitude: 37.1, longitude: 126.9, source: 'kakaomap', externalId: '101',
@@ -1191,11 +1255,13 @@ describe('FrontmatterGenerator', () => {
     }));
 
     expect(frontmatter).toMatchObject({
-      location: '희작', locationAddress: '서울 종로구', locationCount: 1,
-      locations: [expect.objectContaining({ id: 'location-1', archiveId: 'archive-1' })],
+      location: '희작',
+      locationAddress: '서울 종로구',
     });
+    expect(frontmatter.locations).toBeUndefined();
+    expect(frontmatter.locationCount).toBeUndefined();
     const document = generator.generateFullDocument(frontmatter, 'Body');
-    expect(document).toContain('locations:\n  - {"id":"location-1","archiveId":"archive-1"');
+    expect(document).not.toContain('locations:');
     expect(document).not.toContain('[object Object]');
   });
 });

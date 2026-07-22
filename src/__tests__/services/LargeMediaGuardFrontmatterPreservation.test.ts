@@ -78,7 +78,7 @@ describe('LargeMediaGuard: frontmatter preservation', () => {
   });
 
   describe('generateFrontmatter with existingFrontmatter', () => {
-    it('preserves all 12 USER_CONTROLLED fields when re-archiving', () => {
+    it('preserves every registered USER_CONTROLLED field when re-archiving', () => {
       const postData = createTestPostData();
       const existing: Record<string, unknown> = {
         share: true,
@@ -88,6 +88,9 @@ describe('LargeMediaGuard: frontmatter preservation', () => {
         archive: true,
         like: true,
         comment: 'my personal note',
+        tags: ['personal'],
+        archiveTags: ['server/topic'],
+        authorNote: '[[Social Authors/x-test|Test]]',
         downloadedUrls: [
           'downloaded:https://video.twimg.com/ext/v1.mp4',
           'declined:https://video.twimg.com/ext/v2.mp4',
