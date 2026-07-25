@@ -65,9 +65,14 @@ function makeApiClient(serverNotes: unknown[] = []) {
         id: 'archive-123',
         userNotes: serverNotes,
         userHighlights: [],
+        notesRevision: 7,
       },
     }),
-    updateArchiveActions: vi.fn().mockResolvedValue({}),
+    applyArchiveNoteOperations: vi.fn().mockResolvedValue({
+      notesRevision: 8,
+      notes: serverNotes,
+      applied: [],
+    }),
   };
 }
 
@@ -75,6 +80,7 @@ function makeArchiveLookup() {
   return {
     findBySourceArchiveId: vi.fn(),
     findByOriginalUrl: vi.fn().mockReturnValue([]),
+    getIdentityByPath: vi.fn().mockReturnValue(null),
   };
 }
 
@@ -123,7 +129,7 @@ describe('AnnotationOutboundService', () => {
 
       // Should NOT have called the API on first observation
       expect(apiClient.getUserArchive).not.toHaveBeenCalled();
-      expect(apiClient.updateArchiveActions).not.toHaveBeenCalled();
+      expect(apiClient.applyArchiveNoteOperations).not.toHaveBeenCalled();
     });
   });
 
@@ -168,9 +174,13 @@ describe('AnnotationOutboundService', () => {
       await vi.runAllTimersAsync();
 
       expect(apiClient.getUserArchive).toHaveBeenCalledWith('archive-123');
-      expect(apiClient.updateArchiveActions).toHaveBeenCalledWith(
+      expect(apiClient.applyArchiveNoteOperations).toHaveBeenCalledWith(
         'archive-123',
-        expect.objectContaining({ userNotes: expect.any(Array) })
+        7,
+        [expect.objectContaining({
+          op: 'create',
+          note: expect.objectContaining({ content: 'Updated comment' }),
+        })],
       );
     });
   });
@@ -209,10 +219,19 @@ describe('AnnotationOutboundService', () => {
       app._trigger(file);
       await vi.runAllTimersAsync();
 
-      const updateCall = (apiClient.updateArchiveActions as ReturnType<typeof vi.fn>).mock.calls[0];
-      const notes = (updateCall![1] as { userNotes: Array<{ id: string }> }).userNotes;
-      const primaryNote = notes.find((n) => n.id === `obsidian:${clientId}:primary`);
-      expect(primaryNote).toBeDefined();
+      const updateCall = (
+        apiClient.applyArchiveNoteOperations as ReturnType<typeof vi.fn>
+      ).mock.calls[0];
+      const operations = updateCall![2] as Array<{
+        op: string;
+        note?: { id: string };
+      }>;
+      expect(operations).toEqual([
+        expect.objectContaining({
+          op: 'create',
+          note: expect.objectContaining({ id: `obsidian:${clientId}:primary` }),
+        }),
+      ]);
     });
   });
 
@@ -253,12 +272,24 @@ describe('AnnotationOutboundService', () => {
       app._trigger(file);
       await vi.runAllTimersAsync();
 
-      const updateCall = (apiClient.updateArchiveActions as ReturnType<typeof vi.fn>).mock.calls[0];
-      const notes = (updateCall![1] as { userNotes: Array<{ id: string }> }).userNotes;
+      const updateCall = (
+        apiClient.applyArchiveNoteOperations as ReturnType<typeof vi.fn>
+      ).mock.calls[0];
+      const operations = updateCall![2] as Array<{
+        op: string;
+        note?: { id: string };
+        noteId?: string;
+      }>;
 
-      // Mobile notes must still be present
-      expect(notes.some((n) => n.id === 'mobile-note-1')).toBe(true);
-      expect(notes.some((n) => n.id === 'mobile-note-2')).toBe(true);
+      // The client only mutates its own synthetic note. Unmentioned mobile
+      // notes remain authoritative on the server.
+      expect(operations).toHaveLength(1);
+      expect(operations[0]).toMatchObject({
+        op: 'create',
+        note: { id: 'obsidian:my-client:primary' },
+      });
+      expect(JSON.stringify(operations)).not.toContain('mobile-note-1');
+      expect(JSON.stringify(operations)).not.toContain('mobile-note-2');
     });
   });
 
@@ -301,11 +332,15 @@ describe('AnnotationOutboundService', () => {
       app._trigger(file);
       await vi.runAllTimersAsync();
 
-      const updateCall = (apiClient.updateArchiveActions as ReturnType<typeof vi.fn>).mock.calls[0];
-      const notes = (updateCall![1] as { userNotes: Array<{ id: string }> }).userNotes;
-
-      // Synthetic primary note must be removed
-      expect(notes.some((n) => n.id === syntheticNoteId)).toBe(false);
+      expect(apiClient.applyArchiveNoteOperations).toHaveBeenCalledWith(
+        'archive-123',
+        7,
+        [{
+          op: 'delete',
+          noteId: syntheticNoteId,
+          expectedUpdatedAt: '2026-01-01T00:00:00Z',
+        }],
+      );
     });
   });
 
@@ -347,7 +382,7 @@ describe('AnnotationOutboundService', () => {
 
       // Suppression should prevent any API call
       expect(apiClient.getUserArchive).not.toHaveBeenCalled();
-      expect(apiClient.updateArchiveActions).not.toHaveBeenCalled();
+      expect(apiClient.applyArchiveNoteOperations).not.toHaveBeenCalled();
     });
   });
 

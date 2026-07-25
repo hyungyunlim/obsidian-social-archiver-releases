@@ -294,6 +294,7 @@ describe('AnnotationSyncService', () => {
       expect(renderer.render).toHaveBeenCalledWith({
         notes: expect.arrayContaining([expect.objectContaining({ id: 'n1' })]),
         highlights: [],
+        sourcePath: 'Social Archives/test.md',
       });
 
       // Upsert called with current file content and rendered block
@@ -330,6 +331,7 @@ describe('AnnotationSyncService', () => {
         userHighlights: [
           { id: 'h1', text: 'B', startOffset: 0, endOffset: 1, color: 'yellow', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
         ],
+        notesRevision: 12,
       });
 
       const service = new AnnotationSyncService(
@@ -347,6 +349,48 @@ describe('AnnotationSyncService', () => {
       expect(capturedFm.userNoteCount).toBe(1);
       expect(capturedFm.userHighlightCount).toBe(1);
       expect(capturedFm.hasAnnotations).toBe(true);
+      expect(capturedFm.notesRevision).toBe(12);
+    });
+
+    it('passes only exact same-archive location bindings to the renderer', async () => {
+      const file = makeFile('Social Archives/test.md');
+      const renderer = makeAnnotationRenderer('block');
+      const service = new AnnotationSyncService(
+        makeApp() as any,
+        makeWorkersApiClient({
+          userNotes: [
+            { id: 'place-note', content: 'context', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+          ],
+          locations: [
+            {
+              id: 'location-1',
+              archiveId: 'archive-123',
+              name: '남경막국수 본점',
+              contextNoteId: 'place-note',
+            },
+            {
+              id: 'location-other',
+              archiveId: 'another-archive',
+              name: '잘못된 장소',
+              contextNoteId: 'place-note',
+            },
+          ],
+        }) as any,
+        makeArchiveLookup({ byId: file }) as any,
+        renderer as any,
+        makeSectionManager('patched') as any,
+        makeSettings(),
+      );
+
+      await service.handleActionUpdated(makeActionUpdatedData());
+
+      const renderArg = (renderer.render as ReturnType<typeof vi.fn>).mock.calls[0]![0] as {
+        placeNoteBindings?: Map<string, { locationId: string; locationName: string }>;
+      };
+      expect([...renderArg.placeNoteBindings?.entries() ?? []]).toEqual([[
+        'place-note',
+        { locationId: 'location-1', locationName: '남경막국수 본점' },
+      ]]);
     });
 
     it('does not overwrite existing sourceArchiveId in frontmatter', async () => {
@@ -845,6 +889,7 @@ Keep this.`;
         highlights: expect.arrayContaining([
           expect.objectContaining({ id: 'h1' }),
         ]),
+        sourcePath: 'Social Archives/test.md',
       });
       const renderArg = (renderer.render as ReturnType<typeof vi.fn>).mock.calls[0]![0] as any;
       expect(renderArg.notes).toHaveLength(3);

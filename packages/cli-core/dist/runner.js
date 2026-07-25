@@ -76,7 +76,7 @@ export function parseArgv(args) {
 }
 export function helpText() {
     const lines = [
-        'social-archiver — Social Archiver desktop CLI (scaffold)',
+        'social-archiver — Social Archiver CLI',
         '',
         'Usage: social-archiver <command> [--flag value] [--flag=value] [--bare-flag]',
         '',

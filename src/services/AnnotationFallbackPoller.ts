@@ -17,7 +17,7 @@
  *                           └─ error    → fail-closed: stop, wait for next
  *                                         WS recovery or external start()
  *
- * Annotation-flip detection (Codex HOLD #6):
+ * Annotation-change detection:
  *   `GET /api/user/archives` only returns count fields
  *   (`userHighlightCount` / `userNoteCount`) — the full `userHighlights` /
  *   `userNotes` arrays live on `GET /api/user/archives/:archiveId`. To catch
@@ -27,9 +27,8 @@
  *        the archive newly has annotations), fetch per-archive detail via
  *        `apiClient.getUserArchive(id)` and deliver the hydrated record to
  *        `onArchiveUpdate`.
- *   Archives whose counts are unchanged (or non-flipping, e.g. 2 → 2) do NOT
- *   trigger a detail fetch — delivered as-is so the caller can still react
- *   to non-annotation fields (isLiked, shareUrl, etc.) if needed.
+ *   `notesRevision` is also tracked so edits, deletes, and same-count
+ *   replacements hydrate even when note counts do not change.
  *
  * Guardrails:
  *  - Fail-closed on network errors: do not loop retries. The WebSocket's
@@ -66,6 +65,7 @@ export interface AnnotationFallbackPollerDeps {
 interface AnnotationCountSnapshot {
   noteCount: number;
   highlightCount: number;
+  notesRevision: number | null;
 }
 
 const DEFAULT_INTERVAL_MS = 30_000;
@@ -170,6 +170,11 @@ export class AnnotationFallbackPoller {
         const prev = this.countSnapshots.get(archive.id);
         const currentNoteCount = Math.max(0, archive.userNoteCount ?? 0);
         const currentHighlightCount = Math.max(0, archive.userHighlightCount ?? 0);
+        const currentNotesRevision = typeof archive.notesRevision === 'number'
+          && Number.isSafeInteger(archive.notesRevision)
+          && archive.notesRevision >= 0
+          ? archive.notesRevision
+          : null;
         const prevNoteCount = prev?.noteCount ?? 0;
         const prevHighlightCount = prev?.highlightCount ?? 0;
 
@@ -179,15 +184,23 @@ export class AnnotationFallbackPoller {
         this.countSnapshots.set(archive.id, {
           noteCount: currentNoteCount,
           highlightCount: currentHighlightCount,
+          notesRevision: currentNotesRevision,
         });
 
         const countsIncreased =
           currentNoteCount > prevNoteCount || currentHighlightCount > prevHighlightCount;
         const firstEverAnnotation =
           !prev && (currentNoteCount > 0 || currentHighlightCount > 0);
+        const notesRevisionChanged = currentNotesRevision !== null
+          && (
+            (!prev && currentNotesRevision > 0)
+            || (prev !== undefined
+              && prev.notesRevision !== null
+              && prev.notesRevision !== currentNotesRevision)
+          );
 
         let hydrated = archive;
-        if (countsIncreased || firstEverAnnotation) {
+        if (countsIncreased || firstEverAnnotation || notesRevisionChanged) {
           // Count flip → hydrate via per-archive detail endpoint so the
           // reconciler receives the full userNotes / userHighlights arrays.
           const detail = await this.apiClient.getUserArchive(archive.id);

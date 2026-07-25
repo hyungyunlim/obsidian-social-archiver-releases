@@ -112,6 +112,7 @@ const CATEGORY_FIELDS: Record<keyof FrontmatterFieldVisibility, string[]> = {
     'locationAddress',
     'locationUrl',
     'locationCategory',
+    'locationPlaceKind',
     'locations',
     'locationCount',
   ],
@@ -339,6 +340,9 @@ export class FrontmatterGenerator {
     if (postData.metadata.locationAddress) frontmatter.locationAddress = postData.metadata.locationAddress;
     if (postData.metadata.locationUrl) frontmatter.locationUrl = postData.metadata.locationUrl;
     if (postData.metadata.locationCategory) frontmatter.locationCategory = postData.metadata.locationCategory;
+    if (postData.metadata.locationPlaceKind) {
+      frontmatter.locationPlaceKind = postData.metadata.locationPlaceKind;
+    }
     // NOTE: the full `locations` array is NOT written to frontmatter — Obsidian's
     // Properties editor cannot render an array-of-objects and flags it as invalid.
     // It rides in a hidden `%% sa:locations %%` body block instead (appended in

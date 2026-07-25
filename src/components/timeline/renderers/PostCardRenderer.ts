@@ -43,10 +43,6 @@ import { PlaceCandidateModal, type PlaceExtractionModalOutcome } from '../../../
 import { countNonHintPending, isWeakHintCandidate } from '../../../modals/placeCandidateReviewModel';
 import { BILLING_FALLBACK_MESSAGE } from '@social-archiver/cli-core';
 import { ArchivePlacePickerModal } from '../modals/ArchivePlacePickerModal';
-import {
-  applyPrimaryCandidateLocationFrontmatter,
-  getNewlyAttachedPrimaryLocation,
-} from './placeCandidateFrontmatterProjection';
 import { AICommentRenderer, type AICommentRendererOptions } from './AICommentRenderer';
 import { AICliDetector, type AICli, type AICliDetectionResult } from '../../../utils/ai-cli';
 import { parseAIComments, appendAIComment, removeAIComment, updateFrontmatterAIComments } from '../../../services/ai-comment/markdown-handler';
@@ -4391,6 +4387,24 @@ export class PostCardRenderer extends Component {
         const placeArchiveId = this.resolveArchiveIdForContentVariants(post);
         if (placeArchiveId) {
           const pending = await this.placeCandidateStore.getPending(placeArchiveId).catch(() => []);
+          const currentLocations = await this.plugin.workersApiClient
+            .getArchiveLocations(placeArchiveId)
+            .catch(() => []);
+          if (currentLocations.length > 0) {
+            menu.addItem((item) => {
+              item
+                .setIcon('notebook-tabs')
+                .setTitle('Review saved place notes')
+                .onClick(() => {
+                  void this.openPlaceCandidateModal(
+                    post,
+                    placeArchiveId,
+                    rootElement,
+                    { allowEmpty: true, recoveryOnly: true },
+                  );
+                });
+            });
+          }
           if (pending.length === 0) {
             menu.addItem((item) => {
               item
@@ -9653,7 +9667,10 @@ export class PostCardRenderer extends Component {
     post: PostData,
     archiveId: string,
     rootElement: HTMLElement,
-    { allowEmpty = false }: { allowEmpty?: boolean } = {}
+    {
+      allowEmpty = false,
+      recoveryOnly = false,
+    }: { allowEmpty?: boolean; recoveryOnly?: boolean } = {}
   ): Promise<void> {
     let apiClient: WorkersAPIClient;
     try {
@@ -9670,24 +9687,45 @@ export class PostCardRenderer extends Component {
     }
 
     const currentLocations = await apiClient.getArchiveLocations(archiveId).catch(() => []);
+    const hostLocale = window.localStorage.getItem('language') || window.navigator.language;
     const modal = new PlaceCandidateModal(this.app, {
-      candidates,
+      archiveId,
+      hostLocale,
+      candidates: recoveryOnly ? [] : candidates,
       currentLocations,
       attachBatch: (body): Promise<PlaceCandidateAttachmentResult> => (
         apiClient.attachPlaceCandidatesBatch(archiveId, body)
       ),
+      attachProvider: (candidateId, body): Promise<PlaceCandidateAttachmentResult> => (
+        apiClient.attachPlaceCandidateFromProvider(candidateId, body)
+      ),
+      searchProvider: request => apiClient.searchProviderPlaces(request),
+      loadProviderRuntime: async () => {
+        const preferences = await apiClient.getArchivePreferences();
+        return {
+          preference: preferences.mapSearchProvider,
+          availability: preferences.mapSearchProviderAvailability,
+        };
+      },
       rejectCandidate: async (candidateId): Promise<void> => {
         await apiClient.rejectPlaceCandidate(candidateId);
       },
       refetchCandidates: (): Promise<readonly PlaceCandidate[]> => (
         this.placeCandidateStore.refresh(archiveId)
       ),
+      loadContextNoteProposals: () => apiClient.getPlaceContextNoteProposals(archiveId),
+      decideContextNote: (candidateId, intent) => (
+        apiClient.decidePlaceContextNote(candidateId, intent)
+      ),
+      recoveryOnly,
       openPlacePicker: (request): void => {
         new ArchivePlacePickerModal(this.app, {
           archiveId,
           api: apiClient,
-          hostLocale: window.localStorage.getItem('language') || window.navigator.language,
+          hostLocale,
           candidateContext: { archiveId, candidateId: request.candidate.id },
+          ...(request.contextNoteIntent ? { contextNoteIntent: request.contextNoteIntent } : {}),
+          ...(request.placeKindIntent ? { placeKindIntent: request.placeKindIntent } : {}),
           initialView: request.initialView,
           onCandidateAttached: request.onAttached,
           onClosed: request.onClosed,
@@ -9695,11 +9733,19 @@ export class PostCardRenderer extends Component {
       },
       onReconciled: async (result): Promise<void> => {
         this.placeCandidateStore.reconcileAttachment(result);
-        await this.applyAttachedPrimaryPlaceToNote(post, result);
+        await this.plugin.reconcileArchiveLocation(archiveId);
         if (result.remainingPendingCount === 0) {
           this.removePlaceCandidateBanner(post, rootElement);
         }
         await this.refreshPostCardFull(post, rootElement);
+      },
+      onBackgroundCommitted: async (results): Promise<readonly PlaceCandidate[]> => {
+        for (const result of results) this.placeCandidateStore.reconcileAttachment(result);
+        const remaining = await this.placeCandidateStore.refresh(archiveId);
+        await this.plugin.reconcileArchiveLocation(archiveId);
+        if (remaining.length === 0) this.removePlaceCandidateBanner(post, rootElement);
+        await this.refreshPostCardFull(post, rootElement);
+        return remaining;
       },
       onCandidatesChanged: async (remaining): Promise<void> => {
         const remainingIds = new Set(remaining.map((candidate) => candidate.id));
@@ -9713,9 +9759,20 @@ export class PostCardRenderer extends Component {
         await this.refreshPostCardFull(post, rootElement);
       },
       focusExtractCta: candidates.every(isWeakHintCandidate),
-      onExtract: (signal): Promise<PlaceExtractionModalOutcome> => (
-        this.runPlaceExtraction(post, archiveId, rootElement, signal)
-      ),
+      hasImages: post.media.some(media => media.type === 'image'),
+      hasComments: (post.comments?.length ?? 0) > 0,
+      ...(recoveryOnly ? {} : {
+        onExtract: (
+          signal: AbortSignal,
+          options: {
+            includeOcr: boolean;
+            includeComments: boolean;
+            executionPreference: 'auto' | 'server' | 'local';
+          },
+        ): Promise<PlaceExtractionModalOutcome> => (
+          this.runPlaceExtraction(post, archiveId, rootElement, signal, options)
+        ),
+      }),
       onModalClosed: (): void => {
         if (this.openPlaceModals.get(archiveId) === modal) {
           this.openPlaceModals.delete(archiveId);
@@ -9749,6 +9806,11 @@ export class PostCardRenderer extends Component {
     archiveId: string,
     rootElement: HTMLElement,
     signal: AbortSignal,
+    options: {
+      includeOcr: boolean;
+      includeComments: boolean;
+      executionPreference: 'auto' | 'server' | 'local';
+    },
   ): Promise<PlaceExtractionModalOutcome> {
     const apiClient = this.plugin.workersApiClient;
     const beforeIds = new Set(
@@ -9758,7 +9820,9 @@ export class PostCardRenderer extends Component {
     try {
       result = await apiClient.extractPlaceCandidates(archiveId, {
         idempotencyKey: `place-extract:${crypto.randomUUID()}`,
-        includeOcr: true,
+        includeOcr: options.includeOcr,
+        includeComments: options.includeComments,
+        executionPreference: options.executionPreference,
       });
     } catch (error) {
       this.reportPlaceExtractionError(error);
@@ -9895,28 +9959,6 @@ export class PostCardRenderer extends Component {
             : 'Could not find places.',
         );
     }
-  }
-
-  /**
-   * Project only a newly attached primary into this note. Secondary locations
-   * remain server-canonical and never replace primary scalar frontmatter.
-   */
-  private async applyAttachedPrimaryPlaceToNote(
-    post: PostData,
-    result: PlaceCandidateAttachmentResult
-  ): Promise<void> {
-    const primary = getNewlyAttachedPrimaryLocation(result);
-    if (!primary) return;
-    if (!post.filePath) return;
-    const file = this.vault.getAbstractFileByPath(post.filePath);
-    if (!(file instanceof TFile)) return;
-
-    // Mark as UI modification to avoid a double timeline refresh
-    this.onUIModifyCallback?.(post.filePath);
-
-    await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-      applyPrimaryCandidateLocationFrontmatter(fm, primary);
-    });
   }
 
   private removePlaceCandidateBanner(post: PostData, rootElement: HTMLElement): void {

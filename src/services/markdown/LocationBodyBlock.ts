@@ -52,6 +52,7 @@ export class LocationBodyBlock {
       externalId: l.externalId,
       url: l.url,
       category: l.category,
+      placeKind: l.placeKind ?? null,
       isPrimary: l.isPrimary,
       sortOrder: l.sortOrder,
       placeArchiveId: l.placeArchiveId,

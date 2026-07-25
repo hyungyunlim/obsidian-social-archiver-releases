@@ -373,6 +373,65 @@ describe('AnnotationFallbackPoller', () => {
     expect(onArchiveUpdate).toHaveBeenLastCalledWith(sameRow);
   });
 
+  it('hydrates same-count note edits and deletes when notesRevision changes', async () => {
+    const timer = new TimerHarness();
+    const seed = makeArchive('arch-revision', {
+      userNoteCount: 1,
+      userHighlightCount: 0,
+      notesRevision: 4,
+    });
+    const edited = makeArchive('arch-revision', {
+      userNoteCount: 1,
+      userHighlightCount: 0,
+      notesRevision: 5,
+    });
+    const deleted = makeArchive('arch-revision', {
+      userNoteCount: 0,
+      userHighlightCount: 0,
+      notesRevision: 6,
+    });
+    const editedDetail = makeArchive('arch-revision', {
+      ...edited,
+      userNotes: [{
+        id: 'note-1',
+        content: 'edited',
+        createdAt: '2026-04-17T00:00:00.000Z',
+        updatedAt: '2026-04-17T01:00:00.000Z',
+      }],
+    });
+    const deletedDetail = makeArchive('arch-revision', {
+      ...deleted,
+      userNotes: [],
+    });
+    const tickResponses = [
+      { archives: [seed] },
+      { archives: [edited] },
+      { archives: [deleted] },
+    ];
+    const getUserArchives = vi.fn(async () => tickResponses.shift() ?? { archives: [] });
+    const getUserArchive = vi.fn()
+      .mockResolvedValueOnce({ archive: seed })
+      .mockResolvedValueOnce({ archive: editedDetail })
+      .mockResolvedValueOnce({ archive: deletedDetail });
+    const onArchiveUpdate = vi.fn();
+    const poller = new AnnotationFallbackPoller({
+      apiClient: { getUserArchives, getUserArchive } as unknown as WorkersAPIClient,
+      onArchiveUpdate,
+      setTimer: timer.setTimer,
+      clearTimer: timer.clearTimer,
+      random: () => 0,
+    });
+
+    poller.start();
+    await timer.flushNext();
+    await timer.flushNext();
+    await timer.flushNext();
+
+    expect(getUserArchive).toHaveBeenCalledTimes(3);
+    expect(onArchiveUpdate).toHaveBeenNthCalledWith(2, editedDetail);
+    expect(onArchiveUpdate).toHaveBeenNthCalledWith(3, deletedDetail);
+  });
+
   it('hasAnnotations flip (false → true via highlight count) triggers detail fetch', async () => {
     const timer = new TimerHarness();
 

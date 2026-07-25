@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PLACE_KINDS } from '../shared/platforms/place-kinds';
 
 export const PLACE_ARCHIVE_STATES = [
   'metadata_only',
@@ -9,6 +10,7 @@ export const PLACE_ARCHIVE_STATES = [
 
 export const PlaceArchiveStateSchema = z.enum(PLACE_ARCHIVE_STATES);
 export type PlaceArchiveState = z.infer<typeof PlaceArchiveStateSchema>;
+export const PlaceKindSchema = z.enum(PLACE_KINDS);
 
 export const ArchiveLocationSchema = z.object({
   id: z.string().min(1).max(128),
@@ -22,10 +24,13 @@ export const ArchiveLocationSchema = z.object({
   externalId: z.string().max(255).nullable(),
   url: z.string().max(2_048).nullable(),
   category: z.string().max(500).nullable(),
+  placeKind: PlaceKindSchema.nullable().optional(),
   isPrimary: z.boolean(),
   sortOrder: z.number().int().min(0).max(1_000),
   placeArchiveId: z.string().min(1).max(128).nullable(),
   promotionStatus: PlaceArchiveStateSchema,
+  contextNoteId: z.string().min(1).max(100).nullable().optional(),
+  contextNoteTags: z.array(z.string()).max(3).optional(),
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
 }).strict().superRefine((location, context) => {

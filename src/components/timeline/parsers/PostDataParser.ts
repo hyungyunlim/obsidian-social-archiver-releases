@@ -682,6 +682,7 @@ export class PostDataParser {
           locationAddress: frontmatter['locationAddress'] as string | undefined,
           locationUrl: frontmatter['locationUrl'] as string | undefined,
           locationCategory: frontmatter['locationCategory'] as string | undefined,
+          locationPlaceKind: frontmatter['locationPlaceKind'] as PostData['metadata']['locationPlaceKind'],
           // Prefer the hidden body block; fall back to the legacy frontmatter
           // array for notes not yet rewritten to the block format.
           locations: bodyLocations ?? readArchiveLocations(frontmatter['locations']),

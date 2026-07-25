@@ -80,6 +80,19 @@ function escapeCalloutContent(text: string): string {
     .join('\n');
 }
 
+export interface PlaceNoteBinding {
+  readonly locationId: string;
+  readonly locationName: string;
+}
+
+function placeNoteMarker(noteId: string, locationId: string): string {
+  return `<!-- social-archiver:place-note note-id="${encodeURIComponent(noteId)}" location-id="${encodeURIComponent(locationId)}" -->`;
+}
+
+function safePlaceLabel(value: string): string {
+  return value.trim().replace(/\s+/gu, ' ').replace(/[[\]`*_]/gu, '\\$&');
+}
+
 // ─── Renderer ────────────────────────────────────────────
 
 export class AnnotationRenderer {
@@ -108,7 +121,12 @@ export class AnnotationRenderer {
    * The conversion is confined to the rendered body block; the round-trip
    * `fm.comment` value (written by AnnotationSyncService) is NEVER converted.
    */
-  render(params: { notes: UserNote[]; highlights: TextHighlight[]; sourcePath?: string }): string {
+  render(params: {
+    notes: UserNote[];
+    highlights: TextHighlight[];
+    sourcePath?: string;
+    placeNoteBindings?: ReadonlyMap<string, PlaceNoteBinding>;
+  }): string {
     const { notes, highlights } = params;
     const sourcePath = params.sourcePath ?? '';
 
@@ -161,8 +179,14 @@ export class AnnotationRenderer {
 
       sortedNotes.forEach((n) => {
         const timestamp = formatLocalTimestamp(n.createdAt);
+        const placeBinding = params.placeNoteBindings?.get(n.id);
         const calloutLines: string[] = [
-          `> [!note]+ ${timestamp}`,
+          ...(placeBinding
+            ? [placeNoteMarker(n.id, placeBinding.locationId)]
+            : []),
+          `> [!note]+ ${placeBinding
+            ? `Place note · ${safePlaceLabel(placeBinding.locationName)} · ${timestamp}`
+            : timestamp}`,
           escapeCalloutContent(convertInternalMentions(n.content, this.resolvers, sourcePath)),
         ];
         noteLines.push(calloutLines.join('\n'));

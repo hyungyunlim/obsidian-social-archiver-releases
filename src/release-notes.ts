@@ -24,6 +24,19 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.4.0': {
+    title: 'Faster AI Place Review',
+    date: '2026-07-25',
+    notes: `## Faster AI place review
+
+- Find Places now searches, matches, and selects likely results automatically, so most posts are ready to save as soon as the review opens.
+- Place context from the original post can be saved as a note, with the address and inferred place type available for review before saving.
+- Unmatched suggestions can be searched and resolved inline without opening another modal, and matched results survive an app reload.
+- OCR and archived-comment extraction are available as compact options within the Find Places flow.
+- Multi-place saves continue in the background with clear progress feedback, then refresh the post and Places view without requiring a manual reload.
+`,
+    isImportant: true,
+  },
   '4.0.0': {
     title: 'Browser Clips & Local-Only Mode',
     date: '2026-06-11',

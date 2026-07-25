@@ -383,6 +383,7 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
       locationAddress: archive.locationAddress ?? undefined,
       locationUrl: archive.locationUrl ?? undefined,
       locationCategory: archive.locationCategory ?? undefined,
+      locationPlaceKind: archive.locationPlaceKind ?? undefined,
       locations: archive.locations,
       locationCount: archive.locationCount ?? archive.locations?.length,
     },

@@ -8,6 +8,10 @@ import type {
 } from '../../services/WorkersAPIClient';
 import type { AICli, AICommentType } from '../../types/ai-comment';
 import { AICliDetector } from '../../utils/ai-cli';
+import {
+  PLACE_EXTRACT_CAPABILITY,
+  PLACE_KIND_SUGGESTION_CAPABILITY,
+} from '../../types/place-candidate-attachment';
 
 const SUPPORTED_TYPES: AICommentType[] = [
   'summary',
@@ -101,7 +105,14 @@ export class DesktopCapabilityReporter {
     if (!commentCapability) return null;
     return {
       enabled: commentCapability.enabled,
-      capabilities: ['ai-actions-v1', 'tag-patch-v1', 'content-variants-v1', 'content-translate-v1'],
+      capabilities: [
+        'ai-actions-v1',
+        'tag-patch-v1',
+        'content-variants-v1',
+        'content-translate-v1',
+        PLACE_EXTRACT_CAPABILITY,
+        PLACE_KIND_SUGGESTION_CAPABILITY,
+      ],
       pluginVersion: this.deps.pluginVersion,
       updatedAt: commentCapability.updatedAt,
     };

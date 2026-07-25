@@ -197,6 +197,24 @@ describe('AnnotationRenderer', () => {
       const result = renderer.render({ notes, highlights: [] });
       expect(result).toContain('### Notes (2)');
     });
+
+    it('labels exact place-bound notes and keeps IDs in a hidden managed marker', () => {
+      const note = makeNote({ id: 'place-note', content: 'Quiet after 3pm' });
+      const result = renderer.render({
+        notes: [note],
+        highlights: [],
+        placeNoteBindings: new Map([['place-note', {
+          locationId: 'location-1',
+          locationName: 'Cafe [Seoul]',
+        }]]),
+      });
+
+      expect(result).toContain('Place note · Cafe \\[Seoul\\]');
+      expect(result).toContain(
+        '<!-- social-archiver:place-note note-id="place-note" location-id="location-1" -->',
+      );
+      expect(result).toContain('> Quiet after 3pm');
+    });
   });
 
   // ── Both notes and highlights ──
@@ -280,12 +298,11 @@ describe('AnnotationRenderer', () => {
       expect(result).not.toContain('socialarchiver://archive');
     });
 
-    it('strips an unresolvable archive token to plain anchor text', () => {
+    it('preserves an unresolvable archive token so it can resolve after a later sync', () => {
       const r = new AnnotationRenderer(resolvers);
       const note = makeNote({ content: 'see [Gone](socialarchiver://archive/missing)' });
       const result = r.render({ notes: [note], highlights: [] });
-      expect(result).toContain('> see Gone');
-      expect(result).not.toContain('socialarchiver://');
+      expect(result).toContain('> see [Gone](socialarchiver://archive/missing)');
     });
 
     it('converts a resolvable author token to a wikilink', () => {
@@ -304,12 +321,10 @@ describe('AnnotationRenderer', () => {
       expect(result).toContain('[[Some Note (known)|Cool Title]]');
     });
 
-    it('falls back to plain text with the default (no-op) renderer', () => {
+    it('preserves tokens with the default renderer for lossless later resolution', () => {
       const note = makeNote({ content: `read ${ARCHIVE_TOKEN} and ${AUTHOR_TOKEN}` });
       const result = renderer.render({ notes: [note], highlights: [] });
-      // No resolvers → tokens degrade to plain anchor / @name text.
-      expect(result).toContain('> read Cool Title and @Jack');
-      expect(result).not.toContain('socialarchiver://');
+      expect(result).toContain(`> read ${ARCHIVE_TOKEN} and ${AUTHOR_TOKEN}`);
     });
 
     it('is idempotent over a second render of the same input', () => {

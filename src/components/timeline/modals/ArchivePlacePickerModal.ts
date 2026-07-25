@@ -6,6 +6,9 @@ import {
   type MapSearchProvider,
 } from '@/shared/platforms/map-search-provider';
 import {
+  inferPlaceKindFromProvider,
+} from '@/shared/platforms/place-kinds';
+import {
   confirmGetPlaceDetails,
   getArchivePlacePickerError,
   isCandidatePlacePicker,
@@ -96,6 +99,12 @@ export class ArchivePlacePickerModal extends Modal {
       onChanged: (change): void => { void this.publishArchiveChange(change); },
       ...(candidateMode ? {
         candidateContext: this.options.candidateContext,
+        ...(this.options.contextNoteIntent
+          ? { contextNoteIntent: this.options.contextNoteIntent }
+          : {}),
+        ...(this.options.placeKindIntent
+          ? { placeKindIntent: this.options.placeKindIntent }
+          : {}),
         onCandidateAttached: (result): void => { void this.publishCandidateAttachment(result); },
       } : {}),
     });
@@ -252,11 +261,29 @@ export class ArchivePlacePickerModal extends Modal {
     this.close();
     try {
       if (isCandidatePlacePicker(this.options)) {
+        const providerPlaceKind = inferPlaceKindFromProvider(candidate.provider === 'googlemaps'
+          ? { provider: candidate.provider, name: candidate.displayName, primaryType: candidate.primaryType }
+          : {
+            provider: candidate.provider,
+            name: candidate.name,
+            categoryName: candidate.categoryName,
+            categoryGroupCode: candidate.categoryGroupCode,
+            categoryGroupName: candidate.categoryGroupName,
+          })?.placeKind ?? null;
+        const placeKindIntent = this.options.placeKindIntent?.mode === 'override'
+          ? this.options.placeKindIntent
+          : providerPlaceKind
+            ? { placeKind: providerPlaceKind, mode: 'suggest' as const }
+            : this.options.placeKindIntent;
         const response = await this.options.api.attachPlaceCandidateFromProvider(
           this.options.candidateContext.candidateId,
           {
             selectionToken: candidate.selectionToken,
             idempotencyKey: authority.idempotencyKey,
+            ...(this.options.contextNoteIntent
+              ? { contextNoteIntent: this.options.contextNoteIntent }
+              : {}),
+            ...(placeKindIntent ? { placeKindIntent } : {}),
           },
         );
         if (!this.completeSelection(selection)) return;

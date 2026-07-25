@@ -244,46 +244,53 @@ export class AnnotationOutboundService {
       const response = await this.apiClient.getUserArchive(archiveId);
       const archive = response.archive;
 
-      // 2. Clone existing notes array
-      const notes: UserNote[] = [...(archive.userNotes ?? [])];
-
-      // 3. Build synthetic note ID for this Obsidian client
+      // 2. Build synthetic note ID for this Obsidian client
       const clientId = this.getSettings().syncClientId || '';
       const syntheticNoteId = `obsidian:${clientId}:primary`;
 
-      // 4. Find existing primary note index
-      const existingIdx = notes.findIndex((n) => n.id === syntheticNoteId);
+      // 3. Resolve only the synthetic note this client owns. Semantic
+      // operations preserve notes created by mobile/web/desktop and generated
+      // place-context notes even when this vault copy is stale.
+      const existing = (archive.userNotes ?? []).find((note) => note.id === syntheticNoteId);
+      let operation: Parameters<WorkersAPIClient['applyArchiveNoteOperations']>[2][number];
 
       if (comment && comment.trim().length > 0) {
-        // Upsert primary note
         const now = new Date().toISOString();
-        const syntheticNote: UserNote = {
-          id: syntheticNoteId,
-          content: comment.trim(),
-          createdAt: existingIdx >= 0 ? notes[existingIdx]!.createdAt : now,
-          updatedAt: now,
-        };
-
-        if (existingIdx >= 0) {
-          notes[existingIdx] = syntheticNote;
+        if (existing) {
+          if (existing.content === comment.trim()) return;
+          operation = {
+            op: 'update',
+            noteId: syntheticNoteId,
+            expectedUpdatedAt: existing.updatedAt,
+            content: comment.trim(),
+            updatedAt: now,
+          };
         } else {
-          notes.push(syntheticNote);
+          const syntheticNote: UserNote = {
+            id: syntheticNoteId,
+            content: comment.trim(),
+            createdAt: now,
+            updatedAt: now,
+          };
+          operation = { op: 'create', note: syntheticNote };
         }
       } else {
-        // Comment cleared — remove primary note
-        if (existingIdx < 0) {
-          // Nothing to remove — no-op
-          return;
-        }
-        notes.splice(existingIdx, 1);
+        if (!existing) return;
+        operation = {
+          op: 'delete',
+          noteId: syntheticNoteId,
+          expectedUpdatedAt: existing.updatedAt,
+        };
       }
 
-      // 5. PATCH to server
-      await this.apiClient.updateArchiveActions(archiveId, {
-        userNotes: notes,
-      });
+      // 4. Apply the single owned-note mutation at the fetched revision.
+      await this.apiClient.applyArchiveNoteOperations(
+        archiveId,
+        archive.notesRevision ?? 0,
+        [operation],
+      );
 
-      // 6. Add suppression so the resulting inbound WS echo is ignored
+      // 5. Add suppression so the resulting inbound WS echo is ignored
       this.addSuppression(archiveId);
 
       console.debug(

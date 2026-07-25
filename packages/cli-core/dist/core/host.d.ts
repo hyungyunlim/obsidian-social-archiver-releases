@@ -21,6 +21,16 @@ export interface HostStatus {
     username?: string;
     /** Human-readable store/workspace name (vault name, DB path basename, …). */
     store?: string;
+    runtime?: {
+        os: 'macos' | 'windows' | 'linux' | 'unknown';
+        arch: string;
+        standalone: boolean;
+    };
+    authentication?: {
+        authenticated: boolean;
+        source: 'environment' | 'cli-login' | 'desktop-handoff' | 'none';
+        credentialProtection?: 'keychain' | 'credential-manager' | 'secret-service' | 'restricted-file';
+    };
     /** Capability map: which feature areas this host can serve headlessly. */
     features: Record<string, boolean>;
 }

@@ -2,14 +2,18 @@ import { type App } from 'obsidian';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   PlaceCandidateModal,
-  type CandidatePlacePickerRequest,
   type PlaceCandidateModalOptions,
 } from '@/modals/PlaceCandidateModal';
+import {
+  clearPlaceCandidateReviewCache,
+  savePlaceCandidateReviewCache,
+} from '@/modals/placeCandidateReviewCache';
 import { showConfirmModal } from '@/utils/confirm-modal';
 import type {
   ArchiveLocation,
   PlaceCandidate,
   PlaceCandidateAttachmentResult,
+  ProviderSearchCandidate,
 } from '@/services/WorkersAPIClient';
 
 const confirmState = vi.hoisted(() => ({ confirmed: true }));
@@ -47,12 +51,46 @@ function candidate(
 
 function location(overrides: Partial<ArchiveLocation> = {}): ArchiveLocation {
   return {
-    id: 'location-1', archiveId: 'archive-1', placeKey: 'metadata:place',
-    name: 'Existing primary', address: 'Seoul', latitude: null, longitude: null,
-    source: null, externalId: null, url: null, category: null, isPrimary: true,
-    sortOrder: 0, placeArchiveId: null, promotionStatus: 'metadata_only',
-    createdAt: '2026-07-19T00:00:00.000Z', updatedAt: '2026-07-19T00:00:00.000Z',
+    id: 'location-1',
+    archiveId: 'archive-1',
+    placeKey: 'metadata:place',
+    name: 'Existing primary',
+    address: 'Seoul',
+    latitude: null,
+    longitude: null,
+    source: null,
+    externalId: null,
+    url: null,
+    category: null,
+    isPrimary: true,
+    sortOrder: 0,
+    placeArchiveId: null,
+    promotionStatus: 'metadata_only',
+    createdAt: '2026-07-19T00:00:00.000Z',
+    updatedAt: '2026-07-19T00:00:00.000Z',
     ...overrides,
+  };
+}
+
+function kakaoResult(
+  externalId: string,
+  name = `Map ${externalId}`,
+  address = `Road ${externalId}`,
+): ProviderSearchCandidate {
+  return {
+    provider: 'kakaomap',
+    externalId,
+    name,
+    categoryName: '음식점 > 한식',
+    categoryGroupCode: 'FD6',
+    categoryGroupName: '음식점',
+    address,
+    roadAddress: address,
+    latitude: 37.5,
+    longitude: 127,
+    phone: '',
+    placeUrl: `https://place.map.kakao.com/${externalId}`,
+    selectionToken: `selection-${externalId}`,
   };
 }
 
@@ -70,7 +108,7 @@ function result(
       requestDigest: `sha256:${'a'.repeat(64)}`,
       operation,
     },
-    outcomes: resolved.map((item) => ({
+    outcomes: resolved.map(item => ({
       candidateId: item.id,
       ordinal: item.ordinal,
       outcome: 'attached',
@@ -90,18 +128,39 @@ function openModal(overrides: Partial<PlaceCandidateModalOptions> = {}): {
   readonly modal: PlaceCandidateModal;
   readonly options: PlaceCandidateModalOptions;
 } {
-  const rows = [candidate('candidate-3', 2), candidate('candidate-1', 0), candidate('candidate-2', 1)];
+  const rows = overrides.candidates ?? [
+    candidate('candidate-3', 2),
+    candidate('candidate-1', 0),
+    candidate('candidate-2', 1),
+  ];
   const options: PlaceCandidateModalOptions = {
+    archiveId: 'archive-1',
+    hostLocale: 'ko',
     candidates: rows,
     currentLocations: [location()],
-    attachBatch: vi.fn(async (body) => result(
-      rows.filter((item) => body.candidates.some((selected) => selected.candidateId === item.id)),
-      rows.filter((item) => !body.candidates.some((selected) => selected.candidateId === item.id)),
-    )),
+    attachBatch: vi.fn(async body => {
+      const ids = new Set(body.candidates.map(item => item.candidateId));
+      return result(rows.filter(item => ids.has(item.id)), rows.filter(item => !ids.has(item.id)));
+    }),
+    attachProvider: vi.fn(async candidateId => {
+      const resolved = rows.filter(item => item.id === candidateId);
+      return result(resolved, rows.filter(item => item.id !== candidateId), 'attach_provider');
+    }),
+    searchProvider: vi.fn(async request => ({
+      provider: request.provider,
+      query: request.query,
+      results: [],
+      nextCursor: null,
+    })),
+    loadProviderRuntime: vi.fn(async () => ({
+      preference: 'auto',
+      availability: { kakaomap: true, googlemaps: true },
+    })),
     rejectCandidate: vi.fn(async () => undefined),
     refetchCandidates: vi.fn(async () => rows),
     openPlacePicker: vi.fn(),
     onReconciled: vi.fn(async () => undefined),
+    onBackgroundCommitted: vi.fn(async () => []),
     onCandidatesChanged: vi.fn(async () => undefined),
     ...overrides,
   };
@@ -112,7 +171,7 @@ function openModal(overrides: Partial<PlaceCandidateModalOptions> = {}): {
 
 function rowIds(modal: PlaceCandidateModal): string[] {
   return [...modal.contentEl.querySelectorAll<HTMLElement>('[data-candidate-id]')]
-    .map((row) => row.dataset.candidateId ?? '');
+    .map(row => row.dataset.candidateId ?? '');
 }
 
 function click(modal: PlaceCandidateModal, selector: string): void {
@@ -121,349 +180,367 @@ function click(modal: PlaceCandidateModal, selector: string): void {
   button.click();
 }
 
-describe('PlaceCandidateModal independent multi-review', () => {
+async function waitForReady(modal: PlaceCandidateModal, count: number): Promise<void> {
+  await vi.waitFor(() => {
+    expect(modal.contentEl.querySelectorAll('.sa-place-candidate-card.is-selected')).toHaveLength(count);
+  });
+}
+
+describe('PlaceCandidateModal automatic place review', () => {
   beforeEach(() => {
+    const values = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key),
+      clear: () => values.clear(),
+      key: (index: number) => [...values.keys()][index] ?? null,
+      get length() { return values.size; },
+    });
     confirmState.confirmed = true;
     vi.mocked(showConfirmModal).mockClear();
+    clearPlaceCandidateReviewCache('archive-1');
   });
 
-  it('submits selected direct rows in ordinal order and keeps pending siblings open', async () => {
-    // Given: transport order 3,1,2 and the user selects 3 before 1.
-    const { modal, options } = openModal();
-    expect(rowIds(modal)).toEqual(['candidate-1', 'candidate-2', 'candidate-3']);
-    click(modal, '[data-select-candidate="candidate-3"]');
-    click(modal, '[data-select-candidate="candidate-1"]');
+  it('auto-stages direct candidates and reveals note/type controls only for matched rows', async () => {
+    const first = candidate('first', 0, {
+      contextScope: 'candidate',
+      contextText: 'Try the lunch menu before noon.',
+      role: 'recommended',
+      suggestedPlaceKind: 'restaurant',
+    });
+    const { modal, options } = openModal({ candidates: [first] });
 
-    // When: the atomic batch is added.
+    await waitForReady(modal, 1);
+    expect(options.searchProvider).not.toHaveBeenCalled();
+    expect(modal.contentEl.textContent).toContain('Try the lunch menu before noon.');
+    expect(modal.contentEl.querySelector<HTMLSelectElement>(
+      '.sa-place-candidate-kind select',
+    )?.value).toBe('restaurant');
+    expect(modal.contentEl.querySelector('.sa-place-candidate-add-selected')?.textContent)
+      .toBe('Save 1 place and notes');
+
+    click(modal, '.sa-place-candidate-cancel-match');
+    expect(modal.contentEl.textContent).not.toContain('Save this as a place note');
+    expect(modal.contentEl.querySelector('.sa-place-candidate-kind')).toBeNull();
+    expect(modal.contentEl.querySelector('.sa-place-candidate-inline-search')).not.toBeNull();
+  });
+
+  it('searches ambiguous AI candidates and auto-selects the first provider result', async () => {
+    const ambiguous = candidate('ambiguous', 0, {
+      addressText: null,
+      cityHint: '서울 중구',
+      evidenceType: 'caption_llm',
+    });
+    const first = kakaoResult('100', 'First exact match');
+    const second = kakaoResult('200', 'Second match');
+    const searchProvider = vi.fn(async request => ({
+      provider: request.provider,
+      query: request.query,
+      results: [first, second],
+      nextCursor: null,
+    }));
+    const { modal } = openModal({ candidates: [ambiguous], searchProvider });
+
+    await waitForReady(modal, 1);
+    expect(searchProvider).toHaveBeenCalledWith(expect.objectContaining({
+      provider: 'kakaomap',
+      query: 'Place ambiguous 서울 중구',
+      candidateContext: { archiveId: 'archive-1', candidateId: 'ambiguous' },
+    }));
+    expect(modal.contentEl.textContent).toContain('First exact match');
+  });
+
+  it('lets a cancelled auto-match be replaced through inline search', async () => {
+    const ambiguous = candidate('ambiguous', 0, {
+      addressText: null,
+      evidenceType: 'caption_llm',
+    });
+    const automatic = kakaoResult('100', 'Automatic');
+    const replacement = kakaoResult('200', 'Replacement');
+    const searchProvider = vi.fn()
+      .mockResolvedValueOnce({
+        provider: 'kakaomap',
+        query: 'Place ambiguous',
+        results: [automatic],
+        nextCursor: null,
+      })
+      .mockResolvedValueOnce({
+        provider: 'kakaomap',
+        query: 'replacement query',
+        results: [replacement],
+        nextCursor: null,
+      });
+    const { modal } = openModal({ candidates: [ambiguous], searchProvider });
+    await waitForReady(modal, 1);
+
+    click(modal, '.sa-place-candidate-cancel-match');
+    const input = modal.contentEl.querySelector<HTMLInputElement>(
+      '.sa-place-candidate-inline-search input',
+    );
+    if (!input) throw new TypeError('Missing inline search input');
+    input.value = 'replacement query';
+    input.closest('form')?.dispatchEvent(new Event('submit'));
+    await vi.waitFor(() => expect(modal.contentEl.textContent).toContain('Replacement'));
+    click(modal, '.sa-place-candidate-search-result');
+
+    await waitForReady(modal, 1);
+    expect(modal.contentEl.textContent).toContain('Replacement');
+    expect(modal.contentEl.textContent).not.toContain('Automatic');
+  });
+
+  it('restores an explicit cancellation without repeating automatic search', async () => {
+    const ambiguous = candidate('ambiguous', 0, {
+      addressText: null,
+      evidenceType: 'caption_llm',
+    });
+    const searchProvider = vi.fn(async request => ({
+      provider: request.provider,
+      query: request.query,
+      results: [kakaoResult('100')],
+      nextCursor: null,
+    }));
+    const first = openModal({ candidates: [ambiguous], searchProvider }).modal;
+    await waitForReady(first, 1);
+    click(first, '.sa-place-candidate-cancel-match');
+    first.close();
+
+    const second = openModal({ candidates: [ambiguous], searchProvider }).modal;
+    await vi.waitFor(() => expect(second.contentEl.textContent).toContain('No exact matches yet'));
+    expect(searchProvider).toHaveBeenCalledTimes(1);
+    expect(second.contentEl.querySelectorAll('.sa-place-candidate-card.is-selected')).toHaveLength(0);
+    expect(second.contentEl.querySelector('.sa-place-candidate-inline-search')).not.toBeNull();
+  });
+
+  it('auto-stages a corrected direct address without a second selection step', async () => {
+    const incomplete = candidate('incomplete', 0, {
+      name: 'Original',
+      addressText: null,
+      evidenceType: 'jsonld',
+    });
+    const { modal, options } = openModal({ candidates: [incomplete] });
+    await vi.waitFor(() => expect(modal.contentEl.querySelector('.sa-place-candidate-inline-search')).not.toBeNull());
+    click(modal, '[data-edit-candidate="incomplete"]');
+    const name = modal.contentEl.querySelector<HTMLInputElement>('[data-correction-name="incomplete"]');
+    const address = modal.contentEl.querySelector<HTMLInputElement>('[data-correction-address="incomplete"]');
+    if (!name || !address) throw new TypeError('Missing correction fields');
+    name.value = 'Corrected';
+    address.value = 'Corrected address';
+    click(modal, '[data-save-candidate="incomplete"]');
+    await waitForReady(modal, 1);
+    await vi.waitFor(() => expect(
+      modal.contentEl.querySelector<HTMLButtonElement>('.sa-place-candidate-add-selected')?.disabled,
+    ).toBe(false));
+
     click(modal, '.sa-place-candidate-add-selected');
     await vi.waitFor(() => expect(options.attachBatch).toHaveBeenCalledTimes(1));
-
-    // Then: the payload is ordinal, only returned rows leave, and the modal stays mounted.
-    const body = vi.mocked(options.attachBatch).mock.calls[0]?.[0];
-    expect(body?.candidates).toEqual([
-      { candidateId: 'candidate-1' },
-      { candidateId: 'candidate-3' },
-    ]);
-    await vi.waitFor(() => expect(rowIds(modal)).toEqual(['candidate-2']));
-    expect(document.body.contains(modal.modalEl)).toBe(true);
-    expect(modal.contentEl.textContent).toContain('1 place remains');
-    expect(options.onReconciled).toHaveBeenCalledTimes(1);
-  });
-
-  it('uses an associated label as the direct-selection touch target', () => {
-    const { modal } = openModal({ candidates: [candidate('candidate-1', 0)] });
-    const checkbox = modal.contentEl.querySelector<HTMLInputElement>(
-      '[data-select-candidate="candidate-1"]',
-    );
-    const label = checkbox?.closest<HTMLLabelElement>('.sa-place-candidate-select');
-    expect(label).not.toBeNull();
-    expect(checkbox?.labels).toContain(label);
-  });
-
-  it('keeps manual corrections scoped to their candidate', async () => {
-    // Given: one address-less deterministic row beside a fully eligible sibling.
-    const incomplete = candidate('candidate-1', 0, { addressText: null, name: 'Original name' });
-    const sibling = candidate('candidate-2', 1);
-    const attachBatch = vi.fn(async () => result([incomplete], [sibling]));
-    const { modal } = openModal({ candidates: [incomplete, sibling], attachBatch });
-    click(modal, '[data-edit-candidate="candidate-1"]');
-    const name = modal.contentEl.querySelector<HTMLInputElement>('[data-correction-name="candidate-1"]');
-    const address = modal.contentEl.querySelector<HTMLInputElement>('[data-correction-address="candidate-1"]');
-    if (!name || !address) throw new TypeError('Missing correction fields');
-    name.value = 'Corrected place';
-    address.value = 'Corrected address';
-
-    // When: only candidate 1 is saved, selected, and submitted.
-    click(modal, '[data-save-candidate="candidate-1"]');
-    click(modal, '[data-select-candidate="candidate-1"]');
-    click(modal, '.sa-place-candidate-add-selected');
-    await vi.waitFor(() => expect(attachBatch).toHaveBeenCalledTimes(1));
-
-    // Then: candidate 1 owns both overrides and candidate 2 is absent from the payload.
-    expect(attachBatch.mock.calls[0]?.[0].candidates).toEqual([{
-      candidateId: 'candidate-1', name: 'Corrected place', addressText: 'Corrected address',
+    expect(vi.mocked(options.attachBatch).mock.calls[0]?.[0].candidates).toEqual([{
+      candidateId: 'incomplete',
+      name: 'Corrected',
+      addressText: 'Corrected address',
     }]);
   });
 
-  it('returns provider focus after the nested modal applies its late close fallback', async () => {
-    // Given: two ambiguous map rows.
-    const first = candidate('candidate-1', 0, { evidenceType: 'maps_url' });
-    const second = candidate('candidate-2', 1, { evidenceType: 'maps_url' });
-    const openPlacePicker = vi.fn<(request: CandidatePlacePickerRequest) => void>();
-    const { modal } = openModal({ candidates: [first, second], openPlacePicker });
-
-    // When: candidate 2 opens provider search and the nested picker closes without a selection.
-    click(modal, '[data-provider-candidate="candidate-2"]');
-    const providerRequest = openPlacePicker.mock.calls[0]?.[0];
-    providerRequest?.onClosed();
-    const closeFallback = document.createElement('button');
-    document.body.append(closeFallback);
-    closeFallback.focus();
-    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
-
-    // Then: the request and settled focus remain candidate 2 scoped.
-    expect(providerRequest?.candidate.id).toBe('candidate-2');
-    expect(providerRequest?.initialView).toBe('search');
-    expect(document.activeElement?.getAttribute('data-provider-candidate')).toBe('candidate-2');
-    closeFallback.remove();
-  });
-
-  it('returns existing-place focus after the nested modal applies its late close fallback', async () => {
-    // Given: an ambiguous row opens its Existing picker.
-    const first = candidate('candidate-1', 0, { evidenceType: 'maps_url' });
-    const openPlacePicker = vi.fn<(request: CandidatePlacePickerRequest) => void>();
-    const { modal } = openModal({ candidates: [first], openPlacePicker });
-
-    // When: the nested picker closes and Obsidian applies its own focus fallback afterward.
-    click(modal, '[data-existing-candidate="candidate-1"]');
-    const existingRequest = openPlacePicker.mock.calls[0]?.[0];
-    existingRequest?.onClosed();
-    const closeFallback = document.createElement('button');
-    document.body.append(closeFallback);
-    closeFallback.focus();
-    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
-
-    // Then: settled focus returns to the originating existing-place action.
-    expect(existingRequest).toMatchObject({
-      candidate: { id: 'candidate-1' }, initialView: 'existing',
+  it('chunks direct background writes by eight and closes immediately', async () => {
+    const rows = Array.from({ length: 18 }, (_, index) => candidate(`c-${index}`, index));
+    const attachBatch = vi.fn(async body => {
+      const ids = new Set(body.candidates.map(item => item.candidateId));
+      return result(rows.filter(item => ids.has(item.id)), rows.filter(item => !ids.has(item.id)));
     });
-    expect(document.activeElement?.getAttribute('data-existing-candidate')).toBe('candidate-1');
-    closeFallback.remove();
+    const onBackgroundCommitted = vi.fn(async () => []);
+    const { modal } = openModal({ candidates: rows, attachBatch, onBackgroundCommitted });
+    await waitForReady(modal, 18);
+
+    click(modal, '.sa-place-candidate-add-selected');
+    expect(document.body.contains(modal.modalEl)).toBe(false);
+    await vi.waitFor(() => expect(attachBatch).toHaveBeenCalledTimes(3));
+    expect(attachBatch.mock.calls.map(call => call[0].candidates.length)).toEqual([8, 8, 2]);
+    await vi.waitFor(() => expect(onBackgroundCommitted).toHaveBeenCalledTimes(1));
   });
 
-  it('reuses one direct-batch key when a lost response is replayed', async () => {
-    // Given: the first response is lost after the server commits the selected candidate.
-    const selected = candidate('candidate-1', 0);
-    const attachBatch = vi.fn()
-      .mockRejectedValueOnce(new Error('response lost'))
-      .mockImplementationOnce(async (body) => ({
-        ...result([selected], []),
-        replayed: true,
-        request: { ...result([selected], []).request, idempotencyKey: body.idempotencyKey },
-      }));
-    const { modal } = openModal({ candidates: [selected], attachBatch });
-    click(modal, '[data-select-candidate="candidate-1"]');
-
-    // When: the user retries the unchanged logical intent.
-    click(modal, '.sa-place-candidate-add-selected');
-    await vi.waitFor(() => expect(attachBatch).toHaveBeenCalledTimes(1));
-    await vi.waitFor(() => expect(
-      modal.contentEl.querySelector<HTMLButtonElement>('.sa-place-candidate-add-selected')?.disabled,
-    ).toBe(false));
-    click(modal, '.sa-place-candidate-add-selected');
-    await vi.waitFor(() => expect(attachBatch).toHaveBeenCalledTimes(2));
-
-    // Then: replay reaches the server with the original idempotency identity.
-    expect(attachBatch.mock.calls[1]?.[0].idempotencyKey)
-      .toBe(attachBatch.mock.calls[0]?.[0].idempotencyKey);
-  });
-
-  it('rotates the direct-batch key when the selected logical intent changes', async () => {
-    // Given: candidate 1 fails recoverably while candidate 2 remains available.
-    const first = candidate('candidate-1', 0);
-    const second = candidate('candidate-2', 1);
-    const attachBatch = vi.fn(async (): Promise<PlaceCandidateAttachmentResult> => {
-      throw new Error('retryable');
+  it('limits provider attachment concurrency to six', async () => {
+    const rows = Array.from({ length: 13 }, (_, index) => candidate(`p-${index}`, index, {
+      addressText: null,
+      evidenceType: 'caption_llm',
+    }));
+    const searchProvider = vi.fn(async request => ({
+      provider: request.provider,
+      query: request.query,
+      results: [kakaoResult(String(Number(request.candidateContext?.candidateId.split('-')[1]) + 100))],
+      nextCursor: null,
+    }));
+    let active = 0;
+    let maximum = 0;
+    const releases: Array<() => void> = [];
+    const attachProvider = vi.fn(async candidateId => {
+      active += 1;
+      maximum = Math.max(maximum, active);
+      await new Promise<void>(resolve => releases.push(resolve));
+      active -= 1;
+      const resolved = rows.filter(item => item.id === candidateId);
+      return result(resolved, rows.filter(item => item.id !== candidateId), 'attach_provider');
     });
-    const { modal } = openModal({ candidates: [first, second], attachBatch });
-    click(modal, '[data-select-candidate="candidate-1"]');
-    click(modal, '.sa-place-candidate-add-selected');
-    await vi.waitFor(() => expect(attachBatch).toHaveBeenCalledTimes(1));
-    await vi.waitFor(() => expect(
-      modal.contentEl.querySelector<HTMLButtonElement>('.sa-place-candidate-add-selected')?.disabled,
-    ).toBe(false));
+    const { modal } = openModal({ candidates: rows, searchProvider, attachProvider });
+    await waitForReady(modal, 13);
 
-    // When: selection changes before the next attempt.
-    click(modal, '[data-select-candidate="candidate-1"]');
-    click(modal, '[data-select-candidate="candidate-2"]');
     click(modal, '.sa-place-candidate-add-selected');
-    await vi.waitFor(() => expect(attachBatch).toHaveBeenCalledTimes(2));
-
-    // Then: the distinct intent receives a distinct mutation identity.
-    expect(attachBatch.mock.calls[1]?.[0].idempotencyKey)
-      .not.toBe(attachBatch.mock.calls[0]?.[0].idempotencyKey);
+    await vi.waitFor(() => expect(attachProvider).toHaveBeenCalledTimes(6));
+    expect(maximum).toBe(6);
+    while (releases.length > 0 || vi.mocked(attachProvider).mock.calls.length < 13) {
+      releases.splice(0).forEach(release => release());
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    releases.splice(0).forEach(release => release());
+    await vi.waitFor(() => expect(attachProvider).toHaveBeenCalledTimes(13));
   });
 
-  it('rotates the direct-batch key for a new action after success', async () => {
-    // Given: two candidates that are attached in separate successful actions.
-    const first = candidate('candidate-1', 0);
-    const second = candidate('candidate-2', 1);
-    const attachBatch = vi.fn(async (body: Parameters<PlaceCandidateModalOptions['attachBatch']>[0]) => {
-      const selectedId = body.candidates[0]?.candidateId;
-      return result(
-        selectedId === first.id ? [first] : [second],
-        selectedId === first.id ? [second] : [],
-      );
+  it('refreshes an expired cached selection token before background attachment', async () => {
+    const ambiguous = candidate('ambiguous', 0, {
+      addressText: null,
+      evidenceType: 'caption_llm',
     });
-    const { modal } = openModal({ candidates: [first, second], attachBatch });
-
-    // When: candidate 1 succeeds, then candidate 2 starts a new action.
-    click(modal, '[data-select-candidate="candidate-1"]');
-    click(modal, '.sa-place-candidate-add-selected');
-    await vi.waitFor(() => expect(rowIds(modal)).toEqual(['candidate-2']));
-    click(modal, '[data-select-candidate="candidate-2"]');
-    click(modal, '.sa-place-candidate-add-selected');
-    await vi.waitFor(() => expect(attachBatch).toHaveBeenCalledTimes(2));
-
-    // Then: completing the first intent releases its mutation identity.
-    expect(attachBatch.mock.calls[1]?.[0].idempotencyKey)
-      .not.toBe(attachBatch.mock.calls[0]?.[0].idempotencyKey);
-  });
-
-  it('refetches canonical rows on a stale batch without optimistic loss', async () => {
-    // Given: a 409 stale response and newer server truth.
-    const stale = Object.assign(new Error('stale'), { code: 'STALE_CANDIDATE', status: 409 });
-    const attachBatch = vi.fn(async (): Promise<PlaceCandidateAttachmentResult> => { throw stale; });
-    const current = candidate('candidate-4', 3);
-    const refetchCandidates = vi.fn(async () => [current]);
+    savePlaceCandidateReviewCache({
+      archiveId: 'archive-1',
+      provider: 'kakaomap',
+      staged: {
+        ambiguous: {
+          kind: 'provider',
+          provider: 'kakaomap',
+          externalId: '100',
+          selectionToken: 'expired-token',
+          query: 'Place ambiguous',
+          matchedAt: 1,
+          displayName: 'Cached match',
+          displayAddress: 'Cached road',
+        },
+      },
+      searches: {},
+      noteIntents: {},
+      kindIntents: {},
+      suppressedAutoIds: [],
+      includeOcr: false,
+      includeComments: false,
+      executionPreference: 'auto',
+    }, Date.now());
+    const refreshed = { ...kakaoResult('100'), selectionToken: 'fresh-token' };
+    const searchProvider = vi.fn(async request => ({
+      provider: request.provider,
+      query: request.query,
+      results: [refreshed],
+      nextCursor: null,
+    }));
+    const attachProvider = vi.fn(async (_candidateId, body) => {
+      expect(body.selectionToken).toBe('fresh-token');
+      return result([ambiguous], [], 'attach_provider');
+    });
     const { modal } = openModal({
-      candidates: [candidate('candidate-1', 0)], attachBatch, refetchCandidates,
+      candidates: [ambiguous],
+      searchProvider,
+      attachProvider,
     });
-    click(modal, '[data-select-candidate="candidate-1"]');
+    await waitForReady(modal, 1);
 
-    // When: Add selected encounters the stale conflict.
     click(modal, '.sa-place-candidate-add-selected');
 
-    // Then: server truth replaces the review rows and stale recovery is announced.
-    await vi.waitFor(() => expect(refetchCandidates).toHaveBeenCalledTimes(1));
-    expect(rowIds(modal)).toEqual(['candidate-4']);
-    expect(modal.contentEl.querySelector('[aria-live="polite"]')?.textContent).toContain('changed');
+    await vi.waitFor(() => expect(searchProvider).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(attachProvider).toHaveBeenCalledTimes(1));
   });
 
-  it('dismisses one row independently and keeps the remaining review open', async () => {
-    // Given: two pending rows.
-    const rejectCandidate = vi.fn(async () => undefined);
+  it('forwards photo, comments, and local/cloud choices to extraction', async () => {
+    const onExtract = vi.fn(async () => ({ candidates: [], message: 'Done.' }));
     const { modal } = openModal({
-      candidates: [candidate('candidate-1', 0), candidate('candidate-2', 1)], rejectCandidate,
+      candidates: [],
+      onExtract,
+      hasImages: true,
+      hasComments: true,
     });
+    await vi.waitFor(() => expect(modal.contentEl.querySelector('[data-extract-cta]')).not.toBeNull());
+    const toggles = modal.contentEl.querySelectorAll<HTMLInputElement>(
+      '.sa-place-candidate-source-toggle input',
+    );
+    expect(toggles[0]?.checked).toBe(true);
+    toggles[0]?.click();
+    modal.contentEl.querySelectorAll<HTMLInputElement>(
+      '.sa-place-candidate-source-toggle input',
+    )[1]?.click();
+    const execution = modal.contentEl.querySelector<HTMLSelectElement>(
+      '.sa-place-candidate-execution select',
+    );
+    if (!execution) throw new TypeError('Missing execution selector');
+    execution.value = 'local';
+    execution.dispatchEvent(new Event('change'));
+    click(modal, '[data-extract-cta]');
 
-    // When: candidate 1 is dismissed.
-    click(modal, '[data-dismiss-candidate="candidate-1"]');
-
-    // Then: only candidate 1 is rejected and candidate 2 remains visible.
-    await vi.waitFor(() => {
-      expect(rejectCandidate).toHaveBeenCalledWith('candidate-1');
-      expect(rowIds(modal)).toEqual(['candidate-2']);
+    await vi.waitFor(() => expect(onExtract).toHaveBeenCalledTimes(1));
+    expect(onExtract.mock.calls[0]?.[1]).toEqual({
+      includeOcr: false,
+      includeComments: true,
+      executionPreference: 'local',
     });
-    expect(document.body.contains(modal.modalEl)).toBe(true);
   });
 
-  it('requires confirmation before dismissing every remaining row', async () => {
-    // Given: two pending rows and a declined confirmation.
+  it('reviews an existing confirmed place note without another attachment', async () => {
+    const proposal = {
+      candidateId: 'confirmed-1',
+      locationId: 'location-1',
+      locationName: '남경막국수 본점',
+      contextText: '남경막국수-들깨막국수&곤드레막국수,국산재료',
+      contextTags: ['menu', 'quality'],
+      contextScope: 'candidate' as const,
+      status: 'eligible' as const,
+      noteId: null,
+      defaultOn: false,
+      recoveredFromEvidence: true,
+    };
+    const decideContextNote = vi.fn().mockResolvedValue({
+      replayed: false,
+      archiveId: 'archive-1',
+      proposal: { ...proposal, status: 'applied', noteId: 'pcn-1' },
+    });
+    const { modal, options } = openModal({
+      candidates: [],
+      recoveryOnly: true,
+      loadContextNoteProposals: vi.fn().mockResolvedValue([proposal]),
+      decideContextNote,
+    });
+    await vi.waitFor(() => expect(modal.contentEl.textContent).toContain(proposal.contextText));
+    modal.contentEl.querySelector<HTMLInputElement>(
+      '.sa-place-context-recovery input[type="checkbox"]',
+    )?.click();
+    click(modal, '.sa-place-context-recovery button');
+
+    await vi.waitFor(() => expect(decideContextNote).toHaveBeenCalledWith('confirmed-1', 'save'));
+    expect(options.attachBatch).not.toHaveBeenCalled();
+  });
+
+  it('requires confirmation before dismissing every candidate', async () => {
     confirmState.confirmed = false;
     const rejectCandidate = vi.fn(async () => undefined);
     const { modal } = openModal({
-      candidates: [candidate('candidate-1', 0), candidate('candidate-2', 1)], rejectCandidate,
+      candidates: [candidate('one', 0), candidate('two', 1)],
+      rejectCandidate,
     });
-
-    // When: Dismiss all is declined, then accepted.
+    await waitForReady(modal, 2);
     click(modal, '.sa-place-candidate-dismiss-all');
     await vi.waitFor(() => expect(showConfirmModal).toHaveBeenCalledTimes(1));
     expect(rejectCandidate).not.toHaveBeenCalled();
+
     confirmState.confirmed = true;
     click(modal, '.sa-place-candidate-dismiss-all');
-
-    // Then: both independent rejection mutations run only after consent.
     await vi.waitFor(() => expect(rejectCandidate).toHaveBeenCalledTimes(2));
-    expect(rowIds(modal)).toEqual([]);
-    expect(modal.contentEl.textContent).toContain('All place candidates are reviewed');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Places P3b — "Find places with AI" CTA + role chip
-// ---------------------------------------------------------------------------
-
-/** A weak anchor hint carries no name/address/place id. */
-function hint(id: string, ordinal: number): PlaceCandidate {
-  return candidate(id, ordinal, {
-    name: null, addressText: null, externalPlaceId: null, evidenceType: 'anchor',
-  });
-}
-
-function extractButton(modal: PlaceCandidateModal): HTMLButtonElement | null {
-  return modal.contentEl.querySelector<HTMLButtonElement>('[data-extract-cta]');
-}
-
-describe('PlaceCandidateModal — AI place extraction CTA', () => {
-  beforeEach(() => {
-    confirmState.confirmed = true;
-    vi.mocked(showConfirmModal).mockClear();
+    expect(document.body.contains(modal.modalEl)).toBe(false);
   });
 
-  it('hides the CTA when no extractor is wired', () => {
-    const { modal } = openModal();
-    expect(extractButton(modal)).toBeNull();
-  });
-
-  it('renders the footer CTA when an extractor is wired', () => {
-    const { modal } = openModal({ onExtract: vi.fn() });
-    const button = extractButton(modal);
-    expect(button).not.toBeNull();
-    expect(button!.textContent).toBe('Find more places with AI');
-    expect(button!.disabled).toBe(false);
-  });
-
-  it('renders the empty-state CTA when there are no candidates', () => {
-    const { modal } = openModal({ candidates: [], onExtract: vi.fn() });
-    const button = extractButton(modal);
-    expect(button).not.toBeNull();
-    expect(button!.textContent).toBe('Find places with AI');
-    expect(modal.contentEl.textContent).toContain('No place suggestions yet');
-  });
-
-  it('disables the CTA at capacity (>= 8 non-hint pending) with a hint', () => {
-    const rows = Array.from({ length: 8 }, (_, i) => candidate(`c-${i}`, i));
+  it('keeps the 20-candidate extraction capacity rule and known role chips', async () => {
+    const rows = Array.from({ length: 20 }, (_, index) => candidate(`c-${index}`, index, {
+      role: index === 0 ? 'recommended' : null,
+    }));
     const { modal } = openModal({ candidates: rows, onExtract: vi.fn() });
-    const button = extractButton(modal)!;
-    expect(button.disabled).toBe(true);
-    expect(button.getAttribute('title')).toBe('Review pending suggestions first');
-  });
-
-  it('excludes weak hints from the capacity count', () => {
-    const rows = Array.from({ length: 8 }, (_, i) => hint(`h-${i}`, i));
-    const { modal } = openModal({ candidates: rows, onExtract: vi.fn() });
-    expect(extractButton(modal)!.disabled).toBe(false);
-  });
-
-  it('shows a spinner label and folds in the extracted candidates', async () => {
-    const fresh = [candidate('new-1', 0, { evidenceType: 'caption_llm' })];
-    let capturedSignal: unknown;
-    const onExtract = vi.fn(async (signal: AbortSignal) => {
-      capturedSignal = signal;
-      return { candidates: fresh, message: 'Analysis complete.' };
-    });
-    const { modal } = openModal({ candidates: [], onExtract });
-
-    extractButton(modal)!.click();
-
-    // Spinner label appears while the extractor promise is pending.
-    await vi.waitFor(() =>
-      expect(modal.contentEl.textContent).toContain('Analyzing for places…'));
-    expect(onExtract).toHaveBeenCalledTimes(1);
-    // The AbortSignal is passed so the caller can stop polling on close.
-    expect(capturedSignal).toBeInstanceOf(AbortSignal);
-
-    await vi.waitFor(() => expect(rowIds(modal)).toEqual(['new-1']));
-  });
-
-  it('injects out-of-band (WS) refreshed candidates via applyExtractionResult', () => {
-    const { modal } = openModal({ candidates: [], onExtract: vi.fn() });
-    modal.applyExtractionResult([candidate('ws-1', 0, { evidenceType: 'caption_llm' })]);
-    expect(rowIds(modal)).toEqual(['ws-1']);
-  });
-
-  it('renders a role chip for a known role and omits it for other/null', () => {
-    const { modal } = openModal({
-      candidates: [
-        candidate('with-role', 0, { role: 'recommended' }),
-        candidate('other-role', 1, { role: 'other' }),
-        candidate('no-role', 2, { role: null }),
-      ],
-      onExtract: vi.fn(),
-    });
-    const chips = [...modal.contentEl.querySelectorAll('.sa-place-candidate-role')]
-      .map((chip) => chip.textContent);
-    expect(chips).toEqual(['Recommended']);
+    await waitForReady(modal, 20);
+    const button = modal.contentEl.querySelector<HTMLButtonElement>('[data-extract-cta]');
+    expect(button?.disabled).toBe(true);
+    expect(button?.title).toBe('Review pending suggestions first');
+    expect([...modal.contentEl.querySelectorAll('.sa-place-candidate-role')]
+      .map(chip => chip.textContent)).toEqual(['Recommended']);
   });
 });

@@ -158,6 +158,21 @@ function makeClient(): WorkersAPIClient {
   return client;
 }
 
+describe('WorkersAPIClient — owner archive capabilities', () => {
+  beforeEach(() => __setRequestUrlHandler(null));
+  afterEach(() => __setRequestUrlHandler(null));
+
+  it('advertises place-context-note-v1 on ordinary archive reads', async () => {
+    const captured: CapturedRequest[] = [];
+    setHandler(() => ok({ archive: { id: 'archive-1' } }), captured);
+
+    await makeClient().getUserArchive('archive-1');
+
+    expect(captured[0]?.headers?.['X-Client-Capabilities']).toContain('place-context-note-v1');
+    expect(captured[0]?.headers?.['X-Client-Capabilities']).toContain('archive-note-ops-v1');
+  });
+});
+
 describe('WorkersAPIClient — getPlaceCandidates', () => {
   beforeEach(() => __setRequestUrlHandler(null));
   afterEach(() => __setRequestUrlHandler(null));
@@ -573,7 +588,10 @@ describe('WorkersAPIClient — Places P3b capability + tolerant parse', () => {
 
     await makeClient().getPlaceCandidates({ archiveIds: ['archive-1'] });
 
-    expect(captured[0]!.headers?.['X-Client-Capabilities']).toBe('place-extract-v1');
+    expect(captured[0]!.headers?.['X-Client-Capabilities']).toContain('place-extract-v1');
+    expect(captured[0]!.headers?.['X-Client-Capabilities']).toContain('place-context-note-v1');
+    expect(captured[0]!.headers?.['X-Client-Capabilities']).toContain('place-kind-suggestion-v1');
+    expect(captured[0]!.headers?.['X-Client-Capabilities']).toContain('archive-note-ops-v1');
   });
 
   it('advertises place-extract-v1 on attach-batch', async () => {
@@ -587,7 +605,10 @@ describe('WorkersAPIClient — Places P3b capability + tolerant parse', () => {
       })
       .catch(() => undefined);
 
-    expect(captured[0]!.headers?.['X-Client-Capabilities']).toBe('place-extract-v1');
+    expect(captured[0]!.headers?.['X-Client-Capabilities']).toContain('place-extract-v1');
+    expect(captured[0]!.headers?.['X-Client-Capabilities']).toContain('place-context-note-v1');
+    expect(captured[0]!.headers?.['X-Client-Capabilities']).toContain('place-kind-suggestion-v1');
+    expect(captured[0]!.headers?.['X-Client-Capabilities']).toContain('archive-note-ops-v1');
   });
 
   it('tolerantly parses a caption_llm candidate with a role and ordinal 9', async () => {
@@ -597,6 +618,8 @@ describe('WorkersAPIClient — Places P3b capability + tolerant parse', () => {
       evidenceType: 'caption_llm',
       ordinal: 9,
       role: 'recommended',
+      suggestedPlaceKind: 'cafe',
+      placeKindConfidence: 'high',
     } as Partial<PlaceCandidate>);
     setHandler(() => ok({ items: [candidate], pendingCount: 1 }), captured);
 
@@ -605,6 +628,8 @@ describe('WorkersAPIClient — Places P3b capability + tolerant parse', () => {
     expect(result.items).toHaveLength(1);
     expect(result.items[0]!.ordinal).toBe(9);
     expect(result.items[0]!.role).toBe('recommended');
+    expect(result.items[0]!.suggestedPlaceKind).toBe('cafe');
+    expect(result.items[0]!.placeKindConfidence).toBe('high');
   });
 
   it('accepts an unknown future role value without failing the response', async () => {
@@ -627,6 +652,7 @@ describe('WorkersAPIClient — extractPlaceCandidates', () => {
     const result = await makeClient().extractPlaceCandidates('archive/1', {
       idempotencyKey: 'extract:abc',
       includeOcr: true,
+      includeComments: true,
     });
 
     expect(result).toEqual({ runId: 'run_1', jobId: 'job_1', status: 'running' });
@@ -635,9 +661,13 @@ describe('WorkersAPIClient — extractPlaceCandidates', () => {
     expect(request.url).toBe(
       'https://api.test.com/api/user/archives/archive%2F1/place-candidates/extract',
     );
-    expect(request.headers?.['X-Client-Capabilities']).toBe('place-extract-v1');
+    expect(request.headers?.['X-Client-Capabilities']).toContain('place-extract-v1');
+    expect(request.headers?.['X-Client-Capabilities']).toContain('place-context-note-v1');
+    expect(request.headers?.['X-Client-Capabilities']).toContain('place-kind-suggestion-v1');
+    expect(request.headers?.['X-Client-Capabilities']).toContain('place-evidence-origin-v1');
+    expect(request.headers?.['X-Client-Capabilities']).toContain('archive-note-ops-v1');
     expect(JSON.parse(request.body ?? '{}')).toEqual({
-      idempotencyKey: 'extract:abc', includeOcr: true,
+      idempotencyKey: 'extract:abc', includeOcr: true, includeComments: true,
     });
   });
 
@@ -668,5 +698,32 @@ describe('WorkersAPIClient — extractPlaceCandidates', () => {
     await expect(
       makeClient().extractPlaceCandidates('archive-1', { idempotencyKey: 'k' }),
     ).rejects.toMatchObject({ code: 'PAYWALL_REQUIRED', status: 402 });
+  });
+});
+
+describe('WorkersAPIClient — local place-extraction executor capability', () => {
+  beforeEach(() => __setRequestUrlHandler(null));
+  afterEach(() => __setRequestUrlHandler(null));
+
+  it('advertises place extraction and place-kind support while polling AI actions', async () => {
+    const captured: CapturedRequest[] = [];
+    setHandler(() => ok({ jobs: [] }), captured);
+
+    await makeClient().getAvailableAIActionJobs('client-1');
+
+    const capabilities = captured[0]?.headers?.['X-Client-Capabilities'] ?? '';
+    expect(capabilities).toContain('place-extract-v1');
+    expect(capabilities).toContain('place-kind-suggestion-v1');
+  });
+
+  it('advertises the same capabilities when claiming a targeted place job', async () => {
+    const captured: CapturedRequest[] = [];
+    setHandler(() => ok(undefined), captured);
+
+    await makeClient().claimAIActionJob('job-1', { clientId: 'client-1' }).catch(() => undefined);
+
+    const capabilities = captured[0]?.headers?.['X-Client-Capabilities'] ?? '';
+    expect(capabilities).toContain('place-extract-v1');
+    expect(capabilities).toContain('place-kind-suggestion-v1');
   });
 });

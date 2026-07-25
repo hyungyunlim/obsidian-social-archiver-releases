@@ -71,6 +71,7 @@ export interface PostMetadata {
   locationAddress?: string;
   locationUrl?: string;
   locationCategory?: string;
+  locationPlaceKind?: import('../shared/platforms/place-kinds').PlaceKind;
   locations?: readonly ArchiveLocation[];
   locationCount?: number;
   music?: {

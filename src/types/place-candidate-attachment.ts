@@ -1,5 +1,11 @@
 import { z } from 'zod';
 import { ArchiveLocationSchema, type ArchiveLocation } from './archive-location';
+import {
+  PLACE_KIND_SUGGESTION_CAPABILITY,
+  type PlaceKind,
+  type PlaceKindIntent,
+  type PlaceKindSuggestionConfidence,
+} from '../shared/platforms/place-kinds';
 
 const OpaqueIdSchema = z.string().min(1).max(128);
 const IdempotencyKeySchema = z.string().min(1).max(128);
@@ -12,6 +18,9 @@ const IdempotencyKeySchema = z.string().min(1).max(128);
  * below stays tolerant of the field in the same release that adds the header.
  */
 export const PLACE_EXTRACT_CAPABILITY = 'place-extract-v1';
+export const PLACE_CONTEXT_NOTE_CAPABILITY = 'place-context-note-v1';
+export const PLACE_EVIDENCE_ORIGIN_CAPABILITY = 'place-evidence-origin-v1';
+export { PLACE_KIND_SUGGESTION_CAPABILITY };
 
 /**
  * Semantic role of a place candidate — display/filter hint only, never identity
@@ -51,6 +60,12 @@ export type PlaceCandidate = {
   readonly createdAt: string;
   /** Optional (Places P3b). Absent on legacy/ungated responses. */
   readonly role?: string | null;
+  readonly contextText?: string | null;
+  readonly contextTags?: readonly string[];
+  readonly contextScope?: 'candidate' | 'group' | 'none';
+  readonly evidenceOrigin?: 'body' | 'image_text' | 'comment' | null;
+  readonly suggestedPlaceKind?: PlaceKind | null;
+  readonly placeKindConfidence?: PlaceKindSuggestionConfidence | null;
 };
 
 export const PlaceCandidateSchema: z.ZodType<PlaceCandidate> = z.object({
@@ -76,6 +91,16 @@ export const PlaceCandidateSchema: z.ZodType<PlaceCandidate> = z.object({
   // Known key so `.strict()` accepts it; plain string so an unrecognized server
   // role value degrades to "no chip" instead of failing the whole candidate.
   role: z.string().max(64).nullish(),
+  contextText: z.string().max(500).nullish(),
+  contextTags: z.array(z.string()).max(3).optional(),
+  contextScope: z.enum(['candidate', 'group', 'none']).optional(),
+  evidenceOrigin: z.enum(['body', 'image_text', 'comment']).nullish(),
+  suggestedPlaceKind: z.enum([
+    'restaurant', 'cafe', 'bakery', 'bar', 'hospital', 'pharmacy', 'fitness',
+    'kids', 'hotel', 'culture', 'outdoor', 'shopping', 'transit', 'education',
+    'public',
+  ]).nullish(),
+  placeKindConfidence: z.enum(['high', 'medium', 'low']).nullish(),
 }).strict();
 
 export type PlaceCandidatesResponse = {
@@ -99,6 +124,8 @@ export type ExtractPlaceCandidatesBody = {
   readonly idempotencyKey: string;
   /** Include server-held OCR notes/altText in the extraction input. Default true. */
   readonly includeOcr?: boolean;
+  /** Include archived public comment/reply prose. Default false. */
+  readonly includeComments?: boolean;
   readonly executionPreference?: ExtractPlaceCandidatesExecutionPreference;
 };
 
@@ -145,6 +172,8 @@ export type DirectCandidateAttachment = {
   readonly candidateId: string;
   readonly name?: string;
   readonly addressText?: string;
+  readonly contextNoteIntent?: 'save' | 'skip';
+  readonly placeKindIntent?: PlaceKindIntent;
 };
 
 export type AttachPlaceCandidatesBatchBody = {
@@ -155,18 +184,36 @@ export type AttachPlaceCandidatesBatchBody = {
 export type AttachPlaceCandidateProviderBody = {
   readonly idempotencyKey: string;
   readonly selectionToken: string;
+  readonly contextNoteIntent?: 'save' | 'skip';
+  readonly placeKindIntent?: PlaceKindIntent;
 };
 
 export type AttachPlaceCandidateExistingBody = {
   readonly idempotencyKey: string;
   readonly representativeArchiveId: string;
   readonly placeKey?: string;
+  readonly contextNoteIntent?: 'save' | 'skip';
+  readonly placeKindIntent?: PlaceKindIntent;
 };
+
+const PlaceKindIntentSchema: z.ZodType<PlaceKindIntent> = z.object({
+  placeKind: z.enum([
+    'restaurant', 'cafe', 'bakery', 'bar', 'hospital', 'pharmacy', 'fitness',
+    'kids', 'hotel', 'culture', 'outdoor', 'shopping', 'transit', 'education',
+    'public',
+  ]).nullable(),
+  mode: z.enum(['suggest', 'override']),
+}).strict().refine(
+  (value) => value.mode === 'override' || value.placeKind !== null,
+  { message: 'A suggested place kind cannot be null', path: ['placeKind'] },
+);
 
 const DirectCandidateAttachmentSchema: z.ZodType<DirectCandidateAttachment> = z.object({
   candidateId: OpaqueIdSchema,
   name: z.string().trim().min(1).max(300).optional(),
   addressText: z.string().trim().min(1).max(500).optional(),
+  contextNoteIntent: z.enum(['save', 'skip']).optional(),
+  placeKindIntent: PlaceKindIntentSchema.optional(),
 }).strict();
 
 export const AttachPlaceCandidatesBatchBodySchema: z.ZodType<AttachPlaceCandidatesBatchBody> = z.object({
@@ -189,12 +236,16 @@ export const AttachPlaceCandidatesBatchBodySchema: z.ZodType<AttachPlaceCandidat
 export const AttachPlaceCandidateProviderBodySchema: z.ZodType<AttachPlaceCandidateProviderBody> = z.object({
   idempotencyKey: IdempotencyKeySchema,
   selectionToken: z.string().min(1).max(8_192),
+  contextNoteIntent: z.enum(['save', 'skip']).optional(),
+  placeKindIntent: PlaceKindIntentSchema.optional(),
 }).strict();
 
 export const AttachPlaceCandidateExistingBodySchema: z.ZodType<AttachPlaceCandidateExistingBody> = z.object({
   idempotencyKey: IdempotencyKeySchema,
   representativeArchiveId: OpaqueIdSchema,
   placeKey: z.string().min(1).max(600).optional(),
+  contextNoteIntent: z.enum(['save', 'skip']).optional(),
+  placeKindIntent: PlaceKindIntentSchema.optional(),
 }).strict();
 
 export const PLACE_CANDIDATE_ATTACHMENT_OPERATIONS = [
@@ -222,6 +273,12 @@ export type PlaceCandidateAttachmentItemResult = {
   readonly locationId: string;
   readonly canonicalLocation: ArchiveLocation | null;
   readonly candidateStatus: 'confirmed';
+  readonly contextNote?: {
+    readonly intent: 'save' | 'skip';
+    readonly status: 'queued' | 'applied' | 'skipped' | 'not_eligible'
+      | 'blocked_capacity' | 'blocked_existing_binding' | 'failed' | 'deleted_by_user';
+    readonly noteId: string | null;
+  };
 };
 
 export type PlaceCandidateAttachmentResult = {
@@ -258,6 +315,14 @@ const PlaceCandidateAttachmentResultObjectSchema = z.object({
     locationId: OpaqueIdSchema,
     canonicalLocation: ArchiveLocationSchema.nullable(),
     candidateStatus: z.literal('confirmed'),
+    contextNote: z.object({
+      intent: z.enum(['save', 'skip']),
+      status: z.enum([
+        'queued', 'applied', 'skipped', 'not_eligible', 'blocked_capacity',
+        'blocked_existing_binding', 'failed', 'deleted_by_user',
+      ]),
+      noteId: OpaqueIdSchema.nullable(),
+    }).strict().optional(),
   }).strict()),
   activeLocations: z.array(ArchiveLocationSchema).max(20),
   primaryLocationId: OpaqueIdSchema.nullable(),

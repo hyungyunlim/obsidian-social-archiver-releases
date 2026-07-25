@@ -1241,7 +1241,8 @@ describe('FrontmatterGenerator', () => {
     const location = {
       id: 'location-1', archiveId: 'archive-1', placeKey: 'kakaomap:101', name: '희작',
       address: '서울 종로구', latitude: 37.1, longitude: 126.9, source: 'kakaomap', externalId: '101',
-      url: 'https://place.map.kakao.com/101', category: '카페', isPrimary: true, sortOrder: 0,
+      url: 'https://place.map.kakao.com/101', category: '카페', placeKind: 'cafe' as const,
+      isPrimary: true, sortOrder: 0,
       placeArchiveId: null, promotionStatus: 'metadata_only' as const,
       createdAt: '2026-07-15T00:00:00.000Z', updatedAt: '2026-07-15T00:00:00.000Z',
     };
@@ -1250,6 +1251,7 @@ describe('FrontmatterGenerator', () => {
         timestamp: new Date('2026-07-15T00:00:00.000Z'), location: '희작', latitude: 37.1,
         longitude: 126.9, locationSource: 'kakaomap', locationExternalId: '101',
         locationAddress: '서울 종로구', locationUrl: location.url, locationCategory: '카페',
+        locationPlaceKind: 'cafe',
         locations: [location], locationCount: 1,
       },
     }));
@@ -1257,6 +1259,7 @@ describe('FrontmatterGenerator', () => {
     expect(frontmatter).toMatchObject({
       location: '희작',
       locationAddress: '서울 종로구',
+      locationPlaceKind: 'cafe',
     });
     expect(frontmatter.locations).toBeUndefined();
     expect(frontmatter.locationCount).toBeUndefined();

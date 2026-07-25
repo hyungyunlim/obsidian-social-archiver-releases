@@ -88,7 +88,7 @@ export function parseArgv(args: string[]): { ok: true; value: ParsedArgv } | { o
 
 export function helpText(): string {
   const lines: string[] = [
-    'social-archiver — Social Archiver desktop CLI (scaffold)',
+    'social-archiver — Social Archiver CLI',
     '',
     'Usage: social-archiver <command> [--flag value] [--flag=value] [--bare-flag]',
     '',

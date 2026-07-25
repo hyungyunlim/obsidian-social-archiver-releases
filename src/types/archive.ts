@@ -121,6 +121,7 @@ export interface YamlFrontmatter {
   locationAddress?: string;
   locationUrl?: string;
   locationCategory?: string;
+  locationPlaceKind?: import('../shared/platforms/place-kinds').PlaceKind;
   locations?: Array<Record<string, unknown>>;
   locationCount?: number;
   // Mobile Annotation Sync fields
@@ -128,6 +129,8 @@ export interface YamlFrontmatter {
   sourceArchiveId?: string;
   /** Number of user notes attached to this archive in the mobile app */
   userNoteCount?: number;
+  /** Conflict-safe server note revision used by fallback reconciliation. */
+  notesRevision?: number;
   /** Number of text highlights attached to this archive in the mobile app */
   userHighlightCount?: number;
   /** True when at least one note or highlight exists for this archive */

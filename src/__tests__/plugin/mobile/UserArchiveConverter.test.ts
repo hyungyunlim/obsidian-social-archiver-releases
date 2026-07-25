@@ -39,7 +39,7 @@ describe('convertUserArchiveToPostData', () => {
     const locations = [{
       id: 'location-1', archiveId: 'archive-1', placeKey: 'kakaomap:101', name: '희작',
       address: '서울 종로구', latitude: 37.1, longitude: 126.9, source: 'kakaomap',
-      externalId: '101', url: 'https://place.map.kakao.com/101', category: '카페',
+      externalId: '101', url: 'https://place.map.kakao.com/101', category: '카페', placeKind: 'cafe' as const,
       isPrimary: true, sortOrder: 0, placeArchiveId: null, promotionStatus: 'metadata_only' as const,
       createdAt: '2026-07-15T00:00:00.000Z', updatedAt: '2026-07-15T00:00:00.000Z',
     }, {
@@ -52,12 +52,13 @@ describe('convertUserArchiveToPostData', () => {
     const post = convertUserArchiveToPostData(makeArchive({
       location: '희작', locationAddress: '서울 종로구', latitude: 37.1, longitude: 126.9,
       locationSource: 'kakaomap', locationExternalId: '101', locationUrl: locations[0]?.url,
-      locationCategory: '카페', locations, locationCount: 2,
+      locationCategory: '카페', locationPlaceKind: 'cafe', locations, locationCount: 2,
     }));
 
     expect(post.metadata).toMatchObject({
       location: '희작', locationAddress: '서울 종로구', locationSource: 'kakaomap',
       locationExternalId: '101', locationCount: 2,
+      locationPlaceKind: 'cafe',
     });
     expect(post.metadata.locations).toEqual(locations);
   });

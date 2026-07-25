@@ -23,6 +23,7 @@ import type {
   ProviderSearchResponse,
   UserArchive,
 } from '@/services/WorkersAPIClient';
+import type { PlaceKindIntent } from '@/shared/platforms/place-kinds';
 
 export interface ArchivePlacePickerApi {
   getUserArchives(params?: GetUserArchivesParams): Promise<GetUserArchivesResponse>;
@@ -84,6 +85,8 @@ type ArchivePlacePickerBaseOptions = {
 
 export type ArchiveLocationPickerOptions = ArchivePlacePickerBaseOptions & {
   readonly candidateContext?: never;
+  readonly contextNoteIntent?: never;
+  readonly placeKindIntent?: never;
   readonly currentLocation?: string | null;
   readonly archiveMapsUrl: (url: string) => void;
   readonly onChanged: (change: ArchivePlacePickerChange) => void | Promise<void>;
@@ -91,6 +94,8 @@ export type ArchiveLocationPickerOptions = ArchivePlacePickerBaseOptions & {
 
 export type CandidatePlacePickerOptions = ArchivePlacePickerBaseOptions & {
   readonly candidateContext: ProviderSearchCandidateContext;
+  readonly contextNoteIntent?: 'save' | 'skip';
+  readonly placeKindIntent?: PlaceKindIntent;
   readonly initialView: 'search' | 'existing';
   readonly onCandidateAttached: (
     result: PlaceCandidateAttachmentResult,

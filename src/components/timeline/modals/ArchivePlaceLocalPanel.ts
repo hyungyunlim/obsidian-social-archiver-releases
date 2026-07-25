@@ -5,6 +5,7 @@ import type {
   ProviderSearchCandidateContext,
 } from '@/services/WorkersAPIClient';
 import type { MapSearchProvider } from '@/shared/platforms/map-search-provider';
+import type { PlaceKindIntent } from '@/shared/platforms/place-kinds';
 import {
   confirmGetPlaceDetails,
   dedupeExistingPlaceArchives,
@@ -23,6 +24,8 @@ type LocalPanelOptions = {
   readonly onClose: () => void;
   readonly onChanged: (change: ArchivePlacePickerChange) => void | Promise<void>;
   readonly candidateContext?: ProviderSearchCandidateContext;
+  readonly contextNoteIntent?: 'save' | 'skip';
+  readonly placeKindIntent?: PlaceKindIntent;
   readonly onCandidateAttached?: (
     result: PlaceCandidateAttachmentResult,
   ) => void | Promise<void>;
@@ -179,6 +182,12 @@ export class ArchivePlaceLocalPanel {
             idempotencyKey: request.idempotencyKey,
             representativeArchiveId: place.archiveId,
             placeKey: place.placeKey,
+            ...(this.options.contextNoteIntent
+              ? { contextNoteIntent: this.options.contextNoteIntent }
+              : {}),
+            ...(this.options.placeKindIntent
+              ? { placeKindIntent: this.options.placeKindIntent }
+              : {}),
           },
         );
         await this.options.onCandidateAttached?.(response);

@@ -101,6 +101,10 @@ export interface ActionUpdatedEventData {
     shareUrl?: string | null;
     /** True when userNotes or userHighlights were modified on the archive */
     hasAnnotationUpdate?: boolean;
+    /** Authoritative semantic note revision after the mutation. */
+    notesRevision?: number;
+    /** True when an exact place-bound note changed. */
+    placeContextNoteUpdated?: boolean;
     /** True when AI-generated comments were explicitly cleared remotely */
     clearAIComments?: boolean;
     /** True when desktop-generated transcription was explicitly cleared remotely */

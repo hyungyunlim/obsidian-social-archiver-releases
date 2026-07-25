@@ -13,6 +13,7 @@ const PRIMARY_LOCATION_FIELDS = [
   'locationAddress',
   'locationUrl',
   'locationCategory',
+  'locationPlaceKind',
   'locations',
   'locationCount',
 ] as const;
@@ -44,4 +45,5 @@ export function applyPrimaryCandidateLocationFrontmatter(
   if (primary.address) frontmatter.locationAddress = primary.address;
   if (primary.url) frontmatter.locationUrl = primary.url;
   if (primary.category) frontmatter.locationCategory = primary.category;
+  if (primary.placeKind) frontmatter.locationPlaceKind = primary.placeKind;
 }

@@ -56,7 +56,10 @@ import {
   AttachPlaceCandidatesBatchBodySchema,
   ExtractPlaceCandidatesResultSchema,
   InvalidPlaceCandidateAttachmentResponseError,
+  PLACE_CONTEXT_NOTE_CAPABILITY,
+  PLACE_EVIDENCE_ORIGIN_CAPABILITY,
   PLACE_EXTRACT_CAPABILITY,
+  PLACE_KIND_SUGGESTION_CAPABILITY,
   PlaceCandidateAttachmentApiError,
   PlaceCandidatesResponseSchema,
   parsePlaceCandidateAttachmentError,
@@ -264,10 +267,11 @@ export type AIActionType =
   | 'comment.custom'
   | 'tags.suggest_apply'
   | 'content.translate_variant'
-  | 'content.reformat_variant';
+  | 'content.reformat_variant'
+  | 'places.extract_candidates';
 export type AIActionTypeValue = AIActionType | (string & Record<never, never>);
 
-export type AIActionResultKind = 'comment' | 'tag_patch' | 'content_variant';
+export type AIActionResultKind = 'comment' | 'tag_patch' | 'content_variant' | 'place_candidates';
 export type AIActionJobStatus = AICommentJobStatus | 'billing_blocked';
 
 export interface AIActionExecutorCapabilityPayload {
@@ -735,6 +739,7 @@ export interface UserArchive {
   locationAddress?: string | null;
   locationUrl?: string | null;
   locationCategory?: string | null;
+  locationPlaceKind?: import('../shared/platforms/place-kinds').PlaceKind | null;
   locationUpdatedAt?: string | null;
   locations?: readonly ArchiveLocation[];
   locationCount?: number;
@@ -781,6 +786,8 @@ export interface UserArchive {
   // Mobile annotation fields (populated by GET /api/user/archives/:archiveId)
   userNotes?: UserNote[];
   userNoteCount?: number;
+  notesRevision?: number;
+  noteSyncMode?: 'legacy' | 'ops_v1';
   userHighlights?: TextHighlight[];
   userHighlightCount?: number;
   aiComments?: AICommentPayload[];
@@ -791,6 +798,28 @@ export interface UserArchive {
   transcriptResultId?: string | null;
   transcriptionDuration?: number | null;
   transcriptionProcessingTime?: number | null;
+}
+
+export type ArchiveNoteOperation =
+  | { readonly op: 'create'; readonly note: UserNote }
+  | {
+      readonly op: 'update';
+      readonly noteId: string;
+      readonly expectedUpdatedAt: string;
+      readonly content: string;
+      readonly updatedAt: string;
+    }
+  | {
+      readonly op: 'delete';
+      readonly noteId: string;
+      readonly expectedUpdatedAt: string;
+    };
+
+export interface ArchiveNoteOperationResult {
+  readonly archiveId: string;
+  readonly replayed: boolean;
+  readonly notesRevision: number;
+  readonly notes: readonly UserNote[];
 }
 
 export interface AICommentPayload {
@@ -847,6 +876,59 @@ export interface PlaceCandidateConfirmResult {
     location: string | null;
   };
 }
+
+export type PlaceContextNoteProposalStatus =
+  | 'eligible'
+  | 'queued'
+  | 'applied'
+  | 'skipped'
+  | 'blocked_capacity'
+  | 'blocked_existing_binding'
+  | 'failed'
+  | 'deleted_by_user'
+  | 'orphaned';
+
+export interface PlaceContextNoteProposal {
+  readonly candidateId: string;
+  readonly locationId: string;
+  readonly locationName: string;
+  readonly contextText: string;
+  readonly contextTags: readonly string[];
+  readonly contextScope: 'candidate';
+  readonly status: PlaceContextNoteProposalStatus;
+  readonly noteId: string | null;
+  readonly defaultOn: boolean;
+  readonly recoveredFromEvidence: boolean;
+}
+
+export interface PlaceContextNoteDecisionResult {
+  readonly replayed: boolean;
+  readonly archiveId: string;
+  readonly proposal: PlaceContextNoteProposal;
+}
+
+const PlaceContextNoteProposalSchema = z.object({
+  candidateId: z.string().min(1),
+  locationId: z.string().min(1),
+  locationName: z.string().min(1),
+  contextText: z.string().min(1),
+  contextTags: z.array(z.string()).max(3),
+  contextScope: z.literal('candidate'),
+  status: z.enum([
+    'eligible',
+    'queued',
+    'applied',
+    'skipped',
+    'blocked_capacity',
+    'blocked_existing_binding',
+    'failed',
+    'deleted_by_user',
+    'orphaned',
+  ]),
+  noteId: z.string().nullable(),
+  defaultOn: z.boolean(),
+  recoveredFromEvidence: z.boolean(),
+}).strict();
 
 export interface GetUserArchivesParams {
   limit?: number;
@@ -1802,7 +1884,7 @@ export class WorkersAPIClient implements IService {
       'Content-Type': 'application/json',
       // Opt into caption_llm candidates + the `role` field on attach responses
       // (Places P3b §5.5). Tolerant parser lands in the same release.
-      'X-Client-Capabilities': PLACE_EXTRACT_CAPABILITY,
+      'X-Client-Capabilities': `${PLACE_EXTRACT_CAPABILITY},${PLACE_CONTEXT_NOTE_CAPABILITY},${PLACE_KIND_SUGGESTION_CAPABILITY},${PLACE_EVIDENCE_ORIGIN_CAPABILITY},archive-note-ops-v1`,
       ...this.getClientHeaders(),
     };
     if (this.config.authToken) headers.Authorization = `Bearer ${this.config.authToken}`;
@@ -1841,6 +1923,7 @@ export class WorkersAPIClient implements IService {
       'X-Client': 'obsidian-plugin',
       'X-Client-Version': this.config.pluginVersion || '0.0.0',
       'X-Platform': this.getPlatformIdentifier(),
+      'X-Client-Capabilities': `${PLACE_CONTEXT_NOTE_CAPABILITY},archive-note-ops-v1`,
       ...options.headers,
     };
     if (this.config.clientId && !headers['X-Client-Id']) {
@@ -2087,10 +2170,58 @@ export class WorkersAPIClient implements IService {
       {
         method: 'GET',
         // Opt into caption_llm candidates + the `role` field (Places P3b §5.5).
-        headers: { 'X-Client-Capabilities': PLACE_EXTRACT_CAPABILITY },
+        headers: {
+          'X-Client-Capabilities': `${PLACE_EXTRACT_CAPABILITY},${PLACE_CONTEXT_NOTE_CAPABILITY},${PLACE_KIND_SUGGESTION_CAPABILITY},${PLACE_EVIDENCE_ORIGIN_CAPABILITY},archive-note-ops-v1`,
+        },
       },
     );
     const parsed = PlaceCandidatesResponseSchema.safeParse(response);
+    if (!parsed.success) throw new InvalidPlaceCandidateAttachmentResponseError();
+    return parsed.data;
+  }
+
+  async getPlaceContextNoteProposals(
+    archiveId: string,
+  ): Promise<readonly PlaceContextNoteProposal[]> {
+    this.ensureInitialized();
+    const response = await this.request<unknown>(
+      `/api/user/archives/${encodeURIComponent(archiveId)}/place-context-note-proposals`,
+      {
+        method: 'GET',
+        headers: {
+          'X-Client-Capabilities': `${PLACE_CONTEXT_NOTE_CAPABILITY},archive-note-ops-v1`,
+        },
+      },
+    );
+    const parsed = z.object({
+      archiveId: z.literal(archiveId),
+      proposals: z.array(PlaceContextNoteProposalSchema),
+    }).strict().safeParse(response);
+    if (!parsed.success) throw new InvalidPlaceCandidateAttachmentResponseError();
+    return parsed.data.proposals;
+  }
+
+  async decidePlaceContextNote(
+    candidateId: string,
+    intent: 'save' | 'skip',
+    idempotencyKey = `obsidian:context-note:${crypto.randomUUID()}`,
+  ): Promise<PlaceContextNoteDecisionResult> {
+    this.ensureInitialized();
+    const response = await this.request<unknown>(
+      `/api/user/place-candidates/${encodeURIComponent(candidateId)}/context-note`,
+      {
+        method: 'POST',
+        headers: {
+          'X-Client-Capabilities': `${PLACE_CONTEXT_NOTE_CAPABILITY},archive-note-ops-v1`,
+        },
+        body: JSON.stringify({ idempotencyKey, intent }),
+      },
+    );
+    const parsed = z.object({
+      replayed: z.boolean(),
+      archiveId: z.string().min(1),
+      proposal: PlaceContextNoteProposalSchema,
+    }).strict().safeParse(response);
     if (!parsed.success) throw new InvalidPlaceCandidateAttachmentResponseError();
     return parsed.data;
   }
@@ -2113,7 +2244,9 @@ export class WorkersAPIClient implements IService {
       `/api/user/archives/${encodeURIComponent(archiveId)}/place-candidates/extract`,
       {
         method: 'POST',
-        headers: { 'X-Client-Capabilities': PLACE_EXTRACT_CAPABILITY },
+        headers: {
+          'X-Client-Capabilities': `${PLACE_EXTRACT_CAPABILITY},${PLACE_CONTEXT_NOTE_CAPABILITY},${PLACE_KIND_SUGGESTION_CAPABILITY},${PLACE_EVIDENCE_ORIGIN_CAPABILITY},archive-note-ops-v1`,
+        },
         body: JSON.stringify(body),
       },
     );
@@ -2572,6 +2705,23 @@ export class WorkersAPIClient implements IService {
     return { success: true };
   }
 
+  async applyArchiveNoteOperations(
+    archiveId: string,
+    baseRevision: number,
+    operations: readonly ArchiveNoteOperation[],
+    idempotencyKey = `obsidian-note:${crypto.randomUUID()}`,
+  ): Promise<ArchiveNoteOperationResult> {
+    this.ensureInitialized();
+    return this.request<ArchiveNoteOperationResult>(
+      `/api/user/archives/${encodeURIComponent(archiveId)}/note-operations`,
+      {
+        method: 'POST',
+        headers: { 'X-Client-Capabilities': 'archive-note-ops-v1' },
+        body: JSON.stringify({ idempotencyKey, baseRevision, operations }),
+      },
+    );
+  }
+
   /**
    * Bulk update archive actions (isLiked / isBookmarked) for multiple archives.
    *
@@ -2961,13 +3111,24 @@ export class WorkersAPIClient implements IService {
     });
   }
 
+  private aiActionExecutorCapabilities(): string {
+    return [
+      'ai-actions-v1',
+      'tag-patch-v1',
+      'content-variants-v1',
+      'content-translate-v1',
+      PLACE_EXTRACT_CAPABILITY,
+      PLACE_KIND_SUGGESTION_CAPABILITY,
+    ].join(',');
+  }
+
   async getAvailableAIActionJobs(targetClientId: string): Promise<{ jobs: AIActionExecutorJob[] }> {
     this.ensureInitialized();
     return this.request<{ jobs: AIActionExecutorJob[] }>(
       `/api/ai-actions/jobs?targetClientId=${encodeURIComponent(targetClientId)}&state=available`,
       {
         method: 'GET',
-        headers: { 'X-Client-Capabilities': 'ai-actions-v1,tag-patch-v1,content-variants-v1,content-translate-v1' },
+        headers: { 'X-Client-Capabilities': this.aiActionExecutorCapabilities() },
       },
     );
   }
@@ -3013,7 +3174,7 @@ export class WorkersAPIClient implements IService {
     this.ensureInitialized();
     return this.request<AIActionClaimResponse>(`/api/ai-actions/jobs/${jobId}/claim`, {
       method: 'POST',
-      headers: { 'X-Client-Capabilities': 'ai-actions-v1,tag-patch-v1,content-variants-v1,content-translate-v1' },
+      headers: { 'X-Client-Capabilities': this.aiActionExecutorCapabilities() },
       body: JSON.stringify(request),
     });
   }

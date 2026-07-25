@@ -1244,6 +1244,12 @@ export class RealtimeEventBridge {
         if (msg.data.changes.hasAnnotationUpdate || msg.data.changes.clearAIComments || msg.data.changes.clearTranscription) {
           if (!settings.enableMobileAnnotationSync) {
             console.debug('[Social Archiver] Annotation update received but Mobile Annotation Sync is disabled. Enable it in Settings → Mobile sync.');
+            if (msg.data.changes.placeContextNoteUpdated) {
+              new Notice(
+                'Place note saved on the server. Enable Mobile Annotation Sync in settings to write it to this vault.',
+                7000,
+              );
+            }
           } else {
             void this.withArchiveWriteLocks(msg.data.archiveId, async () => {
               await this.deps.annotationSyncService?.handleActionUpdated(msg.data);

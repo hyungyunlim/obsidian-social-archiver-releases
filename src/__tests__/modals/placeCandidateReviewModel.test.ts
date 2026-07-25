@@ -56,7 +56,7 @@ describe('countNonHintPending', () => {
     expect(countNonHintPending(rows)).toBe(2);
   });
 
-  it('caps the CTA at eight non-hint pending', () => {
+  it('caps the CTA at the operational pending ceiling', () => {
     const rows = Array.from({ length: PLACE_EXTRACT_PENDING_CAP }, (_, i) =>
       candidate({ id: `n-${i}` }));
     expect(countNonHintPending(rows)).toBe(PLACE_EXTRACT_PENDING_CAP);

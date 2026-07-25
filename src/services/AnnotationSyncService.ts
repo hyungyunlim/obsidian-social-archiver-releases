@@ -233,6 +233,17 @@ export class AnnotationSyncService {
     const clientId = this.getSettings().syncClientId || '';
     const syntheticNoteId = `obsidian:${clientId}:primary`;
     const primaryNote = notes.find((n) => n.id === syntheticNoteId);
+    const placeNoteBindings = new Map<string, {
+      locationId: string;
+      locationName: string;
+    }>();
+    for (const location of archive.locations ?? []) {
+      if (location.archiveId !== archiveId || !location.contextNoteId) continue;
+      placeNoteBindings.set(location.contextNoteId, {
+        locationId: location.id,
+        locationName: location.name,
+      });
+    }
 
     // Notify outbound service to suppress echo before we write
     this.onBeforeInboundWrite?.(archiveId);
@@ -253,6 +264,11 @@ export class AnnotationSyncService {
         fm.userNoteCount = noteCount;
         fm.userHighlightCount = highlightCount;
         fm.hasAnnotations = hasAnnotations;
+        if (typeof archive.notesRevision === 'number'
+          && Number.isSafeInteger(archive.notesRevision)
+          && archive.notesRevision >= 0) {
+          fm.notesRevision = archive.notesRevision;
+        }
 
         if (hasAICommentSnapshot) {
           if (aiCommentEntries.length > 0) {
@@ -275,7 +291,12 @@ export class AnnotationSyncService {
     // `sourcePath` lets the renderer's injected resolvers emit links relative to
     // the target note (shortest-unique-path / user link-format prefs). Mention
     // tokens are converted ONLY inside this rendered body — never fm.comment.
-    const annotationBlock = this.annotationRenderer.render({ notes, highlights, sourcePath: file.path });
+    const annotationBlock = this.annotationRenderer.render({
+      notes,
+      highlights,
+      sourcePath: file.path,
+      ...(placeNoteBindings.size > 0 ? { placeNoteBindings } : {}),
+    });
 
     // Apply annotation block to note body, and reconcile inline ==text== marks
     // so reader mode / timeline cards visualise the highlights.
