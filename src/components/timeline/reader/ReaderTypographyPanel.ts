@@ -127,11 +127,11 @@ export class ReaderTypographyPanel {
 
   private buildDOM(): void {
     // Wrapper for positioning (positioned relative to anchorEl parent)
-    this.wrapperEl = activeDocument.createElement('div');
+    this.wrapperEl = activeWindow.createDiv();
     this.wrapperEl.className = 'sa-reader-typography-anchor';
 
     // Panel
-    this.panelEl = activeDocument.createElement('div');
+    this.panelEl = activeWindow.createDiv();
     this.panelEl.className = 'sa-reader-typography-panel';
     this.panelEl.setAttribute('role', 'dialog');
     this.panelEl.setAttribute('aria-label', 'Typography');
@@ -243,10 +243,10 @@ export class ReaderTypographyPanel {
     this.panelEl.appendChild(this.buildSeparator());
 
     // Font Family grid
-    const fontsGrid = activeDocument.createElement('div');
+    const fontsGrid = activeWindow.createDiv();
     fontsGrid.className = 'sa-reader-typography-fonts';
     for (const ff of FONT_FAMILIES) {
-      const btn = activeDocument.createElement('button');
+      const btn = activeWindow.createEl('button');
       btn.type = 'button';
       btn.className = 'sa-reader-typography-font-button';
       if (this.state.fontFamily === ff.key) {
@@ -268,7 +268,7 @@ export class ReaderTypographyPanel {
     this.panelEl.appendChild(this.buildSeparator());
 
     // Reset button
-    const resetBtn = activeDocument.createElement('button');
+    const resetBtn = activeWindow.createEl('button');
     resetBtn.type = 'button';
     resetBtn.className = 'sa-reader-typography-reset';
     resetBtn.textContent = 'Reset';
@@ -286,17 +286,17 @@ export class ReaderTypographyPanel {
   }
 
   private buildRow(label: string, value: string): { rowEl: HTMLElement; valueEl: HTMLElement } {
-    const rowEl = activeDocument.createElement('div');
+    const rowEl = activeWindow.createDiv();
     rowEl.className = 'sa-reader-typography-row';
 
-    const topEl = activeDocument.createElement('div');
+    const topEl = activeWindow.createDiv();
     topEl.className = 'sa-reader-typography-row-top';
 
-    const labelEl = activeDocument.createElement('span');
+    const labelEl = activeWindow.createSpan();
     labelEl.className = 'sa-reader-typography-label';
     labelEl.textContent = label;
 
-    const valueEl = activeDocument.createElement('span');
+    const valueEl = activeWindow.createSpan();
     valueEl.className = 'sa-reader-typography-value';
     valueEl.textContent = value;
 
@@ -320,10 +320,10 @@ export class ReaderTypographyPanel {
     isMinDisabled: () => boolean;
     isMaxDisabled: () => boolean;
   }): { ctrlEl: HTMLElement; range: HTMLInputElement; decBtn: HTMLButtonElement; incBtn: HTMLButtonElement } {
-    const ctrlEl = activeDocument.createElement('div');
+    const ctrlEl = activeWindow.createDiv();
     ctrlEl.className = 'sa-reader-typography-row-control';
 
-    const decBtn = activeDocument.createElement('button');
+    const decBtn = activeWindow.createEl('button');
     decBtn.type = 'button';
     decBtn.className = 'sa-reader-typography-step-button';
     decBtn.textContent = '\u2212'; // minus sign
@@ -334,7 +334,7 @@ export class ReaderTypographyPanel {
       opts.onDec();
     });
 
-    const range = activeDocument.createElement('input');
+    const range = activeWindow.createEl('input');
     range.type = 'range';
     range.className = 'sa-reader-typography-range';
     range.min = String(opts.min);
@@ -352,7 +352,7 @@ export class ReaderTypographyPanel {
       }
     });
 
-    const incBtn = activeDocument.createElement('button');
+    const incBtn = activeWindow.createEl('button');
     incBtn.type = 'button';
     incBtn.className = 'sa-reader-typography-step-button';
     incBtn.textContent = '+';
@@ -371,7 +371,7 @@ export class ReaderTypographyPanel {
   }
 
   private buildSeparator(): HTMLElement {
-    const sep = activeDocument.createElement('div');
+    const sep = activeWindow.createDiv();
     sep.className = 'sa-reader-typography-separator';
     return sep;
   }

@@ -98,7 +98,7 @@ export class ArchiveNoteBackfillService {
         }
 
         const outcome: { status: MainTagPlan['status'] } = { status: 'skip' };
-        await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+        await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
           const plan = this.planMainTagUpdate(frontmatter, options);
           outcome.status = plan.status;
           if (plan.status !== 'update' || !plan.tags) return;
@@ -185,7 +185,7 @@ export class ArchiveNoteBackfillService {
               continue;
             }
             let changed = false;
-            await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+            await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
               if (frontmatter.type === AUTHOR_NOTE_TYPE) return;
               if (frontmatter.authorNote === link) return;
               frontmatter.authorNote = link;

@@ -5,6 +5,7 @@ export type { Platform } from '@shared/platforms/types';
 import type { Platform } from '@shared/platforms/types';
 import { PLATFORMS } from '@shared/platforms/types';
 import type { ArchiveLocation } from './archive-location';
+import type { ProductSnapshot } from '../shared/platforms/products';
 
 type ExtensibleString = string & Record<never, never>;
 
@@ -68,6 +69,9 @@ export interface PostMetadata {
   longitude?: number; // Google Maps place longitude
   locationSource?: string; // 'instagram' | 'googlemaps' | 'user'
   locationExternalId?: string; // Provider-stable place id (IG location pk, Google place_id)
+  // Commerce snapshot (server migration 0159, Product PRD P0).
+  product?: ProductSnapshot;
+  productSource?: string;
   locationAddress?: string;
   locationUrl?: string;
   locationCategory?: string;

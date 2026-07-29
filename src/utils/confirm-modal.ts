@@ -20,8 +20,12 @@ export interface InputConfirmModalOptions extends ConfirmModalOptions {
   requiredInput: string;
   /** Placeholder for input field */
   inputPlaceholder?: string;
-  /** Label shown above input */
-  inputLabel?: string;
+  /**
+   * Label shown above the input. Pass a DocumentFragment (via `createFragment`)
+   * to highlight part of it — Obsidian's `setName` renders a fragment but sets
+   * a string as plain text, so markup in a string would show up literally.
+   */
+  inputLabel?: string | DocumentFragment;
 }
 
 /**

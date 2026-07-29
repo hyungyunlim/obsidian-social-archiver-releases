@@ -461,7 +461,7 @@ export class AICommentRenderer {
         // Find the delete button to insert before it
         const deleteBtn = headerLine.querySelector('.ai-comment-delete');
 
-        const addBtn = activeDocument.createElement('span');
+        const addBtn = activeWindow.createSpan();
         addBtn.className = 'ai-comment-add-btn';
         addBtn.classList.add('sa-icon-20');
         addBtn.classList.add('sa-rounded-4');
@@ -513,7 +513,7 @@ export class AICommentRenderer {
    * Show copy feedback
    */
   private showCopyFeedback(element: HTMLElement): void {
-    const feedback = activeDocument.createElement('div');
+    const feedback = activeWindow.createDiv();
     feedback.textContent = 'Copied!';
     feedback.classList.add('sa-absolute');
     feedback.classList.add('sa-py-4');
@@ -671,7 +671,7 @@ export class AICommentRenderer {
     // Process nodes in reverse to avoid offset issues
     for (const { node, matches } of nodesToProcess.reverse()) {
       const text = node.textContent || '';
-      const fragment = activeDocument.createDocumentFragment();
+      const fragment = activeWindow.createFragment();
       let lastIndex = 0;
 
       for (const match of matches) {
@@ -690,7 +690,7 @@ export class AICommentRenderer {
         const totalSeconds = hours * 3600 + minutes * 60 + seconds;
 
         // Create clickable timestamp span
-        const timestampSpan = activeDocument.createElement('span');
+        const timestampSpan = activeWindow.createSpan();
         timestampSpan.className = 'ai-comment-timestamp';
         timestampSpan.textContent = fullMatch;
         timestampSpan.classList.add('sa-text-accent');

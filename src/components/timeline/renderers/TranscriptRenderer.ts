@@ -1014,7 +1014,7 @@ export class TranscriptRenderer {
       }
 
       // Add highlighted match
-      const mark = activeDocument.createElement('mark');
+      const mark = activeWindow.createEl('mark');
       mark.classList.add('tr-highlight');
       mark.textContent = text.substring(index, index + query.length);
       element.appendChild(mark);

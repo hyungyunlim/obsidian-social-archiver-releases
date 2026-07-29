@@ -141,10 +141,10 @@ export class ClipGuideModal extends Modal {
     number: string
   ): { body: HTMLElement; textEl: HTMLElement } {
     const step = stepsEl.createDiv({ cls: 'sa-clip-guide-step' });
-    step.createEl('span', { cls: 'sa-clip-guide-step-number', text: number });
+    step.createSpan({ cls: 'sa-clip-guide-step-number', text: number });
 
     const body = step.createDiv({ cls: 'sa-clip-guide-step-body' });
-    const textEl = body.createEl('span', { cls: 'sa-clip-guide-step-text' });
+    const textEl = body.createSpan({ cls: 'sa-clip-guide-step-text' });
     return { body, textEl };
   }
 

@@ -195,12 +195,12 @@ export class PreviewableInteractionsRenderer {
     kind: CountKind,
     value: number,
   ): HTMLElement {
-    const btn = activeDocument.createElement('div');
+    const btn = activeWindow.createDiv();
     btn.classList.add('pcr-action-btn');
     btn.setAttribute('data-count-kind', kind);
     btn.setCssProps({ '--pcr-meta-gap': '6px' });
 
-    const iconSlot = activeDocument.createElement('div');
+    const iconSlot = activeWindow.createDiv();
     iconSlot.classList.add('pcr-action-icon');
     // Prefer the lucide SVG (matches vault timeline). Fall back to the
     // unicode glyph when `setIcon` is absent — jsdom unit tests, the
@@ -213,7 +213,7 @@ export class PreviewableInteractionsRenderer {
     }
     btn.appendChild(iconSlot);
 
-    const countEl = activeDocument.createElement('span');
+    const countEl = activeWindow.createSpan();
     countEl.classList.add('pcr-action-count');
     countEl.textContent = formatNumber(value);
     btn.appendChild(countEl);

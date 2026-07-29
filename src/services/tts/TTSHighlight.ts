@@ -116,7 +116,7 @@ export class TTSHighlight {
         range.setStart(startInfo.node, startInfo.offset);
         range.setEnd(endInfo.node, endInfo.offset);
 
-        const mark = activeDocument.createElement('mark');
+        const mark = activeWindow.createEl('mark');
         mark.className = HIGHLIGHT_CLASS;
         range.surroundContents(mark);
         this.activeMarks.push(mark);
@@ -134,7 +134,7 @@ export class TTSHighlight {
           range.setStart(node, startOffset);
           range.setEnd(node, endOffset);
 
-          const mark = activeDocument.createElement('mark');
+          const mark = activeWindow.createEl('mark');
           mark.className = HIGHLIGHT_CLASS;
           range.surroundContents(mark);
           this.activeMarks.push(mark);

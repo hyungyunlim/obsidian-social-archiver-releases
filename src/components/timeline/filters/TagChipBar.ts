@@ -1,15 +1,19 @@
-import type { TagWithCount } from '@/types/tag';
+import { UNTAGGED_FILTER_ID, type TagWithCount } from '@/types/tag';
 
 /**
  * TagChipBar - Horizontal scrollable tag chip bar for filtering
  *
  * Single Responsibility: Render tag chips and handle tag selection
+ *
+ * The selected value passed to `onTagSelect` is either a tag name,
+ * UNTAGGED_FILTER_ID (posts without any tag), or null ("All").
  */
 export class TagChipBar {
   private containerEl: HTMLElement | null = null;
   private onTagSelect: (tagName: string | null) => void;
   private selectedTag: string | null = null;
   private currentTags: TagWithCount[] = [];
+  private untaggedCount = 0;
 
   constructor(onTagSelect: (tagName: string | null) => void) {
     this.onTagSelect = onTagSelect;
@@ -19,13 +23,14 @@ export class TagChipBar {
    * Render the tag chip bar into a parent element
    * Returns null if no tags exist
    */
-  render(parent: HTMLElement, tags: TagWithCount[]): HTMLElement | null {
+  render(parent: HTMLElement, tags: TagWithCount[], untaggedCount = 0): HTMLElement | null {
     // Remove existing bar
     this.destroy();
 
     if (tags.length === 0) return null;
 
     this.currentTags = tags;
+    this.untaggedCount = untaggedCount;
 
     this.containerEl = parent.createDiv({ cls: 'tag-chip-bar tcb-container' });
 
@@ -35,8 +40,9 @@ export class TagChipBar {
   }
 
   /** Update tags and re-render chips in place (keeps container position) */
-  update(tags: TagWithCount[]): void {
+  update(tags: TagWithCount[], untaggedCount = 0): void {
     this.currentTags = tags;
+    this.untaggedCount = untaggedCount;
     this.renderChips();
   }
 
@@ -75,6 +81,26 @@ export class TagChipBar {
         this.onTagSelect(null);
       },
     });
+
+    // "Untagged" chip (posts without any tag) — shown when such posts exist,
+    // or while selected so the active filter can still be toggled off
+    if (this.untaggedCount > 0 || this.selectedTag === UNTAGGED_FILTER_ID) {
+      this.renderChip(this.containerEl, {
+        label: 'Untagged',
+        count: this.untaggedCount,
+        color: null,
+        isSelected: this.selectedTag === UNTAGGED_FILTER_ID,
+        onClick: () => {
+          if (this.selectedTag === UNTAGGED_FILTER_ID) {
+            this.selectedTag = null;
+          } else {
+            this.selectedTag = UNTAGGED_FILTER_ID;
+          }
+          this.renderChips();
+          this.onTagSelect(this.selectedTag);
+        },
+      });
+    }
 
     // Tag chips (sorted by sortOrder)
     const sorted = [...this.currentTags].sort((a, b) => a.sortOrder - b.sortOrder);

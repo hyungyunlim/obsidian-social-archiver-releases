@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/definitions.ts
- * Generated: 2026-07-11T08:56:14.731Z
+ * Generated: 2026-07-27T09:29:10.703Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -145,8 +145,11 @@ export const PLATFORM_DEFINITIONS: Record<Platform, PlatformDefinition> = {
     displayName: 'X',
     emoji: '🐦',
     domains: ['x.com', 'twitter.com', 't.co', 'mobile.x.com', 'mobile.twitter.com'],
-    // Note: t.co must match exactly (word boundary) to avoid matching redd.it, pin.it, etc.
-    urlPattern: /(?:x\.com|twitter\.com|(?:^|\/\/)t\.co(?:\/|$))/i,
+    // Every domain here needs a host boundary in front of it, not just t.co.
+    // Without one, `x.com` matches as a SUBSTRING of any host ending in it:
+    // xexymix.com and netflix.com were both detected as X and sent down the
+    // X pipeline instead of being archived as the shops/sites they are.
+    urlPattern: /(?:(?:^|\/\/|\.)(?:x|twitter)\.com|(?:^|\/\/)t\.co(?:\/|$))/i,
     brightDataDatasetId: 'gd_l0kp3kd4e92kx6tm1',
     supportsMedia: true,
     supportsAI: true,

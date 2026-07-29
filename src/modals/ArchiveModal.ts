@@ -1670,7 +1670,7 @@ export class ArchiveModal extends Modal {
       label.addClass('sa-text-normal', 'sa-flex-shrink-0', 'am-form-label');
 
       // Use Obsidian's checkbox-container pattern for toggle
-      const toggleEl = row.createEl('div', { cls: 'checkbox-container' });
+      const toggleEl = row.createDiv({ cls: 'checkbox-container' });
       toggleEl.classList.toggle('is-enabled', this.subscribeEnabled);
       toggleEl.addEventListener('click', () => {
         this.subscribeEnabled = !this.subscribeEnabled;
@@ -3817,10 +3817,10 @@ export class ArchiveModal extends Modal {
       const step = stepsContainer.createDiv();
       step.addClass('am-unauth-step');
 
-      const stepNumber = step.createEl('span', { text: number });
+      const stepNumber = step.createSpan({ text: number });
       stepNumber.addClass('am-unauth-step-number');
 
-      const stepText = step.createEl('span', { text: text });
+      const stepText = step.createSpan({ text: text });
       stepText.addClass('am-unauth-step-text');
     };
 
@@ -3834,8 +3834,8 @@ export class ArchiveModal extends Modal {
 
     const clipBtn = contentEl.createEl('button');
     clipBtn.addClass('am-unauth-clip-btn');
-    clipBtn.createEl('span', { text: 'Clip from your browser instead', cls: 'am-unauth-clip-btn-title' });
-    clipBtn.createEl('span', { text: 'No account needed', cls: 'am-unauth-clip-btn-sub' });
+    clipBtn.createSpan({ text: 'Clip from your browser instead', cls: 'am-unauth-clip-btn-title' });
+    clipBtn.createSpan({ text: 'No account needed', cls: 'am-unauth-clip-btn-sub' });
     clipBtn.addEventListener('click', () => { void this.openClipGuide(); });
 
     // Subtle disclaimer at bottom (no icon)
@@ -3942,7 +3942,7 @@ export class ArchiveModal extends Modal {
     button.setAttribute('data-original-text', originalText);
 
     // Create loading spinner
-    const spinner = activeDocument.createElement('span');
+    const spinner = activeWindow.createSpan();
     spinner.className = 'loading-spinner am-spinner';
     spinner.setAttribute('aria-hidden', 'true');
 
@@ -4003,10 +4003,10 @@ export class ArchiveModal extends Modal {
     header.setAttribute('aria-expanded', String(!isCollapsed));
     header.setAttribute('aria-label', `${title}, ${isCollapsed ? 'collapsed' : 'expanded'}`);
 
-    const titleEl = header.createEl('span', { text: title });
+    const titleEl = header.createSpan({ text: title });
     titleEl.addClass('am-collapsible-title');
 
-    const chevron = header.createEl('span', { text: isCollapsed ? '▶' : '▼' });
+    const chevron = header.createSpan({ text: isCollapsed ? '▶' : '▼' });
     chevron.addClass('am-collapsible-chevron');
     if (isCollapsed) chevron.addClass('am-collapsible-chevron--collapsed');
     chevron.setAttribute('aria-hidden', 'true');

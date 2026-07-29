@@ -546,10 +546,10 @@ export default class SocialArchiverPlugin extends Plugin {
     for (const file of this.app.vault.getMarkdownFiles()) {
       if (!file.path.startsWith(`${archivePath}/`)) continue;
       const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
-      const legacy = fm?.['locations'];
+      const legacy: unknown = fm?.['locations'];
       if (!Array.isArray(legacy) || legacy.length === 0) continue;
 
-      const locations = legacy
+      const locations = (legacy as unknown[])
         .map((item) => ArchiveLocationSchema.safeParse(item))
         .filter((r): r is { success: true; data: ArchiveLocation } => r.success)
         .map((r) => r.data);

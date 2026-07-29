@@ -68,10 +68,10 @@ export class NoticeDetailModal extends Modal {
     // Body — plain text only. Setting `textContent` prevents arbitrary
     // HTML rendering even though the server validates copy on admin
     // write (PRD §Security).
-    const bodyEl = contentEl.createEl('div', { cls: 'nb-modal-body' });
+    const bodyEl = contentEl.createDiv({ cls: 'nb-modal-body' });
     bodyEl.textContent = this.notice.body;
 
-    contentEl.createEl('div', { cls: 'nb-modal-divider' });
+    contentEl.createDiv({ cls: 'nb-modal-divider' });
 
     this.renderActions(contentEl);
 

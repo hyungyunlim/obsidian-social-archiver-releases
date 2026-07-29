@@ -476,7 +476,7 @@ export class MediaGalleryView extends BasesView implements HoverParent {
 
     if (currentIndex === -1) currentIndex = 0;
 
-    const modal = activeDocument.createElement('div');
+    const modal = activeWindow.createDiv();
     modal.addClass('sa-media-lightbox');
 
     // Create backdrop

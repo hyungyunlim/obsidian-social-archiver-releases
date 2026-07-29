@@ -321,7 +321,7 @@ export class LinkPreviewRenderer {
     content.addClass('sa-gap-4');
 
     // Error title
-    const title = content.createEl('div');
+    const title = content.createDiv();
     title.addClass('sa-text-sm');
     title.addClass('sa-font-semibold');
     title.addClass('sa-text-error');

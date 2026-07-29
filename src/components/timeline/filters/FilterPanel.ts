@@ -82,7 +82,7 @@ export class FilterPanel {
     const headerRow = platformSection.createDiv();
     headerRow.addClass('sa-flex-between', 'sa-gap-8', 'sa-mb-8');
 
-    const platformLabel = headerRow.createEl('div', { text: 'Platforms' });
+    const platformLabel = headerRow.createDiv({ text: 'Platforms' });
     platformLabel.addClass('sa-text-sm', 'sa-font-semibold', 'sa-text-muted', 'fp-label-uppercase');
 
     const toggleButton = headerRow.createDiv();

@@ -183,6 +183,8 @@ describe('AICommentJobProcessor local place extraction', () => {
         customPrompt: expect.stringContaining('Do not stop after only the first 3, 5, or 8 places.'),
       }),
     );
+    expect(serviceMocks.generateComment.mock.calls[0]?.[1]?.customPrompt)
+      .toContain('Ignore product cards and ecommerce UI');
     const payload = vi.mocked(setup.uploadAIActionJobResult).mock.calls[0]?.[1]
       .result as { kind: string; candidates: Array<Record<string, unknown>> };
     expect(payload.kind).toBe('place_candidates');

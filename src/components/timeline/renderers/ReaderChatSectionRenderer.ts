@@ -19,18 +19,14 @@ export interface ReaderChatTimelineRenderContext {
 }
 
 function appendDiv(parent: HTMLElement, className: string, text?: string): HTMLDivElement {
-  const el = parent.ownerDocument.createElement('div');
-  el.className = className;
+  const el = parent.createDiv({ cls: className });
   if (text !== undefined) el.textContent = text;
-  parent.appendChild(el);
   return el;
 }
 
 function appendSpan(parent: HTMLElement, className: string, text?: string): HTMLSpanElement {
-  const el = parent.ownerDocument.createElement('span');
-  el.className = className;
+  const el = parent.createSpan({ cls: className });
   if (text !== undefined) el.textContent = text;
-  parent.appendChild(el);
   return el;
 }
 

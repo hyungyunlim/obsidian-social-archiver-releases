@@ -736,6 +736,11 @@ export interface UserArchive {
   longitude?: number | null;
   locationSource?: string | null;
   locationExternalId?: string | null;
+  // Commerce snapshot (server migration 0159). Read from the TOP-LEVEL field —
+  // Places shipped a bug where the client read a metadata bag the server never
+  // filled, so location never reached the plugin at all.
+  product?: unknown;
+  productSource?: string | null;
   locationAddress?: string | null;
   locationUrl?: string | null;
   locationCategory?: string | null;

@@ -99,7 +99,7 @@ export class PreviewableHeaderRenderer {
 
     // Author name
     const displayName = post.author?.name ?? '';
-    const authorName = activeDocument.createElement('strong');
+    const authorName = activeWindow.createEl('strong');
     authorName.textContent = displayName;
     authorName.classList.add('pcr-author-name');
     authorName.setCssProps({
@@ -126,7 +126,7 @@ export class PreviewableHeaderRenderer {
         // Visible affordance: a small dot indicator next to the name so
         // users notice the note exists. The tooltip body lives on the
         // strong element via the data attribute.
-        const noteDot = activeDocument.createElement('span');
+        const noteDot = activeWindow.createSpan();
         noteDot.classList.add('pcr-author-note-indicator');
         noteDot.setAttribute('aria-label', 'Has author note');
         noteDot.setAttribute('title', snippet);
@@ -146,7 +146,7 @@ export class PreviewableHeaderRenderer {
     const timestamp = post.metadata?.timestamp ?? null;
     const relative = formatRelativeTime(timestamp);
     if (relative) {
-      const timeSpan = activeDocument.createElement('span');
+      const timeSpan = activeWindow.createSpan();
       timeSpan.classList.add('pcr-nowrap');
       timeSpan.classList.add('text-xs');
       timeSpan.setCssStyles({ color: 'var(--text-muted)' });
@@ -157,7 +157,7 @@ export class PreviewableHeaderRenderer {
     // Podcast: episode author next to timestamp
     if (post.platform === 'podcast' && post.author?.handle) {
       this.appendSeparator(timeRow);
-      const episodeAuthorSpan = activeDocument.createElement('span');
+      const episodeAuthorSpan = activeWindow.createSpan();
       episodeAuthorSpan.classList.add('pcr-episode-author');
       episodeAuthorSpan.classList.add('text-xs');
       episodeAuthorSpan.setCssStyles({ color: 'var(--text-muted)' });
@@ -168,7 +168,7 @@ export class PreviewableHeaderRenderer {
     // Reddit: subreddit link
     if (post.platform === 'reddit' && post.content?.community) {
       this.appendSeparator(timeRow);
-      const subredditLink = activeDocument.createElement('a');
+      const subredditLink = activeWindow.createEl('a');
       subredditLink.classList.add('pcr-community-link');
       subredditLink.classList.add('text-xs');
       subredditLink.textContent = `r/${post.content.community.name}`;
@@ -183,7 +183,7 @@ export class PreviewableHeaderRenderer {
     // Kidsnote: daycare center label
     if (post.platform === 'kidsnote' && post.content?.community) {
       this.appendSeparator(timeRow);
-      const centerSpan = activeDocument.createElement('span');
+      const centerSpan = activeWindow.createSpan();
       centerSpan.classList.add('text-xs');
       centerSpan.setCssStyles({ color: 'var(--text-muted)' });
       centerSpan.textContent = post.content.community.name;
@@ -194,7 +194,7 @@ export class PreviewableHeaderRenderer {
     // Naver: cafe link
     if (post.platform === 'naver' && post.content?.community) {
       this.appendSeparator(timeRow);
-      const cafeLink = activeDocument.createElement('a');
+      const cafeLink = activeWindow.createEl('a');
       cafeLink.classList.add('pcr-cafe-link');
       cafeLink.classList.add('text-xs');
       cafeLink.textContent = post.content.community.name;
@@ -239,7 +239,7 @@ export class PreviewableHeaderRenderer {
     const avatarSrc = this.context.resolveMediaUrl(post.author?.avatar);
 
     if (avatarSrc) {
-      const avatarImg = activeDocument.createElement('img');
+      const avatarImg = activeWindow.createEl('img');
       avatarImg.loading = 'lazy';
       avatarImg.classList.add('sa-icon-40', 'sa-rounded-full', 'sa-object-cover', 'pcr-avatar-img');
       avatarImg.src = avatarSrc;
@@ -312,7 +312,7 @@ export class PreviewableHeaderRenderer {
           // SVG creation failed in degraded environments; iconWrapper stays empty.
         }
       } else {
-        const img = activeDocument.createElement('img');
+        const img = activeWindow.createEl('img');
         img.setAttribute('src', publisherEntry.icon.url);
         img.setAttribute('alt', publisherEntry.name);
         img.setAttribute('loading', 'lazy');
@@ -395,16 +395,16 @@ export class PreviewableHeaderRenderer {
    * Pure visual.
    */
   public renderHighlightBadge(parent: HTMLElement, count = 0): HTMLElement {
-    const badge = activeDocument.createElement('span');
+    const badge = activeWindow.createSpan();
     badge.classList.add('pcr-highlight-badge');
     parent.appendChild(badge);
 
-    const icon = activeDocument.createElement('span');
+    const icon = activeWindow.createSpan();
     icon.classList.add('pcr-highlight-badge-icon');
     badge.appendChild(icon);
     this.safeSetIcon(icon, 'highlighter');
 
-    const text = activeDocument.createElement('span');
+    const text = activeWindow.createSpan();
     text.textContent = ` ${count}`;
     badge.appendChild(text);
 
@@ -518,7 +518,7 @@ export class PreviewableHeaderRenderer {
   }
 
   private appendInitialsFallback(container: HTMLElement, name: string | undefined | null): void {
-    const fallback = activeDocument.createElement('div');
+    const fallback = activeWindow.createDiv();
     fallback.classList.add(
       'sa-icon-40',
       'sa-rounded-full',
@@ -531,7 +531,7 @@ export class PreviewableHeaderRenderer {
   }
 
   private appendSeparator(parent: HTMLElement): void {
-    const sep = activeDocument.createElement('span');
+    const sep = activeWindow.createSpan();
     sep.textContent = '·';
     sep.classList.add('pcr-separator');
     sep.classList.add('text-xs');
@@ -560,7 +560,7 @@ export class PreviewableHeaderRenderer {
    * vitest (no Obsidian element enrichments) and the Obsidian runtime.
    */
   private makeDiv(parent: HTMLElement, classes: string): HTMLDivElement {
-    const div = activeDocument.createElement('div');
+    const div = activeWindow.createDiv();
     if (classes) {
       for (const cls of classes.split(/\s+/).filter(Boolean)) {
         div.classList.add(cls);

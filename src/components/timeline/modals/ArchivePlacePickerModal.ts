@@ -349,7 +349,7 @@ export class ArchivePlacePickerModal extends Modal {
       const row = panel.createDiv({ cls: 'sa-place-picker-current-row' });
       const details = row.createDiv({ cls: 'sa-place-picker-current-details' });
       details.createEl('strong', { text: location.name });
-      details.createEl('span', {
+      details.createSpan({
         text: [
           location.isPrimary ? 'Primary' : null,
           location.address,
@@ -471,9 +471,9 @@ export class ArchivePlacePickerModal extends Modal {
   }
 
   private showMetadataAttachedNotice(location: ArchiveLocation): void {
-    const content = document.createDocumentFragment();
+    const content = createFragment();
     content.append(`Added ${location.name} as metadata only. `);
-    const promote = document.createElement('button');
+    const promote = createEl('button');
     promote.type = 'button';
     promote.textContent = 'Get details';
     promote.addEventListener('click', () => void this.promote(location));

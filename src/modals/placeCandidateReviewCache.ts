@@ -154,7 +154,7 @@ export function loadPlaceCandidateReviewCache(
   now = Date.now(),
 ): PlaceCandidateReviewCache | null {
   try {
-    const raw = globalThis.localStorage?.getItem(key(archiveId));
+    const raw = window.localStorage?.getItem(key(archiveId));
     if (!raw) return null;
     const value: unknown = JSON.parse(raw);
     if (!record(value) || value.version !== 1 || value.archiveId !== archiveId
@@ -162,7 +162,7 @@ export function loadPlaceCandidateReviewCache(
       || now - (value.savedAt as number) > CACHE_TTL_MS
       || (value.savedAt as number) > now + 60_000
       || !provider(value.provider) || !record(value.staged) || !record(value.searches)) {
-      globalThis.localStorage?.removeItem(key(archiveId));
+      window.localStorage?.removeItem(key(archiveId));
       return null;
     }
     const allowed = new Set(pendingIds);
@@ -222,7 +222,7 @@ export function savePlaceCandidateReviewCache(
   now = Date.now(),
 ): void {
   try {
-    globalThis.localStorage?.setItem(key(cache.archiveId), JSON.stringify({
+    window.localStorage?.setItem(key(cache.archiveId), JSON.stringify({
       ...cache,
       version: 1,
       savedAt: now,
@@ -234,7 +234,7 @@ export function savePlaceCandidateReviewCache(
 
 export function clearPlaceCandidateReviewCache(archiveId: string): void {
   try {
-    globalThis.localStorage?.removeItem(key(archiveId));
+    window.localStorage?.removeItem(key(archiveId));
   } catch {
     // Best-effort cleanup only.
   }

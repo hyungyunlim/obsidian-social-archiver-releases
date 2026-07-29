@@ -140,7 +140,7 @@ export class ArchivePlaceLocalPanel {
       const button = panel.createEl('button', { cls: 'sa-place-picker-result' });
       button.type = 'button';
       button.createEl('strong', { text: place.name, cls: 'sa-place-picker-result-name' });
-      button.createEl('span', {
+      button.createSpan({
         text: [place.provider, place.category, place.address].filter(Boolean).join(' · '),
         cls: 'sa-place-picker-result-meta',
       });
@@ -150,7 +150,7 @@ export class ArchivePlaceLocalPanel {
         button.disabled = true;
         button.addClass('is-added');
         button.setAttribute('aria-disabled', 'true');
-        button.createEl('span', { text: '✓ added', cls: 'sa-place-picker-result-added' });
+        button.createSpan({ text: '✓ added', cls: 'sa-place-picker-result-added' });
         continue;
       }
       button.addEventListener('click', () => void this.attachExisting(place, button));
@@ -219,9 +219,9 @@ export class ArchivePlaceLocalPanel {
   }
 
   private showMetadataAttachedNotice(location: ArchiveLocation): void {
-    const content = document.createDocumentFragment();
+    const content = createFragment();
     content.append(`Added ${location.name} as metadata only. `);
-    const promote = document.createElement('button');
+    const promote = createEl('button');
     promote.type = 'button';
     promote.textContent = 'Get details';
     promote.addEventListener('click', () => void this.promote(location.id, promote));

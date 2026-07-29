@@ -208,7 +208,7 @@ export class PreviewableContentRenderer {
     if (isLongContent) {
       await this.renderMarkdownOrText(contentText, previewContent);
 
-      const seeMoreBtn = activeDocument.createElement('span');
+      const seeMoreBtn = activeWindow.createSpan();
       seeMoreBtn.textContent = 'See more...';
       seeMoreBtn.className = 'pcr-see-more-btn';
       contentContainer.appendChild(seeMoreBtn);
@@ -291,7 +291,7 @@ export class PreviewableContentRenderer {
     if (isLongContent) {
       await this.renderMarkdownOrText(contentText, previewMarkdown);
 
-      const seeMoreBtn = activeDocument.createElement('span');
+      const seeMoreBtn = activeWindow.createSpan();
       seeMoreBtn.textContent = 'See more...';
       seeMoreBtn.className = 'pcr-see-more-btn';
       contentContainer.appendChild(seeMoreBtn);
@@ -372,7 +372,7 @@ export class PreviewableContentRenderer {
 
     const metadataBar = this.makeDiv(container, 'podcast-metadata-bar pcr-podcast-metadata');
     for (const item of items) {
-      const span = activeDocument.createElement('span');
+      const span = activeWindow.createSpan();
       span.textContent = item;
       span.className = 'pcr-podcast-metadata-item';
       metadataBar.appendChild(span);
@@ -401,7 +401,7 @@ export class PreviewableContentRenderer {
       if (part.startsWith('#') && part.length > 1) {
         if (this.context.onHashtagClick) {
           // Build a clickable hashtag anchor that dispatches the callback.
-          const link = activeDocument.createElement('a');
+          const link = activeWindow.createEl('a');
           link.textContent = part;
           link.className = 'pcr-hashtag-link';
           link.setAttribute(
@@ -420,7 +420,7 @@ export class PreviewableContentRenderer {
           container.appendChild(link);
         } else {
           // No click target — render as a passive highlight span.
-          const span = activeDocument.createElement('span');
+          const span = activeWindow.createSpan();
           span.textContent = part;
           span.className = 'pcr-hashtag-span';
           container.appendChild(span);
@@ -525,7 +525,7 @@ export class PreviewableContentRenderer {
               textLastIndex = placeholderPattern.lastIndex;
               continue;
             }
-            const wikiLink = activeDocument.createElement('a');
+            const wikiLink = activeWindow.createEl('a');
             wikiLink.textContent = wikiData.displayText;
             wikiLink.className = 'internal-link pcr-wiki-link';
             wikiLink.setAttribute('href', wikiData.notePath);
@@ -541,7 +541,7 @@ export class PreviewableContentRenderer {
               textLastIndex = placeholderPattern.lastIndex;
               continue;
             }
-            const link = activeDocument.createElement('a');
+            const link = activeWindow.createEl('a');
             link.textContent = linkData.text;
             link.className = 'pcr-ext-link';
             link.setAttribute('href', linkData.url);
@@ -560,7 +560,7 @@ export class PreviewableContentRenderer {
           );
         }
       } else if (seg.type === 'url' && seg.url) {
-        const link = activeDocument.createElement('a');
+        const link = activeWindow.createEl('a');
         link.textContent = seg.content;
         link.className = 'pcr-ext-link';
         link.setAttribute('href', seg.url);
@@ -583,7 +583,7 @@ export class PreviewableContentRenderer {
       'archive-progress-banner pcr-suggestion-banner pcr-suggestion-banner-filled',
     );
     this.makeDiv(banner, 'pcr-spinner');
-    const message = activeDocument.createElement('span');
+    const message = activeWindow.createSpan();
     message.textContent = 'Archiving in background...';
     message.className = 'pcr-banner-message';
     banner.appendChild(message);
@@ -614,7 +614,7 @@ export class PreviewableContentRenderer {
       messageText = kind;
     }
 
-    const message = activeDocument.createElement('span');
+    const message = activeWindow.createSpan();
     message.textContent = messageText;
     message.className = 'pcr-banner-message';
     banner.appendChild(message);
@@ -647,7 +647,7 @@ export class PreviewableContentRenderer {
       `archive-suggestion-banner pcr-suggestion-banner${filledClass}`,
     );
 
-    const message = activeDocument.createElement('span');
+    const message = activeWindow.createSpan();
     message.className = 'pcr-banner-message';
     message.textContent = opts.message ?? 'Archive this post?';
     banner.appendChild(message);
@@ -655,7 +655,7 @@ export class PreviewableContentRenderer {
     const buttonSection = this.makeDiv(banner, 'pcr-banner-buttons');
 
     if (opts.onDecline) {
-      const noButton = activeDocument.createElement('button');
+      const noButton = activeWindow.createEl('button');
       noButton.className = 'pcr-icon-btn pcr-icon-btn-cancel';
       noButton.setAttribute('aria-label', 'Decline archiving');
       noButton.setAttribute('title', opts.declineLabel ?? 'No');
@@ -666,7 +666,7 @@ export class PreviewableContentRenderer {
     }
 
     if (opts.onAccept) {
-      const yesButton = activeDocument.createElement('button');
+      const yesButton = activeWindow.createEl('button');
       yesButton.className = 'pcr-icon-btn pcr-icon-btn-accent';
       yesButton.setAttribute('aria-label', 'Archive this post');
       yesButton.setAttribute('title', opts.acceptLabel ?? 'Yes');
@@ -727,7 +727,7 @@ export class PreviewableContentRenderer {
       const summaryRow = this.makeDiv(hoursSection, 'pcr-gmaps-hours-summary');
       const clockIconWrapper = this.makeDiv(summaryRow, 'pcr-gmaps-address-icon');
       clockIconWrapper.textContent = '⏰';
-      const summarySpan = activeDocument.createElement('span');
+      const summarySpan = activeWindow.createSpan();
       summarySpan.className = 'pcr-gmaps-hours-text';
       summarySpan.textContent = formattedHours.summary;
       summaryRow.appendChild(summarySpan);
@@ -741,10 +741,10 @@ export class PreviewableContentRenderer {
             color: 'var(--interactive-accent)',
           });
         }
-        const daySpan = activeDocument.createElement('span');
+        const daySpan = activeWindow.createSpan();
         daySpan.textContent = day;
         dayRow.appendChild(daySpan);
-        const hoursSpan = activeDocument.createElement('span');
+        const hoursSpan = activeWindow.createSpan();
         hoursSpan.textContent = hours;
         if (hours.toLowerCase() === 'closed') {
           hoursSpan.classList.add('pcr-gmaps-closed');
@@ -773,7 +773,7 @@ export class PreviewableContentRenderer {
       const websiteIconWrapper = this.makeDiv(websiteRow, 'pcr-gmaps-website-icon');
       websiteIconWrapper.textContent = '🌐';
 
-      const websiteSpan = activeDocument.createElement('span');
+      const websiteSpan = activeWindow.createSpan();
       websiteSpan.className = 'pcr-gmaps-website-text';
       websiteSpan.textContent = data.website
         .replace(/^https?:\/\//, '')
@@ -833,12 +833,12 @@ export class PreviewableContentRenderer {
     const paragraphs = source.split(/\n{2,}/);
     for (const paragraph of paragraphs) {
       if (!paragraph) continue;
-      const p = activeDocument.createElement('p');
+      const p = activeWindow.createEl('p');
       const lines = paragraph.split('\n');
       lines.forEach((line, idx) => {
         this.appendInlineRich(p, line);
         if (idx < lines.length - 1) {
-          p.appendChild(activeDocument.createElement('br'));
+          p.appendChild(activeWindow.createEl('br'));
         }
       });
       target.appendChild(p);
@@ -863,12 +863,12 @@ export class PreviewableContentRenderer {
     for (const part of parts) {
       if (!part) continue;
       if (part.startsWith('#') && part.length > 1) {
-        const span = activeDocument.createElement('span');
+        const span = activeWindow.createSpan();
         span.textContent = part;
         span.className = 'pcr-hashtag-span';
         parent.appendChild(span);
       } else if (part.startsWith('@') && part.length > 1) {
-        const span = activeDocument.createElement('span');
+        const span = activeWindow.createSpan();
         span.textContent = part;
         span.className = 'pcr-mention-span';
         parent.appendChild(span);
@@ -1131,7 +1131,7 @@ export class PreviewableContentRenderer {
   // ---------------------------------------------------------------------------
 
   private makeDiv(parent: HTMLElement, className: string): HTMLDivElement {
-    const div = activeDocument.createElement('div');
+    const div = activeWindow.createDiv();
     div.className = className;
     parent.appendChild(div);
     return div;

@@ -87,7 +87,7 @@ export class ReleaseNotesModal extends Modal {
     // QR code block (if provided) — insert after the first section (before second h2)
     if (this.releaseNote.qrCode) {
       const { svgBase64, url, label } = this.releaseNote.qrCode;
-      const qrContainer = activeDocument.createElement('div');
+      const qrContainer = activeWindow.createDiv();
       qrContainer.className = 'sa-release-notes-qr rnm-qr-container';
 
       const qrImg = qrContainer.createEl('img', {
@@ -171,7 +171,7 @@ export class ReleaseNotesModal extends Modal {
       const src = iframe.getAttribute('src') || '';
       const videoId = src.match(/embed\/([^?]+)/)?.[1];
       if (videoId) {
-        const link = activeDocument.createElement('a');
+        const link = activeWindow.createEl('a');
         link.href = `https://www.youtube.com/watch?v=${videoId}`;
         link.textContent = `Watch on YouTube`;
         link.className = 'external-link';
@@ -184,7 +184,7 @@ export class ReleaseNotesModal extends Modal {
     const externalEmbeds = container.querySelectorAll('.external-embed[src*="youtube"]');
     externalEmbeds.forEach((embed) => {
       const src = embed.getAttribute('src') || '';
-      const link = activeDocument.createElement('a');
+      const link = activeWindow.createEl('a');
       link.href = src;
       link.textContent = `Watch on YouTube`;
       link.className = 'external-link';

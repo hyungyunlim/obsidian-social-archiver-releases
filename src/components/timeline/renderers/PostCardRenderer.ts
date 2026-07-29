@@ -1,4 +1,4 @@
-import { setIcon, Notice, Scope, TFile, TFolder, MarkdownRenderer, Component, Modal, Menu, Platform as ObsidianPlatform, requestUrl, type Vault, type App } from 'obsidian';
+import { setIcon, getLanguage, Notice, Scope, TFile, TFolder, MarkdownRenderer, Component, Modal, Menu, Platform as ObsidianPlatform, requestUrl, type Vault, type App } from 'obsidian';
 import type { PostData, Comment, PostMetadata, Platform } from '../../../types/post';
 import type SocialArchiverPlugin from '../../../main';
 import * as L from 'leaflet';
@@ -34,6 +34,14 @@ import {
   isMapPlaceCardEligible,
   getPlatformName,
 } from '@/shared/platforms';
+import {
+  formatProductPrice,
+  isProductCardEligible,
+  productAvailability,
+  productBrandLabel,
+  productDiscountPercent,
+  productShopLabel,
+} from '@/shared/platforms/products';
 import { isSupportedPlatformUrl, validateAndDetectPlatform, isPinterestBoardUrl } from '../../../schemas/platforms';
 import { resolvePinterestUrl } from '../../../utils/pinterest';
 import { AICommentBanner, type AICommentBannerActionId, type AICommentBannerOptions } from './AICommentBanner';
@@ -769,7 +777,9 @@ export class PostCardRenderer extends Component {
       return rootElement;
     }
 
-    if (isMapPlaceCardEligible(post.platform)) {
+    if (isProductCardEligible(post.metadata)) {
+      this.renderProductCard(contentArea, post);
+    } else if (isMapPlaceCardEligible(post.platform)) {
       this.renderGoogleMapsHeader(contentArea, post);
       this.renderGoogleMapsBusinessInfo(contentArea, post);
     } else {
@@ -1613,7 +1623,7 @@ export class PostCardRenderer extends Component {
 
             // Position tooltip relative to viewport using document.body
             const rect = authorName.getBoundingClientRect();
-            const tooltip = activeDocument.createElement('div');
+            const tooltip = activeWindow.createDiv();
             tooltip.addClass('pcr-author-note-tooltip');
             tooltip.textContent = preview;
             tooltip.setCssStyles({
@@ -2503,7 +2513,7 @@ export class PostCardRenderer extends Component {
         this // component for lifecycle management
       );
 
-      const seeMoreBtn = contentContainer.createEl('span', {
+      const seeMoreBtn = contentContainer.createSpan({
         text: 'See more...',
         cls: 'pcr-see-more-btn'
       });
@@ -2752,7 +2762,7 @@ export class PostCardRenderer extends Component {
       // Resolve image paths after rendering
       this.resolveInlineImages(contentText, sourcePath);
 
-      const seeMoreBtn = contentContainer.createEl('span', {
+      const seeMoreBtn = contentContainer.createSpan({
         text: 'See more...',
         cls: 'pcr-see-more-btn'
       });
@@ -2883,7 +2893,7 @@ export class PostCardRenderer extends Component {
 
         if (isVideo) {
           // Create video element for video files
-          const video = activeDocument.createElement('video');
+          const video = activeWindow.createEl('video');
           video.setAttribute('src', resourcePath);
           video.setAttribute('controls', 'true');
           video.setAttribute('preload', 'metadata');
@@ -2891,7 +2901,7 @@ export class PostCardRenderer extends Component {
           span.replaceWith(video);
         } else {
           // Create img element for images
-          const img = activeDocument.createElement('img');
+          const img = activeWindow.createEl('img');
           img.setAttribute('src', resourcePath);
           img.setAttribute('alt', src);
           span.replaceWith(img);
@@ -2916,7 +2926,7 @@ export class PostCardRenderer extends Component {
         const resourcePath = this.app.vault.getResourcePath(linkedFile);
         const isVideo = /\.(mp4|mov|webm|avi|mkv|m4v)$/i.test(linkedFile.path);
         if (isVideo) {
-          const video = activeDocument.createElement('video');
+          const video = activeWindow.createEl('video');
           video.setAttribute('src', resourcePath);
           video.setAttribute('controls', 'true');
           video.setAttribute('preload', 'metadata');
@@ -3068,17 +3078,17 @@ export class PostCardRenderer extends Component {
    * Create an inline media gallery similar to the card media carousel.
    */
   private createInlineImageGallery(mediaItems: HTMLElement[]): HTMLElement {
-    const gallery = activeDocument.createElement('div');
+    const gallery = activeWindow.createDiv();
     gallery.className = 'inline-image-gallery pcr-gallery';
 
     const count = mediaItems.length;
 
     // Main display area
-    const mainDisplay = activeDocument.createElement('div');
+    const mainDisplay = activeWindow.createDiv();
     mainDisplay.className = 'gallery-main-display pcr-gallery-main';
 
     // Create main image container
-    const mainImageContainer = activeDocument.createElement('div');
+    const mainImageContainer = activeWindow.createDiv();
     mainImageContainer.className = 'pcr-gallery-main-container';
 
     const firstMedia = mediaItems[0];
@@ -3094,17 +3104,17 @@ export class PostCardRenderer extends Component {
 
     // Add counter badge if more than 1 image
     if (count > 1) {
-      const counter = activeDocument.createElement('div');
+      const counter = activeWindow.createDiv();
       counter.className = 'gallery-counter pcr-gallery-counter';
       counter.textContent = `1/${count}`;
       mainDisplay.appendChild(counter);
 
       // Navigation arrows (hover handled by CSS .pcr-gallery-main:hover .pcr-gallery-nav)
-      const prevBtn = activeDocument.createElement('button');
+      const prevBtn = activeWindow.createEl('button');
       prevBtn.className = 'gallery-nav gallery-prev pcr-gallery-nav pcr-gallery-nav-prev';
       prevBtn.textContent = '‹';
 
-      const nextBtn = activeDocument.createElement('button');
+      const nextBtn = activeWindow.createEl('button');
       nextBtn.className = 'gallery-nav gallery-next pcr-gallery-nav pcr-gallery-nav-next';
       nextBtn.textContent = '›';
 
@@ -3178,11 +3188,11 @@ export class PostCardRenderer extends Component {
 
     // Thumbnail strip for 3+ images
     if (count >= 3) {
-      const thumbnailStrip = activeDocument.createElement('div');
+      const thumbnailStrip = activeWindow.createDiv();
       thumbnailStrip.className = 'gallery-thumbnails pcr-gallery-thumbnails';
 
       mediaItems.forEach((media, index) => {
-        const thumb = activeDocument.createElement('div');
+        const thumb = activeWindow.createDiv();
         thumb.className = index === 0 ? 'pcr-gallery-thumb pcr-gallery-thumb-active' : 'pcr-gallery-thumb pcr-gallery-thumb-inactive';
 
         const thumbImg = media.cloneNode(true) as HTMLElement;
@@ -3259,33 +3269,33 @@ export class PostCardRenderer extends Component {
    * Open image lightbox for full-screen viewing
    */
   private openImageLightbox(imageSrcs: string[], startIndex: number): void {
-    const overlay = activeDocument.createElement('div');
+    const overlay = activeWindow.createDiv();
     overlay.className = 'image-lightbox-overlay pcr-lightbox-overlay';
 
     let currentIndex = startIndex;
     const count = imageSrcs.length;
 
-    const imgContainer = activeDocument.createElement('div');
+    const imgContainer = activeWindow.createDiv();
     imgContainer.className = 'pcr-lightbox-container';
 
-    const img = activeDocument.createElement('img');
+    const img = activeWindow.createEl('img');
     img.src = imageSrcs[currentIndex] ?? '';
     img.className = 'pcr-lightbox-image';
     imgContainer.appendChild(img);
 
     // Counter
     if (count > 1) {
-      const counter = activeDocument.createElement('div');
+      const counter = activeWindow.createDiv();
       counter.className = 'pcr-lightbox-counter';
       counter.textContent = `${currentIndex + 1} / ${count}`;
       imgContainer.appendChild(counter);
 
       // Navigation
-      const prevBtn = activeDocument.createElement('button');
+      const prevBtn = activeWindow.createEl('button');
       prevBtn.textContent = '‹';
       prevBtn.className = 'pcr-lightbox-nav pcr-lightbox-prev';
 
-      const nextBtn = activeDocument.createElement('button');
+      const nextBtn = activeWindow.createEl('button');
       nextBtn.textContent = '›';
       nextBtn.className = 'pcr-lightbox-nav pcr-lightbox-next';
 
@@ -3311,7 +3321,7 @@ export class PostCardRenderer extends Component {
     }
 
     // Close button
-    const closeBtn = activeDocument.createElement('button');
+    const closeBtn = activeWindow.createEl('button');
     closeBtn.textContent = '×';
     closeBtn.className = 'pcr-lightbox-close';
     closeBtn.addEventListener('click', () => overlay.remove());
@@ -3838,7 +3848,7 @@ export class PostCardRenderer extends Component {
         archiveId,
         currentLocation: post.metadata.location ?? null,
         api: this.plugin.workersApiClient,
-        hostLocale: window.localStorage.getItem('language') || window.navigator.language,
+        hostLocale: getLanguage() || window.navigator.language,
         archiveMapsUrl: url => this.plugin.openArchiveModal(url),
         onChanged: async () => {
           await this.plugin.reconcileArchiveLocation(archiveId);
@@ -5034,12 +5044,12 @@ export class PostCardRenderer extends Component {
           // Format as label: value
         const [label = '', value = ''] = line.split(':');
 
-          lineEl.createEl('span', {
+          lineEl.createSpan({
             text: label.trim(),
             cls: 'pcr-confirm-label'
           });
 
-          lineEl.createEl('span', {
+          lineEl.createSpan({
             text: value.trim(),
             cls: 'pcr-confirm-value'
           });
@@ -5805,8 +5815,8 @@ export class PostCardRenderer extends Component {
    * Uses detached DOM elements since caller handles its own UI re-render.
    */
   public async toggleShareForReader(post: PostData): Promise<void> {
-    const tmpEl = activeDocument.createElement('div');
-    const tmpIcon = activeDocument.createElement('div');
+    const tmpEl = activeWindow.createDiv();
+    const tmpIcon = activeWindow.createDiv();
     if (post.shareUrl) {
       await this.unsharePost(post, tmpEl, tmpIcon);
     } else {
@@ -5819,7 +5829,7 @@ export class PostCardRenderer extends Component {
    * Shows confirm dialog and deletes files, but skips card animation.
    */
   public async deletePostForReader(post: PostData): Promise<boolean> {
-    const tmpEl = activeDocument.createElement('div');
+    const tmpEl = activeWindow.createDiv();
     return this.deletePost(post, tmpEl, { skipAnimation: true });
   }
 
@@ -5828,7 +5838,7 @@ export class PostCardRenderer extends Component {
    * Skips per-post confirmation and success notices; callers should confirm once up front.
    */
   public async deletePostForBulk(post: PostData): Promise<boolean> {
-    const tmpEl = activeDocument.createElement('div');
+    const tmpEl = activeWindow.createDiv();
     return this.deletePost(post, tmpEl, {
       skipConfirm: true,
       skipAnimation: true,
@@ -6070,7 +6080,7 @@ export class PostCardRenderer extends Component {
           });
         } else {
           // Just highlight without link
-          container.createEl('span', { text: part, cls: 'pcr-hashtag-span' });
+          container.createSpan({ text: part, cls: 'pcr-hashtag-span' });
         }
       } else {
         // Regular text
@@ -7211,8 +7221,8 @@ export class PostCardRenderer extends Component {
 
       return new Promise((resolve) => {
         const mediaElement = isVideo
-          ? activeDocument.createElement('video')
-          : activeDocument.createElement('audio');
+          ? activeWindow.createEl('video')
+          : activeWindow.createEl('audio');
 
         mediaElement.preload = 'metadata';
         mediaElement.src = resourcePath;
@@ -7289,7 +7299,7 @@ export class PostCardRenderer extends Component {
 
       // Helper to adjust select width based on selected text
       const adjustSelectWidth = () => {
-        const tempSpan = activeDocument.createElement('span');
+        const tempSpan = activeWindow.createSpan();
         tempSpan.addClass('pcr-model-select-measure');
         tempSpan.textContent = modelSelect.value;
         activeDocument.body.appendChild(tempSpan);
@@ -9252,6 +9262,151 @@ export class PostCardRenderer extends Component {
   }
 
   /**
+   * Commerce product card (Product PRD §5.6) — replaces the generic
+   * author header + body for grade A commerce archives, the way the map-place
+   * card does for places. The product name is the single title source.
+   *
+   * Every field renders conditionally on purpose. Measured stores disagree
+   * sharply about what they expose — Wix emits a Product node with no price at
+   * all, Cafe24 has a rating but no availability, WooCommerce may only expose
+   * an OpenGraph price — so a card carrying just a name and a store is a
+   * normal state, not a degraded one. Never substitute a placeholder.
+   */
+  private renderProductCard(container: HTMLElement, post: PostData): void {
+    const product = post.metadata.product;
+    if (!product) return;
+
+    // The plugin has no i18n layer, so digit grouping follows the host's
+    // locale — the same thing TimelineContainer does for date headers.
+    const locale = typeof navigator !== 'undefined' ? navigator.language : 'en';
+    const url = post.url;
+    const price = formatProductPrice(product, locale);
+    const listPrice = product.listPrice != null && product.currency
+      ? formatProductPrice({ ...product, price: product.listPrice, priceIsFrom: false }, locale)
+      : null;
+    const discount = productDiscountPercent(product);
+    const availability = productAvailability(product);
+    const soldOut = availability === 'OutOfStock';
+
+    const card = container.createDiv({ cls: 'pcr-product-card' });
+
+    if (product.image) {
+      const imageLink = card.createEl('a', {
+        cls: 'pcr-product-image',
+        href: url,
+        attr: { target: '_blank', rel: 'noopener noreferrer' },
+      });
+      imageLink.createEl('img', {
+        attr: { src: product.image, alt: product.name, loading: 'lazy', decoding: 'async' },
+      });
+    }
+
+    const body = card.createDiv({ cls: 'pcr-product-body' });
+
+    // The shop, not the brand: this is the topmost label, so whatever sits
+    // here reads as the store. See productShopLabel.
+    const shopLabel = productShopLabel(product);
+    if (shopLabel) {
+      body.createDiv({ cls: 'pcr-product-brand', text: shopLabel });
+    }
+
+    // Product names arrive in every script, including RTL — let the browser
+    // resolve direction rather than inheriting the note's.
+    const nameEl = body.createEl('a', {
+      cls: 'pcr-product-name',
+      text: product.name,
+      href: url,
+      attr: { target: '_blank', rel: 'noopener noreferrer', dir: 'auto' },
+    });
+    if (ObsidianPlatform.isMobile) {
+      nameEl.setCssStyles({ fontSize: '15px' });
+    }
+
+    if (price) {
+      const priceRow = body.createDiv({ cls: 'pcr-product-price-row' });
+      const priceEl = priceRow.createSpan({ cls: 'pcr-product-price', text: price });
+      if (soldOut) priceEl.addClass('is-sold-out');
+      if (listPrice && discount) {
+        priceRow.createSpan({ cls: 'pcr-product-list-price', text: listPrice });
+        priceRow.createSpan({ cls: 'pcr-product-discount', text: `-${discount}%` });
+      }
+    }
+
+    // Fallback for archives captured before product photos went into media[] —
+    // their only renderer was this strip. Filtered against the archive's own
+    // media so a current archive shows each picture once, in the gallery.
+    // Whole-archive test, not per-URL: an archive with media shows its photos
+    // in the gallery where they can be opened.
+    const unarchivedImages = (post.media?.length ?? 0) > 0
+      ? []
+      : (product.images ?? []).filter((url) => url !== product.image);
+    if (unarchivedImages.length > 0) {
+      const gallery = body.createDiv({ cls: 'pcr-product-gallery' });
+      for (const extra of unarchivedImages.slice(0, 6)) {
+        gallery.createEl('img', { attr: { src: extra, alt: '', loading: 'lazy', decoding: 'async' } });
+      }
+    }
+
+    if (product.description) {
+      // Often the only prose a product page yields: the extracted body is
+      // usually accordion labels, not the actual copy.
+      body.createDiv({ cls: 'pcr-product-description', text: product.description });
+    }
+
+    const meta = body.createDiv({ cls: 'pcr-product-meta' });
+
+    if (availability) {
+      const badge = meta.createSpan({
+        cls: 'pcr-product-badge',
+        text: soldOut
+          ? 'Sold out'
+          : availability === 'PreOrder'
+            ? 'Pre-order'
+            : 'In stock',
+      });
+      if (soldOut) badge.addClass('is-sold-out');
+    }
+
+    if (product.rating) {
+      const rating = meta.createSpan({ cls: 'pcr-product-rating' });
+      const starWrapper = rating.createSpan({ cls: 'pcr-product-rating-icon' });
+      setIcon(starWrapper, 'star');
+      rating.createSpan({
+        text: product.rating.count
+          ? `${product.rating.value} (${product.rating.count})`
+          : `${product.rating.value}`,
+      });
+    }
+
+    const brandLabel = productBrandLabel(product);
+    if (brandLabel) {
+      meta.createSpan({ cls: 'pcr-product-seller', text: brandLabel, attr: { dir: 'auto' } });
+    }
+
+    const store = post.metadata.productSource;
+    if (store) {
+      const footer = body.createDiv({ cls: 'pcr-product-footer' });
+      footer.createEl('a', {
+        cls: 'pcr-product-store',
+        text: store,
+        href: url,
+        attr: { target: '_blank', rel: 'noopener noreferrer' },
+      });
+      // The price is a snapshot, not a live quote — commerce archives go stale
+      // far faster than social ones, so say when it was taken.
+      if (product.observedAt && price) {
+        const observed = new Date(product.observedAt);
+        if (!Number.isNaN(observed.getTime())) {
+          footer.createSpan({
+            cls: 'pcr-product-observed',
+            text: `as of ${observed.toLocaleDateString(locale)}`,
+          });
+        }
+      }
+    }
+  }
+
+  /**
    * Create an action button for Google Maps card with Lucide icon
    */
   private createGmapsActionButton(container: HTMLElement, iconName: string, label: string, url: string): HTMLElement {
@@ -9335,7 +9490,7 @@ export class PostCardRenderer extends Component {
         }).addTo(map);
 
         // Custom attribution - top left corner (z-index low to stay below filter panels)
-        const attr = activeDocument.createElement('div');
+        const attr = activeWindow.createDiv();
         attr.addClass('pcr-gmaps-map-attr');
         attr.textContent = '© ';
         const link = attr.createEl('a', { text: 'OSM' });
@@ -9687,7 +9842,7 @@ export class PostCardRenderer extends Component {
     }
 
     const currentLocations = await apiClient.getArchiveLocations(archiveId).catch(() => []);
-    const hostLocale = window.localStorage.getItem('language') || window.navigator.language;
+    const hostLocale = getLanguage() || window.navigator.language;
     const modal = new PlaceCandidateModal(this.app, {
       archiveId,
       hostLocale,

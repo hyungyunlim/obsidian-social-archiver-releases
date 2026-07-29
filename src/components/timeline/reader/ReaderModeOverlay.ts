@@ -165,13 +165,13 @@ export class ReaderModeOverlay {
     activeDocument.body.addClass('sa-reader-mode-active', 'reader-mode-active');
 
     // Create backdrop
-    this.backdrop = activeDocument.createElement('div');
+    this.backdrop = activeWindow.createDiv();
     this.backdrop.className = 'sa-reader-mode-backdrop';
     this.backdrop.addEventListener('click', () => this.close());
     activeDocument.body.appendChild(this.backdrop);
 
     // Create container
-    this.container = activeDocument.createElement('div');
+    this.container = activeWindow.createDiv();
     this.container.className = 'sa-reader-mode-container';
     activeDocument.body.appendChild(this.container);
     this.setupSafeAreaFallback();
@@ -1417,7 +1417,7 @@ export class ReaderModeOverlay {
     const filePath = post.filePath;
 
     // Backdrop
-    const overlay = activeDocument.createElement('div');
+    const overlay = activeWindow.createDiv();
     overlay.addClass('sa-fixed');
     overlay.addClass('sa-inset-0');
     overlay.addClass('sa-z-1001');
@@ -1426,7 +1426,7 @@ export class ReaderModeOverlay {
     overlay.addClass('sa-dynamic-bg');
 
     // Modal container
-    const modal = activeDocument.createElement('div');
+    const modal = activeWindow.createDiv();
     modal.addClass('sa-bg-primary');
     modal.addClass('sa-border');
     modal.addClass('sa-rounded-12');
@@ -1434,25 +1434,25 @@ export class ReaderModeOverlay {
     modal.addClass('rmo-note-modal');
 
     // Header
-    const header = activeDocument.createElement('div');
+    const header = activeWindow.createDiv();
     header.addClass('sa-flex-between');
     header.addClass('sa-px-16');
     header.addClass('sa-border-b');
     header.addClass('rmo-note-header');
 
-    const title = activeDocument.createElement('div');
+    const title = activeWindow.createDiv();
     title.addClass('sa-font-semibold');
     title.addClass('sa-text-md');
     title.addClass('sa-flex-row');
     title.addClass('sa-gap-6');
-    const titleIcon = activeDocument.createElement('span');
+    const titleIcon = activeWindow.createSpan();
     titleIcon.addClass('sa-icon-16');
     setIcon(titleIcon, 'message-square-text');
     title.appendChild(titleIcon);
     title.appendChild(activeDocument.createTextNode(post.comment ? 'Edit Note' : 'Add Note'));
     header.appendChild(title);
 
-    const closeBtn = activeDocument.createElement('div');
+    const closeBtn = activeWindow.createDiv();
     closeBtn.addClass('sa-clickable');
     closeBtn.addClass('sa-icon-24');
     closeBtn.addClass('sa-rounded-4');
@@ -1469,12 +1469,12 @@ export class ReaderModeOverlay {
     header.appendChild(closeBtn);
 
     // Textarea
-    const body = activeDocument.createElement('div');
+    const body = activeWindow.createDiv();
     body.addClass('sa-p-12');
     body.addClass('sa-flex-1');
     body.addClass('rmo-note-body');
 
-    const textarea = activeDocument.createElement('textarea');
+    const textarea = activeWindow.createEl('textarea');
     textarea.value = post.comment || '';
     textarea.placeholder = 'Write a personal note about this post...';
     textarea.addClass('sa-w-full');
@@ -1488,24 +1488,24 @@ export class ReaderModeOverlay {
     const detachTextareaAutosize = attachAutosizingTextarea(textarea);
 
     // Footer
-    const footer = activeDocument.createElement('div');
+    const footer = activeWindow.createDiv();
     footer.addClass('sa-flex-between');
     footer.addClass('sa-px-16');
     footer.addClass('rmo-note-footer');
 
-    const hint = activeDocument.createElement('span');
+    const hint = activeWindow.createSpan();
     hint.addClass('sa-text-xs');
     hint.addClass('sa-text-muted');
     hint.textContent = 'Cmd/Ctrl+Enter to save';
     footer.appendChild(hint);
 
-    const btnGroup = activeDocument.createElement('div');
+    const btnGroup = activeWindow.createDiv();
     btnGroup.addClass('sa-flex');
     btnGroup.addClass('sa-gap-8');
 
     // Delete button (only if comment exists)
     if (post.comment) {
-      const deleteBtn = activeDocument.createElement('button');
+      const deleteBtn = activeWindow.createEl('button');
       deleteBtn.textContent = 'Delete';
       deleteBtn.addClass('sa-px-12');
       deleteBtn.addClass('sa-py-6');
@@ -1520,7 +1520,7 @@ export class ReaderModeOverlay {
       btnGroup.appendChild(deleteBtn);
     }
 
-    const cancelBtn = activeDocument.createElement('button');
+    const cancelBtn = activeWindow.createEl('button');
     cancelBtn.textContent = 'Cancel';
     cancelBtn.addClass('sa-px-12');
     cancelBtn.addClass('sa-py-6');
@@ -1532,7 +1532,7 @@ export class ReaderModeOverlay {
     cancelBtn.addClass('sa-text-normal');
     cancelBtn.addClass('rmo-note-btn');
 
-    const saveBtn = activeDocument.createElement('button');
+    const saveBtn = activeWindow.createEl('button');
     saveBtn.textContent = 'Save';
     saveBtn.addClass('sa-px-12');
     saveBtn.addClass('sa-py-6');

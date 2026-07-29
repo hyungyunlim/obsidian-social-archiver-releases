@@ -88,3 +88,5 @@ export {
   getPlatformMaxMediaSize,
   getPlatformRateLimit,
 } from './detection';
+
+export * from './client-commerce';

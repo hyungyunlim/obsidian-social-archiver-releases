@@ -969,7 +969,7 @@ export class SeriesCardRenderer extends Component {
     messageDiv.addClass('sa-flex-col', 'sa-flex-center', 'sa-gap-12', 'sa-p-20', 'sa-bg-secondary', 'sa-rounded-8', 'sa-text-muted', 'sa-text-center', 'scr-offline-message');
 
     const icon = messageDiv.createDiv();
-    const svg = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const svg = activeWindow.createSvg('svg');
     svg.setAttribute('width', '32');
     svg.setAttribute('height', '32');
     svg.setAttribute('viewBox', '0 0 24 24');
@@ -979,34 +979,34 @@ export class SeriesCardRenderer extends Component {
     svg.setAttribute('stroke-linecap', 'round');
     svg.setAttribute('stroke-linejoin', 'round');
 
-    const line1 = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'line');
+    const line1 = activeWindow.createSvg('line');
     line1.setAttribute('x1', '1');
     line1.setAttribute('y1', '1');
     line1.setAttribute('x2', '23');
     line1.setAttribute('y2', '23');
     svg.appendChild(line1);
 
-    const path1 = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const path1 = activeWindow.createSvg('path');
     path1.setAttribute('d', 'M16.72 11.06A10.94 10.94 0 0 1 19 12.55');
     svg.appendChild(path1);
 
-    const path2 = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const path2 = activeWindow.createSvg('path');
     path2.setAttribute('d', 'M5 12.55a10.94 10.94 0 0 1 5.17-2.39');
     svg.appendChild(path2);
 
-    const path3 = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const path3 = activeWindow.createSvg('path');
     path3.setAttribute('d', 'M10.71 5.05A16 16 0 0 1 22.58 9');
     svg.appendChild(path3);
 
-    const path4 = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const path4 = activeWindow.createSvg('path');
     path4.setAttribute('d', 'M1.42 9a15.91 15.91 0 0 1 4.7-2.88');
     svg.appendChild(path4);
 
-    const path5 = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const path5 = activeWindow.createSvg('path');
     path5.setAttribute('d', 'M8.53 16.11a6 6 0 0 1 6.95 0');
     svg.appendChild(path5);
 
-    const line2 = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'line');
+    const line2 = activeWindow.createSvg('line');
     line2.setAttribute('x1', '12');
     line2.setAttribute('y1', '20');
     line2.setAttribute('x2', '12.01');
@@ -1638,13 +1638,13 @@ export class SeriesCardRenderer extends Component {
     header.addClass('scr-header');
 
     // Row 1: [icon] [title] [badge] ----spacer---- [controls]
-    const row1 = activeDocument.createElement('div');
+    const row1 = activeWindow.createDiv();
     row1.className = 'series-header-row1';
     row1.addClass('scr-header-row');
     header.appendChild(row1);
 
     // Platform icon (left)
-    const platformIcon = activeDocument.createElement('div');
+    const platformIcon = activeWindow.createDiv();
     platformIcon.className = 'series-platform-icon';
     platformIcon.addClass('scr-platform-icon');
     const icon = getPlatformSimpleIcon(series.platform);
@@ -1658,7 +1658,7 @@ export class SeriesCardRenderer extends Component {
     row1.appendChild(platformIcon);
 
     // Title (clickable)
-    const titleEl = activeDocument.createElement('span');
+    const titleEl = activeWindow.createSpan();
     titleEl.className = 'series-title';
     titleEl.textContent = series.seriesTitle;
     titleEl.addClass('scr-title');
@@ -1681,13 +1681,13 @@ export class SeriesCardRenderer extends Component {
     // Note: Unread badge removed - read status shown via subtle episode styling instead
 
     // Spacer to push controls to the right
-    const spacer = activeDocument.createElement('div');
+    const spacer = activeWindow.createDiv();
     spacer.addClass('scr-spacer');
     row1.appendChild(spacer);
 
     // Controls section (right side, fixed at the end)
     const isMobile = window.innerWidth <= 768 || 'ontouchstart' in window;
-    const controlsSection = activeDocument.createElement('div');
+    const controlsSection = activeWindow.createDiv();
     controlsSection.className = 'series-controls';
     controlsSection.addClass('scr-controls', isMobile ? 'scr-controls--mobile' : 'scr-controls--desktop');
     row1.appendChild(controlsSection);
@@ -1795,7 +1795,7 @@ export class SeriesCardRenderer extends Component {
     this.fullscreenNextSibling = card.nextSibling;
 
     // Create backdrop first (lower z-index)
-    const backdrop = activeDocument.createElement('div');
+    const backdrop = activeWindow.createDiv();
     backdrop.className = 'sa-series-fullscreen-backdrop';
     backdrop.addEventListener('click', () => this.exitFullscreen(series));
     activeDocument.body.appendChild(backdrop);
@@ -2473,7 +2473,7 @@ export class SeriesCardRenderer extends Component {
     }
 
     // Label (will be updated with count)
-    const label = toggleHeader.createEl('span', { cls: 'comments-list-label' });
+    const label = toggleHeader.createSpan({ cls: 'comments-list-label' });
     label.addClass('sa-text-base', 'sa-font-medium', 'sa-text-muted', 'sa-flex-1');
     label.textContent = 'Best comments';
 
@@ -2839,7 +2839,7 @@ export class SeriesCardRenderer extends Component {
       const row1 = card.querySelector('.series-header-row1');
       if (row1) {
         const subscriptionBadge = row1.querySelector('[title*="subscribe"], [title*="Subscribe"]');
-        badge = activeDocument.createElement('div');
+        badge = activeWindow.createDiv();
         badge.className = 'series-unread-badge';
         badge.addClass('sa-inline-flex', 'sa-rounded-8', 'sa-font-bold', 'sa-flex-shrink-0', 'sa-bg-accent', 'scr-unread-badge');
         badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
@@ -2890,7 +2890,7 @@ export class SeriesCardRenderer extends Component {
 
       if (isRead && !readIndicator) {
         // Add read indicator
-        readIndicator = activeDocument.createElement('span');
+        readIndicator = activeWindow.createSpan();
         readIndicator.className = 'read-indicator';
         readIndicator.addClass('sa-flex-row', 'sa-text-faint', 'sa-flex-shrink-0');
         setIcon(readIndicator, 'eye');
@@ -3054,7 +3054,7 @@ export class SeriesCardRenderer extends Component {
             // Insert after star score (if exists) or at the beginning
             const starScore = metaRow.querySelector('.episode-star-score');
 
-            commentBadge = activeDocument.createElement('span');
+            commentBadge = activeWindow.createSpan();
             commentBadge.className = 'episode-comment-badge';
             commentBadge.addClass('scr-comment-badge');
 
@@ -3175,7 +3175,7 @@ export class SeriesCardRenderer extends Component {
     setIcon(chevron, 'chevron-right');
 
     // Label
-    const label = toggleHeader.createEl('span', { cls: 'episode-list-label' });
+    const label = toggleHeader.createSpan({ cls: 'episode-list-label' });
     label.addClass('sa-text-base', 'sa-font-medium', 'sa-text-muted', 'sa-flex-1');
     label.textContent = `Episodes (${series.episodes.length})`;
 
@@ -3375,10 +3375,10 @@ export class SeriesCardRenderer extends Component {
     // Episode number and title
     const titleRow = content.createDiv({ cls: 'sa-episode-item-title-row' });
 
-    const numEl = titleRow.createEl('span', { cls: 'sa-episode-num' });
+    const numEl = titleRow.createSpan({ cls: 'sa-episode-num' });
     numEl.textContent = `${episode.episode}`;
 
-    const titleEl = titleRow.createEl('span', { cls: 'sa-episode-item-title' });
+    const titleEl = titleRow.createSpan({ cls: 'sa-episode-item-title' });
     titleEl.textContent = episode.title;
 
     // Excerpt
@@ -3758,26 +3758,26 @@ export class SeriesCardRenderer extends Component {
     episode: SeriesEpisode,
     onClose: () => void
   ): HTMLElement {
-    const menu = activeDocument.createElement('div');
+    const menu = activeWindow.createDiv();
     menu.className = 'episode-action-menu';
     menu.addClass('scr-action-menu');
 
     const createMenuItem = (icon: string, label: string, onClick: () => void, isActive?: boolean) => {
-      const item = activeDocument.createElement('div');
+      const item = activeWindow.createDiv();
       item.className = 'episode-action-item';
       item.addClass('scr-action-menu-item');
       if (isActive) {
         item.addClass('scr-action-menu-item--active');
       }
 
-      const iconEl = activeDocument.createElement('span');
+      const iconEl = activeWindow.createSpan();
       iconEl.addClass('scr-action-menu-icon');
       setIcon(iconEl, icon);
       if (isActive) {
         iconEl.addClass('scr-svg-filled');
       }
 
-      const labelEl = activeDocument.createElement('span');
+      const labelEl = activeWindow.createSpan();
       labelEl.textContent = label;
 
       item.appendChild(iconEl);
@@ -4202,7 +4202,7 @@ export class SeriesCardRenderer extends Component {
       this.episodeLists.delete(series.seriesId);
 
       // Create temporary container to render new list
-      const tempContainer = activeDocument.createElement('div');
+      const tempContainer = activeWindow.createDiv();
       const newList = this.renderEpisodeList(tempContainer, series, state);
 
       // Insert at original position

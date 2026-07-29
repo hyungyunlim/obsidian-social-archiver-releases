@@ -196,7 +196,7 @@ export class ArchiveProviderSearchPanel {
       button.createEl('strong', {
         text: getProviderCandidateName(candidate), cls: 'sa-place-picker-result-name',
       });
-      button.createEl('span', {
+      button.createSpan({
         text: getProviderCandidateMetadata(candidate), cls: 'sa-place-picker-result-meta',
       });
       button.addEventListener('click', () => this.options.onSelect(candidate, this.snapshot));

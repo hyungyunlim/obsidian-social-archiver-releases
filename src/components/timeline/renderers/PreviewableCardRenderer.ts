@@ -177,7 +177,7 @@ export class PreviewableCardRenderer {
       overflow: 'hidden',
     });
 
-    const label = activeDocument.createElement('span');
+    const label = activeWindow.createSpan();
     label.textContent = 'Text-only post';
     label.setCssStyles({
       color: 'var(--text-muted)',
@@ -202,7 +202,7 @@ export class PreviewableCardRenderer {
    * (no Obsidian element enrichments) and the Obsidian runtime.
    */
   private makeDiv(parent: HTMLElement, classes?: string): HTMLDivElement {
-    const div = activeDocument.createElement('div');
+    const div = activeWindow.createDiv();
     if (classes) {
       for (const c of classes.split(/\s+/).filter(Boolean)) {
         div.classList.add(c);

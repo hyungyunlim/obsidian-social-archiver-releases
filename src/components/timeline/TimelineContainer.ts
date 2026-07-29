@@ -36,6 +36,7 @@ import { NoticeDetailModal } from '../../modals/NoticeDetailModal';
 import { ClipGuideModal } from '../../modals/ClipGuideModal';
 import type { NoticePayloadV1 } from '../../types/notices';
 import { TagChipBar } from './filters/TagChipBar';
+import { UNTAGGED_FILTER_ID } from '../../types/tag';
 import { ReaderModeOverlay, type ReaderModeContext } from './reader/ReaderModeOverlay';
 import { SeriesGroupingService, type TimelineItem, isSeriesGroup } from '../../services/SeriesGroupingService';
 // SeriesGroup imported for type use only if needed in future
@@ -466,10 +467,11 @@ export class TimelineContainer {
     this.tagChipBar = new TagChipBar((tagName: string | null) => {
       const filterState = this.filterSortManager.getFilterState();
       filterState.selectedTags.clear();
-      if (tagName) {
+      const untaggedOnly = tagName === UNTAGGED_FILTER_ID;
+      if (tagName && !untaggedOnly) {
         filterState.selectedTags.add(tagName);
       }
-      this.filterSortManager.updateFilter({ selectedTags: filterState.selectedTags });
+      this.filterSortManager.updateFilter({ selectedTags: filterState.selectedTags, untaggedOnly });
 
       // Phase 3: Use incremental DOM update
       void this.updatePostsFeedIncremental();
@@ -1363,7 +1365,7 @@ export class TimelineContainer {
     this.removeLoadingBar();
 
     // Create loading bar container
-    this.loadingBarEl = activeDocument.createElement('div');
+    this.loadingBarEl = activeWindow.createDiv();
     this.loadingBarEl.className = 'timeline-inline-loading';
     this.loadingBarEl.addClass('sa-sticky');
     this.loadingBarEl.addClass('sa-top-0');
@@ -1378,7 +1380,7 @@ export class TimelineContainer {
     this.loadingBarEl.addClass('sa-text-muted');
 
     // Spinner
-    const spinner = activeDocument.createElement('div');
+    const spinner = activeWindow.createDiv();
     spinner.className = 'timeline-loading-spinner-small';
     spinner.addClass('sa-icon-16');
     spinner.addClass('sa-rounded-full');
@@ -1386,7 +1388,7 @@ export class TimelineContainer {
     this.loadingBarEl.appendChild(spinner);
 
     // Text
-    const text = activeDocument.createElement('span');
+    const text = activeWindow.createSpan();
     text.textContent = 'Syncing new posts...';
     this.loadingBarEl.appendChild(text);
 
@@ -1474,7 +1476,7 @@ export class TimelineContainer {
       const archiveBtn = buttonContainer.createEl('button', {
         cls: 'px-4 py-2 rounded border border-[var(--background-modifier-border)] text-[var(--text-normal)] hover:border-[var(--text-muted)] hover:bg-[var(--background-modifier-hover)] transition-colors cursor-pointer'
       });
-      archiveBtn.createEl('span', { text: 'Archive a post' });
+      archiveBtn.createSpan({ text: 'Archive a post' });
       archiveBtn.addEventListener('click', () => {
         this.plugin.openArchiveModal();
       });
@@ -1485,7 +1487,7 @@ export class TimelineContainer {
       const clipGuideBtn = buttonContainer.createEl('button', {
         cls: 'px-4 py-2 rounded border border-[var(--background-modifier-border)] text-[var(--text-normal)] hover:border-[var(--text-muted)] hover:bg-[var(--background-modifier-hover)] transition-colors cursor-pointer'
       });
-      clipGuideBtn.createEl('span', { text: 'Clip from your browser' });
+      clipGuideBtn.createSpan({ text: 'Clip from your browser' });
       clipGuideBtn.addEventListener('click', () => {
         new ClipGuideModal(this.plugin).open();
       });
@@ -1493,7 +1495,7 @@ export class TimelineContainer {
       const setupBtn = buttonContainer.createEl('button', {
         cls: 'px-4 py-2 rounded border border-[var(--background-modifier-border)] text-[var(--text-muted)] hover:border-[var(--text-muted)] hover:bg-[var(--background-modifier-hover)] hover:text-[var(--text-normal)] transition-colors cursor-pointer'
       });
-      setupBtn.createEl('span', { text: 'Set up account' });
+      setupBtn.createSpan({ text: 'Set up account' });
       setupBtn.addEventListener('click', () => {
         // @ts-expect-error — app.setting is available at runtime but not in public Obsidian types
         (this.app.setting as { open: () => void; openTabById: (id: string) => void }).open();
@@ -1506,7 +1508,7 @@ export class TimelineContainer {
     const guideBtn = buttonContainer.createEl('a', {
       cls: 'px-4 py-2 rounded border border-[var(--background-modifier-border)] text-[var(--text-muted)] hover:border-[var(--text-muted)] hover:bg-[var(--background-modifier-hover)] hover:text-[var(--text-normal)] transition-colors cursor-pointer no-underline'
     });
-    guideBtn.createEl('span', { text: 'View guide' });
+    guideBtn.createSpan({ text: 'View guide' });
     guideBtn.setAttr('href', 'https://docs.social-archive.org');
     guideBtn.setAttr('target', '_blank');
     guideBtn.setAttr('rel', 'noopener noreferrer');
@@ -1526,9 +1528,12 @@ export class TimelineContainer {
 
     // Check if empty because all tagged posts are archived
     const filterState = this.filterSortManager.getFilterState();
-    if (filterState.selectedTags.size > 0 && filterState.activeTab === 'inbox') {
+    if ((filterState.selectedTags.size > 0 || filterState.untaggedOnly) && filterState.activeTab === 'inbox') {
       const archivedWithTag = this.posts.filter(post => {
         if (post.archive !== true) return false;
+        if (filterState.untaggedOnly) {
+          return !post.tags || post.tags.length === 0;
+        }
         if (!post.tags || post.tags.length === 0) return false;
         const postTagsLower = post.tags.map(t => t.toLowerCase());
         return Array.from(filterState.selectedTags).some(tag =>
@@ -1568,6 +1573,7 @@ export class TimelineContainer {
     const isPlainInboxEmpty =
       filterState.activeTab === 'inbox' &&
       filterState.selectedTags.size === 0 &&
+      !filterState.untaggedOnly &&
       !filterState.searchQuery.trim() &&
       !filterState.likedOnly &&
       !filterState.commentedOnly &&
@@ -1697,10 +1703,13 @@ export class TimelineContainer {
       cls: 'text-lg font-semibold text-[var(--text-normal)]'
     });
 
-    const tagNames = Array.from(this.filterSortManager.getFilterState().selectedTags);
-    const tagLabel = tagNames.length === 1
-      ? `"${tagNames[0]}"`
-      : `${tagNames.length} selected tags`;
+    const emptyStateFilter = this.filterSortManager.getFilterState();
+    const tagNames = Array.from(emptyStateFilter.selectedTags);
+    const tagLabel = emptyStateFilter.untaggedOnly
+      ? 'no tags'
+      : tagNames.length === 1
+        ? `"${tagNames[0]}"`
+        : `${tagNames.length} selected tags`;
 
     wrapper.createEl('p', {
       text: `${archivedCount} post${archivedCount !== 1 ? 's' : ''} with ${tagLabel} ${archivedCount !== 1 ? 'are' : 'is'} archived and currently hidden.`
@@ -2955,7 +2964,7 @@ export class TimelineContainer {
     }
 
     // Create dropdown
-    const dropdown = activeDocument.createElement('div');
+    const dropdown = activeWindow.createDiv();
     dropdown.className = 'author-sort-dropdown';
     dropdown.addClass('sa-absolute');
     dropdown.addClass('sa-bg-secondary');
@@ -3072,7 +3081,7 @@ export class TimelineContainer {
     headerRow.addClass('sa-mb-8');
     headerRow.addClass('sa-gap-8');
 
-    const platformLabel = headerRow.createEl('div', { text: 'Platforms' });
+    const platformLabel = headerRow.createDiv({ text: 'Platforms' });
     platformLabel.addClass('sa-text-xs');
     platformLabel.addClass('sa-font-semibold');
     platformLabel.addClass('sa-text-muted');
@@ -5397,7 +5406,7 @@ export class TimelineContainer {
   ): Promise<void> {
     try {
       // Create temporary container for rendering
-      const tempContainer = activeDocument.createElement('div');
+      const tempContainer = activeWindow.createDiv();
 
       // Render real post card
       await this.postCardRenderer.render(tempContainer, post);
@@ -5450,7 +5459,7 @@ export class TimelineContainer {
       }
 
       // Create temporary container for rendering
-      const tempContainer = activeDocument.createElement('div');
+      const tempContainer = activeWindow.createDiv();
       await this.postCardRenderer.render(tempContainer, post);
       const realCard = tempContainer.firstElementChild as HTMLElement;
 
@@ -5485,7 +5494,7 @@ export class TimelineContainer {
       const parent = existingCard?.parentElement;
       if (!existingCard || !parent || !existingCard.isConnected) return;
 
-      const tempContainer = activeDocument.createElement('div');
+      const tempContainer = activeWindow.createDiv();
       await this.postCardRenderer.render(tempContainer, post);
       const newCard = tempContainer.firstElementChild as HTMLElement;
       if (!newCard) return;
@@ -5824,7 +5833,15 @@ export class TimelineContainer {
     const tagsWithCounts = tagStore.getTagsWithCounts().filter(t => t.archiveCount > 0);
     if (tagsWithCounts.length === 0) return;
 
-    this.tagChipBar.render(this.containerEl, tagsWithCounts);
+    this.tagChipBar.render(this.containerEl, tagsWithCounts, this.getUntaggedPostCount());
+  }
+
+  /** Count posts without any tag (for the "Untagged" chip) */
+  private getUntaggedPostCount(): number {
+    if (this.indexEntries.length > 0) {
+      return this.indexEntries.filter(e => e.tags.length === 0).length;
+    }
+    return this.posts.filter(p => !p.tags || p.tags.length === 0).length;
   }
 
   /**
@@ -5842,7 +5859,7 @@ export class TimelineContainer {
     if (existingBar) {
       if (tagsWithCounts.length > 0) {
         // Update chips in place without destroying the container (preserves position)
-        this.tagChipBar.update(tagsWithCounts);
+        this.tagChipBar.update(tagsWithCounts, this.getUntaggedPostCount());
       } else {
         // No tags left, remove the bar
         this.tagChipBar.destroy();
@@ -6825,6 +6842,7 @@ export class TimelineContainer {
     return {
       platforms: new Set<string>(TIMELINE_PLATFORM_IDS),
       selectedTags: new Set<string>(),
+      untaggedOnly: false,
       likedOnly: false,
       commentedOnly: false,
       sharedOnly: false,
@@ -7985,7 +8003,7 @@ export class TimelineContainer {
       span1.addClass('tc-group-label-dim');
       const span2 = dropdownBtn.createSpan({ text: getGroupLabel(this.galleryGroupBy) });
       span2.addClass('tc-group-value');
-      const svg = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      const svg = activeWindow.createSvg('svg');
       svg.setAttribute('width', '12');
       svg.setAttribute('height', '12');
       svg.setAttribute('viewBox', '0 0 24 24');
@@ -7995,7 +8013,7 @@ export class TimelineContainer {
       svg.setAttribute('stroke-linecap', 'round');
       svg.setAttribute('stroke-linejoin', 'round');
       svg.classList.add('tc-group-chevron');
-      const polyline = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      const polyline = activeWindow.createSvg('polyline');
       polyline.setAttribute('points', '6 9 12 15 18 9');
       svg.appendChild(polyline);
       dropdownBtn.appendChild(svg);
@@ -8024,17 +8042,17 @@ export class TimelineContainer {
         const isActive = this.galleryGroupBy === option.type;
 
         // Create option container with checkmark
-        const optionContent = activeDocument.createElement('div');
+        const optionContent = activeWindow.createDiv();
         optionContent.className = 'tc-option-content';
 
-        const labelSpan = activeDocument.createElement('span');
+        const labelSpan = activeWindow.createSpan();
         labelSpan.textContent = option.label;
         labelSpan.className = isActive ? 'tc-option-label-active' : 'tc-option-label';
         optionContent.appendChild(labelSpan);
 
         if (isActive) {
-          const checkmark = activeDocument.createElement('span');
-          const svg = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          const checkmark = activeWindow.createSpan();
+          const svg = activeWindow.createSvg('svg');
           svg.setAttribute('width', '14');
           svg.setAttribute('height', '14');
           svg.setAttribute('viewBox', '0 0 24 24');
@@ -8043,7 +8061,7 @@ export class TimelineContainer {
           svg.setAttribute('stroke-width', '2');
           svg.setAttribute('stroke-linecap', 'round');
           svg.setAttribute('stroke-linejoin', 'round');
-          const polyline = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+          const polyline = activeWindow.createSvg('polyline');
           polyline.setAttribute('points', '20 6 9 17 4 12');
           svg.appendChild(polyline);
           checkmark.appendChild(svg);

@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/index.ts
- * Generated: 2026-07-11T08:56:14.733Z
+ * Generated: 2026-07-28T02:27:51.585Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -98,3 +98,5 @@ export {
   getPlatformMaxMediaSize,
   getPlatformRateLimit,
 } from './detection';
+
+export * from './client-commerce';

@@ -37,3 +37,12 @@ export interface TagWithCount extends TagDefinition {
 
 /** Max tag name length */
 export const TAG_NAME_MAX_LENGTH = 30;
+
+/**
+ * Sentinel value used by tag filter UIs to represent "posts without any tag".
+ * Not a valid tag name (contains no user-creatable characters clash risk:
+ * validateTagName rejects nothing alphanumeric-specific, but users cannot
+ * create a tag starting with `__` via the UI, and filter logic never treats
+ * this as a literal tag name).
+ */
+export const UNTAGGED_FILTER_ID = '__untagged__';

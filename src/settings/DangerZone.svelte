@@ -27,7 +27,11 @@ async function handleDeleteAccount() {
     cancelText: 'Cancel',
     confirmClass: 'danger',
     requiredInput: settings.username,
-    inputLabel: `Type your username <strong style="color: var(--interactive-accent); font-family: monospace;">${settings.username}</strong> to confirm:`,
+    inputLabel: createFragment((frag) => {
+      frag.appendText('Type your username ');
+      frag.createEl('strong', { text: settings.username, cls: 'cm-confirm-token' });
+      frag.appendText(' to confirm:');
+    }),
     inputPlaceholder: 'Enter your username'
   });
 
@@ -76,7 +80,11 @@ async function handleResetSharedPosts() {
     cancelText: 'Cancel',
     confirmClass: 'warning',
     requiredInput: RESET_CONFIRM_TEXT,
-    inputLabel: `Type <strong style="color: var(--interactive-accent); font-family: monospace;">${RESET_CONFIRM_TEXT}</strong> to confirm:`,
+    inputLabel: createFragment((frag) => {
+      frag.appendText('Type ');
+      frag.createEl('strong', { text: RESET_CONFIRM_TEXT, cls: 'cm-confirm-token' });
+      frag.appendText(' to confirm:');
+    }),
     inputPlaceholder: 'Type RESET to confirm'
   });
 

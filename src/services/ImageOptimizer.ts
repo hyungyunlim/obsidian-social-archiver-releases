@@ -67,7 +67,7 @@ export class ImageOptimizer {
   private ctx: CanvasRenderingContext2D;
 
   constructor() {
-    this.canvas = activeDocument.createElement('canvas');
+    this.canvas = activeWindow.createEl('canvas');
     const ctx = this.canvas.getContext('2d');
     if (!ctx) {
       throw new ImageOptimizationError('Failed to get 2D context from canvas');
@@ -79,7 +79,7 @@ export class ImageOptimizer {
    * Check if WebP is supported
    */
   static supportsWebP(): boolean {
-    const canvas = activeDocument.createElement('canvas');
+    const canvas = activeWindow.createEl('canvas');
     canvas.width = 1;
     canvas.height = 1;
     return canvas.toDataURL('image/webp').startsWith('data:image/webp');

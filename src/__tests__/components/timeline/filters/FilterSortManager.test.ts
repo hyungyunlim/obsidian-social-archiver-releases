@@ -159,6 +159,69 @@ describe('FilterSortManager', () => {
       const manager = new FilterSortManager({ activeTab: 'inbox', localOnlyOnly: true });
       expect(manager.hasActiveFilters()).toBe(true);
     });
+
+    it('returns true for untagged-only filter', () => {
+      const manager = new FilterSortManager({ activeTab: 'inbox', untaggedOnly: true });
+      expect(manager.hasActiveFilters()).toBe(true);
+    });
+  });
+
+  describe('untagged filtering', () => {
+    it('filters full posts to those without tags', () => {
+      const tagged = makePost({ filePath: 'tagged.md', tags: ['news'] });
+      const untagged = makePost({ filePath: 'untagged.md', tags: [] });
+      const noTagsField = makePost({ filePath: 'no-field.md' });
+      const manager = new FilterSortManager({ activeTab: 'inbox', untaggedOnly: true });
+
+      const result = manager.applyFiltersAndSort([tagged, untagged, noTagsField]);
+
+      expect(result.map((post) => post.filePath).sort()).toEqual(['no-field.md', 'untagged.md']);
+    });
+
+    it('takes precedence over selectedTags when both are set', () => {
+      const tagged = makePost({ filePath: 'tagged.md', tags: ['news'] });
+      const untagged = makePost({ filePath: 'untagged.md', tags: [] });
+      const manager = new FilterSortManager({
+        activeTab: 'inbox',
+        untaggedOnly: true,
+        selectedTags: new Set(['news']),
+      });
+
+      const result = manager.applyFiltersAndSort([tagged, untagged]);
+
+      expect(result.map((post) => post.filePath)).toEqual(['untagged.md']);
+    });
+
+    it('filters index entries to those without tags', () => {
+      const entry = (id: string, tags: string[]): PostIndexEntry => ({
+        id,
+        platform: 'x',
+        filePath: `${id}.md`,
+        fileModifiedTime: 0,
+        authorName: 'Author',
+        publishedDate: Date.parse('2026-04-20T10:00:00.000Z'),
+        archivedDate: Date.parse('2026-04-20T10:00:00.000Z'),
+        tags,
+        hashtags: [],
+        like: false,
+        archive: false,
+        isLocalOnly: false,
+        subscribed: false,
+        searchText: '',
+        url: `https://example.com/${id}`,
+        mediaCount: 0,
+        commentCount: 0,
+        metadataTimestamp: Date.parse('2026-04-20T10:00:00.000Z'),
+      });
+      const manager = new FilterSortManager({ activeTab: 'inbox', untaggedOnly: true });
+
+      const result = manager.applyFiltersAndSortIndex([
+        entry('tagged', ['news']),
+        entry('untagged', []),
+      ]);
+
+      expect(result.map((item) => item.filePath)).toEqual(['untagged.md']);
+    });
   });
 
   describe('local-only filtering', () => {

@@ -46,7 +46,7 @@ import {
   getPlatformSimpleIcon as getIconServiceSimpleIcon,
   getPlatformLucideIcon as getIconServiceLucideIcon
 } from '../../services/IconService';
-import type { TagWithCount } from '../../types/tag';
+import { UNTAGGED_FILTER_ID, type TagWithCount } from '../../types/tag';
 import AuthorProfileHeader from './AuthorProfileHeader.svelte';
 
 // ============================================================================
@@ -238,10 +238,12 @@ export class AuthorDetailContainer {
 
     // Initialize TagChipBar
     this.tagChipBar = new TagChipBar((tagName: string | null) => {
-      if (tagName) {
-        this.filterSortManager.updateFilter({ selectedTags: new Set([tagName]) });
+      if (tagName === UNTAGGED_FILTER_ID) {
+        this.filterSortManager.updateFilter({ selectedTags: new Set(), untaggedOnly: true });
+      } else if (tagName) {
+        this.filterSortManager.updateFilter({ selectedTags: new Set([tagName]), untaggedOnly: false });
       } else {
-        this.filterSortManager.updateFilter({ selectedTags: new Set() });
+        this.filterSortManager.updateFilter({ selectedTags: new Set(), untaggedOnly: false });
       }
       this.applyFiltersAndRenderFeed();
     });
@@ -561,7 +563,7 @@ export class AuthorDetailContainer {
     // We need to insert before the feed wrapper, not at the end
     if (toolbarParent && toolbarNextSibling) {
       // Create a temporary container to hold the new toolbar
-      const tempDiv = activeDocument.createElement('div');
+      const tempDiv = activeWindow.createDiv();
       toolbarParent.insertBefore(tempDiv, toolbarNextSibling);
 
       // Now render toolbar into the target, which will place it at the end
@@ -792,9 +794,11 @@ export class AuthorDetailContainer {
     // Sort by count descending
     authorTags.sort((a, b) => b.archiveCount - a.archiveCount);
 
+    const untaggedCount = this.posts.filter(p => !p.tags || p.tags.length === 0).length;
+
     // Render between toolbar and feed (insert before feedWrapper)
     if (this.feedWrapper && this.toolbarEl) {
-      this.tagChipBar.render(this.contentRoot ?? this.target, authorTags);
+      this.tagChipBar.render(this.contentRoot ?? this.target, authorTags, untaggedCount);
       // Move to correct position (after toolbar, before feed)
       const chipBar = (this.contentRoot ?? this.target).querySelector('.tag-chip-bar');
       if (chipBar && this.feedWrapper) {

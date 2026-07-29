@@ -2122,6 +2122,15 @@ body.is-mobile .tc-selection-pill {
   margin: 0 0 16px 0;
   color: var(--text-normal);
   line-height: 1.5;
+  /* The message is plain text with \n separators; without this the bullet
+     lines run together into one paragraph. */
+  white-space: pre-line;
+}
+
+/* The literal value the user has to retype, highlighted in the input label. */
+.cm-confirm-token {
+  color: var(--interactive-accent);
+  font-family: var(--font-monospace);
 }
 
 /* Monospace input */

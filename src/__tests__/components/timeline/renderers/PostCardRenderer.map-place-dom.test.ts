@@ -103,6 +103,8 @@ function createRenderer(): { app: App; renderer: PostCardRenderer } {
       getDisplayTagsForPost: vi.fn(() => []),
       getTagDefinitions: vi.fn(() => []),
     },
+    // The renderer subscribes to the ai-action status stream on construction.
+    events: { on: vi.fn(() => ({})), off: vi.fn() },
   } as SocialArchiverPlugin;
 
   return {

@@ -261,7 +261,7 @@ export class AICommentBanner {
 
     // Adjust width helper
     const adjustWidth = (select: HTMLSelectElement) => {
-      const tempSpan = activeDocument.createElement('span');
+      const tempSpan = activeWindow.createSpan();
       tempSpan.classList.add('acb-measure-span');
       tempSpan.textContent = select.options[select.selectedIndex]?.text || '';
       activeDocument.body.appendChild(tempSpan);

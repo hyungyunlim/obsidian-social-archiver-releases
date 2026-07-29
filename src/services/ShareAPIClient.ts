@@ -140,7 +140,7 @@ interface PendingShareLinkage {
 }
 
 function generateUuidV4(): string {
-  const cryptoApi = globalThis.crypto;
+  const cryptoApi = window.crypto;
   if (cryptoApi && typeof cryptoApi.randomUUID === 'function') {
     return cryptoApi.randomUUID();
   }
@@ -196,7 +196,7 @@ class PendingShareLinkageStore {
 
   private readAll(): Record<string, PendingShareLinkage> {
     try {
-      const raw = globalThis.localStorage?.getItem(LINKAGE_STORAGE_KEY);
+      const raw = window.localStorage?.getItem(LINKAGE_STORAGE_KEY);
       if (raw) return JSON.parse(raw) as Record<string, PendingShareLinkage>;
     } catch (error) {
       // Corrupt or unavailable storage — fall back to the in-memory copy.
@@ -209,7 +209,7 @@ class PendingShareLinkageStore {
   private writeAll(all: Record<string, PendingShareLinkage>): void {
     PendingShareLinkageStore.memory = all;
     try {
-      globalThis.localStorage?.setItem(LINKAGE_STORAGE_KEY, JSON.stringify(all));
+      window.localStorage?.setItem(LINKAGE_STORAGE_KEY, JSON.stringify(all));
     } catch (error) {
       // The in-memory fallback above already holds the state.
       console.warn('[ShareAPIClient] pending-share linkage state not persisted:', error instanceof Error ? error.message : error);

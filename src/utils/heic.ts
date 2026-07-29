@@ -94,7 +94,7 @@ async function tryNativeHEICConversion(
 
     img.onload = (): void => {
       try {
-        const canvas = activeDocument.createElement('canvas');
+        const canvas = activeWindow.createEl('canvas');
         canvas.width = img.naturalWidth;
         canvas.height = img.naturalHeight;
 

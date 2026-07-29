@@ -265,7 +265,7 @@ export class ComposedPostSyncService {
     const file = this.vault.getFileByPath(entry.filePath);
     if (!file) {
       // File was deleted — remove from queue
-      console.log(`${LOG_PREFIX} File missing, removing from queue: ${entry.filePath}`);
+      console.debug(`${LOG_PREFIX} File missing, removing from queue: ${entry.filePath}`);
       await this.removeFromQueue(entry.clientPostId);
       return;
     }
@@ -311,7 +311,7 @@ export class ComposedPostSyncService {
     // Remove from queue
     await this.removeFromQueue(entry.clientPostId);
 
-    console.log(`${LOG_PREFIX} Create synced: ${entry.clientPostId} → ${result.archiveId}`);
+    console.debug(`${LOG_PREFIX} Create synced: ${entry.clientPostId} → ${result.archiveId}`);
   }
 
   private async handleUpdate(
@@ -339,7 +339,7 @@ export class ComposedPostSyncService {
     // Remove from queue
     await this.removeFromQueue(entry.clientPostId);
 
-    console.log(`${LOG_PREFIX} Update synced: ${entry.clientPostId} (archiveId=${entry.sourceArchiveId})`);
+    console.debug(`${LOG_PREFIX} Update synced: ${entry.clientPostId} (archiveId=${entry.sourceArchiveId})`);
   }
 
   private async recordFailure(
@@ -669,7 +669,7 @@ export class ComposedPostSyncService {
       this.contentFingerprints.delete(match.clientPostId);
       this.selfWriteSuppression.delete(match.clientPostId);
       await this.removeFromQueue(match.clientPostId);
-      console.log(`${LOG_PREFIX} Removed queue entry for deleted file: ${filePath}`);
+      console.debug(`${LOG_PREFIX} Removed queue entry for deleted file: ${filePath}`);
     }
   }
 }

@@ -9,6 +9,7 @@
 
 import type { PostData, Media, Platform, Comment } from '../../types/post';
 import type { UserArchive, UserArchiveComment } from '../../services/WorkersAPIClient';
+import type { ProductSnapshot } from '../../shared/platforms/products';
 
 const LEGACY_WEB_CLIP_SEPARATOR = '\n\n---\n\n';
 const LEADING_WEB_CLIP_SEPARATOR = '---\n\n';
@@ -380,6 +381,8 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
       longitude: archive.longitude ?? undefined,
       locationSource: archive.locationSource ?? undefined,
       locationExternalId: archive.locationExternalId ?? undefined,
+      ...(archive.product ? { product: archive.product as ProductSnapshot } : {}),
+      ...(archive.productSource ? { productSource: archive.productSource } : {}),
       locationAddress: archive.locationAddress ?? undefined,
       locationUrl: archive.locationUrl ?? undefined,
       locationCategory: archive.locationCategory ?? undefined,

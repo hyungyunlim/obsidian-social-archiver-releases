@@ -3346,3 +3346,177 @@ a.pcr-gmaps-map-touch-overlay {
     flex: 1 1 160px;
   }
 }
+
+/* ========================================
+ * Commerce product card (Product PRD §5.6)
+ * ======================================== */
+
+.pcr-product-card {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.pcr-product-image {
+  flex: 0 0 auto;
+  width: 88px;
+  height: 88px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--background-secondary);
+}
+
+.pcr-product-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.pcr-product-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pcr-product-brand {
+  font-size: 11px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.pcr-product-name {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-normal);
+  text-decoration: none;
+  /* Product names run long and arrive in every script, including RTL. */
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pcr-product-name:hover {
+  text-decoration: underline;
+}
+
+.pcr-product-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.pcr-product-price {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-normal);
+}
+
+.pcr-product-price.is-sold-out {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.pcr-product-list-price {
+  font-size: 12px;
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.pcr-product-discount {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-error);
+}
+
+.pcr-product-meta,
+.pcr-product-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.pcr-product-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--background-modifier-success);
+  color: var(--text-success);
+  font-weight: 600;
+}
+
+.pcr-product-badge.is-sold-out {
+  background: var(--background-secondary);
+  color: var(--text-faint);
+}
+
+.pcr-product-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.pcr-product-rating-icon {
+  display: inline-flex;
+  color: var(--color-yellow);
+}
+
+.pcr-product-rating-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.pcr-product-store {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.pcr-product-store:hover {
+  text-decoration: underline;
+}
+
+.pcr-product-observed {
+  color: var(--text-faint);
+}
+
+.pcr-product-description {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  /* The source's own line breaks and bullet list. */
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 8;
+  line-clamp: 8;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+
+.pcr-product-gallery {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.pcr-product-gallery img {
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--background-secondary);
+}

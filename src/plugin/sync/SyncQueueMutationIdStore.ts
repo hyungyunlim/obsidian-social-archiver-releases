@@ -69,7 +69,7 @@ export class SyncQueueMutationIdStore {
 }
 
 function defaultGenerateId(): string {
-  const globalCrypto = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  const globalCrypto = (window as { crypto?: { randomUUID?: () => string } }).crypto;
   if (globalCrypto?.randomUUID) return globalCrypto.randomUUID();
   // ponytail: only reached where WebCrypto is absent (old runtimes); timestamp+rand is unique enough for an idempotency key.
   return `mut-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;

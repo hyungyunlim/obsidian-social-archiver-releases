@@ -295,7 +295,7 @@ function renderEvidence(card: HTMLElement, candidate: PlaceCandidate): void {
       ? 'Found in image text'
       : null;
   if (originLabel) {
-    card.createEl('span', { cls: 'sa-place-candidate-evidence-origin', text: originLabel });
+    card.createSpan({ cls: 'sa-place-candidate-evidence-origin', text: originLabel });
   }
   card.createEl('p', {
     cls: 'sa-place-candidate-evidence',

@@ -198,14 +198,14 @@ export class PreviewableMediaRenderer {
     });
 
     // Prev / Next chevron buttons — 44px hit area minimum (mobile target).
-    const prevBtn = activeDocument.createElement('button');
+    const prevBtn = activeWindow.createEl('button');
     prevBtn.classList.add('pcr-media-carousel-nav', 'pcr-media-carousel-nav-prev');
     prevBtn.type = 'button';
     prevBtn.setAttribute('aria-label', 'Previous media');
     prevBtn.textContent = '‹';
     this.styleNavButton(prevBtn, 'left');
 
-    const nextBtn = activeDocument.createElement('button');
+    const nextBtn = activeWindow.createEl('button');
     nextBtn.classList.add('pcr-media-carousel-nav', 'pcr-media-carousel-nav-next');
     nextBtn.type = 'button';
     nextBtn.setAttribute('aria-label', 'Next media');
@@ -231,7 +231,7 @@ export class PreviewableMediaRenderer {
 
     const dotEls: HTMLElement[] = [];
     for (let i = 0; i < total; i++) {
-      const dot = activeDocument.createElement('span');
+      const dot = activeWindow.createSpan();
       dot.classList.add('pcr-media-carousel-dot');
       if (i === 0) dot.classList.add('pcr-media-carousel-dot-active');
       dot.setCssStyles({
@@ -444,7 +444,7 @@ export class PreviewableMediaRenderer {
     src: string,
     lazy: boolean,
   ): void {
-    const img = activeDocument.createElement('img');
+    const img = activeWindow.createEl('img');
     img.src = src;
     img.alt = item.altText ?? item.alt ?? '';
     if (lazy) img.loading = 'lazy';
@@ -468,7 +468,7 @@ export class PreviewableMediaRenderer {
     item: PostData['media'][number],
     src: string,
   ): void {
-    const video = activeDocument.createElement('video');
+    const video = activeWindow.createEl('video');
     video.classList.add('pcr-media-carousel-video');
     video.setAttribute('controls', 'true');
     // playsinline is required on iOS Safari — without it iOS forces
@@ -517,7 +517,7 @@ export class PreviewableMediaRenderer {
       textAlign: 'center',
       padding: '0 12px',
     });
-    const label = activeDocument.createElement('span');
+    const label = activeWindow.createSpan();
     label.textContent = unavailable ? 'Preview unavailable' : 'Preview loading…';
     placeholder.appendChild(label);
   }
@@ -564,17 +564,17 @@ export class PreviewableMediaRenderer {
    * `gallery-*`) match the source.
    */
   public createInlineImageGallery(mediaItems: HTMLElement[]): HTMLElement {
-    const gallery = activeDocument.createElement('div');
+    const gallery = activeWindow.createDiv();
     gallery.className = 'inline-image-gallery pcr-gallery';
 
     const count = mediaItems.length;
 
     // Main display area
-    const mainDisplay = activeDocument.createElement('div');
+    const mainDisplay = activeWindow.createDiv();
     mainDisplay.className = 'gallery-main-display pcr-gallery-main';
 
     // Create main image container
-    const mainImageContainer = activeDocument.createElement('div');
+    const mainImageContainer = activeWindow.createDiv();
     mainImageContainer.className = 'pcr-gallery-main-container';
 
     const firstMedia = mediaItems[0];
@@ -590,17 +590,17 @@ export class PreviewableMediaRenderer {
 
     // Add counter badge if more than 1 image
     if (count > 1) {
-      const counter = activeDocument.createElement('div');
+      const counter = activeWindow.createDiv();
       counter.className = 'gallery-counter pcr-gallery-counter';
       counter.textContent = `1/${count}`;
       mainDisplay.appendChild(counter);
 
       // Navigation arrows (hover handled by CSS .pcr-gallery-main:hover .pcr-gallery-nav)
-      const prevBtn = activeDocument.createElement('button');
+      const prevBtn = activeWindow.createEl('button');
       prevBtn.className = 'gallery-nav gallery-prev pcr-gallery-nav pcr-gallery-nav-prev';
       prevBtn.textContent = '‹';
 
-      const nextBtn = activeDocument.createElement('button');
+      const nextBtn = activeWindow.createEl('button');
       nextBtn.className = 'gallery-nav gallery-next pcr-gallery-nav pcr-gallery-nav-next';
       nextBtn.textContent = '›';
 
@@ -674,11 +674,11 @@ export class PreviewableMediaRenderer {
 
     // Thumbnail strip for 3+ images
     if (count >= 3) {
-      const thumbnailStrip = activeDocument.createElement('div');
+      const thumbnailStrip = activeWindow.createDiv();
       thumbnailStrip.className = 'gallery-thumbnails pcr-gallery-thumbnails';
 
       mediaItems.forEach((media, index) => {
-        const thumb = activeDocument.createElement('div');
+        const thumb = activeWindow.createDiv();
         thumb.className =
           index === 0
             ? 'pcr-gallery-thumb pcr-gallery-thumb-active'
@@ -761,33 +761,33 @@ export class PreviewableMediaRenderer {
   public openImageLightbox(imageSrcs: string[], startIndex: number): void {
     if (imageSrcs.length === 0) return;
 
-    const overlay = activeDocument.createElement('div');
+    const overlay = activeWindow.createDiv();
     overlay.className = 'image-lightbox-overlay pcr-lightbox-overlay';
 
     let currentIndex = startIndex;
     const count = imageSrcs.length;
 
-    const imgContainer = activeDocument.createElement('div');
+    const imgContainer = activeWindow.createDiv();
     imgContainer.className = 'pcr-lightbox-container';
 
-    const img = activeDocument.createElement('img');
+    const img = activeWindow.createEl('img');
     img.src = imageSrcs[currentIndex] ?? '';
     img.className = 'pcr-lightbox-image';
     imgContainer.appendChild(img);
 
     let counter: HTMLDivElement | null = null;
     if (count > 1) {
-      counter = activeDocument.createElement('div');
+      counter = activeWindow.createDiv();
       counter.className = 'pcr-lightbox-counter';
       counter.textContent = `${currentIndex + 1} / ${count}`;
       imgContainer.appendChild(counter);
 
       // Navigation
-      const prevBtn = activeDocument.createElement('button');
+      const prevBtn = activeWindow.createEl('button');
       prevBtn.textContent = '‹';
       prevBtn.className = 'pcr-lightbox-nav pcr-lightbox-prev';
 
-      const nextBtn = activeDocument.createElement('button');
+      const nextBtn = activeWindow.createEl('button');
       nextBtn.textContent = '›';
       nextBtn.className = 'pcr-lightbox-nav pcr-lightbox-next';
 
@@ -813,7 +813,7 @@ export class PreviewableMediaRenderer {
     }
 
     // Close button
-    const closeBtn = activeDocument.createElement('button');
+    const closeBtn = activeWindow.createEl('button');
     closeBtn.textContent = '×';
     closeBtn.className = 'pcr-lightbox-close';
     closeBtn.addEventListener('click', () => overlay.remove());
@@ -863,7 +863,7 @@ export class PreviewableMediaRenderer {
    */
   public renderLocalVideo(parent: HTMLElement, src: string): HTMLVideoElement {
     const wrapper = this.makeDiv(parent, 'local-video-container pcr-video-container');
-    const video = activeDocument.createElement('video');
+    const video = activeWindow.createEl('video');
     video.classList.add('pcr-video-element');
     // PRD requires playsinline for iOS Safari compat — without this iOS
     // forces fullscreen playback which breaks the timeline UX.
@@ -895,7 +895,7 @@ export class PreviewableMediaRenderer {
       return this.renderLocalVideo(parent, src);
     }
     const wrapper = this.makeDiv(parent, 'local-video-container pcr-video-container');
-    const video = activeDocument.createElement('video');
+    const video = activeWindow.createEl('video');
     video.classList.add('pcr-video-element');
     for (const [k, v] of Object.entries(opts.attrs)) {
       video.setAttribute(k, v);
@@ -1075,10 +1075,10 @@ export class PreviewableMediaRenderer {
         }).addTo(map);
 
         // Custom attribution — top-left corner, low z-index.
-        const attr = activeDocument.createElement('div');
+        const attr = activeWindow.createDiv();
         attr.classList.add('pcr-gmaps-map-attr');
         attr.textContent = '© ';
-        const link = activeDocument.createElement('a');
+        const link = activeWindow.createEl('a');
         link.textContent = 'OSM';
         link.href = 'https://www.openstreetmap.org/copyright';
         link.target = '_blank';
@@ -1135,7 +1135,7 @@ export class PreviewableMediaRenderer {
     const linkContainer = this.makeDiv(wrapper, 'pcr-map-link-container');
 
     if (post.metadata.location) {
-      const locationText = activeDocument.createElement('span');
+      const locationText = activeWindow.createSpan();
       locationText.textContent = post.metadata.location;
       locationText.classList.add('pcr-map-location-text');
       linkContainer.appendChild(locationText);
@@ -1150,7 +1150,7 @@ export class PreviewableMediaRenderer {
       post.metadata.location,
       post.author.name,
     );
-    const directionsLink = activeDocument.createElement('a');
+    const directionsLink = activeWindow.createEl('a');
     directionsLink.textContent = 'Directions';
     directionsLink.classList.add('pcr-map-link');
     directionsLink.href = directionsUrl;
@@ -1159,7 +1159,7 @@ export class PreviewableMediaRenderer {
     linksDiv.appendChild(directionsLink);
 
     // Google Maps link.
-    const gmapLink = activeDocument.createElement('a');
+    const gmapLink = activeWindow.createEl('a');
     gmapLink.textContent = 'Open in maps';
     gmapLink.classList.add('pcr-map-link');
     gmapLink.href = post.url || `https://www.google.com/maps?q=${lat},${lng}`;
@@ -1212,7 +1212,7 @@ export class PreviewableMediaRenderer {
   }
 
   private makeDiv(parent: HTMLElement, classes?: string): HTMLDivElement {
-    const div = activeDocument.createElement('div');
+    const div = activeWindow.createDiv();
     if (classes) {
       for (const c of classes.split(/\s+/).filter(Boolean)) {
         div.classList.add(c);

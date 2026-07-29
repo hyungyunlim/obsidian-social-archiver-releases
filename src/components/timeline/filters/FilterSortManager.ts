@@ -11,6 +11,7 @@ import type { TimelineArchiveTab } from '../../../types/settings';
 export interface FilterState {
   platforms: Set<string>;
   selectedTags: Set<string>;  // Tag names to filter by (empty = show all)
+  untaggedOnly: boolean;      // Show only posts without any tag (mutually exclusive with selectedTags)
   likedOnly: boolean;
   commentedOnly: boolean;
   sharedOnly: boolean;
@@ -142,8 +143,10 @@ export class FilterSortManager {
       return false;
     });
 
-    // Filter by tags (any match)
-    if (this.filterState.selectedTags.size > 0) {
+    // Filter by tags (any match) or untagged-only
+    if (this.filterState.untaggedOnly) {
+      filtered = filtered.filter(post => !post.tags || post.tags.length === 0);
+    } else if (this.filterState.selectedTags.size > 0) {
       filtered = filtered.filter(post => {
         if (!post.tags || post.tags.length === 0) return false;
         const postTagsLower = post.tags.map(t => t.toLowerCase());
@@ -301,8 +304,10 @@ export class FilterSortManager {
       return false;
     });
 
-    // Filter by tags (any match)
-    if (this.filterState.selectedTags.size > 0) {
+    // Filter by tags (any match) or untagged-only
+    if (this.filterState.untaggedOnly) {
+      filtered = filtered.filter(entry => entry.tags.length === 0);
+    } else if (this.filterState.selectedTags.size > 0) {
       const selectedTagsLower = new Set(
         Array.from(this.filterState.selectedTags).map(t => t.toLowerCase())
       );
@@ -504,6 +509,7 @@ export class FilterSortManager {
     const hasActiveFilter = (
       !allActivePlatformsSelected ||
       this.filterState.selectedTags.size > 0 ||
+      Boolean(this.filterState.untaggedOnly) ||
       Boolean(this.filterState.likedOnly) ||
       Boolean(this.filterState.commentedOnly) ||
       Boolean(this.filterState.sharedOnly) ||
@@ -525,6 +531,7 @@ export class FilterSortManager {
       selectedTags: initialFilterState?.selectedTags
         ? new Set(initialFilterState.selectedTags)
         : new Set<string>(),
+      untaggedOnly: initialFilterState?.untaggedOnly ?? false,
       likedOnly: initialFilterState?.likedOnly ?? false,
       commentedOnly: initialFilterState?.commentedOnly ?? false,
       sharedOnly: initialFilterState?.sharedOnly ?? false,

@@ -419,7 +419,7 @@ export class ReaderHighlightManager {
     const rect = range.getBoundingClientRect();
     if (rect.width === 0 && rect.height === 0) return;
 
-    this.toolbar = activeDocument.createElement('div');
+    this.toolbar = activeWindow.createDiv();
     this.toolbar.addClass('sa-highlight-toolbar');
 
     // Mobile: use bottom-fixed bar to avoid conflict with iOS/Android native selection menus
@@ -521,7 +521,7 @@ export class ReaderHighlightManager {
     const rect = mark.getBoundingClientRect();
     if (rect.width === 0 && rect.height === 0) return;
 
-    this.toolbar = activeDocument.createElement('div');
+    this.toolbar = activeWindow.createDiv();
     this.toolbar.addClass('sa-highlight-toolbar');
     if (Platform.isMobile) {
       this.toolbar.addClass('sa-highlight-toolbar-mobile');
@@ -841,7 +841,7 @@ export class ReaderHighlightManager {
     range.setStart(node, start);
     range.setEnd(node, end);
 
-    const mark = activeDocument.createElement('mark');
+    const mark = activeWindow.createEl('mark');
     mark.addClass('sa-reader-highlight');
     mark.dataset.highlightId = highlight.id;
 

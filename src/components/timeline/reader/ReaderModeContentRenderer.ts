@@ -685,7 +685,7 @@ export class ReaderModeContentRenderer extends Component {
     }
 
     const authorName = quoted.author?.name || 'Unknown';
-    const authorEl = header.createEl('span', { text: `${platformName} — ${authorName}` });
+    const authorEl = header.createSpan({ text: `${platformName} — ${authorName}` });
     authorEl.addClass('sa-text-sm');
     authorEl.addClass('sa-opacity-80');
     authorEl.addClass('sa-font-medium');
@@ -847,7 +847,7 @@ export class ReaderModeContentRenderer extends Component {
     const header = parent.createDiv({ cls: 'sa-reader-mode-comments-header' });
     const headingGroup = header.createDiv();
     headingGroup.createEl('h3', { text: 'Comments' });
-    headingGroup.createEl('span', {
+    headingGroup.createSpan({
       text: `${totalCount} saved item${totalCount === 1 ? '' : 's'}`,
     });
 
