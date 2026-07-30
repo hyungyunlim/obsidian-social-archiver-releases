@@ -3449,11 +3449,18 @@ a.pcr-gmaps-map-touch-overlay {
   color: var(--text-muted);
 }
 
+/*
+ * `--text-on-accent`, NOT `--text-success`. Obsidian defines both
+ * `--background-modifier-success` and `--text-success` as `var(--color-green)`
+ * — the same variable — so pairing them painted the label in exactly the colour
+ * of its own pill and the "In stock" badge was invisible in every default theme.
+ * The sold-out variant escaped it only because it overrides both.
+ */
 .pcr-product-badge {
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--background-modifier-success);
-  color: var(--text-success);
+  color: var(--text-on-accent);
   font-weight: 600;
 }
 

@@ -96,6 +96,7 @@ import { AuthorProfileOutboundService } from './plugin/sync/AuthorProfileOutboun
 import { AuthorProfileSyncService } from './plugin/sync/AuthorProfileSyncService';
 import { ArchiveStateSyncService } from './plugin/sync/ArchiveStateSyncService';
 import { LocationFrontmatterSyncService } from './plugin/sync/LocationFrontmatterSyncService';
+import { ProductFrontmatterSyncService } from './plugin/sync/ProductFrontmatterSyncService';
 import { ArchiveStateOutboundService } from './plugin/sync/ArchiveStateOutboundService';
 import { LikeStateSyncService } from './plugin/sync/LikeStateSyncService';
 import { ShareStateSyncService } from './plugin/sync/ShareStateSyncService';
@@ -134,6 +135,21 @@ const FOREGROUND_SYNC_CATCH_UP_MEDIA_MAX_DEFER_MS = 30 * 60 * 1000;
 const FOREGROUND_SYNC_CATCH_UP_MIN_INTERVAL_MS = 30_000;
 const ARCHIVE_LIBRARY_SYNC_MEDIA_RETRY_MS = 10_000;
 const ARCHIVE_STATE_RECONCILE_BACKFILL_VERSION = 6;
+/**
+ * Forces exactly one full library reconcile so existing notes pick up commerce
+ * data (`productSource` + the `%% sa:product %%` block).
+ *
+ * Needed because nothing else would ever walk them. The delta sweep only
+ * returns archives the server has touched since `lastServerTime`, and it
+ * refreshes `completedAt` on every run — so the 7-day staleness rule that
+ * triggers a full sweep never fires again for an established vault. Without
+ * this, commerce archived before the feature shipped would stay invisible in
+ * Shopping forever.
+ *
+ * Bump only to force another full sweep on every user's next launch. It is
+ * expensive: a complete paginated walk of the library per client.
+ */
+const PRODUCT_RECONCILE_BACKFILL_VERSION = 1;
 const ARCHIVE_RECONCILE_TOMBSTONE_START = '1970-01-01T00:00:00.000Z';
 type ForegroundSyncCatchUpTrigger = 'focus' | 'visibilitychange' | 'online';
 
@@ -297,6 +313,7 @@ export default class SocialArchiverPlugin extends Plugin {
   private shareStateSyncService?: ShareStateSyncService; // Inbound shareUrl → fm.share/fm.shareUrl sync
   private commentStateSyncService?: CommentStateSyncService; // Inbound hasCommentUpdate → managed `## 💬 Comments` section sync
   private locationFrontmatterSyncService?: LocationFrontmatterSyncService; // Inbound place confirms → location frontmatter (Places P3c)
+  private productFrontmatterSyncService?: ProductFrontmatterSyncService; // Inbound commerce enrichment → product frontmatter + body block
   private bulkArchiveActionAccumulator?: BulkArchiveActionAccumulator; // Shared accumulator for batching outbound like/archive API calls
   private authorProfileSyncService?: AuthorProfileSyncService; // Inbound/startup synced author profile application
   private remoteArchiveIngestService?: RemoteArchiveIngestService; // Shared single-archive fetch+save for WS events
@@ -649,6 +666,7 @@ export default class SocialArchiverPlugin extends Plugin {
     await this.archiveDeleteSyncService?.flushPendingDeletes();
     await this.archiveLibrarySyncService?.startSync(mode);
     await this.completeArchiveStateReconcileBackfillIfCompleted();
+    await this.completeProductReconcileBackfillIfCompleted();
   }
 
   private async startArchiveStateReconcileBackfillWhenTimelineIdle(): Promise<void> {
@@ -666,11 +684,32 @@ export default class SocialArchiverPlugin extends Plugin {
     }
     await this.archiveLibrarySyncService?.startSync('manual-reconcile');
     await this.completeArchiveStateReconcileBackfillIfCompleted();
+    await this.completeProductReconcileBackfillIfCompleted();
   }
 
   private needsArchiveStateReconcileBackfill(): boolean {
     return (this.settings.archiveStateReconcileBackfillVersion ?? 0) <
       ARCHIVE_STATE_RECONCILE_BACKFILL_VERSION;
+  }
+
+  private needsProductReconcileBackfill(): boolean {
+    return (this.settings.productReconcileBackfillVersion ?? 0) <
+      PRODUCT_RECONCILE_BACKFILL_VERSION;
+  }
+
+  /**
+   * Stamp the commerce backfill once a full sweep has actually finished.
+   *
+   * Gated on `phase === 'completed'` so an aborted or errored run retries on the
+   * next launch rather than marking the back catalogue healed when it is not.
+   */
+  private async completeProductReconcileBackfillIfCompleted(): Promise<void> {
+    if (this.archiveLibrarySyncService?.getState().phase !== 'completed') return;
+    if (!this.needsProductReconcileBackfill()) return;
+
+    this.settings.productReconcileBackfillVersion = PRODUCT_RECONCILE_BACKFILL_VERSION;
+    this.settings.productReconcileBackfillDoneAt = new Date().toISOString();
+    await this.saveSettingsPartial({}, { reinitialize: false, notify: false });
   }
 
   private async completeArchiveStateReconcileBackfillIfCompleted(): Promise<void> {
@@ -1386,6 +1425,8 @@ export default class SocialArchiverPlugin extends Plugin {
     this.commentStateSyncService = undefined;
     this.locationFrontmatterSyncService?.dispose();
     this.locationFrontmatterSyncService = undefined;
+    this.productFrontmatterSyncService?.dispose();
+    this.productFrontmatterSyncService = undefined;
     this.bulkArchiveActionAccumulator?.destroy();
     this.bulkArchiveActionAccumulator = undefined;
     this.authorProfileSyncService = undefined;
@@ -1827,6 +1868,17 @@ export default class SocialArchiverPlugin extends Plugin {
         localLockRegistry: this.localLockRegistry,
       });
 
+      // Inbound commerce enrichment → product frontmatter + `%% sa:product %%`.
+      // No frontmatter-category gate, unlike location: `productSource` is not
+      // part of any hideable field category, so there is nothing to respect.
+      this.productFrontmatterSyncService?.dispose();
+      this.productFrontmatterSyncService = new ProductFrontmatterSyncService({
+        app: this.app,
+        apiClient: () => this.apiClient,
+        findBySourceArchiveId: (id) => this.archiveLookupService?.findBySourceArchiveId(id) ?? null,
+        localLockRegistry: this.localLockRegistry,
+      });
+
       // Create shared accumulator for batching outbound like/archive API calls
       this.bulkArchiveActionAccumulator?.destroy();
       this.bulkArchiveActionAccumulator = new BulkArchiveActionAccumulator(this.apiClient);
@@ -2129,6 +2181,13 @@ export default class SocialArchiverPlugin extends Plugin {
         reconcileLocationState: (file, archive) =>
           this.locationFrontmatterSyncService?.reconcileFromLibrarySync(file, archive) ??
           Promise.resolve(),
+        // Commerce catch-up. Rides the archive this sweep already fetched, so a
+        // full reconcile heals an entire back catalogue for zero extra requests
+        // — including notes written before commerce support existed, and grade
+        // B/C stores whose price was enriched after the note was saved.
+        reconcileProductState: (file, archive) =>
+          this.productFrontmatterSyncService?.reconcileFromLibrarySync(file, archive) ??
+          Promise.resolve(),
         // Library sweeps go through the sweep-index gate: archives with no
         // relations cost zero per-archive GETs (2,500-archive vaults used to
         // flood the shared rate-limit bucket with one GET per archive).
@@ -2408,6 +2467,7 @@ export default class SocialArchiverPlugin extends Plugin {
           shareStateSyncService: this.shareStateSyncService,
           commentStateSyncService: this.commentStateSyncService,
           locationFrontmatterSyncService: this.locationFrontmatterSyncService,
+          productFrontmatterSyncService: this.productFrontmatterSyncService,
           recoverLocationFrontmatterSync: async (): Promise<boolean> => {
             const librarySync = this.archiveLibrarySyncService;
             if (!librarySync || librarySync.isRunning) return false;
@@ -2550,13 +2610,17 @@ export default class SocialArchiverPlugin extends Plugin {
             Date.now() - completedAtMs > LIBRARY_SYNC_MAX_AGE_MS;
           const shouldAutoStart = !libSync || !libSync.completedAt || stale;
           const needsArchiveStateReconcileBackfill = this.needsArchiveStateReconcileBackfill();
+          // Commerce needs one full walk. `stale` cannot deliver it: the delta
+          // sweep refreshes `completedAt` on every run, so an established vault
+          // never crosses the 7-day threshold and never takes the branch above.
+          const needsProductReconcileBackfill = this.needsProductReconcileBackfill();
 
           if (shouldAutoStart) {
             // Delay to let services fully initialise before starting sync
             this.scheduleTrackedTimeout(() => {
               void this.startArchiveLibrarySyncWhenTimelineIdle();
             }, 8000);
-          } else if (needsArchiveStateReconcileBackfill) {
+          } else if (needsArchiveStateReconcileBackfill || needsProductReconcileBackfill) {
             this.scheduleTrackedTimeout((): void => {
               void this.startArchiveStateReconcileBackfillWhenTimelineIdle();
             }, 8000);

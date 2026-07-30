@@ -181,6 +181,9 @@ const PLATFORM_PATTERNS: URLPattern[] = [
       // Thread URLs (using /t/ path)
       /threads\.(?:net|com)\/t\/[A-Za-z0-9_-]+/i,
 
+      // Share links from the Threads app share sheet (302s to the canonical post URL)
+      /threads\.(?:net|com)\/share\/[A-Za-z0-9_-]+/i,
+
       // Direct post link format
       /threads\.(?:net|com)\/[A-Za-z0-9_-]+/i,
     ],

@@ -1170,3 +1170,110 @@ describe('RealtimeEventBridge -- bulk location convergence', () => {
     expect(deps.refreshTimelineView).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * The product upsert/clear endpoints broadcast through the same notifier as
+ * place confirms, so a price enriched on another device rides this batch. These
+ * pin the fan-out, which is the part most likely to be dropped by a later edit
+ * to the location reconcile path.
+ */
+describe('RealtimeEventBridge -- bulk commerce convergence', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('runs the product reconciler over the same batch as the location one', async () => {
+    const locationReconcile = vi.fn().mockResolvedValue({ failedArchiveIds: [] });
+    const productReconcile = vi.fn().mockResolvedValue({ failedArchiveIds: [] });
+    const events = makeEvents();
+    const deps = makeDeps({
+      events,
+      locationFrontmatterSyncService: { reconcileArchiveIds: locationReconcile },
+      productFrontmatterSyncService: { reconcileArchiveIds: productReconcile },
+      random: () => 0.5,
+    });
+    new RealtimeEventBridge(deps).setup();
+
+    await events.trigger('ws:archives_bulk_updated', {
+      type: 'archives_bulk_updated',
+      data: { archiveIds: ['archive-1'], sourceClientId: 'mobile-client' },
+    });
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(locationReconcile).toHaveBeenCalledWith(['archive-1']);
+    expect(productReconcile).toHaveBeenCalledWith(['archive-1']);
+  });
+
+  it('retries an archive the product reconciler failed on', async () => {
+    const locationReconcile = vi.fn().mockResolvedValue({ failedArchiveIds: [] });
+    const productReconcile = vi.fn()
+      .mockResolvedValueOnce({ failedArchiveIds: ['archive-1'] })
+      .mockResolvedValueOnce({ failedArchiveIds: [] });
+    const events = makeEvents();
+    const deps = makeDeps({
+      events,
+      locationFrontmatterSyncService: { reconcileArchiveIds: locationReconcile },
+      productFrontmatterSyncService: { reconcileArchiveIds: productReconcile },
+      random: () => 0.5,
+    });
+    new RealtimeEventBridge(deps).setup();
+
+    await events.trigger('ws:archives_bulk_updated', {
+      type: 'archives_bulk_updated',
+      data: { archiveIds: ['archive-1'], sourceClientId: 'mobile-client' },
+    });
+    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(60000);
+
+    expect(productReconcile).toHaveBeenCalledTimes(2);
+  });
+
+  it('still reconciles commerce when no location service is wired', async () => {
+    const productReconcile = vi.fn().mockResolvedValue({ failedArchiveIds: [] });
+    const events = makeEvents();
+    const deps = makeDeps({
+      events,
+      locationFrontmatterSyncService: undefined,
+      productFrontmatterSyncService: { reconcileArchiveIds: productReconcile },
+      random: () => 0.5,
+    });
+    new RealtimeEventBridge(deps).setup();
+
+    await events.trigger('ws:archives_bulk_updated', {
+      type: 'archives_bulk_updated',
+      data: { archiveIds: ['archive-1'], sourceClientId: 'mobile-client' },
+    });
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(productReconcile).toHaveBeenCalledWith(['archive-1']);
+  });
+
+  it('skips commerce reconcile on bulk note batches, same as location', async () => {
+    // Those batches carry 100-200 ids and never change a product; fanning out
+    // per-archive GETs for them is what the flag exists to prevent.
+    const productReconcile = vi.fn().mockResolvedValue({ failedArchiveIds: [] });
+    const events = makeEvents();
+    const deps = makeDeps({
+      events,
+      productFrontmatterSyncService: { reconcileArchiveIds: productReconcile },
+      random: () => 0.5,
+    });
+    new RealtimeEventBridge(deps).setup();
+
+    await events.trigger('ws:archives_bulk_updated', {
+      type: 'archives_bulk_updated',
+      data: {
+        archiveIds: ['archive-1'],
+        sourceClientId: 'mobile-client',
+        hasAnnotationUpdate: true,
+      },
+    });
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(productReconcile).not.toHaveBeenCalled();
+  });
+});

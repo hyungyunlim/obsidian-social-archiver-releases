@@ -24,6 +24,28 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.5.0': {
+    title: 'Shopping',
+    date: '2026-07-30',
+    notes: `## Shopping
+
+- Product pages you archive now render as shopping cards — photo, price, discount, stock, store — instead of a page title. Open the timeline and click the shopping-bag icon to browse them, filtered by store.
+- Commerce data was already arriving from the server and being dropped when the note was written, so these cards never appeared for anything in your vault. They do now.
+- Prices that arrive after archiving reach your vault too. Coupang, Amazon and Naver do not publish a price a server can read, so it is captured later on another device — that now syncs in rather than being lost.
+
+## First launch after this update
+
+- Your library syncs once in full so existing shop archives pick up their prices and photos. On a large vault this takes a while; the sync banner shows progress.
+- Notes now record **when you archived them** rather than when this vault downloaded them. If you sort by "Archived" or group by date, expect a one-time reshuffle — the dates are more accurate now, not less.
+
+## Fixes
+
+- Upgrading an archive to a richer version no longer discards your tags, share links, or per-file media choices. This could break a published share link.
+- The "In stock" badge was invisible: Obsidian uses one colour for both the badge background and its text.
+- A webtoon episode saved twice no longer risks showing the empty copy.
+`,
+    isImportant: true,
+  },
   '4.4.0': {
     title: 'Faster AI Place Review',
     date: '2026-07-25',

@@ -124,6 +124,12 @@ export interface YamlFrontmatter {
   locationPlaceKind?: import('../shared/platforms/place-kinds').PlaceKind;
   locations?: Array<Record<string, unknown>>;
   locationCount?: number;
+  /**
+   * Normalized store host for a commerce archive ("gymshark.com",
+   * "brand.naver.com/lgcaremall"). The Shopping view's grouping key; the full
+   * snapshot lives in the `%% sa:product %%` body block.
+   */
+  productSource?: string;
   // Mobile Annotation Sync fields
   /** Stable server archive ID used as primary lookup key for annotation sync */
   sourceArchiveId?: string;

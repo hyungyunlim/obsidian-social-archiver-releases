@@ -41,6 +41,28 @@ export function isSeriesGroup(item: TimelineItem): item is SeriesGroup {
 }
 
 /**
+ * Which of two files for the SAME episode number to keep.
+ *
+ * Duplicates arise when streaming creates a file and a background download
+ * writes another. Later archive time wins; on a tie, more media wins.
+ *
+ * The media half was documented in the calling code but never implemented, so a
+ * tie silently kept whichever file was encountered first — which can be the
+ * streaming stub rather than the completed download. Ties are ordinary rather
+ * than exotic: `archived` stores minute precision, so episodes written in one
+ * pass compare equal.
+ */
+export function prefersReplacementEpisode(
+  existing: { archived: string; mediaCount: number },
+  candidate: { archived: string; mediaCount: number },
+): boolean {
+  const existingAt = new Date(existing.archived || 0).getTime();
+  const candidateAt = new Date(candidate.archived || 0).getTime();
+  if (candidateAt > existingAt) return true;
+  return candidateAt === existingAt && candidate.mediaCount > existing.mediaCount;
+}
+
+/**
  * Normalize a frontmatter seriesId value into a string grouping key.
  *
  * seriesId is usually a scalar (number or string), but Obsidian's Properties
@@ -248,10 +270,11 @@ export class SeriesGroupingService {
         if (!existing) {
           episodeMap.set(ep.episode, ep);
         } else {
-          // Keep the one with more recent archived date, or the one with more media
-          const existingArchived = new Date(existing.archived || 0).getTime();
-          const currentArchived = new Date(ep.archived || 0).getTime();
-          if (currentArchived > existingArchived) {
+          const replaces = prefersReplacementEpisode(
+            { archived: existing.archived, mediaCount: existing.post.media?.length ?? 0 },
+            { archived: ep.archived, mediaCount: ep.post.media?.length ?? 0 },
+          );
+          if (replaces) {
             episodeMap.set(ep.episode, ep);
           }
         }

@@ -39,6 +39,15 @@ const threadsThreadUrlSchema = z
 		message: 'Invalid Threads thread URL format (expected: /t/{threadId})',
 	});
 
+// Share link produced by the Threads app share sheet: threads.com/share/{token}
+// The token is not the post shortcode — the link 302s to /@{user}/post/{shortcode},
+// and the server expands it before archiving.
+const threadsShareUrlSchema = z
+	.string()
+	.regex(/(threads\.net|threads\.com)\/share\/[A-Za-z0-9_-]+\/?$/i, {
+		message: 'Invalid Threads share URL format (expected: /share/{token})',
+	});
+
 // Direct post link format: threads.net/{postId} or threads.com/{postId}
 const threadsDirectUrlSchema = z
 	.string()
@@ -69,6 +78,7 @@ export const ThreadsURLSchema = z
 			const patterns = [
 				threadsPostUrlSchema,
 				threadsThreadUrlSchema,
+				threadsShareUrlSchema,
 				threadsDirectUrlSchema,
 			];
 

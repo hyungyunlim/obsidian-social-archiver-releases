@@ -19,6 +19,36 @@ import { USER_CONTROLLED_FRONTMATTER_FIELDS } from './markdown/frontmatter/const
 import { App, Vault, TFile, normalizePath, stringifyYaml } from 'obsidian';
 
 /**
+ * Carry user-owned frontmatter forward onto a freshly regenerated block.
+ *
+ * Every writer that overwrites an existing note has to run this, because
+ * regeneration rebuilds frontmatter from `PostData` — and `PostData` does not
+ * carry the user's tags, share state, or per-URL media decisions. Whatever is
+ * not merged back is not "reset to a default", it is gone.
+ *
+ * Extracted rather than copied a third time: this logic already exists twice
+ * (here and, unreachably, in FrontmatterGenerator), and the copy that was
+ * missing from `savePost` is precisely how the replace path came to destroy
+ * user data.
+ */
+export function mergeUserControlledFrontmatter<T extends Record<string, unknown>>(
+  next: T,
+  existing: Record<string, unknown> | undefined,
+): T {
+  if (!existing) return { ...next };
+
+  // Widened for the write, narrowed once on return — keeps the cast in here
+  // rather than at all three call sites.
+  const merged: Record<string, unknown> = { ...next };
+  for (const field of USER_CONTROLLED_FRONTMATTER_FIELDS) {
+    if (existing[field] !== undefined) {
+      merged[field] = existing[field];
+    }
+  }
+  return merged as T;
+}
+
+/**
  * Media file save result
  */
 export interface MediaSaveResult {
@@ -340,12 +370,28 @@ export class VaultStorageService {
     // Pass undefined for customTemplate to use default, then mediaResults
     const markdown = this.markdownConverter.convert(postData, undefined, mediaResults, { outputFilePath: filePath });
 
+    // Overwriting an existing note (subscription limited-archive upgrade, media
+    // enrichment, preliminary-file replacement) regenerates frontmatter from
+    // PostData — which carries none of the user's tags, share state, or media
+    // decisions. Without this merge the upgrade silently destroys them, and a
+    // published shareUrl stops resolving. New files skip it: nothing to keep.
+    const existingFile = this.vault.getFileByPath(filePath);
+    const documentToWrite = existingFile
+      ? this.markdownConverter.updateFullDocument({
+          ...markdown,
+          frontmatter: mergeUserControlledFrontmatter(
+            markdown.frontmatter,
+            this.app.metadataCache.getFileCache(existingFile)?.frontmatter,
+          ),
+        }).fullDocument
+      : markdown.fullDocument;
+
     // Ensure parent folder exists
     const parentPath = this.getParentPath(filePath);
     await this.vaultManager.createFolderIfNotExists(parentPath);
 
     // Save markdown file
-    const file = await this.createOrUpdateFile(filePath, markdown.fullDocument);
+    const file = await this.createOrUpdateFile(filePath, documentToWrite);
 
     // Inject composed-post sync contract fields for user-created posts
     if (postData.platform === 'post' && postData.id) {
@@ -525,13 +571,18 @@ export class VaultStorageService {
     // Preserve user-controlled fields (share state, per-URL download decisions,
     // detach markers, etc.) so re-archive/update doesn't clobber user intent.
     // See USER_CONTROLLED_FRONTMATTER_FIELDS in frontmatter/constants.ts.
-    const mergedFrontmatter: Record<string, unknown> = { ...markdown.frontmatter };
-    const existingFm = existingFrontmatter as Record<string, unknown>;
+    const mergedFrontmatter = mergeUserControlledFrontmatter(
+      markdown.frontmatter,
+      existingFrontmatter,
+    );
 
-    for (const field of USER_CONTROLLED_FRONTMATTER_FIELDS) {
-      if (existingFm[field] !== undefined) {
-        mergedFrontmatter[field] = existingFm[field];
-      }
+    // Editing a note is not re-archiving it. This path (composed-post edits,
+    // adding an embedded archive to a host note) never carries a server archive
+    // time, so the generator falls back to `now` and the original date would be
+    // lost. Only fill from the existing note when nothing better was supplied —
+    // a caller that does know the real archive time must still win.
+    if (!postData.archivedDate && typeof existingFrontmatter['archived'] === 'string') {
+      mergedFrontmatter.archived = existingFrontmatter['archived'];
     }
 
     // Extract existing body content and media gallery

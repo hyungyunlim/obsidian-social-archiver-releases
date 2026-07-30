@@ -174,7 +174,21 @@ export class FrontmatterGenerator {
   generateFrontmatter(postData: PostData, options?: FrontmatterOptions): YamlFrontmatter {
     // Current timestamp in YYYY-MM-DD HH:mm format (consistent with published)
     const now = new Date();
-    const archived = this.dateNumberFormatter.formatDate(now);
+    // `archived` is WHEN THE USER ARCHIVED IT, not when this file was written.
+    // For anything arriving from the server those differ — often by months — and
+    // stamping `now` made the field record the download instead. Sync paths
+    // supply the server's value via `archivedDate` (UserArchiveConverter); a
+    // direct archive supplies nothing, and for that `now` is the correct answer.
+    //
+    // Formatted through the same formatter as every other date so the stored
+    // shape stays `YYYY-MM-DD HH:mm` — SeriesGroupingService compares this field
+    // as a raw string, and mixing in ISO-8601 would break that comparison.
+    const archivedSource = postData.archivedDate instanceof Date
+      && !Number.isNaN(postData.archivedDate.getTime())
+      ? postData.archivedDate
+      : now;
+    const archived = this.dateNumberFormatter.formatDate(archivedSource);
+    // `lastModified` genuinely IS now: this is the write.
     const lastModified = this.dateNumberFormatter.formatDate(now);
 
     // Format original post date (YYYY-MM-DD HH:mm in local timezone)
@@ -348,6 +362,14 @@ export class FrontmatterGenerator {
     // It rides in a hidden `%% sa:locations %%` body block instead (appended in
     // MarkdownConverter.convert / reconciled by LocationFrontmatterSyncService).
     // Only the flat primary-place fields above stay in frontmatter.
+
+    // Commerce store host. Flat and in frontmatter on purpose: it is the key the
+    // Shopping view groups by, and keeping it queryable from Bases/Dataview is
+    // most of its value. The nested snapshot rides in a `%% sa:product %%` body
+    // block for the same reason `locations` does.
+    if (postData.metadata.productSource) {
+      frontmatter.productSource = postData.metadata.productSource;
+    }
 
     // Bases Map View compatible coordinates format: "lat, lng"
     if (postData.metadata.latitude !== undefined && postData.metadata.longitude !== undefined) {

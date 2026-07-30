@@ -17,6 +17,13 @@ export interface FilterState {
   sharedOnly: boolean;
   localOnlyOnly: boolean;
   subscribedOnly: boolean;
+  /** Shopping mode: keep only commerce archives (those with a store host). */
+  productsOnly: boolean;
+  /**
+   * Narrow Shopping to one store, by normalized host. Only meaningful while
+   * `productsOnly` is on; null is "All stores".
+   */
+  productSource: string | null;
   includeArchived: boolean;
   activeTab: TimelineArchiveTab;
   dateRange: { start: Date | null; end: Date | null };
@@ -176,9 +183,15 @@ export class FilterSortManager {
       filtered = filtered.filter(post => post.isLocalOnly === true);
     }
 
-    // Filter by subscribed only
-    if (this.filterState.subscribedOnly) {
-      filtered = filtered.filter(post => post.subscribed === true);
+    // Shopping. Eligibility is keyed on the store host rather than on
+    // `isProductCardEligible`, because the index path has only the host and the
+    // two lists must agree — a card that appears in one and not the other reads
+    // as data loss.
+    if (this.filterState.productsOnly) {
+      filtered = filtered.filter(post => Boolean(post.metadata.productSource));
+      if (this.filterState.productSource) {
+        filtered = filtered.filter(post => post.metadata.productSource === this.filterState.productSource);
+      }
     }
 
     // Filter by archive status
@@ -332,6 +345,12 @@ export class FilterSortManager {
     }
     if (this.filterState.subscribedOnly) {
       filtered = filtered.filter(e => e.subscribed);
+    }
+    if (this.filterState.productsOnly) {
+      filtered = filtered.filter(e => Boolean(e.productSource));
+      if (this.filterState.productSource) {
+        filtered = filtered.filter(e => e.productSource === this.filterState.productSource);
+      }
     }
     switch (this.filterState.activeTab) {
       case 'inbox':
@@ -519,6 +538,9 @@ export class FilterSortManager {
       this.filterState.dateRange.start !== null ||
       this.filterState.dateRange.end !== null
       // Search query removed - search and filter are now independent
+      // `productsOnly` / `productSource` are deliberately absent: Shopping has
+      // its own lit toolbar button and its own selected chip, so counting it
+      // here would light the filter button for a state the user can already see.
     );
     return Boolean(hasActiveFilter);
   }
@@ -537,6 +559,8 @@ export class FilterSortManager {
       sharedOnly: initialFilterState?.sharedOnly ?? false,
       localOnlyOnly: initialFilterState?.localOnlyOnly ?? false,
       subscribedOnly: initialFilterState?.subscribedOnly ?? false,
+      productsOnly: initialFilterState?.productsOnly ?? false,
+      productSource: initialFilterState?.productSource ?? null,
       includeArchived: initialFilterState?.includeArchived ?? false,
       activeTab: initialFilterState?.activeTab ?? 'inbox' as const,
       dateRange: {

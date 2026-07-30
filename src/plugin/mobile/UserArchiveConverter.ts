@@ -335,11 +335,22 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
   }) as Media[];
   const whisperTranscript = normalizeWhisperTranscript(archive);
 
+  const parsedArchivedAt = archive.archivedAt ? new Date(archive.archivedAt) : null;
+  const archivedDate = parsedArchivedAt && !Number.isNaN(parsedArchivedAt.getTime())
+    ? parsedArchivedAt
+    : undefined;
+
   return {
     platform,
     id: archive.postId,
     url: archive.originalUrl,
     sourceArchiveId: archive.id,
+    // When the user actually archived this, per the server. Every sync path —
+    // library sweep, mobile sync, WS ingest, sync queue — comes through here, so
+    // this one line is what stops a synced note from claiming it was archived at
+    // the moment the vault happened to download it. Invalid dates are dropped
+    // rather than propagated as `Invalid Date`.
+    ...(archivedDate ? { archivedDate } : {}),
     ...(archive.contentType ? { contentType: archive.contentType } : {}),
     ...(archive.title ? { title: archive.title } : {}),
     author: {

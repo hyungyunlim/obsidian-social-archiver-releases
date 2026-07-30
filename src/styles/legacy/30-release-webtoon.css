@@ -381,7 +381,10 @@
 .sa-webtoon-episode-item .read-badge {
   padding: 1px 4px;
   background: var(--background-modifier-success);
-  color: var(--text-success);
+  /* Same trap as .pcr-product-badge: Obsidian aliases --text-success and
+     --background-modifier-success to the same --color-green, so this badge was
+     invisible too. */
+  color: var(--text-on-accent);
   border-radius: 3px;
   font-size: 10px;
   flex-shrink: 0

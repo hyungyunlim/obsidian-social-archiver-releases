@@ -235,6 +235,21 @@ export interface ArchiveLibrarySyncDeps {
   reconcileLocationState?: (file: TFile, archive: UserArchive) => Promise<void>;
 
   /**
+   * Reconcile commerce data (`productSource` frontmatter + the hidden
+   * `%% sa:product %%` block) on an existing note against the server archive.
+   *
+   * Same server-owned contract as `reconcileLocationState`, and the same
+   * offline catch-up role — but it carries more weight here, because a
+   * commerce note is routinely written BEFORE its price exists. Grade B and C
+   * stores (Coupang, Amazon, Naver) are enriched by a client that can render
+   * the page, minutes to hours after the archive lands; without this sweep that
+   * price would never reach a note that has already been written.
+   *
+   * Wired to ProductFrontmatterSyncService.reconcileFromLibrarySync() in main.ts.
+   */
+  reconcileProductState?: (file: TFile, archive: UserArchive) => Promise<void>;
+
+  /**
    * Reconcile the managed `## Linked archives` section on a vault file against
    * the server's archive_link_relations for `archiveId`. Idempotent + fail-soft.
    *
@@ -723,6 +738,7 @@ export class ArchiveLibrarySyncService {
         await this.reconcileExistingTranscriptState(existingById, archive);
         await this.reconcileExistingCommentState(existingById, archive);
         await this.reconcileExistingLocationState(existingById, archive);
+        await this.reconcileExistingProductState(existingById, archive);
         await this.reconcileLinkRelationState(existingById, archive);
         if (!updated) {
           this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
@@ -801,6 +817,7 @@ export class ArchiveLibrarySyncService {
         await this.reconcileExistingTranscriptState(matched, archive);
         await this.reconcileExistingCommentState(matched, archive);
         await this.reconcileExistingLocationState(matched, archive);
+        await this.reconcileExistingProductState(matched, archive);
         await this.reconcileLinkRelationState(matched, archive);
         if (!updated) {
           this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
@@ -970,6 +987,25 @@ export class ArchiveLibrarySyncService {
       await this.deps.reconcileLocationState(file, archive);
     } catch (error) {
       console.warn('[Social Archiver] [LibrarySync] reconcileExistingLocationState failed', {
+        archiveId: archive.id,
+        path: file.path,
+        error,
+      });
+    }
+  }
+
+  /**
+   * Reconcile commerce frontmatter and the product block. Non-fatal, same as
+   * the location pass — a store that fails to reconcile must not abort the
+   * sweep for every archive behind it.
+   */
+  private async reconcileExistingProductState(file: TFile, archive: UserArchive): Promise<void> {
+    if (!this.deps.reconcileProductState) return;
+
+    try {
+      await this.deps.reconcileProductState(file, archive);
+    } catch (error) {
+      console.warn('[Social Archiver] [LibrarySync] reconcileExistingProductState failed', {
         archiveId: archive.id,
         path: file.path,
         error,

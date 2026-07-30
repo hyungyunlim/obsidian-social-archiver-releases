@@ -3,6 +3,7 @@ import type { PostData, Comment, Media, MultiLangTranscript } from '../../../typ
 import type { YamlFrontmatter } from '../../../types/archive';
 import { ArchiveLocationSchema, type ArchiveLocation } from '../../../types/archive-location';
 import { LocationBodyBlock } from '../../../services/markdown/LocationBodyBlock';
+import { ProductBodyBlock } from '../../../services/markdown/ProductBodyBlock';
 import { isRssBasedPlatform } from '../../../constants/rssPlatforms';
 import { detectMediaType, isImageUrl, isVideoUrl, isAudioUrl } from '../../../utils/mediaType';
 import { PostIndexService, type PostIndexEntry } from '../../../services/PostIndexService';
@@ -181,7 +182,14 @@ export class PostDataParser {
       // block (Obsidian can't render an object-array frontmatter property).
       // Parse it out, then strip it so it never appears in content.text / shares.
       const bodyLocations = LocationBodyBlock.parse(rawContent);
-      const content = bodyLocations ? LocationBodyBlock.strip(rawContent) : rawContent;
+      const withoutLocations = bodyLocations ? LocationBodyBlock.strip(rawContent) : rawContent;
+      // Same deal for the commerce snapshot — a nested object, so it rides in
+      // `%% sa:product %%` rather than frontmatter. Strip unconditionally: a
+      // block that failed to parse must still not leak into the rendered body.
+      const bodyProduct = ProductBodyBlock.parse(withoutLocations);
+      const content = ProductBodyBlock.has(withoutLocations)
+        ? ProductBodyBlock.strip(withoutLocations)
+        : withoutLocations;
 
       // Try to use MetadataCache for frontmatter if available
       let frontmatter: ExtendedFrontmatter | null = null;
@@ -691,6 +699,12 @@ export class PostDataParser {
             : (typeof frontmatter['locationCount'] === 'number'
               ? frontmatter['locationCount']
               : undefined),
+          // Commerce. Either half alone is enough for a product card
+          // (isProductCardEligible), so neither is gated on the other.
+          product: bodyProduct ?? undefined,
+          productSource: typeof frontmatter['productSource'] === 'string'
+            ? frontmatter['productSource']
+            : undefined,
           // Podcast-specific metadata
           duration: frontmatter.duration,
           episode: frontmatter.episode,

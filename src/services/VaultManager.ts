@@ -131,7 +131,14 @@ class PathGenerator {
 
     // Build token values
     const publishedDate = this.formatDate(postData.metadata.timestamp);
-    const archivedDate = this.formatDate(new Date());
+    // Same source as the `archived` frontmatter field. Reading the clock here
+    // instead would put a different date in the filename than in the note for
+    // every synced archive.
+    const archivedDate = this.formatDate(
+      postData.archivedDate instanceof Date && !Number.isNaN(postData.archivedDate.getTime())
+        ? postData.archivedDate
+        : new Date(),
+    );
     const platform = getPlatformName(postData.platform);
     const author = this.sanitizeFilename(postData.author.name);
 

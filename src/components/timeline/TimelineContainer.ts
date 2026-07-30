@@ -36,6 +36,7 @@ import { NoticeDetailModal } from '../../modals/NoticeDetailModal';
 import { ClipGuideModal } from '../../modals/ClipGuideModal';
 import type { NoticePayloadV1 } from '../../types/notices';
 import { TagChipBar } from './filters/TagChipBar';
+import { StoreChipBar, type StoreSummary } from './filters/StoreChipBar';
 import { UNTAGGED_FILTER_ID } from '../../types/tag';
 import { ReaderModeOverlay, type ReaderModeContext } from './reader/ReaderModeOverlay';
 import { SeriesGroupingService, type TimelineItem, isSeriesGroup } from '../../services/SeriesGroupingService';
@@ -364,6 +365,7 @@ export class TimelineContainer {
 
   // Tag chip bar for filtering by user-defined tags
   private tagChipBar: TagChipBar;
+  private storeChipBar: StoreChipBar;
   private bulkSelectionContainer: HTMLElement | null = null;
   private selectionMode = false;
   private selectedPostPaths: Set<string> = new Set();
@@ -474,6 +476,12 @@ export class TimelineContainer {
       this.filterSortManager.updateFilter({ selectedTags: filterState.selectedTags, untaggedOnly });
 
       // Phase 3: Use incremental DOM update
+      void this.updatePostsFeedIncremental();
+    });
+
+    // Initialize StoreChipBar for Shopping's per-store filtering
+    this.storeChipBar = new StoreChipBar((source: string | null) => {
+      this.filterSortManager.updateFilter({ productSource: source });
       void this.updatePostsFeedIncremental();
     });
 
@@ -1579,13 +1587,25 @@ export class TimelineContainer {
       !filterState.commentedOnly &&
       !filterState.sharedOnly &&
       !filterState.localOnlyOnly &&
-      !filterState.subscribedOnly;
+      !filterState.subscribedOnly &&
+      // Shopping has its own empty state; the archived-count line below counts
+      // every post, which would be a wrong number to show inside Shopping.
+      !filterState.productsOnly;
     if (isPlainInboxEmpty) {
       const archivedCount = this.posts.filter((post) => post.archive === true).length;
       if (archivedCount > 0) {
         this.renderInboxArchivedEmptyState(archivedCount);
         return;
       }
+    }
+
+    // Shopping with nothing to shop. Distinguished from "filters hide the
+    // products" by the store list, which ignores every filter but the tab: no
+    // stores means no commerce archives exist, so offering "Reset filters"
+    // would be a dead end.
+    if (filterState.productsOnly && this.getStoreSummaries().length === 0) {
+      this.renderShoppingEmptyState();
+      return;
     }
 
     const wrapper = this.containerEl.createDiv({
@@ -1635,6 +1655,40 @@ export class TimelineContainer {
         }
       }
     })());
+  }
+
+  /**
+   * Render the empty state for Shopping when no commerce archive exists yet.
+   *
+   * The exit is "Back to timeline" rather than "Reset filters": Shopping being
+   * empty is not a filter mistake, and resetting would silently drop the user's
+   * unrelated tag/tab state to fix a problem those filters did not cause.
+   */
+  private renderShoppingEmptyState(): void {
+    const wrapper = this.containerEl.createDiv({
+      cls: 'flex flex-col items-center justify-center min-h-[300px] text-center text-[var(--text-muted)] gap-3 max-w-2xl mx-auto timeline-feed'
+    });
+
+    wrapper.createEl('p', {
+      text: '🛍️',
+      cls: 'text-4xl mb-2'
+    });
+
+    wrapper.createEl('h3', {
+      text: 'No products yet',
+      cls: 'text-lg font-semibold text-[var(--text-normal)]'
+    });
+
+    wrapper.createEl('p', {
+      text: 'Archive a product page from a shop and it lands here with its price and photos.'
+    });
+
+    const backBtn = wrapper.createEl('button', {
+      text: 'Back to timeline',
+      cls: 'px-4 py-2 rounded border border-[var(--interactive-accent)] text-[var(--interactive-accent)] hover:bg-[var(--interactive-accent)] hover:text-[var(--text-on-accent)] transition-colors cursor-pointer'
+    });
+
+    backBtn.addEventListener('click', () => void this.toggleShoppingView());
   }
 
   /**
@@ -2395,6 +2449,7 @@ export class TimelineContainer {
     this.renderTabCycleButton(rightButtons);
     this.renderViewSwitcherButton(rightButtons);
 
+    this.renderShoppingButton(rightButtons);
     this.renderSubscriptionButton(rightButtons);
     this.renderSettingsButton(rightButtons);
 
@@ -3643,6 +3698,101 @@ export class TimelineContainer {
   }
 
   /**
+   * Render the Shopping button — the plugin's equivalent of the drawer entry
+   * mobile/desktop/share-web use for the Shopping screen.
+   *
+   * Those clients give Shopping a whole screen because they have a drawer to
+   * hang it off. Here it is a filter over the same feed instead, which is what
+   * those screens are underneath: `hasProduct` + a store chip bar over the
+   * ordinary archive list. Keeping it a filter is why search, sort, tabs, bulk
+   * select, and the gallery toggle all keep working inside Shopping, and why
+   * the product card needs no second render path.
+   */
+  private renderShoppingButton(parent: HTMLElement): void {
+    const shoppingBtn = parent.createDiv();
+    shoppingBtn.addClass('sa-action-btn');
+    shoppingBtn.setAttribute('role', 'button');
+    shoppingBtn.setAttribute('tabindex', '0');
+
+    const shoppingIcon = shoppingBtn.createDiv();
+    shoppingIcon.addClass('sa-icon-16');
+    shoppingIcon.addClass('sa-text-muted');
+    shoppingIcon.addClass('sa-transition-color');
+    setIcon(shoppingIcon, 'shopping-bag');
+
+    const updateButtonState = () => {
+      const active = this.filterSortManager.getFilterState().productsOnly;
+      shoppingBtn.setAttribute('aria-pressed', String(active));
+      if (active) {
+        shoppingBtn.removeClass('sa-bg-transparent');
+        shoppingBtn.addClass('sa-bg-accent');
+        shoppingIcon.removeClass('sa-text-muted');
+        shoppingIcon.addClass('tc-sub-icon-active');
+        shoppingBtn.setAttribute('title', 'Back to timeline');
+      } else {
+        shoppingBtn.removeClass('sa-bg-accent');
+        shoppingBtn.addClass('sa-bg-transparent');
+        shoppingIcon.removeClass('tc-sub-icon-active');
+        shoppingIcon.addClass('sa-text-muted');
+        shoppingBtn.setAttribute('title', 'Shopping');
+      }
+    };
+
+    updateButtonState();
+
+    shoppingBtn.addEventListener('mouseenter', () => {
+      if (!this.filterSortManager.getFilterState().productsOnly) {
+        shoppingBtn.removeClass('sa-bg-transparent');
+        shoppingBtn.addClass('sa-bg-hover');
+        shoppingIcon.removeClass('sa-text-muted');
+        shoppingIcon.addClass('sa-text-accent');
+      }
+    });
+
+    shoppingBtn.addEventListener('mouseleave', () => {
+      updateButtonState();
+    });
+
+    const toggle = () => void this.toggleShoppingView();
+    shoppingBtn.addEventListener('click', toggle);
+    shoppingBtn.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggle();
+      }
+    });
+  }
+
+  /**
+   * Enter or leave Shopping.
+   *
+   * Leaving always clears the store selection: a chip that survives the toggle
+   * comes back invisibly next time (the chip bar only renders inside Shopping),
+   * and the user would see a silently short list with no filter shown anywhere.
+   */
+  private async toggleShoppingView(): Promise<void> {
+    const next = !this.filterSortManager.getFilterState().productsOnly;
+
+    // Authors is a different screen, not a filter — it cannot show product
+    // cards, so entering Shopping has to leave it the way the gallery toggle does.
+    if (next && this.isSubscriptionViewActive) {
+      this.isSubscriptionViewActive = false;
+      this.syncFiltersAuthorToTimeline();
+    }
+
+    // Not persisted, deliberately — Authors, its sibling mode, is not either,
+    // and reopening the vault into a products-only timeline with no visible
+    // cause is a worse cold start than losing the mode.
+    this.filterSortManager.updateFilter({ productsOnly: next, productSource: null });
+
+    if (this.viewMode === 'gallery') {
+      await this.renderGalleryView();
+    } else {
+      await this.loadPosts();
+    }
+  }
+
+  /**
    * Render subscription button (toggles subscription management view)
    */
   private renderSubscriptionButton(parent: HTMLElement): void {
@@ -3697,6 +3847,9 @@ export class TimelineContainer {
       updateButtonState();
 
       if (this.isSubscriptionViewActive) {
+        // Authors replaces the feed, so a Shopping filter left on underneath
+        // would be invisible while its toolbar button stayed lit.
+        this.filterSortManager.updateFilter({ productsOnly: false, productSource: null });
         // Sync filter state from Timeline to Author
         this.syncFiltersTimelineToAuthor();
         await this.renderSubscriptionManagement();
@@ -5109,6 +5262,10 @@ export class TimelineContainer {
     // Render header with filter/sort controls
     this.renderHeader();
 
+    // Stores sit above tags: inside Shopping the store is the primary axis, and
+    // the two bars stack in the same slot.
+    this.renderStoreChipBar();
+
     const hasTagChipBar = this.hasVisibleTagChipBar();
     if (hasTagChipBar) {
       this.renderTagChipBar();
@@ -5309,6 +5466,7 @@ export class TimelineContainer {
     }
 
     // Compute new filtered list from current filter state
+    this.reconcileStoreSelection();
     const newFiltered = this.filterSortManager.applyFiltersAndSortIndex(this.indexEntries);
     // Compute diff against previous tracked state
     const diff = this.filterSortManager.diffWithPrevious(newFiltered);
@@ -5602,6 +5760,7 @@ export class TimelineContainer {
       await this.refreshFailedArchiveAttempts();
 
       // Use FilterSortManager to apply filters and sorting (always apply, even with cached data)
+      this.reconcileStoreSelection();
       this.filteredPosts = this.applyCurrentFiltersAndSort();
       // Also maintain index-based filtered list for incremental updates
       this.filteredIndexEntries = this.filterSortManager.applyFiltersAndSortIndex(this.indexEntries);
@@ -5875,6 +6034,75 @@ export class TimelineContainer {
     if (!tagStore) return false;
 
     return tagStore.getTagsWithCounts().some((tag) => tag.archiveCount > 0);
+  }
+
+  /**
+   * Aggregate stores for the Shopping chip bar.
+   *
+   * There is no SQL here, so this is share-web's shape (a reduce over what is
+   * loaded) rather than mobile/desktop's `GROUP BY product_source`. It runs on
+   * the index when one exists, which is the whole vault rather than the
+   * currently filtered page — counts must not shrink as the user filters.
+   *
+   * Deliberately ignores every filter EXCEPT the archive tab: chips that vanish
+   * because Inbox is showing would make the archived half of a store
+   * unreachable, and a count that disagrees with the visible list reads as a bug.
+   */
+  private getStoreSummaries(): StoreSummary[] {
+    const byStore = new Map<string, StoreSummary>();
+    const tab = this.filterSortManager.getFilterState().activeTab;
+
+    const add = (source: string | undefined, archived: boolean, timestamp: number): void => {
+      if (!source) return;
+      if (tab === 'inbox' && archived) return;
+      if (tab === 'archive' && !archived) return;
+      const existing = byStore.get(source);
+      if (existing) {
+        existing.archiveCount += 1;
+        existing.lastArchivedAt = Math.max(existing.lastArchivedAt, timestamp);
+        return;
+      }
+      byStore.set(source, { source, archiveCount: 1, lastArchivedAt: timestamp });
+    };
+
+    if (this.indexEntries.length > 0) {
+      for (const entry of this.indexEntries) {
+        add(entry.productSource, entry.archive === true, entry.archivedDate ?? entry.metadataTimestamp);
+      }
+    } else {
+      for (const post of this.posts) {
+        add(
+          post.metadata.productSource,
+          post.archive === true,
+          post.metadata.timestamp instanceof Date ? post.metadata.timestamp.getTime() : 0,
+        );
+      }
+    }
+
+    return [...byStore.values()];
+  }
+
+  /**
+   * Drop a store selection whose store no longer exists.
+   *
+   * Runs BEFORE filtering, not at render time: deleting the last archive of the
+   * selected store would otherwise leave an invisible filter pinned on, and the
+   * feed would come back empty with no chip to explain it. Checked against the
+   * store list rather than the filtered result, so a store that is merely
+   * search-empty keeps its selection.
+   */
+  private reconcileStoreSelection(): void {
+    const { productsOnly, productSource } = this.filterSortManager.getFilterState();
+    if (!productsOnly || !productSource) return;
+    if (this.getStoreSummaries().some((store) => store.source === productSource)) return;
+    this.filterSortManager.updateFilter({ productSource: null });
+  }
+
+  /** Render the Shopping store chips. Presentational — see reconcileStoreSelection. */
+  private renderStoreChipBar(): void {
+    const filterState = this.filterSortManager.getFilterState();
+    if (!filterState.productsOnly) return;
+    this.storeChipBar.render(this.containerEl, this.getStoreSummaries(), filterState.productSource);
   }
 
   private getBulkSelectionListPosts(): Array<PostData & { filePath: string }> {
@@ -6848,6 +7076,8 @@ export class TimelineContainer {
       sharedOnly: false,
       localOnlyOnly: false,
       subscribedOnly: false,
+      productsOnly: false,
+      productSource: null,
       includeArchived: false,
       activeTab: 'inbox',
       dateRange: { start: null, end: null },
@@ -7955,6 +8185,11 @@ export class TimelineContainer {
     // Render header with filter/sort controls (same as timeline view)
     this.renderHeader();
 
+    // Store chips work the same in gallery mode — Shopping + gallery is the
+    // product-photo grid, and losing the store filter on the toggle would be a
+    // filter silently changing behind a view switch.
+    this.renderStoreChipBar();
+
     // Render tag chip bar below header (if tags exist)
     this.renderTagChipBar();
 
@@ -8195,11 +8430,18 @@ export class TimelineContainer {
         })
         .filter((file): file is TFile => file !== null) || [];
 
+      // An empty result means "nothing matched", but this fallback reads it as
+      // "no filter" and shows the whole vault. Every other filter has always
+      // relied on that, so Shopping opts in rather than changing it wholesale:
+      // toggling Shopping with no products has to yield an empty gallery, not
+      // every photo in the vault.
+      const scopeToFilteredFiles = filteredFiles.length > 0 || currentFilter.productsOnly;
+
       // Extract media items with platform and search filters applied
       const mediaItems = await this.galleryRenderer.extractMediaItems(
         currentFilter.platforms.size > 0 ? currentFilter.platforms : undefined,
         currentFilter.searchQuery,
-        filteredFiles.length > 0 ? filteredFiles : undefined
+        scopeToFilteredFiles ? filteredFiles : undefined
       );
 
       loadingEl.remove();

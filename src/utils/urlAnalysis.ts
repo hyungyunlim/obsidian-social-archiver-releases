@@ -738,6 +738,18 @@ export function analyzeUrl(url: string): UrlAnalysisResult {
       }
     }
 
+    // Threads app share links: threads.com/share/{token}
+    // The token is not the post shortcode, so no postId can be derived here —
+    // the link 302s to /@{user}/post/{shortcode} and the server expands it.
+    if (platform === 'threads' && /^\/share\/[A-Za-z0-9_-]+\/?$/i.test(urlObj.pathname)) {
+      return {
+        type: 'post',
+        platform: 'threads',
+        originalUrl,
+        normalizedUrl
+      };
+    }
+
     // Check if URL has post-identifying segments (indicates post URL)
     if (hasPostSegments(urlObj.pathname)) {
       const postId = detector.extractPostId(normalizedUrl);

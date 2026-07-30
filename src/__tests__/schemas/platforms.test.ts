@@ -331,6 +331,11 @@ describe('Platform URL Schemas', () => {
 
 				// Direct post URLs
 				'https://threads.net/ABC123xyz',
+
+				// Share sheet links from the Threads app (expanded server-side)
+				'https://www.threads.com/share/BATJuLt_Lc/',
+				'https://www.threads.com/share/BATJuLt_Lc',
+				'https://threads.net/share/BATJuLt_Lc/',
 			];
 
 			validUrls.forEach((url) => {

@@ -261,6 +261,16 @@ export interface RealtimeEventBridgeDeps {
   locationFrontmatterSyncService?: {
     reconcileArchiveIds(archiveIds: readonly string[]): Promise<LocationReconcileResult>;
   } | undefined;
+  /**
+   * Commerce reconciliation for the same `ws:archives_bulk_updated` batch. The
+   * product upsert/clear endpoints broadcast through the same notifier as place
+   * confirms, and without `hasAnnotationUpdate`, so a price enriched on another
+   * device reaches the vault live rather than waiting for a full library sweep.
+   * Wired to ProductFrontmatterSyncService in main.ts.
+   */
+  productFrontmatterSyncService?: {
+    reconcileArchiveIds(archiveIds: readonly string[]): Promise<LocationReconcileResult>;
+  } | undefined;
   recoverLocationFrontmatterSync: (archiveIds: readonly string[]) => Promise<boolean>;
   random?: () => number;
   canExecuteAICommentJobs?: () => boolean;
@@ -1557,16 +1567,18 @@ export class RealtimeEventBridge {
     this.archivesBulkUpdatedTimer = this.deps.schedule(() => {
       this.archivesBulkUpdatedTimer = undefined;
       if (generation !== this.bulkLocationReconcileGeneration) return;
-      const service = this.deps.locationFrontmatterSyncService;
+      const hasReconciler = Boolean(
+        this.deps.locationFrontmatterSyncService ?? this.deps.productFrontmatterSyncService,
+      );
       const archiveIds = [...this.pendingBulkUpdatedArchiveIds];
       this.pendingBulkUpdatedArchiveIds.clear();
-      if (!service) {
+      if (!hasReconciler) {
         this.transferBulkLocationRecovery(archiveIds, generation);
         return;
       }
       this.bulkLocationReconcileInFlight = true;
 
-      void service.reconcileArchiveIds(archiveIds)
+      void this.reconcileBulkUpdatedArchives(archiveIds)
         .then((result) => {
           if (generation !== this.bulkLocationReconcileGeneration) return;
           this.bulkLocationReconcileInFlight = false;
@@ -1584,6 +1596,40 @@ export class RealtimeEventBridge {
           );
         });
     }, delay);
+  }
+
+  /**
+   * Run every server-owned-metadata reconciler over one bulk-updated batch.
+   *
+   * Sequential, not concurrent: both reconcilers write the same note, and the
+   * lock registry that would serialize them is optional. Running them in
+   * parallel would race whenever it is absent.
+   *
+   * Failures are unioned so the existing retry ladder covers both. Retrying
+   * re-runs both reconcilers, which is free for the half that already
+   * succeeded — each one is a strict no-op when the note already matches.
+   *
+   * ponytail: two reconcilers means two GETs per archive. Acceptable because
+   * product and place broadcasts are single-archive and the 100-200 id
+   * bulk-note batches are already excluded upstream. If a third reconciler
+   * appears, or batches grow, lift the fetch into a shared runner that
+   * dispatches one archive to all of them.
+   */
+  private async reconcileBulkUpdatedArchives(
+    archiveIds: readonly string[],
+  ): Promise<LocationReconcileResult> {
+    const failed = new Set<string>();
+
+    for (const service of [
+      this.deps.locationFrontmatterSyncService,
+      this.deps.productFrontmatterSyncService,
+    ]) {
+      if (!service) continue;
+      const result = await service.reconcileArchiveIds(archiveIds);
+      for (const archiveId of result.failedArchiveIds) failed.add(archiveId);
+    }
+
+    return { failedArchiveIds: [...failed] };
   }
 
   private finishBulkLocationReconcile(

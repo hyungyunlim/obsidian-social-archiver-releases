@@ -746,6 +746,13 @@ export interface SocialArchiverSettings {
    */
   archiveStateReconcileBackfillDoneAt?: string;
   archiveStateReconcileBackfillVersion?: number;
+  /**
+   * One-time commerce reconcile: bumped to PRODUCT_RECONCILE_BACKFILL_VERSION
+   * once a full library sweep has pulled `productSource` and the product block
+   * onto notes that predate commerce support.
+   */
+  productReconcileBackfillDoneAt?: string;
+  productReconcileBackfillVersion?: number;
 
   // Delete Sync Settings
   deleteSync: DeleteSyncSettings;

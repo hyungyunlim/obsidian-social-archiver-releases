@@ -25,6 +25,12 @@ export interface PostIndexEntry {
   isLocalOnly: boolean;
   subscribed: boolean;
   subscriptionId?: string;
+  /**
+   * Normalized store host of a commerce archive, or undefined. Present on the
+   * index because Shopping filters and its store chips run on the index path —
+   * reading it from PostData would force a full parse of every note.
+   */
+  productSource?: string;
 
   // Pre-joined search text (fast substring matching)
   searchText: string;
@@ -60,7 +66,14 @@ interface PostIndex {
 
 // v4: local-only provenance is projected into the lightweight index so the
 // timeline can filter those notes without loading every full card first.
-const INDEX_VERSION = 4;
+// v5: `productSource` joins it for the same reason. The bump is mandatory —
+// a retained v4 cache has the field on no entry, so Shopping would come up
+// permanently empty for every existing vault with no error anywhere.
+// v6: `archivedDate` changed MEANING — it now carries the server's archive time
+// rather than the local write time. A retained v5 cache mixes both vintages, so
+// sorting and date-grouping by "archived" would be arbitrary until every file
+// happened to fail its own mtime staleness check.
+const INDEX_VERSION = 6;
 const INDEX_FILE_NAME = 'post-index.json';
 const SAVE_DEBOUNCE_MS = 5_000;
 
@@ -295,6 +308,12 @@ export class PostIndexService {
       isLocalOnly: metadata.isLocalOnly,
       subscribed: metadata.subscribed,
       subscriptionId: metadata.subscriptionId,
+      // Read straight off the frontmatter rather than threaded through
+      // `metadata`: it is a plain string with no parsing step, and every
+      // hand-maintained field list is one more place to silently drop it.
+      productSource: typeof frontmatter['productSource'] === 'string' && frontmatter['productSource']
+        ? frontmatter['productSource']
+        : undefined,
       searchText,
       seriesId: metadata.seriesId,
       episodeNumber: metadata.episodeNumber,

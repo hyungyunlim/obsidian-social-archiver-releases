@@ -10,6 +10,8 @@ import { CommentFormatter } from './markdown/formatters/CommentFormatter';
 import { FactCheckFormatter } from './markdown/formatters/FactCheckFormatter';
 import { FrontmatterGenerator } from './markdown/frontmatter/FrontmatterGenerator';
 import { LocationBodyBlock } from './markdown/LocationBodyBlock';
+import { ProductBodyBlock } from './markdown/ProductBodyBlock';
+import { isRenderableProductSnapshot } from '../shared/platforms/products';
 import { MediaPlaceholderGenerator } from './MediaPlaceholderGenerator';
 import { SentinelMediaRegionManager } from '@/plugin/realtime/SentinelMediaRegionManager';
 import { isRssBasedPlatform } from '@/constants/rssPlatforms';
@@ -1640,6 +1642,15 @@ export class MarkdownConverter implements IService {
     const locations = normalizedPostData.metadata.locations;
     if (Array.isArray(locations) && locations.length > 0) {
       content = `${content.replace(/\s+$/, '')}\n\n${LocationBodyBlock.serialize(locations)}\n`;
+    }
+
+    // The commerce snapshot rides in its own hidden block for the same reason:
+    // it is a nested object, and the flat `productSource` alone cannot rebuild
+    // the card. Without this the server sends a product on every commerce
+    // archive and the vault silently drops it.
+    const product = normalizedPostData.metadata.product;
+    if (isRenderableProductSnapshot(product)) {
+      content = `${content.replace(/\s+$/, '')}\n\n${ProductBodyBlock.serialize(product)}\n`;
     }
 
     // Generate full document

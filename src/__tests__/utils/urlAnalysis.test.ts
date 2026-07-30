@@ -322,6 +322,22 @@ describe('urlAnalysis', () => {
           expect(result.postId).toBe(expectedId);
         }
       });
+
+      it('should treat Threads share links as posts without a derived post ID', () => {
+        const urls = [
+          'https://www.threads.com/share/BATJuLt_Lc/',
+          'https://www.threads.com/share/BATJuLt_Lc',
+          'https://threads.net/share/BATJuLt_Lc/',
+        ];
+
+        for (const url of urls) {
+          const result = analyzeUrl(url);
+          expect(result.type, `Failed for ${url}`).toBe('post');
+          expect(result.platform).toBe('threads');
+          // The share token is not the post shortcode — the server expands it.
+          expect(result.postId).toBeUndefined();
+        }
+      });
     });
 
     describe('Reddit', () => {

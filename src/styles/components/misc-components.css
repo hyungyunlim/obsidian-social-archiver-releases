@@ -2094,6 +2094,17 @@ body.is-mobile .tc-selection-pill {
   margin-left: 2px;
 }
 
+/*
+ * Shopping store chips reuse every chip rule above; only the stacking gap
+ * differs. `.tcb-container`'s 28px tail is the gap before the feed, so when a
+ * tag bar follows the store bar that tail becomes a hole between two bars.
+ * Written as an override rather than a default so that a renderer without
+ * `:has()` support still gets correct standalone spacing, just a roomier stack.
+ */
+.store-chip-bar:has(+ .tag-chip-bar) {
+  padding-bottom: 8px;
+}
+
 
 /* ========================================
  * Confirm Modal (cm-)
