@@ -2479,3 +2479,238 @@ body.is-mobile .sa-flex-between .sa-dynamic-height {
 body.is-mobile .sa-flex-between .sa-dynamic-width {
   width: 32px;
 }
+
+
+/* ========================================
+ * Places list (sa-place-)
+ * ======================================== */
+
+.sa-place-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 42rem;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.sa-place-search-input {
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 13px;
+}
+
+/* The chip bar reuses TagChipBar's chip rules; only the tail differs, since
+   rows follow immediately rather than the feed. */
+.sa-place-chip-bar {
+  padding-bottom: 4px;
+}
+
+.sa-place-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.sa-place-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-normal);
+  text-align: left;
+  cursor: pointer;
+  /* iOS HIG minimum touch target — these rows are the primary Places control. */
+  min-height: 44px;
+}
+
+.sa-place-row:hover {
+  background: var(--background-modifier-hover);
+}
+
+.sa-place-row.is-selected {
+  background: var(--background-modifier-active-hover);
+}
+
+.sa-place-row-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+}
+
+.sa-place-row-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sa-place-row-name {
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sa-place-row-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sa-place-row-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.sa-place-row-badge {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-accent);
+}
+
+.sa-place-list-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* A 45-place list would push the feed off-screen; cap it and scroll. */
+.sa-place-rows {
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+
+/* ========================================
+ * Places map (sa-place-map / sa-place-marker)
+ * ======================================== */
+
+/*
+ * Two classes deep on purpose. post-card.css carries Leaflet's own
+ * `.leaflet-container { height: 100% }` and is imported AFTER this file, so a
+ * single-class `.sa-place-map` height loses on source order — and `100%` of an
+ * auto-height flex parent is 0, which renders the map into a collapsed box that
+ * looks like nothing happened at all.
+ */
+.sa-place-list .sa-place-map {
+  position: relative;
+  width: 100%;
+  /*
+   * Scales with the pane so a main-area tab gets a usable map, while a narrow
+   * sidebar stays workable. A fixed 320px was fine in the sidebar and wasteful
+   * everywhere else.
+   */
+  height: 42vh;
+  min-height: 260px;
+  max-height: 560px;
+  /* The tag chip bar butts straight up against the map without this. */
+  margin-bottom: 12px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--background-secondary);
+}
+
+.sa-place-map-attr {
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  z-index: 500;
+  font-size: 10px;
+  color: var(--text-faint);
+  background: var(--background-primary);
+  padding: 1px 4px;
+  border-radius: 4px;
+  opacity: 0.85;
+}
+
+.sa-place-marker {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  /* Leaflet sizes the icon box; the label has to escape it to stay readable. */
+  overflow: visible;
+  white-space: nowrap;
+}
+
+.sa-place-marker-dot {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--interactive-accent);
+  box-shadow: 0 0 0 2px var(--background-primary);
+}
+
+.sa-place-marker.is-selected .sa-place-marker-dot {
+  width: 14px;
+  height: 14px;
+  background: var(--text-accent);
+}
+
+/*
+ * Hidden until the container says the zoom is close enough. Permanent labels are
+ * what made a whole-country view unreadable — dots overlap gracefully, name
+ * plates do not.
+ */
+.sa-place-marker-label {
+  display: none;
+  font-size: 11px;
+  color: var(--text-normal);
+  background: var(--background-primary);
+  padding: 0 4px;
+  border-radius: 4px;
+  opacity: 0.9;
+}
+
+/* The presentation switch sits with the search box. */
+.sa-place-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sa-place-toolbar .sa-place-search {
+  flex: 1 1 auto;
+}
+
+.sa-place-toggle {
+  gap: 4px;
+  width: auto;
+  padding: 0 8px;
+}
+
+.sa-place-toggle-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.sa-place-map-error {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.sa-place-map-labels .sa-place-marker-label {
+  display: inline;
+}

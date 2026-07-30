@@ -264,6 +264,61 @@ describe('LocationFrontmatterSyncService.reconcileFromLibrarySync', () => {
     expect(writtenFrontmatters[0]).toEqual({ tags: ['keep-me'] });
   });
 
+  it('replaces the place kind when the place changes', async () => {
+    // The kind is the icon every client draws. Left unmanaged, a reconcile that
+    // moved the note to a different place kept the previous kind, so a cafe row
+    // went on claiming to be a restaurant.
+    const { app, writtenFrontmatters } = makeApp({
+      location: 'Old Diner',
+      locationSource: 'kakaomap',
+      locationExternalId: '111',
+      locationPlaceKind: 'restaurant',
+    });
+    const service = makeService(app);
+
+    await service.reconcileFromLibrarySync(makeFile('a.md'), {
+      id: 'archive-1',
+      location: 'New Cafe',
+      locationSource: 'kakaomap',
+      locationExternalId: '222',
+      locationPlaceKind: 'cafe',
+    });
+
+    expect(writtenFrontmatters[0]?.locationPlaceKind).toBe('cafe');
+  });
+
+  it('clears the place kind when the server has none', async () => {
+    const { app, writtenFrontmatters } = makeApp({
+      location: 'Somewhere',
+      locationPlaceKind: 'restaurant',
+    });
+    const service = makeService(app);
+
+    await service.reconcileFromLibrarySync(makeFile('a.md'), {
+      id: 'archive-1',
+      location: 'Somewhere',
+    });
+
+    expect(writtenFrontmatters[0]).not.toHaveProperty('locationPlaceKind');
+  });
+
+  it('ignores a place kind the taxonomy does not recognise', async () => {
+    // Guards against a server-side taxonomy addition landing in the vault as a
+    // kind no client can render an icon for. Dropping it leaves the projection
+    // identical to what is already on disk, so the correct outcome is the strict
+    // no-op — asserting that also proves the bad value never reached a write.
+    const { app, processFrontMatter } = makeApp({ location: 'Somewhere' });
+    const service = makeService(app);
+
+    await service.reconcileFromLibrarySync(makeFile('a.md'), {
+      id: 'archive-1',
+      location: 'Somewhere',
+      locationPlaceKind: 'teleport-pad' as never,
+    });
+
+    expect(processFrontMatter).not.toHaveBeenCalled();
+  });
+
   it('overwrites provisional server-owned fields and preserves unrelated user fields', async () => {
     const { app, processFrontMatter, writtenFrontmatters } = makeApp({
       location: 'Provisional place',

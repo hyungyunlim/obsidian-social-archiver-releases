@@ -37,6 +37,9 @@ import { ClipGuideModal } from '../../modals/ClipGuideModal';
 import type { NoticePayloadV1 } from '../../types/notices';
 import { TagChipBar } from './filters/TagChipBar';
 import { StoreChipBar, type StoreSummary } from './filters/StoreChipBar';
+import { PlaceListRenderer } from './places/PlaceListRenderer';
+import { PlaceMapRenderer } from './places/PlaceMapRenderer';
+import { aggregatePlaces } from '../../utils/placeAggregation';
 import { UNTAGGED_FILTER_ID } from '../../types/tag';
 import { ReaderModeOverlay, type ReaderModeContext } from './reader/ReaderModeOverlay';
 import { SeriesGroupingService, type TimelineItem, isSeriesGroup } from '../../services/SeriesGroupingService';
@@ -366,6 +369,8 @@ export class TimelineContainer {
   // Tag chip bar for filtering by user-defined tags
   private tagChipBar: TagChipBar;
   private storeChipBar: StoreChipBar;
+  private placeListRenderer: PlaceListRenderer;
+  private placeMapRenderer: PlaceMapRenderer;
   private bulkSelectionContainer: HTMLElement | null = null;
   private selectionMode = false;
   private selectedPostPaths: Set<string> = new Set();
@@ -477,6 +482,29 @@ export class TimelineContainer {
 
       // Phase 3: Use incremental DOM update
       void this.updatePostsFeedIncremental();
+    });
+
+    // Places selects by vault path rather than placeKey — the index carries only
+    // `hasPlace`, and the aggregation already knows which notes reference each
+    // place, so it hands the paths over and both filter paths work unchanged.
+    this.placeMapRenderer = new PlaceMapRenderer({
+      onSelect: (place) => {
+        this.filterSortManager.updateFilter({ placeFilePaths: new Set(place.filePaths) });
+        void this.updatePostsFeedIncremental();
+      },
+    });
+
+    this.placeListRenderer = new PlaceListRenderer({
+      // Injected so the list never imports Leaflet — the map module is only
+      // reached when the user switches to it.
+      renderMap: (container, places, selectedKey) =>
+        this.placeMapRenderer.render(container, places, selectedKey) !== null,
+      onSelect: (place) => {
+        this.filterSortManager.updateFilter({
+          placeFilePaths: place ? new Set(place.filePaths) : null,
+        });
+        void this.updatePostsFeedIncremental();
+      },
     });
 
     // Initialize StoreChipBar for Shopping's per-store filtering
@@ -2449,6 +2477,7 @@ export class TimelineContainer {
     this.renderTabCycleButton(rightButtons);
     this.renderViewSwitcherButton(rightButtons);
 
+    this.renderPlacesButton(rightButtons);
     this.renderShoppingButton(rightButtons);
     this.renderSubscriptionButton(rightButtons);
     this.renderSettingsButton(rightButtons);
@@ -3698,6 +3727,94 @@ export class TimelineContainer {
   }
 
   /**
+   * Render the Places button — "archives with a place".
+   *
+   * A filter rather than a screen, same as Shopping. The platform chips already
+   * offer googlemaps/navermap/kakaomap and that is NOT this: measured on a real
+   * vault, 86% of place-bearing notes sit on ordinary social platforms, so the
+   * platform route reaches almost none of them. This is keyed on the place data.
+   */
+  private renderPlacesButton(parent: HTMLElement): void {
+    const placesBtn = parent.createDiv();
+    placesBtn.addClass('sa-action-btn');
+    placesBtn.setAttribute('role', 'button');
+    placesBtn.setAttribute('tabindex', '0');
+
+    const placesIcon = placesBtn.createDiv();
+    placesIcon.addClass('sa-icon-16');
+    placesIcon.addClass('sa-text-muted');
+    placesIcon.addClass('sa-transition-color');
+    setIcon(placesIcon, 'map-pin');
+
+    const updateButtonState = (): void => {
+      const active = this.filterSortManager.getFilterState().placesOnly;
+      placesBtn.setAttribute('aria-pressed', String(active));
+      if (active) {
+        placesBtn.removeClass('sa-bg-transparent');
+        placesBtn.addClass('sa-bg-accent');
+        placesIcon.removeClass('sa-text-muted');
+        placesIcon.addClass('tc-sub-icon-active');
+        placesBtn.setAttribute('title', 'Back to timeline');
+      } else {
+        placesBtn.removeClass('sa-bg-accent');
+        placesBtn.addClass('sa-bg-transparent');
+        placesIcon.removeClass('tc-sub-icon-active');
+        placesIcon.addClass('sa-text-muted');
+        placesBtn.setAttribute('title', 'Places');
+      }
+    };
+
+    updateButtonState();
+
+    placesBtn.addEventListener('mouseenter', () => {
+      if (!this.filterSortManager.getFilterState().placesOnly) {
+        placesBtn.removeClass('sa-bg-transparent');
+        placesBtn.addClass('sa-bg-hover');
+        placesIcon.removeClass('sa-text-muted');
+        placesIcon.addClass('sa-text-accent');
+      }
+    });
+    placesBtn.addEventListener('mouseleave', () => { updateButtonState(); });
+
+    const toggle = (): void => void this.togglePlacesView();
+    placesBtn.addEventListener('click', toggle);
+    placesBtn.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggle();
+      }
+    });
+  }
+
+  /**
+   * Enter or leave Places. Mutually exclusive with Shopping — an archive can be
+   * both a product and a place, but showing one filtered feed under two lit
+   * buttons reads as a bug.
+   */
+  private async togglePlacesView(): Promise<void> {
+    const next = !this.filterSortManager.getFilterState().placesOnly;
+
+    if (next && this.isSubscriptionViewActive) {
+      this.isSubscriptionViewActive = false;
+      this.syncFiltersAuthorToTimeline();
+    }
+
+    this.filterSortManager.updateFilter({
+      placesOnly: next,
+      // A place selection that survived the toggle would come back invisibly —
+      // the list only renders inside Places — and silently shorten the feed.
+      placeFilePaths: null,
+      ...(next ? { productsOnly: false, productSource: null } : {}),
+    });
+
+    if (this.viewMode === 'gallery') {
+      await this.renderGalleryView();
+    } else {
+      await this.loadPosts();
+    }
+  }
+
+  /**
    * Render the Shopping button — the plugin's equivalent of the drawer entry
    * mobile/desktop/share-web use for the Shopping screen.
    *
@@ -3783,7 +3900,11 @@ export class TimelineContainer {
     // Not persisted, deliberately — Authors, its sibling mode, is not either,
     // and reopening the vault into a products-only timeline with no visible
     // cause is a worse cold start than losing the mode.
-    this.filterSortManager.updateFilter({ productsOnly: next, productSource: null });
+    this.filterSortManager.updateFilter({
+      productsOnly: next,
+      productSource: null,
+      ...(next ? { placesOnly: false, placeFilePaths: null } : {}),
+    });
 
     if (this.viewMode === 'gallery') {
       await this.renderGalleryView();
@@ -5262,6 +5383,12 @@ export class TimelineContainer {
     // Render header with filter/sort controls
     this.renderHeader();
 
+    // Places renders a LIST, not a chip bar — measured cardinality is inverted
+    // from Shopping (45 distinct places across 14 notes), so a chip per place
+    // would be unusable. The list doubles as the selector, which is why there is
+    // no separate list/feed mode to switch between.
+    this.renderPlaceList();
+
     // Stores sit above tags: inside Shopping the store is the primary axis, and
     // the two bars stack in the same slot.
     this.renderStoreChipBar();
@@ -6096,6 +6223,24 @@ export class TimelineContainer {
     if (!productsOnly || !productSource) return;
     if (this.getStoreSummaries().some((store) => store.source === productSource)) return;
     this.filterSortManager.updateFilter({ productSource: null });
+  }
+
+  /**
+   * Render the grouped place list while Places is on, and drop a selection whose
+   * place no longer exists — otherwise deleting the last archive referencing a
+   * place leaves an invisible path filter pinned on and the feed empty.
+   */
+  private renderPlaceList(): void {
+    if (!this.filterSortManager.getFilterState().placesOnly) return;
+
+    const places = aggregatePlaces(this.posts);
+    let selectedKey = this.placeListRenderer.getSelectedKey();
+    if (selectedKey && !places.some((place) => place.placeKey === selectedKey)) {
+      selectedKey = null;
+      this.filterSortManager.updateFilter({ placeFilePaths: null });
+    }
+
+    this.placeListRenderer.render(this.containerEl, places, selectedKey);
   }
 
   /** Render the Shopping store chips. Presentational — see reconcileStoreSelection. */
@@ -7076,6 +7221,8 @@ export class TimelineContainer {
       sharedOnly: false,
       localOnlyOnly: false,
       subscribedOnly: false,
+      placesOnly: false,
+      placeFilePaths: null,
       productsOnly: false,
       productSource: null,
       includeArchived: false,
@@ -8184,6 +8331,10 @@ export class TimelineContainer {
 
     // Render header with filter/sort controls (same as timeline view)
     this.renderHeader();
+
+    // Places list works the same in gallery mode — the selection narrows which
+    // photos the grid shows.
+    this.renderPlaceList();
 
     // Store chips work the same in gallery mode — Shopping + gallery is the
     // product-photo grid, and losing the store filter on the toggle would be a

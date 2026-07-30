@@ -2283,6 +2283,16 @@ export class PostDataParser {
       const commentsSection = content.match(/## 💬 Comments/);
       const commentCount = commentsSection ? (frontmatter['comments'] ?? 0) : 0;
 
+      // Cheap on purpose — the flat primary field, or the presence of the hidden
+      // block. No JSON parse: this runs for every note in the vault on a cold
+      // index. Measured on a real vault the two always travel together, but the
+      // block is checked too so a note that somehow carries only the array is
+      // still findable.
+      const hasPlace = Boolean(
+        (typeof frontmatter['location'] === 'string' && frontmatter['location'].trim())
+        || LocationBodyBlock.has(content),
+      );
+
       return PostIndexService.buildEntry(file, frontmatter, contentText, platform, {
         authorName: (isProfile ? frontmatter['displayName'] : frontmatter['author']) as string || 'Unknown',
         authorHandle: (frontmatter['authorHandle'] as string | undefined) || (frontmatter['handle'] as string | undefined),
@@ -2298,6 +2308,7 @@ export class PostDataParser {
         isLocalOnly,
         subscribed: frontmatter['subscribed'] === true,
         subscriptionId: frontmatter['subscriptionId'] as string | undefined,
+        hasPlace,
         publishedDate,
         archivedDate,
         mediaCount,

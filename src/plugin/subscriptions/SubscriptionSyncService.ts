@@ -691,8 +691,11 @@ export class SubscriptionSyncService {
           const preservationInProgress = post.mediaPreservationStatus === 'pending' || post.mediaPreservationStatus === 'processing';
           if (!preservationInProgress) {
             post._expiredMedia = expiredMedia;
+            const allCdnExpired = expiredMedia.every((item) => item.reason === 'cdn_expired');
             new Notice(
-              `\u26A0\uFE0F ${expiredMedia.length} media item(s) could not be downloaded (CDN expired).`,
+              allCdnExpired
+                ? `\u26A0\uFE0F ${expiredMedia.length} media item(s) could not be downloaded (CDN expired).`
+                : `\u26A0\uFE0F ${expiredMedia.length} media item(s) could not be downloaded.`,
               8000
             );
           }

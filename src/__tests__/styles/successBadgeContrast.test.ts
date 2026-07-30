@@ -69,3 +69,34 @@ describe('success badges stay readable', () => {
     expect(badge?.body).toMatch(/color\s*:\s*var\(--text-on-accent\)/);
   });
 });
+
+/**
+ * Leaflet's own `.leaflet-container { height: 100% }` lives in post-card.css,
+ * which is imported after the file holding the places map rule. Same
+ * specificity, so source order decides — and `100%` of an auto-height parent is
+ * 0, which renders the map into a collapsed box. It looks identical to the
+ * toggle doing nothing, and no jsdom test can see it.
+ */
+describe('places map survives the Leaflet height rule', () => {
+  it('sets the map height with more specificity than .leaflet-container', () => {
+    const css = readFileSync(join(STYLES_ROOT, 'components/misc-components.css'), 'utf8');
+    const heightRules = rules(css).filter(
+      (rule) => rule.selector.includes('.sa-place-map') && /height\s*:/.test(rule.body),
+    );
+
+    expect(heightRules.length).toBeGreaterThan(0);
+    for (const rule of heightRules) {
+      // Two class selectors beat the single-class Leaflet rule regardless of order.
+      expect(rule.selector.match(/\./g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it('confirms the rule it has to outrank still exists', () => {
+    // If Leaflet's height rule is ever removed, the specificity dance above is
+    // pointless and this test says so rather than silently guarding nothing.
+    const postCard = readFileSync(join(STYLES_ROOT, 'components/post-card.css'), 'utf8');
+    const leaflet = rules(postCard).find((rule) => rule.selector === '.leaflet-container');
+
+    expect(leaflet?.body).toMatch(/height\s*:\s*100%/);
+  });
+});

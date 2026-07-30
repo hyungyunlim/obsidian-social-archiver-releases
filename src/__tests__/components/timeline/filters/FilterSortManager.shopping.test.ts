@@ -107,3 +107,76 @@ describe('FilterSortManager — Shopping', () => {
     expect(manager.hasActiveFilters()).toBe(false);
   });
 });
+
+/**
+ * Places is keyed on the place DATA, never on `platform`. Measured on a real
+ * vault, 86% of place-bearing notes sat on threads/facebook/kidsnote — the
+ * platform chips reach almost none of them, which is the whole reason this
+ * filter exists.
+ */
+describe('FilterSortManager — Places', () => {
+  const placePost = (filePath: string, opts: { locations?: number; flat?: string } = {}): PostData => ({
+    platform: 'threads',
+    filePath,
+    title: 'Post',
+    authorName: 'A',
+    authorUrl: 'https://example.com',
+    publishedDate: new Date(),
+    archivedDate: new Date(),
+    metadata: {
+      timestamp: new Date(),
+      ...(opts.locations ? { locations: Array.from({ length: opts.locations }, (_, i) => ({ id: `l${i}` })) } : {}),
+      ...(opts.flat ? { location: opts.flat } : {}),
+    },
+  } as unknown as PostData);
+
+  const placeEntry = (filePath: string, hasPlace: boolean): PostIndexEntry =>
+    ({ ...makeEntry(filePath), platform: 'threads', hasPlace } as PostIndexEntry);
+
+  it('keeps only archives with a place', () => {
+    const manager = new FilterSortManager({ activeTab: 'all', placesOnly: true });
+    const posts = [placePost('a.md', { locations: 2 }), placePost('b.md')];
+    const entries = [placeEntry('a.md', true), placeEntry('b.md', false)];
+
+    expect(manager.applyFiltersAndSort(posts).map(p => p.filePath)).toEqual(['a.md']);
+    expect(manager.applyFiltersAndSortIndex(entries).map(e => e.filePath)).toEqual(['a.md']);
+  });
+
+  it('counts a legacy flat-only place as a place', () => {
+    // Older notes carry the primary in flat frontmatter with no array.
+    const manager = new FilterSortManager({ activeTab: 'all', placesOnly: true });
+    expect(manager.applyFiltersAndSort([placePost('a.md', { flat: '서울' })])).toHaveLength(1);
+  });
+
+  it('does not treat a blank flat location as a place', () => {
+    const manager = new FilterSortManager({ activeTab: 'all', placesOnly: true });
+    expect(manager.applyFiltersAndSort([placePost('a.md', { flat: '   ' })])).toHaveLength(0);
+  });
+
+  it('is inert while off', () => {
+    const manager = new FilterSortManager({ activeTab: 'all' });
+    expect(manager.applyFiltersAndSort([placePost('a.md'), placePost('b.md', { locations: 1 })])).toHaveLength(2);
+    expect(manager.applyFiltersAndSortIndex([placeEntry('a.md', false), placeEntry('b.md', true)])).toHaveLength(2);
+  });
+
+  it('does not key on platform — a map-platform post without place data is excluded', () => {
+    // The inverse of the platform chips, and the point of the whole filter.
+    const manager = new FilterSortManager({ activeTab: 'all', placesOnly: true });
+    const mapPostNoData = { ...placePost('map.md'), platform: 'kakaomap' } as PostData;
+    expect(manager.applyFiltersAndSort([mapPostNoData])).toHaveLength(0);
+  });
+
+  it('composes with Shopping rather than replacing it', () => {
+    const manager = new FilterSortManager({ activeTab: 'all', placesOnly: true, productsOnly: true });
+    const both = placePost('both.md', { locations: 1 });
+    both.metadata.productSource = 'shop.example.com';
+    const placeOnly = placePost('place.md', { locations: 1 });
+
+    expect(manager.applyFiltersAndSort([both, placeOnly]).map(p => p.filePath)).toEqual(['both.md']);
+  });
+
+  it('does not light the filter button — Places shows its own state', () => {
+    const manager = new FilterSortManager({ activeTab: 'inbox', placesOnly: true });
+    expect(manager.hasActiveFilters()).toBe(false);
+  });
+});

@@ -111,6 +111,9 @@
     importedWithWarnings: number;
     skippedDuplicates: number;
     failed: number;
+    /** Items never attempted because the run stopped on a quota error. */
+    quotaBlocked?: number;
+    stopReason?: 'quota';
     /** PRD F4.5 — exposed via the gallery flow only. */
     intentionallyExcluded?: number;
   } | null>(null);
@@ -227,7 +230,10 @@
           ...evt.summary,
           intentionallyExcluded,
         };
-        if (activeJob) activeJob = { ...activeJob, status: 'completed' };
+        // Mirror the worker's honest terminal status (failed > 0 → 'failed').
+        if (activeJob) {
+          activeJob = { ...activeJob, status: evt.summary.failed > 0 ? 'failed' : 'completed' };
+        }
         pane = 'completion';
         break;
       case 'job.failed':

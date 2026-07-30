@@ -149,7 +149,9 @@ export type ImportItemOutcome =
   | 'uploaded'
   | 'skipped_duplicate'
   | 'imported_with_warnings'
-  | 'failed';
+  | 'failed'
+  /** Never attempted (or rejected) because the run stopped on a quota error. Non-retriable. */
+  | 'skipped_quota';
 
 /** Persisted reference to a source ZIP part. */
 export type ImportJobSourceFile = {
@@ -212,6 +214,8 @@ export type ImportJobState = {
    * case-insensitive).
    */
   tags: string[];
+  /** Set when the run stopped early (e.g. server credit quota exhausted). */
+  stopReason?: 'quota';
   lastError?: string;
   /** Registered sync client ID for echo suppression (PRD §9.4.1). */
   sourceClientId?: string;
@@ -280,6 +284,9 @@ export type ImportProgressEvent =
         importedWithWarnings: number;
         skippedDuplicates: number;
         failed: number;
+        /** Items never attempted because the run stopped on a quota error. */
+        quotaBlocked?: number;
+        stopReason?: 'quota';
       };
     }
   | { type: 'job.failed'; jobId: string; error: string }

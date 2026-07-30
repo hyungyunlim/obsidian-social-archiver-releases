@@ -11,6 +11,9 @@
     importedWithWarnings: number;
     skippedDuplicates: number;
     failed: number;
+    /** Items never attempted because the run stopped on a quota error. */
+    quotaBlocked?: number;
+    stopReason?: 'quota';
     /**
      * Posts the user explicitly opted out of via the Review Gallery
      * (PRD prd-instagram-import-gallery.md F4.5). Absent / 0 for the
@@ -42,10 +45,19 @@
   // "Delete source .zip files" opt-in per PRD §5.3.1 — we surface the checkbox
   // only; actual cleanup is owned by the orchestrator. Default is unchecked.
   let deleteSources = $state(false);
+
+  // Honest heading — don't claim success when the run stopped or items failed.
+  const title = $derived(
+    summary?.stopReason === 'quota'
+      ? 'Import stopped — credit quota reached'
+      : summary && summary.failed > 0
+        ? 'Import finished with errors'
+        : 'Import complete',
+  );
 </script>
 
 <div class="sa-ig-completion">
-  <h3 class="sa-ig-completion__title">Import complete</h3>
+  <h3 class="sa-ig-completion__title">{title}</h3>
 
   {#if summary}
     <div class="sa-ig-completion__stats">
@@ -69,6 +81,11 @@
         <span class="sa-ig-completion__stat-value">{summary.failed}</span>
       </div>
     </div>
+    {#if (summary.quotaBlocked ?? 0) > 0}
+      <p class="sa-ig-completion__excluded" aria-live="polite">
+        {summary.quotaBlocked} posts not attempted — credit quota reached
+      </p>
+    {/if}
     {#if (summary.intentionallyExcluded ?? 0) > 0}
       <p class="sa-ig-completion__excluded" aria-live="polite">
         {summary.intentionallyExcluded} posts intentionally excluded by you

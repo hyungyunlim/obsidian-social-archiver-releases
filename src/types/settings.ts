@@ -753,6 +753,13 @@ export interface SocialArchiverSettings {
    */
   productReconcileBackfillDoneAt?: string;
   productReconcileBackfillVersion?: number;
+  /**
+   * One-time place reconcile: bumped to LOCATION_RECONCILE_BACKFILL_VERSION once
+   * a full library sweep has pulled server-owned place data onto notes whose
+   * confirms happened while this client was closed.
+   */
+  locationReconcileBackfillDoneAt?: string;
+  locationReconcileBackfillVersion?: number;
 
   // Delete Sync Settings
   deleteSync: DeleteSyncSettings;

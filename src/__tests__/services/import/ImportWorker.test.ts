@@ -234,7 +234,8 @@ describe('ImportWorker', () => {
     const item = store.getItems('job1')[0]!;
     expect(item.status).toBe('failed');
     expect(item.errorMessage).toContain('server down');
-    expect(store.getJob('job1')?.status).toBe('completed');
+    // Honest terminal status — a run with failures is not "completed".
+    expect(store.getJob('job1')?.status).toBe('failed');
   });
 
   it('records skipped_duplicate when server reports dupe', async () => {
@@ -571,6 +572,190 @@ describe('ImportWorker', () => {
     // Not every item will have been processed.
     const uploaded = store.getItems('job1').filter((it) => it.status === 'uploaded').length;
     expect(uploaded).toBeLessThan(5);
+  });
+
+  it('stops the run on a batch quota error without retrying quota items', async () => {
+    store.createJob(makeJob({ totalItems: 3 }), [
+      makeItem('p1'),
+      makeItem('p2'),
+      makeItem('p3'),
+    ]);
+    const batch = vi.fn(async (args: Parameters<NonNullable<ImportAPIClient['createArchivesFromImportBatch']>>[0]) => ({
+      accepted: 1,
+      created: [{ postId: 'p1', archiveId: 'arch-p1' }],
+      skippedDuplicates: [],
+      failed: args.items
+        .filter((item) => item.clientPostData.id !== 'p1')
+        .map((item) => ({
+          postId: item.clientPostData.id,
+          code: 'PAYWALL_REQUIRED',
+          message: 'Monthly archive limit reached',
+        })),
+    }));
+    const api = makeAPI({ createArchivesFromImportBatch: batch });
+
+    const worker = new ImportWorker('job1', {
+      apiClient: api,
+      jobStore: store,
+      progressBus: bus,
+      logger,
+      zipReaderFor: () => undefined,
+      postDataFor: (id) => makePostData(id),
+    });
+    await worker.start();
+
+    // No 3x retry passes — the quota error stops the run after one batch.
+    expect(batch).toHaveBeenCalledTimes(1);
+
+    const items = store.getItems('job1');
+    expect(items.find((it) => it.postId === 'p1')?.status).toBe('uploaded');
+    for (const postId of ['p2', 'p3']) {
+      const item = items.find((it) => it.postId === postId)!;
+      expect(item.status).toBe('skipped_quota');
+      // Quota-blocked items must NOT count as retried failures.
+      expect(item.retryCount).toBe(0);
+      expect(item.errorMessage).toContain('PAYWALL_REQUIRED');
+    }
+
+    const job = store.getJob('job1');
+    expect(job?.status).toBe('completed'); // no real failures
+    expect(job?.stopReason).toBe('quota');
+    expect(job?.failedItems).toBe(0);
+
+    const completion = events.find((e) => e.type === 'job.completed');
+    expect(completion).toBeDefined();
+    if (completion && completion.type === 'job.completed') {
+      expect(completion.summary.imported).toBe(1);
+      expect(completion.summary.failed).toBe(0);
+      expect(completion.summary.quotaBlocked).toBe(2);
+      expect(completion.summary.stopReason).toBe('quota');
+    }
+  });
+
+  it('stops the run on a legacy-path quota error and marks remaining items quota-blocked', async () => {
+    store.createJob(makeJob({ totalItems: 3 }), [
+      makeItem('p1'),
+      makeItem('p2'),
+      makeItem('p3'),
+    ]);
+    const create = vi.fn(async ({ clientPostData }: { clientPostData: PostData }) => {
+      if (clientPostData.id === 'p2') {
+        throw new Error('POST /api/archive failed: INSUFFICIENT_CREDITS: Insufficient credits');
+      }
+      return { archiveId: `arch-${clientPostData.id}`, skippedDuplicate: false };
+    });
+    const api = makeAPI({ createArchiveFromImport: create });
+
+    const worker = new ImportWorker('job1', {
+      apiClient: api,
+      jobStore: store,
+      progressBus: bus,
+      logger,
+      zipReaderFor: () => undefined,
+      postDataFor: (id) => makePostData(id),
+    });
+    await worker.start();
+
+    // p1 attempted + p2 quota error (no retries), p3 never attempted.
+    expect(create).toHaveBeenCalledTimes(2);
+
+    const items = store.getItems('job1');
+    expect(items.find((it) => it.postId === 'p1')?.status).toBe('uploaded');
+    const p2 = items.find((it) => it.postId === 'p2')!;
+    expect(p2.status).toBe('skipped_quota');
+    expect(p2.retryCount).toBe(0);
+    expect(p2.errorMessage).toContain('INSUFFICIENT_CREDITS');
+    const p3 = items.find((it) => it.postId === 'p3')!;
+    expect(p3.status).toBe('skipped_quota');
+    expect(p3.errorMessage).toContain('Not attempted');
+
+    const job = store.getJob('job1');
+    expect(job?.status).toBe('completed');
+    expect(job?.stopReason).toBe('quota');
+
+    const completion = events.find((e) => e.type === 'job.completed');
+    expect(completion).toBeDefined();
+    if (completion && completion.type === 'job.completed') {
+      expect(completion.summary.quotaBlocked).toBe(2);
+      expect(completion.summary.stopReason).toBe('quota');
+    }
+  });
+
+  it('finalizes with status failed and an honest summary when some items fail', async () => {
+    // Seed p2 at MAX retries so withRetry makes a single attempt (fast test).
+    store.createJob(makeJob({ totalItems: 2 }), [
+      makeItem('p1'),
+      makeItem('p2', { retryCount: 3 }),
+    ]);
+    const api = makeAPI({
+      createArchiveFromImport: vi.fn(async ({ clientPostData }) => {
+        if (clientPostData.id === 'p2') throw new Error('server down');
+        return { archiveId: `arch-${clientPostData.id}`, skippedDuplicate: false };
+      }),
+    });
+    const worker = new ImportWorker('job1', {
+      apiClient: api,
+      jobStore: store,
+      progressBus: bus,
+      logger,
+      zipReaderFor: () => undefined,
+      postDataFor: (id) => makePostData(id),
+    });
+    await worker.start();
+
+    expect(store.getJob('job1')?.status).toBe('failed');
+    const completion = events.find((e) => e.type === 'job.completed');
+    expect(completion).toBeDefined();
+    if (completion && completion.type === 'job.completed') {
+      expect(completion.summary.imported).toBe(1);
+      expect(completion.summary.failed).toBe(1);
+      expect(completion.summary.stopReason).toBeUndefined();
+    }
+  });
+
+  it('paces on succeeded items — a fully-rejected batch does not sleep per attempted item', async () => {
+    // 4 items at retryCount 2 → one batch pass flips them all to terminal failed.
+    store.createJob(makeJob({ totalItems: 4, rateLimitPerSec: 2 }), [
+      makeItem('p1', { retryCount: 2 }),
+      makeItem('p2', { retryCount: 2 }),
+      makeItem('p3', { retryCount: 2 }),
+      makeItem('p4', { retryCount: 2 }),
+    ]);
+    const api = makeAPI({
+      createArchivesFromImportBatch: vi.fn(async (args: Parameters<NonNullable<ImportAPIClient['createArchivesFromImportBatch']>>[0]) => ({
+        accepted: 0,
+        created: [],
+        skippedDuplicates: [],
+        failed: args.items.map((item) => ({
+          postId: item.clientPostData.id,
+          code: 'SERVER_ERROR',
+          message: 'boom',
+        })),
+      })),
+    });
+
+    const timeoutSpy = vi.spyOn(window, 'setTimeout');
+    const worker = new ImportWorker('job1', {
+      apiClient: api,
+      jobStore: store,
+      progressBus: bus,
+      logger,
+      zipReaderFor: () => undefined,
+      postDataFor: (id) => makePostData(id),
+    });
+    await worker.start();
+
+    // Budget is 500ms/item (rate 2). Old behavior slept attempted × budget
+    // (4 × 500 = 2000ms) even though 0 succeeded; new behavior paces on
+    // succeeded → max(1, 0) × 500. Store debounce timers are 250ms.
+    const delays = timeoutSpy.mock.calls.map((call) =>
+      typeof call[1] === 'number' ? call[1] : 0,
+    );
+    timeoutSpy.mockRestore();
+    expect(Math.max(...delays, 0)).toBeLessThanOrEqual(600);
+
+    expect(store.getItems('job1').every((it) => it.status === 'failed')).toBe(true);
+    expect(store.getJob('job1')?.status).toBe('failed');
   });
 
   it('fails gracefully when postData is missing', async () => {

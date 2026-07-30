@@ -65,3 +65,36 @@ describe('PostIndexService.buildEntry — commerce', () => {
     expect(entry.productSource).toBeUndefined();
   });
 });
+
+/**
+ * `hasPlace` is what makes "archives with a place" filterable without parsing
+ * every note. It projects from the frontmatter the index already reads.
+ */
+describe('PostIndexService.buildEntry — places', () => {
+  it('projects hasPlace when the caller found one', () => {
+    const entry = PostIndexService.buildEntry(
+      fileNamed('Social Archives/threads/post.md'),
+      { location: '서울 성수동' },
+      'body',
+      'threads',
+      { ...METADATA, hasPlace: true },
+    );
+
+    expect(entry.hasPlace).toBe(true);
+  });
+
+  it('leaves hasPlace undefined rather than false for the ordinary case', () => {
+    // Absent beats `false` — the index is persisted per note, and this is the
+    // overwhelming majority of them.
+    const entry = PostIndexService.buildEntry(
+      fileNamed('Social Archives/threads/post.md'),
+      {},
+      'body',
+      'threads',
+      METADATA,
+    );
+
+    expect(entry.hasPlace).toBeUndefined();
+    expect('hasPlace' in entry).toBe(false);
+  });
+});

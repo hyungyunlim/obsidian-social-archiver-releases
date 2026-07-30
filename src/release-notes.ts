@@ -24,6 +24,27 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.6.0': {
+    title: 'Places',
+    date: '2026-07-30',
+    notes: `## Browse by place
+
+- The timeline toolbar has a map-pin button. It gathers every archive that has a place attached, grouped one row per place with a count, and picking a place filters the timeline to it.
+- Filter by place type or map provider, and search by name or address.
+- Switch the panel to a map with the **Map** button beside the search box. Markers show where your places are; names appear as you zoom in, and clicking one filters the timeline just like a row does.
+- **Places attached to ordinary posts are findable at last.** Most saved places do not sit on a map archive — they are attached to a Threads or Facebook post — and until now nothing could list them. Filtering by the Google/Naver/Kakao platform chips only ever reached the handful that were map archives themselves.
+
+## First launch after this update
+
+- The archive index rebuilds so places become filterable, and your library syncs once in full so places confirmed on another device while Obsidian was closed reach this vault.
+
+## Fixes
+
+- A place's type no longer goes stale. Changing the place on an archive kept the previous type, so the icon described somewhere the note no longer pointed at.
+- Instagram Saved imports stop when your quota runs out instead of continuing, report a truthful final status, and say which media could not be fetched and why.
+`,
+    isImportant: true,
+  },
   '4.5.0': {
     title: 'Shopping',
     date: '2026-07-30',

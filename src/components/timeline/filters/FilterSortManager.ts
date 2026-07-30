@@ -17,6 +17,25 @@ export interface FilterState {
   sharedOnly: boolean;
   localOnlyOnly: boolean;
   subscribedOnly: boolean;
+  /**
+   * Places mode: keep only archives with an attached place.
+   *
+   * Keyed on the place DATA, never on `platform`. Measured on a real vault, 86%
+   * of place-bearing notes sit on threads/facebook/kidsnote rather than a map
+   * platform, so a platform gate would hide most of them — which is exactly what
+   * the platform chips already do.
+   */
+  placesOnly: boolean;
+  /**
+   * Narrow Places to one place, as the set of vault paths referencing it.
+   *
+   * A path set rather than a `placeKey` because the index carries only
+   * `hasPlace` — the keys live in the note body, and parsing every block to
+   * index them would cost far more than this. The aggregation already knows
+   * which notes reference each place, so it hands the paths over directly and
+   * both filter paths work unchanged.
+   */
+  placeFilePaths: ReadonlySet<string> | null;
   /** Shopping mode: keep only commerce archives (those with a store host). */
   productsOnly: boolean;
   /**
@@ -187,6 +206,17 @@ export class FilterSortManager {
     // `isProductCardEligible`, because the index path has only the host and the
     // two lists must agree — a card that appears in one and not the other reads
     // as data loss.
+    if (this.filterState.placesOnly) {
+      filtered = filtered.filter(post =>
+        (post.metadata.locations?.length ?? 0) > 0
+        || Boolean(typeof post.metadata.location === 'string' && post.metadata.location.trim()));
+    }
+
+    if (this.filterState.placeFilePaths) {
+      const paths = this.filterState.placeFilePaths;
+      filtered = filtered.filter(post => post.filePath !== undefined && paths.has(post.filePath));
+    }
+
     if (this.filterState.productsOnly) {
       filtered = filtered.filter(post => Boolean(post.metadata.productSource));
       if (this.filterState.productSource) {
@@ -346,6 +376,15 @@ export class FilterSortManager {
     if (this.filterState.subscribedOnly) {
       filtered = filtered.filter(e => e.subscribed);
     }
+    if (this.filterState.placesOnly) {
+      filtered = filtered.filter(e => e.hasPlace === true);
+    }
+
+    if (this.filterState.placeFilePaths) {
+      const paths = this.filterState.placeFilePaths;
+      filtered = filtered.filter(e => paths.has(e.filePath));
+    }
+
     if (this.filterState.productsOnly) {
       filtered = filtered.filter(e => Boolean(e.productSource));
       if (this.filterState.productSource) {
@@ -538,6 +577,7 @@ export class FilterSortManager {
       this.filterState.dateRange.start !== null ||
       this.filterState.dateRange.end !== null
       // Search query removed - search and filter are now independent
+      // `placesOnly` is absent for the same reason as the commerce flags below.
       // `productsOnly` / `productSource` are deliberately absent: Shopping has
       // its own lit toolbar button and its own selected chip, so counting it
       // here would light the filter button for a state the user can already see.
@@ -559,6 +599,8 @@ export class FilterSortManager {
       sharedOnly: initialFilterState?.sharedOnly ?? false,
       localOnlyOnly: initialFilterState?.localOnlyOnly ?? false,
       subscribedOnly: initialFilterState?.subscribedOnly ?? false,
+      placesOnly: initialFilterState?.placesOnly ?? false,
+      placeFilePaths: initialFilterState?.placeFilePaths ?? null,
       productsOnly: initialFilterState?.productsOnly ?? false,
       productSource: initialFilterState?.productSource ?? null,
       includeArchived: initialFilterState?.includeArchived ?? false,

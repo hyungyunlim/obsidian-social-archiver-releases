@@ -150,6 +150,21 @@ const ARCHIVE_STATE_RECONCILE_BACKFILL_VERSION = 6;
  * expensive: a complete paginated walk of the library per client.
  */
 const PRODUCT_RECONCILE_BACKFILL_VERSION = 1;
+/**
+ * Forces one full library reconcile so existing notes converge on server-owned
+ * place data.
+ *
+ * Same reasoning as the commerce gate above, and the same reason it is needed:
+ * `ArchiveLibrarySyncService` documents the location reconcile as the catch-up
+ * for place confirms made on other devices while this client was offline — but
+ * that catch-up only runs during a full sweep, and a full sweep never happens
+ * again once delta catch-up has refreshed `completedAt`. The live WS path covers
+ * confirms made while Obsidian is open; nothing covered the rest.
+ *
+ * Bump to force another full sweep. Expensive: a complete paginated walk per
+ * client.
+ */
+const LOCATION_RECONCILE_BACKFILL_VERSION = 1;
 const ARCHIVE_RECONCILE_TOMBSTONE_START = '1970-01-01T00:00:00.000Z';
 type ForegroundSyncCatchUpTrigger = 'focus' | 'visibilitychange' | 'online';
 
@@ -667,6 +682,7 @@ export default class SocialArchiverPlugin extends Plugin {
     await this.archiveLibrarySyncService?.startSync(mode);
     await this.completeArchiveStateReconcileBackfillIfCompleted();
     await this.completeProductReconcileBackfillIfCompleted();
+    await this.completeLocationReconcileBackfillIfCompleted();
   }
 
   private async startArchiveStateReconcileBackfillWhenTimelineIdle(): Promise<void> {
@@ -685,6 +701,7 @@ export default class SocialArchiverPlugin extends Plugin {
     await this.archiveLibrarySyncService?.startSync('manual-reconcile');
     await this.completeArchiveStateReconcileBackfillIfCompleted();
     await this.completeProductReconcileBackfillIfCompleted();
+    await this.completeLocationReconcileBackfillIfCompleted();
   }
 
   private needsArchiveStateReconcileBackfill(): boolean {
@@ -695,6 +712,11 @@ export default class SocialArchiverPlugin extends Plugin {
   private needsProductReconcileBackfill(): boolean {
     return (this.settings.productReconcileBackfillVersion ?? 0) <
       PRODUCT_RECONCILE_BACKFILL_VERSION;
+  }
+
+  private needsLocationReconcileBackfill(): boolean {
+    return (this.settings.locationReconcileBackfillVersion ?? 0) <
+      LOCATION_RECONCILE_BACKFILL_VERSION;
   }
 
   /**
@@ -709,6 +731,20 @@ export default class SocialArchiverPlugin extends Plugin {
 
     this.settings.productReconcileBackfillVersion = PRODUCT_RECONCILE_BACKFILL_VERSION;
     this.settings.productReconcileBackfillDoneAt = new Date().toISOString();
+    await this.saveSettingsPartial({}, { reinitialize: false, notify: false });
+  }
+
+  /**
+   * Stamp the place backfill once a full sweep has actually finished. Gated on
+   * `phase === 'completed'` so an aborted run retries rather than marking the
+   * back catalogue healed when it is not.
+   */
+  private async completeLocationReconcileBackfillIfCompleted(): Promise<void> {
+    if (this.archiveLibrarySyncService?.getState().phase !== 'completed') return;
+    if (!this.needsLocationReconcileBackfill()) return;
+
+    this.settings.locationReconcileBackfillVersion = LOCATION_RECONCILE_BACKFILL_VERSION;
+    this.settings.locationReconcileBackfillDoneAt = new Date().toISOString();
     await this.saveSettingsPartial({}, { reinitialize: false, notify: false });
   }
 
@@ -2614,13 +2650,18 @@ export default class SocialArchiverPlugin extends Plugin {
           // sweep refreshes `completedAt` on every run, so an established vault
           // never crosses the 7-day threshold and never takes the branch above.
           const needsProductReconcileBackfill = this.needsProductReconcileBackfill();
+          const needsLocationReconcileBackfill = this.needsLocationReconcileBackfill();
 
           if (shouldAutoStart) {
             // Delay to let services fully initialise before starting sync
             this.scheduleTrackedTimeout(() => {
               void this.startArchiveLibrarySyncWhenTimelineIdle();
             }, 8000);
-          } else if (needsArchiveStateReconcileBackfill || needsProductReconcileBackfill) {
+          } else if (
+            needsArchiveStateReconcileBackfill
+            || needsProductReconcileBackfill
+            || needsLocationReconcileBackfill
+          ) {
             this.scheduleTrackedTimeout((): void => {
               void this.startArchiveStateReconcileBackfillWhenTimelineIdle();
             }, 8000);
@@ -3611,6 +3652,28 @@ export default class SocialArchiverPlugin extends Plugin {
     if (!this.importOrchestrator) {
       throw new Error('Import orchestrator factory returned undefined.');
     }
+
+    // Plugin-level terminal notices — the import modal may be closed when
+    // the job ends, so surface quota stops / failures globally.
+    this.importOrchestrator.onEvent((evt) => {
+      if (evt.type === 'job.failed') {
+        new Notice(`Instagram import failed: ${evt.error}`, 10000);
+      } else if (evt.type === 'job.completed') {
+        const s = evt.summary;
+        if (s.stopReason === 'quota') {
+          new Notice(
+            `Instagram import stopped — credit quota reached. ${s.imported} imported, ${s.quotaBlocked ?? 0} blocked by quota.`,
+            10000
+          );
+        } else if (s.failed > 0) {
+          new Notice(
+            `Instagram import finished with ${s.failed} failed item(s) (${s.imported} imported).`,
+            10000
+          );
+        }
+      }
+    });
+
     return this.importOrchestrator;
   }
 
@@ -3877,6 +3940,8 @@ export default class SocialArchiverPlugin extends Plugin {
 
     // Fire-and-forget: request server re-preserve if we have an archiveId
     if (sourceArchiveId && this.apiClient) {
+      // No explicit rescrape flag: the server defaults rescrape=true for this
+      // reason and degrades to legacy re-preserve when rescrape is unavailable.
       void this.apiClient.represerveMedia(sourceArchiveId, 'client_redownload_command');
     }
 

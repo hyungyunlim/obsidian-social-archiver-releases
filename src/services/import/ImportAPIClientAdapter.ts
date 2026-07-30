@@ -325,6 +325,10 @@ function escapeHeaderValue(v: string): string {
 
 function extractErrorMessage(body: unknown): string | null {
   if (!body || typeof body !== 'object') return null;
-  const maybe = body as { error?: { message?: string } };
-  return maybe.error?.message ?? null;
+  const maybe = body as { error?: { code?: string; message?: string } };
+  const { code, message } = maybe.error ?? {};
+  // Prefix the code (matches the batch path's `${code}: ${message}` format)
+  // so callers can detect e.g. PAYWALL_REQUIRED / INSUFFICIENT_CREDITS.
+  if (code && message) return `${code}: ${message}`;
+  return message ?? code ?? null;
 }

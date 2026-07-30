@@ -48,6 +48,7 @@ import {
   MEDIA_UPLOAD_BATCH_BYTE_CAP,
   MEDIA_UPLOAD_BATCH_SIZE,
 } from '@/types/import';
+import { isPaywallRequiredError } from '@/utils/billingError';
 import type { ImportJobStore } from './ImportJobStore';
 import type { ImportZipReader } from './ImportZipReader';
 import type { ImportProgressBus } from './ImportProgressBus';
@@ -229,6 +230,22 @@ function markLocalOnlyImportPostData(postData: PostData): void {
   delete postData.sourceArchiveId;
 }
 
+/**
+ * Server codes that mean "stop the whole run — the account has no quota
+ * left". Retrying these burns credits/wall-clock for nothing; mirrors
+ * LocalArchiveImportService's PAYWALL_REQUIRED stop (stopReason 'quota').
+ */
+function isQuotaStopCode(code: string): boolean {
+  return code === 'PAYWALL_REQUIRED' || code === 'INSUFFICIENT_CREDITS';
+}
+
+/** Quota detection for legacy-path thrown errors (message carries the code). */
+function isQuotaStopError(err: unknown): boolean {
+  if (isPaywallRequiredError(err)) return true;
+  const message = err instanceof Error ? err.message : String(err);
+  return message.includes('INSUFFICIENT_CREDITS') || message.includes('PAYWALL_REQUIRED');
+}
+
 /** Exponential backoff with jitter, capped at 5s. */
 function backoffMs(attempt: number): number {
   const base = Math.min(5000, 250 * Math.pow(2, attempt));
@@ -272,6 +289,7 @@ function contentTypeFor(relativePath: string): string {
  */
 export class ImportWorker {
   private readonly control: ControlFlag = { paused: false, cancelled: false };
+  private stopReason: 'quota' | null = null;
   private inFlight = false;
   private finishedPromise: Promise<void> | null = null;
   private serverApiCallCount = 0;
@@ -292,6 +310,7 @@ export class ImportWorker {
     if (this.finishedPromise) return this.finishedPromise;
     this.control.paused = false;
     this.control.cancelled = false;
+    this.stopReason = null;
     this.finishedPromise = this.runLoop().finally(() => {
       this.finishedPromise = null;
     });
@@ -385,13 +404,18 @@ export class ImportWorker {
         const budgetMs = Math.max(50, Math.floor(1000 / rate));
         const startedAt = Date.now();
 
-        const batchCount = await this.processBatch();
-        if (batchCount === 0) {
+        const batch = await this.processBatch();
+        if (batch.attempted === 0) {
           await this.processItem(nextIndex);
         }
 
+        // Quota exhausted — stop the run immediately, no pacing sleep.
+        if (this.stopReason === 'quota') break;
+
         const elapsed = Date.now() - startedAt;
-        const processedCount = Math.max(1, batchCount);
+        // Pace on successfully processed items — a fully-rejected batch must
+        // not burn wall-clock sleeping for items the server refused.
+        const processedCount = Math.max(1, batch.succeeded);
         const batchBudgetMs = budgetMs * processedCount;
         if (elapsed < batchBudgetMs) {
           await delay(batchBudgetMs - elapsed);
@@ -408,6 +432,14 @@ export class ImportWorker {
 
       if (this.control.cancelled || this.control.paused) {
         // Either cancel or pause — state is already persisted by pause()/cancel().
+        return;
+      }
+
+      if (this.stopReason === 'quota') {
+        // Quota stop — mark everything not yet attempted as quota-blocked
+        // (distinct from real failures, non-retriable) and finalize honestly.
+        this.markRemainingItemsQuotaBlocked();
+        await this.finalizeJob();
         return;
       }
 
@@ -454,14 +486,15 @@ export class ImportWorker {
   // Per-item pipeline
   // ---------------------------------------------------------------------------
 
-  private async processBatch(): Promise<number> {
+  private async processBatch(): Promise<{ attempted: number; succeeded: number }> {
+    const none = { attempted: 0, succeeded: 0 };
     const { jobStore, logger, apiClient, postDataFor, onArchiveCreated } = this.deps;
-    if (!apiClient.createArchivesFromImportBatch || this.inFlight) return 0;
+    if (!apiClient.createArchivesFromImportBatch || this.inFlight) return none;
     this.inFlight = true;
     try {
       const job = jobStore.getJob(this.jobId);
-      if (!job) return 0;
-      if (job.mode === 'local-only') return 0;
+      if (!job) return none;
+      if (job.mode === 'local-only') return none;
 
       const items = [...jobStore.getItems(this.jobId)];
       const pending = items
@@ -471,7 +504,7 @@ export class ImportWorker {
           (item.status === 'failed' && item.retryCount < MAX_ITEM_RETRIES),
         )
         .slice(0, IMPORT_INGEST_BATCH_SIZE);
-      if (pending.length === 0) return 0;
+      if (pending.length === 0) return none;
 
       const batchItems: Array<{
         index: number;
@@ -510,7 +543,7 @@ export class ImportWorker {
       if (batchItems.length === 0) {
         jobStore.updateItems(this.jobId, items);
         this.updateJobCounters();
-        return pending.length;
+        return { attempted: pending.length, succeeded: 0 };
       }
 
       for (const candidate of batchItems) {
@@ -549,12 +582,13 @@ export class ImportWorker {
           this.emitItemProgress(reverted[candidate.index]!);
         }
         jobStore.updateItems(this.jobId, reverted);
-        return 0;
+        return none;
       }
 
       const createdByPostId = new Map(response.created.map((entry) => [entry.postId, entry.archiveId]));
       const skippedByPostId = new Map(response.skippedDuplicates.map((entry) => [entry.postId, entry.archiveId]));
       const failedByPostId = new Map(response.failed.map((entry) => [entry.postId, entry]));
+      let succeeded = 0;
 
       for (const candidate of batchItems) {
         const current = jobStore.getItems(this.jobId)[candidate.index] ?? candidate.item;
@@ -563,12 +597,22 @@ export class ImportWorker {
         let finalItem: ImportItem;
 
         if (failed) {
-          finalItem = {
-            ...current,
-            status: 'failed',
-            retryCount: current.retryCount + 1,
-            errorMessage: `${failed.code}: ${failed.message}`,
-          };
+          if (isQuotaStopCode(failed.code)) {
+            // Quota exhausted — stop the run instead of retrying this 3x.
+            this.stopReason = 'quota';
+            finalItem = {
+              ...current,
+              status: 'skipped_quota',
+              errorMessage: `${failed.code}: ${failed.message}`,
+            };
+          } else {
+            finalItem = {
+              ...current,
+              status: 'failed',
+              retryCount: current.retryCount + 1,
+              errorMessage: `${failed.code}: ${failed.message}`,
+            };
+          }
         } else if (skippedByPostId.has(postId)) {
           finalItem = {
             ...current,
@@ -623,6 +667,14 @@ export class ImportWorker {
           }
         }
 
+        if (
+          finalItem.status === 'uploaded' ||
+          finalItem.status === 'imported_with_warnings' ||
+          finalItem.status === 'skipped_duplicate'
+        ) {
+          succeeded += 1;
+        }
+
         const nextItems = [...jobStore.getItems(this.jobId)];
         nextItems[candidate.index] = finalItem;
         jobStore.updateItems(this.jobId, nextItems);
@@ -630,7 +682,7 @@ export class ImportWorker {
         this.updateJobCounters();
       }
 
-      return pending.length;
+      return { attempted: pending.length, succeeded };
     } finally {
       this.inFlight = false;
     }
@@ -770,7 +822,13 @@ export class ImportWorker {
         }
       } catch (err) {
         lastError = err instanceof Error ? err.message : String(err);
-        outcome = 'failed';
+        if (isQuotaStopError(err)) {
+          // Quota exhausted — stop the run; this item is blocked, not failed.
+          this.stopReason = 'quota';
+          outcome = 'skipped_quota';
+        } else {
+          outcome = 'failed';
+        }
         logger.error(`[ImportWorker] item ${item.postId} failed`, err);
       }
 
@@ -786,7 +844,8 @@ export class ImportWorker {
           outcome === 'uploaded' || outcome === 'imported_with_warnings' || outcome === 'skipped_duplicate'
             ? Date.now()
             : current.uploadedAt,
-        errorMessage: outcome === 'failed' ? lastError : current.errorMessage,
+        errorMessage:
+          outcome === 'failed' || outcome === 'skipped_quota' ? lastError : current.errorMessage,
       };
       const nextItems = [...jobStore.getItems(this.jobId)];
       nextItems[index] = finalItem;
@@ -973,6 +1032,8 @@ export class ImportWorker {
         return await fn();
       } catch (err) {
         lastErr = err;
+        // Quota errors are terminal for the whole run — retrying burns credits.
+        if (isQuotaStopError(err)) break;
         if (attempt >= MAX_ITEM_RETRIES) break;
         const wait = backoffMs(attempt);
         this.deps.logger.warn(
@@ -1002,10 +1063,14 @@ export class ImportWorker {
     const importedWithWarnings = items.filter((it) => it.status === 'imported_with_warnings').length;
     const skippedDuplicates = items.filter((it) => it.status === 'skipped_duplicate').length;
     const failed = items.filter((it) => it.status === 'failed').length;
+    const quotaBlocked = items.filter((it) => it.status === 'skipped_quota').length;
 
     const updated: ImportJobState = {
       ...job,
-      status: 'completed',
+      // Honest terminal status — a run with failures is not "completed".
+      status: failed > 0 ? 'failed' : 'completed',
+      ...(failed > 0 ? { lastError: `${failed} item(s) failed` } : {}),
+      ...(this.stopReason ? { stopReason: this.stopReason } : {}),
       completedAt: Date.now(),
       completedItems: imported + importedWithWarnings,
       partialMediaItems: importedWithWarnings,
@@ -1039,8 +1104,41 @@ export class ImportWorker {
     progressBus.emit({
       type: 'job.completed',
       jobId: this.jobId,
-      summary: { imported, importedWithWarnings, skippedDuplicates, failed },
+      summary: {
+        imported,
+        importedWithWarnings,
+        skippedDuplicates,
+        failed,
+        ...(quotaBlocked > 0 ? { quotaBlocked } : {}),
+        ...(this.stopReason ? { stopReason: this.stopReason } : {}),
+      },
     });
+  }
+
+  /**
+   * Flip every not-yet-attempted item to `skipped_quota` after a quota stop
+   * so they are terminal (never retried) and distinct from real failures.
+   */
+  private markRemainingItemsQuotaBlocked(): void {
+    const { jobStore } = this.deps;
+    const items = [...jobStore.getItems(this.jobId)];
+    const changedIndices: number[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i]!;
+      if (it.status === 'pending' || it.status === 'uploading') {
+        items[i] = {
+          ...it,
+          status: 'skipped_quota',
+          errorMessage: 'Not attempted — credit quota reached',
+        };
+        changedIndices.push(i);
+      }
+    }
+    if (changedIndices.length === 0) return;
+    jobStore.updateItems(this.jobId, items);
+    for (const i of changedIndices) {
+      this.emitItemProgress(items[i]!);
+    }
   }
 
   // ---------------------------------------------------------------------------

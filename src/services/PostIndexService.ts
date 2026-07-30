@@ -31,6 +31,15 @@ export interface PostIndexEntry {
    * reading it from PostData would force a full parse of every note.
    */
   productSource?: string;
+  /**
+   * Whether this archive has any attached place.
+   *
+   * A boolean rather than a count on purpose: the count would mean JSON-parsing
+   * the `%% sa:locations %%` block for every note in the vault, and nothing in
+   * the timeline needs the number. The places view aggregates from parsed
+   * PostData, not from here.
+   */
+  hasPlace?: boolean;
 
   // Pre-joined search text (fast substring matching)
   searchText: string;
@@ -73,7 +82,10 @@ interface PostIndex {
 // rather than the local write time. A retained v5 cache mixes both vintages, so
 // sorting and date-grouping by "archived" would be arbitrary until every file
 // happened to fail its own mtime staleness check.
-const INDEX_VERSION = 6;
+// v7: `hasPlace` joins it so "archives with a place" can be filtered on the
+// index. Measured on a real vault, 86% of place-bearing notes sit on non-map
+// platforms, so the platform filter reached almost none of them.
+const INDEX_VERSION = 7;
 const INDEX_FILE_NAME = 'post-index.json';
 const SAVE_DEBOUNCE_MS = 5_000;
 
@@ -265,6 +277,7 @@ export class PostIndexService {
       isLocalOnly: boolean;
       subscribed: boolean;
       subscriptionId?: string;
+      hasPlace?: boolean;
       publishedDate?: Date;
       archivedDate?: Date;
       mediaCount: number;
@@ -314,6 +327,7 @@ export class PostIndexService {
       productSource: typeof frontmatter['productSource'] === 'string' && frontmatter['productSource']
         ? frontmatter['productSource']
         : undefined,
+      ...(metadata.hasPlace ? { hasPlace: true } : {}),
       searchText,
       seriesId: metadata.seriesId,
       episodeNumber: metadata.episodeNumber,
