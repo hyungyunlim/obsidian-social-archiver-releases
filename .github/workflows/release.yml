@@ -61,13 +61,34 @@ jobs:
             dist-plugin/main.js
             dist-plugin/styles.css
 
+      - name: Verify release notes are parseable
+        run: node scripts/extract-release-notes.mjs --check
+
       - name: Create release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag="${{ steps.version.outputs.tag }}"
 
-          gh release create "$tag" \
-            --title="$tag" \
-            --draft \
-            dist-plugin/main.js manifest.json dist-plugin/styles.css
+          # Body comes from src/release-notes.ts — the same notes the plugin
+          # shows in-app — so the two cannot drift and nobody has to remember to
+          # paste them in. Releases were previously created with an empty body.
+          #
+          # A version with no entry is normal: patches without notable changes
+          # deliberately have none. Fall back to GitHub's generated notes so the
+          # body is never empty.
+          if node scripts/extract-release-notes.mjs "$tag" --footer > release-notes.md; then
+            echo "Using notes from src/release-notes.ts"
+            gh release create "$tag" \
+              --title="$tag" \
+              --notes-file release-notes.md \
+              --draft \
+              dist-plugin/main.js manifest.json dist-plugin/styles.css
+          else
+            echo "No release-notes.ts entry for $tag — falling back to generated notes"
+            gh release create "$tag" \
+              --title="$tag" \
+              --generate-notes \
+              --draft \
+              dist-plugin/main.js manifest.json dist-plugin/styles.css
+          fi
