@@ -71,6 +71,20 @@ describe('AuthorProfileSyncService.applyProfiles', () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
+  it('forwards creatorGroupId untouched on inbound (WS) profiles', async () => {
+    const upsert = vi.fn().mockResolvedValue(null);
+    const service = new AuthorProfileSyncService(
+      {} as unknown as WorkersAPIClient,
+      { upsertFromSyncedProfile: upsert } as unknown as AuthorNoteService,
+    );
+
+    await service.applyInboundProfile(makeProfile({ creatorGroupId: 'g-1' }));
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ creatorGroupId: 'g-1' }),
+    );
+  });
+
   it('invokes beforeApply for each profile before upserting', async () => {
     const order: string[] = [];
     const authorNoteService = {

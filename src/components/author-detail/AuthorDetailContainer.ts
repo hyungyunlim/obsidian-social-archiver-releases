@@ -81,6 +81,8 @@ export interface AuthorDetailContainerProps {
 // AuthorDetailContainer
 // ============================================================================
 
+// NOTE: Mosaic view (issue releases#39) is deliberately NOT wired into the
+// author detail feed in v1 — only TimelineContainer honors it.
 export class AuthorDetailContainer {
   // Container & props
   private readonly target: HTMLElement;

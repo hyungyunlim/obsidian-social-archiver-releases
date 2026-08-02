@@ -48,6 +48,7 @@ const DETECTION_ORDER: Platform[] = [
   'navermap', // Must be before 'naver' - map place URLs are a distinct archive identity
   'naver', // Korean portal - blog, cafe, news (must be before blog/mastodon)
   'brunch', // Korean publishing platform by Kakao
+  'xiaohongshu', // Chinese lifestyle SNS - covers xhslink/xhs.cn/rednote share domains
   'bluesky',
   'googlemaps',
   'kakaomap',
@@ -387,6 +388,18 @@ export function extractPostIdFromUrl(platform: Platform, url: string): string | 
         const m = pathname.match(/^\/@([A-Za-z0-9_-]+)\/(\d+)\/?$/);
         if (!m?.[1] || !m?.[2]) return null;
         return `${m[1]}/${m[2]}`;
+      }
+
+      case 'xiaohongshu': {
+        // /explore/<24hex> and legacy /discovery/item/<24hex>; profile-scoped
+        // /user/profile/<uid>/<noteId> uses the second 24-hex segment.
+        // Share links (xhslink.*, xhs.cn) carry no id — they must be resolved first.
+        // End-anchored: without it `/explore/<24hex>abcdef` would silently
+        // truncate to a plausible-looking id.
+        const direct = pathname.match(/\/(?:explore|discovery\/item)\/([0-9a-f]{24})(?:\/|$)/i);
+        if (direct?.[1]) return direct[1].toLowerCase();
+        const scoped = pathname.match(/\/user\/profile\/[0-9a-f]{24}\/([0-9a-f]{24})(?:\/|$)/i);
+        return scoped?.[1]?.toLowerCase() ?? null;
       }
 
       case 'navermap':

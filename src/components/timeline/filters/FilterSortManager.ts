@@ -36,6 +36,13 @@ export interface FilterState {
    * both filter paths work unchanged.
    */
   placeFilePaths: ReadonlySet<string> | null;
+  /**
+   * Tri-state transcribed filter (feedback #91 parity with mobile):
+   * - null: off (matches everything)
+   * - true: only posts that have a transcript
+   * - false: only VIDEO posts that have no transcript (text posts never match)
+   */
+  transcribed: boolean | null;
   /** Shopping mode: keep only commerce archives (those with a store host). */
   productsOnly: boolean;
   /**
@@ -224,6 +231,24 @@ export class FilterSortManager {
       }
     }
 
+    // Tri-state transcribed filter. Must agree with the index path below —
+    // a card that appears in one and not the other reads as data loss.
+    if (this.filterState.transcribed !== null) {
+      const wantTranscribed = this.filterState.transcribed;
+      filtered = filtered.filter(post => {
+        const hasTranscript = Boolean(
+          (post.whisperTranscript?.segments?.length ?? 0) > 0
+          || post.transcript?.raw
+          || (post.transcript?.formatted?.length ?? 0) > 0
+        );
+        if (wantTranscribed) return hasTranscript;
+        const isVideo = post.platform === 'youtube'
+          || Boolean(post.videoId)
+          || (post.media?.some(m => m.type === 'video') ?? false);
+        return isVideo && !hasTranscript;
+      });
+    }
+
     // Filter by archive status
     switch (this.filterState.activeTab) {
       case 'inbox':
@@ -389,6 +414,17 @@ export class FilterSortManager {
       filtered = filtered.filter(e => Boolean(e.productSource));
       if (this.filterState.productSource) {
         filtered = filtered.filter(e => e.productSource === this.filterState.productSource);
+      }
+    }
+
+    // Tri-state transcribed filter (index path — see PostData path above).
+    // Entries missing the v8 fields read as false: the INDEX_VERSION bump
+    // rebuilds them all, so undefined never lingers past one load.
+    if (this.filterState.transcribed !== null) {
+      if (this.filterState.transcribed) {
+        filtered = filtered.filter(e => e.hasTranscript === true);
+      } else {
+        filtered = filtered.filter(e => e.hasVideo === true && e.hasTranscript !== true);
       }
     }
     switch (this.filterState.activeTab) {
@@ -573,6 +609,7 @@ export class FilterSortManager {
       Boolean(this.filterState.sharedOnly) ||
       Boolean(this.filterState.localOnlyOnly) ||
       Boolean(this.filterState.subscribedOnly) ||
+      this.filterState.transcribed !== null ||
       this.filterState.activeTab !== 'inbox' ||
       this.filterState.dateRange.start !== null ||
       this.filterState.dateRange.end !== null
@@ -601,6 +638,7 @@ export class FilterSortManager {
       subscribedOnly: initialFilterState?.subscribedOnly ?? false,
       placesOnly: initialFilterState?.placesOnly ?? false,
       placeFilePaths: initialFilterState?.placeFilePaths ?? null,
+      transcribed: initialFilterState?.transcribed ?? null,
       productsOnly: initialFilterState?.productsOnly ?? false,
       productSource: initialFilterState?.productSource ?? null,
       includeArchived: initialFilterState?.includeArchived ?? false,

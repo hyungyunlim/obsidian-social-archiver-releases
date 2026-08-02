@@ -73,7 +73,8 @@ export class ArchivePlacePickerModal extends Modal {
     this.contentEl.empty();
     this.modalEl.addClass('social-archiver-modal', 'sa-place-picker-modal');
     this.contentEl.addClass('sa-place-picker');
-    this.contentEl.createEl('h2', { text: 'Link a place', cls: 'sa-place-picker-title' });
+    // Native modal title keeps the chrome consistent with the other modals.
+    this.setTitle('Link a place');
     const candidateMode = isCandidatePlacePicker(this.options);
     this.contentEl.createEl('p', {
       text: candidateMode

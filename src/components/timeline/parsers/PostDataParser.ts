@@ -9,6 +9,7 @@ import { detectMediaType, isImageUrl, isVideoUrl, isAudioUrl } from '../../../ut
 import { PostIndexService, type PostIndexEntry } from '../../../services/PostIndexService';
 import type { Platform } from '@shared/platforms/types';
 import { parseTranscriptSections } from '../../../services/markdown/TranscriptSectionManager';
+import { TRANSCRIPT_HEADER_REGEX } from '../../../constants/languages';
 import { parseAnnotationBlock } from '../../../services/markdown/AnnotationBlockParser';
 import { parseLinkedArchivesBlock } from '../../../services/markdown/LinkedArchivesBlockParser';
 import { mergeTagListsCaseInsensitive } from '../../../utils/tags';
@@ -2293,6 +2294,29 @@ export class PostDataParser {
         || LocationBodyBlock.has(content),
       );
 
+      // Transcribed filter projection. The body section is the ground truth —
+      // frontmatter flags are only set at archive time (never by later whisper
+      // jobs) and are user-strippable, so they serve as a fallback only.
+      // TRANSCRIPT_HEADER_REGEX is /g — reset lastIndex around test() to avoid
+      // the stateful-lastIndex bug on the shared regex.
+      TRANSCRIPT_HEADER_REGEX.lastIndex = 0;
+      const hasTranscript = TRANSCRIPT_HEADER_REGEX.test(content)
+        || frontmatter['hasTranscript'] === true
+        || frontmatter['videoTranscribed'] === true
+        || Boolean(frontmatter['transcriptResultId'])
+        || (Array.isArray(frontmatter['transcriptResultIds']) && frontmatter['transcriptResultIds'].length > 0);
+      TRANSCRIPT_HEADER_REGEX.lastIndex = 0;
+
+      // Cheap video detection: platform, video frontmatter flags, or a video
+      // item in the frontmatter media array (string format "video:path" — see
+      // the full-parse path above). No heavy parsing.
+      const hasVideo = platform === 'youtube'
+        || Boolean(frontmatter['videoId'])
+        || frontmatter['videoDownloaded'] === true
+        || (Array.isArray(frontmatter['media'])
+          && (frontmatter['media'] as unknown[]).some(m =>
+            typeof m === 'string' && m.startsWith('video:')));
+
       return PostIndexService.buildEntry(file, frontmatter, contentText, platform, {
         authorName: (isProfile ? frontmatter['displayName'] : frontmatter['author']) as string || 'Unknown',
         authorHandle: (frontmatter['authorHandle'] as string | undefined) || (frontmatter['handle'] as string | undefined),
@@ -2309,6 +2333,8 @@ export class PostDataParser {
         subscribed: frontmatter['subscribed'] === true,
         subscriptionId: frontmatter['subscriptionId'] as string | undefined,
         hasPlace,
+        hasTranscript,
+        hasVideo,
         publishedDate,
         archivedDate,
         mediaCount,

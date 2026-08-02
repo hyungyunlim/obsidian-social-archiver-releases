@@ -52,7 +52,8 @@ const PROVIDER_ONLY_EVIDENCE = new Set(['maps_url', 'caption_llm']);
  * disabled (§7.1). Weak anchor hints are excluded — they're superseded when a
  * run completes, so they don't occupy review capacity.
  */
-export const PLACE_EXTRACT_PENDING_CAP = 20;
+// Mirrors the server's MAX_CANDIDATES_PER_ARCHIVE (workers place-candidates-db).
+export const PLACE_EXTRACT_PENDING_CAP = 30;
 
 /**
  * A weak anchor hint carries no name/address/place id — it only signals "worth

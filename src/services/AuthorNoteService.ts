@@ -303,6 +303,11 @@ export class AuthorNoteService {
     const data = this.readNote(file);
     if (!data) return null;
 
+    // creatorGroupId is deliberately ABSENT from this literal (and must stay
+    // absent): the server upsert is presence-gated, so absent = keep existing.
+    // Sending it from possibly-stale frontmatter — or `?? null` — would send an
+    // explicit null for every note lacking the key and mass-unlink creator
+    // groups made on other clients. Never add a spread here.
     return {
       authorKey: data.authorKey,
       platform: data.platform,
@@ -350,7 +355,7 @@ export class AuthorNoteService {
    */
   async applySyncedProfileFields(
     file: TFile,
-    profile: Pick<UserAuthorProfile, 'displayNameOverride' | 'bioOverride' | 'aliases' | 'fetchedBio' | 'fetchedAvatarUrl'>,
+    profile: Pick<UserAuthorProfile, 'displayNameOverride' | 'bioOverride' | 'aliases' | 'fetchedBio' | 'fetchedAvatarUrl' | 'creatorGroupId'>,
   ): Promise<void> {
     try {
       await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
@@ -372,7 +377,7 @@ export class AuthorNoteService {
 
   private applyProfileToFrontmatter(
     fm: Record<string, unknown>,
-    profile: Pick<UserAuthorProfile, 'displayNameOverride' | 'bioOverride' | 'aliases' | 'fetchedBio' | 'fetchedAvatarUrl'>,
+    profile: Pick<UserAuthorProfile, 'displayNameOverride' | 'bioOverride' | 'aliases' | 'fetchedBio' | 'fetchedAvatarUrl' | 'creatorGroupId'>,
   ): void {
     if (profile.displayNameOverride?.trim()) {
       fm.displayNameOverride = profile.displayNameOverride.trim();
@@ -396,11 +401,18 @@ export class AuthorNoteService {
     if (profile.fetchedAvatarUrl?.trim()) {
       fm.avatar = profile.fetchedAvatarUrl.trim();
     }
+    // Server-owned mirror: delete on null/absent so an unlink done on another
+    // client propagates into the vault instead of leaving a stale group id.
+    if (profile.creatorGroupId?.trim()) {
+      fm.creatorGroupId = profile.creatorGroupId.trim();
+    } else {
+      delete fm.creatorGroupId;
+    }
   }
 
   private async repairFrontmatter(
     file: TFile,
-    profile: Pick<UserAuthorProfile, 'displayNameOverride' | 'bioOverride' | 'aliases' | 'fetchedBio' | 'fetchedAvatarUrl'>,
+    profile: Pick<UserAuthorProfile, 'displayNameOverride' | 'bioOverride' | 'aliases' | 'fetchedBio' | 'fetchedAvatarUrl' | 'creatorGroupId'>,
   ): Promise<void> {
     const content = await this.app.vault.read(file);
     const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
@@ -441,7 +453,8 @@ export class AuthorNoteService {
       profile.bioOverride?.trim() ||
       (profile.aliases?.length ?? 0) > 0 ||
       profile.fetchedBio?.trim() ||
-      profile.fetchedAvatarUrl?.trim()
+      profile.fetchedAvatarUrl?.trim() ||
+      profile.creatorGroupId?.trim()
     );
     if (!hasUserFields) {
       return null;
@@ -463,6 +476,7 @@ export class AuthorNoteService {
       displayNameOverride: profile.displayNameOverride || undefined,
       bioOverride: profile.bioOverride || undefined,
       aliases: profile.aliases.length > 0 ? profile.aliases : undefined,
+      creatorGroupId: profile.creatorGroupId || undefined,
     };
 
     return this.createNote(noteData);
@@ -945,6 +959,7 @@ export class AuthorNoteService {
       postsCount: typeof fm.postsCount === 'number' ? fm.postsCount : undefined,
       bio: typeof fm.bio === 'string' ? fm.bio : undefined,
       verified: typeof fm.verified === 'boolean' ? fm.verified : undefined,
+      creatorGroupId: typeof fm.creatorGroupId === 'string' ? fm.creatorGroupId : undefined,
       archiveCount: typeof fm.archiveCount === 'number' ? fm.archiveCount : 0,
       lastSeenAt: typeof fm.lastSeenAt === 'string' ? fm.lastSeenAt : undefined,
       lastMetadataUpdate: typeof fm.lastMetadataUpdate === 'string' ? fm.lastMetadataUpdate : undefined,
@@ -1001,6 +1016,7 @@ export class AuthorNoteService {
     addField('noteVersion', data.noteVersion);
     addField('authorKey', data.authorKey);
     addField('legacyKeys', data.legacyKeys);
+    addField('creatorGroupId', data.creatorGroupId);
     addField('platform', data.platform);
     addField('authorName', data.authorName);
     addField('displayNameOverride', data.displayNameOverride);

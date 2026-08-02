@@ -563,6 +563,7 @@ export class CompactPostCardRenderer extends Component {
       'naver-webtoon': 'Naver Webtoon',
       webtoons: 'WEBTOON',
       brunch: 'Brunch',
+      xiaohongshu: 'Xiaohongshu',
       web: 'Web Article',
       post: 'Post'
     };

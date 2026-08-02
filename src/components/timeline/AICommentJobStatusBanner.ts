@@ -102,9 +102,11 @@ function getBannerText(state: AICommentJobBannerState): string {
 function getJobLabel(state: AICommentJobBannerState): string {
   if (state.actionType === 'content.translate_variant') return 'Translation';
   if (state.actionType === 'tags.suggest_apply') return 'Tag suggestion';
+  if (state.actionType === 'places.extract_candidates') return 'Place analysis';
   if (state.actionType?.startsWith('comment.')) return 'AI comment';
   if (state.resultKind === 'content_variant') return 'Content variant';
   if (state.resultKind === 'tag_patch') return 'Tag suggestion';
+  if (state.resultKind === 'place_candidates') return 'Place analysis';
   return 'AI action';
 }
 

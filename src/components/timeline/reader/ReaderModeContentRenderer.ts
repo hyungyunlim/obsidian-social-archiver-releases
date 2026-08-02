@@ -779,6 +779,18 @@ export class ReaderModeContentRenderer extends Component {
       });
     }
 
+    // Copy full transcript button (preventDefault so the click doesn't toggle the <details>)
+    const copyBtn = summary.createSpan({ cls: 'sa-flex-row sa-rounded-4 sa-clickable sa-transition tr-toggle-btn tr-toggle-inactive' });
+    copyBtn.setAttribute('title', 'Copy transcript');
+    copyBtn.setAttribute('aria-label', 'Copy transcript');
+    setIcon(copyBtn, 'copy');
+    copyBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      void navigator.clipboard.writeText(transcript);
+      new Notice('Transcript copied to clipboard');
+    });
+
     const content = details.createDiv({ cls: 'transcript-content sa-reader-mode-raw-transcript-content' });
     content.createEl('p', { text: transcript });
   }

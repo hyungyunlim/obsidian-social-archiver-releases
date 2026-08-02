@@ -458,11 +458,10 @@ describe('PlaceCandidateModal automatic place review', () => {
     const toggles = modal.contentEl.querySelectorAll<HTMLInputElement>(
       '.sa-place-candidate-source-toggle input',
     );
+    // Both sources default ON when available (banner-flow parity).
     expect(toggles[0]?.checked).toBe(true);
+    expect(toggles[1]?.checked).toBe(true);
     toggles[0]?.click();
-    modal.contentEl.querySelectorAll<HTMLInputElement>(
-      '.sa-place-candidate-source-toggle input',
-    )[1]?.click();
     const execution = modal.contentEl.querySelector<HTMLSelectElement>(
       '.sa-place-candidate-execution select',
     );

@@ -44,7 +44,13 @@ import {
 } from '@/shared/platforms/products';
 import { isSupportedPlatformUrl, validateAndDetectPlatform, isPinterestBoardUrl } from '../../../schemas/platforms';
 import { resolvePinterestUrl } from '../../../utils/pinterest';
-import { AICommentBanner, type AICommentBannerActionId, type AICommentBannerOptions } from './AICommentBanner';
+import {
+  AICommentBanner,
+  type AICommentBannerActionId,
+  type AICommentBannerOptions,
+  type AICommentBannerState,
+} from './AICommentBanner';
+import { COMMENT_TYPE_DISPLAY_NAMES } from '../../../types/ai-comment';
 import { PlaceCandidateBanner } from './PlaceCandidateBanner';
 import { PlaceCandidateStore } from '../../../services/PlaceCandidateStore';
 import { PlaceCandidateModal, type PlaceExtractionModalOutcome } from '../../../modals/PlaceCandidateModal';
@@ -183,6 +189,18 @@ export class PostCardRenderer extends Component {
 
   // AI Comment components
   private aiCommentBanners: Map<string, AICommentBanner> = new Map();
+  /**
+   * In-flight banner-initiated AI runs keyed by post id. Owning the
+   * AbortController here (not in the banner) lets a run survive card
+   * re-renders — e.g. the foreground-sync refresh — while the re-created
+   * banner resumes the generating UI from this entry.
+   */
+  private readonly activeAIBannerRuns = new Map<string, {
+    readonly controller: AbortController;
+    readonly startTime: number;
+    readonly actionId: AICommentBannerActionId | null;
+    status: string;
+  }>();
   private aiCommentRenderers: Map<string, AICommentRenderer> = new Map();
 
   // Place candidate banner components (Places P3c)
@@ -9706,24 +9724,39 @@ export class PostCardRenderer extends Component {
       || post.transcript?.formatted?.length
     );
 
+    const resumedRun = this.activeAIBannerRuns.get(post.id);
     const options: AICommentBannerOptions = {
       availableClis,
       defaultCli,
       defaultType: settings.defaultType,
       isGenerating: false,
+      ...(resumedRun ? {
+        activeRun: {
+          startTime: resumedRun.startTime,
+          status: resumedRun.status,
+          actionId: resumedRun.actionId,
+        },
+      } : {}),
+      onCancelRun: () => {
+        this.activeAIBannerRuns.get(post.id)?.controller.abort();
+      },
       onGenerate: async (cli: AICli, type: AICommentType, customPrompt?: string, language?: AIOutputLanguage) => {
-        await this.handleAICommentGenerate(post, cli, type, banner, rootElement, customPrompt, language);
+        await this.trackBannerRun(post, null, `Generating ${COMMENT_TYPE_DISPLAY_NAMES[type]}`, (signal) =>
+          this.handleAICommentGenerate(post, cli, type, banner, rootElement, customPrompt, language, signal));
       },
       onGenerateMulti: async (clis: AICli[], type: AICommentType, customPrompt?: string, language?: AIOutputLanguage) => {
-        await this.handleAICommentGenerateMulti(post, clis, type, banner, rootElement, customPrompt, language);
+        await this.trackBannerRun(post, null, `Generating ${COMMENT_TYPE_DISPLAY_NAMES[type]} (${clis.length} AIs)`, (signal) =>
+          this.handleAICommentGenerateMulti(post, clis, type, banner, rootElement, customPrompt, language, signal));
       },
       onRunAction: async (actionId: AICommentBannerActionId, cli: AICli, language?: AIOutputLanguage) => {
-        // Places is not a CLI action: hand off to the place-candidate modal,
-        // which owns the whole extraction flow (server lane, consent, spinner).
+        // Places is not a CLI action: run the extraction headlessly (desktop
+        // parity) and open the review modal only once candidates exist. The
+        // banner shows the run progress and supports cancel via its signal.
         if (actionId === 'places.extract_candidates') {
           const placeArchiveId = this.resolveArchiveIdForContentVariants(post);
           if (!placeArchiveId) return;
-          await this.openPlaceCandidateModal(post, placeArchiveId, rootElement, { allowEmpty: true });
+          await this.trackBannerRun(post, actionId, 'Running Find Places', (signal) =>
+            this.runBannerPlaceExtraction(post, placeArchiveId, rootElement, signal));
           return;
         }
         await this.handleTimelineAIActionRequest(post, actionId, cli, language);
@@ -9752,6 +9785,47 @@ export class PostCardRenderer extends Component {
     };
 
     banner.render(bannerContainer, options);
+  }
+
+  /**
+   * Run a banner-initiated AI task with a controller that outlives the banner
+   * instance. Card re-renders (foreground sync) destroy and recreate the
+   * banner; the recreated banner resumes the generating UI from the registry
+   * entry, and this wrapper pushes the terminal state to whichever banner is
+   * live when the run settles.
+   */
+  private async trackBannerRun(
+    post: PostData,
+    actionId: AICommentBannerActionId | null,
+    initialStatus: string,
+    run: (signal: AbortSignal) => Promise<void>,
+  ): Promise<void> {
+    const controller = new AbortController();
+    const startTime = Date.now();
+    this.activeAIBannerRuns.set(post.id, {
+      controller,
+      startTime,
+      actionId,
+      status: initialStatus,
+    });
+    // A mounted idle banner becomes the run's monitor right away (no-op when
+    // this run was started from the banner itself — it is already generating).
+    this.aiCommentBanners.get(post.id)?.resumeRun({ startTime, status: initialStatus, actionId });
+    try {
+      await run(controller.signal);
+      this.settleLiveBanner(post.id, controller.signal.aborted ? 'default' : 'complete');
+    } catch (error) {
+      this.settleLiveBanner(post.id, 'default');
+      throw error;
+    } finally {
+      this.activeAIBannerRuns.delete(post.id);
+    }
+  }
+
+  /** Move the post's live banner out of 'generating' once its run settles. */
+  private settleLiveBanner(postId: string, state: AICommentBannerState): void {
+    const live = this.aiCommentBanners.get(postId);
+    if (live && live.getState() === 'generating') live.setState(state);
   }
 
   private async getAvailableClisForAICommentBanner(): Promise<AICli[]> {
@@ -9917,15 +9991,18 @@ export class PostCardRenderer extends Component {
       hasImages: post.media.some(media => media.type === 'image'),
       hasComments: (post.comments?.length ?? 0) > 0,
       ...(recoveryOnly ? {} : {
+        // The modal's own abort signal is intentionally ignored: closing the
+        // modal must not cancel the run. The registry's controller (card AI
+        // banner X) is the one cancel path.
         onExtract: (
-          signal: AbortSignal,
+          _signal: AbortSignal,
           options: {
             includeOcr: boolean;
             includeComments: boolean;
             executionPreference: 'auto' | 'server' | 'local';
           },
         ): Promise<PlaceExtractionModalOutcome> => (
-          this.runPlaceExtraction(post, archiveId, rootElement, signal, options)
+          this.runModalPlaceExtraction(post, archiveId, rootElement, options)
         ),
       }),
       onModalClosed: (): void => {
@@ -9936,6 +10013,54 @@ export class PostCardRenderer extends Component {
     });
     this.openPlaceModals.set(archiveId, modal);
     modal.open();
+  }
+
+  /**
+   * Banner-confirmed "Find Places" (§7.1, desktop parity): run the extraction
+   * headlessly with default sources, then open the review modal only when the
+   * run yields candidates. Cancelling the banner aborts the wait; an already
+   * open review modal folds results in via the WS refresh instead.
+   */
+  private async runBannerPlaceExtraction(
+    post: PostData,
+    archiveId: string,
+    rootElement: HTMLElement,
+    signal: AbortSignal,
+  ): Promise<void> {
+    // No option UI in this flow, so include every available source — posts
+    // often carry the place details in comments/photos, not the body. The
+    // card-menu → modal path keeps the per-source toggles.
+    const outcome = await this.runPlaceExtraction(post, archiveId, rootElement, signal, {
+      includeOcr: post.media.some((media) => media.type === 'image'),
+      includeComments: (post.comments?.length ?? 0) > 0,
+      executionPreference: 'auto',
+    });
+    if (signal.aborted || outcome.candidates.length === 0) return;
+    if (this.openPlaceModals.has(archiveId)) return;
+    await this.openPlaceCandidateModal(post, archiveId, rootElement, { allowEmpty: true });
+  }
+
+  /**
+   * Modal-triggered extraction runs through the same per-post registry as
+   * banner runs, so it survives the modal closing: the card's AI banner (when
+   * mounted) flips to the generating state for crawl-banner-style monitoring
+   * and can cancel the run; completion lands on the live card either way.
+   */
+  private async runModalPlaceExtraction(
+    post: PostData,
+    archiveId: string,
+    rootElement: HTMLElement,
+    options: {
+      includeOcr: boolean;
+      includeComments: boolean;
+      executionPreference: 'auto' | 'server' | 'local';
+    },
+  ): Promise<PlaceExtractionModalOutcome> {
+    let outcome: PlaceExtractionModalOutcome = { candidates: [], message: '' };
+    await this.trackBannerRun(post, 'places.extract_candidates', 'Running Find Places', async (signal) => {
+      outcome = await this.runPlaceExtraction(post, archiveId, rootElement, signal, options);
+    });
+    return outcome;
   }
 
   // ---------------------------------------------------------------------------
@@ -9999,6 +10124,11 @@ export class PostCardRenderer extends Component {
 
     // 202 running — wait for the terminal ai-action signal (WS or poll), then refresh.
     await this.waitForPlaceExtractionTerminal(result.jobId, signal);
+    if (signal.aborted) {
+      // Cancelled mid-run — skip the outcome toasts; the WS listener still
+      // folds late results into the store when the job eventually finishes.
+      return { candidates: await this.placeCandidateStore.getPending(archiveId), message: '' };
+    }
     const candidates = await this.placeCandidateStore.refresh(archiveId);
     const added = candidates.some((candidate) => !beforeIds.has(candidate.id));
     if (!added) new Notice('No places found in this post');
@@ -10440,13 +10570,23 @@ export class PostCardRenderer extends Component {
     banner: AICommentBanner,
     rootElement: HTMLElement,
     customPrompt?: string,
-    language?: AIOutputLanguage
+    language?: AIOutputLanguage,
+    signal?: AbortSignal
   ): Promise<void> {
     const filePath = post.filePath;
     if (!filePath) {
       new Notice('Cannot generate AI comment: post is not archived');
       throw new Error('Post not archived');
     }
+
+    // The banner may be replaced by a card re-render mid-run; always talk to
+    // the live instance and mirror progress into the run registry so the
+    // resumed banner picks up the latest status.
+    const updateProgress = (progress: AICommentProgress): void => {
+      const entry = this.activeAIBannerRuns.get(post.id);
+      if (entry && progress.status) entry.status = progress.status;
+      (this.aiCommentBanners.get(post.id) ?? banner).updateProgress(progress);
+    };
 
     try {
       // Import AICommentService dynamically
@@ -10507,7 +10647,7 @@ export class PostCardRenderer extends Component {
       }
 
       // Update banner progress
-      banner.updateProgress({
+      updateProgress({
         percentage: 10,
         status: `Starting ${cli} analysis...`,
         cli,
@@ -10535,10 +10675,8 @@ export class PostCardRenderer extends Component {
         currentNotePath,
         targetLanguage: targetLang,
         outputLanguage: language || this.plugin.settings.aiComment.outputLanguage || 'auto',
-        onProgress: (progress: AICommentProgress) => {
-          banner.updateProgress(progress);
-        },
-        signal: banner.getAbortSignal(),
+        onProgress: updateProgress,
+        signal: signal ?? banner.getAbortSignal(),
       });
 
       // Mark as UI modification to prevent refresh
@@ -10637,13 +10775,21 @@ export class PostCardRenderer extends Component {
     banner: AICommentBanner,
     rootElement: HTMLElement,
     customPrompt?: string,
-    language?: AIOutputLanguage
+    language?: AIOutputLanguage,
+    signal?: AbortSignal
   ): Promise<void> {
     const filePath = post.filePath;
     if (!filePath) {
       new Notice('Cannot generate AI comment: post is not archived');
       throw new Error('Post not archived');
     }
+
+    // See handleAICommentGenerate: survive banner replacement mid-run.
+    const updateProgress = (progress: AICommentProgress): void => {
+      const entry = this.activeAIBannerRuns.get(post.id);
+      if (entry && progress.status) entry.status = progress.status;
+      (this.aiCommentBanners.get(post.id) ?? banner).updateProgress(progress);
+    };
 
     try {
       // Import AICommentService dynamically
@@ -10687,7 +10833,7 @@ export class PostCardRenderer extends Component {
       if (!firstCli) {
         throw new Error('No CLIs provided');
       }
-      banner.updateProgress({
+      updateProgress({
         percentage: 10,
         status: `Starting parallel analysis with ${clis.length} AIs...`,
         cli: firstCli,
@@ -10713,13 +10859,13 @@ export class PostCardRenderer extends Component {
             onProgress: (progress: AICommentProgress) => {
               // Update progress (show the first CLI's progress as primary)
               if (cli === clis[0]) {
-                banner.updateProgress({
+                updateProgress({
                   ...progress,
                   status: `${progress.status} (${clis.length} AIs)`,
                 });
               }
             },
-            signal: banner.getAbortSignal(),
+            signal: signal ?? banner.getAbortSignal(),
           })
         )
       );
@@ -11011,9 +11157,22 @@ export class PostCardRenderer extends Component {
   }
 
   /**
+   * A card refresh may be requested with a root captured before a re-render
+   * (e.g. the foreground-sync rebuild) replaced the card's DOM. Re-resolve
+   * the live element by post id so the refresh lands on what's on screen.
+   */
+  private resolveLiveCardRoot(post: PostData, rootElement: HTMLElement): HTMLElement {
+    if (rootElement.isConnected) return rootElement;
+    return activeDocument.querySelector<HTMLElement>(
+      `[data-post-id="${CSS.escape(post.id)}"]`,
+    ) ?? rootElement;
+  }
+
+  /**
    * Refresh a post card (re-render after changes)
    */
-  private async refreshPostCard(post: PostData, rootElement: HTMLElement): Promise<void> {
+  private async refreshPostCard(post: PostData, initialRootElement: HTMLElement): Promise<void> {
+    const rootElement = this.resolveLiveCardRoot(post, initialRootElement);
     // Find the content area where AI comments should be rendered
     const contentArea = rootElement.querySelector('.post-content-area');
     if (!contentArea) return;
@@ -11050,8 +11209,9 @@ export class PostCardRenderer extends Component {
    * Full post card re-render by re-parsing the file.
    * Used after translate-transcript to pick up new multilang transcript data.
    */
-  private async refreshPostCardFull(post: PostData, rootElement: HTMLElement): Promise<void> {
+  private async refreshPostCardFull(post: PostData, initialRootElement: HTMLElement): Promise<void> {
     if (!post.filePath) return;
+    const rootElement = this.resolveLiveCardRoot(post, initialRootElement);
     try {
       const file = this.vault.getFileByPath(post.filePath);
       if (!file || !(file instanceof TFile)) return;

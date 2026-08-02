@@ -40,6 +40,15 @@ export interface PostIndexEntry {
    * PostData, not from here.
    */
   hasPlace?: boolean;
+  /**
+   * Whether the note body carries a transcript section (or the frontmatter says
+   * one exists). Projected so the Transcribed quick filter runs on the index
+   * without re-parsing every note. Frontmatter alone is not trusted — later
+   * whisper jobs write the body section without always stamping frontmatter.
+   */
+  hasTranscript?: boolean;
+  /** Whether the archive is a video (youtube, downloaded video, or video media). */
+  hasVideo?: boolean;
 
   // Pre-joined search text (fast substring matching)
   searchText: string;
@@ -85,7 +94,11 @@ interface PostIndex {
 // v7: `hasPlace` joins it so "archives with a place" can be filtered on the
 // index. Measured on a real vault, 86% of place-bearing notes sit on non-map
 // platforms, so the platform filter reached almost none of them.
-const INDEX_VERSION = 7;
+// v8: `hasTranscript` / `hasVideo` join it for the Transcribed quick filter.
+// The bump forces a one-time re-parse — a retained v7 cache has neither field
+// on any entry, so both directions of the filter would come up permanently
+// empty for every existing vault with no error anywhere.
+const INDEX_VERSION = 8;
 const INDEX_FILE_NAME = 'post-index.json';
 const SAVE_DEBOUNCE_MS = 5_000;
 
@@ -278,6 +291,8 @@ export class PostIndexService {
       subscribed: boolean;
       subscriptionId?: string;
       hasPlace?: boolean;
+      hasTranscript?: boolean;
+      hasVideo?: boolean;
       publishedDate?: Date;
       archivedDate?: Date;
       mediaCount: number;
@@ -328,6 +343,8 @@ export class PostIndexService {
         ? frontmatter['productSource']
         : undefined,
       ...(metadata.hasPlace ? { hasPlace: true } : {}),
+      ...(metadata.hasTranscript ? { hasTranscript: true } : {}),
+      ...(metadata.hasVideo ? { hasVideo: true } : {}),
       searchText,
       seriesId: metadata.seriesId,
       episodeNumber: metadata.episodeNumber,

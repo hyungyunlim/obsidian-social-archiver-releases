@@ -2505,12 +2505,6 @@ a.pcr-gmaps-map-touch-overlay {
   color: var(--text-normal);
 }
 
-.sa-place-picker-title {
-  margin: 0 0 4px;
-  font-size: 15px;
-  line-height: 1.35;
-}
-
 .sa-place-picker-description,
 .sa-place-picker-status {
   margin: 0;
@@ -2530,7 +2524,11 @@ a.pcr-gmaps-map-touch-overlay {
 
 .sa-place-picker-current h3 {
   margin: 0;
-  font-size: 13px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .sa-place-picker-current-row {
@@ -2539,7 +2537,6 @@ a.pcr-gmaps-map-touch-overlay {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-s);
   background: var(--background-secondary);
 }
@@ -2577,38 +2574,47 @@ a.pcr-gmaps-map-touch-overlay {
 
 .sa-place-picker-add-heading {
   margin: 16px 0 0;
-  font-size: 13px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
+/* Underline tabs — no button chrome, matching Obsidian's tab pattern. */
 .sa-place-picker-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 16px;
   margin: 8px 0 12px;
-  padding-bottom: 8px;
   border-bottom: 1px solid var(--background-modifier-border);
 }
 
 .sa-place-picker-tab {
-  flex: 1 1 104px;
-  min-height: 36px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-s);
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 4px 2px 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   background: transparent;
+  box-shadow: none;
   color: var(--text-muted);
   font-size: 13px;
   font-weight: 500;
 }
 
 .sa-place-picker-tab:hover {
-  background: var(--background-modifier-hover);
+  background: transparent;
+  box-shadow: none;
   color: var(--text-normal);
 }
 
 .sa-place-picker-tab[aria-selected='true'] {
-  border-color: var(--background-modifier-border);
-  background: var(--background-secondary);
+  border-bottom-color: var(--interactive-accent);
+  background: transparent;
   color: var(--text-normal);
+  font-weight: 600;
 }
 
 .sa-place-picker-tab:focus-visible,
@@ -2746,12 +2752,14 @@ a.pcr-gmaps-map-touch-overlay {
   border-color: var(--interactive-accent);
 }
 
+/* One flat composite row: the outer border is the only box. */
 .sa-place-picker-provider-select {
   max-width: 124px;
   min-height: 40px;
   padding: 0 8px;
   border: 0;
   background: transparent;
+  box-shadow: none;
   color: var(--text-normal);
   font-size: 12px;
   font-weight: 600;
@@ -2766,6 +2774,15 @@ a.pcr-gmaps-map-touch-overlay {
 .sa-place-picker-search-row button {
   min-height: 32px;
   margin: 4px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--interactive-accent);
+  font-weight: 600;
+}
+
+.sa-place-picker-search-row button:hover {
+  background: var(--background-modifier-hover);
 }
 
 .sa-place-picker-search-input {
@@ -2773,6 +2790,7 @@ a.pcr-gmaps-map-touch-overlay {
   min-height: 40px;
   border: 0;
   background: transparent;
+  box-shadow: none;
 }
 
 .sa-place-picker-attribution {
@@ -3293,13 +3311,24 @@ a.pcr-gmaps-map-touch-overlay {
   gap: var(--size-4-2);
 }
 
+/* Quiet destructive-ish action, pushed to the start of the button row. */
+.sa-place-candidate-dismiss-all {
+  margin-right: auto;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+}
+
+.sa-place-candidate-dismiss-all:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-error);
+}
+
 .sa-place-candidate-empty {
-  margin: var(--size-4-3) 0;
-  padding: var(--size-4-4);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-s);
-  background: var(--background-secondary);
-  color: var(--text-normal);
+  margin: var(--size-4-4) 0;
+  padding: var(--size-4-5) 0;
+  color: var(--text-muted);
   text-align: center;
 }
 

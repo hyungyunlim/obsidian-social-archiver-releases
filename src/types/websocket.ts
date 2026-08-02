@@ -240,6 +240,8 @@ export interface AuthorProfileUpdatedEventData {
     fetchedAvatarR2Key?: string | null;
     fetchedAvatarUpdatedAt?: string | null;
     avatarPreservationStatus?: string | null;
+    /** Same non-null value on N profiles = same cross-platform creator. */
+    creatorGroupId?: string | null;
     aliases: string[];
     updatedAt: string;
   };

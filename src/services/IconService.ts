@@ -43,6 +43,7 @@ import {
   siNaver,
   siNaverWebtoon,
   siBrunch,
+  siXiaohongshu,
   siKidsnote,
   siRss,
   siWeb,
@@ -98,6 +99,7 @@ const SIMPLE_ICON_MAP: Record<string, PlatformIcon | null> = {
   'naver-webtoon': siNaverWebtoon, // Naver Webtoon
   webtoons: siNaverWebtoon, // WEBTOON Global (same icon as Naver Webtoon)
   brunch: siBrunch, // Brunch (Kakao publishing platform)
+  xiaohongshu: siXiaohongshu, // Xiaohongshu / RedNote
   kidsnote: siKidsnote,
   blog: siRss,
   web: siWeb,
@@ -146,6 +148,7 @@ const EMOJI_MAP: Record<string, string> = {
   'naver-webtoon': '📚',
   webtoons: '📚', // WEBTOON Global (same icon as Naver Webtoon)
   brunch: '☕',
+  xiaohongshu: '📕',
   blog: '📝',
   post: '📝',
   default: '🌐',

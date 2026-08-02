@@ -34,6 +34,7 @@ export type Platform =
   | 'naver-webtoon'
   | 'webtoons'
   | 'brunch'
+  | 'xiaohongshu'
   | 'web'
   | 'post';
 
@@ -67,6 +68,7 @@ export const PLATFORMS = [
   'naver-webtoon',
   'webtoons',
   'brunch',
+  'xiaohongshu',
   'web',
   'post',
 ] as const;
@@ -103,6 +105,7 @@ export const PLATFORM_DETECTION_ORDER = [
   'naver-webtoon',
   'naver',
   'brunch',
+  'xiaohongshu',
   'podcast',
   'blog',
   'mastodon',
@@ -239,6 +242,9 @@ export const PREVIEW_SUPPORTED_PLATFORMS = [
   'naver-webtoon',
   'webtoons',
   'brunch',
+  // Xiaohongshu profile preview works unauthenticated (SSR userPageData);
+  // note enumeration does not — see prd xiaohongshu §8.
+  'xiaohongshu',
 ] as const;
 
 export type PreviewSupportedPlatform = typeof PREVIEW_SUPPORTED_PLATFORMS[number];
@@ -274,6 +280,7 @@ export const MOBILE_PLATFORMS = [
   'kidsnote',
   'pinterest',
   'tumblr',
+  'xiaohongshu',
   'web',
   'post',
   'googlemaps',
@@ -307,6 +314,7 @@ export const MOBILE_PLATFORM_INFO: Record<MobilePlatform, { name: string; placeh
   kidsnote: { name: 'Kidsnote', placeholder: 'Kidsnote report' },
   pinterest: { name: 'Pinterest', placeholder: 'Pinterest pin URL' },
   tumblr: { name: 'Tumblr', placeholder: 'Tumblr post URL' },
+  xiaohongshu: { name: 'Xiaohongshu', placeholder: 'Xiaohongshu note or share link' },
   web: { name: 'Web Article', placeholder: 'Web page or article URL' },
   post: { name: 'My Post', placeholder: 'Your composed post' },
   googlemaps: { name: 'Google Maps', placeholder: 'Google Maps place URL' },
@@ -333,6 +341,7 @@ export const SOCIAL_MEDIA_PLATFORMS = [
   'reddit',
   'pinterest',
   'tumblr',
+  'xiaohongshu',
 ] as const;
 
 export type SocialMediaPlatform = typeof SOCIAL_MEDIA_PLATFORMS[number];

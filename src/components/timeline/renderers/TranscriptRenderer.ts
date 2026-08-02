@@ -1,4 +1,4 @@
-import { setIcon } from 'obsidian';
+import { Notice, setIcon } from 'obsidian';
 import type { TranscriptionSegment } from '../../../types/transcription';
 import type { PlaybackAdapter } from '../controllers/PlaybackAdapter';
 import { HtmlMediaPlaybackAdapter } from '../controllers/PlaybackAdapter';
@@ -225,6 +225,9 @@ export class TranscriptRenderer {
     }
 
     this.renderViewToggle(header);
+
+    // Copy full transcript button (stopPropagation is handled inside renderCopyButton)
+    this.renderCopyButton(header);
 
     // Speaker jump button (stopPropagation is handled inside renderSpeakerJumpButton)
     this.renderSpeakerJumpButton(header);
@@ -580,6 +583,35 @@ export class TranscriptRenderer {
         ccBtn.addClass('tr-toggle-inactive');
       }
       ccBtn.title = this.captionActive ? 'Hide video captions' : 'Show video captions';
+    });
+  }
+
+  /**
+   * Render copy-full-transcript button
+   */
+  private renderCopyButton(parent: HTMLElement): void {
+    const copyBtn = parent.createDiv({ cls: 'transcript-copy sa-flex-row sa-rounded-4 sa-clickable sa-transition tr-toggle-btn tr-toggle-inactive' });
+    if (this.isMobile) {
+      copyBtn.addClass('tr-toggle-btn-mobile');
+    }
+    copyBtn.title = 'Copy transcript';
+    copyBtn.setAttribute('aria-label', 'Copy transcript');
+
+    const icon = copyBtn.createSpan({ cls: 'transcript-copy-icon sa-flex-row' });
+    if (this.isMobile) {
+      icon.addClass('sa-icon-14');
+    }
+    setIcon(icon, 'copy');
+
+    if (!this.isMobile) {
+      copyBtn.createSpan({ text: 'Copy' });
+    }
+
+    copyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const text = this.buildReadableBlocks().join('\n\n');
+      void navigator.clipboard.writeText(text);
+      new Notice('Transcript copied to clipboard');
     });
   }
 

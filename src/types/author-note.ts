@@ -72,6 +72,12 @@ export interface AuthorNoteData {
   bio?: string;
   /** Verified status on platform */
   verified?: boolean;
+  /**
+   * Creator group link, SERVER-OWNED: mirrored in from the synced profile on
+   * every inbound sync and never sent back out. Hand edits are local-only
+   * drift that the next sync overwrites (or deletes, when the server unlinks).
+   */
+  creatorGroupId?: string;
 
   // ── Statistics (plugin-managed) ────────────────────────────────────
   /** Number of archived posts in vault */
@@ -115,6 +121,7 @@ export const PLUGIN_MANAGED_FIELDS: ReadonlySet<keyof AuthorNoteData> = new Set(
   'postsCount',
   'bio',
   'verified',
+  'creatorGroupId',
   'archiveCount',
   'lastSeenAt',
   'lastMetadataUpdate',

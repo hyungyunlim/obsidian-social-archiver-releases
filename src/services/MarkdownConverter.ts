@@ -1325,6 +1325,60 @@ const DEFAULT_TEMPLATES: Record<Platform, string> = {
 **Original URL:** {{url}}
 `,
 
+  xiaohongshu: `{{#if comment}}
+> **My Note:**
+> {{comment}}
+
+---
+
+{{/if}}{{#if title}}# {{title}}
+
+{{/if}}{{#if content.text}}{{content.text}}
+
+{{/if}}
+
+{{#if media}}
+
+---
+
+{{media}}
+{{/if}}
+
+{{#if comments}}
+
+---
+
+## 💬 Comments
+
+{{comments}}
+{{/if}}
+
+{{#if ai}}
+
+---
+
+## AI Analysis
+
+**Summary:** {{ai.summary}}
+
+**Sentiment:** {{ai.sentiment}}
+
+**Topics:** {{ai.topics}}
+
+{{#if ai.factCheck}}
+
+### Fact Checks
+{{ai.factCheck}}
+{{/if}}
+{{/if}}
+
+---
+
+**Platform:** 📕 Xiaohongshu | **Author:** {{author.name}}{{#if metadata.timestamp}} | **Published:** {{metadata.timestamp}}{{/if}}{{#if metadata.likes}} | ❤️ {{metadata.likes}}{{/if}}{{#if metadata.bookmarks}} | 🔖 {{metadata.bookmarks}}{{/if}}{{#if metadata.location}} | 📍 {{metadata.location}}{{/if}}
+
+**Original URL:** {{url}}
+`,
+
   podcast: `{{#if comment}}
 > **My Note:**
 > {{comment}}
@@ -2143,6 +2197,7 @@ export class MarkdownConverter implements IService {
       'naver-webtoon': '📖',
       webtoons: '📚',
       brunch: '📝',
+      xiaohongshu: '📕',
       web: '🌐',
       post: '📝'
     };

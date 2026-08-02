@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/definitions.ts
- * Generated: 2026-07-27T09:29:10.703Z
+ * Generated: 2026-07-30T13:45:29.793Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -275,6 +275,24 @@ export const PLATFORM_DEFINITIONS: Record<Platform, PlatformDefinition> = {
     maxMediaSize: 100 * 1024 * 1024, // 100MB
     rateLimit: { requestsPerHour: 200, requestsPerDay: 2000 },
     features: { stories: false, live: false, reels: false, threads: true },
+  },
+
+  xiaohongshu: {
+    id: 'xiaohongshu',
+    displayName: 'Xiaohongshu',
+    emoji: '📕',
+    domains: ['xiaohongshu.com', 'xhslink.com', 'xhslink.cn', 'xhs.cn', 'rednote.com'],
+    // Host-anchored on purpose: `xhs.cn` is short enough that an unanchored
+    // pattern would claim any URL merely mentioning it (…/redirect?to=xhs.cn),
+    // and `xiaohongshu.com.attacker.example` would pass as the real domain.
+    urlPattern: /^(?:https?:\/\/)?(?:[\w-]+\.)*(?:xiaohongshu\.com|xhslink\.(?:com|cn)|xhs\.cn|rednote\.com)(?:[:/?#]|$)/i,
+    // No brightDataDatasetId: BrightData has no Xiaohongshu dataset.
+    supportsMedia: true,
+    supportsAI: true,
+    // Measured max note video is 103MB; 100MB (threads) would reject it.
+    maxMediaSize: 200 * 1024 * 1024, // 200MB
+    rateLimit: { requestsPerHour: 200, requestsPerDay: 2000 },
+    features: { stories: false, live: false, reels: false, threads: false },
   },
 
   googlemaps: {
@@ -735,6 +753,12 @@ export const PLATFORM_AI_COMMENT_CONFIG: Record<Platform, PlatformAICommentConfi
     requiresTranscription: false,
     defaultEnabled: true,
     contentSource: 'rawMarkdown',
+  },
+  xiaohongshu: {
+    showBanner: true,
+    requiresTranscription: false,
+    defaultEnabled: true,
+    contentSource: 'text',
   },
   web: {
     showBanner: true,

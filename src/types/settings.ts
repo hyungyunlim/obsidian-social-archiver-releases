@@ -214,6 +214,12 @@ export interface WebtoonStreamingSettings {
 
 export type TimelineArchiveTab = 'inbox' | 'archive' | 'all';
 export type TimelineSortBy = 'published' | 'archived';
+export type TimelineViewMode = 'timeline' | 'gallery' | 'mosaic';
+
+/** Mosaic view column width bounds (px) — shared by the zoom slider and migration clamp. */
+export const MOSAIC_COLUMN_WIDTH_MIN = 160;
+export const MOSAIC_COLUMN_WIDTH_MAX = 400;
+export const MOSAIC_COLUMN_WIDTH_DEFAULT = 240;
 
 export interface TimelineFilterPreferences {
   platforms: string[];
@@ -221,6 +227,8 @@ export interface TimelineFilterPreferences {
   commentedOnly: boolean;
   sharedOnly: boolean;
   localOnlyOnly: boolean;
+  /** Tri-state transcribed quick filter: true / false / null (off). */
+  transcribed?: boolean | null;
   includeArchived: boolean;
   searchQuery: string;
   dateRange: {
@@ -237,6 +245,7 @@ export function createDefaultTimelineFilters(): TimelineFilterPreferences {
     commentedOnly: false,
     sharedOnly: false,
     localOnlyOnly: false,
+    transcribed: null,
     includeArchived: false,
     searchQuery: '',
     dateRange: {
@@ -658,7 +667,8 @@ export interface SocialArchiverSettings {
   timelineSortBy: TimelineSortBy;
   defaultTimelineSortBy: TimelineSortBy;
   timelineSortOrder: 'newest' | 'oldest';
-  timelineViewMode: 'timeline' | 'gallery';
+  timelineViewMode: TimelineViewMode;
+  mosaicColumnWidth: number; // Mosaic view target column width in px (160-400, default 240)
   timelineFilters: TimelineFilterPreferences;
   enableLazyLoad: boolean; // Enable IntersectionObserver lazy loading (default: true)
   seriesCurrentEpisode: SeriesCurrentEpisodeState; // Track current episode per series (seriesId -> episode number)
@@ -926,6 +936,7 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
   defaultTimelineSortBy: 'published',
   timelineSortOrder: 'newest',
   timelineViewMode: 'timeline',
+  mosaicColumnWidth: MOSAIC_COLUMN_WIDTH_DEFAULT,
   timelineFilters: createDefaultTimelineFilters(),
   enableLazyLoad: true, // Lazy loading enabled by default for performance
   seriesCurrentEpisode: {}, // Empty by default, populated as user navigates series
@@ -1089,6 +1100,19 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
 
   if (!migrated.timelineViewMode) {
     migrated.timelineViewMode = 'timeline';
+  }
+
+  // Mosaic column width: falsy-guard + clamp to the valid slider range.
+  if (
+    typeof migrated.mosaicColumnWidth !== 'number' ||
+    !Number.isFinite(migrated.mosaicColumnWidth)
+  ) {
+    migrated.mosaicColumnWidth = MOSAIC_COLUMN_WIDTH_DEFAULT;
+  } else {
+    migrated.mosaicColumnWidth = Math.min(
+      MOSAIC_COLUMN_WIDTH_MAX,
+      Math.max(MOSAIC_COLUMN_WIDTH_MIN, migrated.mosaicColumnWidth)
+    );
   }
 
   if (!isTimelineSortBy(migrated.timelineSortBy)) {

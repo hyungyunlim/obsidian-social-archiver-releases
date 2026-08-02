@@ -62,6 +62,10 @@ import {
 	extractBrunchBookId,
 	extractBrunchKeyword
 } from './brunch';
+import {
+	XiaohongshuURLSchema,
+	isXiaohongshuProfileUrl
+} from './xiaohongshu';
 
 /**
  * Re-export all platform-specific schemas
@@ -162,6 +166,9 @@ export {
 	canonicalizeBrunchUrl,
 	extractBrunchBookId,
 	extractBrunchKeyword,
+	// Xiaohongshu
+	XiaohongshuURLSchema,
+	isXiaohongshuProfileUrl,
 	// Naver Webtoon (defined inline below)
 	// NaverWebtoonURLSchema,
 	// extractNaverWebtoonInfo,
@@ -345,6 +352,7 @@ const PLATFORM_SCHEMA_MAP = {
 	'naver-webtoon': NaverWebtoonURLSchema,
 	webtoons: WebtoonsURLSchema,
 	brunch: BrunchURLSchema,
+	xiaohongshu: XiaohongshuURLSchema,
 	web: WebURLSchema,
 } as const satisfies Record<ExternalPlatform, z.ZodType>;
 

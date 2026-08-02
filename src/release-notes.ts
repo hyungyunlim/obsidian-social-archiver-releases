@@ -24,6 +24,18 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.6.1': {
+    title: 'Mosaic view',
+    date: '2026-08-02',
+    notes: `## Mosaic view
+
+- The timeline's view switcher now cycles through three layouts: **Timeline → Gallery → Mosaic**. Mosaic lays every post out as a moodboard of variable-height cards — like Eagle or Raindrop.
+- Unlike the media gallery, mosaic shows **all posts**: text-only posts render as a text tile with the title and an excerpt, so nothing disappears just because it has no image.
+- Every card keeps a visible footer (platform, title, author) — no hover needed, so it works on Obsidian mobile and iPad.
+- A card-size slider sits where the gallery's group-by control is; drag it to zoom tiles between compact and roomy. Your search, filters, and tag chips all apply to the mosaic exactly as they do to the timeline.
+- Click any card to open its note.
+`,
+  },
   '4.6.0': {
     title: 'Places',
     date: '2026-07-30',

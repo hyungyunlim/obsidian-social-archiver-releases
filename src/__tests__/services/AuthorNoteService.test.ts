@@ -526,6 +526,118 @@ describe('AuthorNoteService', () => {
         expect.any(Function),
       );
     });
+
+    // ------------------------------------------------------------------
+    // creatorGroupId (server-owned mirror)
+    // ------------------------------------------------------------------
+    it('writes creatorGroupId into frontmatter when the synced profile has one', async () => {
+      const ctx = createMockApp();
+      const service = createService(ctx.mockApp);
+
+      const filePath = 'Authors/x-karpathy.md';
+      setupIndexableNote(ctx, filePath, {
+        type: AUTHOR_NOTE_TYPE,
+        noteVersion: AUTHOR_NOTE_VERSION,
+        authorKey: 'x:url:https://x.com/karpathy',
+        legacyKeys: [],
+        platform: 'x',
+        authorName: 'Andrej Karpathy',
+      });
+      service.invalidateIndex();
+
+      await service.upsertFromSyncedProfile({
+        authorKey: 'x:url:https://x.com/karpathy',
+        platform: 'x',
+        authorName: 'Andrej Karpathy',
+        aliases: [],
+        creatorGroupId: 'g-1',
+        updatedAt: '2026-07-01T00:00:00.000Z',
+      });
+
+      expect(ctx.fileCacheMap.get(filePath)!.frontmatter.creatorGroupId).toBe('g-1');
+    });
+
+    it('deletes creatorGroupId from frontmatter when the server unlinks (null)', async () => {
+      const ctx = createMockApp();
+      const service = createService(ctx.mockApp);
+
+      const filePath = 'Authors/x-karpathy.md';
+      setupIndexableNote(ctx, filePath, {
+        type: AUTHOR_NOTE_TYPE,
+        noteVersion: AUTHOR_NOTE_VERSION,
+        authorKey: 'x:url:https://x.com/karpathy',
+        legacyKeys: [],
+        platform: 'x',
+        authorName: 'Andrej Karpathy',
+        creatorGroupId: 'g-1',
+      });
+      service.invalidateIndex();
+
+      await service.upsertFromSyncedProfile({
+        authorKey: 'x:url:https://x.com/karpathy',
+        platform: 'x',
+        authorName: 'Andrej Karpathy',
+        aliases: [],
+        creatorGroupId: null,
+        updatedAt: '2026-07-02T00:00:00.000Z',
+      });
+
+      const fm = ctx.fileCacheMap.get(filePath)!.frontmatter;
+      expect('creatorGroupId' in fm).toBe(false);
+    });
+
+    it('creates a note for a link-only profile (creatorGroupId counts as a user field)', async () => {
+      const ctx = createMockApp();
+      ctx.folderMap.set('Authors', makeTFolder('Authors'));
+      const service = createService(ctx.mockApp);
+
+      const result = await service.upsertFromSyncedProfile({
+        authorKey: 'x:url:https://x.com/karpathy',
+        platform: 'x',
+        authorName: 'Andrej Karpathy',
+        authorUrl: 'https://x.com/karpathy',
+        authorHandle: 'karpathy',
+        aliases: [],
+        creatorGroupId: 'g-1',
+        updatedAt: '2026-07-01T00:00:00.000Z',
+      });
+
+      expect(result).not.toBeNull();
+      const [, content] = (ctx.mockApp.vault.create as ReturnType<typeof vi.fn>)
+        .mock.calls[0];
+      expect(content).toContain('creatorGroupId: g-1');
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // buildEditableProfilePayload -- outbound clobber guard
+  // --------------------------------------------------------------------------
+  describe('buildEditableProfilePayload', () => {
+    it('NEVER includes creatorGroupId, even when the note frontmatter has one', () => {
+      const ctx = createMockApp();
+      const service = createService(ctx.mockApp);
+
+      const filePath = 'Authors/x-karpathy.md';
+      const file = makeTFile(filePath);
+      ctx.fileCacheMap.set(filePath, {
+        frontmatter: {
+          type: AUTHOR_NOTE_TYPE,
+          noteVersion: AUTHOR_NOTE_VERSION,
+          authorKey: 'x:url:https://x.com/karpathy',
+          legacyKeys: [],
+          platform: 'x',
+          authorName: 'Andrej Karpathy',
+          creatorGroupId: 'g-1',
+        },
+      });
+
+      const payload = service.buildEditableProfilePayload(file);
+
+      // Absent — NOT null. The server upsert is presence-gated, so an explicit
+      // null here would unlink every group created on another client.
+      expect(payload).not.toBeNull();
+      expect('creatorGroupId' in payload!).toBe(false);
+    });
   });
 
   // --------------------------------------------------------------------------

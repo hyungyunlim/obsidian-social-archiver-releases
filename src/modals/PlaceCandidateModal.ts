@@ -138,7 +138,7 @@ export class PlaceCandidateModal extends Modal {
   private liveMessage = '';
   private extracting = false;
   private includeOcr: boolean;
-  private includeComments = false;
+  private includeComments: boolean;
   private executionPreference: ExtractPlaceCandidatesExecutionPreference = 'auto';
   private extractController: AbortController | null = null;
   private hasFocusedExtractCta = false;
@@ -155,6 +155,9 @@ export class PlaceCandidateModal extends Modal {
     this.candidates = orderPlaceCandidates(options.candidates);
     this.recoverySession = options.recoveryOnly === true;
     this.includeOcr = options.hasImages === true;
+    // Match the banner flow's defaults: include every available source unless
+    // the user opted out (the review cache overrides this in hydrate).
+    this.includeComments = options.hasComments === true;
     this.provider = resolveMapSearchProvider('auto', options.hostLocale).provider;
     this.reconcileCandidateState();
   }
@@ -162,6 +165,8 @@ export class PlaceCandidateModal extends Modal {
   onOpen(): void {
     this.isOpen = true;
     this.modalEl.addClass('social-archiver-modal', 'sa-place-candidate-modal');
+    // Native modal title keeps the chrome consistent with the other modals.
+    this.setTitle(this.recoverySession ? 'Review saved place notes' : 'Places in this post');
     this.render();
     if (this.recoverySession) {
       void this.loadContextNoteProposals();
@@ -267,7 +272,9 @@ export class PlaceCandidateModal extends Modal {
       await this.resolveCandidatesAutomatically();
       this.liveMessage = this.staged.size > 0
         ? `${this.staged.size} likely ${this.staged.size === 1 ? 'place is' : 'places are'} ready to add.`
-        : 'No exact matches yet. Refine a search in the row.';
+        : this.candidates.length === 0
+          ? ''
+          : 'No exact matches yet. Refine a search in the row.';
     } finally {
       this.cacheReady = true;
       this.preparing = false;

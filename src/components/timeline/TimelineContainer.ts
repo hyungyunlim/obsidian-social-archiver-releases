@@ -2,8 +2,13 @@ import { setIcon, Notice, Platform as ObsidianPlatform, requestUrl, TFile, type 
 import type { PostData, Platform } from '../../types/post';
 import type { ShareMediaStats } from '../../services/ShareAPIClient';
 import type SocialArchiverPlugin from '../../main';
-import type { SocialArchiverSettings, TimelineFilterPreferences, TimelineArchiveTab } from '../../types/settings';
-import { resolveViewLocation } from '../../types/settings';
+import type { SocialArchiverSettings, TimelineFilterPreferences, TimelineArchiveTab, TimelineViewMode } from '../../types/settings';
+import {
+  resolveViewLocation,
+  MOSAIC_COLUMN_WIDTH_MIN,
+  MOSAIC_COLUMN_WIDTH_MAX,
+  MOSAIC_COLUMN_WIDTH_DEFAULT,
+} from '../../types/settings';
 import { siObsidian, type PlatformIcon as SimpleIcon } from '../../constants/platform-icons';
 import {
   getPlatformSimpleIcon as getIconServiceSimpleIcon,
@@ -17,6 +22,7 @@ import { FilterPanel } from './filters/FilterPanel';
 import { SortDropdown } from './filters/SortDropdown';
 import { MediaGalleryRenderer } from './renderers/MediaGalleryRenderer';
 import { GalleryViewRenderer } from './renderers/GalleryViewRenderer';
+import { MosaicViewRenderer } from './renderers/MosaicViewRenderer';
 import { CommentRenderer } from './renderers/CommentRenderer';
 import { YouTubeEmbedRenderer } from './renderers/YouTubeEmbedRenderer';
 import { LinkPreviewRenderer } from './renderers/LinkPreviewRenderer';
@@ -233,8 +239,8 @@ export class TimelineContainer {
   private loadPostsInProgress: boolean = false;
   private loadPostsPending: boolean = false;
 
-  // View mode: 'timeline' or 'gallery'
-  private viewMode: 'timeline' | 'gallery' = 'timeline';
+  // View mode: 'timeline', 'gallery' (media grid), or 'mosaic' (mixed board)
+  private viewMode: TimelineViewMode = 'timeline';
   private isViewSwitching: boolean = false;
   private contentContainer: HTMLElement | null = null;
 
@@ -541,7 +547,7 @@ export class TimelineContainer {
         this.seriesCardRenderer.clearCaches();
 
         // Re-render the posts feed to rebuild series groups
-        if (this.viewMode === 'gallery') {
+        if (this.viewMode !== 'timeline') {
           void this.renderGalleryContent();
         } else {
           void this.renderPostsFeed();
@@ -1364,7 +1370,7 @@ export class TimelineContainer {
       this.containerEl.classList.add(cls);
     }
 
-    if (this.viewMode === 'gallery') {
+    if (this.viewMode !== 'timeline') {
       await this.renderGalleryView();
     } else {
       this.renderLoading();
@@ -1670,13 +1676,13 @@ export class TimelineContainer {
       if (this.filteredPosts.length === 0) {
         if (this.posts.length === 0) {
           this.renderEmpty();
-        } else if (this.viewMode === 'gallery') {
+        } else if (this.viewMode !== 'timeline') {
           await this.renderGalleryView();
         } else {
           await this.renderPosts();
         }
       } else {
-        if (this.viewMode === 'gallery') {
+        if (this.viewMode !== 'timeline') {
           await this.renderGalleryView();
         } else {
           await this.renderPosts();
@@ -1758,7 +1764,7 @@ export class TimelineContainer {
       this.updateTabButtonState?.();
       this.updateFilterButtonState?.();
 
-      if (this.viewMode === 'gallery') {
+      if (this.viewMode !== 'timeline') {
         await this.renderGalleryContent();
       } else {
         await this.renderPostsFeed();
@@ -1813,7 +1819,7 @@ export class TimelineContainer {
       this.updateTabButtonState?.();
       this.updateFilterButtonState?.();
 
-      if (this.viewMode === 'gallery') {
+      if (this.viewMode !== 'timeline') {
         await this.renderGalleryContent();
       } else {
         await this.renderPostsFeed();
@@ -1836,13 +1842,13 @@ export class TimelineContainer {
       if (this.filteredPosts.length === 0) {
         if (this.posts.length === 0) {
           this.renderEmpty();
-        } else if (this.viewMode === 'gallery') {
+        } else if (this.viewMode !== 'timeline') {
           await this.renderGalleryView();
         } else {
           await this.renderPosts();
         }
       } else {
-        if (this.viewMode === 'gallery') {
+        if (this.viewMode !== 'timeline') {
           await this.renderGalleryView();
         } else {
           await this.renderPosts();
@@ -1884,7 +1890,7 @@ export class TimelineContainer {
       this.persistFilterPreferences();
       this.updateTabButtonState?.();
       this.updateFilterButtonState?.();
-      if (this.viewMode === 'gallery') {
+      if (this.viewMode !== 'timeline') {
         await this.renderGalleryContent();
       } else {
         await this.renderPostsFeed();
@@ -3596,7 +3602,7 @@ export class TimelineContainer {
     this.updateFilterButtonState?.();
     void this.refreshBulkSelectionPresentation();
 
-    if (this.viewMode === 'gallery') {
+    if (this.viewMode !== 'timeline') {
       void this.renderGalleryContent();
     } else {
       void this.renderPostsFeed();
@@ -3626,12 +3632,17 @@ export class TimelineContainer {
         return;
       }
 
-      const isGallery = this.viewMode === 'gallery';
+      // 3-state cycle: timeline → gallery → mosaic → timeline (decision (c)).
+      // Icon/tooltip advertise the NEXT mode, matching the old 2-state behavior.
       viewIcon.removeClass('tc-view-switch-icon-spinning');
       viewSwitcherBtn.removeClass('tc-view-switch-btn-loading');
       viewSwitcherBtn.removeAttribute('aria-busy');
-      setIcon(viewIcon, isGallery ? 'list' : 'layout-grid');
-      viewSwitcherBtn.setAttribute('title', isGallery ? 'Switch to Timeline' : 'Switch to Media Gallery');
+      const next = this.getNextViewMode();
+      setIcon(viewIcon, next === 'gallery' ? 'layout-grid' : next === 'mosaic' ? 'layout-dashboard' : 'list');
+      viewSwitcherBtn.setAttribute(
+        'title',
+        next === 'gallery' ? 'Switch to Media Gallery' : next === 'mosaic' ? 'Switch to Mosaic' : 'Switch to Timeline'
+      );
     };
     this.updateViewButtonState = updateViewButton;
     updateViewButton();
@@ -3661,13 +3672,15 @@ export class TimelineContainer {
         return;
       }
 
-      const nextMode = this.viewMode === 'timeline' ? 'gallery' : 'timeline';
+      const nextMode = this.getNextViewMode();
       viewSwitcherBtn.addClass('tc-view-switch-btn-loading');
       viewIcon.addClass('tc-view-switch-icon-spinning');
       setIcon(viewIcon, 'loader-2');
       viewSwitcherBtn.setAttribute('title', nextMode === 'gallery'
         ? 'Switching to Media Gallery...'
-        : 'Switching to Timeline...');
+        : nextMode === 'mosaic'
+          ? 'Switching to Mosaic...'
+          : 'Switching to Timeline...');
 
       await this.switchViewMode(nextMode);
 
@@ -3677,7 +3690,12 @@ export class TimelineContainer {
     })());
   }
 
-  private async switchViewMode(nextMode: 'timeline' | 'gallery'): Promise<void> {
+  /** 3-state switcher cycle: timeline → gallery → mosaic → timeline. */
+  private getNextViewMode(): TimelineViewMode {
+    return this.viewMode === 'timeline' ? 'gallery' : this.viewMode === 'gallery' ? 'mosaic' : 'timeline';
+  }
+
+  private async switchViewMode(nextMode: TimelineViewMode): Promise<void> {
     if (this.isViewSwitching || this.viewMode === nextMode) {
       return;
     }
@@ -3706,7 +3724,9 @@ export class TimelineContainer {
         window.requestAnimationFrame(() => resolve());
       });
 
-      if (nextMode === 'gallery') {
+      if (nextMode !== 'timeline') {
+        // Gallery AND mosaic share the full grid-view render path;
+        // renderGalleryContent dispatches to the right renderer.
         await this.renderGalleryView();
       } else {
         await this.loadPosts();
@@ -3807,7 +3827,7 @@ export class TimelineContainer {
       ...(next ? { productsOnly: false, productSource: null } : {}),
     });
 
-    if (this.viewMode === 'gallery') {
+    if (this.viewMode !== 'timeline') {
       await this.renderGalleryView();
     } else {
       await this.loadPosts();
@@ -3906,7 +3926,7 @@ export class TimelineContainer {
       ...(next ? { placesOnly: false, placeFilePaths: null } : {}),
     });
 
-    if (this.viewMode === 'gallery') {
+    if (this.viewMode !== 'timeline') {
       await this.renderGalleryView();
     } else {
       await this.loadPosts();
@@ -3978,7 +3998,7 @@ export class TimelineContainer {
         // Sync filter state from Author to Timeline
         this.syncFiltersAuthorToTimeline();
         // Return to posts/gallery view
-        if (this.viewMode === 'gallery') {
+        if (this.viewMode !== 'timeline') {
           await this.renderGalleryView();
         } else {
           await this.loadPosts();
@@ -5587,7 +5607,7 @@ export class TimelineContainer {
     if (this.isSubscriptionViewActive) return;
 
     // Gallery mode always does full re-render (different DOM structure)
-    if (this.viewMode === 'gallery') {
+    if (this.viewMode !== 'timeline') {
       await this.renderGalleryContent();
       return;
     }
@@ -5814,7 +5834,7 @@ export class TimelineContainer {
       if (shouldReloadFromVault) {
         // Only show loading if not in gallery mode (gallery has its own loading)
         // and not in subscription management view (keep the author catalog visible)
-        if (this.viewMode !== 'gallery' && !this.isSubscriptionViewActive) {
+        if (this.viewMode === 'timeline' && !this.isSubscriptionViewActive) {
           this.renderLoading();
           // Give browser a chance to paint loading UI before heavy work
           await new Promise(resolve => window.setTimeout(resolve, 0));
@@ -5906,7 +5926,7 @@ export class TimelineContainer {
       if (this.filteredPosts.length === 0) {
         if (this.posts.length === 0) {
           this.renderEmpty();
-        } else if (this.viewMode === 'gallery') {
+        } else if (this.viewMode !== 'timeline') {
           this.renderFilteredEmptyState();
         } else {
           await this.renderPosts();
@@ -5915,7 +5935,7 @@ export class TimelineContainer {
       }
 
       // Check viewMode and render accordingly
-      if (this.viewMode === 'gallery') {
+      if (this.viewMode !== 'timeline') {
         await this.renderGalleryView();  // Full render for gallery
       } else {
         await this.renderPosts();
@@ -6432,13 +6452,67 @@ export class TimelineContainer {
         this.updateFilterButtonState?.();
         void this.refreshBulkSelectionPresentation();
 
-        if (this.viewMode === 'gallery') {
+        if (this.viewMode !== 'timeline') {
           void this.renderGalleryContent();
         } else {
           void this.renderPostsFeed();
         }
       });
     }
+
+    this.renderTranscribedQuickFilterButton(parent, isMobile);
+  }
+
+  /**
+   * Tri-state transcribed chip (feedback #91): click cycles null → true → false → null.
+   * Rendered separately from the binary chip loop because its state isn't a boolean.
+   * The chip row is fully re-rendered on click (refreshBulkSelectionPresentation),
+   * so icon/label/title refresh without manual DOM updates.
+   */
+  private renderTranscribedQuickFilterButton(parent: HTMLElement, isMobile: boolean): void {
+    const transcribed = this.filterSortManager.getFilterState().transcribed;
+    const active = transcribed !== null;
+    const icon = transcribed === false ? 'captions-off' : 'captions';
+    const label = transcribed === false ? 'Not transcribed' : 'Transcribed';
+    const title = transcribed === true
+      ? 'Showing transcribed only'
+      : transcribed === false
+        ? 'Showing not-transcribed videos only'
+        : 'Show transcribed only';
+
+    const btn = parent.createEl('button', {
+      cls: 'tc-quick-filter-btn',
+      attr: {
+        type: 'button',
+        title,
+        'aria-label': title,
+        'aria-pressed': String(active),
+      },
+    });
+    if (active) btn.addClass('is-active');
+
+    const btnIcon = btn.createSpan({ cls: 'tc-quick-filter-icon' });
+    setIcon(btnIcon, icon);
+
+    if (!isMobile) {
+      btn.createSpan({ text: label });
+    }
+
+    btn.addEventListener('click', () => {
+      const current = this.filterSortManager.getFilterState().transcribed;
+      const next = current === null ? true : current === true ? false : null;
+      this.filterSortManager.updateFilter({ transcribed: next });
+      this.filteredPosts = this.applyCurrentFiltersAndSort();
+      this.persistFilterPreferences();
+      this.updateFilterButtonState?.();
+      void this.refreshBulkSelectionPresentation();
+
+      if (this.viewMode !== 'timeline') {
+        void this.renderGalleryContent();
+      } else {
+        void this.renderPostsFeed();
+      }
+    });
   }
 
   private renderBulkSelectionControls(hasTagChipBar: boolean): void {
@@ -7223,6 +7297,7 @@ export class TimelineContainer {
       subscribedOnly: false,
       placesOnly: false,
       placeFilePaths: null,
+      transcribed: null,
       productsOnly: false,
       productSource: null,
       includeArchived: false,
@@ -7252,6 +7327,7 @@ export class TimelineContainer {
       commentedOnly: prefs.commentedOnly ?? defaults.commentedOnly,
       sharedOnly: prefs.sharedOnly ?? defaults.sharedOnly,
       localOnlyOnly: prefs.localOnlyOnly ?? defaults.localOnlyOnly,
+      transcribed: prefs.transcribed ?? defaults.transcribed,
       includeArchived: activeTab !== 'inbox',
       activeTab,
       dateRange: {
@@ -7270,6 +7346,7 @@ export class TimelineContainer {
       commentedOnly: state.commentedOnly,
       sharedOnly: state.sharedOnly,
       localOnlyOnly: state.localOnlyOnly,
+      transcribed: state.transcribed,
       includeArchived: state.includeArchived,
       searchQuery: state.searchQuery,
       dateRange: {
@@ -7753,6 +7830,10 @@ export class TimelineContainer {
 
     // Clean up intersection observers
     this.observerManager.destroy();
+
+    // Clean up mosaic renderer (disconnects its lazy-load IntersectionObserver)
+    this.mosaicRenderer?.destroy();
+    this.mosaicRenderer = null;
 
     // Unmount PostComposer if exists
     if (this.composerComponent) {
@@ -8309,6 +8390,8 @@ export class TimelineContainer {
   // Store gallery renderer instance for filter updates
   private galleryRenderer: GalleryViewRenderer | null = null;
   private galleryGroupBy: 'none' | 'author' | 'post' | 'author-post' = 'none';
+  // Mosaic renderer instance (viewMode === 'mosaic')
+  private mosaicRenderer: MosaicViewRenderer | null = null;
 
   /**
    * Render Gallery View - delegates to GalleryViewRenderer
@@ -8323,8 +8406,10 @@ export class TimelineContainer {
     // Clear everything and start fresh
     this.containerEl.empty();
 
-    // Reset gallery renderer for full re-render
+    // Reset gallery/mosaic renderers for full re-render
     this.galleryRenderer = null;
+    this.mosaicRenderer?.destroy();
+    this.mosaicRenderer = null;
 
     // Render PostComposer at the top
     this.renderPostComposer();
@@ -8353,10 +8438,15 @@ export class TimelineContainer {
     this.renderTranscriptionJobStatusBanner();
     this.renderCrossPostStatusBanner();
 
-    // Render gallery group controls (below header)
-    this.renderGalleryGroupControls();
+    // Render mode-specific controls (below header):
+    // gallery → group-by dropdown, mosaic → card-size slider
+    if (this.viewMode === 'mosaic') {
+      this.renderMosaicZoomControl();
+    } else {
+      this.renderGalleryGroupControls();
+    }
 
-    // Render gallery content
+    // Render gallery/mosaic content
     await this.renderGalleryContent();
   }
 
@@ -8527,8 +8617,80 @@ export class TimelineContainer {
       return;
     }
 
+    // Mosaic shares every gallery dispatch site but renders posts, not media files.
+    if (this.viewMode === 'mosaic') {
+      this.renderMosaicContent();
+      return;
+    }
+
     // Always do full render (grouping needs re-render)
     await this.renderGalleryContentFull();
+  }
+
+  /**
+   * Render mosaic content (mixed media + text tiles from filteredPosts).
+   * Counterpart of renderGalleryContentFull for viewMode === 'mosaic'.
+   * Fed from this.filteredPosts — already filter/search/tag-aware, no vault re-reads.
+   */
+  private renderMosaicContent(): void {
+    if (this.isSubscriptionViewActive) {
+      return;
+    }
+
+    // Replace any previous mosaic content (filter/search changes re-enter here
+    // without emptying containerEl; cross-mode switches go through
+    // renderGalleryView which empties everything).
+    this.mosaicRenderer?.destroy();
+    this.containerEl.querySelectorAll('.sa-mosaic-container').forEach((el) => el.remove());
+
+    const mosaicContainer = this.containerEl.createDiv('sa-mosaic-container');
+    const columnWidth = this.plugin.settings.mosaicColumnWidth || MOSAIC_COLUMN_WIDTH_DEFAULT;
+    mosaicContainer.setCssProps({ '--sa-mosaic-col-w': `${columnWidth}px` });
+
+    this.mosaicRenderer = new MosaicViewRenderer(this.app);
+    // containerEl is the actual scroll container (sa-timeline-scroll-container)
+    // — used as the IntersectionObserver root for lazy loading.
+    this.mosaicRenderer.render(mosaicContainer, this.filteredPosts ?? [], this.containerEl);
+  }
+
+  /**
+   * Mosaic card-size slider — mosaic's sibling of renderGalleryGroupControls.
+   * Writes --sa-mosaic-col-w live and persists mosaicColumnWidth on release.
+   */
+  private renderMosaicZoomControl(): void {
+    const controlsContainer = this.containerEl.createDiv('gallery-group-controls tc-mosaic-zoom');
+
+    const label = controlsContainer.createSpan({ text: 'Card size' });
+    label.addClass('tc-group-label-dim');
+
+    const slider = controlsContainer.createEl('input', {
+      attr: {
+        type: 'range',
+        min: String(MOSAIC_COLUMN_WIDTH_MIN),
+        max: String(MOSAIC_COLUMN_WIDTH_MAX),
+        step: '20',
+        'aria-label': 'Mosaic card size',
+      },
+    });
+    slider.value = String(this.plugin.settings.mosaicColumnWidth || MOSAIC_COLUMN_WIDTH_DEFAULT);
+
+    slider.addEventListener('input', () => {
+      const value = Number(slider.value);
+      const mosaicEl = this.containerEl.querySelector('.sa-mosaic-container');
+      if (mosaicEl instanceof HTMLElement) {
+        mosaicEl.setCssProps({ '--sa-mosaic-col-w': `${value}px` });
+      }
+    });
+
+    // Persist on release only (avoids a settings write per pixel of drag).
+    slider.addEventListener('change', () => {
+      const value = Number(slider.value);
+      this.plugin.settings.mosaicColumnWidth = value;
+      void this.plugin.saveSettingsPartial(
+        { mosaicColumnWidth: value },
+        { reinitialize: false, notify: false }
+      );
+    });
   }
 
   /**

@@ -65,6 +65,22 @@ export interface AICommentBannerOptions {
   onTagLanguageChange?: (language: AIOutputLanguage) => void;
   /** Whether the post has a transcript (enables translate-transcript type) */
   hasTranscript?: boolean;
+  /**
+   * Resume the generating UI for a run that outlived a card re-render. The
+   * run itself is owned by the caller (it survives banner destruction);
+   * `startTime` keeps the elapsed timer continuous and `status` restores the
+   * last progress message.
+   */
+  activeRun?: {
+    startTime: number;
+    status: string;
+    actionId?: AICommentBannerActionId | null;
+  };
+  /**
+   * Abort the underlying run. Wired by the caller to the run's own
+   * AbortController so cancel works from a resumed banner instance too.
+   */
+  onCancelRun?: () => void;
 }
 
 // Simplified type options (removed redundant keypoints, translation)
@@ -150,6 +166,14 @@ export class AICommentBanner {
       ? (options.tagLanguage || 'auto')
       : (options.outputLanguage || 'auto');
 
+    // Resume a run that survived a card re-render: keep the elapsed timer
+    // continuous and restore the action selection for accurate labels.
+    if (options.activeRun) {
+      this.state = 'generating';
+      this.generatingStartTime = options.activeRun.startTime;
+      if (options.activeRun.actionId) this.selectedActionId = options.activeRun.actionId;
+    }
+
     if (options.availableClis.length === 0 || this.state === 'dismissed') {
       return;
     }
@@ -160,6 +184,9 @@ export class AICommentBanner {
 
     this.contentEl = banner;
     this.renderCurrentState();
+    if (options.activeRun?.status) {
+      this.updateStatusMessage?.(options.activeRun.status);
+    }
   }
 
   private renderCurrentState(): void {
@@ -595,7 +622,12 @@ export class AICommentBanner {
     checkIcon.addClass('sa-icon-16');
     setIcon(checkIcon, 'check');
 
-    successMsg.createSpan({ text: this.selectedActionId ? 'AI action queued' : 'AI comment added' });
+    // Places runs to completion before this state; the other actions queue a job.
+    successMsg.createSpan({
+      text: this.selectedActionId === 'places.extract_candidates'
+        ? 'Analysis complete'
+        : this.selectedActionId ? 'AI action queued' : 'AI comment added',
+    });
 
     // Auto-dismiss after 2 seconds (shorter since no action needed)
     window.setTimeout(() => {
@@ -732,7 +764,8 @@ export class AICommentBanner {
         // Single AI generation
         await this.options.onGenerate(this.selectedCli, this.selectedType, customPrompt, this.selectedLanguage);
       }
-      this.state = 'complete';
+      // A cancel mid-run already reset the state to 'default' — keep it.
+      if (this.state === 'generating') this.state = 'complete';
     } catch (error) {
       if (error instanceof Error && error.message.includes('not authenticated')) {
         this.state = 'authRequired';
@@ -748,6 +781,9 @@ export class AICommentBanner {
   private handleCancel(): void {
     this.stopElapsedTimer();
     this.abortController?.abort();
+    // The run's real controller lives with the caller so it survives
+    // re-renders; cancel must reach it from a resumed banner too.
+    this.options?.onCancelRun?.();
     this.state = 'default';
     this.renderCurrentState();
   }
@@ -755,6 +791,25 @@ export class AICommentBanner {
   // ============================================================================
   // Public Methods
   // ============================================================================
+
+  /**
+   * Adopt an externally-owned run that started elsewhere (e.g. the review
+   * modal's extract CTA): switch an idle banner to the generating UI so the
+   * card monitors the run. No-op unless the banner sits in 'default' —
+   * a dismissed banner stays dismissed and a running one keeps its state.
+   */
+  resumeRun(run: {
+    startTime: number;
+    status: string;
+    actionId?: AICommentBannerActionId | null;
+  }): void {
+    if (this.state !== 'default' || !this.contentEl) return;
+    if (run.actionId) this.selectedActionId = run.actionId;
+    this.generatingStartTime = run.startTime;
+    this.state = 'generating';
+    this.renderCurrentState();
+    if (run.status) this.updateStatusMessage?.(run.status);
+  }
 
   updateProgress(progress: AICommentProgress): void {
     if (!this.options) return;

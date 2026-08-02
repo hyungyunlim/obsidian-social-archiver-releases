@@ -99,7 +99,6 @@ export function renderCandidateReviewView(
   callbacks: CandidateReviewViewCallbacks,
 ): void {
   root.empty();
-  root.createEl('h3', { text: 'Places in this post' });
   root.createEl('p', {
     cls: 'sa-place-candidate-intro',
     text: 'Likely places are matched automatically. Remove a wrong match or search again in its row.',
@@ -111,7 +110,8 @@ export function renderCandidateReviewView(
       text: `Current primary: ${primary.name}. New places are added without replacing it.`,
     });
   }
-  renderReviewToolbar(root, state, callbacks);
+  // The map-search toolbar only makes sense once there are rows to match.
+  if (state.candidates.length > 0) renderReviewToolbar(root, state, callbacks);
   const live = root.createDiv({ cls: 'sa-place-candidate-live' });
   live.setAttribute('aria-live', 'polite');
   live.setText(state.liveMessage);
@@ -175,6 +175,8 @@ function renderExtractControls(
     cls: 'sa-place-candidate-extract',
     text: state.extracting ? 'Analyzing for places…' : idleLabel,
   });
+  // With nothing to review yet, the extraction IS the primary action.
+  if (state.candidates.length === 0) button.addClass('mod-cta');
   button.dataset.extractCta = 'true';
   if (state.extracting) button.addClass('is-loading');
   button.disabled = state.extracting || state.extractDisabled || state.busy;
@@ -469,6 +471,8 @@ function renderFooter(
     text: 'Dismiss all',
   });
   dismissAll.addEventListener('click', callbacks.onDismissAll);
+  const close = secondary.createEl('button', { text: 'Close' });
+  close.addEventListener('click', callbacks.onClose);
   const noteCount = [...state.staged.keys()].filter(
     (candidateId) => state.contextNoteIntents.get(candidateId) === true,
   ).length;
@@ -480,8 +484,6 @@ function renderFooter(
   });
   add.disabled = state.staged.size === 0 || state.busy || state.preparing;
   add.addEventListener('click', callbacks.onAddReady);
-  const close = secondary.createEl('button', { text: 'Close' });
-  close.addEventListener('click', callbacks.onClose);
 }
 
 function renderEmpty(
@@ -497,6 +499,7 @@ function renderEmpty(
   });
   const actions = root.createDiv({ cls: 'sa-place-candidate-footer-actions' });
   renderExtractControls(actions, state, callbacks, 'Find places with AI');
-  const close = actions.createEl('button', { text: 'Close' });
+  const secondary = actions.createDiv({ cls: 'sa-place-candidate-footer-secondary' });
+  const close = secondary.createEl('button', { text: 'Close' });
   close.addEventListener('click', callbacks.onClose);
 }
