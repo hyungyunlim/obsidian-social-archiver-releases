@@ -47,7 +47,7 @@ import {
 import type { Platform as SocialPlatform } from '../shared/platforms/types';
 import { getPlatformDefinition } from '../shared/platforms/definitions';
 import { isAuthenticated, isPaidPlan } from '../utils/auth';
-import { getAccountRequiredMessage } from '../utils/accountGate';
+import { ACCOUNT_SECTION_CLS, focusAccountSection, getAccountRequiredMessage } from '../utils/accountGate';
 import { LocalArchiveScanner } from '../services/import/local/LocalArchiveScanner';
 import {
   MapSearchProviderPreferenceController,
@@ -778,7 +778,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           .setButtonText('Sign in')
           .setCta()
           .onClick(() => {
-            this.containerEl.scrollTo({ top: 0, behavior: 'smooth' });
+            focusAccountSection(this.containerEl);
           }));
       },
     };
@@ -1274,7 +1274,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       heading: 'Account',
       items: [
         this.svelteIslandRow('Account', 'authComponent', (host) => {
-          const authContainer = host.createDiv({ cls: 'social-archiver-auth-section' });
+          const authContainer = host.createDiv({ cls: ACCOUNT_SECTION_CLS });
           authContainer.addClass('sa-settings-section');
           return mount(AuthSettingsTab, {
             target: authContainer,

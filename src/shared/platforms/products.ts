@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/products.ts
- * Generated: 2026-08-02T00:11:50.640Z
+ * Generated: 2026-07-27T14:56:22.790Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared

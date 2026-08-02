@@ -38,6 +38,26 @@ export function getAccountRequiredMessage(capability: AccountCapability): string
   return CAPABILITY_COPY[capability];
 }
 
+/** Wrapper the Account settings section mounts into. */
+export const ACCOUNT_SECTION_CLS = 'social-archiver-auth-section';
+
+/**
+ * Reveal the Account section inside an already-open settings tab, for the
+ * "Sign in" CTA every account-gated section shows when logged out.
+ *
+ * Targets the section element rather than scrolling the tab container: which
+ * ancestor actually scrolls differs between desktop, mobile and Obsidian 1.13's
+ * native definition renderer, and scrolling the wrong one is a silent no-op —
+ * the CTA looked dead to logged-out users (feedback #108). Focusing the email
+ * field is the part that always reads as a response, keyboard and all.
+ */
+export function focusAccountSection(root: HTMLElement): void {
+  const section = root.querySelector(`.${ACCOUNT_SECTION_CLS}`);
+  if (!section) return;
+  section.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  section.querySelector<HTMLInputElement>('input[type="email"]')?.focus({ preventScroll: true });
+}
+
 function openPluginSettings(plugin: SocialArchiverPlugin): void {
   const appSetting = (
     plugin.app as unknown as {
