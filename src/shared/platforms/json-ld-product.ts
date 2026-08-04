@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/json-ld-product.ts
- * Generated: 2026-08-02T11:38:25.939Z
+ * Generated: 2026-07-29T09:27:48.641Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared

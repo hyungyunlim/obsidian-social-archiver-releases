@@ -19,6 +19,26 @@ const FIRST_SECTION_HEADER_CLS = 'sa-settings-section-header-first';
  * control binding is exactly the duplication this module exists to avoid, so
  * every row keeps its existing imperative builder body inside `render`.
  */
+/**
+ * Turn a definition row's settingEl into a block host for custom content
+ * (Svelte islands, prose blocks).
+ *
+ * The content must live INSIDE the settingEl. Obsidian 1.13's group renderer
+ * re-parents its tracked settingEls after every render pass
+ * (`listEl.setChildrenInPlace([...settingEls])`), so nodes mounted next to the
+ * row — the old `settingEl.remove(); mount(parent)` trick — are dropped from
+ * the DOM and whole sections silently vanish (feedback #108 follow-up: the
+ * Account section, and with it the signed-out "Sign in" flow, disappeared on
+ * Obsidian 1.13).
+ */
+export function islandHost(setting: Setting): HTMLElement {
+  const host = setting.settingEl;
+  // Drop the name/desc scaffolding the renderer built; the island owns layout.
+  host.empty();
+  host.addClass('sa-settings-island-host');
+  return host;
+}
+
 export function renderSettingDefinitions(
   containerEl: HTMLElement,
   items: readonly SettingDefinitionItem[],

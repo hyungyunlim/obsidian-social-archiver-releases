@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/client-commerce.ts
- * Generated: 2026-08-02T11:38:25.937Z
+ * Generated: 2026-08-02T11:32:26.264Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -18,7 +18,22 @@ export type ClientProductCaptureSurface =
   | 'chrome-clip'
   | 'ios-safari-extension'
   | 'ios-share-preprocessor'
-  | 'mobile-webview';
+  | 'mobile-webview'
+  | 'desktop-webview';
+
+/**
+ * Surfaces where the page was loaded by a background session the user is not
+ * looking at, rather than clipped from a tab they opened themselves. They earn
+ * strictly less trust — see the URL rule in `validateClientProductEnvelope`.
+ */
+const BACKGROUND_SESSION_SURFACES: ReadonlySet<ClientProductCaptureSurface> =
+  new Set(['mobile-webview', 'desktop-webview']);
+
+export function isBackgroundSessionCaptureSurface(
+  surface: ClientProductCaptureSurface,
+): boolean {
+  return BACKGROUND_SESSION_SURFACES.has(surface);
+}
 
 export type CommerceCandidateReason =
   | 'structured-product'
@@ -430,12 +445,13 @@ export function validateClientProductEnvelope(
     return { valid: false, code: 'INVALID_SNAPSHOT' };
   }
 
-  // The background mobile session is intentionally narrower than interactive
-  // browser capture. It is never allowed to turn an arbitrary DOM page into a
-  // product: the URL itself must carry a provider-specific stable product ID,
-  // even when the page also exposes Product JSON-LD.
+  // A background session is intentionally narrower than interactive browser
+  // capture. It is never allowed to turn an arbitrary DOM page into a product:
+  // the URL itself must carry a provider-specific stable product ID, even when
+  // the page also exposes Product JSON-LD. The desktop hidden webview has the
+  // same threat model as the mobile one, so it earns the same rule.
   if (
-    envelope.captureSurface === 'mobile-webview'
+    isBackgroundSessionCaptureSurface(envelope.captureSurface)
     && !isClientOnlyProductUrl(envelope.pageUrl)
   ) {
     return { valid: false, code: 'NOT_COMMERCE_CANDIDATE' };

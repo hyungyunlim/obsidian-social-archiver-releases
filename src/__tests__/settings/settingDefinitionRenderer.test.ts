@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { Setting, SettingDefinitionItem } from 'obsidian';
-import { renderSettingDefinitions } from '../../settings/settingDefinitionRenderer';
+import { islandHost, renderSettingDefinitions } from '../../settings/settingDefinitionRenderer';
 
 /**
  * `renderSettingDefinitions` is the pre-1.13 half of the declarative settings
@@ -102,6 +102,38 @@ describe('renderSettingDefinitions', () => {
 
     expect(headings()).toEqual(['Advanced']);
     expect(names()).toEqual(['Nested row']);
+  });
+
+  it('keeps islandHost content when Obsidian 1.13 re-parents tracked settingEls', () => {
+    // The Account section (feedback #108 follow-up): the sign-in island used to
+    // mount NEXT to its row after settingEl.remove(). Obsidian 1.13's group
+    // renderer then runs listEl.setChildrenInPlace([...settingEls]) after every
+    // pass, which restored the removed row and dropped the island — the whole
+    // Account section vanished and the "Sign in" CTA went dead. Content must
+    // live inside the settingEl to survive.
+    let settingEl: HTMLElement | undefined;
+    renderSettingDefinitions(container, [{
+      type: 'group',
+      heading: 'Account',
+      items: [{
+        name: 'Account',
+        render: (setting) => {
+          settingEl = setting.settingEl;
+          islandHost(setting).createDiv({ cls: 'island-content' });
+        },
+      }],
+    }]);
+
+    expect(settingEl).toBeDefined();
+    // Name/desc scaffolding is cleared so the row reads as a bare block host.
+    expect(settingEl?.querySelector('.setting-item-name')).toBeNull();
+    expect(settingEl?.classList.contains('sa-settings-island-host')).toBe(true);
+
+    // Simulate the 1.13 pass: the list's children are reset to exactly the
+    // tracked settingEls (setChildrenInPlace).
+    settingEl?.parentElement?.replaceChildren(settingEl);
+
+    expect(container.querySelector('.island-content')).not.toBeNull();
   });
 
   it('only wraps a group in its own element when it asks for a class', () => {

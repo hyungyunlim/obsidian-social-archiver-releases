@@ -544,6 +544,15 @@ body.is-mobile .sa-action-btn {
   margin-bottom: 32px;
 }
 
+/* A .setting-item repurposed as a block host for Svelte islands / prose blocks.
+   Neutralizes the row chrome (flex layout, padding, separator) so the island
+   inside renders as if it sat directly in the section flow. */
+.setting-item.sa-settings-island-host {
+  display: block;
+  padding: 0;
+  border: none;
+}
+
 /* Subsection margin */
 .sa-settings-subsection {
   margin-bottom: 16px;

@@ -1,6 +1,6 @@
 import { App, getLanguage, Notice, PluginSettingTab, Setting, Platform, setIcon } from 'obsidian';
 import type { SettingDefinitionItem, SettingDefinitionRender, SettingGroupItem } from 'obsidian';
-import { renderSettingDefinitions } from './settingDefinitionRenderer';
+import { islandHost, renderSettingDefinitions } from './settingDefinitionRenderer';
 import nodeRequire from '../utils/nodeRequire';
 import type SocialArchiverPlugin from '../main';
 import { FolderSuggest } from './FolderSuggest';
@@ -898,9 +898,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       name,
       searchable: false,
       render: (setting): void => {
-        const host = setting.settingEl.parentElement ?? this.containerEl;
-        setting.settingEl.remove();
-        build(host);
+        build(islandHost(setting));
       },
     };
   }
@@ -1239,11 +1237,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   /**
    * A section body that is a Svelte island rather than setting rows.
    *
-   * The island owns its own layout, so the wrapping row is dropped and the
-   * component mounts into its parent. `SettingGroup.listEl` would be the
-   * natural handle but it needs Obsidian 1.11.0 and minAppVersion is 1.10.0.
-   * The returned cleanup thunk unmounts on 1.13+; `cleanupComponents()` covers
-   * the pre-1.13 path, where display() rebuilds the whole tab.
+   * The island owns its own layout, so the row is emptied and restyled as a
+   * block ({@link islandHost}) and the component mounts inside it — never next
+   * to it, because Obsidian 1.13's renderer re-parents its tracked settingEls
+   * after every pass and drops outside nodes. The returned cleanup thunk
+   * unmounts on 1.13+; `cleanupComponents()` covers the pre-1.13 path, where
+   * display() rebuilds the whole tab.
    *
    * Not searchable: the island's contents are opaque to the definition tree,
    * so a query has nothing to match here.
@@ -1259,9 +1258,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       searchable: false,
       ...(visible ? { visible } : {}),
       render: (setting): (() => void) => {
-        const host = setting.settingEl.parentElement ?? this.containerEl;
-        setting.settingEl.remove();
-        this[key] = mountInto(host);
+        this[key] = mountInto(islandHost(setting));
         return () => this.unmountComponent(key);
       },
     };
@@ -1406,7 +1403,10 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         },
         {
-          name: 'Supertonic engine',
+          // Distinct from the installed-state 'Supertonic engine' row below:
+          // sibling defs sharing a name collide in Obsidian 1.13's keyed
+          // reconciler (console error + rows swapping identity on re-render).
+          name: 'Install Supertonic engine',
           desc: 'Install the on-device speech engine.',
           visible: needsInstall,
           render: (setting): void => {
