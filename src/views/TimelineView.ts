@@ -29,6 +29,7 @@ interface TimelineComponent {
   reload?(): Promise<void>;
   destroy?(): void;
   softRefresh?(): Promise<void>;
+  syncMapTheme?(): void;
   openStreamingFullscreen?(
     seriesInfo: { seriesId: string; seriesTitle: string; author: string; platform: string; thumbnailUrl?: string },
     episodeDetail: { titleId: number; no: number; subtitle: string; imageUrls: string[]; thumbnailUrl?: string },
@@ -500,6 +501,16 @@ export class TimelineView extends ItemView {
         }
       })
     );
+
+      // Follow the theme on the Places map. `css-change` is what Obsidian fires
+      // when the theme or a snippet changes, so it covers the toggle and a theme
+      // switch alike. Swapping the tile URL keeps the camera; re-rendering would
+      // send the user back to the opening view every time they flip the theme.
+      this.registerEvent(
+        this.app.workspace.on('css-change', () => {
+          this.component?.syncMapTheme?.();
+        })
+      );
 
       // Listen for file rename (posts renamed)
       this.registerEvent(

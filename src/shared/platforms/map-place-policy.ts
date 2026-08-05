@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/map-place-policy.ts
- * Generated: 2026-08-04T06:00:35.914Z
+ * Generated: 2026-07-11T08:56:14.734Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared

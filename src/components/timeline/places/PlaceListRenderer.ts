@@ -1,4 +1,4 @@
-import { setIcon } from 'obsidian';
+import { Menu, setIcon } from 'obsidian';
 import type { PlaceKind } from '@/shared/platforms/place-kinds';
 import {
   availablePlaceKinds,
@@ -44,17 +44,37 @@ const KIND_ICON: Partial<Record<PlaceKind, string>> = {
   public: 'building-2',
 };
 
+const PRESENTATIONS = ['list', 'map', 'posts'] as const;
+
+const PRESENTATION_ICON: Record<PlacePresentation, string> = {
+  list: 'list',
+  map: 'map',
+  posts: 'newspaper',
+};
+
+const PRESENTATION_LABEL: Record<PlacePresentation, string> = {
+  list: 'List',
+  map: 'Map',
+  posts: 'Posts',
+};
+
 /** Sentence-case label for a kind chip; null is the unclassified bucket. */
 function kindLabel(kind: PlaceKind | null): string {
   if (kind === null) return 'Unclassified';
   return kind.charAt(0).toUpperCase() + kind.slice(1);
 }
 
-export type PlacePresentation = 'list' | 'map';
+/**
+ * The three Places surfaces, matching the mobile places tab exactly
+ * (`['places', 'map', 'posts']`): the grouped list, the map alone, or the flat
+ * feed of every place-bearing archive. Desktop adds a fourth `split`; the
+ * plugin's pane is too narrow for a side-by-side to earn its keep.
+ */
+export type PlacePresentation = 'list' | 'map' | 'posts';
 
 export interface PlaceListCallbacks {
-  /** A place row was activated. Null clears the selection. */
-  onSelect: (place: PlaceSummary | null) => void;
+  /** A place row or marker was activated — open it. */
+  onSelect: (place: PlaceSummary) => void;
   /**
    * Draw the map into this container and report whether anything was drawn.
    * Injected rather than imported so the list does not depend on Leaflet — the
@@ -80,6 +100,11 @@ export class PlaceListRenderer {
   /** Current selection, so the caller can reconcile after the data changes. */
   getSelectedKey(): string | null {
     return this.selectedKey;
+  }
+
+  /** Which surface is showing, so the caller knows whether to draw the feed. */
+  getPresentation(): PlacePresentation {
+    return this.presentation;
   }
 
   destroy(): void {
@@ -117,11 +142,19 @@ export class PlaceListRenderer {
     const root = this.containerEl;
     if (!root) return;
     root.empty();
+    // Map and posts hand the pane to something the reading column should not
+    // cap — the map itself, and the timeline's own feed — so the switch above
+    // them lines up with the header icons rather than floating mid-pane.
+    root.toggleClass('is-map', this.presentation === 'map');
+    root.toggleClass('is-posts', this.presentation === 'posts');
 
+    // Map mode is the map and nothing else — the same call the mobile tab makes,
+    // where the search field, the chips and the controls row are all gated on
+    // `viewMode === 'places'`. Every strip left above the map is a strip of pane
+    // the map does not get, which is what made it read as a thumbnail.
     const toolbar = root.createDiv({ cls: 'sa-place-toolbar' });
-    this.renderSearch(toolbar);
+    if (this.presentation === 'list') this.renderSearch(toolbar);
     if (this.callbacks.renderMap) this.renderPresentationToggle(toolbar);
-    this.renderChips(root);
 
     if (this.presentation === 'map') {
       // The map surface always renders something — a map, or a line explaining
@@ -130,6 +163,12 @@ export class PlaceListRenderer {
       this.callbacks.renderMap?.(root, this.visiblePlaces(), this.selectedKey);
       return;
     }
+
+    // Posts mode shows the flat feed, which the timeline owns; the list renders
+    // only its switch so there is a way back.
+    if (this.presentation === 'posts') return;
+
+    this.renderChips(root);
 
     const visible = this.visiblePlaces();
     if (visible.length === 0) {
@@ -146,29 +185,43 @@ export class PlaceListRenderer {
     for (const place of visible) this.renderRow(list, place);
   }
 
+  /**
+   * A dropdown, matching desktop's view-mode button. A segmented control put
+   * three targets in a toolbar that already carries the timeline's own icon row
+   * right above it, and the two rows of buttons read as one crowded strip.
+   *
+   * Obsidian's own `Menu` rather than a hand-rolled popup: it brings the
+   * positioning, the outside-click dismiss, keyboard navigation and the check
+   * mark, none of which is worth reimplementing for three items.
+   */
   private renderPresentationToggle(parent: HTMLElement): void {
-    const btn = parent.createDiv({ cls: 'sa-action-btn sa-bg-transparent sa-place-toggle' });
-    btn.setAttribute('role', 'button');
-    btn.setAttribute('tabindex', '0');
-    const wantsMap = this.presentation === 'list';
-    btn.setAttribute('title', wantsMap ? 'Show on map' : 'Show as list');
-    btn.setAttribute('aria-pressed', String(this.presentation === 'map'));
+    const btn = parent.createEl('button', { cls: 'sa-place-mode-trigger' });
+    btn.type = 'button';
+    btn.setAttribute('aria-haspopup', 'menu');
+    btn.setAttribute('aria-label', `Places view: ${PRESENTATION_LABEL[this.presentation]}`);
+    btn.setAttribute('title', 'Change places view');
 
-    const icon = btn.createDiv({ cls: 'sa-icon-16 sa-text-muted sa-transition-color' });
-    setIcon(icon, wantsMap ? 'map' : 'list');
-    btn.createSpan({ cls: 'sa-place-toggle-label', text: wantsMap ? 'Map' : 'List' });
+    setIcon(btn.createDiv({ cls: 'sa-icon-16' }), PRESENTATION_ICON[this.presentation]);
+    btn.createSpan({ cls: 'sa-place-mode-label', text: PRESENTATION_LABEL[this.presentation] });
+    setIcon(btn.createDiv({ cls: 'sa-icon-16 sa-place-mode-caret' }), 'chevron-down');
 
-    const toggle = (): void => {
-      this.presentation = wantsMap ? 'map' : 'list';
-      this.callbacks.onPresentationChange?.(this.presentation);
-      this.renderBody();
-    };
-    btn.addEventListener('click', toggle);
-    btn.addEventListener('keydown', (e: KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        toggle();
+    btn.addEventListener('click', (event) => {
+      const menu = new Menu();
+      for (const mode of PRESENTATIONS) {
+        menu.addItem((item) => {
+          item
+            .setTitle(PRESENTATION_LABEL[mode])
+            .setIcon(PRESENTATION_ICON[mode])
+            .setChecked(this.presentation === mode)
+            .onClick(() => {
+              if (this.presentation === mode) return;
+              this.presentation = mode;
+              this.callbacks.onPresentationChange?.(mode);
+              this.renderBody();
+            });
+        });
       }
+      menu.showAtMouseEvent(event);
     });
   }
 
@@ -263,8 +316,9 @@ export class PlaceListRenderer {
     const selected = this.selectedKey === place.placeKey;
     const row = parent.createEl('button', { cls: 'sa-place-row' });
     row.type = 'button';
+    // `is-selected` marks the last place opened so returning from its detail
+    // shows where you were. Not aria-pressed — the row opens, it does not toggle.
     if (selected) row.addClass('is-selected');
-    row.setAttribute('aria-pressed', String(selected));
     row.setAttribute('aria-label', place.name);
 
     const icon = row.createDiv({ cls: 'sa-place-row-icon' });
@@ -288,11 +342,12 @@ export class PlaceListRenderer {
     }
     meta.createSpan({ cls: 'sa-place-row-count', text: String(place.archiveCount) });
 
+    // Opens the place, it does not toggle a filter. A row and a marker are the
+    // same gesture with the same destination, which is what the mobile tab does
+    // — both routes land on the place screen.
     row.addEventListener('click', () => {
-      // Clicking the selected place clears it, so the row is its own toggle.
-      const next = selected ? null : place;
-      this.selectedKey = next?.placeKey ?? null;
-      this.callbacks.onSelect(next);
+      this.selectedKey = place.placeKey;
+      this.callbacks.onSelect(place);
     });
   }
 }

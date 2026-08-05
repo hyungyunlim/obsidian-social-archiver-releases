@@ -2515,7 +2515,17 @@ body.is-mobile .sa-flex-between .sa-dynamic-width {
   flex-direction: column;
 }
 
-.sa-place-row {
+/*
+ * Two classes deep, and `box-shadow: none`, for every bare `<button>` in this
+ * panel — rows, the mode trigger, Back, the provider links.
+ *
+ * These are `<button>` for the keyboard and the screen reader, which means they
+ * inherit Obsidian's filled-button look: `background-color: var(--interactive-
+ * normal)` plus an input shadow. Themes commonly restate that at `.view-content
+ * button`, which is (0,1,1) and beats a single class — so a one-class
+ * `background: transparent` silently lost and every row rendered as a grey slab.
+ */
+.sa-place-list .sa-place-row {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -2524,6 +2534,7 @@ body.is-mobile .sa-flex-between .sa-dynamic-width {
   border: none;
   border-radius: 8px;
   background: transparent;
+  box-shadow: none;
   color: var(--text-normal);
   text-align: left;
   cursor: pointer;
@@ -2531,11 +2542,11 @@ body.is-mobile .sa-flex-between .sa-dynamic-width {
   min-height: 44px;
 }
 
-.sa-place-row:hover {
+.sa-place-list .sa-place-row:hover {
   background: var(--background-modifier-hover);
 }
 
-.sa-place-row.is-selected {
+.sa-place-list .sa-place-row.is-selected {
   background: var(--background-modifier-active-hover);
 }
 
@@ -2594,7 +2605,12 @@ body.is-mobile .sa-flex-between .sa-dynamic-width {
   font-size: 13px;
 }
 
-/* A 45-place list would push the feed off-screen; cap it and scroll. */
+/*
+ * Capped and scrolling, because in the grid views the list sits ON TOP of the
+ * grid and 45 places would push it off-screen. In list mode the list IS the
+ * surface, and `.sa-places-fill` below lifts the cap — leaving it on is what
+ * stopped the rows at 40% of the pane with the rest of it blank.
+ */
 .sa-place-rows {
   max-height: 40vh;
   overflow-y: auto;
@@ -2628,6 +2644,87 @@ body.is-mobile .sa-flex-between .sa-dynamic-width {
   border-radius: 8px;
   overflow: hidden;
   background: var(--background-secondary);
+}
+
+/*
+ * Map mode: the map IS the surface, so it takes the pane.
+ *
+ * The 42rem cap above is the feed's reading column, which the list correctly
+ * sits inside — a map does not. Capped, a wide main-area tab drew the whole of
+ * Korea into 672px while the rest of the pane sat empty, which is what read as
+ * "the map is broken".
+ */
+.sa-place-list.is-map {
+  max-width: none;
+}
+
+/*
+ * List and map both own the pane, so both grow into it. The rows keep the
+ * reading column for width — a place name stretched across a 2000px pane is
+ * harder to scan, not easier — but take the full height, which is the half that
+ * was missing.
+ */
+.sa-places-fill .sa-place-list {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.sa-places-fill .sa-place-rows {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+/*
+ * Posts hands the pane back to the timeline's own feed, which carries its own
+ * reading column — so the list contributes only its switch, and that switch
+ * belongs at the pane edge under the header icons, not centred in a 42rem block
+ * with nothing else in it.
+ */
+.sa-place-list.is-posts {
+  max-width: none;
+  /* The tag chip bar starts right under this; without the gap the switch reads
+     as part of the tag row. */
+  margin-bottom: 10px;
+}
+
+.sa-place-list.is-map .sa-place-map {
+  /* Grow into the pane instead of a fixed slice of the viewport: banners above
+     take their space first and the map gets the rest, so nothing overflows. */
+  flex: 1 1 auto;
+  height: auto;
+  max-height: none;
+  margin-bottom: 0;
+}
+
+/*
+ * The column map mode grows inside. Obsidian's view content is block flow, so a
+ * percentage or `flex: 1` height would resolve against nothing and collapse.
+ */
+.sa-places-fill {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Only the map absorbs the slack — the composer, header and banners keep the
+   height they asked for instead of being squeezed by it. */
+.sa-places-fill > *:not(.sa-place-list) {
+  flex: 0 0 auto;
+}
+
+/*
+ * A place opened FROM the map mounts inside that column, and the column does not
+ * scroll — so the detail has to scroll itself or its feed is unreachable past
+ * the fold. Opened from the list it is plain block flow, where these flex
+ * properties are inert and the pane scrolls as usual. Must follow the rule
+ * above, which matches this element at equal specificity.
+ */
+.sa-places-fill > .sa-place-detail-wrapper {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .sa-place-map-attr {
@@ -2693,15 +2790,47 @@ body.is-mobile .sa-flex-between .sa-dynamic-width {
   flex: 1 1 auto;
 }
 
-.sa-place-toggle {
+/* The list / map / posts dropdown trigger. The menu itself is Obsidian's. */
+.sa-place-toolbar .sa-place-mode-trigger {
+  display: inline-flex;
+  align-items: center;
   gap: 4px;
-  width: auto;
-  padding: 0 8px;
+  flex-shrink: 0;
+  /* Right-hand end of the toolbar, so it lines up with the header's icon row
+     instead of sitting mid-pane wherever the search box happens to end. */
+  margin-left: auto;
+  /* iOS HIG-adjacent target — this switch is the Places navigation. */
+  min-height: 30px;
+  padding: 0 6px 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
 }
 
-.sa-place-toggle-label {
+.sa-place-toolbar .sa-place-mode-trigger:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+  box-shadow: none;
+}
+
+.sa-place-mode-label {
   font-size: 12px;
-  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.sa-place-mode-caret {
+  color: var(--text-faint);
+}
+
+@media (max-width: 400px) {
+  /* A sidebar this narrow needs the search box more than it needs the word. */
+  .sa-place-mode-label {
+    display: none;
+  }
 }
 
 .sa-place-map-error {
@@ -2713,4 +2842,97 @@ body.is-mobile .sa-flex-between .sa-dynamic-width {
 
 .sa-place-map-labels .sa-place-marker-label {
   display: inline;
+}
+
+
+/* ========================================
+ * Place detail (sa-place-detail-)
+ * ======================================== */
+
+/* Back inside the feed's reading column: this surface IS a feed, unlike the map. */
+.sa-place-detail {
+  max-width: 42rem;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.sa-place-detail-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  margin-bottom: 12px;
+}
+
+/*
+ * A plain text link, not a filled pill. Obsidian styles bare `<button>` with a
+ * background and an input shadow, which turned Back into the loudest element on
+ * a page whose subject is the place name below it — `box-shadow: none` is the
+ * half that `background: transparent` alone did not cover.
+ */
+.sa-place-detail .sa-place-detail-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 0 4px 0 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.sa-place-detail .sa-place-detail-back:hover {
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-normal);
+}
+
+.sa-place-detail-name {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+.sa-place-detail-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.sa-place-detail-count {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.sa-place-detail-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sa-place-detail .sa-place-detail-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sa-place-detail .sa-place-detail-link:hover {
+  background: var(--background-modifier-hover);
+  box-shadow: none;
+  color: var(--text-normal);
 }

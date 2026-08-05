@@ -1,4 +1,5 @@
 import { setIcon, getLanguage, Notice, Scope, TFile, TFolder, MarkdownRenderer, Component, Modal, Menu, Platform as ObsidianPlatform, requestUrl, type Vault, type App } from 'obsidian';
+import { addBasemap, renderBasemapAttribution } from '../places/basemap';
 import type { PostData, Comment, PostMetadata, Platform } from '../../../types/post';
 import type SocialArchiverPlugin from '../../../main';
 import * as L from 'leaflet';
@@ -9502,19 +9503,10 @@ export class PostCardRenderer extends Component {
           tap: false, // Valid Leaflet option for mobile, not in @types/leaflet
         } as L.MapOptions);
 
-        // OpenStreetMap tiles
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19,
-        }).addTo(map);
+        addBasemap(map, activeWindow.document);
 
         // Custom attribution - top left corner (z-index low to stay below filter panels)
-        const attr = activeWindow.createDiv();
-        attr.addClass('pcr-gmaps-map-attr');
-        attr.textContent = '© ';
-        const link = attr.createEl('a', { text: 'OSM' });
-        link.href = 'https://www.openstreetmap.org/copyright';
-        link.target = '_blank';
-        mapWrapper.appendChild(attr);
+        renderBasemapAttribution(mapWrapper, 'pcr-gmaps-map-attr');
 
 
         // Custom marker using div icon (no external images needed)

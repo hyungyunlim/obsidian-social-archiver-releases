@@ -162,6 +162,18 @@ export class FilterSortManager {
   }
 
   /**
+   * Sort without filtering.
+   *
+   * A place page shows every archive at that place. `aggregatePlaces` counts
+   * from the whole vault, so filtering the page would print "1 archive" over an
+   * empty feed the moment the timeline sat on Inbox and the archive did not.
+   * Copied first because `applySort` sorts in place.
+   */
+  sortOnly(posts: readonly PostData[]): PostData[] {
+    return this.applySort([...posts]);
+  }
+
+  /**
    * Apply filters to posts
    */
   private applyFilters(posts: PostData[]): PostData[] {

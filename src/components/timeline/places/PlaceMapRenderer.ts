@@ -1,14 +1,14 @@
 import * as L from 'leaflet';
 import type { PlaceSummary } from '@/utils/placeAggregation';
+import { addBasemap, basemapTileUrl, currentBasemapTheme, renderBasemapAttribution } from './basemap';
 
 /**
  * The places map — one marker per place that has coordinates.
  *
- * Leaflet, not MapLibre. The plugin already bundles Leaflet for the map-place
- * card's embedded map, so this adds no dependency; the other clients use
- * MapLibre and their clustering/camera helpers are written against its native
- * GeoJSON clustering API, which Leaflet has no equivalent for. Porting them
- * would mean adding `leaflet.markercluster` for a dataset that does not need it.
+ * Leaflet, not MapLibre — and now for a measured reason rather than a budgetary
+ * one. MapLibre cannot run in Obsidian at all: it needs a Web Worker and the app
+ * offers a plugin no way to construct one. See `basemap.ts` for the probe
+ * results and what they rule out.
  *
  * ponytail: no clustering. Measured on a real vault the whole corpus is 45
  * places, which reads fine as plain markers. Revisit if a vault ever shows
@@ -47,8 +47,18 @@ export interface PlaceMapCallbacks {
 export class PlaceMapRenderer {
   private containerEl: HTMLElement | null = null;
   private map: L.Map | null = null;
+  private basemap: L.TileLayer | null = null;
 
   constructor(private readonly callbacks: PlaceMapCallbacks) {}
+
+  /**
+   * Follow Obsidian's theme. Swaps the tile URL on the existing layer rather
+   * than re-rendering, so the camera survives — a theme toggle should not throw
+   * away wherever the user had panned to.
+   */
+  syncTheme(): void {
+    this.basemap?.setUrl(basemapTileUrl(currentBasemapTheme()));
+  }
 
   /**
    * Tear the map down. Leaflet holds listeners on window and on its own panes,
@@ -60,8 +70,20 @@ export class PlaceMapRenderer {
       this.map.remove();
       this.map = null;
     }
+    this.basemap = null;
     this.containerEl?.remove();
     this.containerEl = null;
+  }
+
+  /**
+   * Re-measure after the container was hidden and shown again.
+   *
+   * Place detail hides the map with `display: none` rather than destroying it,
+   * so pan and zoom survive the round trip. Leaflet measured 0×0 while hidden,
+   * though, so without this the restored map draws into a collapsed viewport.
+   */
+  refresh(): void {
+    this.map?.invalidateSize();
   }
 
   /**
@@ -117,15 +139,8 @@ export class PlaceMapRenderer {
         scrollWheelZoom: true,
       });
 
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 })
-        .addTo(this.map);
-
-      const attribution = this.containerEl.createDiv({ cls: 'sa-place-map-attr' });
-      attribution.textContent = '© ';
-      const link = attribution.createEl('a', { text: 'OSM' });
-      link.href = 'https://www.openstreetmap.org/copyright';
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
+      this.basemap = addBasemap(this.map);
+      renderBasemapAttribution(this.containerEl, 'sa-place-map-attr');
 
       const bounds: L.LatLngTuple[] = [];
       for (const { place, position } of mappable) {
@@ -171,6 +186,7 @@ export class PlaceMapRenderer {
         this.map.remove();
         this.map = null;
       }
+      this.basemap = null;
       this.containerEl?.empty();
       this.containerEl?.createDiv({
         cls: 'sa-place-map-error',

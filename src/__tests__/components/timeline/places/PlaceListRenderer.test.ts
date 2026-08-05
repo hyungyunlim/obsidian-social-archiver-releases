@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Menu } from 'obsidian';
 import { PlaceListRenderer } from '@/components/timeline/places/PlaceListRenderer';
 import type { PlaceSummary } from '@/utils/placeAggregation';
 import type { PlaceKind } from '@/shared/platforms/place-kinds';
@@ -84,17 +85,18 @@ describe('PlaceListRenderer', () => {
     expect(root.querySelector('.sa-place-row-badge')).not.toBeNull();
   });
 
-  it('reports the place on click, and clears it when clicked again', () => {
+  it('opens the place on click, and opening the open one again re-opens it', () => {
+    // A row navigates, it does not toggle a filter — same gesture and same
+    // destination as a map marker. Clicking the already-open place used to clear
+    // the selection, which from a place page reads as the row going dead.
     const { root, onSelect } = mount([place()]);
-    const row = root.querySelector('.sa-place-row') as HTMLElement;
-
-    row.click();
+    (root.querySelector('.sa-place-row') as HTMLElement).click();
     expect(onSelect).toHaveBeenLastCalledWith(expect.objectContaining({ placeKey: 'kakaomap:1' }));
 
-    // Re-render reflecting the selection, then click the same row.
     const second = mount([place()], 'kakaomap:1');
     (second.root.querySelector('.sa-place-row') as HTMLElement).click();
-    expect(second.onSelect).toHaveBeenLastCalledWith(null);
+    expect(second.onSelect)
+      .toHaveBeenLastCalledWith(expect.objectContaining({ placeKey: 'kakaomap:1' }));
   });
 
   it('marks the selected row', () => {
@@ -221,12 +223,37 @@ describe('PlaceListRenderer — map presentation', () => {
     return { root: renderer.render(parent, places), renderMap };
   }
 
-  const toggle = (root: HTMLElement): HTMLElement =>
-    root.querySelector('.sa-place-toolbar .sa-action-btn') as HTMLElement;
+  /** Open the dropdown and pick a mode, the way the user does. */
+  function mode(root: HTMLElement, label: string): void {
+    (root.querySelector('.sa-place-mode-trigger') as HTMLElement)
+      .dispatchEvent(new MouseEvent('click'));
+    const menu = Menu.last;
+    if (!menu) throw new Error('the switch opened no menu');
+    if (!menu.select(label)) throw new Error(`the menu offered no "${label}"`);
+  }
 
-  it('offers no toggle when no map renderer is supplied', () => {
+  it('offers no switch when no map renderer is supplied', () => {
     const { root } = mount([place()]);
-    expect(root.querySelector('.sa-place-toolbar .sa-action-btn')).toBeNull();
+    expect(root.querySelector('.sa-place-mode-trigger')).toBeNull();
+  });
+
+  it('offers all three modes and checks the one showing', () => {
+    const { root } = mountWithMap([place()]);
+    (root.querySelector('.sa-place-mode-trigger') as HTMLElement)
+      .dispatchEvent(new MouseEvent('click'));
+
+    expect(Menu.last?.items.map((item) => item.title)).toEqual(['List', 'Map', 'Posts']);
+    expect(Menu.last?.items.filter((item) => item.checked).map((item) => item.title))
+      .toEqual(['List']);
+  });
+
+  it('names the mode showing on the trigger itself', () => {
+    const { root } = mountWithMap([place()]);
+    expect(root.querySelector('.sa-place-mode-label')?.textContent).toBe('List');
+
+    mode(root, 'Map');
+
+    expect(root.querySelector('.sa-place-mode-label')?.textContent).toBe('Map');
   });
 
   it('starts as a list and switches to the map on demand', () => {
@@ -235,7 +262,7 @@ describe('PlaceListRenderer — map presentation', () => {
     expect(renderMap).not.toHaveBeenCalled();
     expect(names(root)).toEqual(['개나리']);
 
-    toggle(root).click();
+    mode(root, 'Map');
 
     expect(renderMap).toHaveBeenCalledTimes(1);
     expect(root.querySelector('.sa-place-rows')).toBeNull();
@@ -249,30 +276,88 @@ describe('PlaceListRenderer — map presentation', () => {
 
     ([...root.querySelectorAll('.tcb-chip')]
       .find((el) => el.textContent === 'Cafe') as HTMLElement).click();
-    toggle(root).click();
+    mode(root, 'Map');
 
     expect(renderMap.mock.calls[0]?.[1]).toHaveLength(1);
   });
 
   it('leaves the map surface to explain itself rather than reverting', () => {
-    // Reverting silently is what made the toggle look dead: the user pressed it
+    // Reverting silently is what made the switch look dead: the user pressed it
     // and the list simply stayed. The map surface always renders something now,
-    // and the List button is right there to go back.
+    // and List is right there to go back.
     const { root, renderMap } = mountWithMap([place({ hasCoords: false })], false);
 
-    toggle(root).click();
+    mode(root, 'Map');
 
     expect(renderMap).toHaveBeenCalledTimes(1);
     expect(root.querySelector('.sa-place-rows')).toBeNull();
-    expect(toggle(root).textContent).toContain('List');
+    expect(Menu.last?.items.map((item) => item.title)).toContain('List');
   });
 
   it('switches back to the list', () => {
     const { root } = mountWithMap([place()]);
 
-    toggle(root).click();
-    toggle(root).click();
+    mode(root, 'Map');
+    mode(root, 'List');
 
     expect(names(root)).toEqual(['개나리']);
+  });
+
+  it('strips the search box and chips in map mode', () => {
+    // Mobile parity: the map tab hides the search field, the chip row and the
+    // controls row. Every strip left above the map is pane the map does not get,
+    // which is what made a full-width map still read as a thumbnail.
+    const { root } = mountWithMap([
+      place({ placeKind: 'restaurant' }),
+      place({ placeKey: 'k:2', name: 'Cafe One', placeKind: 'cafe' }),
+    ]);
+    expect(root.querySelector('.sa-place-search-input')).not.toBeNull();
+    expect(root.querySelector('.sa-place-chip-bar')).not.toBeNull();
+
+    mode(root, 'Map');
+
+    expect(root.querySelector('.sa-place-search-input')).toBeNull();
+    expect(root.querySelector('.sa-place-chip-bar')).toBeNull();
+    expect(root.classList.contains('is-map')).toBe(true);
+  });
+
+  it('renders only the switch in posts mode, and reports the change', () => {
+    // Posts is the flat feed, which the timeline owns — the list contributes
+    // nothing but the way back.
+    const onPresentationChange = vi.fn();
+    const renderMap = vi.fn(() => true);
+    const renderer = new PlaceListRenderer({
+      onSelect: vi.fn(),
+      renderMap,
+      onPresentationChange,
+    });
+    const parent = document.createElement('div');
+    document.body.appendChild(parent);
+    const root = renderer.render(parent, [place()]);
+
+    mode(root, 'Posts');
+
+    expect(onPresentationChange).toHaveBeenLastCalledWith('posts');
+    expect(renderer.getPresentation()).toBe('posts');
+    expect(root.querySelector('.sa-place-rows')).toBeNull();
+    expect(renderMap).not.toHaveBeenCalled();
+    expect(root.querySelector('.sa-place-mode-trigger')).not.toBeNull();
+    expect(root.classList.contains('is-posts')).toBe(true);
+  });
+
+  it('does not re-announce the mode already showing', () => {
+    const onPresentationChange = vi.fn();
+    const renderer = new PlaceListRenderer({
+      onSelect: vi.fn(),
+      renderMap: vi.fn(() => true),
+      onPresentationChange,
+    });
+    const parent = document.createElement('div');
+    document.body.appendChild(parent);
+    const root = renderer.render(parent, [place()]);
+
+    mode(root, 'List');
+
+    expect(onPresentationChange).not.toHaveBeenCalled();
   });
 });

@@ -43,9 +43,10 @@ import { ClipGuideModal } from '../../modals/ClipGuideModal';
 import type { NoticePayloadV1 } from '../../types/notices';
 import { TagChipBar } from './filters/TagChipBar';
 import { StoreChipBar, type StoreSummary } from './filters/StoreChipBar';
+import { PlaceDetailRenderer } from './places/PlaceDetailRenderer';
 import { PlaceListRenderer } from './places/PlaceListRenderer';
 import { PlaceMapRenderer } from './places/PlaceMapRenderer';
-import { aggregatePlaces } from '../../utils/placeAggregation';
+import { aggregatePlaces, type PlaceSummary } from '../../utils/placeAggregation';
 import { UNTAGGED_FILTER_ID } from '../../types/tag';
 import { ReaderModeOverlay, type ReaderModeContext } from './reader/ReaderModeOverlay';
 import { SeriesGroupingService, type TimelineItem, isSeriesGroup } from '../../services/SeriesGroupingService';
@@ -377,6 +378,12 @@ export class TimelineContainer {
   private storeChipBar: StoreChipBar;
   private placeListRenderer: PlaceListRenderer;
   private placeMapRenderer: PlaceMapRenderer;
+  /** Place Detail (inline, mirrors Author Detail — see showPlaceDetail). */
+  private placeDetailRenderer: PlaceDetailRenderer | null = null;
+  private placeDetailWrapper: HTMLElement | null = null;
+  private activePlace: PlaceSummary | null = null;
+  /** The hidden timeline missed a refresh, so Back has to rebuild it. */
+  private placeTimelineStale = false;
   private bulkSelectionContainer: HTMLElement | null = null;
   private selectionMode = false;
   private selectedPostPaths: Set<string> = new Set();
@@ -490,14 +497,13 @@ export class TimelineContainer {
       void this.updatePostsFeedIncremental();
     });
 
-    // Places selects by vault path rather than placeKey — the index carries only
-    // `hasPlace`, and the aggregation already knows which notes reference each
-    // place, so it hands the paths over and both filter paths work unchanged.
+    // A marker and a row are one gesture with one destination, which is the
+    // mobile tab's rule — both `onMarkerPress` and a list press route to the
+    // place screen. In gallery/mosaic there is no card feed to open a detail
+    // into, so there the selection stays a filter over the grid; that is what
+    // `placeFilePaths` still exists for.
     this.placeMapRenderer = new PlaceMapRenderer({
-      onSelect: (place) => {
-        this.filterSortManager.updateFilter({ placeFilePaths: new Set(place.filePaths) });
-        void this.updatePostsFeedIncremental();
-      },
+      onSelect: (place) => this.selectPlace(place),
     });
 
     this.placeListRenderer = new PlaceListRenderer({
@@ -505,11 +511,12 @@ export class TimelineContainer {
       // reached when the user switches to it.
       renderMap: (container, places, selectedKey) =>
         this.placeMapRenderer.render(container, places, selectedKey) !== null,
-      onSelect: (place) => {
-        this.filterSortManager.updateFilter({
-          placeFilePaths: place ? new Set(place.filePaths) : null,
-        });
-        void this.updatePostsFeedIncremental();
+      onSelect: (place) => this.selectPlace(place),
+      // Switching surfaces drops a stale detail and re-lays the feed, since map
+      // and list own the pane while posts hands it back.
+      onPresentationChange: () => {
+        this.hidePlaceDetail({ restore: false });
+        void this.loadPosts();
       },
     });
 
@@ -3814,6 +3821,9 @@ export class TimelineContainer {
   private async togglePlacesView(): Promise<void> {
     const next = !this.filterSortManager.getFilterState().placesOnly;
 
+    // Leaving Places with a detail open would strand it over the plain timeline.
+    this.hidePlaceDetail({ restore: false });
+
     if (next && this.isSubscriptionViewActive) {
       this.isSubscriptionViewActive = false;
       this.syncFiltersAuthorToTimeline();
@@ -5389,6 +5399,16 @@ export class TimelineContainer {
       return;
     }
 
+    // A vault change while a place is open would empty the container and take
+    // the detail with it. Repaint the place instead and note that the timeline
+    // underneath is now stale, so Back rebuilds it rather than restoring what
+    // this pass was about to replace.
+    if (this.activePlace) {
+      this.placeTimelineStale = true;
+      this.refreshActivePlace();
+      return;
+    }
+
     // Remove inline loading bar if present
     this.removeLoadingBar();
 
@@ -5408,6 +5428,18 @@ export class TimelineContainer {
     // would be unusable. The list doubles as the selector, which is why there is
     // no separate list/feed mode to switch between.
     this.renderPlaceList();
+
+    // List and map own the pane — the feed and its filter bars belong to the
+    // posts surface only. Drawing them under the map is what buried it: every
+    // strip below still costs the map height, and the tag bar butting against a
+    // map nobody filtered by tags reads as leftover chrome.
+    if (this.isPlaceSurfaceExclusive()) {
+      this.renderNoticeBanner();
+      this.renderLibrarySyncBanner();
+      this.renderArchiveProgressBanner();
+      this.hasRenderedPosts = true;
+      return;
+    }
 
     // Stores sit above tags: inside Shopping the store is the primary axis, and
     // the two bars stack in the same slot.
@@ -6246,11 +6278,28 @@ export class TimelineContainer {
   }
 
   /**
+   * True while a Places surface that is not the feed is showing, so the caller
+   * knows the pane is spoken for. The grids never qualify: there the place list
+   * narrows the grid rather than replacing it.
+   */
+  private isPlaceSurfaceExclusive(): boolean {
+    if (!this.filterSortManager.getFilterState().placesOnly) return false;
+    if (this.viewMode !== 'timeline') return false;
+    return this.placeListRenderer.getPresentation() !== 'posts';
+  }
+
+  /**
    * Render the grouped place list while Places is on, and drop a selection whose
    * place no longer exists — otherwise deleting the last archive referencing a
    * place leaves an invisible path filter pinned on and the feed empty.
    */
   private renderPlaceList(): void {
+    // List and map both need the pane to be a column they can grow inside; the
+    // default block flow would collapse a percentage height to nothing. Set
+    // before the Places guard so leaving Places takes the column back down with
+    // it — stranded, it would leave the plain timeline unable to scroll.
+    this.containerEl.toggleClass('sa-places-fill', this.isPlaceSurfaceExclusive());
+
     if (!this.filterSortManager.getFilterState().placesOnly) return;
 
     const places = aggregatePlaces(this.posts);
@@ -6258,6 +6307,12 @@ export class TimelineContainer {
     if (selectedKey && !places.some((place) => place.placeKey === selectedKey)) {
       selectedKey = null;
       this.filterSortManager.updateFilter({ placeFilePaths: null });
+    }
+
+    // The open place going away — its last archive deleted — would otherwise
+    // leave a detail pinned over a timeline that no longer has it.
+    if (this.activePlace && !places.some((place) => place.placeKey === this.activePlace?.placeKey)) {
+      this.hidePlaceDetail({ restore: false });
     }
 
     this.placeListRenderer.render(this.containerEl, places, selectedKey);
@@ -7782,6 +7837,130 @@ export class TimelineContainer {
     });
   }
 
+  // --------------------------------------------------------------------------
+  // Place Detail (inline within timeline)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Route a place selection. Timeline mode opens the place; the grids keep the
+   * old filter behaviour, since a grid has no card feed to open a detail into.
+   */
+  private selectPlace(place: PlaceSummary): void {
+    if (this.viewMode !== 'timeline') {
+      this.filterSortManager.updateFilter({ placeFilePaths: new Set(place.filePaths) });
+      void this.updatePostsFeedIncremental();
+      return;
+    }
+    this.showPlaceDetail(place);
+  }
+
+  /**
+   * Show one place's archives, replacing the timeline content.
+   *
+   * Hiding the timeline rather than destroying it is the whole point: the map is
+   * a live Leaflet instance, and re-rendering it would throw away the pan and
+   * zoom the user navigated to. `display: none` keeps it, so Back lands on the
+   * map exactly as it was — it only needs a re-measure, since Leaflet saw a 0×0
+   * container the entire time it was hidden.
+   */
+  public showPlaceDetail(place: PlaceSummary): void {
+    if (this.activePlace) {
+      this.activePlace = place;
+      this.renderPlaceDetail();
+      return;
+    }
+
+    this.activePlace = place;
+
+    for (const child of Array.from(this.containerEl.children)) {
+      (child as HTMLElement).setCssStyles({ display: 'none' });
+    }
+
+    this.placeDetailWrapper = this.containerEl.createDiv({
+      cls: 'sa-place-detail-wrapper',
+    });
+    this.placeDetailRenderer = new PlaceDetailRenderer({
+      onBack: () => this.hidePlaceDetail(),
+      renderCard: async (parent, post) => {
+        await this.postCardRenderer.render(parent, post, true);
+      },
+      onOpenUrl: (url) => window.open(url, '_blank'),
+    });
+
+    this.renderPlaceDetail();
+  }
+
+  /** Repoint the basemap after Obsidian's theme changed. See TimelineView. */
+  public syncMapTheme(): void {
+    this.placeMapRenderer.syncTheme();
+  }
+
+  /** Paint the active place. Split out so switching places skips the mount. */
+  private renderPlaceDetail(): void {
+    const place = this.activePlace;
+    if (!place || !this.placeDetailRenderer || !this.placeDetailWrapper) return;
+    // Sorted but NOT filtered. The place list is aggregated from the whole
+    // vault, so a page fed `filteredPosts` printed its count off one corpus and
+    // its cards off another — "1 archive" over "No archives reference this
+    // place yet." the moment the timeline sat on Inbox and the archive did not.
+    this.placeDetailRenderer.render(
+      this.placeDetailWrapper,
+      place,
+      this.filterSortManager.sortOnly(this.posts),
+    );
+  }
+
+  /**
+   * Repaint after the vault changed under an open place — re-aggregated, so the
+   * header's count and address follow the edit that triggered the refresh. The
+   * place losing its last archive closes the detail rather than showing a page
+   * for something that no longer exists.
+   */
+  private refreshActivePlace(): void {
+    const key = this.activePlace?.placeKey;
+    if (!key) return;
+    const place = aggregatePlaces(this.posts).find((entry) => entry.placeKey === key);
+    if (!place) {
+      this.hidePlaceDetail();
+      return;
+    }
+    this.activePlace = place;
+    this.renderPlaceDetail();
+  }
+
+  /**
+   * Close the place detail. `restore: false` is for callers that are about to
+   * re-render the timeline themselves and would otherwise un-hide children a
+   * moment before wiping them.
+   */
+  public hidePlaceDetail(options?: { restore?: boolean }): void {
+    if (!this.activePlace) return;
+
+    const stale = this.placeTimelineStale;
+    this.placeTimelineStale = false;
+    this.placeDetailRenderer?.destroy();
+    this.placeDetailRenderer = null;
+    this.placeDetailWrapper?.remove();
+    this.placeDetailWrapper = null;
+    this.activePlace = null;
+
+    if (options?.restore === false) return;
+
+    // The timeline behind missed a refresh while it was hidden, so restoring it
+    // would show what the vault looked like before the change.
+    if (stale) {
+      void this.renderPosts();
+      return;
+    }
+
+    for (const child of Array.from(this.containerEl.children)) {
+      (child as HTMLElement).setCssStyles({ display: '' });
+    }
+    // The map measured itself while it had no layout box. Without this it draws
+    // into a collapsed viewport and looks broken on the way back.
+    this.placeMapRenderer.refresh();
+  }
+
   /**
    * Hide Author Detail and restore the timeline content.
    */
@@ -7815,6 +7994,14 @@ export class TimelineContainer {
     }
     this.authorDetailWrapper = null;
     this.isAuthorDetailActive = false;
+
+    // Destroy inline place detail if active. Leaflet holds window listeners, so
+    // the map goes down with it rather than leaking past the view.
+    this.placeDetailRenderer?.destroy();
+    this.placeDetailRenderer = null;
+    this.placeDetailWrapper = null;
+    this.activePlace = null;
+    this.placeMapRenderer.destroy();
 
     // Flush pending PostIndexService writes to disk
     void this.postIndexService.flush();

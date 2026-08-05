@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/map-search-provider.ts
- * Generated: 2026-08-04T06:00:35.915Z
+ * Generated: 2026-07-14T20:38:59.846Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared

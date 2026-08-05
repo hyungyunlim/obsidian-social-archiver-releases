@@ -93,7 +93,10 @@ export function encodeMapPlaceQuery(value: string): string | null {
 }
 
 export const NAVER_MAP_URL_PATTERN = /^https?:\/\/(?:map\.naver\.com\/(?:p\/(?:entry\/place\/\d{1,30}|search\/[^/?#]+\/place\/\d{1,30})|v5\/entry\/place\/\d{1,30})|(?:m|pcmap)\.place\.naver\.com\/place\/\d{1,30}(?:\/home)?)\/?(?:[?#].*)?$/i;
-export const KAKAO_MAP_URL_PATTERN = /^https?:\/\/(?:place\.map\.kakao\.com\/\d{1,30}|map\.kakao\.com\/link\/map\/\d{1,30})\/?(?:[?#].*)?$/i;
+// applink.map.kakao.com/place?id=… is what the KakaoMap app's share sheet
+// produces (via the kko.to shortener), so the place id lives in the query
+// string rather than the path.
+export const KAKAO_MAP_URL_PATTERN = /^https?:\/\/(?:(?:place\.map\.kakao\.com\/\d{1,30}|map\.kakao\.com\/link\/map\/\d{1,30})\/?(?:[?#].*)?|applink\.map\.kakao\.com\/place\/?\?(?:[^#]*&)?id=\d{1,30}(?:[&#].*)?)$/i;
 
 function parseHttpUrl(value: string): URL | null {
   try {
@@ -136,6 +139,12 @@ function extractKakaoPlaceId(parsed: URL): string | null {
   if (hostname === 'map.kakao.com') {
     const mapLinkMatch = parsed.pathname.match(/^\/link\/map\/(\d{1,30})\/?$/);
     return mapLinkMatch?.[1] ?? null;
+  }
+
+  if (hostname === 'applink.map.kakao.com') {
+    if (!/^\/place\/?$/.test(parsed.pathname)) return null;
+    const id = parsed.searchParams.get('id');
+    return id && /^\d{1,30}$/.test(id) ? id : null;
   }
 
   return null;

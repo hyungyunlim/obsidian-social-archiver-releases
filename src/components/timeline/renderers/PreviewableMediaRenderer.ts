@@ -49,6 +49,7 @@
  */
 
 import * as L from 'leaflet';
+import { addBasemap, renderBasemapAttribution } from '../places/basemap';
 import type { PostData } from '../../../types/post';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- imported for parity with sibling renderers / future-proofing of the PreviewContext shape; not currently consumed by the media renderer
 import { extractYouTubeVideoId as _extractYouTubeVideoId } from './PreviewableHelpers';
@@ -1070,20 +1071,10 @@ export class PreviewableMediaRenderer {
           tap: false,
         } as L.MapOptions);
 
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19,
-        }).addTo(map);
+        addBasemap(map, activeWindow.document);
 
         // Custom attribution — top-left corner, low z-index.
-        const attr = activeWindow.createDiv();
-        attr.classList.add('pcr-gmaps-map-attr');
-        attr.textContent = '© ';
-        const link = activeWindow.createEl('a');
-        link.textContent = 'OSM';
-        link.href = 'https://www.openstreetmap.org/copyright';
-        link.target = '_blank';
-        attr.appendChild(link);
-        wrapper.appendChild(attr);
+        renderBasemapAttribution(wrapper, 'pcr-gmaps-map-attr');
 
         // Custom marker via div icon.
         const markerIcon = L.divIcon({
