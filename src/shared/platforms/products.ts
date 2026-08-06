@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/products.ts
- * Generated: 2026-08-06T03:00:54.539Z
+ * Generated: 2026-08-06T05:11:27.900Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -558,6 +558,194 @@ export function upgradeImageVariant(url: string): string {
     // degraded input. Leave it exactly as-is.
     return url;
   }
+}
+
+/**
+ * Structural minimum {@link applyProductPresentation} touches.
+ *
+ * Deliberately loose: every client declares its own PostData (server, plugin,
+ * extension clip envelope) and they agree only on these four members.
+ */
+export interface ProductPresentablePost {
+  url?: string;
+  author: { name: string; avatar?: string };
+  content: { text: string; markdown?: string };
+  media: Array<{ type: string; url: string }>;
+  metadata: { product?: ProductSnapshot; productSource?: string };
+}
+
+/**
+ * Promote the product snapshot into the archive's ordinary presentation data.
+ *
+ * Lives here rather than in the server because a commerce page reaches a vault
+ * by three different routes — server extraction, the extension's server clip,
+ * and the extension's local `obsidian://` clip — and the note has to look the
+ * same whichever one produced it. The first two used to be the only callers,
+ * and the local clip silently shipped a product page with no card and no
+ * photos. That is the second time this bug shipped: before this was factored
+ * out of the server at all, only the client-extracted Chrome lane copied its
+ * images into media[], so a Safari archive left its whole gallery stranded in
+ * metadata.product.images behind one generic page thumbnail.
+ *
+ * Kept independent from how the snapshot was obtained, so server JSON-LD,
+ * client DOM extraction and later enrichment all get identical treatment.
+ *
+ * Every helper is idempotent, and the reference-stability check makes a
+ * repeated pass a true no-op.
+ */
+export function applyProductPresentation<T extends ProductPresentablePost>(
+  post: T,
+  product: ProductSnapshot | null | undefined = post.metadata?.product,
+): T {
+  if (!product?.name) return post;
+
+  const productSource = post.metadata?.productSource
+    ?? normalizeProductHost(post.url ?? '');
+  const media = withProductImages(post.media, product);
+  const content = withProductDescription(post.content, product.description);
+  const author = withProductSeller(
+    stripProductImageAvatar(post.author, product.image),
+    product.seller ?? marketplaceStoreHandle(productSource),
+  );
+  const metadata = !post.metadata?.productSource && productSource
+    ? { ...post.metadata, productSource }
+    : post.metadata;
+
+  if (
+    media === post.media
+    && content === post.content
+    && author === post.author
+    && metadata === post.metadata
+  ) {
+    return post;
+  }
+
+  return { ...post, media, content, author, metadata };
+}
+
+/**
+ * Put the product photos into `media[]`.
+ *
+ * This is what PRD §3 meant by "preserve the images, do not reference them":
+ * media[] is the existing pipeline, so one assignment buys R2 preservation
+ * (the archive survives the store deleting the file) AND the media grid with
+ * its lightbox on every client — zoom, swipe, keyboard — with no viewer code
+ * written four times.
+ *
+ * Appended, never replacing: a page can carry both product shots and other
+ * media, and the card's own hero image stays whatever the snapshot says.
+ */
+function withProductImages<M extends { type: string; url: string }>(
+  media: M[],
+  product: ProductSnapshot,
+): M[] {
+  const urls = product.images?.length
+    ? product.images
+    : (product.image ? [product.image] : []);
+  if (urls.length === 0) return media;
+
+  const existing = media ?? [];
+  const seen = new Set(existing.map((item) => item.url));
+  const added = urls
+    .filter((url) => url && !seen.has(url))
+    // The element type is the caller's; a product photo only ever adds the two
+    // members every variant of it shares.
+    .map((url) => ({ type: 'image', url } as unknown as M));
+
+  return added.length > 0 ? [...existing, ...added] : media;
+}
+
+/**
+ * Make sure the product's own description is in the archive body.
+ *
+ * Extraction on a product page reliably returns the theme's furniture —
+ * "+ ADD AN ARM", "27 reviews", "SHIPPING INFO" — and drops the actual copy,
+ * so the body is nearly useless and, worse, that is what full-text search
+ * indexes.
+ *
+ * Prepending rather than replacing: the extracted text occasionally does carry
+ * real content, and there is no reliable way to tell furniture from prose. This
+ * way nothing is lost, search gets the real description, and a reader sees
+ * prose first. Skipped when the body already contains it.
+ */
+function withProductDescription<T extends { text: string; markdown?: string }>(
+  content: T,
+  description: string | undefined,
+): T {
+  const trimmed = description?.trim();
+  if (!trimmed) return content;
+
+  const body = content.text ?? '';
+  // Compare on a collapsed form so whitespace differences do not cause a
+  // duplicate paragraph.
+  const flat = (value: string): string => value.replace(/\s+/g, ' ').trim();
+  if (flat(body).includes(flat(trimmed))) return content;
+
+  return {
+    ...content,
+    text: body ? `${trimmed}\n\n${body}` : trimmed,
+    ...(content.markdown
+      ? { markdown: `${trimmed}\n\n${content.markdown}` }
+      : {}),
+  };
+}
+
+/**
+ * Seller handle from a marketplace `product_source`.
+ *
+ * SmartStore declares no seller, no brand and no og:site_name (measured on
+ * the live page), so the store's URL handle is the only identifier the page
+ * actually states. It is a handle rather than a display name — "hawaiis", not
+ * "하와이스커피" — but it names the seller, which "smartstore.naver.com" does
+ * not. Parsing the display name out of the product title would be guessing.
+ */
+function marketplaceStoreHandle(productSource: string | null | undefined): string | undefined {
+  const handle = productSource?.includes('/') ? productSource.split('/')[1] : undefined;
+  return handle?.trim() || undefined;
+}
+
+/**
+ * On a product archive the store IS the author.
+ *
+ * A product page has no byline, so whatever generic author extraction returns
+ * is noise: measured on andar-global it produced "Flora C., Yik L., Zoey C."
+ * — three reviewers' names. A marketplace produces the bare hostname
+ * ("smartstore.naver.com"), which identifies nothing either.
+ *
+ * So when a snapshot names a seller, that wins outright rather than only
+ * beating a hostname. There is no case where a reviewer's name or a domain is
+ * a better label for a product than the shop selling it.
+ */
+function withProductSeller<T extends { name: string } | undefined>(
+  author: T,
+  seller: string | undefined,
+): T {
+  const trimmed = seller?.trim();
+  if (!author || !trimmed) return author;
+  return author.name === trimmed ? author : { ...author, name: trimmed };
+}
+
+/**
+ * Never let the product photo become the author avatar.
+ *
+ * The card already shows that image at full size directly below, so using it
+ * again as a 32px circle just prints it twice. Dropping it lets the client
+ * fall back to the site icon or its generated initials avatar, either of which
+ * says something the big image does not.
+ *
+ * Compared scheme-insensitively because og:image is often http:// while the
+ * snapshot's is https://.
+ */
+function stripProductImageAvatar<T extends { avatar?: string } | undefined>(
+  author: T,
+  productImage: string | undefined,
+): T {
+  if (!author?.avatar || !productImage) return author;
+  const bare = (url: string): string => url.replace(/^https?:/, '').split('?')[0] ?? url;
+  if (bare(author.avatar) !== bare(productImage)) return author;
+
+  const { avatar: _dropped, ...rest } = author;
+  return rest as T;
 }
 
 /** Parse the stored `product_json` column. Never throws. */

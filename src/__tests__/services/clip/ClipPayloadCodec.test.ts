@@ -126,6 +126,33 @@ describe('ClipPayloadCodec', () => {
       });
     });
 
+    it('preserves the commerce snapshot from a product clip', () => {
+      // Strip mode drops whatever the schema does not declare, so a clipped
+      // product page used to arrive as a plain article: no card, no photos.
+      const product = {
+        name: 'Nike Air Max',
+        price: 159000,
+        currency: 'KRW',
+        images: ['https://cdn.example.com/shoe-1.jpg'],
+        source: 'json-ld',
+        confidence: 'confirmed',
+        extractorVersion: '1',
+      };
+      const payload = codec.decode(
+        makeCompressedEnvelope({
+          platform: 'web',
+          metadata: {
+            timestamp: '2026-06-01T12:00:00.000Z',
+            product,
+            productSource: 'nike.com',
+          },
+        })
+      );
+
+      expect(payload.postData.metadata.product).toEqual(product);
+      expect(payload.postData.metadata.productSource).toBe('nike.com');
+    });
+
     it('revives publishedDate/archivedDate ISO strings into Date objects', () => {
       const payload = codec.decode(
         makeCompressedEnvelope({

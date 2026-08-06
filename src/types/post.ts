@@ -665,6 +665,14 @@ export const PostDataSchema: z.ZodType<PostData> = z.lazy(() => z.object({
     timestamp: z.union([z.date(), z.string()]),
     editedAt: z.union([z.date(), z.string()]).nullish(),
     location: z.string().nullish(),
+    // Commerce snapshot, carried VERBATIM for the same reason ProductBodyBlock
+    // stores it verbatim: a hand-written field list here would silently drop
+    // whatever ProductSnapshot grew since. Without these two the strip-mode
+    // clip codec threw the whole card away and a clipped product page landed
+    // as a plain article. Shape is guarded downstream by
+    // isRenderableProductSnapshot, so garbage never reaches a note.
+    product: z.custom<ProductSnapshot>().nullish(),
+    productSource: z.string().nullish(),
     music: z.object({
       title: z.string(),
       author: z.string(),
