@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/place-kinds.ts
- * Generated: 2026-08-05T23:29:30.154Z
+ * Generated: 2026-07-24T15:17:22.560Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared

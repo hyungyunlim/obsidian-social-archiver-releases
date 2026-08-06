@@ -361,3 +361,131 @@ describe('PlaceListRenderer — map presentation', () => {
     expect(onPresentationChange).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * The row icon doubles as the place-type picker, the way the place bubble does
+ * on mobile and desktop.
+ */
+describe('PlaceListRenderer — place kind', () => {
+  function mountEditable(places: PlaceSummary[]): {
+    root: HTMLElement;
+    onKindChange: ReturnType<typeof vi.fn>;
+    onSelect: ReturnType<typeof vi.fn>;
+  } {
+    const onKindChange = vi.fn();
+    const onSelect = vi.fn();
+    const renderer = new PlaceListRenderer({ onSelect, onKindChange });
+    const parent = document.createElement('div');
+    document.body.appendChild(parent);
+    return { root: renderer.render(parent, places), onKindChange, onSelect };
+  }
+
+  const icon = (root: HTMLElement): HTMLElement =>
+    root.querySelector('.sa-place-row-icon') as HTMLElement;
+
+  it('leaves the icon inert when there is nowhere to write the change', () => {
+    const { root } = mount([place()]);
+    expect(icon(root).classList.contains('is-editable')).toBe(false);
+    expect(icon(root).tagName).toBe('DIV');
+  });
+
+  it('offers Unclassified plus every kind, checking the current one', () => {
+    const { root } = mountEditable([place({ placeKind: 'cafe' })]);
+    icon(root).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    const titles = Menu.last?.items.map((item) => item.title) ?? [];
+    expect(titles[0]).toBe('Unclassified');
+    expect(titles).toContain('Restaurant');
+    expect(titles).toContain('Cafe');
+    expect(Menu.last?.items.filter((item) => item.checked).map((item) => item.title))
+      .toEqual(['Cafe']);
+  });
+
+  it('reports the chosen kind', () => {
+    const { root, onKindChange } = mountEditable([place({ placeKind: 'cafe' })]);
+    icon(root).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    Menu.last?.select('Bakery');
+
+    expect(onKindChange).toHaveBeenCalledWith(
+      expect.objectContaining({ placeKey: 'kakaomap:1' }),
+      'bakery',
+    );
+  });
+
+  it('clears the kind through the Unclassified entry', () => {
+    const { root, onKindChange } = mountEditable([place({ placeKind: 'cafe' })]);
+    icon(root).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    Menu.last?.select('Unclassified');
+
+    expect(onKindChange).toHaveBeenCalledWith(expect.anything(), null);
+  });
+
+  it('does not report the kind already set', () => {
+    const { root, onKindChange } = mountEditable([place({ placeKind: 'cafe' })]);
+    icon(root).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    Menu.last?.select('Cafe');
+
+    expect(onKindChange).not.toHaveBeenCalled();
+  });
+
+  it('does not open the place when the icon is used', () => {
+    // The icon sits inside the row, which is itself a button-role target — so
+    // the click has to stop there or picking a type would also navigate away.
+    const { root, onSelect } = mountEditable([place()]);
+    icon(root).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('opens the place from the keyboard, since the row is not a button element', () => {
+    const { root, onSelect } = mountEditable([place()]);
+    const row = root.querySelector('.sa-place-row') as HTMLElement;
+    row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Creating a place with no host archive — the only route to a place that is not
+ * a property of some post.
+ */
+describe('PlaceListRenderer — add a place', () => {
+  function mountWithAdd(): { root: HTMLElement; onAddPlace: ReturnType<typeof vi.fn> } {
+    const onAddPlace = vi.fn();
+    const renderer = new PlaceListRenderer({
+      onSelect: vi.fn(),
+      renderMap: vi.fn(() => true),
+      onAddPlace,
+    });
+    const parent = document.createElement('div');
+    document.body.appendChild(parent);
+    return { root: renderer.render(parent, [place()]), onAddPlace };
+  }
+
+  const addButton = (root: HTMLElement): HTMLElement | null =>
+    root.querySelector('.sa-place-add');
+
+  it('offers nothing when there is no way to create a place', () => {
+    const { root } = mount([place()]);
+    expect(addButton(root)).toBeNull();
+  });
+
+  it('reports the request', () => {
+    const { root, onAddPlace } = mountWithAdd();
+    (addButton(root) as HTMLElement).click();
+    expect(onAddPlace).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays reachable from the map and posts surfaces', () => {
+    // Saving a place is not a list-mode action: the thought most often arrives
+    // while looking at the map.
+    const { root } = mountWithAdd();
+    for (const surface of ['Map', 'Posts', 'List']) {
+      (root.querySelector('.sa-place-mode-trigger') as HTMLElement)
+        .dispatchEvent(new MouseEvent('click'));
+      Menu.last?.select(surface);
+      expect(addButton(root)).not.toBeNull();
+    }
+  });
+});

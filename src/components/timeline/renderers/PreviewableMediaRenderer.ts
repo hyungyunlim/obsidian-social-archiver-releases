@@ -49,7 +49,7 @@
  */
 
 import * as L from 'leaflet';
-import { addBasemap, renderBasemapAttribution } from '../places/basemap';
+import { addBasemap, observeMapSize, renderBasemapAttribution } from '../places/basemap';
 import type { PostData } from '../../../types/post';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- imported for parity with sibling renderers / future-proofing of the PreviewContext shape; not currently consumed by the media renderer
 import { extractYouTubeVideoId as _extractYouTubeVideoId } from './PreviewableHelpers';
@@ -1087,10 +1087,10 @@ export class PreviewableMediaRenderer {
 
         L.marker([lat, lng], { icon: markerIcon }).addTo(map);
 
-        // Fix tile loading after container measurement settles.
-        window.setTimeout(() => {
-          map.invalidateSize();
-        }, 100);
+        // Watch the container rather than betting on 100ms. These maps sit in
+        // lazily rendered cards, so there is no frame by which layout is known
+        // to have settled — and a short measurement puts the pin off the place.
+        observeMapSize(map, mapContainer);
       } catch (err) {
         console.error('[PreviewableMediaRenderer] Failed to initialize Leaflet map:', err);
         // Fallback: text-only location card.

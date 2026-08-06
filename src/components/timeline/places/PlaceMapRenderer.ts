@@ -1,6 +1,12 @@
 import * as L from 'leaflet';
 import type { PlaceSummary } from '@/utils/placeAggregation';
-import { addBasemap, basemapTileUrl, currentBasemapTheme, renderBasemapAttribution } from './basemap';
+import {
+  addBasemap,
+  basemapTileUrl,
+  currentBasemapTheme,
+  observeMapSize,
+  renderBasemapAttribution,
+} from './basemap';
 
 /**
  * The places map — one marker per place that has coordinates.
@@ -48,6 +54,7 @@ export class PlaceMapRenderer {
   private containerEl: HTMLElement | null = null;
   private map: L.Map | null = null;
   private basemap: L.TileLayer | null = null;
+  private stopObservingSize: (() => void) | null = null;
 
   constructor(private readonly callbacks: PlaceMapCallbacks) {}
 
@@ -66,6 +73,8 @@ export class PlaceMapRenderer {
    * alone leaks the map.
    */
   destroy(): void {
+    this.stopObservingSize?.();
+    this.stopObservingSize = null;
     if (this.map) {
       this.map.remove();
       this.map = null;
@@ -73,17 +82,6 @@ export class PlaceMapRenderer {
     this.basemap = null;
     this.containerEl?.remove();
     this.containerEl = null;
-  }
-
-  /**
-   * Re-measure after the container was hidden and shown again.
-   *
-   * Place detail hides the map with `display: none` rather than destroying it,
-   * so pan and zoom survive the round trip. Leaflet measured 0×0 while hidden,
-   * though, so without this the restored map draws into a collapsed viewport.
-   */
-  refresh(): void {
-    this.map?.invalidateSize();
   }
 
   /**
@@ -166,18 +164,14 @@ export class PlaceMapRenderer {
       this.map.on('zoomend', syncLabelVisibility);
       syncLabelVisibility();
 
-      // Leaflet computes marker pixel positions and the fitted view from the
-      // container size it measured at init. Inside a timeline still laying out
-      // that measurement is stale, which leaves markers visibly offset until
-      // some later zoom recomputes them — the classic "wrong until you zoom in".
-      //
-      // So re-measure on the next frame and frame again with the real size.
-      // invalidateSize alone fixes the tiles but keeps the wrong view.
-      window.requestAnimationFrame(() => {
-        if (!this.map) return;
-        this.map.invalidateSize();
-        this.applyInitialView(mappable);
-      });
+      // The opening view is framed on the first real measurement, not now:
+      // the container is still laying out, and framing on a short size is
+      // what displaced every marker until a zoom made Leaflet recompute.
+      this.stopObservingSize = observeMapSize(
+        this.map,
+        this.containerEl,
+        () => this.applyInitialView(mappable),
+      );
     } catch (error) {
       // Say so rather than vanishing. Silently reverting is exactly how the
       // missing center/zoom presented: the button appeared to do nothing.

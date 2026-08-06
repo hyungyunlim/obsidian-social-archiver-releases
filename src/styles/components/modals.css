@@ -1014,10 +1014,27 @@
   text-align: center;
 }
 
-/* Video mode warning */
+/*
+ * Video mode warning — a note, not an alarm.
+ *
+ * It used to be `--color-yellow` text on a filled `--background-modifier-warning`
+ * block: loud enough to outweigh everything else in the modal, and yellow-on-
+ * orange is poor contrast, so it managed to shout and be hard to read at once.
+ * A rule down the side carries the warning colour; the text goes muted and
+ * legible.
+ */
 .am-video-warning {
   margin: 2px 0 10px 0;
-  background: var(--background-modifier-warning);
+  padding-left: 10px;
+  border: none;
+  border-left: 2px solid var(--text-warning, var(--color-orange));
+  border-radius: 0;
+  background: transparent;
+}
+
+/* Outranks the `sa-text-warning` utility the element also carries. */
+.am-video-warning.am-video-warning {
+  color: var(--text-muted);
 }
 
 /* Disclaimer row */

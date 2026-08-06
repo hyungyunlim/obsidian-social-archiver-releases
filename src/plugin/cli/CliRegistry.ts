@@ -57,6 +57,9 @@ import {
   PROFILE_CRAWL_FLAGS,
   SHARE_FLAGS,
   SUBSCRIBE_FLAGS,
+  SUBSCRIPTIONS_FLAGS,
+  PLACES_FLAGS,
+  BOOKMARK_FLAGS,
   SYNC_FLAGS,
   TAGS_FLAGS,
   TAG_APPLY_FLAGS,
@@ -72,6 +75,9 @@ import { AICommentCliService, AICommentService_NotAvailableError } from './AICom
 import type { AIOutputLanguage } from '../../types/ai-comment';
 import { ImportCliError, ImportCliService } from './ImportCliService';
 import { ProfileCliService } from './ProfileCliService';
+import { SubscriptionsCliService } from './SubscriptionsCliService';
+import { ArchiveActionsCliService } from './ArchiveActionsCliService';
+import { PlacesCliService } from './PlacesCliService';
 import { ProfileCrawlService } from '../services/ProfileCrawlService';
 import { extractGoogleMapsLinks } from '../../utils/googleMapsLinks';
 import nodeRequire from '../../utils/nodeRequire';
@@ -405,6 +411,9 @@ export class CliRegistry {
   private registerP1(): void {
     this.register(COMMANDS.PROFILE_CRAWL, PROFILE_CRAWL_FLAGS, (p) => this.profileCrawlHandler(p));
     this.register(COMMANDS.SUBSCRIBE, SUBSCRIBE_FLAGS, (p) => this.subscribeHandler(p));
+    this.register(COMMANDS.SUBSCRIPTIONS, SUBSCRIPTIONS_FLAGS, (p) => this.subscriptionsHandler(p));
+    this.register(COMMANDS.PLACES, PLACES_FLAGS, (p) => this.placesHandler(p));
+    this.register(COMMANDS.BOOKMARK, BOOKMARK_FLAGS, (p) => this.bookmarkHandler(p));
     this.register(COMMANDS.GOOGLEMAPS, GOOGLEMAPS_FLAGS, (p) => this.googleMapsHandler(p));
     this.register(COMMANDS.IMPORT_INSTAGRAM, IMPORT_INSTAGRAM_FLAGS, (p) => this.importInstagramHandler(p));
     this.register(COMMANDS.IMPORT_JOB, IMPORT_JOB_FLAGS, (p) => this.importJobHandler(p));
@@ -478,6 +487,50 @@ export class CliRegistry {
       return this.formatOk(COMMANDS.SUBSCRIBE, result, fmt);
     } catch (e) {
       return this.formatArchiveError(COMMANDS.SUBSCRIBE, e, fmt);
+    }
+  }
+
+  /**
+   * Manage the subscriptions `subscribe` created. The manager is initialized
+   * lazily elsewhere in the plugin, so wait for it rather than reporting an
+   * empty list when the CLI runs before startup finishes.
+   */
+  private async subscriptionsHandler(params: CliParams): Promise<string> {
+    const fmt = this.readFormat(params);
+    try {
+      const manager = await this.plugin.ensureSubscriptionManagerReady();
+      const adapter = new SubscriptionsCliService(manager);
+      const result = await adapter.run(params);
+      return this.formatOk(COMMANDS.SUBSCRIPTIONS, result, fmt);
+    } catch (e) {
+      return this.formatArchiveError(COMMANDS.SUBSCRIPTIONS, e, fmt);
+    }
+  }
+
+  /**
+   * Review extracted place candidates. Uses the same Workers client the plugin
+   * UI uses, so a candidate confirmed here shows up attached in the vault.
+   */
+  private async placesHandler(params: CliParams): Promise<string> {
+    const fmt = this.readFormat(params);
+    try {
+      const adapter = new PlacesCliService(this.plugin.workersApiClient);
+      const result = await adapter.run(params);
+      return this.formatOk(COMMANDS.PLACES, result, fmt);
+    } catch (e) {
+      return this.formatArchiveError(COMMANDS.PLACES, e, fmt);
+    }
+  }
+
+  /** Bulk Inbox triage — the "Archive" state, same as the UI's archive button. */
+  private async bookmarkHandler(params: CliParams): Promise<string> {
+    const fmt = this.readFormat(params);
+    try {
+      const adapter = new ArchiveActionsCliService(this.plugin.workersApiClient);
+      const result = await adapter.bookmark(params);
+      return this.formatOk(COMMANDS.BOOKMARK, result, fmt);
+    } catch (e) {
+      return this.formatArchiveError(COMMANDS.BOOKMARK, e, fmt);
     }
   }
 

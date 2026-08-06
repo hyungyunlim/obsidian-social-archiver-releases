@@ -1,5 +1,5 @@
 import { setIcon, getLanguage, Notice, Scope, TFile, TFolder, MarkdownRenderer, Component, Modal, Menu, Platform as ObsidianPlatform, requestUrl, type Vault, type App } from 'obsidian';
-import { addBasemap, renderBasemapAttribution } from '../places/basemap';
+import { addBasemap, observeMapSize, renderBasemapAttribution } from '../places/basemap';
 import type { PostData, Comment, PostMetadata, Platform } from '../../../types/post';
 import type SocialArchiverPlugin from '../../../main';
 import * as L from 'leaflet';
@@ -9519,10 +9519,10 @@ export class PostCardRenderer extends Component {
 
         L.marker([lat, lng], { icon: markerIcon }).addTo(map);
 
-        // Fix tile loading issue - invalidate size after container is rendered
-        window.setTimeout(() => {
-          map.invalidateSize();
-        }, 100);
+        // Watch the container rather than betting on 100ms. These maps sit in
+        // lazily rendered cards, so there is no frame by which layout is known
+        // to have settled — and a short measurement puts the pin off the place.
+        observeMapSize(map, mapContainer);
       } catch (err) {
         console.error('[PostCardRenderer] Failed to initialize Leaflet map:', err);
         // Fallback: show location text only

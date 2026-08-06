@@ -30,6 +30,37 @@ const L = {
 
 vi.mock('leaflet', () => ({ ...L, default: L }));
 
+/**
+ * jsdom ships no ResizeObserver, and the renderer's re-measure now hangs off one.
+ * This stub records what was observed and lets a test drive a size change, since
+ * a real observer would never fire without layout.
+ */
+let observed: HTMLElement[] = [];
+let disconnected = false;
+let fireResize: (() => void) | null = null;
+
+vi.stubGlobal('ResizeObserver', class {
+  constructor(private readonly callback: () => void) {
+    fireResize = () => this.callback();
+  }
+  observe(element: HTMLElement): void {
+    observed.push(element);
+  }
+  disconnect(): void {
+    disconnected = true;
+  }
+  unobserve(): void {}
+});
+
+/** Give the observed container a size and let the observer report it. */
+function resize(width: number, height: number): void {
+  for (const element of observed) {
+    Object.defineProperty(element, 'clientWidth', { value: width, configurable: true });
+    Object.defineProperty(element, 'clientHeight', { value: height, configurable: true });
+  }
+  fireResize?.();
+}
+
 const { PlaceMapRenderer } = await import('@/components/timeline/places/PlaceMapRenderer');
 
 function place(overrides: Partial<PlaceSummary> = {}): PlaceSummary {
@@ -62,6 +93,9 @@ function mount(places: PlaceSummary[], selectedKey: string | null = null): {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  observed = [];
+  disconnected = false;
+  fireResize = null;
   L.map.mockReturnValue(map);
   L.marker.mockReturnValue(marker);
   L.tileLayer.mockReturnValue({ addTo: vi.fn() });
@@ -206,18 +240,65 @@ describe('PlaceMapRenderer', () => {
     );
   });
 
-  it('re-frames after re-measuring, not just invalidating size', async () => {
+  it('re-frames after re-measuring, not just invalidating size', () => {
     // Marker pixel positions come from the container size measured at init. In a
-    // timeline still laying out that is stale, so markers sit visibly offset
-    // until some later zoom recomputes them. invalidateSize alone fixes the tiles
-    // and keeps the wrong view, so the view has to be applied again.
+    // timeline still laying out that is stale, so every marker sits offset by the
+    // difference — tens of kilometres at country zoom — until some later zoom
+    // makes Leaflet recompute. invalidateSize alone fixes the tiles and keeps the
+    // wrong view, so the view has to be applied again.
     mount([place(), place({ placeKey: 'k:2', latitude: 37.6, longitude: 127.1 })]);
     const fitsBefore = map.fitBounds.mock.calls.length;
 
-    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    resize(400, 300);
 
     expect(map.invalidateSize).toHaveBeenCalled();
     expect(map.fitBounds.mock.calls.length).toBeGreaterThan(fitsBefore);
+  });
+
+  it('watches the container rather than betting on one frame', () => {
+    // The previous fix was a single requestAnimationFrame, which assumes layout
+    // has settled by the next frame. It has not whenever something sizes later —
+    // a banner appearing above the map, a font finishing loading, the pane moving
+    // between sidebar and main area — and Leaflet never re-measures on its own.
+    mount([place()]);
+    expect(observed).toHaveLength(1);
+
+    resize(400, 300);
+    const afterFirst = map.invalidateSize.mock.calls.length;
+    resize(900, 700);
+
+    expect(map.invalidateSize.mock.calls.length).toBeGreaterThan(afterFirst);
+  });
+
+  it('frames the opening view once, so a later resize cannot yank the camera', () => {
+    // Re-fitting on every resize would drag the user back to the opening view
+    // each time a banner appeared above the map.
+    mount([place(), place({ placeKey: 'k:2', latitude: 37.6, longitude: 127.1 })]);
+
+    resize(400, 300);
+    const fitsAfterFraming = map.fitBounds.mock.calls.length;
+    resize(900, 700);
+
+    expect(map.fitBounds.mock.calls.length).toBe(fitsAfterFraming);
+  });
+
+  it('ignores a zero-sized container instead of re-framing on it', () => {
+    // Place detail hides the map with display:none rather than destroying it, so
+    // the camera survives. Treating that 0x0 as a real size would frame the map
+    // on nothing and throw away where the user had panned to.
+    mount([place(), place({ placeKey: 'k:2', latitude: 37.6, longitude: 127.1 })]);
+    const fitsBefore = map.fitBounds.mock.calls.length;
+
+    resize(0, 0);
+
+    expect(map.invalidateSize).not.toHaveBeenCalled();
+    expect(map.fitBounds.mock.calls.length).toBe(fitsBefore);
+  });
+
+  it('disconnects the observer on destroy', () => {
+    const { renderer } = mount([place()]);
+    renderer.destroy();
+    expect(disconnected).toBe(true);
   });
 
   it('removes the map on destroy, not just the element', () => {

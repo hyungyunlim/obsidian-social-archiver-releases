@@ -1,4 +1,4 @@
-import { setIcon, Notice, Platform as ObsidianPlatform, requestUrl, TFile, type Vault, type App } from 'obsidian';
+import { setIcon, getLanguage, Notice, Platform as ObsidianPlatform, requestUrl, TFile, type Vault, type App } from 'obsidian';
 import type { PostData, Platform } from '../../types/post';
 import type { ShareMediaStats } from '../../services/ShareAPIClient';
 import type SocialArchiverPlugin from '../../main';
@@ -43,7 +43,9 @@ import { ClipGuideModal } from '../../modals/ClipGuideModal';
 import type { NoticePayloadV1 } from '../../types/notices';
 import { TagChipBar } from './filters/TagChipBar';
 import { StoreChipBar, type StoreSummary } from './filters/StoreChipBar';
+import { AddPlaceModal } from './modals/AddPlaceModal';
 import { PlaceDetailRenderer } from './places/PlaceDetailRenderer';
+import { PlaceKindWriter } from './places/PlaceKindWriter';
 import { PlaceListRenderer } from './places/PlaceListRenderer';
 import { PlaceMapRenderer } from './places/PlaceMapRenderer';
 import { aggregatePlaces, type PlaceSummary } from '../../utils/placeAggregation';
@@ -380,6 +382,7 @@ export class TimelineContainer {
   private placeMapRenderer: PlaceMapRenderer;
   /** Place Detail (inline, mirrors Author Detail — see showPlaceDetail). */
   private placeDetailRenderer: PlaceDetailRenderer | null = null;
+  private placeKindWriter: PlaceKindWriter;
   private placeDetailWrapper: HTMLElement | null = null;
   private activePlace: PlaceSummary | null = null;
   /** The hidden timeline missed a refresh, so Back has to rebuild it. */
@@ -506,6 +509,11 @@ export class TimelineContainer {
       onSelect: (place) => this.selectPlace(place),
     });
 
+    this.placeKindWriter = new PlaceKindWriter(
+      this.app,
+      (placeKey, placeKind) => this.plugin.workersApiClient.setPlaceKind(placeKey, placeKind),
+    );
+
     this.placeListRenderer = new PlaceListRenderer({
       // Injected so the list never imports Leaflet — the map module is only
       // reached when the user switches to it.
@@ -518,6 +526,8 @@ export class TimelineContainer {
         this.hidePlaceDetail({ restore: false });
         void this.loadPosts();
       },
+      onKindChange: (place, placeKind) => void this.changePlaceKind(place, placeKind),
+      onAddPlace: () => this.openAddPlaceModal(),
     });
 
     // Initialize StoreChipBar for Shopping's per-store filtering
@@ -7890,6 +7900,74 @@ export class TimelineContainer {
     this.renderPlaceDetail();
   }
 
+  /**
+   * Reclassify a place across every note that references it.
+   *
+   * The vault is the read model here — `aggregatePlaces` derives places from the
+   * notes — so the write goes to the notes and the list picks the new kind up on
+   * the next parse. The server is told too, best effort, so the kind matches on
+   * mobile and desktop; a signed-out user still gets to classify their places.
+   */
+  private async changePlaceKind(
+    place: PlaceSummary,
+    placeKind: import('@/shared/platforms/place-kinds').PlaceKind | null,
+  ): Promise<void> {
+    try {
+      const { updated, syncError } = await this.placeKindWriter.apply(
+        place.placeKey,
+        placeKind,
+        place.filePaths,
+      );
+      if (updated === 0) return;
+
+      if (syncError) {
+        console.warn('[Social Archiver] Place kind not synced to the server:', syncError);
+        new Notice(`Set ${place.name} to ${placeKind ?? 'unclassified'} — this device only.`);
+      }
+      await this.loadPosts();
+    } catch (error) {
+      console.error('[Social Archiver] Failed to change place kind:', error);
+      new Notice('Could not change the place type.');
+    }
+  }
+
+  /**
+   * Search for a place and save it on its own, with no host archive.
+   *
+   * The result goes through the ordinary archive path, because a canonical map
+   * URL already resolves to its own platform — so this is the search entry to a
+   * flow that previously required finding the URL by hand.
+   */
+  private openAddPlaceModal(): void {
+    new AddPlaceModal(this.app, {
+      api: this.plugin.workersApiClient,
+      hostLocale: getLanguage() || window.navigator.language,
+      archivePlace: (url) => void this.archivePlace(url),
+    }).open();
+  }
+
+  /**
+   * Archive a place URL with no further prompting.
+   *
+   * `enqueueArchive` is the same queue the archive modal submits to, so this
+   * gets the same progress banner and the same resulting card — it just skips
+   * the form, because "Add a place" already collected the only decision there
+   * was. Comments are off: a map place has no platform comments to include.
+   */
+  private async archivePlace(url: string): Promise<void> {
+    try {
+      // Throws on a duplicate or a failed lock rather than reporting it, so the
+      // catch below is the only place that has to say anything went wrong.
+      await this.plugin.archiveCliService.enqueueArchive(url, {
+        mediaMode: 'all',
+        includeComments: false,
+      });
+    } catch (error) {
+      console.error('[Social Archiver] Failed to archive place:', error);
+      new Notice(error instanceof Error ? error.message : 'Could not archive that place.');
+    }
+  }
+
   /** Repoint the basemap after Obsidian's theme changed. See TimelineView. */
   public syncMapTheme(): void {
     this.placeMapRenderer.syncTheme();
@@ -7953,12 +8031,11 @@ export class TimelineContainer {
       return;
     }
 
+    // The map re-measures itself on the way back: it was `display: none`, and
+    // PlaceMapRenderer watches its container for exactly this.
     for (const child of Array.from(this.containerEl.children)) {
       (child as HTMLElement).setCssStyles({ display: '' });
     }
-    // The map measured itself while it had no layout box. Without this it draws
-    // into a collapsed viewport and looks broken on the way back.
-    this.placeMapRenderer.refresh();
   }
 
   /**

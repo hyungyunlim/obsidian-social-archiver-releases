@@ -3,6 +3,7 @@ import {
   addBasemap,
   basemapTileUrl,
   currentBasemapTheme,
+  observeMapSize,
   renderBasemapAttribution,
 } from '@/components/timeline/places/basemap';
 
@@ -80,5 +81,95 @@ describe('basemap', () => {
     document.body.appendChild(parent);
 
     expect(renderBasemapAttribution(parent, 'x').ownerDocument).toBe(parent.ownerDocument);
+  });
+});
+
+/**
+ * The shared re-measure. Three maps depend on it — the Places map and the two
+ * card mini-maps — and all three previously guessed at when layout settles.
+ */
+describe('observeMapSize', () => {
+  let fire: (() => void) | null;
+  let disconnects: number;
+
+  function sized(width: number, height: number): HTMLElement {
+    const element = document.createElement('div');
+    Object.defineProperty(element, 'clientWidth', { value: width, configurable: true });
+    Object.defineProperty(element, 'clientHeight', { value: height, configurable: true });
+    return element;
+  }
+
+  function resize(element: HTMLElement, width: number, height: number): void {
+    Object.defineProperty(element, 'clientWidth', { value: width, configurable: true });
+    Object.defineProperty(element, 'clientHeight', { value: height, configurable: true });
+    fire?.();
+  }
+
+  beforeEach(() => {
+    fire = null;
+    disconnects = 0;
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: () => void) {
+        fire = callback;
+      }
+      observe(): void {}
+      disconnect(): void {
+        disconnects += 1;
+      }
+      unobserve(): void {}
+    });
+  });
+
+  it('re-measures the map every time the container changes size', () => {
+    const map = { invalidateSize: vi.fn() };
+    const container = sized(0, 0);
+    observeMapSize(map, container);
+
+    resize(container, 400, 300);
+    resize(container, 900, 700);
+
+    expect(map.invalidateSize).toHaveBeenCalledTimes(2);
+  });
+
+  it('runs the framing callback once, on the first real size', () => {
+    // Re-framing on every resize would drag the user back to the opening view
+    // each time something above the map appeared.
+    const map = { invalidateSize: vi.fn() };
+    const container = sized(0, 0);
+    const onFirstSize = vi.fn();
+    observeMapSize(map, container, onFirstSize);
+
+    resize(container, 400, 300);
+    resize(container, 900, 700);
+
+    expect(onFirstSize).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a zero-sized container', () => {
+    // A map hidden with display:none measures 0x0. Acting on that would frame it
+    // on nothing and lose wherever the user had panned to.
+    const map = { invalidateSize: vi.fn() };
+    const container = sized(0, 0);
+    const onFirstSize = vi.fn();
+    observeMapSize(map, container, onFirstSize);
+
+    resize(container, 0, 0);
+
+    expect(map.invalidateSize).not.toHaveBeenCalled();
+    expect(onFirstSize).not.toHaveBeenCalled();
+  });
+
+  it('hands back a disconnect', () => {
+    const stop = observeMapSize({ invalidateSize: vi.fn() }, sized(10, 10));
+    stop();
+    expect(disconnects).toBe(1);
+  });
+
+  it('is a no-op where ResizeObserver is missing, rather than throwing', () => {
+    vi.stubGlobal('ResizeObserver', undefined);
+    const map = { invalidateSize: vi.fn() };
+
+    expect(() => observeMapSize(map, sized(10, 10))()).not.toThrow();
+    expect(map.invalidateSize).not.toHaveBeenCalled();
   });
 });

@@ -838,10 +838,17 @@ export class ArchiveCompletionService {
                 throw new Error('Naver video download failed');
               }
               continue; // Skip the rest of the loop for this media item
-            } else if (postData.platform === 'googlemaps' || mediaUrl.includes('maps.google') || mediaUrl.includes('staticmap')) {
-              // Google Maps: Skip static map images (require API key, can't proxy)
-              // The map is rendered dynamically in the timeline using Leaflet/OSM
-              console.debug(`[Social Archiver] Skipping Google Maps static image: ${mediaUrl.substring(0, 100)}...`);
+            } else if (mediaUrl.includes('maps.google') || mediaUrl.includes('staticmap')) {
+              // Skip STATIC MAP images only — they need an API key and the
+              // timeline draws its own map with Leaflet anyway.
+              //
+              // This used to also skip on `platform === 'googlemaps'`, which is
+              // not what the comment says and not what was wanted: it dropped
+              // every photo on a Google Maps archive, so a place note listed its
+              // photos as remote URLs and the card had none. Real place photos
+              // come from googleusercontent.com and the Workers proxy already
+              // allows that host.
+              console.debug(`[Social Archiver] Skipping static map image: ${mediaUrl.substring(0, 100)}...`);
               continue;
             } else {
               // Download via Workers proxy to bypass CORS

@@ -33,6 +33,8 @@ export const COMMANDS = {
     AI_PROVIDERS: 'social-archiver:ai-providers',
     SEARCH: 'social-archiver:search',
     BOOKMARK: 'social-archiver:bookmark',
+    SUBSCRIPTIONS: 'social-archiver:subscriptions',
+    PLACES: 'social-archiver:places',
 };
 // -----------------------------------------------------------------------------
 // Shared flag fragments
@@ -241,6 +243,30 @@ export const SEARCH_FLAGS = {
     cursor: { description: 'Pagination cursor from a previous response.', value: '<cursor>' },
     ...FORMAT_FLAG,
 };
+export const SUBSCRIPTIONS_FLAGS = {
+    action: {
+        description: 'What to do: list (default), pause, resume, run, runs, or delete.',
+        value: '<action>',
+    },
+    id: { description: 'Subscription id — required for every action except list.', value: '<id>' },
+    limit: { description: 'runs only: how many runs to return (default 10).', value: '<n>' },
+    confirm: {
+        description: 'delete only: must be true. Deleting is irreversible; archives are kept.',
+        value: '<true>',
+    },
+    ...FORMAT_FLAG,
+};
+export const PLACES_FLAGS = {
+    action: {
+        description: 'What to do: list (default), attach, or detach.',
+        value: '<action>',
+    },
+    archive: { description: 'Archive id — scopes list, and required for attach.', value: '<id>' },
+    candidate: { description: 'attach only: candidate ids to confirm (comma-separated).', value: '<c1,c2>' },
+    placeKey: { description: 'detach only: "<source>:<externalId>" of the place to remove everywhere.', value: '<key>' },
+    limit: { description: 'list only: how many pending candidates to return.', value: '<n>' },
+    ...FORMAT_FLAG,
+};
 export const BOOKMARK_FLAGS = {
     ids: {
         description: 'Comma-separated archive IDs to bookmark (= the "Archive" state; moves out of Inbox). Max 200 per call.',
@@ -279,6 +305,8 @@ export const COMMAND_DESCRIPTIONS = Object.freeze({
     [COMMANDS.AI_PROVIDERS]: 'List installed AI CLI providers (claude, gemini, codex) and their auth status.',
     [COMMANDS.SEARCH]: 'Search your archives by text (server-side, snippet results). One-off lookups; use export+grep for repeated analysis.',
     [COMMANDS.BOOKMARK]: 'Bookmark/un-bookmark archives in bulk (the "Archive" state — moves posts in/out of the Inbox).',
+    [COMMANDS.SUBSCRIPTIONS]: 'Manage existing subscriptions: list, pause, resume, run now, run history, delete.',
+    [COMMANDS.PLACES]: 'Review extracted place candidates: list them with their evidence, confirm, or detach a place.',
 });
 /** Flag schema lookup by command id — used by the argv layer for help/validation. */
 export const FLAGS_BY_COMMAND = Object.freeze({
@@ -307,5 +335,7 @@ export const FLAGS_BY_COMMAND = Object.freeze({
     [COMMANDS.AI_PROVIDERS]: AI_PROVIDERS_FLAGS,
     [COMMANDS.SEARCH]: SEARCH_FLAGS,
     [COMMANDS.BOOKMARK]: BOOKMARK_FLAGS,
+    [COMMANDS.SUBSCRIPTIONS]: SUBSCRIPTIONS_FLAGS,
+    [COMMANDS.PLACES]: PLACES_FLAGS,
 });
 //# sourceMappingURL=flags.js.map

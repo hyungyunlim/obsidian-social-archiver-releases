@@ -103,6 +103,25 @@ describe('PostCardRenderer map-place provider routing', () => {
   });
 
   it('keeps the search submit target aligned with the compact picker controls', () => {
-    expect(styles).toMatch(/\.sa-place-picker-search-row button\s*{[^}]*min-height: 36px;/s);
+    // Scoped under `.sa-place-picker` so it outranks a theme's `.view-content
+    // button`, which is what filled every picker button with grey.
+    expect(styles).toMatch(
+      /\.sa-place-picker \.sa-place-picker-search-row button\s*{[^}]*min-height: 32px;/s,
+    );
+  });
+
+  it('keeps every picker button out of reach of a theme button rule', () => {
+    // These are <button> for the keyboard, so they inherit Obsidian's filled
+    // control styling, and themes restate that at `.view-content button` —
+    // (0,1,1), which beats a lone class. Each rule that neutralises the fill has
+    // to carry two classes or it silently loses.
+    for (const selector of [
+      '.sa-place-picker .sa-place-picker-tab',
+      '.sa-place-picker .sa-place-picker-result',
+      '.sa-place-picker .sa-place-picker-manual-action',
+      '.sa-place-picker .sa-place-picker-search-row button',
+    ]) {
+      expect(styles).toContain(`${selector} {`);
+    }
   });
 });

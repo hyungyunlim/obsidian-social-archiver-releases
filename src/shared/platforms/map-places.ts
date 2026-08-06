@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/map-places.ts
- * Generated: 2026-08-05T23:29:30.154Z
+ * Generated: 2026-08-05T21:27:17.087Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared

@@ -2550,16 +2550,34 @@ body.is-mobile .sa-flex-between .sa-dynamic-width {
   background: var(--background-modifier-active-hover);
 }
 
-.sa-place-row-icon {
+.sa-place-list .sa-place-row-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 28px;
   height: 28px;
+  padding: 0;
   flex-shrink: 0;
+  border: none;
   border-radius: 999px;
   background: var(--background-secondary);
+  box-shadow: none;
   color: var(--text-muted);
+}
+
+/* The icon is the place-type picker when there is somewhere to write to. */
+.sa-place-list .sa-place-row-icon.is-editable {
+  cursor: pointer;
+}
+
+.sa-place-list .sa-place-row-icon.is-editable:hover {
+  background: var(--background-modifier-active-hover);
+  color: var(--text-accent);
+}
+
+.sa-place-list .sa-place-row-icon.is-editable:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 1px;
 }
 
 .sa-place-row-body {
@@ -2790,6 +2808,39 @@ body.is-mobile .sa-flex-between .sa-dynamic-width {
   flex: 1 1 auto;
 }
 
+/*
+ * Add a place. Sits between the search box and the view switch, pushed right
+ * with it — the two are the toolbar's actions, the search box is its field.
+ */
+.sa-place-toolbar .sa-place-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: auto;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.sa-place-toolbar .sa-place-add:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-accent);
+  box-shadow: none;
+}
+
+/* With Add present, the switch no longer needs to claim the free space. */
+.sa-place-toolbar .sa-place-add + .sa-place-mode-trigger {
+  margin-left: 0;
+}
+
 /* The list / map / posts dropdown trigger. The menu itself is Obsidian's. */
 .sa-place-toolbar .sa-place-mode-trigger {
   display: inline-flex;
@@ -2935,4 +2986,42 @@ body.is-mobile .sa-flex-between .sa-dynamic-width {
   background: var(--background-modifier-hover);
   box-shadow: none;
   color: var(--text-normal);
+}
+
+
+/* ========================================
+ * Notice actions (sa-notice-action)
+ * ======================================== */
+
+/*
+ * A button inside an Obsidian Notice.
+ *
+ * The toast is dark in both themes, so Obsidian's filled control styling reads
+ * as a light slab pasted onto it. Two classes deep for the same reason every
+ * other button in this plugin is: themes restate the button fill at
+ * `.view-content button`, which outranks a single class.
+ */
+.notice .sa-notice-action,
+.sa-notice-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  margin-left: 2px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  /* The Notice sets its own foreground; inheriting keeps the button legible in
+     either theme without hardcoding a colour the toast might not use. */
+  color: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.notice .sa-notice-action:hover,
+.sa-notice-action:hover {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
 }

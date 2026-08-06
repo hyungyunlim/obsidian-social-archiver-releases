@@ -1578,6 +1578,39 @@ export class WorkersAPIClient implements IService {
     throw new ArchivePreferencesApiError('update', response.status, response.json);
   }
 
+  /**
+   * Reclassify a place for every archive that references it.
+   *
+   * `PATCH /api/user/places/{placeKey}/kind`, the same endpoint the mobile and
+   * desktop apps call, so a kind set in one client shows up in the others.
+   * `null` clears the kind back to unclassified.
+   */
+  async setPlaceKind(
+    placeKey: string,
+    placeKind: import('../shared/platforms/place-kinds').PlaceKind | null,
+  ): Promise<void> {
+    this.ensureInitialized();
+    if (!this.config.authToken) {
+      throw new Error('Authentication required');
+    }
+
+    const response = await requestUrl({
+      url: `${this.config.endpoint}/api/user/places/${encodeURIComponent(placeKey)}/kind`,
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getClientHeaders(),
+        Authorization: `Bearer ${this.config.authToken}`,
+      },
+      body: JSON.stringify({ placeKind }),
+      throw: false,
+    });
+
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`Failed to set place kind (HTTP ${response.status})`);
+    }
+  }
+
   async listArchiveAttempts(params: {
     status?: ArchiveAttemptStatus;
     includeDismissed?: boolean;
@@ -3613,6 +3646,45 @@ export class WorkersAPIClient implements IService {
       headers: extraHeaders,
       body: JSON.stringify({ pairs }),
     });
+  }
+
+  /**
+   * Remove an attached place from every archive it is on. Posts are never
+   * deleted — only the location link. `placeKey` is `<source>:<externalId>`,
+   * as reported by the place list.
+   *
+   * POST /api/user/places/detach
+   */
+  async detachPlace(
+    placeKey: string,
+    clientId?: string,
+  ): Promise<{ archiveIds: string[]; removedCount: number }> {
+    this.ensureInitialized();
+
+    const extraHeaders: Record<string, string> = {};
+    if (clientId) {
+      extraHeaders['X-Client-Id'] = clientId;
+    }
+
+    const data = await this.request<{ archiveIds?: unknown; removedCount?: unknown }>(
+      '/api/user/places/detach',
+      {
+        method: 'POST',
+        headers: extraHeaders,
+        body: JSON.stringify({ placeKey }),
+      },
+    );
+
+    const archiveIds = Array.isArray(data.archiveIds)
+      ? data.archiveIds.filter((id): id is string => typeof id === 'string')
+      : [];
+    return {
+      archiveIds,
+      // Prefer the server's count; fall back to what it actually listed rather
+      // than reporting 0 removals for a detach that succeeded.
+      removedCount:
+        typeof data.removedCount === 'number' ? data.removedCount : archiveIds.length,
+    };
   }
 
   // ============================================================================

@@ -474,7 +474,9 @@ export class ArchivePlacePickerModal extends Modal {
   private showMetadataAttachedNotice(location: ArchiveLocation): void {
     const content = createFragment();
     content.append(`Added ${location.name} as metadata only. `);
-    const promote = createEl('button');
+    // Classed, because a bare <button> inside a Notice inherits Obsidian's
+    // filled control styling — a light-grey slab on the dark toast.
+    const promote = createEl('button', { cls: 'sa-notice-action' });
     promote.type = 'button';
     promote.textContent = 'Get details';
     promote.addEventListener('click', () => void this.promote(location));

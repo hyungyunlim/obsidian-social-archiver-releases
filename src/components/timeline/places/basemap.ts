@@ -64,6 +64,56 @@ export function addBasemap(map: L.Map, doc: Document = document): L.TileLayer {
   return layer;
 }
 
+/** Just the part of a Leaflet map this module needs, so tests need no Leaflet. */
+interface MeasurableMap {
+  invalidateSize(): void;
+}
+
+/**
+ * Keep a map's idea of its own size honest.
+ *
+ * Leaflet measures its container once, at init, and never again on its own.
+ * Every one of these maps is created inside a timeline that is still laying
+ * out, so that first measurement is short — and Leaflet places markers relative
+ * to it, which displaces every marker by the difference. The offset is a fixed
+ * number of pixels, so it reads as tens of kilometres at country zoom and
+ * vanishes at street zoom: the "positions are wrong until you zoom in" report.
+ *
+ * All three call sites previously guessed at when layout settles — one
+ * `requestAnimationFrame` here, `setTimeout(…, 100)` on the two card maps. A
+ * guess is wrong whenever something sizes later: a banner appearing above the
+ * map, a font finishing loading, a lazily rendered card, the pane being dragged
+ * between the sidebar and the main area. This watches the container instead.
+ *
+ * `onFirstSize` runs once, on the first non-zero measurement, for a caller that
+ * needs to frame its opening view. It is deliberately not run again — re-fitting
+ * on every resize would drag the user back to the opening view whenever a banner
+ * appeared.
+ */
+export function observeMapSize(
+  map: MeasurableMap,
+  container: HTMLElement,
+  onFirstSize?: () => void,
+): () => void {
+  if (typeof ResizeObserver === 'undefined') return () => {};
+
+  let sized = false;
+  const observer = new ResizeObserver(() => {
+    // A hidden container measures 0×0. Acting on that would frame the map on
+    // nothing — place detail hides the map rather than destroying it precisely
+    // so the camera survives the round trip.
+    if (container.clientWidth === 0 || container.clientHeight === 0) return;
+
+    map.invalidateSize();
+    if (!sized) {
+      sized = true;
+      onFirstSize?.();
+    }
+  });
+  observer.observe(container);
+  return () => observer.disconnect();
+}
+
 /**
  * Attribution for the basemap. Required by both parties: OSM for the data, CARTO
  * for the rendering.

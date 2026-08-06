@@ -1,5 +1,5 @@
 import { Menu, setIcon } from 'obsidian';
-import type { PlaceKind } from '@/shared/platforms/place-kinds';
+import { PLACE_KINDS, type PlaceKind } from '@/shared/platforms/place-kinds';
 import {
   availablePlaceKinds,
   availablePlaceProviders,
@@ -82,6 +82,14 @@ export interface PlaceListCallbacks {
    */
   renderMap?: (container: HTMLElement, places: PlaceSummary[], selectedKey: string | null) => boolean;
   onPresentationChange?: (presentation: PlacePresentation) => void;
+  /**
+   * Reclassify a place. Omitted when there is nowhere to write the change, in
+   * which case the row icon stays a plain icon rather than offering a menu
+   * that cannot do anything.
+   */
+  onKindChange?: (place: PlaceSummary, placeKind: PlaceKind | null) => void;
+  /** Create a place archive from scratch. Omitted when there is no way to. */
+  onAddPlace?: () => void;
 }
 
 export class PlaceListRenderer {
@@ -154,6 +162,7 @@ export class PlaceListRenderer {
     // the map does not get, which is what made it read as a thumbnail.
     const toolbar = root.createDiv({ cls: 'sa-place-toolbar' });
     if (this.presentation === 'list') this.renderSearch(toolbar);
+    this.renderAddPlace(toolbar);
     if (this.callbacks.renderMap) this.renderPresentationToggle(toolbar);
 
     if (this.presentation === 'map') {
@@ -183,6 +192,26 @@ export class PlaceListRenderer {
 
     const list = root.createDiv({ cls: 'sa-place-rows' });
     for (const place of visible) this.renderRow(list, place);
+  }
+
+  /**
+   * Create a place with no host archive.
+   *
+   * Every other route to a place attaches one to a post, so this is the only way
+   * to save a place for its own sake. It sits beside the view switch because
+   * that is where the eye already is when the answer to "where is that place I
+   * saved" turns out to be "I never saved it".
+   */
+  private renderAddPlace(parent: HTMLElement): void {
+    const onAddPlace = this.callbacks.onAddPlace;
+    if (!onAddPlace) return;
+
+    const btn = parent.createEl('button', { cls: 'sa-place-add' });
+    btn.type = 'button';
+    btn.setAttribute('aria-label', 'Add a place');
+    btn.setAttribute('title', 'Add a place');
+    setIcon(btn.createDiv({ cls: 'sa-icon-16' }), 'map-pin-plus');
+    btn.addEventListener('click', () => onAddPlace());
   }
 
   /**
@@ -290,6 +319,43 @@ export class PlaceListRenderer {
     }
   }
 
+  /**
+   * The place-type picker, on the row's icon — mobile and desktop both put it
+   * there, on the place bubble.
+   *
+   * Obsidian's `Menu` again, so fifteen kinds get scrolling, keyboard navigation
+   * and a check mark for free. "Unclassified" is an entry rather than a separate
+   * clear button, because clearing IS choosing a kind here.
+   */
+  private openKindMenu(event: MouseEvent, place: PlaceSummary): void {
+    const onKindChange = this.callbacks.onKindChange;
+    if (!onKindChange) return;
+
+    const menu = new Menu();
+    const choose = (kind: PlaceKind | null): void => {
+      if (place.placeKind === kind || (!place.placeKind && kind === null)) return;
+      onKindChange(place, kind);
+    };
+
+    menu.addItem((item) => {
+      item
+        .setTitle(kindLabel(null))
+        .setIcon('map-pin')
+        .setChecked(!place.placeKind)
+        .onClick(() => choose(null));
+    });
+    for (const kind of PLACE_KINDS) {
+      menu.addItem((item) => {
+        item
+          .setTitle(kindLabel(kind))
+          .setIcon(KIND_ICON[kind] ?? 'map-pin')
+          .setChecked(place.placeKind === kind)
+          .onClick(() => choose(kind));
+      });
+    }
+    menu.showAtMouseEvent(event);
+  }
+
   private renderChip(parent: HTMLElement, label: string, selected: boolean, onClick: () => void): void {
     const chip = parent.createDiv({ cls: 'tag-chip tcb-chip' });
     chip.setAttribute('role', 'button');
@@ -314,15 +380,38 @@ export class PlaceListRenderer {
 
   private renderRow(parent: HTMLElement, place: PlaceSummary): void {
     const selected = this.selectedKey === place.placeKey;
-    const row = parent.createEl('button', { cls: 'sa-place-row' });
-    row.type = 'button';
+    // A div with a button role, not a <button>, so the kind picker inside it is
+    // a real button rather than illegal nested interactive content. Desktop's
+    // place row is built the same way, and it sidesteps the inherited fill that
+    // Obsidian gives bare buttons.
+    const row = parent.createDiv({ cls: 'sa-place-row' });
+    row.setAttribute('role', 'button');
+    row.setAttribute('tabindex', '0');
     // `is-selected` marks the last place opened so returning from its detail
     // shows where you were. Not aria-pressed — the row opens, it does not toggle.
     if (selected) row.addClass('is-selected');
     row.setAttribute('aria-label', place.name);
 
-    const icon = row.createDiv({ cls: 'sa-place-row-icon' });
+    // The icon opens the kind picker, matching mobile and desktop where the
+    // place bubble is its own control. Only a button when there is something to
+    // pick — a plain div otherwise, so nothing offers a menu that cannot open.
+    const editable = Boolean(this.callbacks.onKindChange);
+    const icon = editable
+      ? row.createEl('button', { cls: 'sa-place-row-icon is-editable' })
+      : row.createDiv({ cls: 'sa-place-row-icon' });
     setIcon(icon, (place.placeKind && KIND_ICON[place.placeKind]) || 'map-pin');
+
+    if (editable && icon instanceof HTMLButtonElement) {
+      icon.type = 'button';
+      icon.setAttribute('aria-haspopup', 'menu');
+      icon.setAttribute('aria-label', `Change place type for ${place.name}`);
+      icon.setAttribute('title', 'Change place type');
+      icon.addEventListener('click', (event) => {
+        // The row opens the place; the icon must not also do that.
+        event.stopPropagation();
+        this.openKindMenu(event, place);
+      });
+    }
 
     const body = row.createDiv({ cls: 'sa-place-row-body' });
     body.createDiv({ cls: 'sa-place-row-name', text: place.name, attr: { dir: 'auto' } });
@@ -345,9 +434,16 @@ export class PlaceListRenderer {
     // Opens the place, it does not toggle a filter. A row and a marker are the
     // same gesture with the same destination, which is what the mobile tab does
     // — both routes land on the place screen.
-    row.addEventListener('click', () => {
+    const open = (): void => {
       this.selectedKey = place.placeKey;
       this.callbacks.onSelect(place);
+    };
+    row.addEventListener('click', open);
+    // A div with a button role has to bring its own keyboard activation.
+    row.addEventListener('keydown', (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      open();
     });
   }
 }

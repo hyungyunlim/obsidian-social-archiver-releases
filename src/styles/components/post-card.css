@@ -2269,17 +2269,55 @@ a.pcr-gmaps-map-touch-overlay {
  * Leaflet CSS (moved from createElement('style'))
  * ======================================== */
 
+/*
+ * Upstream's "required styles" group, verbatim.
+ *
+ * These rules are Leaflet's geometry contract, not decoration: every layer,
+ * tile and marker is placed with `transform: translate3d(x, y, 0)` relative to
+ * its pane, and a transform on a statically positioned element translates from
+ * that element's FLOW position instead. Transcribing the group selector by
+ * selector is how `.leaflet-marker-icon` and `.leaflet-tile-container` came to
+ * be left out — markers stacked down the marker pane in normal flow and then
+ * took their geographic offset from there.
+ *
+ * Zoomed in, places sit thousands of pixels apart and a ~12px stacking error is
+ * invisible. Zoomed out, a whole country compresses into a few dozen pixels and
+ * the stacking dominates, which drew a vault of Seoul and Gyeonggi places as
+ * vertical columns out in the East China Sea — and read as "the map is only
+ * accurate when you zoom in".
+ *
+ * Keep this block matching leaflet.css. Everything BELOW it is ours: the
+ * controls and attribution are deliberately restyled.
+ */
+.leaflet-pane,
+.leaflet-tile,
+.leaflet-marker-icon,
+.leaflet-marker-shadow,
+.leaflet-tile-container,
+.leaflet-pane > svg,
+.leaflet-pane > canvas,
+.leaflet-zoom-box,
+.leaflet-image-layer,
+.leaflet-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+/* Without this a dragged map starts a native image drag on a tile or marker. */
+.leaflet-tile,
+.leaflet-marker-icon,
+.leaflet-marker-shadow {
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
 .leaflet-container {
   height: 100%;
   width: 100%;
   font-family: inherit;
   position: relative;
-}
-
-.leaflet-pane {
-  position: absolute;
-  left: 0;
-  top: 0;
+  overflow: hidden;
 }
 
 .leaflet-tile-pane { z-index: 2; }
@@ -2296,7 +2334,6 @@ a.pcr-gmaps-map-touch-overlay {
 }
 
 .leaflet-tile {
-  position: absolute;
   filter: inherit;
 }
 
@@ -2566,7 +2603,7 @@ a.pcr-gmaps-map-touch-overlay {
   gap: 4px;
 }
 
-.sa-place-picker-current-actions button {
+.sa-place-picker .sa-place-picker-current-actions button {
   min-height: 30px;
   padding-inline: 8px;
   font-size: 12px;
@@ -2590,7 +2627,7 @@ a.pcr-gmaps-map-touch-overlay {
   border-bottom: 1px solid var(--background-modifier-border);
 }
 
-.sa-place-picker-tab {
+.sa-place-picker .sa-place-picker-tab {
   flex: 0 0 auto;
   min-height: 34px;
   padding: 4px 2px 8px;
@@ -2604,34 +2641,34 @@ a.pcr-gmaps-map-touch-overlay {
   font-weight: 500;
 }
 
-.sa-place-picker-tab:hover {
+.sa-place-picker .sa-place-picker-tab:hover {
   background: transparent;
   box-shadow: none;
   color: var(--text-normal);
 }
 
-.sa-place-picker-tab[aria-selected='true'] {
+.sa-place-picker .sa-place-picker-tab[aria-selected='true'] {
   border-bottom-color: var(--interactive-accent);
   background: transparent;
   color: var(--text-normal);
   font-weight: 600;
 }
 
-.sa-place-picker-tab:focus-visible,
-.sa-place-picker-result:focus-visible,
-.sa-place-picker-detach:focus-visible,
-.sa-place-picker-search-row button:focus-visible,
+.sa-place-picker .sa-place-picker-tab:focus-visible,
+.sa-place-picker .sa-place-picker-result:focus-visible,
+.sa-place-picker .sa-place-picker-detach:focus-visible,
+.sa-place-picker .sa-place-picker-search-row button:focus-visible,
 .sa-place-picker-search-input:focus-visible,
 .sa-place-picker-attribution:focus-visible {
   outline: 2px solid var(--interactive-accent);
   outline-offset: 2px;
 }
 
-.sa-place-picker-load-more:focus-visible,
-.sa-place-picker-manual-action:focus-visible,
+.sa-place-picker .sa-place-picker-load-more:focus-visible,
+.sa-place-picker .sa-place-picker-manual-action:focus-visible,
 .sa-place-picker-manual-input:focus-visible,
-.sa-place-picker-manual-submit:focus-visible,
-.sa-place-picker-recovery button:focus-visible {
+.sa-place-picker .sa-place-picker-manual-submit:focus-visible,
+.sa-place-picker .sa-place-picker-recovery button:focus-visible {
   outline: 2px solid var(--interactive-accent);
   outline-offset: 2px;
 }
@@ -2643,7 +2680,7 @@ a.pcr-gmaps-map-touch-overlay {
   gap: 8px;
 }
 
-.sa-place-picker-result {
+.sa-place-picker .sa-place-picker-result {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -2660,7 +2697,7 @@ a.pcr-gmaps-map-touch-overlay {
   white-space: normal;
 }
 
-.sa-place-picker-result:hover {
+.sa-place-picker .sa-place-picker-result:hover {
   background: var(--background-modifier-hover);
 }
 
@@ -2702,7 +2739,7 @@ a.pcr-gmaps-map-touch-overlay {
   text-wrap: pretty;
 }
 
-.sa-place-picker-detach {
+.sa-place-picker .sa-place-picker-detach {
   width: 100%;
   min-height: 36px;
   margin-bottom: 4px;
@@ -2713,7 +2750,7 @@ a.pcr-gmaps-map-touch-overlay {
   color: var(--text-error);
 }
 
-.sa-place-picker-detach:hover {
+.sa-place-picker .sa-place-picker-detach:hover {
   background: var(--background-modifier-hover);
 }
 
@@ -2771,7 +2808,7 @@ a.pcr-gmaps-map-touch-overlay {
   background: var(--background-modifier-border);
 }
 
-.sa-place-picker-search-row button {
+.sa-place-picker .sa-place-picker-search-row button {
   min-height: 32px;
   margin: 4px;
   border: 0;
@@ -2781,7 +2818,7 @@ a.pcr-gmaps-map-touch-overlay {
   font-weight: 600;
 }
 
-.sa-place-picker-search-row button:hover {
+.sa-place-picker .sa-place-picker-search-row button:hover {
   background: var(--background-modifier-hover);
 }
 
@@ -2812,7 +2849,7 @@ a.pcr-gmaps-map-touch-overlay {
   gap: 8px;
 }
 
-.sa-place-picker-manual-action {
+.sa-place-picker .sa-place-picker-manual-action {
   align-self: flex-start;
   height: auto;
   min-height: 32px;
@@ -2824,14 +2861,12 @@ a.pcr-gmaps-map-touch-overlay {
   font-size: 12px;
 }
 
-.sa-place-picker-manual-action:hover {
+.sa-place-picker .sa-place-picker-manual-action:hover {
   background: transparent;
   color: var(--text-normal);
-}
-
-.sa-place-picker-manual-input,
-.sa-place-picker-manual-submit,
-.sa-place-picker-load-more {
+}.sa-place-picker-manual-input,
+.sa-place-picker .sa-place-picker-manual-submit,
+.sa-place-picker .sa-place-picker-load-more {
   min-height: 36px;
 }
 
