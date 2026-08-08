@@ -35,6 +35,7 @@ import {
   InvalidPlaceApiResponseError,
   parseProviderPlaceSelectionResponse,
   parseProviderSearchResponse,
+  PLACE_SEARCH_PREVIEW_CAPABILITY,
   ProviderPlaceSelectionRequestSchema,
   ProviderSearchRequestSchema,
   type ProviderPlaceSelectionResponse,
@@ -2837,6 +2838,9 @@ export class WorkersAPIClient implements IService {
     if (!normalized.success) throw new InvalidPlaceApiResponseError('search');
     const response = await this.request<unknown>('/api/user/places/provider-search', {
       method: 'POST',
+      // Unlocks rating/photos/reviews on Google results. Withheld without it,
+      // because clients that predate the field reject unknown keys outright.
+      headers: { 'X-Client-Capabilities': PLACE_SEARCH_PREVIEW_CAPABILITY },
       body: JSON.stringify(normalized.data),
     });
     const parsed = parseProviderSearchResponse(response, normalized.data);

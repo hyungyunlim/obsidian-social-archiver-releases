@@ -118,4 +118,106 @@ describe('ArchiveStateBackfillService', () => {
     expect(reconcileArchiveState).not.toHaveBeenCalled();
     expect(result.alreadySyncedCount).toBe(1);
   });
+
+  it('reconciles share state even when the bookmark flag already matches', async () => {
+    const file = makeFile('Social Archives/Facebook/post.md');
+    const app = makeApp([
+      {
+        file,
+        content: '---\nsourceArchiveId: archive-1\narchive: true\n---\n\nBody',
+      },
+    ]);
+    const reconcileShareState = vi.fn(async () => {});
+    const apiClient = {
+      getUserArchives: vi.fn(async () => ({
+        archives: [
+          { id: 'archive-1', isBookmarked: true, shareUrl: 'https://example.com/u/s1' },
+        ],
+        total: 1,
+        limit: 100,
+        offset: 0,
+        hasMore: false,
+        serverTime: '2026-06-24T00:00:00.000Z',
+      })),
+    };
+
+    const service = new ArchiveStateBackfillService({
+      app,
+      apiClient: () => apiClient as any,
+      reconcileArchiveState: vi.fn(async () => {}),
+      reconcileShareState,
+    });
+
+    await service.reconcileFromServer();
+
+    expect(reconcileShareState).toHaveBeenCalledWith(
+      file,
+      'archive-1',
+      'https://example.com/u/s1',
+    );
+  });
+
+  it('propagates an unshared (null) shareUrl so revoked shares converge', async () => {
+    const file = makeFile('Social Archives/Facebook/post.md');
+    const app = makeApp([
+      {
+        file,
+        content: '---\nsourceArchiveId: archive-1\narchive: true\nshare: true\n---\n\nBody',
+      },
+    ]);
+    const reconcileShareState = vi.fn(async () => {});
+    const apiClient = {
+      getUserArchives: vi.fn(async () => ({
+        archives: [{ id: 'archive-1', isBookmarked: true, shareUrl: null }],
+        total: 1,
+        limit: 100,
+        offset: 0,
+        hasMore: false,
+        serverTime: '2026-06-24T00:00:00.000Z',
+      })),
+    };
+
+    const service = new ArchiveStateBackfillService({
+      app,
+      apiClient: () => apiClient as any,
+      reconcileArchiveState: vi.fn(async () => {}),
+      reconcileShareState,
+    });
+
+    await service.reconcileFromServer();
+
+    expect(reconcileShareState).toHaveBeenCalledWith(file, 'archive-1', null);
+  });
+
+  it('skips share reconciliation when the server omits shareUrl (older API)', async () => {
+    const file = makeFile('Social Archives/Facebook/post.md');
+    const app = makeApp([
+      {
+        file,
+        content: '---\nsourceArchiveId: archive-1\narchive: true\n---\n\nBody',
+      },
+    ]);
+    const reconcileShareState = vi.fn(async () => {});
+    const apiClient = {
+      getUserArchives: vi.fn(async () => ({
+        archives: [{ id: 'archive-1', isBookmarked: true }],
+        total: 1,
+        limit: 100,
+        offset: 0,
+        hasMore: false,
+        serverTime: '2026-06-24T00:00:00.000Z',
+      })),
+    };
+
+    const service = new ArchiveStateBackfillService({
+      app,
+      apiClient: () => apiClient as any,
+      reconcileArchiveState: vi.fn(async () => {}),
+      reconcileShareState,
+    });
+
+    await service.reconcileFromServer();
+
+    expect(reconcileShareState).not.toHaveBeenCalled();
+  });
 });

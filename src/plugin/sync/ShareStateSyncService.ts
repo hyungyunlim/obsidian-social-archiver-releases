@@ -11,7 +11,7 @@
  * AND any `shareUrl: null` clears sent via action_updated are applied.
  */
 
-import type { App } from 'obsidian';
+import type { App, TFile } from 'obsidian';
 import type { ActionUpdatedEventData } from '@/types/websocket';
 import type { SocialArchiverSettings } from '@/types/settings';
 import type { WorkersAPIClient } from '../../services/WorkersAPIClient';
@@ -99,6 +99,34 @@ export class ShareStateSyncService {
     }
 
     if (!file) return;
+
+    await this.applyShareState(file, archiveId, nextShareUrl, sourceArchiveIdMissing);
+  }
+
+  /**
+   * Offline catch-up lane: apply the server's canonical `shareUrl` to a file we
+   * already matched (library sync / state backfill).
+   *
+   * Without this, share state only ever reached the vault via the live
+   * `action_updated` WebSocket event — so a share created or revoked while
+   * Obsidian was closed never converged.
+   */
+  async reconcileFromLibrarySync(
+    file: TFile,
+    archiveId: string,
+    shareUrl: string | null,
+  ): Promise<void> {
+    if (this.isSuppressed(archiveId)) return;
+    await this.applyShareState(file, archiveId, shareUrl, false);
+  }
+
+  private async applyShareState(
+    file: TFile,
+    archiveId: string,
+    nextShareUrl: string | null,
+    sourceArchiveIdMissing: boolean,
+  ): Promise<void> {
+    const enabling = typeof nextShareUrl === 'string' && nextShareUrl.length > 0;
 
     const cache = this.app.metadataCache.getFileCache(file);
     const currentShareUrl: unknown = cache?.frontmatter?.['shareUrl'];

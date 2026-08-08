@@ -198,6 +198,14 @@ export interface ArchiveLibrarySyncDeps {
   reconcileLikeState?: (file: TFile, archiveId: string, isLiked: boolean) => Promise<void>;
 
   /**
+   * Reconcile the `share` / `shareUrl` frontmatter fields against the server's
+   * canonical `shareUrl`. Same contract as `reconcileArchiveState`.
+   *
+   * Wired to ShareStateSyncService.reconcileFromLibrarySync() in main.ts.
+   */
+  reconcileShareState?: (file: TFile, archiveId: string, shareUrl: string | null) => Promise<void>;
+
+  /**
    * Reconcile an existing vault file's annotation state (userNotes +
    * userHighlights) against the server archive. Writes the managed
    * annotation block and inline `==text==` marks so reader mode / timeline
@@ -870,6 +878,31 @@ export class ArchiveLibrarySyncService {
   private async reconcileExistingActionState(file: TFile, archive: UserArchive): Promise<void> {
     await this.reconcileExistingArchiveState(file, archive);
     await this.reconcileExistingLikeState(file, archive);
+    await this.reconcileExistingShareState(file, archive);
+  }
+
+  /**
+   * Reconcile `share` / `shareUrl` frontmatter against the server. Best-effort
+   * and non-fatal, same as the archive/like lanes above.
+   *
+   * Short-circuits when the dep is unwired or the server omitted `shareUrl`
+   * (older API); `null` is a meaningful value here — it means "unshared".
+   */
+  private async reconcileExistingShareState(file: TFile, archive: UserArchive): Promise<void> {
+    if (!this.deps.reconcileShareState) return;
+
+    const serverShareUrl = archive.shareUrl;
+    if (serverShareUrl === undefined) return;
+
+    try {
+      await this.deps.reconcileShareState(file, archive.id, serverShareUrl);
+    } catch (error) {
+      console.warn('[Social Archiver] [LibrarySync] reconcileExistingShareState failed', {
+        archiveId: archive.id,
+        path: file.path,
+        error,
+      });
+    }
   }
 
   /**

@@ -125,9 +125,22 @@ export function getProviderCandidateName(candidate: ProviderSearchCandidate): st
   return candidate.provider === 'googlemaps' ? candidate.displayName : candidate.name;
 }
 
+/**
+ * `★ 4.6 (1,284)`, folded into the existing metadata line so a rated result
+ * costs no extra layout. Empty whenever the preview is absent — the paid search
+ * lane never sends one.
+ */
+export function getProviderCandidateRating(candidate: ProviderSearchCandidate): string {
+  if (candidate.provider !== 'googlemaps' || candidate.rating === undefined) return '';
+  return candidate.reviewCount === undefined
+    ? `\u2605 ${candidate.rating.toFixed(1)}`
+    : `\u2605 ${candidate.rating.toFixed(1)} (${candidate.reviewCount.toLocaleString()})`;
+}
+
 export function getProviderCandidateMetadata(candidate: ProviderSearchCandidate): string {
   return candidate.provider === 'googlemaps'
-    ? [candidate.primaryType, candidate.formattedAddress].filter(Boolean).join(' · ')
+    ? [getProviderCandidateRating(candidate), candidate.primaryType, candidate.formattedAddress]
+      .filter(Boolean).join(' · ')
     : [candidate.categoryGroupName || candidate.categoryName, candidate.roadAddress || candidate.address]
       .filter(Boolean).join(' · ');
 }

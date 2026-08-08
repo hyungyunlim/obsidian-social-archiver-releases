@@ -2739,6 +2739,34 @@ a.pcr-gmaps-map-touch-overlay {
   text-wrap: pretty;
 }
 
+.sa-place-picker-result-review {
+  min-width: 0;
+  width: 100%;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-style: italic;
+  line-height: 1.35;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.sa-place-picker-result-photos {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.sa-place-picker-result-photos img {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-s);
+  object-fit: cover;
+  background: var(--background-secondary);
+}
+
 .sa-place-picker .sa-place-picker-detach {
   width: 100%;
   min-height: 36px;

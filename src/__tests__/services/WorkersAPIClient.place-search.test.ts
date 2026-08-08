@@ -138,6 +138,83 @@ describe('WorkersAPIClient place search', () => {
     });
   });
 
+  it('declares the preview capability and keeps a well-formed search preview', async () => {
+    // Given: the free direct lane answers with rating/photos/reviews.
+    let observedHeaders: Record<string, string> | undefined;
+    __setRequestUrlHandler(async (request) => {
+      observedHeaders = request.headers as Record<string, string> | undefined;
+      return {
+        status: 200,
+        headers: {},
+        text: '',
+        json: {
+          success: true,
+          data: {
+            ...GOOGLE_SEARCH_RESPONSE,
+            results: [{
+              ...GOOGLE_SEARCH_RESPONSE.results[0],
+              rating: 4.6,
+              reviewCount: 1_284,
+              photos: [{ url: 'https://lh3.googleusercontent.com/a', width: 800, height: 600 }],
+              reviews: ['Great coffee.'],
+            }],
+          },
+        },
+        arrayBuffer: new ArrayBuffer(0),
+      };
+    });
+
+    // When
+    const response = await createClient().searchProviderPlaces({
+      provider: 'googlemaps', query: 'Blue Bottle', size: 5,
+    });
+
+    // Then
+    expect(observedHeaders?.['X-Client-Capabilities']).toContain('place-search-preview-v1');
+    expect(response.results[0]).toMatchObject({
+      rating: 4.6,
+      reviewCount: 1_284,
+      photos: [{ url: 'https://lh3.googleusercontent.com/a', width: 800, height: 600 }],
+      reviews: ['Great coffee.'],
+    });
+  });
+
+  it('drops a malformed preview instead of dropping the whole place', async () => {
+    // Given: the candidate schema is .strict(), so without per-field `.catch()`
+    // a bad rating would delete the place from the result list entirely.
+    __setRequestUrlHandler(async () => ({
+      status: 200,
+      headers: {},
+      text: '',
+      json: {
+        success: true,
+        data: {
+          ...GOOGLE_SEARCH_RESPONSE,
+          results: [{
+            ...GOOGLE_SEARCH_RESPONSE.results[0],
+            rating: 'four point six',
+            photos: [{ url: 'http://insecure.example/a', width: 800, height: 600 }],
+          }],
+        },
+      },
+      arrayBuffer: new ArrayBuffer(0),
+    }));
+
+    // When
+    const response = await createClient().searchProviderPlaces({
+      provider: 'googlemaps', query: 'Blue Bottle', size: 5,
+    });
+
+    // Then
+    // The place survives; only the bad fields are dropped. `.catch(undefined)`
+    // leaves the key present with an undefined value, which every reader treats
+    // the same as absent.
+    expect(response.results[0]).toMatchObject({ externalId: 'ChIJ-google-place' });
+    const candidate = response.results[0];
+    expect(candidate?.provider === 'googlemaps' && candidate.rating).toBeUndefined();
+    expect(candidate?.provider === 'googlemaps' && candidate.photos).toBeUndefined();
+  });
+
   it('submits only the signed token and idempotency key for provider selection', async () => {
     // Given: a signed candidate and a source archive.
     let observedBody: string | undefined;

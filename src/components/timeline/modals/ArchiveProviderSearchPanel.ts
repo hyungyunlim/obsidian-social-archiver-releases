@@ -199,6 +199,23 @@ export class ArchiveProviderSearchPanel {
       button.createSpan({
         text: getProviderCandidateMetadata(candidate), cls: 'sa-place-picker-result-meta',
       });
+      if (candidate.provider === 'googlemaps') {
+        const [review] = candidate.reviews ?? [];
+        if (review) {
+          button.createSpan({
+            text: `\u201C${review}\u201D`, cls: 'sa-place-picker-result-review',
+          });
+        }
+        if (candidate.photos?.length) {
+          const strip = button.createDiv({ cls: 'sa-place-picker-result-photos' });
+          for (const photo of candidate.photos) {
+            const image = strip.createEl('img');
+            image.src = photo.url;
+            image.alt = '';
+            image.loading = 'lazy';
+          }
+        }
+      }
       button.addEventListener('click', () => this.options.onSelect(candidate, this.snapshot));
     }
     if (this.snapshot.attribution) {

@@ -131,7 +131,11 @@ describe('SentinelMediaRegionManager.stripMarkers', () => {
       SentinelMediaRegionManager.wrap('id-two', '![](2.png)'),
     ].join('\n\n');
     const stripped = SentinelMediaRegionManager.stripMarkers(content);
-    expect(stripped).toBe('![](1.png)\n\n![](2.png)');
+    // The trailing newline belongs to the `![](2.png)` line, not to the end
+    // marker — stripMarkers drops marker LINES, it does not trim the content's
+    // own line endings (see the sibling test above, which keeps its trailing
+    // newline for the same reason).
+    expect(stripped).toBe('![](1.png)\n\n![](2.png)\n');
   });
 
   it('strips an inline marker without eating surrounding text', () => {

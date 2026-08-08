@@ -1958,8 +1958,9 @@ Content:
       return new AICommentError('CLI_NOT_AUTHENTICATED', `${cli} authentication failed: ${stderr.slice(0, 200)}`, { cli });
     }
 
-    // Rate limiting
-    if (lowerStderr.includes('rate limit') || lowerStderr.includes('too many requests') || lowerStderr.includes('quota')) {
+    // Rate limiting — includes exhausted subscription limits
+    // (Claude: "Claude usage limit reached" / Codex: "You've hit your usage limit")
+    if (lowerStderr.includes('rate limit') || lowerStderr.includes('too many requests') || lowerStderr.includes('quota') || lowerStderr.includes('usage limit')) {
       return new AICommentError('RATE_LIMITED', `${cli} rate limited: ${stderr.slice(0, 200)}`, { cli });
     }
 

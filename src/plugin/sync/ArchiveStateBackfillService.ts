@@ -25,6 +25,13 @@ export interface ArchiveStateBackfillDeps {
   app: App;
   apiClient: () => WorkersAPIClient | undefined;
   reconcileArchiveState: (file: TFile, archiveId: string, isBookmarked: boolean) => Promise<void>;
+  reconcileShareState?: (file: TFile, archiveId: string, shareUrl: string | null) => Promise<void>;
+}
+
+interface ServerArchiveState {
+  isBookmarked: boolean;
+  /** `undefined` = server omitted the field (older API); `null` = not shared. */
+  shareUrl?: string | null;
 }
 
 export interface ArchiveStateFrontmatterIdentity {
@@ -72,9 +79,9 @@ export class ArchiveStateBackfillService {
   }
 
   async reconcileFromServer(): Promise<ArchiveStateBackfillResult> {
-    const serverBookmarkStates = await this.fetchServerBookmarkStates();
+    const serverStates = await this.fetchServerStates();
     const result: ArchiveStateBackfillResult = {
-      serverArchives: serverBookmarkStates.size,
+      serverArchives: serverStates.size,
       scannedFiles: 0,
       matchedFiles: 0,
       alreadySyncedCount: 0,
@@ -92,13 +99,23 @@ export class ArchiveStateBackfillService {
         if (!identity?.sourceArchiveId) continue;
 
         result.matchedFiles += 1;
-        const serverIsBookmarked = serverBookmarkStates.get(identity.sourceArchiveId);
-        if (serverIsBookmarked === undefined) {
+        const serverState = serverStates.get(identity.sourceArchiveId);
+        if (serverState === undefined) {
           result.missingServerCount += 1;
           continue;
         }
 
-        if (identity.archive === serverIsBookmarked) {
+        // Share state has its own no-op guard inside reconcileShareState, so it
+        // is reconciled independently of whether the bookmark flag drifted.
+        if (this.deps.reconcileShareState && serverState.shareUrl !== undefined) {
+          await this.deps.reconcileShareState(
+            file,
+            identity.sourceArchiveId,
+            serverState.shareUrl,
+          );
+        }
+
+        if (identity.archive === serverState.isBookmarked) {
           result.alreadySyncedCount += 1;
           continue;
         }
@@ -106,7 +123,7 @@ export class ArchiveStateBackfillService {
         await this.deps.reconcileArchiveState(
           file,
           identity.sourceArchiveId,
-          serverIsBookmarked,
+          serverState.isBookmarked,
         );
         result.updatedCount += 1;
       } catch (error) {
@@ -122,13 +139,13 @@ export class ArchiveStateBackfillService {
     return result;
   }
 
-  private async fetchServerBookmarkStates(): Promise<Map<string, boolean>> {
+  private async fetchServerStates(): Promise<Map<string, ServerArchiveState>> {
     const apiClient = this.deps.apiClient();
     if (!apiClient) {
       throw new Error('API client not initialised');
     }
 
-    const states = new Map<string, boolean>();
+    const states = new Map<string, ServerArchiveState>();
     let offset = 0;
 
     while (true) {
@@ -140,7 +157,10 @@ export class ArchiveStateBackfillService {
 
       for (const archive of response.archives) {
         if (typeof archive.isBookmarked === 'boolean') {
-          states.set(archive.id, archive.isBookmarked);
+          states.set(archive.id, {
+            isBookmarked: archive.isBookmarked,
+            ...(archive.shareUrl !== undefined ? { shareUrl: archive.shareUrl } : {}),
+          });
         }
       }
 

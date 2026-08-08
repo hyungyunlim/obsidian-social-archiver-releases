@@ -172,10 +172,22 @@ export function aggregatePlaces(posts: readonly PostData[]): PlaceSummary[] {
 
       if (location.placeArchiveId && location.promotionStatus === 'archived') {
         summary.placeArchiveId = location.placeArchiveId;
+      } else if (isProviderCard) {
+        // This note IS the place, so it is the place's archive whether or not a
+        // promotion ever said so. Promotion is only ONE way a place archive gets
+        // created — a pasted map URL, the share sheet and "add a place" all mint
+        // one directly, and those file as metadata_only with no placeArchiveId.
+        // Without this the place's own card showed on its page while the list
+        // counted it as zero. `??=` so an explicit promotion still wins.
+        summary.placeArchiveId ??= post.sourceArchiveId ?? post.id ?? undefined;
       }
       // 'archived' is terminal; otherwise let a more advanced state win over
       // metadata_only so an in-flight promotion is visible.
-      if (location.promotionStatus === 'archived'
+      if (isProviderCard) {
+        // The note exists, so the place is archived — the same conclusion the
+        // other clients reach from `map_archive_identity`.
+        summary.placeArchiveState = 'archived';
+      } else if (location.promotionStatus === 'archived'
         || summary.placeArchiveState === 'metadata_only'
         || summary.placeArchiveState === 'archive_failed') {
         summary.placeArchiveState = location.promotionStatus;

@@ -274,3 +274,50 @@ describe('place list filters', () => {
     expect(sortPlaces(places, 'recent')).toHaveLength(3);
   });
 });
+
+/**
+ * A place saved on its own — a pasted map URL, the share sheet, "add a place".
+ * None of those go through promotion, so the note files as metadata_only with
+ * no placeArchiveId, and treating promotion as the only way to BE a place made
+ * the list count it as zero while its own page showed the card.
+ */
+describe('aggregatePlaces — a place archived on its own', () => {
+  function standalonePlace(): PostData {
+    return {
+      platform: 'googlemaps',
+      id: 'arc-standalone',
+      sourceArchiveId: 'arc-standalone',
+      filePath: 'Places/eiffel.md',
+      metadata: {
+        location: 'Eiffel Tower',
+        latitude: 48.858,
+        longitude: 2.294,
+        locationSource: 'googlemaps',
+        locationExternalId: 'ChIJLU7jZClu5kcR4PcOOO6p3I0',
+        timestamp: new Date('2026-08-06T00:00:00.000Z'),
+      },
+    } as unknown as PostData;
+  }
+
+  it('counts the place even though nothing promoted it', () => {
+    const [place] = aggregatePlaces([standalonePlace()]);
+
+    expect(place?.archiveCount).toBe(1);
+    expect(place?.placeArchiveId).toBe('arc-standalone');
+  });
+
+  it('reports it as archived, not metadata-only', () => {
+    // The note exists; a badge saying otherwise contradicts the card beside it.
+    expect(aggregatePlaces([standalonePlace()])[0]?.placeArchiveState).toBe('archived');
+  });
+
+  it('still does not count the place card as a post about the place', () => {
+    // The provider card IS the place. Counting it as a related post would
+    // inflate every place against the other clients.
+    expect(aggregatePlaces([standalonePlace()])[0]?.relatedPostCount).toBe(0);
+  });
+
+  it('surfaces the place note in filePaths, so its page shows it', () => {
+    expect(aggregatePlaces([standalonePlace()])[0]?.filePaths).toContain('Places/eiffel.md');
+  });
+});

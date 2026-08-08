@@ -29,6 +29,27 @@ const KakaoCandidateSchema = z.object({
   candidate => isCanonicalKakaoPlaceUrl(candidate.placeUrl, candidate.externalId),
 );
 
+/** Declared in `X-Client-Capabilities` to receive the search preview fields. */
+export const PLACE_SEARCH_PREVIEW_CAPABILITY = 'place-search-preview-v1';
+
+const MAX_PREVIEW_PHOTOS = 3;
+const MAX_PREVIEW_REVIEWS = 3;
+
+const PreviewPhotoSchema = z.object({
+  url: z.string().url().max(2_048).startsWith('https://'),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+}).strict();
+
+/**
+ * Display-only preview on a Google search result, sent only when the request
+ * declares `place-search-preview-v1` and the server answers from the free
+ * direct lane. The paid Text Search fallback never carries it.
+ *
+ * `.catch(undefined)` on each field, unlike the identity fields above: this is
+ * decoration, and the enclosing object is `.strict()`, so a malformed rating
+ * would otherwise fail the whole candidate and delete the place from the list.
+ */
 const GoogleCandidateSchema = z.object({
   provider: z.literal('googlemaps'),
   externalId: GoogleExternalIdSchema,
@@ -37,6 +58,11 @@ const GoogleCandidateSchema = z.object({
   latitude: LatitudeSchema,
   longitude: LongitudeSchema,
   primaryType: z.string().min(1).max(100).optional(),
+  rating: z.number().min(0).max(5).optional().catch(undefined),
+  reviewCount: z.number().int().nonnegative().optional().catch(undefined),
+  photos: z.array(PreviewPhotoSchema).max(MAX_PREVIEW_PHOTOS).optional().catch(undefined),
+  reviews: z.array(z.string().min(1).max(2_000)).max(MAX_PREVIEW_REVIEWS).optional()
+    .catch(undefined),
   selectionToken: SelectionTokenSchema,
 }).strict();
 

@@ -786,6 +786,17 @@ export default class SocialArchiverPlugin extends Plugin {
             ),
           );
         },
+        reconcileShareState: async (file, archiveId, shareUrl) => {
+          const service = this.shareStateSyncService;
+          if (!service) return;
+          await this.localLockRegistry.withLocks(
+            [
+              { kind: 'archiveMaterialization', archiveId },
+              { kind: 'markdownWrite', archiveId },
+            ],
+            () => service.reconcileFromLibrarySync(file, archiveId, shareUrl),
+          );
+        },
       });
 
       const result = await service.reconcileFromServer();
@@ -2203,6 +2214,9 @@ export default class SocialArchiverPlugin extends Plugin {
           Promise.resolve(),
         reconcileLikeState: (file, archiveId, isLiked) =>
           this.likeStateSyncService?.reconcileFromLibrarySync(file, archiveId, isLiked) ??
+          Promise.resolve(),
+        reconcileShareState: (file, archiveId, shareUrl) =>
+          this.shareStateSyncService?.reconcileFromLibrarySync(file, archiveId, shareUrl) ??
           Promise.resolve(),
         reconcileAnnotationState: (file, archive) =>
           this.annotationSyncService?.reconcileFromLibrarySync(file, archive) ??
