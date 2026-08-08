@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/index.ts
- * Generated: 2026-07-28T02:27:51.585Z
+ * Generated: 2026-08-08T03:19:52.668Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
