@@ -24,6 +24,20 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.6.8': {
+    title: 'Deleted notes stay deleted',
+    date: '2026-08-09',
+    notes: `## Deleted notes stay deleted
+
+- Deleting an archive note (or a whole folder) from your vault no longer comes back on the next sync. The plugin now remembers local deletions and stops re-importing those archives — the server copies stay untouched for your other devices.
+- Re-archiving the same post from another device still arrives normally; only unchanged server copies stay hidden.
+- **Deletions made before this update are not remembered.** If old archives keep reappearing, delete them once more after updating — from then on they stay gone.
+
+## Disconnect stays disconnected
+
+- Disconnecting this vault under **Settings → Mobile sync** used to be silently undone the next time you signed in. Signing in no longer re-enables sync by itself — the vault reconnects only when you press Connect.
+`,
+  },
   '4.6.1': {
     title: 'Mosaic view',
     date: '2026-08-02',

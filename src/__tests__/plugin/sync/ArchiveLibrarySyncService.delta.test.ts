@@ -113,6 +113,48 @@ describe('ArchiveLibrarySyncService delta catch-up', () => {
     expect(notify).toHaveBeenCalledWith('Library sync complete: 1 new archive saved.', 5000);
   });
 
+  it('skips locally-deleted (tombstoned) archives at Tier 0.5 without saving', async () => {
+    const settings = makeSettings();
+    const archive = makeArchive();
+    const apiClient = {
+      getUserArchives: vi.fn().mockResolvedValue({
+        archives: [archive],
+        total: 1,
+        hasMore: false,
+        serverTime: '2026-05-09T00:00:00.000Z',
+        deletedIds: [],
+      }),
+    };
+    const saveSubscriptionPostDetailed = vi.fn();
+    const isArchiveTombstoned = vi.fn().mockReturnValue(true);
+
+    const service = new ArchiveLibrarySyncService({
+      apiClient: () => apiClient as any,
+      settings: () => settings,
+      saveSettings: vi.fn().mockResolvedValue(undefined),
+      findBySourceArchiveId: vi.fn().mockReturnValue(null),
+      findByOriginalUrl: vi.fn().mockReturnValue([]),
+      findByClientPostId: vi.fn().mockReturnValue(null),
+      indexSavedFile: vi.fn(),
+      backfillFileIdentity: vi.fn().mockResolvedValue(undefined),
+      saveSubscriptionPostDetailed,
+      convertUserArchiveToPostData: vi.fn(),
+      notify: vi.fn(),
+      isArchiveTombstoned,
+      applyInboundDeletedIds: vi.fn().mockResolvedValue(undefined),
+    });
+
+    await service.startDeltaSync();
+
+    expect(isArchiveTombstoned).toHaveBeenCalledWith(archive);
+    expect(saveSubscriptionPostDetailed).not.toHaveBeenCalled();
+    expect(service.getState()).toMatchObject({
+      phase: 'completed',
+      savedCount: 0,
+      skippedCount: 1,
+    });
+  });
+
   it('falls back to bootstrap sync when no delta high-water mark exists', async () => {
     const settings = makeSettings();
     settings.archiveLibrarySync.completedAt = '';

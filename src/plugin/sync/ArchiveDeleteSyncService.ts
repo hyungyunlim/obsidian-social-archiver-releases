@@ -27,6 +27,7 @@ import type {
   SocialArchiverSettings,
   DeleteSyncSettings,
   PendingArchiveDeleteEntry,
+  LocalArchiveDeleteTombstone,
 } from '../../types/settings';
 import { showDeleteConfirmModal } from './DeleteConfirmModal';
 import { isLocalOnlyImportMode, isLocalOnlyNote } from './localOnlyNoteGuard';
@@ -69,6 +70,12 @@ const MAX_FLUSH_BATCH_SIZE = 10;
 
 /** Maximum pending queue size — stops enqueuing beyond this to prevent unbounded growth. */
 const MAX_QUEUE_SIZE = 20;
+
+/**
+ * Maximum persisted local-delete tombstones (FIFO — oldest deletions expire
+ * first). Bounds data.json growth; 500 covers any realistic deleted set.
+ */
+const MAX_TOMBSTONES = 500;
 
 /** Log prefix for all messages from this service. */
 const LOG_PREFIX = '[Social Archiver] [DeleteSync]';
@@ -184,6 +191,42 @@ export class ArchiveDeleteSyncService {
   }
 
   /**
+   * Returns true when the server archive matches a local-deletion tombstone
+   * for the current user AND the server copy has not been re-archived since
+   * the local deletion.
+   *
+   * Used as Tier 0.5 by ArchiveLibrarySyncService and by the queue/WS ingest
+   * paths so that a note the user deleted locally (with outbound delete sync
+   * off, or after choosing "Keep on Server") stays deleted instead of being
+   * re-imported from the still-active server row.
+   *
+   * A server `archivedAt` newer than the tombstone's `deletedAt` means the
+   * archive was deliberately re-archived on another client after the local
+   * deletion — the tombstone loses and the archive is imported again.
+   */
+  isServerArchiveTombstoned(
+    archive: { id: string; originalUrl?: string | null; archivedAt?: string | null }
+  ): boolean {
+    const settings = this.deps.settings();
+    const username = settings.username;
+    if (!username) return false;
+
+    const match = this.getTombstones(settings).find((t) =>
+      t.username === username &&
+      (t.archiveId
+        ? t.archiveId === archive.id
+        // URL matching only for id-less (legacy-note) tombstones — an id-bound
+        // tombstone must not swallow a different server row for the same URL.
+        : (!!t.originalUrl && t.originalUrl === archive.originalUrl))
+    );
+    if (!match) return false;
+
+    // ISO-8601 string compare (server guarantees ISO timestamps).
+    if (archive.archivedAt && archive.archivedAt > match.deletedAt) return false;
+    return true;
+  }
+
+  /**
    * Returns the number of pending outbound delete requests in the queue.
    */
   getPendingCount(): number {
@@ -249,7 +292,13 @@ export class ArchiveDeleteSyncService {
 
     // Feature flag
     if (!settings.deleteSync?.outboundEnabled) {
-      console.debug(`${LOG_PREFIX} Outbound delete disabled — skipping`, {
+      // The local delete stays local — leave a tombstone so library sync and
+      // queue/WS ingest do not re-import the still-active server copy.
+      await this.recordLocalDeleteTombstones(
+        [{ archiveId: identity.archiveId, originalUrl: identity.originalUrl }],
+        settings,
+      );
+      console.debug(`${LOG_PREFIX} Outbound delete disabled — skipping (tombstone recorded)`, {
         archiveId: identity.archiveId,
       });
       return;
@@ -285,6 +334,11 @@ export class ArchiveDeleteSyncService {
         `Delete sync queue full (${MAX_QUEUE_SIZE} items) — this vault deletion will not be synced to server. ` +
         `Go to Settings → Sync to manage pending deletes.`,
         8000,
+      );
+      // Not synced to server — tombstone so the archive is not re-imported.
+      await this.recordLocalDeleteTombstones(
+        resolvedArchiveIds.map((archiveId) => ({ archiveId, originalUrl: identity.originalUrl })),
+        settings,
       );
       return;
     }
@@ -424,12 +478,18 @@ export class ArchiveDeleteSyncService {
         // User chose to keep server copies — clear ALL eligible entries for
         // the current user (not just the batch), since the intent is to keep
         // everything. Entries for other users (if any) are preserved.
+        // Tombstone each cleared entry so the kept server copies are not
+        // re-imported into this vault by library sync.
+        this.stampLocalDeleteTombstones(
+          eligible.map((e) => ({ archiveId: e.archiveId })),
+          settings,
+        );
         const eligibleIds = new Set(eligible.map((e) => e.archiveId));
         const remaining = queue.filter((e) => !eligibleIds.has(e.archiveId));
         this.setQueue(settings, remaining);
         await this.deps.saveSettings();
         console.debug(
-          `${LOG_PREFIX} User chose "Keep on Server" — cleared ${eligible.length} pending deletes`,
+          `${LOG_PREFIX} User chose "Keep on Server" — cleared ${eligible.length} pending deletes (tombstoned)`,
         );
         return;
       }
@@ -507,10 +567,15 @@ export class ArchiveDeleteSyncService {
       }
 
       if (status === 403) {
-        // Forbidden — terminal, remove from queue
+        // Forbidden — terminal, remove from queue. The server copy survives,
+        // so tombstone it to keep the local deletion from being re-imported.
         console.warn(`${LOG_PREFIX} Forbidden (403) — removing from queue (terminal)`, {
           archiveId: entry.archiveId,
         });
+        await this.recordLocalDeleteTombstones(
+          [{ archiveId: entry.archiveId }],
+          this.deps.settings(),
+        );
         await this.removeFromQueue(entry.archiveId);
         return false; // continue with next item
       }
@@ -661,6 +726,97 @@ export class ArchiveDeleteSyncService {
         this.suppressedInboundDeleteIds.delete(archiveId);
       }
     }
+  }
+
+  // --------------------------------------------------------------------------
+  // Local-delete tombstone helpers (settings-based persistence)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Stamp tombstones into settings (in-memory) and persist.
+   * Candidates without archiveId AND originalUrl are ignored.
+   */
+  private async recordLocalDeleteTombstones(
+    candidates: Array<{ archiveId?: string; originalUrl?: string }>,
+    settings: SocialArchiverSettings,
+  ): Promise<void> {
+    if (!this.stampLocalDeleteTombstones(candidates, settings)) return;
+    await this.deps.saveSettings();
+  }
+
+  /**
+   * Stamp tombstones into settings without persisting (caller saves).
+   *
+   * A candidate matching an existing tombstone refreshes its `deletedAt` —
+   * essential for the re-delete case: tombstone → server re-archive wins →
+   * note re-imported → user deletes again → the refreshed timestamp makes the
+   * new deletion stick.
+   *
+   * @returns true when settings were mutated.
+   */
+  private stampLocalDeleteTombstones(
+    candidates: Array<{ archiveId?: string; originalUrl?: string }>,
+    settings: SocialArchiverSettings,
+  ): boolean {
+    const username = settings.username;
+    if (!username) return false;
+
+    const tombstones = this.getTombstones(settings);
+    const now = new Date().toISOString();
+    let mutated = false;
+
+    for (const candidate of candidates) {
+      if (!candidate.archiveId && !candidate.originalUrl) continue;
+
+      const existing = tombstones.find((t) =>
+        t.username === username &&
+        (candidate.archiveId
+          ? t.archiveId === candidate.archiveId
+          : (!t.archiveId && !!t.originalUrl && t.originalUrl === candidate.originalUrl))
+      );
+
+      if (existing) {
+        existing.deletedAt = now;
+        if (!existing.originalUrl && candidate.originalUrl) {
+          existing.originalUrl = candidate.originalUrl;
+        }
+        mutated = true;
+        continue;
+      }
+
+      const entry: LocalArchiveDeleteTombstone = { username, deletedAt: now };
+      if (candidate.archiveId) entry.archiveId = candidate.archiveId;
+      if (candidate.originalUrl) entry.originalUrl = candidate.originalUrl;
+      tombstones.push(entry);
+      mutated = true;
+    }
+
+    if (!mutated) return false;
+
+    // FIFO cap — oldest local deletions expire first (MAX_TOMBSTONES).
+    while (tombstones.length > MAX_TOMBSTONES) tombstones.shift();
+    this.setTombstones(settings, tombstones);
+
+    console.debug(`${LOG_PREFIX} Recorded local-delete tombstone(s)`, {
+      count: candidates.length,
+      total: tombstones.length,
+    });
+    return true;
+  }
+
+  /** Read tombstones from settings; empty array when absent/malformed. */
+  private getTombstones(settings: SocialArchiverSettings): LocalArchiveDeleteTombstone[] {
+    const raw = (settings as unknown as Record<string, unknown>)['localArchiveDeleteTombstones'];
+    if (!Array.isArray(raw)) return [];
+    return raw as LocalArchiveDeleteTombstone[];
+  }
+
+  /** Write tombstones into settings (in-memory only; caller persists). */
+  private setTombstones(
+    settings: SocialArchiverSettings,
+    tombstones: LocalArchiveDeleteTombstone[],
+  ): void {
+    (settings as unknown as Record<string, unknown>)['localArchiveDeleteTombstones'] = tombstones;
   }
 
   // --------------------------------------------------------------------------

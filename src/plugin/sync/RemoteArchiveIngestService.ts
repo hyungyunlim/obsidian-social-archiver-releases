@@ -43,6 +43,12 @@ export interface RemoteArchiveIngestDeps {
   /** Returns true if the given URL was archived locally within the dedup window. */
   hasRecentlyArchivedUrl: (url: string | null | undefined) => boolean;
 
+  /**
+   * Local-deletion tombstone check (Tier 0.5, see
+   * ArchiveDeleteSyncService.isServerArchiveTombstoned).
+   */
+  isArchiveTombstoned?: (archive: UserArchive) => boolean;
+
   /** Lookup service for checking existing vault files by sourceArchiveId. */
   archiveLookupService: ArchiveLookupService | null;
 
@@ -145,6 +151,15 @@ export class RemoteArchiveIngestService {
 
     const archive = await this.fetchWithRetry(apiClient, archiveId);
     if (!archive) {
+      return 'skipped';
+    }
+
+    // Local-deletion tombstone: the user deleted this note in the vault and
+    // the server copy was not re-archived since — do not re-import it.
+    if (this.deps.isArchiveTombstoned?.(archive)) {
+      console.debug('[RemoteArchiveIngest] Archive matches a local-delete tombstone — skipping', {
+        archiveId,
+      });
       return 'skipped';
     }
 

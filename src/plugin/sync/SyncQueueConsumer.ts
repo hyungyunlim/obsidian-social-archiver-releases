@@ -58,6 +58,12 @@ export interface SyncQueueConsumerDeps {
   saveSubscriptionPost: (post: PendingPost) => Promise<boolean>;
   convertUserArchiveToPostData: (archive: UserArchive) => PostData;
   hasRecentlyArchivedUrl: (url: string | null | undefined) => boolean;
+  /**
+   * Local-deletion tombstone check (see
+   * ArchiveDeleteSyncService.isServerArchiveTombstoned). Tombstoned items are
+   * ACKed without saving so they do not re-create locally deleted notes.
+   */
+  isArchiveTombstoned?: (archive: UserArchive) => boolean;
   refreshTimelineView: () => void;
   /** Plugin's tracked timeout (cleared centrally on unload) — the drain's only cadence. */
   schedule: (callback: () => void, delayMs: number) => number;
@@ -159,6 +165,11 @@ export class SyncQueueConsumer {
       const { archive } = await api.getUserArchive(item.archiveId);
       if (!archive) return 'failed';
       if (this.deps.hasRecentlyArchivedUrl(archive.originalUrl)) {
+        await this.ackItem(api, item);
+        return 'acked-duplicate';
+      }
+      if (this.deps.isArchiveTombstoned?.(archive)) {
+        // Locally deleted, kept on server — ACK so the item never re-lists.
         await this.ackItem(api, item);
         return 'acked-duplicate';
       }

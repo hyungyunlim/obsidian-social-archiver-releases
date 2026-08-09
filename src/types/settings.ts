@@ -508,6 +508,20 @@ export interface PendingArchiveDeleteEntry {
 }
 
 /**
+ * Local-deletion tombstone: the user deleted an archive note in the vault
+ * but the deletion did NOT reach the server (outbound delete sync off, queue
+ * overflow, "Keep on Server", or a terminal 403). Library sync and queue/WS
+ * ingest must not re-import a matching server archive unless the server copy
+ * was re-archived after the local deletion (`archivedAt > deletedAt`).
+ */
+export interface LocalArchiveDeleteTombstone {
+  archiveId?: string;
+  originalUrl?: string;
+  username: string;
+  deletedAt: string; // ISO 8601
+}
+
+/**
  * Queue entry for outbound composed-post sync (create or update).
  * Persisted in settings so it survives plugin restart.
  */
@@ -695,6 +709,15 @@ export interface SocialArchiverSettings {
    */
   syncClientId: string;
 
+  /**
+   * Set when the user explicitly disconnects this vault as a sync client
+   * (Settings → Mobile sync → Disconnect). Blocks the automatic sync-client
+   * registration that runs after a successful login, so a token-expiry
+   * re-login cannot silently re-enable library sync. Cleared on any
+   * successful registration (explicit Connect).
+   */
+  syncDisconnectedByUser: boolean;
+
   // Mobile Annotation Sync Settings
   /** Sync highlights and notes from mobile app to vault (opt-in beta, default: false) */
   enableMobileAnnotationSync: boolean;
@@ -774,6 +797,7 @@ export interface SocialArchiverSettings {
   // Delete Sync Settings
   deleteSync: DeleteSyncSettings;
   pendingArchiveDeletes: PendingArchiveDeleteEntry[];
+  localArchiveDeleteTombstones: LocalArchiveDeleteTombstone[];
 
   // Composed Post Sync Queue
   pendingComposedPostSyncs: PendingComposedPostSyncEntry[];
@@ -962,6 +986,7 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
   // Multi-Device Sync Settings
   enableServerPendingJobs: true, // Enabled by default for cross-device recovery
   syncClientId: '', // Empty until registered
+  syncDisconnectedByUser: false, // Only set by an explicit user Disconnect
 
   // Mobile Annotation Sync Settings
   enableMobileAnnotationSync: true, // Phase 3: default ON; opt-out via UI (migration respects explicit false)
@@ -980,6 +1005,7 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
     confirmBeforeServerDelete: true,
   },
   pendingArchiveDeletes: [],
+  localArchiveDeleteTombstones: [],
 
   // Composed Post Sync Queue
   pendingComposedPostSyncs: [],

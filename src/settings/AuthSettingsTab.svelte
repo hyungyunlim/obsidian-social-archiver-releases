@@ -124,8 +124,10 @@ function startCrossDeviceTimers(sessionId: string, expiresAt: string, pollMs: nu
           showAuthSuccess(completion.username || '');
 
           // Auto-register sync client when logged in via mobile app.
-          // The user clearly has the mobile app, so enable sync automatically.
-          if (!plugin.settings.syncClientId) {
+          // The user clearly has the mobile app, so enable sync automatically —
+          // unless they explicitly disconnected this vault before; a re-login
+          // (e.g. after token expiry) must not silently re-enable sync.
+          if (!plugin.settings.syncClientId && !plugin.settings.syncDisconnectedByUser) {
             plugin.registerSyncClient().catch(() => {
               // Best-effort: sync can be enabled manually later
             });

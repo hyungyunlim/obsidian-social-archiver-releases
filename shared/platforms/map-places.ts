@@ -237,9 +237,22 @@ function googleMapsSearchUrl(target: MapPlaceTarget): string | null {
   return query ? `https://www.google.com/maps/search/?api=1&query=${query}` : null;
 }
 
-function googleMapsExactUrl(target: MapPlaceTarget, placeId: string): string {
+/** BCP-47-ish tag, mirroring the fetcher's languageCode schema. */
+const MAP_PLACE_LANGUAGE_PATTERN = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/;
+
+function googleMapsExactUrl(
+  target: MapPlaceTarget,
+  placeId: string,
+  languageCode?: string,
+): string {
   const query = googleMapsExactQuery(target);
-  return `https://www.google.com/maps/search/?api=1&query=${query}&query_place_id=${placeId}`;
+  // `hl` pins the language the place gets ARCHIVED in: the server re-fetches
+  // by place id, and without hl Google answers in the fetcher IP's locale —
+  // not the app language the user searched in.
+  const hl = languageCode && MAP_PLACE_LANGUAGE_PATTERN.test(languageCode)
+    ? `&hl=${languageCode}`
+    : '';
+  return `https://www.google.com/maps/search/?api=1&query=${query}&query_place_id=${placeId}${hl}`;
 }
 
 const EXACT_MAP_PLACE_URL_BUILDERS = {
@@ -250,14 +263,17 @@ const EXACT_MAP_PLACE_URL_BUILDERS = {
     `https://place.map.kakao.com/${placeId}`,
 } as const satisfies Record<
   VerifiedMapPlaceSource,
-  (target: MapPlaceTarget, placeId: string) => string | null
+  (target: MapPlaceTarget, placeId: string, languageCode?: string) => string | null
 >;
 
-export function buildExactMapPlaceUrl(target: MapPlaceTarget): string | null {
+export function buildExactMapPlaceUrl(
+  target: MapPlaceTarget,
+  options?: { readonly languageCode?: string },
+): string | null {
   const provider = getMapPlaceProvider(target.locationSource);
   const placeId = target.locationExternalId;
   if (!provider || !placeId || !MAP_PLACE_ID_PATTERNS[provider.source].test(placeId)) return null;
-  return EXACT_MAP_PLACE_URL_BUILDERS[provider.source](target, placeId);
+  return EXACT_MAP_PLACE_URL_BUILDERS[provider.source](target, placeId, options?.languageCode);
 }
 
 function buildMapProviderSearchUrl(

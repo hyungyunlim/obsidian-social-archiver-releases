@@ -57,7 +57,7 @@ export class DeleteConfirmModal extends Modal {
 
     // Warning
     const warning = contentEl.createEl('p', {
-      text: 'If you keep them on the server, they may appear again during Library Sync.',
+      text: 'If you keep them on the server, they stay available to your other devices but will not be re-imported into this vault.',
     });
     warning.setCssStyles({
       color: 'var(--text-error)',

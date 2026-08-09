@@ -61,6 +61,13 @@ export interface MobileSyncServiceDeps {
   /** Returns true if the given URL was archived locally within the dedup window. */
   hasRecentlyArchivedUrl: (url: string | null | undefined) => boolean;
 
+  /**
+   * Local-deletion tombstone check (see
+   * ArchiveDeleteSyncService.isServerArchiveTombstoned). Tombstoned items are
+   * ACKed without saving so they do not re-create locally deleted notes.
+   */
+  isArchiveTombstoned?: (archive: UserArchive) => boolean;
+
   /** Refresh the timeline view after a successful sync. */
   refreshTimelineView: () => void;
 
@@ -131,6 +138,18 @@ export class MobileSyncService {
       const syncUrl = archive.originalUrl;
       if (this.deps.hasRecentlyArchivedUrl(syncUrl)) {
         console.debug('[Social Archiver] Skipping duplicate sync for recently archived URL:', syncUrl);
+        const apiClient = this.deps.apiClient();
+        if (!apiClient) {
+          throw new Error('API client not initialized');
+        }
+        await apiClient.ackSyncItem(queueId, clientId);
+        return 'acked-duplicate';
+      }
+
+      // 2.5. Local-deletion tombstone: the user deleted this note in the vault
+      // and the server copy was not re-archived since — ACK without saving.
+      if (this.deps.isArchiveTombstoned?.(archive)) {
+        console.debug('[Social Archiver] Skipping sync for locally-deleted (tombstoned) archive:', archiveId);
         const apiClient = this.deps.apiClient();
         if (!apiClient) {
           throw new Error('API client not initialized');

@@ -305,4 +305,191 @@ describe('ArchiveDeleteSyncService', () => {
       expect(mockShowDeleteConfirmModal).not.toHaveBeenCalled();
     });
   });
+
+  describe('local-delete tombstones', () => {
+    const OUTBOUND_OFF = {
+      outboundEnabled: false,
+      inboundEnabled: true,
+      confirmBeforeServerDelete: true,
+    };
+
+    function makeTombstoneService(settings: SocialArchiverSettings) {
+      const saveSettings = vi.fn().mockResolvedValue(undefined);
+      const apiClient = {
+        deleteArchive: vi.fn().mockResolvedValue({ success: true }),
+        getUserArchives: vi.fn().mockResolvedValue(makeArchivesResponse([])),
+      };
+      const service = new ArchiveDeleteSyncService({
+        apiClient: () => apiClient as any,
+        settings: () => settings,
+        saveSettings,
+        app: { fileManager: { trashFile: vi.fn() } } as any,
+        findBySourceArchiveId: vi.fn().mockReturnValue(null),
+        findByOriginalUrl: vi.fn().mockReturnValue([]),
+        isLibrarySyncRunning: () => false,
+        notify: vi.fn(),
+      });
+      return { service, saveSettings, apiClient };
+    }
+
+    it('records a tombstone when outbound delete is disabled and blocks re-import', async () => {
+      vi.setSystemTime(new Date('2026-08-01T00:00:00.000Z'));
+      const settings = makeSettings({ deleteSync: OUTBOUND_OFF });
+      const { service, saveSettings, apiClient } = makeTombstoneService(settings);
+
+      await (service as any).handleOutboundDelete({
+        path: 'Social Archives/post.md',
+        archiveId: 'archive-1',
+        originalUrl: 'https://example.com/post/1',
+      });
+
+      expect(settings.pendingArchiveDeletes).toHaveLength(0);
+      expect(apiClient.deleteArchive).not.toHaveBeenCalled();
+      expect(saveSettings).toHaveBeenCalled();
+      expect(settings.localArchiveDeleteTombstones).toEqual([
+        {
+          archiveId: 'archive-1',
+          originalUrl: 'https://example.com/post/1',
+          username: 'test-user',
+          deletedAt: '2026-08-01T00:00:00.000Z',
+        },
+      ]);
+
+      // Older server copy is blocked…
+      expect(service.isServerArchiveTombstoned({
+        id: 'archive-1',
+        originalUrl: 'https://example.com/post/1',
+        archivedAt: '2026-07-01T00:00:00.000Z',
+      })).toBe(true);
+      // …a different archive is not…
+      expect(service.isServerArchiveTombstoned({
+        id: 'archive-2',
+        originalUrl: 'https://example.com/post/2',
+        archivedAt: '2026-07-01T00:00:00.000Z',
+      })).toBe(false);
+      // …and another user's session never matches.
+      settings.username = 'someone-else';
+      expect(service.isServerArchiveTombstoned({
+        id: 'archive-1',
+        originalUrl: 'https://example.com/post/1',
+        archivedAt: '2026-07-01T00:00:00.000Z',
+      })).toBe(false);
+    });
+
+    it('lets a newer server re-archive through, and a re-delete re-blocks it', async () => {
+      vi.setSystemTime(new Date('2026-08-01T00:00:00.000Z'));
+      const settings = makeSettings({ deleteSync: OUTBOUND_OFF });
+      const { service } = makeTombstoneService(settings);
+      const identity = {
+        path: 'Social Archives/post.md',
+        archiveId: 'archive-1',
+        originalUrl: 'https://example.com/post/1',
+      };
+
+      await (service as any).handleOutboundDelete(identity);
+
+      // Deliberate re-archive on another client after the local deletion wins.
+      const reArchived = {
+        id: 'archive-1',
+        originalUrl: 'https://example.com/post/1',
+        archivedAt: '2026-08-02T00:00:00.000Z',
+      };
+      expect(service.isServerArchiveTombstoned(reArchived)).toBe(false);
+
+      // The user deletes the re-imported note again — refreshed deletedAt wins.
+      vi.setSystemTime(new Date('2026-08-03T00:00:00.000Z'));
+      await (service as any).handleOutboundDelete(identity);
+      expect(settings.localArchiveDeleteTombstones).toHaveLength(1);
+      expect(service.isServerArchiveTombstoned(reArchived)).toBe(true);
+    });
+
+    it('matches URL-only tombstones by URL; id-bound tombstones never swallow a different row', async () => {
+      vi.setSystemTime(new Date('2026-08-01T00:00:00.000Z'));
+      const settings = makeSettings({ deleteSync: OUTBOUND_OFF });
+      const { service } = makeTombstoneService(settings);
+
+      // Legacy note without archiveId → URL-only tombstone.
+      await (service as any).handleOutboundDelete({
+        path: 'Social Archives/legacy.md',
+        originalUrl: 'https://example.com/legacy',
+      });
+      expect(service.isServerArchiveTombstoned({
+        id: 'any-server-id',
+        originalUrl: 'https://example.com/legacy',
+        archivedAt: '2026-07-01T00:00:00.000Z',
+      })).toBe(true);
+
+      // Id-bound tombstone must not match a different server row for the same URL.
+      await (service as any).handleOutboundDelete({
+        path: 'Social Archives/post.md',
+        archiveId: 'archive-1',
+        originalUrl: 'https://example.com/post/1',
+      });
+      expect(service.isServerArchiveTombstoned({
+        id: 'archive-9',
+        originalUrl: 'https://example.com/post/1',
+        archivedAt: '2026-07-01T00:00:00.000Z',
+      })).toBe(false);
+    });
+
+    it('tombstones cleared entries when the user chooses "Keep on Server"', async () => {
+      vi.setSystemTime(new Date('2026-08-01T00:00:00.000Z'));
+      confirmKeep();
+      const settings = makeSettings();
+      const { service, apiClient } = makeTombstoneService(settings);
+
+      await (service as any).handleOutboundDelete({
+        path: 'Social Archives/post.md',
+        archiveId: 'archive-1',
+        originalUrl: 'https://example.com/post/1',
+      });
+
+      expect(apiClient.deleteArchive).not.toHaveBeenCalled();
+      expect(settings.pendingArchiveDeletes).toHaveLength(0);
+      expect(settings.localArchiveDeleteTombstones?.[0]).toMatchObject({
+        archiveId: 'archive-1',
+        username: 'test-user',
+      });
+      expect(service.isServerArchiveTombstoned({
+        id: 'archive-1',
+        originalUrl: 'https://example.com/post/1',
+        archivedAt: '2026-07-01T00:00:00.000Z',
+      })).toBe(true);
+    });
+
+    it('records nothing when the deleted note has neither archiveId nor originalUrl', async () => {
+      const settings = makeSettings({ deleteSync: OUTBOUND_OFF });
+      const { service, saveSettings } = makeTombstoneService(settings);
+
+      await (service as any).handleOutboundDelete({ path: 'Social Archives/unknown.md' });
+
+      expect(settings.localArchiveDeleteTombstones).toBeUndefined();
+      expect(saveSettings).not.toHaveBeenCalled();
+    });
+
+    it('caps the tombstone list at 500 entries (FIFO)', async () => {
+      vi.setSystemTime(new Date('2026-08-01T00:00:00.000Z'));
+      const existing = Array.from({ length: 500 }, (_, i) => ({
+        archiveId: `old-${i}`,
+        username: 'test-user',
+        deletedAt: '2026-01-01T00:00:00.000Z',
+      }));
+      const settings = makeSettings({
+        deleteSync: OUTBOUND_OFF,
+        localArchiveDeleteTombstones: existing,
+      });
+      const { service } = makeTombstoneService(settings);
+
+      await (service as any).handleOutboundDelete({
+        path: 'Social Archives/new.md',
+        archiveId: 'archive-new',
+        originalUrl: 'https://example.com/new',
+      });
+
+      const tombstones = settings.localArchiveDeleteTombstones;
+      expect(tombstones).toHaveLength(500);
+      expect(tombstones[0]?.archiveId).toBe('old-1'); // oldest evicted
+      expect(tombstones[499]?.archiveId).toBe('archive-new');
+    });
+  });
 });

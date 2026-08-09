@@ -62,14 +62,17 @@ export interface AddPlaceModalOptions {
  * link — and it validates the id against the provider's pattern, so a malformed
  * result yields null instead of an un-archivable URL.
  */
-export function candidateUrl(candidate: ProviderSearchCandidate): string | null {
+export function candidateUrl(
+  candidate: ProviderSearchCandidate,
+  languageCode?: string,
+): string | null {
   return buildExactMapPlaceUrl({
     name: candidate.provider === 'kakaomap' ? candidate.name : candidate.displayName,
     latitude: candidate.latitude,
     longitude: candidate.longitude,
     locationSource: candidate.provider,
     locationExternalId: candidate.externalId,
-  });
+  }, { ...(languageCode ? { languageCode } : {}) });
 }
 
 export class AddPlaceModal extends Modal {
@@ -164,7 +167,7 @@ export class AddPlaceModal extends Modal {
   }
 
   private archive(candidate: ProviderSearchCandidate): void {
-    const url = candidateUrl(candidate);
+    const url = candidateUrl(candidate, this.options.hostLocale);
     if (!url) {
       // A candidate with no canonical URL cannot be archived, and silently
       // closing would look like the pick did nothing.

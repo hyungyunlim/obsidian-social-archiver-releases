@@ -158,6 +158,13 @@ export interface ArchiveLibrarySyncDeps {
   isArchiveQueuedForDeletion?: (archiveId: string) => boolean;
 
   /**
+   * Tier 0.5: check if a server archive matches a local-deletion tombstone
+   * (note deleted in the vault without the deletion reaching the server).
+   * Wired to ArchiveDeleteSyncService.isServerArchiveTombstoned().
+   */
+  isArchiveTombstoned?: (archive: UserArchive) => boolean;
+
+  /**
    * Apply inbound deletes for archive IDs reported as deleted in the delta sweep.
    * Wired to a function that calls ArchiveDeleteSyncService.handleInboundDelete()
    * for each ID.
@@ -732,6 +739,15 @@ export class ArchiveLibrarySyncService {
       // Tier 0: skip if queued for outbound deletion
       if (this.deps.isArchiveQueuedForDeletion?.(archive.id)) {
         console.debug('[Social Archiver] [LibrarySync] Tier 0: skipping archive queued for deletion', archive.id);
+        this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
+        return;
+      }
+
+      // Tier 0.5: skip archives the user deleted locally without server
+      // propagation (outbound delete off / kept-on-server). A server-side
+      // re-archive newer than the local deletion passes through.
+      if (this.deps.isArchiveTombstoned?.(archive)) {
+        console.debug('[Social Archiver] [LibrarySync] Tier 0.5: skipping locally-deleted (tombstoned) archive', archive.id);
         this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
         return;
       }

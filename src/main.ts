@@ -2079,6 +2079,8 @@ export default class SocialArchiverPlugin extends Plugin {
         saveSubscriptionPost: (post) => this.saveSubscriptionPost(post),
         convertUserArchiveToPostData: (archive) => this.convertUserArchiveToPostData(archive),
         hasRecentlyArchivedUrl: (url) => this.hasRecentlyArchivedUrl(url),
+        isArchiveTombstoned: (archive) =>
+          this.archiveDeleteSyncService?.isServerArchiveTombstoned(archive) ?? false,
         refreshTimelineView: () => this.refreshTimelineView(),
         suppressTimelineRefresh: () => {
           for (const leaf of this.app.workspace.getLeavesOfType('social-archiver-timeline')) {
@@ -2111,6 +2113,8 @@ export default class SocialArchiverPlugin extends Plugin {
         saveSubscriptionPost: (post) => this.saveSubscriptionPost(post),
         convertUserArchiveToPostData: (archive) => this.convertUserArchiveToPostData(archive),
         hasRecentlyArchivedUrl: (url) => this.hasRecentlyArchivedUrl(url),
+        isArchiveTombstoned: (archive) =>
+          this.archiveDeleteSyncService?.isServerArchiveTombstoned(archive) ?? false,
         refreshTimelineView: () => this.refreshTimelineView(),
         schedule: (cb, delay) => this.scheduleTrackedTimeout(cb, delay),
         runV1Fallback: () => this.mobileSyncService?.processPendingSyncQueue() ?? Promise.resolve(),
@@ -2122,6 +2126,8 @@ export default class SocialArchiverPlugin extends Plugin {
         apiClient: () => this.apiClient,
         settings: () => ({ archivePath: this.settings.archivePath }),
         hasRecentlyArchivedUrl: (url) => this.hasRecentlyArchivedUrl(url),
+        isArchiveTombstoned: (archive) =>
+          this.archiveDeleteSyncService?.isServerArchiveTombstoned(archive) ?? false,
         archiveLookupService: this.archiveLookupService ?? null,
         convertUserArchiveToPostData: (archive) => this.convertUserArchiveToPostData(archive),
         saveSubscriptionPost: (post) => this.saveSubscriptionPost(post),
@@ -2204,6 +2210,8 @@ export default class SocialArchiverPlugin extends Plugin {
         convertUserArchiveToPostData: (archive) => convertUserArchiveToPostData(archive),
         notify: (msg, timeout) => new Notice(msg, timeout),
         isArchiveQueuedForDeletion: (id) => this.archiveDeleteSyncService?.isArchiveQueuedForDeletion(id) ?? false,
+        isArchiveTombstoned: (archive) =>
+          this.archiveDeleteSyncService?.isServerArchiveTombstoned(archive) ?? false,
         applyInboundDeletedIds: async (deletedIds, source) => {
           for (const id of deletedIds) {
             await this.archiveDeleteSyncService?.handleInboundDelete(id, undefined, source);
@@ -4114,7 +4122,9 @@ export default class SocialArchiverPlugin extends Plugin {
 
       if (response.clientId) {
         await this.saveSettingsPartial(
-          { syncClientId: response.clientId },
+          // Any successful registration (explicit Connect or runtime-scope
+          // repair) supersedes a previous explicit Disconnect.
+          { syncClientId: response.clientId, syncDisconnectedByUser: false },
           { reinitialize: options.reinitialize ?? false, notify: true },
         );
         this.apiClient.setClientId(response.clientId);
@@ -4160,6 +4170,8 @@ export default class SocialArchiverPlugin extends Plugin {
     try {
       await this.apiClient.deleteSyncClient(clientId);
       this.settings.syncClientId = '';
+      // Explicit user Disconnect — block auto re-registration on re-login.
+      this.settings.syncDisconnectedByUser = true;
       // Cancel library sync and clear checkpoint (sync client removed)
       await this.archiveLibrarySyncService?.cancelAndClear();
       await this.saveSettings();
@@ -4168,6 +4180,7 @@ export default class SocialArchiverPlugin extends Plugin {
     } catch (error) {
       console.error('[Social Archiver] Sync client unregistration failed:', error);
       this.settings.syncClientId = '';
+      this.settings.syncDisconnectedByUser = true;
       void this.archiveLibrarySyncService?.cancelAndClear();
       await this.saveSettings();
       return { success: true };
