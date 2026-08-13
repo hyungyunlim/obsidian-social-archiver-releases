@@ -109,6 +109,10 @@ function makePluginStub(opts?: {
             stubs.libraryDeltaCalls.push(mode);
           }),
         },
+    // Reconcile passes the library sync runs after a delta catch-up.
+    reconcileArchiveStatesFromServer: vi.fn(async () => null),
+    reconcileDeletedArchivesFromServer: vi.fn(async () => null),
+    reconcileArchiveTagsFromServer: vi.fn(async () => undefined),
   };
 
   // archiveOrchestrator getter — stubbed

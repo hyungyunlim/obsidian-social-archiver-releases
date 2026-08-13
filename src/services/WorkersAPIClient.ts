@@ -1242,6 +1242,20 @@ export interface UpsertTagsResult {
   resolvedTags?: ResolvedTagEntry[];
 }
 
+/** A single archive-tag mapping returned from GET /api/user/archive-tags */
+export interface UserArchiveTag {
+  archiveId: string;
+  tagId: string;
+  createdAt: string;
+}
+
+/** Response from GET /api/user/archive-tags */
+export interface ArchiveTagsResponse {
+  archiveTags: UserArchiveTag[];
+  deletedPairs: ArchiveTagMappingInput[];
+  serverTime: string;
+}
+
 /** Response from POST /api/user/archive-tags */
 export interface UpsertArchiveTagsResult {
   upserted: number;
@@ -3547,6 +3561,32 @@ export class WorkersAPIClient implements IService {
       headers: extraHeaders,
       body: JSON.stringify({ tags }),
     });
+  }
+
+  /**
+   * Get archive-tag mappings from the server
+   *
+   * GET /api/user/archive-tags
+   *
+   * Without `updatedAfter` this returns the full set of active mappings, which
+   * is what the startup backfill pass needs. `deletedPairs` is only populated
+   * by the server when both `updatedAfter` and `includeDeleted` are supplied.
+   *
+   * @returns Active archive-tag mappings, deleted pairs, and server time
+   */
+  async getArchiveTags(options: { updatedAfter?: string; includeDeleted?: boolean } = {}): Promise<ArchiveTagsResponse> {
+    this.ensureInitialized();
+
+    const params = new URLSearchParams();
+    if (options.updatedAfter) params.set('updatedAfter', options.updatedAfter);
+    if (options.includeDeleted) params.set('includeDeleted', 'true');
+
+    const query = params.toString();
+
+    return await this.request<ArchiveTagsResponse>(
+      `/api/user/archive-tags${query ? `?${query}` : ''}`,
+      { method: 'GET' },
+    );
   }
 
   /**

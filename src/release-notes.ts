@@ -24,6 +24,21 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.6.9': {
+    title: 'Tags from your phone reach your vault',
+    date: '2026-08-13',
+    notes: `## Tags from your phone reach your vault
+
+- Tags you add in the mobile app now arrive in your vault. Until now they only landed if Obsidian happened to be open at that exact moment — tag something with Obsidian closed and it never showed up. The plugin now catches up on every start, so tags added on any device are waiting for you.
+- Your existing tags are safe: catch-up only **adds** tags, it never removes what is already on a note.
+- To see them in Obsidian's own tag pane and searches, turn on **Settings → Frontmatter → Mirror archive tags to Obsidian tags**. It applies to your existing notes too, not just new ones.
+- Fixed a bug in that mirroring: if you wrote your tags on one line (\`tags: work, reading\`) instead of as a list, turning mirroring on erased them. Please update before enabling it.
+
+## Korean settings
+
+- The settings screen is now in Korean when Obsidian's display language is Korean. Everything else stays as it was.
+`,
+  },
   '4.6.8': {
     title: 'Deleted notes stay deleted',
     date: '2026-08-09',

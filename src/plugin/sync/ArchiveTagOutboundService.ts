@@ -18,7 +18,7 @@ import type { WorkersAPIClient, TagUpsertInput, ArchiveTagMappingInput } from '.
 import type { ArchiveLookupService } from '../../services/ArchiveLookupService';
 import type { TagStore } from '../../services/TagStore';
 import type { SocialArchiverSettings } from '../../types/settings';
-import { mirrorArchiveTagsIntoObsidianTags, normalizeTagName } from '../../utils/tags';
+import { mirrorArchiveTagsIntoObsidianTags, normalizeTagName, readFrontmatterTags } from '../../utils/tags';
 
 // ============================================================================
 // Constants
@@ -117,6 +117,16 @@ export class ArchiveTagOutboundService {
    */
   addSuppression(archiveId: string): void {
     this.suppressionMap.set(archiveId, Date.now());
+  }
+
+  /**
+   * Seed the last-known tag snapshot for a file written by an inbound sync.
+   *
+   * Snapshots start empty, so without this the first metadata change after an
+   * inbound write diffs `[...serverTags]` against `[]` and re-pushes every tag.
+   */
+  primeSnapshot(filePath: string, tags: string[]): void {
+    this.lastKnownArchiveTags.set(filePath, [...tags]);
   }
 
   /**
@@ -320,9 +330,7 @@ export class ArchiveTagOutboundService {
     if (!file) return;
 
     await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-      const currentTags = Array.isArray(fm.tags)
-        ? (fm.tags as unknown[]).filter((t): t is string => typeof t === 'string')
-        : [];
+      const currentTags = readFrontmatterTags(fm.tags);
 
       fm.tags = mirrorArchiveTagsIntoObsidianTags(
         currentTags,

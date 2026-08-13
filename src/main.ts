@@ -112,6 +112,7 @@ import {
   ArchiveDeleteBackfillService,
   type ArchiveDeleteBackfillResult,
 } from './plugin/sync/ArchiveDeleteBackfillService';
+import { ArchiveTagBackfillService } from './plugin/sync/ArchiveTagBackfillService';
 import { MediaPlaceholderGenerator } from './services/MediaPlaceholderGenerator';
 import { NoticesService } from './services/NoticesService';
 import { NoticeTelemetryService } from './services/NoticeTelemetryService';
@@ -811,6 +812,43 @@ export default class SocialArchiverPlugin extends Plugin {
         error,
       });
       return null;
+    }
+  }
+
+  /**
+   * Pull archive→tag mappings created on other clients into the vault.
+   *
+   * Tag definitions sync on their own, but the mappings only ever arrived via
+   * the live `archive_tags_updated` event — tags added on mobile while Obsidian
+   * was closed never reached the note. Additive; never removes local tags.
+   */
+  async reconcileArchiveTagsFromServer(): Promise<void> {
+    const archiveLookup = this.archiveLookupService;
+    if (!this.apiClient || !archiveLookup) return;
+
+    try {
+      const service = new ArchiveTagBackfillService({
+        app: this.app,
+        apiClient: () => this.apiClient,
+        archiveLookup,
+        tagStore: this.tagStore,
+        getSettings: () => this.settings,
+        archiveTagOutbound: () => this.archiveTagOutboundService,
+        withArchiveWriteLocks: (archiveId, fn) => this.localLockRegistry.withLocks(
+          [
+            { kind: 'archiveMaterialization', archiveId },
+            { kind: 'markdownWrite', archiveId },
+          ],
+          fn,
+        ),
+      });
+
+      const result = await service.reconcileFromServer();
+      if (result.updatedCount > 0) {
+        this.refreshTimelineView();
+      }
+    } catch (error) {
+      console.warn('[Social Archiver] [ArchiveTagBackfill] Failed', { error });
     }
   }
 
@@ -2615,6 +2653,9 @@ export default class SocialArchiverPlugin extends Plugin {
               this.archiveTagOutboundService?.rebuildTagCache(
                 defs.map(d => ({ id: d.id, name: d.name }))
               );
+
+              // Definitions first — the backfill resolves mapping tag IDs through them.
+              return this.reconcileArchiveTagsFromServer();
             });
           }, 4000);
         }

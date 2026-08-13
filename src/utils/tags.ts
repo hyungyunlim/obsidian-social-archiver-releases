@@ -57,6 +57,27 @@ export function isValidTagName(name: string): boolean {
 }
 
 /**
+ * Read a frontmatter tag field into a string array.
+ *
+ * Obsidian accepts `tags` as a YAML list *or* as an inline string
+ * (`tags: work` / `tags: work, home`). Reading a scalar as "no tags" and then
+ * writing an array back deletes what the user wrote — so every code path that
+ * rewrites `tags` must read it through here.
+ *
+ * @param value - Raw frontmatter value (array, string, or anything else)
+ * @returns Tag names, empty when the field is absent or of another type
+ */
+export function readFrontmatterTags(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string');
+  }
+  if (typeof value === 'string') {
+    return value.split(',').map(tag => tag.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+/**
  * Merge selected tags into existing frontmatter tags with case-insensitive deduplication.
  *
  * Rules:

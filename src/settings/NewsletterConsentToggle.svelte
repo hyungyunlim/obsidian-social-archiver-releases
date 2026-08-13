@@ -1,6 +1,7 @@
 <script lang="ts">
 import { Notice } from 'obsidian';
 import type SocialArchiverPlugin from '../main';
+import { t } from '../i18n';
 import {
   NewsletterConsentService,
   type MarketingConsentState,
@@ -41,7 +42,7 @@ $effect(() => {
     if (result.success && result.data) {
       consent = result.data;
     } else {
-      loadError = result.error?.message || 'Unable to load newsletter preference.';
+      loadError = result.error?.message || t('news.toggle.loadError');
     }
     isLoading = false;
   }
@@ -87,12 +88,12 @@ async function handleToggle(event: Event): Promise<void> {
 {#if plugin.settings.authToken}
   <div class="sa-newsletter-toggle-row">
     <div class="sa-newsletter-toggle-info">
-      <div class="sa-newsletter-toggle-name">Newsletter</div>
+      <div class="sa-newsletter-toggle-name">{t('news.toggle.name')}</div>
       <div class="sa-newsletter-toggle-desc">
         {#if isSuppressed}
-          Disabled due to delivery issue — contact support to re-enable.
+          {t('news.toggle.suppressed')}
         {:else}
-          Receive occasional product updates and tips.
+          {t('news.toggle.desc')}
         {/if}
       </div>
       {#if loadError}
@@ -106,7 +107,7 @@ async function handleToggle(event: Event): Promise<void> {
           checked={optInChecked}
           disabled={toggleDisabled}
           onchange={handleToggle}
-          aria-label="Newsletter opt-in"
+          aria-label={t('news.toggle.ariaLabel')}
         />
         <span class="sa-newsletter-switch-slider" aria-hidden="true"></span>
       </label>

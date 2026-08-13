@@ -14,6 +14,7 @@ import {
   refreshUserEmail,
 } from '../utils/auth';
 import { DEFAULT_BILLING_CAMPAIGN } from '../shared/billing/campaign';
+import { t } from '../i18n';
 import { BROWSER_EXTENSION_LINKS } from '../constants';
 import NewsletterConsentBanner from './NewsletterConsentBanner.svelte';
 import NewsletterConsentToggle from './NewsletterConsentToggle.svelte';
@@ -112,7 +113,7 @@ function startCrossDeviceTimers(sessionId: string, expiresAt: string, pollMs: nu
         const authToken = result.data.authToken;
         if (!authToken) {
           crossDeviceState = 'error';
-          crossDeviceError = 'Failed to receive auth token.';
+          crossDeviceError = t('auth.xdev.error.tokenMissing');
           return;
         }
         // Complete authentication using existing utility
@@ -138,7 +139,7 @@ function startCrossDeviceTimers(sessionId: string, expiresAt: string, pollMs: nu
           plugin.maybeOfferLocalArchiveImport();
         } else {
           crossDeviceState = 'error';
-          crossDeviceError = completion.error || 'Authentication failed.';
+          crossDeviceError = completion.error || t('auth.xdev.error.authFailed');
           showAuthError(crossDeviceError);
         }
       } else if (status === 'rejected') {
@@ -178,7 +179,7 @@ async function handleStartCrossDeviceAuth(): Promise<void> {
 
   if (!result.success || !result.data) {
     crossDeviceState = 'error';
-    crossDeviceError = result.error?.message || 'Unable to start session.';
+    crossDeviceError = result.error?.message || t('auth.xdev.error.startFailed');
     return;
   }
 
@@ -274,12 +275,12 @@ interface CapabilityMatrixRow {
 }
 
 const capabilityMatrix: readonly CapabilityMatrixRow[] = [
-  { label: 'Browser clips', anonymous: true },
-  { label: 'Local timeline & tags', anonymous: true },
-  { label: 'Archive by URL', anonymous: false },
-  { label: 'Mobile sync', anonymous: false },
-  { label: 'Share links', anonymous: false },
-  { label: 'Subscriptions', anonymous: false, accountNote: 'paid plans' },
+  { label: t('auth.matrix.browserClips'), anonymous: true },
+  { label: t('auth.matrix.localTimelineTags'), anonymous: true },
+  { label: t('auth.matrix.archiveByUrl'), anonymous: false },
+  { label: t('auth.matrix.mobileSync'), anonymous: false },
+  { label: t('auth.matrix.shareLinks'), anonymous: false },
+  { label: t('auth.matrix.subscriptions'), anonymous: false, accountNote: t('auth.matrix.paidPlans') },
 ];
 
 // Clips received via the browser extension; drives the hero card done-state.
@@ -321,10 +322,10 @@ function getBetaFreeSunsetLine(plan: string, policy?: BillingUsageSummary['polic
   if (!sunsetDate) return '';
 
   if (policy?.betaFreeSunsetActive) {
-    return 'Beta Free has ended. Free plan limits now apply.';
+    return t('auth.billing.betaFreeEnded');
   }
 
-  return `Beta Free ends ${sunsetDate}. Free plan limits apply after that.`;
+  return t('auth.billing.betaFreeEnds', { date: sunsetDate });
 }
 
 function getArchiveQuotaProgress(quota: BillingUsageSummary['archiveQuota'] | undefined): number {
@@ -345,7 +346,7 @@ async function handleRefreshBillingUsage(showNotice = true): Promise<void> {
   try {
     const refreshed = await refreshUserBillingUsage(plugin);
     if (!refreshed) {
-      billingUsageError = 'Unable to refresh archive usage.';
+      billingUsageError = t('auth.billing.refreshError');
       if (showNotice) new Notice('Unable to refresh archive usage');
       return;
     }
@@ -354,7 +355,7 @@ async function handleRefreshBillingUsage(showNotice = true): Promise<void> {
     billingUsage = plugin.settings.billingUsage;
     if (showNotice) new Notice('Archive usage refreshed');
   } catch {
-    billingUsageError = 'Unable to refresh archive usage.';
+    billingUsageError = t('auth.billing.refreshError');
     if (showNotice) new Notice('Unable to refresh archive usage');
   } finally {
     isBillingUsageLoading = false;
@@ -667,38 +668,38 @@ $effect(() => {
       <!-- Waiting for Magic Link State -->
       <div class="auth-section">
         <div class="callout callout-info">
-          <div class="callout-title">📧 Check Your Email</div>
+          <div class="callout-title">{t('auth.waiting.title')}</div>
           <div class="callout-content">
-            <p>We've sent a magic link to <strong>{plugin.settings.email}</strong></p>
-            <p>Click the link in your email to complete authentication.</p>
-            <p class="text-muted">The link will expire in 5 minutes.</p>
-            <p class="text-muted spam-notice">💡 <strong>Tip:</strong> If you don't see the email, please check your spam or junk folder.</p>
+            <p>{t('auth.waiting.sent.prefix')}<strong>{plugin.settings.email}</strong>{t('auth.waiting.sent.suffix')}</p>
+            <p>{t('auth.waiting.clickLink')}</p>
+            <p class="text-muted">{t('auth.waiting.expiry')}</p>
+            <p class="text-muted spam-notice">💡 <strong>{t('auth.waiting.tip.label')}</strong> {t('auth.waiting.tip.text')}</p>
           </div>
         </div>
 
         <div class="waiting-actions">
           <button class="mod-cta sa-mobile-compact-btn" onclick={handleResend} disabled={isSubmitting}>
-            {isSubmitting ? 'Resending...' : 'Resend Link'}
+            {isSubmitting ? t('auth.waiting.resending') : t('auth.waiting.resend')}
           </button>
           <button class="sa-mobile-compact-btn" onclick={handleCancelWaiting}>
-            Cancel
+            {t('auth.common.cancel')}
           </button>
         </div>
       </div>
     {:else}
       <!-- Unauthenticated State -->
       <div class="auth-section">
-        <p class="auth-description">A free account unlocks archiving by URL, mobile sync, and sharing. Magic link authentication - no password needed.</p>
+        <p class="auth-description">{t('auth.description')}</p>
 
         <!-- Email Field (always shown) -->
         <div class="setting-item">
           <div class="setting-item-info">
-            <div class="setting-item-name">Email</div>
+            <div class="setting-item-name">{t('auth.email.name')}</div>
             <div class="setting-item-description">
               {#if authMode === 'signup'}
-                We'll send you a magic link to verify your account
+                {t('auth.email.descSignup')}
               {:else}
-                We'll send you a magic link to log in
+                {t('auth.email.descLogin')}
               {/if}
             </div>
           </div>
@@ -716,8 +717,8 @@ $effect(() => {
         {#if authMode === 'signup'}
           <div class="setting-item">
             <div class="setting-item-info">
-              <div class="setting-item-name">Username</div>
-              <div class="setting-item-description">3-20 characters (lowercase, numbers, hyphens, underscores)</div>
+              <div class="setting-item-name">{t('auth.username.name')}</div>
+              <div class="setting-item-description">{t('auth.username.desc')}</div>
             </div>
             <div class="setting-item-control">
               <input
@@ -740,14 +741,14 @@ $effect(() => {
                   onclick={handleCreateAccount}
                   disabled={isSubmitting || !email || !username}
                 >
-                  {isSubmitting ? 'Creating Account...' : 'Create Account'}
+                  {isSubmitting ? t('auth.signup.creating') : t('auth.signup.create')}
                 </button>
                 <button
                   class="sa-mobile-compact-btn"
                   onclick={() => { authMode = 'login'; username = ''; }}
                   disabled={isSubmitting}
                 >
-                  Log In
+                  {t('auth.login.button')}
                 </button>
               {:else}
                 <button
@@ -755,14 +756,14 @@ $effect(() => {
                   onclick={handleLogin}
                   disabled={isSubmitting || !email}
                 >
-                  {isSubmitting ? 'Sending Link...' : 'Send Magic Link'}
+                  {isSubmitting ? t('auth.login.sending') : t('auth.login.sendMagicLink')}
                 </button>
                 <button
                   class="sa-mobile-compact-btn"
                   onclick={() => { authMode = 'signup'; }}
                   disabled={isSubmitting}
                 >
-                  Create Account
+                  {t('auth.signup.create')}
                 </button>
               {/if}
             </div>
@@ -771,7 +772,7 @@ $effect(() => {
 
         <!-- Cross-Device Auth Divider -->
         <div class="xdev-divider">
-          <span class="xdev-divider-text">or</span>
+          <span class="xdev-divider-text">{t('auth.divider.or')}</span>
         </div>
 
         <!-- Cross-Device Auth Section -->
@@ -783,13 +784,13 @@ $effect(() => {
                 onclick={handleStartCrossDeviceAuth}
                 disabled={isSubmitting}
               >
-                Log in with mobile app
+                {t('auth.xdev.loginWithMobile')}
               </button>
             </div>
           </div>
         {:else if crossDeviceState === 'loading'}
           <div class="xdev-section">
-            <p class="xdev-hint">Starting session...</p>
+            <p class="xdev-hint">{t('auth.xdev.starting')}</p>
           </div>
         {:else if crossDeviceState === 'code-shown'}
           <div class="xdev-section">
@@ -797,48 +798,48 @@ $effect(() => {
               <div class="xdev-qr-container">
                 {@html crossDeviceQrSvg}
               </div>
-              <p class="xdev-instruction">Scan the QR code or enter the code in the mobile app</p>
+              <p class="xdev-instruction">{t('auth.xdev.scanInstruction')}</p>
             {:else}
-              <p class="xdev-instruction">Enter this code in the mobile app</p>
+              <p class="xdev-instruction">{t('auth.xdev.enterInstruction')}</p>
             {/if}
             <div class="xdev-code-display">{crossDeviceDisplayCode}</div>
             <p class="xdev-timer">
               {#if crossDeviceSecondsLeft > 0}
-                Expires in {Math.floor(crossDeviceSecondsLeft / 60)}:{String(crossDeviceSecondsLeft % 60).padStart(2, '0')}
+                {t('auth.xdev.expiresIn', { time: `${Math.floor(crossDeviceSecondsLeft / 60)}:${String(crossDeviceSecondsLeft % 60).padStart(2, '0')}` })}
               {:else}
-                Expired
+                {t('auth.xdev.expired')}
               {/if}
             </p>
             <div class="xdev-actions">
-              <button class="sa-mobile-compact-btn" onclick={handleCancelCrossDevice}>Cancel</button>
+              <button class="sa-mobile-compact-btn" onclick={handleCancelCrossDevice}>{t('auth.common.cancel')}</button>
             </div>
           </div>
         {:else if crossDeviceState === 'approved'}
           <div class="xdev-section xdev-success">
-            <p>Logged in with mobile app!</p>
+            <p>{t('auth.xdev.approved')}</p>
           </div>
         {:else if crossDeviceState === 'rejected'}
           <div class="xdev-section xdev-error">
-            <p>Rejected from mobile</p>
+            <p>{t('auth.xdev.rejected')}</p>
             <div class="xdev-actions">
-              <button class="sa-mobile-compact-btn" onclick={handleStartCrossDeviceAuth}>Try again</button>
-              <button class="sa-mobile-compact-btn" onclick={handleCancelCrossDevice}>Cancel</button>
+              <button class="sa-mobile-compact-btn" onclick={handleStartCrossDeviceAuth}>{t('auth.xdev.tryAgain')}</button>
+              <button class="sa-mobile-compact-btn" onclick={handleCancelCrossDevice}>{t('auth.common.cancel')}</button>
             </div>
           </div>
         {:else if crossDeviceState === 'expired'}
           <div class="xdev-section xdev-error">
-            <p>Code has expired</p>
+            <p>{t('auth.xdev.codeExpired')}</p>
             <div class="xdev-actions">
-              <button class="sa-mobile-compact-btn" onclick={handleStartCrossDeviceAuth}>Generate new code</button>
-              <button class="sa-mobile-compact-btn" onclick={handleCancelCrossDevice}>Cancel</button>
+              <button class="sa-mobile-compact-btn" onclick={handleStartCrossDeviceAuth}>{t('auth.xdev.generateNewCode')}</button>
+              <button class="sa-mobile-compact-btn" onclick={handleCancelCrossDevice}>{t('auth.common.cancel')}</button>
             </div>
           </div>
         {:else if crossDeviceState === 'error'}
           <div class="xdev-section xdev-error">
-            <p>{crossDeviceError || 'An error occurred.'}</p>
+            <p>{crossDeviceError || t('auth.xdev.error.generic')}</p>
             <div class="xdev-actions">
-              <button class="sa-mobile-compact-btn" onclick={handleStartCrossDeviceAuth}>Try again</button>
-              <button class="sa-mobile-compact-btn" onclick={handleCancelCrossDevice}>Cancel</button>
+              <button class="sa-mobile-compact-btn" onclick={handleStartCrossDeviceAuth}>{t('auth.xdev.tryAgain')}</button>
+              <button class="sa-mobile-compact-btn" onclick={handleCancelCrossDevice}>{t('auth.common.cancel')}</button>
             </div>
           </div>
         {/if}
@@ -851,27 +852,27 @@ $effect(() => {
             <!-- Done-state: clips already arriving via the extension -->
             <div class="anon-hero-done">
               <span class="anon-hero-done-check">✓</span>
-              <span>{localClipCount} {localClipCount === 1 ? 'clip' : 'clips'} saved locally</span>
+              <span>{localClipCount === 1 ? t('auth.anon.clipSavedOne', { count: localClipCount }) : t('auth.anon.clipsSaved', { count: localClipCount })}</span>
             </div>
-            <p class="anon-hero-upsell">Add an account for server archiving, mobile sync, and sharing — free.</p>
+            <p class="anon-hero-upsell">{t('auth.anon.upsell')}</p>
           {:else}
-            <div class="anon-hero-title">Use without an account</div>
-            <p class="anon-hero-subtitle">Clip posts straight from your browser — no sign-up needed.</p>
+            <div class="anon-hero-title">{t('auth.anon.title')}</div>
+            <p class="anon-hero-subtitle">{t('auth.anon.subtitle')}</p>
             <ol class="anon-hero-steps">
               <li class="anon-hero-step">
-                <span>Install the browser extension</span>
+                <span>{t('auth.anon.step1')}</span>
                 <div class="anon-hero-step-actions">
                   <button class="anon-hero-install-button sa-mobile-compact-btn" onclick={handleOpenWebStore}>
-                    Install from Chrome Web Store
+                    {t('auth.anon.installButton')}
                   </button>
-                  <a class="anon-hero-guide-link" href={BROWSER_EXTENSION_LINKS.GUIDE} target="_blank" rel="noopener">Guide</a>
+                  <a class="anon-hero-guide-link" href={BROWSER_EXTENSION_LINKS.GUIDE} target="_blank" rel="noopener">{t('auth.anon.guide')}</a>
                 </div>
               </li>
               <li class="anon-hero-step">
-                <span>Open a post and click <em>Clip to Obsidian</em></span>
+                <span>{t('auth.anon.step2.prefix')}<em>Clip to Obsidian</em>{t('auth.anon.step2.suffix')}</span>
               </li>
               <li class="anon-hero-step">
-                <span>Clips appear in your timeline</span>
+                <span>{t('auth.anon.step3')}</span>
               </li>
             </ol>
           {/if}
@@ -880,8 +881,8 @@ $effect(() => {
           <div class="anon-capability-matrix">
             <div class="anon-matrix-row anon-matrix-header">
               <span class="anon-matrix-label"></span>
-              <span class="anon-matrix-cell">Without account</span>
-              <span class="anon-matrix-cell">With free account</span>
+              <span class="anon-matrix-cell">{t('auth.matrix.withoutAccount')}</span>
+              <span class="anon-matrix-cell">{t('auth.matrix.withAccount')}</span>
             </div>
             {#each capabilityMatrix as row (row.label)}
               <div class="anon-matrix-row">
@@ -921,7 +922,7 @@ $effect(() => {
               <button
                 class="email-change-trigger sa-mobile-compact-btn"
                 onclick={() => { showEmailChangeForm = true; newEmailInput = ''; }}
-              >Change</button>
+              >{t('auth.account.change')}</button>
             {/if}
           </div>
         </div>
@@ -954,24 +955,24 @@ $effect(() => {
               onclick={handleRequestEmailChange}
               disabled={isRequestingEmailChange || !newEmailInput.trim()}
             >
-              {isRequestingEmailChange ? 'Sending...' : 'Send Verification'}
+              {isRequestingEmailChange ? t('auth.emailChange.sending') : t('auth.emailChange.sendVerification')}
             </button>
             <button
               class="email-change-cancel sa-mobile-compact-btn"
               onclick={handleCancelEmailChange}
               disabled={isRequestingEmailChange}
             >
-              Cancel
+              {t('auth.common.cancel')}
             </button>
           </div>
-          <p class="email-change-hint">A verification link will be sent to your new email address.</p>
+          <p class="email-change-hint">{t('auth.emailChange.hint')}</p>
         </div>
       {/if}
 
       <div class={`billing-usage-display${archiveQuotaExhausted ? ' quota-exhausted' : ''}`}>
         <div class="billing-usage-header">
           <div>
-            <div class="billing-usage-label">Archive quota</div>
+            <div class="billing-usage-label">{t('auth.billing.archiveQuota')}</div>
             <div class="billing-usage-plan">{billingPlanDisplay}</div>
           </div>
           <button
@@ -979,7 +980,7 @@ $effect(() => {
             onclick={() => handleRefreshBillingUsage(true)}
             disabled={isBillingUsageLoading}
           >
-            {isBillingUsageLoading ? 'Refreshing...' : 'Refresh'}
+            {isBillingUsageLoading ? t('auth.billing.refreshing') : t('auth.billing.refresh')}
           </button>
         </div>
 
@@ -990,60 +991,60 @@ $effect(() => {
         {#if archiveQuota}
           {#if archiveQuota.unlimited || archiveQuota.limit === -1}
             <div class="billing-usage-main">
-              <span class="billing-usage-value">No monthly limit</span>
-              <span class="billing-usage-muted">{archiveQuota.used} archived this month</span>
+              <span class="billing-usage-value">{t('auth.billing.noMonthlyLimit')}</span>
+              <span class="billing-usage-muted">{t('auth.billing.archivedThisMonth', { count: archiveQuota.used })}</span>
             </div>
           {:else}
             <div class="billing-usage-main">
               <span class="billing-usage-value">{archiveQuota.used}</span>
               <span class="billing-usage-separator">/</span>
               <span class="billing-usage-limit">{archiveQuota.limit}</span>
-              <span class="billing-usage-muted">({archiveQuota.remaining} left)</span>
+              <span class="billing-usage-muted">{t('auth.billing.left', { count: archiveQuota.remaining })}</span>
             </div>
             <div class="billing-progress-track" aria-hidden="true">
               <div class="billing-progress-bar" style={`width: ${archiveQuotaProgress}%`}></div>
             </div>
             {#if archiveQuota.resetAt}
-              <div class="billing-usage-reset">Monthly quota resets {formatDate(archiveQuota.resetAt)}</div>
+              <div class="billing-usage-reset">{t('auth.billing.quotaResets', { date: formatDate(archiveQuota.resetAt) })}</div>
             {/if}
             {#if archiveQuotaExhausted}
-              <div class="billing-usage-warning">Upgrade in the mobile app to archive more.</div>
+              <div class="billing-usage-warning">{t('auth.billing.upgradeHint')}</div>
             {/if}
           {/if}
         {:else if billingUsageError}
           <div class="billing-usage-error">{billingUsageError}</div>
         {:else}
-          <div class="billing-usage-muted">Archive usage will appear after sync.</div>
+          <div class="billing-usage-muted">{t('auth.billing.usageAfterSync')}</div>
         {/if}
 
         {#if cloudCreditQuota}
           <div class="billing-usage-subsection">
-            <div class="billing-usage-label">Cloud credits</div>
+            <div class="billing-usage-label">{t('auth.billing.cloudCredits')}</div>
             {#if cloudCreditQuota.unlimited || cloudCreditQuota.limit === -1}
               <div class="billing-usage-main">
-                <span class="billing-usage-value">No monthly limit</span>
-                <span class="billing-usage-muted">{cloudCreditQuota.used} used this month</span>
+                <span class="billing-usage-value">{t('auth.billing.noMonthlyLimit')}</span>
+                <span class="billing-usage-muted">{t('auth.billing.usedThisMonth', { count: cloudCreditQuota.used })}</span>
               </div>
             {:else}
               <div class="billing-usage-main">
                 <span class="billing-usage-value">{cloudCreditQuota.used}</span>
                 <span class="billing-usage-separator">/</span>
                 <span class="billing-usage-limit">{cloudCreditQuota.limit}</span>
-                <span class="billing-usage-muted">({cloudCreditQuota.remaining} left)</span>
+                <span class="billing-usage-muted">{t('auth.billing.left', { count: cloudCreditQuota.remaining })}</span>
               </div>
               {#if cloudCreditQuota.reserved > 0}
-                <div class="billing-usage-reset">{cloudCreditQuota.reserved} Cloud credits pending</div>
+                <div class="billing-usage-reset">{t('auth.billing.cloudCreditsPending', { count: cloudCreditQuota.reserved })}</div>
               {/if}
               <div class="billing-progress-track" aria-hidden="true">
                 <div class="billing-progress-bar" style={`width: ${cloudCreditQuotaProgress}%`}></div>
               </div>
               {#if cloudCreditQuota.resetAt}
-                <div class="billing-usage-reset">Cloud credits reset {formatDate(cloudCreditQuota.resetAt)}</div>
+                <div class="billing-usage-reset">{t('auth.billing.cloudCreditsReset', { date: formatDate(cloudCreditQuota.resetAt) })}</div>
               {/if}
             {/if}
             <div class="billing-usage-reset">
-              AI: {cloudCreditBreakdown.ai.used} used{cloudCreditBreakdown.ai.reserved > 0 ? `, ${cloudCreditBreakdown.ai.reserved} pending` : ''}
-              · Google Maps: {cloudCreditBreakdown.googleMaps.used} used{cloudCreditBreakdown.googleMaps.reserved > 0 ? `, ${cloudCreditBreakdown.googleMaps.reserved} pending` : ''}
+              AI: {t('auth.billing.breakdown.used', { count: cloudCreditBreakdown.ai.used })}{cloudCreditBreakdown.ai.reserved > 0 ? t('auth.billing.breakdown.pending', { count: cloudCreditBreakdown.ai.reserved }) : ''}
+              · Google Maps: {t('auth.billing.breakdown.used', { count: cloudCreditBreakdown.googleMaps.used })}{cloudCreditBreakdown.googleMaps.reserved > 0 ? t('auth.billing.breakdown.pending', { count: cloudCreditBreakdown.googleMaps.reserved }) : ''}
             </div>
           </div>
         {/if}
@@ -1054,7 +1055,7 @@ $effect(() => {
 
       <!-- Platform Stats - Compact Grid -->
       {#if Object.keys(settings.byPlatform).length > 0}
-        <div class="platform-minimal-header">Platform Activity</div>
+        <div class="platform-minimal-header">{t('auth.platformActivity')}</div>
         <div class="platform-minimal-grid">
           {#each Object.entries(settings.byPlatform).filter(([, count]) => count > 0) as [platform, count]}
             <div class="platform-minimal-item">
@@ -1074,7 +1075,7 @@ $effect(() => {
           class="sign-out-button sa-mobile-compact-btn"
           onclick={handleSignOut}
         >
-          Sign Out
+          {t('auth.signOut')}
         </button>
       </div>
     </div>

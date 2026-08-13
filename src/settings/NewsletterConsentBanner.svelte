@@ -1,6 +1,7 @@
 <script lang="ts">
 import { Notice } from 'obsidian';
 import type SocialArchiverPlugin from '../main';
+import { t } from '../i18n';
 import {
   NewsletterConsentService,
   type MarketingConsentState,
@@ -115,32 +116,32 @@ async function handleDismiss(): Promise<void> {
 </script>
 
 {#if visible}
-  <div class="sa-newsletter-banner" role="region" aria-label="Newsletter consent">
+  <div class="sa-newsletter-banner" role="region" aria-label={t('news.banner.ariaLabel')}>
     <div class="sa-newsletter-banner-icon" aria-hidden="true">📬</div>
     <div class="sa-newsletter-banner-body">
-      <div class="sa-newsletter-banner-title">Stay in the loop?</div>
-      <div class="sa-newsletter-banner-desc">Get occasional product updates and tips.</div>
+      <div class="sa-newsletter-banner-title">{t('news.banner.title')}</div>
+      <div class="sa-newsletter-banner-desc">{t('news.banner.desc')}</div>
       <div class="sa-newsletter-banner-actions">
         <button
           class="sa-newsletter-banner-primary"
           onclick={handleGrant}
           disabled={isSubmitting}
         >
-          Yes, sign me up
+          {t('news.banner.signUp')}
         </button>
         <button
           class="sa-newsletter-banner-secondary"
           onclick={handleRefuse}
           disabled={isSubmitting}
         >
-          No thanks
+          {t('news.banner.noThanks')}
         </button>
         <button
           class="sa-newsletter-banner-tertiary"
           onclick={handleDismiss}
           disabled={isSubmitting}
         >
-          Decide later
+          {t('news.banner.later')}
         </button>
       </div>
     </div>

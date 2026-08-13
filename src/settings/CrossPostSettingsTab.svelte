@@ -11,6 +11,7 @@ import {
   isThreadsConnectionUsable,
 } from '@/utils/crosspostStatus';
 import { showConfirmModal } from '@/utils/confirm-modal';
+import { t } from '../i18n';
 
 interface Props {
   plugin: SocialArchiverPlugin;
@@ -77,9 +78,9 @@ function formatTokenExpiry(expiresAt: number | null): string {
     month: 'short',
     day: 'numeric',
   });
-  if (daysRemaining <= 0) return `${dateStr} (expired)`;
-  if (daysRemaining === 1) return `${dateStr} (1 day remaining)`;
-  return `${dateStr} (${daysRemaining} days remaining)`;
+  if (daysRemaining <= 0) return t('xpost.tokenExpiry.expired', { date: dateStr });
+  if (daysRemaining === 1) return t('xpost.tokenExpiry.oneDay', { date: dateStr });
+  return t('xpost.tokenExpiry.days', { date: dateStr, days: daysRemaining });
 }
 
 function getTokenExpiryWarning(expiresAt: number | null, status: typeof tokenStatus): boolean {
@@ -150,7 +151,7 @@ async function handleConnect(): Promise<void> {
 
   // Pre-check: user must be logged in (have an auth token)
   if (!plugin.settings.authToken) {
-    const msg = 'Please log in to Social Archiver first. Go to the Authentication section above to sign in.';
+    const msg = t('xpost.error.loginFirst');
     error = msg;
     new Notice(msg);
     return;
@@ -163,7 +164,7 @@ async function handleConnect(): Promise<void> {
     const initResult = await client.initOAuth();
 
     if (!initResult.authUrl) {
-      error = 'Failed to start authentication. Please try again.';
+      error = t('xpost.error.startAuthFailed');
       new Notice('Failed to start Threads authentication.');
       return;
     }
@@ -176,12 +177,12 @@ async function handleConnect(): Promise<void> {
     startPolling();
   } catch (err) {
     if (err instanceof AuthenticationError) {
-      const msg = 'Please log in to Social Archiver first. Go to the Authentication section above to sign in.';
+      const msg = t('xpost.error.loginFirst');
       error = msg;
       new Notice(msg);
     } else {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      error = `Failed to start authentication: ${message}`;
+      const message = err instanceof Error ? err.message : t('xpost.error.unknown');
+      error = t('xpost.error.startAuthFailedWithMessage', { message });
       new Notice(`Threads connection failed: ${message}`);
     }
   } finally {
@@ -214,8 +215,8 @@ async function handleDisconnect(): Promise<void> {
 
     new Notice('Threads account disconnected.');
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    error = `Failed to disconnect: ${message}`;
+    const message = err instanceof Error ? err.message : t('xpost.error.unknown');
+    error = t('xpost.error.disconnectFailed', { message });
     new Notice(`Disconnect failed: ${message}`);
   } finally {
     isDisconnecting = false;
@@ -236,8 +237,8 @@ async function handleRefreshToken(): Promise<void> {
 
     new Notice('Threads token refreshed successfully.');
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    error = `Failed to refresh token: ${message}`;
+    const message = err instanceof Error ? err.message : t('xpost.error.unknown');
+    error = t('xpost.error.refreshTokenFailed', { message });
     new Notice(`Token refresh failed: ${message}`);
   } finally {
     isRefreshingToken = false;
@@ -246,10 +247,10 @@ async function handleRefreshToken(): Promise<void> {
 
 function confirmDisconnect(): Promise<boolean> {
   return showConfirmModal(plugin.app, {
-    title: 'Disconnect Threads account?',
-    message: 'You will need to re-authorize to cross-post again.',
-    confirmText: 'Disconnect',
-    cancelText: 'Cancel',
+    title: t('xpost.confirmDisconnect.title'),
+    message: t('xpost.confirmDisconnect.message'),
+    confirmText: t('xpost.disconnect'),
+    cancelText: t('xpost.cancel'),
     confirmClass: 'warning',
   });
 }
@@ -283,7 +284,7 @@ function startPolling(): void {
   pollingTimeout = window.setTimeout(() => {
     if (isPolling) {
       stopPolling();
-      error = 'Connection timed out. Please try again.';
+      error = t('xpost.error.timeout');
       new Notice('Threads connection timed out. Please try again.');
     }
   }, 5 * 60 * 1000); // 5-minute timeout
@@ -334,7 +335,7 @@ onDestroy(() => {
 
     {#if isLoadingStatus}
       <div class="crosspost-status-row">
-        <span class="crosspost-loading-text">Checking connection status...</span>
+        <span class="crosspost-loading-text">{t('xpost.checkingStatus')}</span>
       </div>
     {:else if isConnected}
       <!-- Connected state -->
@@ -342,7 +343,7 @@ onDestroy(() => {
         <div class="crosspost-status-row">
           <span class="{statusDotClass}" aria-hidden="true"></span>
           <span class="crosspost-username">@{username}</span>
-          <span class="crosspost-status-label connected-label">Connected</span>
+          <span class="crosspost-status-label connected-label">{t('xpost.connected')}</span>
         </div>
 
         {#if tokenExpiresAt}
@@ -350,14 +351,14 @@ onDestroy(() => {
             class="crosspost-token-expiry"
             class:expiry-warning={tokenExpiryWarning}
           >
-            <span class="expiry-label">Token expires:</span>
+            <span class="expiry-label">{t('xpost.tokenExpiresLabel')}</span>
             <span class="expiry-value">{tokenExpiryDisplay}</span>
           </div>
         {/if}
 
         {#if tokenStatus === 'expired' || tokenStatus === 'error'}
           <div class="crosspost-token-expired-notice">
-            Token has expired or is invalid. Refresh to continue posting.
+            {t('xpost.tokenExpiredNotice')}
           </div>
         {/if}
 
@@ -367,18 +368,18 @@ onDestroy(() => {
               class="mod-cta crosspost-btn sa-mobile-compact-btn"
               onclick={handleRefreshToken}
               disabled={isRefreshingToken}
-              aria-label="Refresh Threads token"
+              aria-label={t('xpost.refreshTokenAria')}
             >
-              {isRefreshingToken ? 'Refreshing...' : 'Refresh Token'}
+              {isRefreshingToken ? t('xpost.refreshing') : t('xpost.refreshToken')}
             </button>
           {/if}
           <button
             class="mod-warning crosspost-btn sa-mobile-compact-btn"
             onclick={handleDisconnect}
             disabled={isDisconnecting}
-            aria-label="Disconnect Threads account"
+            aria-label={t('xpost.disconnectAria')}
           >
-            {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
+            {isDisconnecting ? t('xpost.disconnecting') : t('xpost.disconnect')}
           </button>
         </div>
       </div>
@@ -387,18 +388,18 @@ onDestroy(() => {
       <div class="crosspost-disconnected-info">
         <div class="crosspost-status-row">
           <span class="status-dot disconnected" aria-hidden="true"></span>
-          <span class="crosspost-not-connected-label">Not connected</span>
+          <span class="crosspost-not-connected-label">{t('xpost.notConnected')}</span>
         </div>
 
         {#if isPolling}
           <div class="crosspost-polling-notice">
-            Waiting for authorization in your browser...
+            {t('xpost.waitingForAuth')}
             <button
               class="crosspost-btn-link"
               onclick={stopPolling}
-              aria-label="Cancel Threads authorization"
+              aria-label={t('xpost.cancelAuthAria')}
             >
-              Cancel
+              {t('xpost.cancel')}
             </button>
           </div>
         {:else}
@@ -406,9 +407,9 @@ onDestroy(() => {
             class="mod-cta crosspost-btn crosspost-connect-btn sa-mobile-compact-btn"
             onclick={handleConnect}
             disabled={isConnecting}
-            aria-label="Connect Threads account"
+            aria-label={t('xpost.connectAria')}
           >
-            {isConnecting ? 'Starting...' : 'Connect Threads Account'}
+            {isConnecting ? t('xpost.starting') : t('xpost.connectAccount')}
           </button>
         {/if}
       </div>
@@ -421,9 +422,9 @@ onDestroy(() => {
           class="crosspost-error-retry"
           onclick={retryConnectionStatus}
           disabled={isLoadingStatus}
-          aria-label="Retry Threads connection status check"
+          aria-label={t('xpost.retryAria')}
         >
-          {isLoadingStatus ? 'Checking...' : 'Retry'}
+          {isLoadingStatus ? t('xpost.checking') : t('xpost.retry')}
         </button>
       </div>
     {/if}
@@ -441,9 +442,9 @@ onDestroy(() => {
         </svg>
       </div>
       <span class="crosspost-platform-name">X (Twitter)</span>
-      <span class="crosspost-coming-soon-badge">Coming soon</span>
+      <span class="crosspost-coming-soon-badge">{t('xpost.comingSoon')}</span>
     </div>
-    <p class="crosspost-coming-soon-text">X (Twitter) cross-posting will be available in a future update.</p>
+    <p class="crosspost-coming-soon-text">{t('xpost.comingSoonText')}</p>
   </div>
 </div>
 

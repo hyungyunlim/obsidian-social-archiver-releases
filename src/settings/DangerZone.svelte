@@ -3,6 +3,7 @@ import { Notice, normalizePath } from 'obsidian';
 import type SocialArchiverPlugin from '../main';
 import { clearAuthentication, refreshUserCredits } from '../utils/auth';
 import { showInputConfirmModal } from '../utils/confirm-modal';
+import { t } from '../i18n';
 
 interface Props {
   plugin: SocialArchiverPlugin;
@@ -21,18 +22,18 @@ let isAuthenticated = $derived(settings.isVerified && settings.authToken !== '')
  */
 async function handleDeleteAccount() {
   const confirmed = await showInputConfirmModal(plugin.app, {
-    title: 'Delete Account',
-    message: `This action cannot be undone. All your data will be permanently deleted:\n\n• All shared posts\n• All uploaded images and media\n• Your username and account`,
-    confirmText: 'Delete My Account',
-    cancelText: 'Cancel',
+    title: t('danger.deleteAccount.title'),
+    message: t('danger.deleteAccount.message'),
+    confirmText: t('danger.deleteAccount.confirm'),
+    cancelText: t('danger.cancel'),
     confirmClass: 'danger',
     requiredInput: settings.username,
     inputLabel: createFragment((frag) => {
-      frag.appendText('Type your username ');
+      frag.appendText(t('danger.deleteAccount.inputLabelPrefix'));
       frag.createEl('strong', { text: settings.username, cls: 'cm-confirm-token' });
-      frag.appendText(' to confirm:');
+      frag.appendText(t('danger.deleteAccount.inputLabelSuffix'));
     }),
-    inputPlaceholder: 'Enter your username'
+    inputPlaceholder: t('danger.deleteAccount.inputPlaceholder')
   });
 
   if (!confirmed) return;
@@ -74,18 +75,18 @@ async function handleResetSharedPosts() {
   const RESET_CONFIRM_TEXT = 'RESET';
 
   const confirmed = await showInputConfirmModal(plugin.app, {
-    title: 'Remove All Shared Posts',
-    message: `This action removes every published post from social-archive.org and clears any share information stored in your vault.\n\n• Deletes all share links from the cloud\n• Removes share URLs from your local markdown files\n• Stops anyone from accessing your current shared posts`,
-    confirmText: 'Remove Shared Posts',
-    cancelText: 'Cancel',
+    title: t('danger.reset.title'),
+    message: t('danger.reset.message'),
+    confirmText: t('danger.reset.confirm'),
+    cancelText: t('danger.cancel'),
     confirmClass: 'warning',
     requiredInput: RESET_CONFIRM_TEXT,
     inputLabel: createFragment((frag) => {
-      frag.appendText('Type ');
+      frag.appendText(t('danger.reset.inputLabelPrefix'));
       frag.createEl('strong', { text: RESET_CONFIRM_TEXT, cls: 'cm-confirm-token' });
-      frag.appendText(' to confirm:');
+      frag.appendText(t('danger.reset.inputLabelSuffix'));
     }),
-    inputPlaceholder: 'Type RESET to confirm'
+    inputPlaceholder: t('danger.reset.inputPlaceholder')
   });
 
   if (!confirmed) return;
@@ -193,14 +194,14 @@ function removeShareMetadata(content: string): { updated: boolean; output: strin
 {#if isAuthenticated}
   <div class="danger-zone-container">
     <!-- Danger Zone Header -->
-    <h2 class="danger-zone-main-header">Danger Zone</h2>
+    <h2 class="danger-zone-main-header">{t('danger.header')}</h2>
 
     <!-- Reset Shared Posts Section -->
     <div class="setting-item">
       <div class="setting-item-info">
-        <div class="setting-item-name">Remove All Shared Posts</div>
+        <div class="setting-item-name">{t('danger.reset.title')}</div>
         <div class="setting-item-description">
-          Delete every published post from social-archive.org and clear share metadata from your vault notes.
+          {t('danger.reset.desc')}
         </div>
       </div>
       <div class="setting-item-control">
@@ -208,7 +209,7 @@ function removeShareMetadata(content: string): { updated: boolean; output: strin
           class="reset-shares-button sa-mobile-compact-btn"
           onclick={handleResetSharedPosts}
         >
-          Remove Shared Posts
+          {t('danger.reset.confirm')}
         </button>
       </div>
     </div>
@@ -216,9 +217,9 @@ function removeShareMetadata(content: string): { updated: boolean; output: strin
     <!-- Delete Account Section - Standard Setting Style -->
     <div class="setting-item">
       <div class="setting-item-info">
-        <div class="setting-item-name">Delete Account</div>
+        <div class="setting-item-name">{t('danger.deleteAccount.title')}</div>
         <div class="setting-item-description">
-          Permanently delete your account and all associated data
+          {t('danger.deleteAccount.desc')}
         </div>
       </div>
       <div class="setting-item-control">
@@ -226,7 +227,7 @@ function removeShareMetadata(content: string): { updated: boolean; output: strin
           class="delete-account-button sa-mobile-compact-btn"
           onclick={handleDeleteAccount}
         >
-          Delete Account
+          {t('danger.deleteAccount.title')}
         </button>
       </div>
     </div>

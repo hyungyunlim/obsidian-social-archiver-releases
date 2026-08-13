@@ -28,7 +28,7 @@ import type { ShareStateSyncService } from '../sync/ShareStateSyncService';
 import type { CommentStateSyncService } from '../sync/CommentStateSyncService';
 import type { SocialArchiverSettings } from '../../types/settings';
 import type { PostData, Platform } from '../../types/post';
-import { mirrorArchiveTagsIntoObsidianTags } from '../../utils/tags';
+import { mirrorArchiveTagsIntoObsidianTags, readFrontmatterTags } from '../../utils/tags';
 import type {
   ArchiveCompleteEventData,
   ClientSyncEventData,
@@ -1352,9 +1352,7 @@ export class RealtimeEventBridge {
               const previousArchiveTags = Array.isArray(fm.archiveTags)
                 ? (fm.archiveTags as unknown[]).filter((t): t is string => typeof t === 'string')
                 : [];
-              const currentObsidianTags = Array.isArray(fm.tags)
-                ? (fm.tags as unknown[]).filter((t): t is string => typeof t === 'string')
-                : [];
+              const currentObsidianTags = readFrontmatterTags(fm.tags);
 
               fm.archiveTags = serverTags;
 

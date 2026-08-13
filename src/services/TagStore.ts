@@ -1,7 +1,7 @@
 import { TFile, TFolder, type App } from 'obsidian';
 import type { TagDefinition, TagWithCount } from '@/types/tag';
 import { TAG_COLORS } from '@/types/tag';
-import { mergeTagListsCaseInsensitive, normalizeTagName, validateTagName } from '@/utils/tags';
+import { mergeTagListsCaseInsensitive, normalizeTagName, readFrontmatterTags, validateTagName } from '@/utils/tags';
 import type SocialArchiverPlugin from '@/main';
 import type { WorkersAPIClient } from './WorkersAPIClient';
 
@@ -664,9 +664,7 @@ export class TagStore {
   }
 
   private readStringArray(value: unknown): string[] {
-    return Array.isArray(value)
-      ? value.filter((item): item is string => typeof item === 'string')
-      : [];
+    return readFrontmatterTags(value);
   }
 
   private removeTagName(tags: string[], tagName: string): string[] {

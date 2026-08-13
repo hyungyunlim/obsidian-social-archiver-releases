@@ -26,6 +26,7 @@ import {
   normalizeFrontmatterPropertyOrder,
 } from '../types/settings';
 import { mount, unmount } from 'svelte';
+import { t } from '../i18n';
 import AuthSettingsTab from './AuthSettingsTab.svelte';
 import DangerZone from './DangerZone.svelte';
 import SyncSettingsTab from './SyncSettingsTab.svelte';
@@ -47,7 +48,7 @@ import {
 import type { Platform as SocialPlatform } from '../shared/platforms/types';
 import { getPlatformDefinition } from '../shared/platforms/definitions';
 import { isAuthenticated, isPaidPlan } from '../utils/auth';
-import { ACCOUNT_SECTION_CLS, focusAccountSection, getAccountRequiredMessage } from '../utils/accountGate';
+import { ACCOUNT_SECTION_CLS, focusAccountSection } from '../utils/accountGate';
 import { LocalArchiveScanner } from '../services/import/local/LocalArchiveScanner';
 import {
   MapSearchProviderPreferenceController,
@@ -230,7 +231,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       type: 'group',
       items: [this.blockRow('Social Archiver', (host) => {
         const descEl = host.createEl('p', {
-          text: 'Archive and save social media posts to your Obsidian vault'
+          text: t('st.tab.desc')
         });
         descEl.addClass('sa-settings-desc');
       })],
@@ -278,9 +279,9 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    */
   private viewSettingDefinitions(): SettingDefinitionItem[] {
     const locationOptions: Record<string, string> = {
-      default: 'Use default',
-      sidebar: 'Right sidebar',
-      main: 'Main tab',
+      default: t('st.view.useDefault'),
+      sidebar: t('st.view.rightSidebar'),
+      main: t('st.view.mainTab'),
     };
     const overrideRow = (
       name: string,
@@ -308,17 +309,17 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     return [{
       type: 'group',
-      heading: 'View',
+      heading: t('st.view.heading'),
       items: [
         {
-          name: 'Default view location',
-          desc: 'Where views open by default. Individual views below can override this.',
+          name: t('st.view.defaultLocation.name'),
+          desc: t('st.view.defaultLocation.desc'),
           render: (setting): void => {
             setting.addDropdown(dropdown => {
               dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
               return dropdown
-                .addOption('sidebar', 'Right sidebar')
-                .addOption('main', 'Main tab')
+                .addOption('sidebar', t('st.view.rightSidebar'))
+                .addOption('main', t('st.view.mainTab'))
                 .setValue(this.plugin.settings.viewLocationDefault)
                 .onChange((value) => {
                   this.plugin.settings.viewLocationDefault = value as 'sidebar' | 'main';
@@ -328,26 +329,26 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         },
         overrideRow(
-          'Timeline view',
-          'Override the default location for the timeline view.',
+          t('st.view.timeline.name'),
+          t('st.view.timeline.desc'),
           () => this.plugin.settings.timelineLocation,
           (value) => { this.plugin.settings.timelineLocation = value; },
         ),
         overrideRow(
-          'Author detail',
-          'Override the default location for the author detail view.',
+          t('st.view.authorDetail.name'),
+          t('st.view.authorDetail.desc'),
           () => this.plugin.settings.authorDetailLocation,
           (value) => { this.plugin.settings.authorDetailLocation = value; },
         ),
         {
-          name: 'Default timeline sort',
-          desc: 'Choose whether new timeline views start from archive date or publish date.',
+          name: t('st.view.defaultSort.name'),
+          desc: t('st.view.defaultSort.desc'),
           render: (setting): void => {
             setting.addDropdown(dropdown => {
               dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
               return dropdown
-                .addOption('archived', 'Archive date')
-                .addOption('published', 'Publish date')
+                .addOption('archived', t('st.view.sortArchived'))
+                .addOption('published', t('st.view.sortPublished'))
                 .setValue(this.plugin.settings.defaultTimelineSortBy)
                 .onChange((value) => {
                   const sortBy = value as TimelineSortBy;
@@ -372,14 +373,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   private instagramImportSettingDefinitions(): SettingDefinitionItem[] {
     return [{
       type: 'group',
-      heading: 'Instagram Saved Import (Experimental)',
+      heading: t('st.igImport.heading'),
       items: [{
-        name: 'Enable Instagram Saved import',
+        name: t('st.igImport.enable.name'),
         desc: Platform.isMobile
-          ? 'Desktop-only. Run the import on desktop, then sync to mobile.'
-          : 'Import Instagram Saved Posts from a .zip file exported by the Social Archiver '
-              + 'Chrome extension. Adds a ribbon icon and a Command Palette entry. '
-              + 'Experimental — requires a compatible export package.',
+          ? t('st.igImport.enable.descMobile')
+          : t('st.igImport.enable.descDesktop'),
         render: (setting): void => {
           setting.addToggle(toggle => {
             toggle
@@ -411,11 +410,11 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   private archiveSettingDefinitions(): SettingDefinitionItem[] {
     return [{
       type: 'group',
-      heading: 'Archive',
+      heading: t('st.archive.heading'),
       items: [
         {
-          name: 'Keep failed archive attempts',
-          desc: 'Save failed or limited archives with site metadata for later review.',
+          name: t('st.archive.keepFailed.name'),
+          desc: t('st.archive.keepFailed.desc'),
           render: (setting): void => {
             let loadedPreference = false;
             let retainFailedArchiveAttempts = false;
@@ -424,7 +423,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
               toggle.setDisabled(true);
 
               if (!this.plugin.settings.authToken) {
-                setting.setDesc('Sign in to sync failed archive behavior across clients.');
+                setting.setDesc(t('st.archive.keepFailed.signIn'));
                 return toggle;
               }
 
@@ -467,8 +466,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                   if (!setting.settingEl.isConnected) return;
                   setting.setDesc(
                     error instanceof Error
-                      ? `Failed to load archive behavior settings: ${error.message}`
-                      : 'Failed to load archive behavior settings.'
+                      ? t('st.archive.keepFailed.loadFailed', { message: error.message })
+                      : t('st.archive.keepFailed.loadFailedGeneric')
                   );
                 });
 
@@ -477,8 +476,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         },
         {
-          name: 'Default place search',
-          desc: 'Auto uses Kakao for Korean and Google Maps for other app languages. This account setting syncs across clients.',
+          name: t('st.archive.placeSearch.name'),
+          desc: t('st.archive.placeSearch.desc'),
           render: (setting): void => {
             const controller = new MapSearchProviderPreferenceController(
               this.plugin.workersApiClient,
@@ -487,14 +486,14 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
             setting.addDropdown(dropdown => {
               dropdown
-                .addOption('auto', 'Auto (app language)')
+                .addOption('auto', t('st.archive.placeSearch.auto'))
                 .addOption('kakaomap', 'Kakao Maps')
                 .addOption('googlemaps', 'Google Maps')
                 .setValue('auto')
                 .setDisabled(true);
 
               if (!this.plugin.settings.authToken) {
-                setting.setDesc('Sign in to sync the default place search provider across clients.');
+                setting.setDesc(t('st.archive.placeSearch.signIn'));
                 return dropdown;
               }
 
@@ -533,8 +532,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                   if (!setting.settingEl.isConnected) return;
                   setting.setDesc(
                     error instanceof Error
-                      ? `Failed to load place search provider: ${error.message}`
-                      : 'Failed to load place search provider.'
+                      ? t('st.archive.placeSearch.loadFailed', { message: error.message })
+                      : t('st.archive.placeSearch.loadFailedGeneric')
                   );
                 });
 
@@ -543,8 +542,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         },
         {
-          name: 'Archive folder',
-          desc: 'Folder where archived posts will be saved',
+          name: t('st.archive.folder.name'),
+          desc: t('st.archive.folder.desc'),
           render: (setting): void => {
             setting.addText(text => {
               text
@@ -562,15 +561,15 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         },
         {
-          name: 'Archive folder structure',
-          desc: 'Choose how notes are organized under archive folder',
+          name: t('st.archive.structure.name'),
+          desc: t('st.archive.structure.desc'),
           render: (setting): void => {
             setting.addDropdown(dropdown => {
               dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
               return dropdown
-                .addOption('platform-year-month', 'Archive folder/platform/year/month')
-                .addOption('platform-only', 'Archive folder/platform')
-                .addOption('flat', 'Archive folder only')
+                .addOption('platform-year-month', t('st.archive.structure.platformYearMonth'))
+                .addOption('platform-only', t('st.archive.structure.platformOnly'))
+                .addOption('flat', t('st.archive.structure.flat'))
                 .setValue(this.plugin.settings.archiveOrganization)
                 .onChange((value: string) => {
                   this.plugin.settings.archiveOrganization = value as ArchiveOrganizationMode;
@@ -580,8 +579,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         },
         {
-          name: 'Media folder',
-          desc: 'Folder where downloaded media files will be saved',
+          name: t('st.archive.mediaFolder.name'),
+          desc: t('st.archive.mediaFolder.desc'),
           render: (setting): void => {
             setting.addText(text => {
               text
@@ -599,8 +598,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         },
         {
-          name: 'Filename format',
-          desc: 'Template for archived note filenames. Click tokens to insert at cursor.',
+          name: t('st.archive.filename.name'),
+          desc: t('st.archive.filename.desc'),
           aliases: ['template', 'tokens', 'note title'],
           render: (setting): void => {
             // Force the block to wrap below the header row
@@ -623,8 +622,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             });
 
             // Reset button next to input
-            const resetBtn = inputRowEl.createDiv({ cls: 'clickable-icon', attr: { 'aria-label': 'Reset to default' } });
-            resetBtn.title = 'Reset to default';
+            const resetBtn = inputRowEl.createDiv({ cls: 'clickable-icon', attr: { 'aria-label': t('st.common.resetToDefault') } });
+            resetBtn.title = t('st.common.resetToDefault');
             setIcon(resetBtn, 'rotate-ccw');
             resetBtn.addEventListener('click', (e) => {
               e.preventDefault();
@@ -639,20 +638,20 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             chipsEl.addClass('st-fn-chips');
 
             const tokenDefs: { token: string; label: string }[] = [
-              { token: 'published_date', label: 'Date' },
-              { token: 'archived_date', label: 'Archived' },
-              { token: 'platform', label: 'Platform' },
-              { token: 'author', label: 'Author' },
-              { token: 'title', label: 'Title' },
-              { token: 'slug', label: 'Slug' },
-              { token: 'post_id', label: 'Post ID' },
-              { token: 'short_id', label: 'Short ID' },
+              { token: 'published_date', label: t('st.token.date') },
+              { token: 'archived_date', label: t('st.token.archived') },
+              { token: 'platform', label: t('st.token.platform') },
+              { token: 'author', label: t('st.token.author') },
+              { token: 'title', label: t('st.token.title') },
+              { token: 'slug', label: t('st.token.slug') },
+              { token: 'post_id', label: t('st.token.postId') },
+              { token: 'short_id', label: t('st.token.shortId') },
             ];
 
             for (const { token, label } of tokenDefs) {
               const chip = chipsEl.createEl('button', { text: label });
               chip.addClass('st-fn-chip');
-              chip.title = `Insert {${token}}`;
+              chip.title = t('st.common.insertToken', { token: `{${token}}` });
               chip.addEventListener('click', (e) => {
                 e.preventDefault();
                 const start = inputEl.selectionStart ?? inputEl.value.length;
@@ -692,7 +691,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                 preview = preview.replace(new RegExp(`\\{${token}\\}`, 'g'), value);
               }
               previewEl.empty();
-              const label = previewEl.createSpan({ text: 'Preview: ' });
+              const label = previewEl.createSpan({ text: t('st.common.preview') });
               label.addClass('st-fn-preview-label');
               previewEl.createEl('code', { text: `${preview}.md` });
             };
@@ -701,15 +700,15 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         },
         {
-          name: 'Download media',
-          desc: 'Choose what media to download with posts. This setting serves as the default for the archive modal.',
+          name: t('st.archive.downloadMedia.name'),
+          desc: t('st.archive.downloadMedia.desc'),
           render: (setting): void => {
             setting.addDropdown(dropdown => {
               dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
               return dropdown
-                .addOption('text-only', 'Text only')
-                .addOption('images-only', 'Images only')
-                .addOption('images-and-videos', 'Images and videos')
+                .addOption('text-only', t('st.archive.downloadMedia.textOnly'))
+                .addOption('images-only', t('st.archive.downloadMedia.imagesOnly'))
+                .addOption('images-and-videos', t('st.archive.downloadMedia.imagesAndVideos'))
                 .setValue(this.plugin.settings.downloadMedia)
                 .onChange((value: string) => {
                   this.plugin.settings.downloadMedia = value as MediaDownloadMode;
@@ -721,8 +720,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         {
           // Large Media Guard — prompt before downloading oversized top-level
           // videos. See prd-large-media-guard.md (Flow A / Prevention).
-          name: 'Large video prompt threshold (MB)',
-          desc: 'Prompt before downloading videos larger than this size. Set to 0 to always download without prompting.',
+          name: t('st.archive.largeVideo.name'),
+          desc: t('st.archive.largeVideo.desc'),
           render: (setting): void => {
             setting.addText(text => text
               .setPlaceholder('100')
@@ -736,8 +735,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         },
         {
-          name: 'Include comments',
-          desc: 'Include platform comments in archived notes. When disabled, only the post content and your personal notes are saved. This setting serves as the default for the archive modal.',
+          name: t('st.archive.includeComments.name'),
+          desc: t('st.archive.includeComments.desc'),
           render: (setting): void => {
             setting.addToggle(toggle => toggle
               .setValue(this.plugin.settings.includeComments)
@@ -748,8 +747,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         },
         {
-          name: 'Include hashtags as Obsidian tags',
-          desc: 'When enabled, extracted hashtags are rendered as Obsidian tags. Disable this to keep hashtags visible without creating native tags in your vault.',
+          name: t('st.archive.hashtags.name'),
+          desc: t('st.archive.hashtags.desc'),
           render: (setting): void => {
             setting.addToggle(toggle => toggle
               .setValue(this.plugin.settings.includeHashtagsAsObsidianTags)
@@ -770,12 +769,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    */
   private signedOutRow(description: string): SettingGroupItem {
     return {
-      name: 'Sign in to enable',
+      name: t('st.signedOut.name'),
       desc: description,
       visible: () => !isAuthenticated(this.plugin),
       render: (setting): void => {
         setting.addButton(button => button
-          .setButtonText('Sign in')
+          .setButtonText(t('st.signedOut.button'))
           .setCta()
           .onClick(() => {
             focusAccountSection(this.containerEl);
@@ -788,9 +787,9 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   private mobileSyncSettingDefinitions(): SettingDefinitionItem[] {
     return [{
       type: 'group',
-      heading: 'Mobile sync',
+      heading: t('st.mobileSync.heading'),
       items: [
-        this.signedOutRow(getAccountRequiredMessage('sync')),
+        this.signedOutRow(t('st.signedOut.desc.sync')),
         this.svelteIslandRow('Mobile sync', 'syncSettingsComponent', (host) => {
           const syncContainer = host.createDiv({ cls: 'social-archiver-sync-section' });
           syncContainer.addClass('sa-settings-subsection');
@@ -807,9 +806,9 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   private crossPostSettingDefinitions(): SettingDefinitionItem[] {
     return [{
       type: 'group',
-      heading: 'Cross-posting',
+      heading: t('st.crossPost.heading'),
       items: [
-        this.signedOutRow(getAccountRequiredMessage('crosspost')),
+        this.signedOutRow(t('st.signedOut.desc.crosspost')),
         this.svelteIslandRow('Cross-posting', 'crossPostComponent', (host) => {
           const crossPostContainer = host.createDiv({ cls: 'social-archiver-crosspost-section' });
           return mount(CrossPostSettingsTab, {
@@ -825,22 +824,22 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   private updateNotificationsSettingDefinitions(): SettingDefinitionItem[] {
     return [{
       type: 'group',
-      heading: 'Update notifications',
+      heading: t('st.updates.heading'),
       items: [
         {
-          name: 'Release notes',
-          desc: 'Open the shared Social Archiver release notes hub',
+          name: t('st.updates.releaseNotes.name'),
+          desc: t('st.updates.releaseNotes.desc'),
           render: (setting): void => {
             setting.addButton(button => button
-              .setButtonText('View release notes')
+              .setButtonText(t('st.updates.releaseNotes.button'))
               .onClick(() => {
                 window.open(RELEASE_NOTES_URL, '_blank');
               }));
           },
         },
         {
-          name: 'Show release notes after updates',
-          desc: 'Display a modal with new features and changes when the plugin updates',
+          name: t('st.updates.showAfterUpdate.name'),
+          desc: t('st.updates.showAfterUpdate.desc'),
           render: (setting): void => {
             setting.addToggle(toggle => toggle
               .setValue(this.plugin.settings.showReleaseNotes)
@@ -862,21 +861,21 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   private supportSettingDefinitions(): SettingDefinitionItem[] {
     return [{
       type: 'group',
-      heading: 'Support',
+      heading: t('st.support.heading'),
       items: [
       this.blockRow('Support divider', (host) => {
         const supportDivider = host.createDiv({ cls: 'social-archiver-support-divider' });
         supportDivider.addClass('st-sup-divider');
       }),
       {
-        name: 'About the creator',
-        desc: 'Hey, I’m Hyungyun Jun Lim. I’m a startup founder and builder, and I build Social Archiver as a solo side project. I created it for people like me who want local archives because posts get deleted, platforms change, and content disappears. Feel free to reach out on GitHub for feedback or business inquiries.',
+        name: t('st.support.about.name'),
+        desc: t('st.support.about.desc'),
         render: (setting): void => {
           setting.addButton((button) => {
             button.buttonEl.addClass('sa-mobile-compact-btn');
             return button
               .setIcon('github')
-              .setButtonText('GitHub profile')
+              .setButtonText(t('st.support.about.button'))
               .onClick(() => {
                 window.open(PERSONAL_GITHUB_URL, '_blank');
               });
@@ -911,11 +910,11 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       set: (value: string) => void,
     ): SettingGroupItem => ({
       name,
-      desc: `Copy the ${name} cookie value`,
+      desc: t('st.naver.cookieRow.desc', { name }),
       render: (setting): void => {
         setting.addText((text) => {
           text
-            .setPlaceholder(`Paste ${name} value`)
+            .setPlaceholder(t('st.naver.cookieRow.placeholder', { name }))
             .setValue(get())
             .onChange((value) => {
               // Clean the value - remove "NID_AUT=" prefix if user pasted it
@@ -934,20 +933,20 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       items: [
         this.blockRow('Naver description', (host) => {
           const naverDesc = host.createEl('p', {
-            text: 'Configure settings for archiving content from Naver blog, cafe, and news.'
+            text: t('st.naver.desc')
           });
           naverDesc.addClass('sa-settings-info');
         }),
         {
-          name: 'Cookie',
+          name: t('st.naver.cookie.name'),
           desc: createFragment((frag) => {
-            frag.appendText('For private/member-only cafes. ');
+            frag.appendText(t('st.naver.cookie.line1'));
             frag.createEl('br');
-            frag.appendText('Get from Chrome: F12 → Application → Cookies → naver.com');
+            frag.appendText(t('st.naver.cookie.line2'));
             frag.createEl('br');
             frag.createEl('br');
             const link = frag.createEl('a', {
-              text: 'How to get Naver cookies →',
+              text: t('st.naver.cookie.link'),
               href: 'https://github.com/social-archive/obsidian-social-archiver/wiki/Naver-Cookie-Setup',
             });
             link.setAttr('target', '_blank');
@@ -970,8 +969,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           const small = helperText.createEl('small');
           small.addClass('sa-text-muted');
           small.textContent = '💡 ';
-          small.createEl('strong', { text: 'Tip:' });
-          small.appendChild(activeDocument.createTextNode(' Leave empty for public blogs and cafes. Only needed for private cafes that require login.'));
+          small.createEl('strong', { text: t('st.naver.tip.label') });
+          small.appendChild(activeDocument.createTextNode(t('st.naver.tip.text')));
         }),
       ],
     }];
@@ -1016,28 +1015,28 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     return [{
       type: 'group',
-      heading: 'Webtoon streaming',
+      heading: t('st.webtoon.heading'),
       items: [
         this.blockRow('Streaming mode explainer', (host) => {
           const infoDiv = host.createDiv({ cls: 'setting-info' });
           infoDiv.addClass('sa-settings-info-box');
-          infoDiv.createEl('strong', { text: 'Streaming mode' });
-          infoDiv.appendChild(activeDocument.createTextNode(' loads webtoon episodes instantly without waiting for downloads.'));
+          infoDiv.createEl('strong', { text: t('st.webtoon.info.strong') });
+          infoDiv.appendChild(activeDocument.createTextNode(t('st.webtoon.info.text')));
           const ul = infoDiv.createEl('ul');
           ul.addClass('sa-settings-info-list');
-          ul.createEl('li', { text: 'Images are proxied through our server to bypass CORS restrictions' });
-          ul.createEl('li', { text: 'Background download saves episodes for offline reading' });
-          ul.createEl('li', { text: 'Prefetch pre-loads the next episode for seamless transitions' });
+          ul.createEl('li', { text: t('st.webtoon.info.li1') });
+          ul.createEl('li', { text: t('st.webtoon.info.li2') });
+          ul.createEl('li', { text: t('st.webtoon.info.li3') });
         }),
         {
-          name: 'Episode loading mode',
-          desc: 'Stream-first: load immediately via proxy (faster). Download-first: wait for full download (offline ready).',
+          name: t('st.webtoon.loadingMode.name'),
+          desc: t('st.webtoon.loadingMode.desc'),
           render: (setting): void => {
             setting.addDropdown(dropdown => {
               dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
               return dropdown
-                .addOption('stream-first', 'Stream first (recommended)')
-                .addOption('download-first', 'Download first')
+                .addOption('stream-first', t('st.webtoon.streamFirst'))
+                .addOption('download-first', t('st.webtoon.downloadFirst'))
                 .setValue(this.plugin.settings.webtoonStreaming?.viewMode || 'stream-first')
                 .onChange((value) => {
                   streaming().viewMode = value as 'stream-first' | 'download-first';
@@ -1047,21 +1046,21 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         },
         toggleRow(
-          'Background download',
-          'Automatically download streamed episodes to vault for offline access.',
+          t('st.webtoon.bgDownload.name'),
+          t('st.webtoon.bgDownload.desc'),
           () => this.plugin.settings.webtoonStreaming?.backgroundDownload !== false,
           (value) => { streaming().backgroundDownload = value; },
         ),
         toggleRow(
-          'Prefetch next episode',
-          'Pre-load next episode data when reaching end of current episode for faster transitions.',
+          t('st.webtoon.prefetch.name'),
+          t('st.webtoon.prefetch.desc'),
           () => this.plugin.settings.webtoonStreaming?.prefetchNextEpisode !== false,
           (value) => { streaming().prefetchNextEpisode = value; },
         ),
         {
           ...toggleRow(
-            'Mobile data saver',
-            'Load lower quality images to reduce data usage on mobile networks.',
+            t('st.webtoon.dataSaver.name'),
+            t('st.webtoon.dataSaver.desc'),
             () => this.plugin.settings.webtoonStreaming?.mobileDataSaver ?? false,
             (value) => { streaming().mobileDataSaver = value; },
           ),
@@ -1082,30 +1081,30 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    */
   private localArchivesSettingDefinitions(): SettingDefinitionItem[] {
     const count = (): number => new LocalArchiveScanner(this.app).count();
-    const countLabel = (): string => (count() === 1 ? '1 local archive' : `${count()} local archives`);
+    const countLabel = (): string => (count() === 1 ? t('st.local.countOne') : t('st.local.countOther', { count: count() }));
 
     return [{
       type: 'group',
-      heading: 'Local archives',
+      heading: t('st.local.heading'),
       items: [
         {
-          name: 'Local archives in this vault',
+          name: t('st.local.inVault.name'),
           visible: () => !isAuthenticated(this.plugin),
           render: (setting): void => {
             setting
-              .setName(`${countLabel()} in this vault`)
+              .setName(t('st.local.inVault', { countLabel: countLabel() }))
               .setDesc(count() > 0
-                ? 'Sign in to import them to your account.'
-                : 'Browser clips are stored only in this vault.');
+                ? t('st.local.inVault.signIn')
+                : t('st.local.inVault.clipsLocal'));
           },
         },
         {
-          name: 'Import local archives',
+          name: t('st.local.import.name'),
           visible: () => isAuthenticated(this.plugin) && count() > 0,
           render: (setting): void => {
-            setting.setName(`${countLabel()} not yet imported`);
+            setting.setName(t('st.local.notImported', { countLabel: countLabel() }));
             setting.addButton(button => button
-              .setButtonText('Import local archives…')
+              .setButtonText(t('st.local.import.button'))
               .setCta()
               .onClick(() => {
                 void this.plugin.openLocalArchiveImport();
@@ -1133,17 +1132,17 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    */
   private autoUploadRow(): SettingGroupItem {
     return {
-      name: 'Auto-upload new clips',
+      name: t('st.local.autoUpload.name'),
       render: (setting): void => {
         const authenticated = isAuthenticated(this.plugin);
         const paid = isPaidPlan(this.plugin);
 
         setting.setDesc(
           !authenticated
-            ? 'Sign in to enable. Uploads count against your monthly archive quota.'
+            ? t('st.local.autoUpload.signIn')
             : paid
-              ? 'Automatically upload new browser clips to your account. Each upload counts against your monthly archive quota.'
-              : 'Available on paid plans. Each upload counts against your monthly archive quota.'
+              ? t('st.local.autoUpload.paid')
+              : t('st.local.autoUpload.free')
         );
 
         setting.addToggle(toggle => {
@@ -1178,19 +1177,19 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     return [{
       type: 'group',
-      heading: 'Sharing',
+      heading: t('st.share.heading'),
       items: [
-        this.signedOutRow(getAccountRequiredMessage('share')),
+        this.signedOutRow(t('st.signedOut.desc.share')),
         {
-          name: 'Share mode',
-          desc: 'Choose how shared posts appear on the web. "preview" mode protects copyright by showing only excerpts without media.',
+          name: t('st.share.mode.name'),
+          desc: t('st.share.mode.desc'),
           visible: signedIn,
           render: (setting): void => {
             setting.addDropdown(dropdown => {
               dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
               return dropdown
-                .addOption('preview', 'Preview (copyright-safe)')
-                .addOption('full', 'Full content (original)')
+                .addOption('preview', t('st.share.mode.preview'))
+                .addOption('full', t('st.share.mode.full'))
                 .setValue(this.plugin.settings.shareMode)
                 .onChange((value: string) => {
                   this.plugin.settings.shareMode = value as ShareMode;
@@ -1201,8 +1200,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         },
         {
-          name: 'Copy reader mode link by default',
-          desc: 'When creating a share link, copy the reader-mode URL (#reader). Disable to copy the normal post URL.',
+          name: t('st.share.readerLink.name'),
+          desc: t('st.share.readerLink.desc'),
           visible: signedIn,
           render: (setting): void => {
             setting.addToggle(toggle => toggle
@@ -1214,8 +1213,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         },
         {
-          name: 'Preview length',
-          desc: 'Maximum character count for text preview in "preview" mode. Platform link is always included in preview mode.',
+          name: t('st.share.previewLength.name'),
+          desc: t('st.share.previewLength.desc'),
           visible: signedIn,
           render: (setting): void => {
             setting.addText(text => text
@@ -1268,7 +1267,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
   private accountSettingDefinitions(): SettingDefinitionItem[] {
     return [{
       type: 'group',
-      heading: 'Account',
+      heading: t('st.account.heading'),
       items: [
         this.svelteIslandRow('Account', 'authComponent', (host) => {
           const authContainer = host.createDiv({ cls: ACCOUNT_SECTION_CLS });
@@ -1309,11 +1308,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     return [{
       type: 'group',
       items: [{
-        name: 'Local command execution',
-        desc: 'Obsidian may show a Shell Execution warning for Social Archiver. '
-          + 'The plugin can run local command-line tools only for desktop features you enable or request: '
-          + 'AI comments (Claude/Gemini/Codex CLI), Whisper transcription, video downloads (yt-dlp/ffmpeg), '
-          + 'and optional Supertonic TTS. Mobile Obsidian does not run these local shell commands.',
+        name: t('st.shellNotice.name'),
+        desc: t('st.shellNotice.desc'),
         render: (setting): void => {
           setting.settingEl.addClass('sa-settings-info');
         },
@@ -1347,7 +1343,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     const licenseNote = (host: HTMLElement): void => {
       const note = host.createDiv({ cls: 'setting-item-description' });
-      note.textContent = 'Supertonic model license: OpenRAIL-M. Code: MIT.';
+      note.textContent = t('st.tts.license');
       note.addClass('sa-settings-info');
     };
 
@@ -1374,11 +1370,11 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     return [{
       type: 'group',
-      heading: 'Text-to-Speech',
+      heading: t('st.tts.heading'),
       items: [
         {
-          name: 'TTS Provider',
-          desc: 'Choose between cloud (Azure) or on-device (Supertonic) speech synthesis',
+          name: t('st.tts.provider.name'),
+          desc: t('st.tts.provider.desc'),
           render: (setting): void => {
             // Supertonic is desktop-only (FR-07 AC): fall back rather than
             // leaving a selected engine that can never run.
@@ -1389,8 +1385,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             setting.addDropdown((dropdown) => {
               dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
               dropdown
-                .addOption('azure', 'Azure Cloud')
-                .addOption('supertonic', 'Supertonic (on-device, desktop only)')
+                .addOption('azure', t('st.tts.provider.azure'))
+                .addOption('supertonic', t('st.tts.provider.supertonic'))
                 .setValue(tts().provider)
                 .onChange(async (value: string) => {
                   tts().provider = value as PluginTTSProviderId;
@@ -1406,22 +1402,22 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           // Distinct from the installed-state 'Supertonic engine' row below:
           // sibling defs sharing a name collide in Obsidian 1.13's keyed
           // reconciler (console error + rows swapping identity on re-render).
-          name: 'Install Supertonic engine',
-          desc: 'Install the on-device speech engine.',
+          name: t('st.tts.install.name'),
+          desc: t('st.tts.install.desc'),
           visible: needsInstall,
           render: (setting): void => {
             const installer = new SupertonicInstaller();
             const installedVersion = installer.getInstalledVersion();
             const targetVersion = installer.getTargetVersion();
             const hasPreviousInstall = Boolean(installedVersion);
-            const actionLabel = hasPreviousInstall ? `Update to v${targetVersion}` : 'Install';
-            const runningLabel = hasPreviousInstall ? 'Updating...' : 'Installing...';
+            const actionLabel = hasPreviousInstall ? t('st.tts.updateTo', { version: targetVersion }) : t('st.tts.install.button');
+            const runningLabel = hasPreviousInstall ? t('st.tts.updating') : t('st.tts.installing');
             const successLabel = hasPreviousInstall ? 'updated' : 'installed';
 
             setting.setDesc(
               hasPreviousInstall
-                ? `Found Supertonic v${installedVersion}. Update to v${targetVersion} to enable Supertonic 3 support.`
-                : `Not installed. Downloads ~415MB of models for on-device TTS (desktop only).`,
+                ? t('st.tts.install.foundDesc', { installed: installedVersion ?? '', target: targetVersion })
+                : t('st.tts.install.notInstalledDesc'),
             );
             setting.addButton((button) => {
               button
@@ -1452,8 +1448,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
         // --- Azure provider, or Supertonic installed ---
         {
-          name: 'Speech speed',
-          desc: 'Playback speed (0.5x to 2.0x)',
+          name: t('st.tts.speed.name'),
+          desc: t('st.tts.speed.desc'),
           visible: engineReady,
           render: (setting): void => {
             setting.addSlider((slider) => {
@@ -1469,27 +1465,27 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         },
         toggleRow(
-          'Highlight current sentence',
-          'Highlight the sentence being spoken in Reader Mode',
+          t('st.tts.highlight.name'),
+          t('st.tts.highlight.desc'),
           () => tts().highlightEnabled,
           (value) => { tts().highlightEnabled = value; },
         ),
         toggleRow(
-          'Auto-scroll to sentence',
-          'Automatically scroll to keep the current sentence visible',
+          t('st.tts.scroll.name'),
+          t('st.tts.scroll.desc'),
           () => tts().scrollSyncEnabled,
           (value) => { tts().scrollSyncEnabled = value; },
         ),
         {
           ...this.blockRow('Azure cloud note', (host) => {
             const azureNote = host.createDiv({ cls: 'setting-item-description' });
-            azureNote.textContent = 'Azure Speech uses your Social Archiver account. Login required.';
+            azureNote.textContent = t('st.tts.azureNote');
             azureNote.addClass('sa-settings-info');
           }),
           visible: () => engineReady() && tts().provider === 'azure',
         },
         {
-          name: 'Supertonic engine',
+          name: t('st.tts.engine.name'),
           aliases: ['uninstall', 'update'],
           visible: installed,
           render: (setting): void => {
@@ -1500,18 +1496,18 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
             setting.setDesc(
               updateAvailable
-                ? `Installed (v${installedVersion ?? 'unknown'}). Update to v${targetVersion} for Supertonic 3 support.`
-                : `Installed (v${installedVersion ?? 'unknown'}). Runs locally on your machine.`,
+                ? t('st.tts.engine.updateDesc', { installed: installedVersion ?? t('st.tts.versionUnknown'), target: targetVersion })
+                : t('st.tts.engine.installedDesc', { installed: installedVersion ?? t('st.tts.versionUnknown') }),
             );
 
             if (updateAvailable) {
               setting.addButton((button) => {
                 button
-                  .setButtonText(`Update to v${targetVersion}`)
+                  .setButtonText(t('st.tts.updateTo', { version: targetVersion }))
                   .setCta()
                   .onClick(async () => {
                     button.setDisabled(true);
-                    button.setButtonText('Updating...');
+                    button.setButtonText(t('st.tts.updating'));
                     const progressEl = setting.descEl;
                     const result = await installer.install((progress) => {
                       progressEl.textContent = `${progress.message} (${progress.step}/${progress.totalSteps})`;
@@ -1528,11 +1524,11 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
             setting.addButton((button) => {
               button
-                .setButtonText('Uninstall')
+                .setButtonText(t('st.tts.uninstall'))
                 .setWarning()
                 .onClick(async () => {
                   button.setDisabled(true);
-                  button.setButtonText('Uninstalling...');
+                  button.setButtonText(t('st.tts.uninstalling'));
                   const result = await installer.uninstall();
                   if (result.success) {
                     new Notice('Supertonic uninstalled.');
@@ -1546,16 +1542,16 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         },
         {
           // Quality selector (FR-07)
-          name: 'Synthesis quality',
-          desc: 'Higher quality = slower synthesis. "Balanced" is recommended.',
+          name: t('st.tts.quality.name'),
+          desc: t('st.tts.quality.desc'),
           visible: installed,
           render: (setting): void => {
             setting.addDropdown((dropdown) => {
               dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
               dropdown
-                .addOption('fast', 'Fast (lower quality)')
-                .addOption('balanced', 'Balanced (recommended)')
-                .addOption('high', 'High (slower)')
+                .addOption('fast', t('st.tts.quality.fast'))
+                .addOption('balanced', t('st.tts.quality.balanced'))
+                .addOption('high', t('st.tts.quality.high'))
                 .setValue(tts().supertonicQuality)
                 .onChange(async (value: string) => {
                   tts().supertonicQuality = value as 'fast' | 'balanced' | 'high';
@@ -1568,19 +1564,19 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           ...this.blockRow('Supertonic license and install path', (host) => {
             licenseNote(host);
             const resourceNote = host.createDiv({ cls: 'setting-item-description' });
-            resourceNote.textContent = `Install path: ${new SupertonicInstaller().getInstallPath()}`;
+            resourceNote.textContent = t('st.tts.installPath', { path: new SupertonicInstaller().getInstallPath() });
             resourceNote.addClass('sa-settings-info');
           }),
           visible: installed,
         },
         {
-          name: 'Language',
-          desc: 'Auto-detect or override the speech language',
+          name: t('st.tts.language.name'),
+          desc: t('st.tts.language.desc'),
           visible: engineReady,
           render: (setting): void => {
             setting.addDropdown((dropdown) => {
               dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
-              dropdown.addOption('', 'Auto-detect');
+              dropdown.addOption('', t('st.common.autoDetect'));
               for (const option of TTS_LANGUAGE_OVERRIDE_OPTIONS) {
                 dropdown.addOption(option.code, option.label);
               }
@@ -1639,20 +1635,20 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     return [{
       type: 'group',
-      heading: 'AI comments',
+      heading: t('st.ai.heading'),
       items: [
-        this.signedOutRow(getAccountRequiredMessage('ai-comments')),
+        this.signedOutRow(t('st.signedOut.desc.aiComments')),
         {
           ...this.blockRow('AI comments mobile notice', (host) => {
             const mobileNote = host.createDiv({ cls: 'setting-item-description' });
-            mobileNote.textContent = 'AI comments are only available on desktop (requires local CLI tools)';
+            mobileNote.textContent = t('st.ai.mobileNote');
             mobileNote.addClass('sa-settings-info');
           }),
           visible: () => isAuthenticated(this.plugin) && Platform.isMobile,
         },
         {
-          name: 'Enable AI comments',
-          desc: 'Show AI comment suggestions on archived posts. Requires local AI CLI tools.',
+          name: t('st.ai.enable.name'),
+          desc: t('st.ai.enable.desc'),
           visible: available,
           render: (setting): void => {
             setting.addToggle(toggle => toggle
@@ -1675,8 +1671,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           visible: available,
         },
         {
-          name: 'Default AI tool',
-          desc: 'Choose which AI CLI to use by default',
+          name: t('st.ai.defaultTool.name'),
+          desc: t('st.ai.defaultTool.desc'),
           visible: available,
           render: (setting): void => {
             const clis: AICli[] = ['claude', 'gemini', 'codex'];
@@ -1699,15 +1695,15 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                   const info = AI_CLI_INFO[option.value as AICli];
                   option.text = detected.has(option.value as AICli)
                     ? `${info.displayName} ✓`
-                    : `${info.displayName} (not installed)`;
+                    : t('st.ai.notInstalled', { name: info.displayName });
                 }
               });
             });
           },
         },
         {
-          name: 'Default comment type',
-          desc: 'Type of analysis to generate by default',
+          name: t('st.ai.commentType.name'),
+          desc: t('st.ai.commentType.desc'),
           visible: available,
           render: (setting): void => {
             setting.addDropdown(dropdown => {
@@ -1725,14 +1721,14 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         },
         languageRow(
-          'Output language',
-          'Language for AI responses. "auto" matches the content language (e.g., Korean content → Korean summary)',
+          t('st.ai.outputLang.name'),
+          t('st.ai.outputLang.desc'),
           () => settings().outputLanguage,
           (value) => { settings().outputLanguage = value; },
         ),
         languageRow(
-          'Tag language',
-          'Language for AI-suggested tags. "auto" matches the content language (e.g., Korean content → Korean tags)',
+          t('st.ai.tagLang.name'),
+          t('st.ai.tagLang.desc'),
           () => settings().tagLanguage,
           (value) => { settings().tagLanguage = value; },
         ),
@@ -1805,29 +1801,29 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     return [{
       type: 'group',
-      heading: 'Author',
+      heading: t('st.author.heading'),
       items: [
         avatarToggle(
-          'Download author avatars',
-          'Save author profile images locally for offline access. Avatars are stored in the media folder under "authors".',
+          t('st.author.avatars.name'),
+          t('st.author.avatars.desc'),
           () => this.plugin.settings.downloadAuthorAvatars,
           (value) => { this.plugin.settings.downloadAuthorAvatars = value; },
         ),
         avatarToggle(
-          'Update author metadata',
-          'Track author statistics (followers, posts count, bio) on each archive. Useful for author catalog insights.',
+          t('st.author.metadata.name'),
+          t('st.author.metadata.desc'),
           () => this.plugin.settings.updateAuthorMetadata,
           (value) => { this.plugin.settings.updateAuthorMetadata = value; },
         ),
         avatarToggle(
-          'Overwrite existing avatars',
-          'Replace local avatar file when a new URL is provided. When disabled, existing avatars are preserved.',
+          t('st.author.overwrite.name'),
+          t('st.author.overwrite.desc'),
           () => this.plugin.settings.overwriteAuthorAvatar,
           (value) => { this.plugin.settings.overwriteAuthorAvatar = value; },
         ),
         {
-          name: 'Enable author notes',
-          desc: 'Create vault-native markdown files for each author with profile metadata and space for your notes. Experimental feature.',
+          name: t('st.author.notes.name'),
+          desc: t('st.author.notes.desc'),
           render: (setting): void => {
             setting.addToggle(toggle => toggle
               .setValue(this.plugin.settings.enableAuthorNotes)
@@ -1839,8 +1835,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         },
         gate(notesEnabled, {
-          name: 'Author notes folder',
-          desc: 'Folder where author note files will be created. Default: "Social Authors" (outside the archive folder to avoid scanner conflicts).',
+          name: t('st.author.notesFolder.name'),
+          desc: t('st.author.notesFolder.desc'),
           render: (setting): void => {
             setting.addText(text => {
               text
@@ -1855,8 +1851,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         }),
         gate(notesEnabled, {
-          name: 'Link archive notes to author notes',
-          desc: 'Add an authorNote wikilink to new archive notes so Obsidian backlinks and graph connections are created automatically.',
+          name: t('st.author.links.name'),
+          desc: t('st.author.links.desc'),
           render: (setting): void => {
             setting.addToggle((toggle) => toggle
               .setValue(this.plugin.settings.enableAuthorNoteLinks === true)
@@ -1868,8 +1864,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         }),
         gate(linksEnabled, {
-          name: 'Author link alias',
-          desc: 'Template used for the visible wikilink label. Click a token to insert it.',
+          name: t('st.author.alias.name'),
+          desc: t('st.author.alias.desc'),
           aliases: ['wikilink', 'template', 'token'],
           render: (setting): void => {
             setting.settingEl.addClass('st-fn-header-setting');
@@ -1893,7 +1889,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                 platform: 'instagram',
               });
               previewEl.empty();
-              const label = previewEl.createSpan({ text: 'Preview: ' });
+              const label = previewEl.createSpan({ text: t('st.common.preview') });
               label.addClass('st-fn-preview-label');
               previewEl.createEl('code', { text: `[[Social Authors/instagram-janedoe|${alias}]]` });
             };
@@ -1907,9 +1903,9 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
             const resetBtn = inputRowEl.createDiv({
               cls: 'clickable-icon',
-              attr: { 'aria-label': 'Reset to default' },
+              attr: { 'aria-label': t('st.common.resetToDefault') },
             });
-            resetBtn.title = 'Reset to default';
+            resetBtn.title = t('st.common.resetToDefault');
             setIcon(resetBtn, 'rotate-ccw');
             resetBtn.addEventListener('click', (event) => {
               event.preventDefault();
@@ -1922,15 +1918,15 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             const chipsEl = blockEl.createDiv();
             chipsEl.addClass('st-fn-chips');
             const tokens = [
-              { token: 'author', label: 'Author' },
-              { token: 'display_name', label: 'Display name' },
-              { token: 'handle', label: 'Handle' },
-              { token: 'platform', label: 'Platform' },
+              { token: 'author', label: t('st.token.author') },
+              { token: 'display_name', label: t('st.token.displayName') },
+              { token: 'handle', label: t('st.token.handle') },
+              { token: 'platform', label: t('st.token.platform') },
             ];
             for (const { token, label } of tokens) {
               const chip = chipsEl.createEl('button', { text: label });
               chip.addClass('st-fn-chip');
-              chip.title = `Insert {${token}}`;
+              chip.title = t('st.common.insertToken', { token: `{${token}}` });
               chip.addEventListener('click', (event) => {
                 event.preventDefault();
                 const start = inputEl.selectionStart ?? inputEl.value.length;
@@ -1949,13 +1945,13 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         }),
         gate(linksEnabled, {
-          name: 'Apply author links to existing notes',
-          desc: 'Preview and add or update authorNote links across the current archive folder. Other frontmatter and author note bodies are preserved.',
+          name: t('st.author.backfill.name'),
+          desc: t('st.author.backfill.desc'),
           render: (setting): void => {
             setting.addButton((button) => button
-              .setButtonText('Preview & Apply')
+              .setButtonText(t('st.common.previewApply'))
               .onClick(async () => {
-                button.setDisabled(true).setButtonText('Scanning...');
+                button.setDisabled(true).setButtonText(t('st.common.scanning'));
                 try {
                   await this.plugin.saveSettings();
                   const { ArchiveNoteBackfillService } = await import('../services/ArchiveNoteBackfillService');
@@ -1968,12 +1964,17 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                   });
                   const preview = await backfill.previewAuthorLinks(noteService);
                   const confirmed = await showConfirmModal(this.app, {
-                    title: 'Apply author links to existing notes?',
-                    message: `Scanned ${preview.scanned} notes and found ${preview.authors} authors across ${preview.eligibleFiles} eligible notes. ${preview.missingAuthorNotes} author notes will be created if needed.`,
-                    confirmText: 'Apply links',
+                    title: t('st.author.backfill.confirmTitle'),
+                    message: t('st.author.backfill.confirmMessage', {
+                      scanned: preview.scanned,
+                      authors: preview.authors,
+                      eligible: preview.eligibleFiles,
+                      missing: preview.missingAuthorNotes,
+                    }),
+                    confirmText: t('st.author.backfill.confirmButton'),
                   });
                   if (!confirmed) return;
-                  button.setButtonText('Applying...');
+                  button.setButtonText(t('st.common.applying'));
                   const result = await backfill.applyAuthorLinks(
                     noteService,
                     this.plugin.settings.authorNoteLinkAliasFormat || DEFAULT_AUTHOR_NOTE_LINK_ALIAS_FORMAT,
@@ -1983,23 +1984,23 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                   console.error('[Social Archiver] Author link backfill failed:', error);
                   new Notice('Failed to apply author links. Check console for details.');
                 } finally {
-                  button.setDisabled(false).setButtonText('Preview & Apply');
+                  button.setDisabled(false).setButtonText(t('st.common.previewApply'));
                 }
               }));
           },
         }),
         gate(notesEnabled, {
-          name: 'Generate author notes',
-          desc: 'Scan your vault and create author note files for all discovered authors. Safe to run multiple times.',
+          name: t('st.author.generate.name'),
+          desc: t('st.author.generate.desc'),
           render: (setting): void => {
             setting.addButton((button) => {
               button.buttonEl.addClass('sa-mobile-compact-btn');
               return button
-                .setButtonText('Scan & Generate')
+                .setButtonText(t('st.author.generate.button'))
                 .setCta()
                 .onClick(async () => {
                   button.setDisabled(true);
-                  button.setButtonText('Scanning...');
+                  button.setButtonText(t('st.common.scanning'));
 
                   try {
                     const { AuthorVaultScanner } = await import('../services/AuthorVaultScanner');
@@ -2018,10 +2019,10 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                       includeEmbeddedArchives: true,
                     });
 
-                    button.setButtonText('Scanning vault...');
+                    button.setButtonText(t('st.author.generate.scanningVault'));
                     const scanResult = await scanner.scanVault();
 
-                    button.setButtonText('Deduplicating...');
+                    button.setButtonText(t('st.author.generate.deduplicating'));
                     const deduplicator = new AuthorDeduplicator();
                     const dedupeResult = deduplicator.deduplicate(scanResult.authors, new Map());
 
@@ -2031,7 +2032,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                     const BATCH_SIZE = 50;
 
                     for (let i = 0; i < authors.length; i += BATCH_SIZE) {
-                      button.setButtonText(`Processing ${i}/${authors.length}...`);
+                      button.setButtonText(t('st.author.generate.processing', { current: i, total: authors.length }));
                       const batch = authors.slice(i, i + BATCH_SIZE);
                       for (const author of batch) {
                         const result = await noteService.upsertFromCatalogEntry(author);
@@ -2048,12 +2049,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                     }
 
                     new Notice(`Author notes: ${created} created, ${updated} updated (${authors.length} authors total)`);
-                    setting.setDesc(`Last scan: ${created} created, ${updated} updated (${authors.length} authors). Safe to run again.`);
+                    setting.setDesc(t('st.author.generate.lastScan', { created, updated, total: authors.length }));
                   } catch (err) {
                     console.error('[Social Archiver] Author note generation failed:', err);
                     new Notice('Failed to generate author notes. Check console for details.');
                   } finally {
-                    button.setButtonText('Scan & Generate');
+                    button.setButtonText(t('st.author.generate.button'));
                     button.setDisabled(false);
                   }
                 });
@@ -2119,12 +2120,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     return [{
       type: 'group',
-      heading: 'Transcription',
+      heading: t('st.stt.heading'),
       items: [
         {
           ...this.blockRow('Transcription mobile notice', (host) => {
             const mobileNote = host.createDiv({ cls: 'setting-item-description' });
-            mobileNote.textContent = 'Transcription is only available on desktop (requires local Whisper CLI)';
+            mobileNote.textContent = t('st.stt.mobileNote');
             mobileNote.addClass('sa-settings-info');
           }),
           visible: () => Platform.isMobile,
@@ -2138,8 +2139,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           visible: desktop,
         },
         {
-          name: 'Enable Whisper transcription',
-          desc: 'Transcribe podcast audio using locally installed Whisper (desktop only)',
+          name: t('st.stt.enable.name'),
+          desc: t('st.stt.enable.desc'),
           visible: desktop,
           render: (setting): void => {
             setting.addToggle(toggle => toggle
@@ -2151,20 +2152,20 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         },
         {
-          name: 'Preferred Whisper variant',
+          name: t('st.stt.variant.name'),
           visible: desktop,
           render: (setting): void => {
             const appleSilicon = isAppleSilicon();
             setting.setDesc(appleSilicon
-              ? 'Choose which Whisper implementation to use. "Auto-detect" tries whisper.cpp first on Apple Silicon (Metal GPU).'
-              : 'Choose which Whisper implementation to use. "Auto-detect" tries faster-whisper first.');
+              ? t('st.stt.variant.descApple')
+              : t('st.stt.variant.descOther'));
             setting.addDropdown(dropdown => {
               dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
               return dropdown
-                .addOption('auto', 'Auto-detect')
-                .addOption('faster-whisper', appleSilicon ? 'faster-whisper' : 'faster-whisper (recommended)')
+                .addOption('auto', t('st.common.autoDetect'))
+                .addOption('faster-whisper', appleSilicon ? 'faster-whisper' : t('st.common.recommendedSuffix', { name: 'faster-whisper' }))
                 .addOption('openai-whisper', 'openai-whisper')
-                .addOption('whisper.cpp', appleSilicon ? 'whisper.cpp (recommended)' : 'whisper.cpp')
+                .addOption('whisper.cpp', appleSilicon ? t('st.common.recommendedSuffix', { name: 'whisper.cpp' }) : 'whisper.cpp')
                 .setValue(transcription().preferredVariant || 'auto')
                 .onChange(async (value) => {
                   transcription().preferredVariant = value as WhisperVariantType;
@@ -2176,14 +2177,14 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         },
         dropdownRow(
-          'Preferred model',
-          'Larger models are more accurate but slower. Requires more VRAM.',
+          t('st.stt.model.name'),
+          t('st.stt.model.desc'),
           {
-            tiny: 'Tiny (~1GB VRAM, fastest)',
-            base: 'Base (~1GB VRAM)',
-            small: 'Small (~2GB VRAM) - recommended',
-            medium: 'Medium (~5GB VRAM)',
-            large: 'Large (~10GB VRAM, most accurate)',
+            tiny: t('st.stt.model.tiny'),
+            base: t('st.stt.model.base'),
+            small: t('st.stt.model.small'),
+            medium: t('st.stt.model.medium'),
+            large: t('st.stt.model.large'),
           },
           () => transcription().preferredModel,
           (value) => {
@@ -2192,12 +2193,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         ),
         dropdownRow(
-          'Default language',
-          'Auto-detect or select specific language for transcription',
+          t('st.stt.lang.name'),
+          t('st.stt.lang.desc'),
           {
-            auto: 'Auto-detect', en: 'English', es: 'Spanish', fr: 'French', de: 'German',
-            it: 'Italian', pt: 'Portuguese', ja: 'Japanese', ko: 'Korean', zh: 'Chinese',
-            ru: 'Russian', ar: 'Arabic',
+            auto: t('st.common.autoDetect'), en: t('st.lang.en'), es: t('st.lang.es'), fr: t('st.lang.fr'), de: t('st.lang.de'),
+            it: t('st.lang.it'), pt: t('st.lang.pt'), ja: t('st.lang.ja'), ko: t('st.lang.ko'), zh: t('st.lang.zh'),
+            ru: t('st.lang.ru'), ar: t('st.lang.ar'),
           },
           () => transcription().language,
           (value) => {
@@ -2206,12 +2207,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         ),
         {
-          name: 'Custom Whisper path',
-          desc: 'Override automatic detection with a custom binary path (optional)',
+          name: t('st.stt.customPath.name'),
+          desc: t('st.stt.customPath.desc'),
           visible: desktop,
           render: (setting): void => {
             setting.addText(text => text
-              .setPlaceholder('/path/to/whisper or C:\\path\\to\\whisper.exe')
+              .setPlaceholder(t('st.stt.customPath.placeholder'))
               .setValue(transcription().customWhisperPath || '')
               .onChange(async (value) => {
                 transcription().customWhisperPath = value || undefined;
@@ -2222,8 +2223,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         },
         {
           // Force enable covers ARM64/Windows edge cases where detection fails.
-          name: 'Force enable custom path',
-          desc: 'Skip binary validation when using custom path. Use if detection fails on ARM64, Windows, or other systems.',
+          name: t('st.stt.forcePath.name'),
+          desc: t('st.stt.forcePath.desc'),
           visible: desktop,
           render: (setting): void => {
             setting.addToggle(toggle => toggle
@@ -2236,11 +2237,11 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         },
         dropdownRow(
-          'Batch transcription mode',
-          'Transcribe-only: transcribe existing local videos. Download-and-transcribe: also download videos from URLs before transcribing.',
+          t('st.stt.batchMode.name'),
+          t('st.stt.batchMode.desc'),
           {
-            'transcribe-only': 'Transcribe only',
-            'download-and-transcribe': 'Download & transcribe',
+            'transcribe-only': t('st.stt.batchMode.transcribeOnly'),
+            'download-and-transcribe': t('st.stt.batchMode.downloadAndTranscribe'),
           },
           () => transcription().batchMode || 'transcribe-only',
           async (value) => {
@@ -2249,8 +2250,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           },
         ),
         {
-          name: 'Batch transcribe videos in notes',
-          desc: 'Scans notes in your archive folder and transcribes notes with local video attachments where videoTranscribed is not true.',
+          name: t('st.stt.batch.name'),
+          desc: t('st.stt.batch.desc'),
           visible: desktop,
           render: (setting): void => {
             // Buttons are state-driven: which ones exist depends on the
@@ -2262,7 +2263,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
               if (status === 'idle' || status === 'completed' || status === 'cancelled') {
                 setting.addButton((button) => button
-                  .setButtonText('Start')
+                  .setButtonText(t('st.common.start'))
                   .setCta()
                   .onClick(async () => {
                     const mode = transcription().batchMode || 'transcribe-only';
@@ -2271,13 +2272,13 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                   }));
               } else if (status === 'running' || status === 'scanning') {
                 setting.addButton((button) => button
-                  .setButtonText('Pause')
+                  .setButtonText(t('st.common.pause'))
                   .onClick(() => {
                     this.plugin.batchTranscriptionManager?.pause();
                     renderBatchButtons();
                   }));
                 setting.addButton((button) => button
-                  .setButtonText('Cancel')
+                  .setButtonText(t('st.common.cancel'))
                   .setWarning()
                   .onClick(() => {
                     this.plugin.batchTranscriptionManager?.cancel();
@@ -2285,14 +2286,14 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                   }));
               } else if (status === 'paused') {
                 setting.addButton((button) => button
-                  .setButtonText('Resume')
+                  .setButtonText(t('st.common.resume'))
                   .setCta()
                   .onClick(async () => {
                     await this.plugin.batchTranscriptionManager?.resume();
                     renderBatchButtons();
                   }));
                 setting.addButton((button) => button
-                  .setButtonText('Cancel')
+                  .setButtonText(t('st.common.cancel'))
                   .setWarning()
                   .onClick(() => {
                     this.plugin.batchTranscriptionManager?.cancel();
@@ -2329,19 +2330,19 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     return [{
       type: 'group',
-      heading: 'Frontmatter',
+      heading: t('st.fm.heading'),
       items: [
         this.blockRow('Frontmatter description', (host) => {
           const frontmatterDesc = host.createEl('p', {
-            text: 'Choose built-in properties and add custom properties for all archived notes.'
+            text: t('st.fm.desc')
           });
           frontmatterDesc.addClass('sa-settings-info');
           frontmatterDesc.setCssProps({ '--st-margin': '0 0 12px 0' });
           frontmatterDesc.addClass('st-margin-custom');
         }),
         {
-          name: 'Enable frontmatter customization',
-          desc: 'Apply visibility rules and custom properties to newly archived notes.',
+          name: t('st.fm.enable.name'),
+          desc: t('st.fm.enable.desc'),
           aliases: ['property order', 'custom properties', 'archive tags'],
           render: (setting): void => {
             this.ensureFrontmatterSettings();
@@ -2364,14 +2365,19 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         /** Build the durable one-line last-import summary (PRD S4.8). */
   private formatLocalImportSummary(result: LocalImportLastResult): string {
     const stopReasonCopy: Record<LocalImportLastResult['stopReason'], string> = {
-      completed: 'completed',
-      quota: 'monthly quota reached',
-      error: 'stopped on error',
+      completed: t('st.local.summary.completed'),
+      quota: t('st.local.summary.quota'),
+      error: t('st.local.summary.error'),
     };
-    return `Last import (${new Date(result.at).toLocaleString()}): `
-      + `${result.imported} imported · ${result.duplicates} ${result.duplicates === 1 ? 'duplicate' : 'duplicates'} · `
-      + `${result.partialMedia} partial media · ${result.remaining} remaining `
-      + `(${stopReasonCopy[result.stopReason]})`;
+    return t('st.local.summary', {
+      date: new Date(result.at).toLocaleString(),
+      imported: result.imported,
+      duplicates: result.duplicates,
+      duplicateWord: result.duplicates === 1 ? t('st.local.summary.duplicateOne') : t('st.local.summary.duplicateOther'),
+      partialMedia: result.partialMedia,
+      remaining: result.remaining,
+      reason: stopReasonCopy[result.stopReason],
+    });
   }
 
     /**
@@ -2418,11 +2424,11 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     const bodyContainer = containerEl.createDiv({ cls: 'social-archiver-frontmatter-body' });
 
-    const defaultPropertiesHeaderSetting = new Setting(bodyContainer).setName('Property order').setHeading();
+    const defaultPropertiesHeaderSetting = new Setting(bodyContainer).setName(t('st.fm.propertyOrder')).setHeading();
     defaultPropertiesHeaderSetting.settingEl.addClass('sa-text-md', 'sa-font-semibold', 'sa-text-normal', 'st-margin-custom');
     defaultPropertiesHeaderSetting.settingEl.setCssProps({ '--st-margin': '12px 0 8px 0' });
     const defaultPropertiesDesc = bodyContainer.createEl('p', {
-      text: 'Reorder rows. Add new rows at the bottom and move them with ↑/↓.',
+      text: t('st.fm.reorderHint'),
     });
     defaultPropertiesDesc.addClass('sa-settings-desc-small');
 
@@ -2434,68 +2440,68 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     }> = [
       {
         key: 'authorDetails',
-        name: 'Author Details',
+        name: t('st.fm.cat.authorDetails'),
         desc: 'authorHandle, authorAvatar, followers, bio',
         fields: ['authorHandle', 'authorAvatar', 'authorFollowers', 'authorPostsCount', 'authorBio', 'authorVerified'],
       },
       {
         key: 'engagement',
-        name: 'Engagement Metrics',
+        name: t('st.fm.cat.engagement'),
         desc: 'likes, comments, shares, views',
         fields: ['likes', 'comments', 'shares', 'views'],
       },
       {
         key: 'aiAnalysis',
-        name: 'AI Analysis',
+        name: t('st.fm.cat.aiAnalysis'),
         desc: 'ai_summary, sentiment, topics',
         fields: ['ai_summary', 'sentiment', 'topics'],
       },
       {
         key: 'externalLinks',
-        name: 'External Links',
-        desc: 'link metadata and linkPreviews',
+        name: t('st.fm.cat.externalLinks'),
+        desc: t('st.fm.cat.externalLinks.desc'),
         fields: ['externalLink', 'externalLinkTitle', 'externalLinkDescription', 'externalLinkImage', 'linkPreviews'],
       },
       {
         key: 'location',
-        name: 'Location',
+        name: t('st.fm.cat.location'),
         desc: 'latitude, longitude, coordinates, location',
         fields: ['latitude', 'longitude', 'coordinates', 'location'],
       },
       {
         key: 'subscription',
-        name: 'Subscription Info',
+        name: t('st.fm.cat.subscription'),
         desc: 'subscribed, subscriptionId',
         fields: ['subscribed', 'subscriptionId'],
       },
       {
         key: 'seriesInfo',
-        name: 'Series Info',
-        desc: 'series, episode, genre, rating',
+        name: t('st.fm.cat.seriesInfo'),
+        desc: t('st.fm.cat.seriesInfo.desc'),
         fields: ['series', 'seriesUrl', 'seriesId', 'episode', 'totalEpisodes', 'starScore', 'genre', 'ageRating', 'finished', 'publishDay'],
       },
       {
         key: 'podcastInfo',
-        name: 'Podcast Info',
-        desc: 'audio fields, season, hosts, guests',
+        name: t('st.fm.cat.podcastInfo'),
+        desc: t('st.fm.cat.podcastInfo.desc'),
         fields: ['channelTitle', 'audioUrl', 'audioSize', 'audioType', 'season', 'subtitle', 'hosts', 'guests', 'explicit'],
       },
       {
         key: 'reblogInfo',
-        name: 'Reblog/Repost',
-        desc: 'original author and post references',
+        name: t('st.fm.cat.reblogInfo'),
+        desc: t('st.fm.cat.reblogInfo.desc'),
         fields: ['isReblog', 'originalAuthor', 'originalAuthorHandle', 'originalAuthorUrl', 'originalPostUrl', 'originalAuthorAvatar'],
       },
       {
         key: 'mediaMetadata',
-        name: 'Media Metadata',
-        desc: 'expired media and processed URLs',
+        name: t('st.fm.cat.mediaMetadata'),
+        desc: t('st.fm.cat.mediaMetadata.desc'),
         fields: ['media_expired', 'media_expired_urls', 'processedUrls'],
       },
       {
         key: 'workflow',
-        name: 'Workflow Fields',
-        desc: 'share/archive/video download+transcription status fields',
+        name: t('st.fm.cat.workflow'),
+        desc: t('st.fm.cat.workflow.desc'),
         fields: [
           'share',
           'archive',
@@ -2686,8 +2692,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     const renderCustomValueRow = (property: CustomFrontmatterProperty, propertyType: FrontmatterPropertyType): void => {
       if (propertyType === 'checkbox') {
         const valueSetting = new Setting(orderListContainer)
-          .setName('Checkbox value')
-          .setDesc('Template override has priority. If empty, checkbox value is used.')
+          .setName(t('st.fm.value.checkbox.name'))
+          .setDesc(t('st.fm.value.checkbox.desc'))
           .addToggle((toggle) => toggle
             .setValue(property.checked === true)
             .onChange((value) => {
@@ -2695,7 +2701,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
               this.markDirty();
             }))
           .addText((text) => text
-            .setPlaceholder('Optional template override, e.g. {{platform}}')
+            .setPlaceholder(t('st.fm.value.templatePlatform'))
             .setValue(property.template || '')
             .onChange((value) => {
               property.template = value;
@@ -2707,8 +2713,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
       if (propertyType === 'date') {
         const valueSetting = new Setting(orderListContainer)
-          .setName('Date value')
-          .setDesc('Template override has priority. If empty, date picker value is used.')
+          .setName(t('st.fm.value.date.name'))
+          .setDesc(t('st.fm.value.date.desc'))
           .addText((text) => {
             text
               .setValue(property.dateValue || '')
@@ -2719,7 +2725,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             text.inputEl.type = 'date';
           })
           .addText((text) => text
-            .setPlaceholder('Optional template override, e.g. {{dates.archived}}')
+            .setPlaceholder(t('st.fm.value.templateDates'))
             .setValue(property.template || '')
             .onChange((value) => {
               property.template = value;
@@ -2731,8 +2737,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
       if (propertyType === 'date-time') {
         const valueSetting = new Setting(orderListContainer)
-          .setName('Date & time value')
-          .setDesc('Template override has priority. If empty, date-time picker value is used.')
+          .setName(t('st.fm.value.dateTime.name'))
+          .setDesc(t('st.fm.value.dateTime.desc'))
           .addText((text) => {
             text
               .setValue(property.dateTimeValue || '')
@@ -2743,7 +2749,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             text.inputEl.type = 'datetime-local';
           })
           .addText((text) => text
-            .setPlaceholder('Optional template override, e.g. {{dates.archived}}')
+            .setPlaceholder(t('st.fm.value.templateDates'))
             .setValue(property.template || '')
             .onChange((value) => {
               property.template = value;
@@ -2755,11 +2761,11 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
       if (propertyType === 'list') {
         const valueSetting = new Setting(orderListContainer)
-          .setName('List value')
-          .setDesc('One item per line. Template variables are supported in each line.')
+          .setName(t('st.fm.value.list.name'))
+          .setDesc(t('st.fm.value.list.desc'))
           .addTextArea((text) => {
             text
-              .setPlaceholder('first item\nsecond item\n{{platform}}')
+              .setPlaceholder(t('st.fm.value.list.placeholder'))
               .setValue(property.value || '')
               .onChange((value) => {
                 property.value = value;
@@ -2773,10 +2779,10 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       }
 
       const valueSetting = new Setting(orderListContainer)
-        .setName(propertyType === 'number' ? 'Number Value' : 'Text Value')
-        .setDesc('Template variables are supported.')
+        .setName(propertyType === 'number' ? t('st.fm.value.number.name') : t('st.fm.value.text.name'))
+        .setDesc(t('st.fm.value.simple.desc'))
         .addText((text) => text
-          .setPlaceholder(propertyType === 'number' ? '123 or {{post.id}}' : 'inbox or {{platform}}')
+          .setPlaceholder(propertyType === 'number' ? t('st.fm.value.number.placeholder') : t('st.fm.value.text.placeholder'))
           .setValue(property.value || '')
           .onChange((value) => {
             property.value = value;
@@ -2807,7 +2813,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
           const defaultSetting = new Setting(orderListContainer)
             .setName(category.name)
-            .setDesc(aliasCount > 0 ? `${category.desc} · Aliases: ${aliasCount}` : category.desc)
+            .setDesc(aliasCount > 0 ? t('st.fm.aliasesSuffix', { desc: category.desc, count: aliasCount }) : category.desc)
             .addToggle((toggle) => toggle
               .setValue(frontmatterSettings.fieldVisibility[category.key])
               .onChange((value) => {
@@ -2817,8 +2823,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
           if (aliasableFields.length > 0) {
             defaultSetting.addButton((button) => button
-              .setButtonText(expandedAliasCategory === category.key ? `Aliases (${aliasCount})` : `Alias (${aliasCount})`)
-              .setTooltip('Edit aliases for keys in this row')
+              .setButtonText(expandedAliasCategory === category.key ? t('st.fm.aliasesButton', { count: aliasCount }) : t('st.fm.aliasButton', { count: aliasCount }))
+              .setTooltip(t('st.fm.aliasTooltip'))
               .onClick(() => {
                 expandedAliasCategory = expandedAliasCategory === category.key ? null : category.key;
                 renderMixedPropertyRows();
@@ -2829,12 +2835,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             .addButton((button) => button
               .setButtonText('↑')
               .setDisabled(index === 0)
-              .setTooltip('Move this row up')
+              .setTooltip(t('st.fm.moveUp'))
               .onClick(() => moveMixedItem(index, index - 1)))
             .addButton((button) => button
               .setButtonText('↓')
               .setDisabled(index >= mixedOrderItems.length - 1)
-              .setTooltip('Move this row down')
+              .setTooltip(t('st.fm.moveDown'))
               .onClick(() => moveMixedItem(index, index + 1)));
 
           styleOrderRow(defaultSetting, 'default');
@@ -2844,7 +2850,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             aliasEditor.addClass('sa-settings-alias-editor', 'st-alias-editor-expanded');
 
             const aliasGuide = aliasEditor.createEl('p', {
-              text: 'Rename default keys used by this row. Leave empty to keep the original key.',
+              text: t('st.fm.aliasGuide'),
             });
             aliasGuide.addClass('sa-settings-alias-guide');
 
@@ -2860,7 +2866,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
               const inputEl = row.createEl('input', { type: 'text' });
               inputEl.value = String(frontmatterSettings.fieldAliases?.[field] || '');
-              inputEl.placeholder = `alias for ${field}`;
+              inputEl.placeholder = t('st.fm.aliasPlaceholder', { field });
               inputEl.addClass('sa-settings-alias-input');
 
               inputEl.addEventListener('change', () => {
@@ -2891,14 +2897,14 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         const propertyType: FrontmatterPropertyType = this.normalizeFrontmatterPropertyType(property.type);
         property.type = propertyType;
         const isCustomKey = !vaultFrontmatterKeys.includes(property.key);
-        const labelKey = String(property.key || '').trim() || 'Untitled';
+        const labelKey = String(property.key || '').trim() || t('st.fm.untitled');
 
         const propertySetting = new Setting(orderListContainer)
           .setName(labelKey)
           .addDropdown((dropdown) => {
             dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
-            dropdown.addOption('', 'Select existing key...');
-            dropdown.addOption(customKeyOptionValue, 'New key...');
+            dropdown.addOption('', t('st.fm.selectExistingKey'));
+            dropdown.addOption(customKeyOptionValue, t('st.fm.newKey'));
             for (const key of vaultFrontmatterKeys) {
               dropdown.addOption(key, key);
             }
@@ -2925,7 +2931,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
               .setValue(property.key)
               .onChange((value) => {
                 property.key = value;
-                propertySetting.setName(String(value || '').trim() || 'Untitled');
+                propertySetting.setName(String(value || '').trim() || t('st.fm.untitled'));
                 this.markDirty();
                 rebuildPropertyOrderFromMixedOrder();
               });
@@ -2936,12 +2942,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           .addDropdown((dropdown) => {
             dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
             dropdown
-              .addOption('text', 'Text')
-              .addOption('number', 'Number')
-              .addOption('checkbox', 'Checkbox')
-              .addOption('date', 'Date')
-              .addOption('date-time', 'Date & time')
-              .addOption('list', 'List')
+              .addOption('text', t('st.fm.type.text'))
+              .addOption('number', t('st.fm.type.number'))
+              .addOption('checkbox', t('st.fm.type.checkbox'))
+              .addOption('date', t('st.fm.type.date'))
+              .addOption('date-time', t('st.fm.type.dateTime'))
+              .addOption('list', t('st.fm.type.list'))
               .setValue(propertyType)
               .onChange((value) => {
                 property.type = this.normalizeFrontmatterPropertyType(value);
@@ -2958,16 +2964,16 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           .addButton((button) => button
             .setButtonText('↑')
             .setDisabled(index === 0)
-            .setTooltip('Move this row up')
+            .setTooltip(t('st.fm.moveUp'))
             .onClick(() => moveMixedItem(index, index - 1)))
           .addButton((button) => button
             .setButtonText('↓')
             .setDisabled(index >= mixedOrderItems.length - 1)
-            .setTooltip('Move this row down')
+            .setTooltip(t('st.fm.moveDown'))
             .onClick(() => moveMixedItem(index, index + 1)))
           .addExtraButton((button) => button
             .setIcon('trash')
-            .setTooltip('Remove property')
+            .setTooltip(t('st.fm.removeProperty'))
             .onClick(() => {
               frontmatterSettings.customProperties = frontmatterSettings.customProperties.filter(
                 (candidate) => candidate.id !== property.id
@@ -2984,10 +2990,10 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       }
 
       const addRowSetting = new Setting(orderListContainer)
-        .setName('Add row')
+        .setName(t('st.fm.addRow.name'))
         .addButton((button) => button
-          .setButtonText('+ add row')
-          .setTooltip('Add row')
+          .setButtonText(t('st.fm.addRow.button'))
+          .setTooltip(t('st.fm.addRow.name'))
           .onClick(() => {
             const newProperty: CustomFrontmatterProperty = {
               id: this.createFrontmatterPropertyId(),
@@ -3012,10 +3018,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     renderMixedPropertyRows();
 
     const variablesNote = bodyContainer.createDiv({
-      text: 'Custom property values support these template variables: '
-        + '{{platform}}, {{author.name}}, {{author.handle}}, {{author.username}}, {{author.url}}, '
-        + '{{post.id}}, {{post.url}}, {{dates.published}}, {{dates.archived}}, {{dates.lastModified}}. '
-        + 'Use the dotted form exactly (e.g. {{post.url}}), not the property label. ',
+      text: t('st.fm.variablesNote'),
     });
     variablesNote.addClass('sa-settings-desc-small', 'st-margin-custom');
     variablesNote.setCssProps({ '--st-margin': '8px 0 4px 0' });
@@ -3023,26 +3026,26 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     const obsidianLang = getLanguage().toLowerCase();
     const docsLocale = obsidianLang.startsWith('ko') ? 'ko' : obsidianLang.startsWith('ja') ? 'ja' : 'en';
     const variablesGuideLink = variablesNote.createEl('a', {
-      text: 'View guide',
+      text: t('st.fm.viewGuide'),
       href: `https://docs.social-archive.org/${docsLocale}/guide/frontmatter-template-variables`,
     });
     variablesGuideLink.setAttr('target', '_blank');
     variablesGuideLink.setAttr('rel', 'noopener');
 
     const coreLockedNote = bodyContainer.createDiv({
-      text: 'Core keys cannot be removed, renamed, or replaced by a custom property with the same name: platform, author, authorUrl, authorNote, published, archived, lastModified, tags, archiveTags.',
+      text: t('st.fm.coreLockedNote'),
     });
     coreLockedNote.addClass('sa-settings-desc-small');
     coreLockedNote.setCssProps({ '--st-margin': '4px 0 12px 0' });
     coreLockedNote.addClass('st-margin-custom');
 
-    const tagSettingsHeaderSetting = new Setting(bodyContainer).setName('Archive tags').setHeading();
+    const tagSettingsHeaderSetting = new Setting(bodyContainer).setName(t('st.fm.archiveTags')).setHeading();
     tagSettingsHeaderSetting.settingEl.addClass('sa-text-md', 'sa-font-semibold', 'sa-text-normal', 'st-margin-custom');
     tagSettingsHeaderSetting.settingEl.setCssProps({ '--st-margin': '14px 0 8px 0' });
 
     new Setting(bodyContainer)
-      .setName('Main archive tag')
-      .setDesc('Base tag for archived notes. Example: maintag or #maintag. Leave empty to disable auto tags.')
+      .setName(t('st.fm.mainTag.name'))
+      .setDesc(t('st.fm.mainTag.desc'))
       .addText((text) => text
         .setPlaceholder('Maintag')
         .setValue(frontmatterSettings.tagRoot || '')
@@ -3053,8 +3056,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         }));
 
     new Setting(bodyContainer)
-      .setName('Tag structure')
-      .setDesc('Choose how the auto tag is generated from the main tag.')
+      .setName(t('st.fm.tagStructure.name'))
+      .setDesc(t('st.fm.tagStructure.desc'))
       .addDropdown((dropdown) => {
         dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
         return dropdown
@@ -3070,12 +3073,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       });
 
     new Setting(bodyContainer)
-      .setName('Apply main tag to existing notes')
-      .setDesc('Preview and replace only known plugin-managed main tags in the current archive folder. Unrelated tags and archiveTags are preserved.')
+      .setName(t('st.fm.applyMainTag.name'))
+      .setDesc(t('st.fm.applyMainTag.desc'))
       .addButton((button) => button
-        .setButtonText('Preview & Apply')
+        .setButtonText(t('st.common.previewApply'))
         .onClick(async () => {
-          button.setDisabled(true).setButtonText('Scanning...');
+          button.setDisabled(true).setButtonText(t('st.common.scanning'));
           try {
             await this.plugin.saveSettings();
             const { ArchiveNoteBackfillService } = await import('../services/ArchiveNoteBackfillService');
@@ -3089,25 +3092,30 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             };
             const preview = await service.previewMainTag(options);
             const confirmed = await showConfirmModal(this.app, {
-              title: 'Apply main tag to existing notes?',
-              message: `Scanned ${preview.scanned} notes. ${preview.updated} will change, ${preview.unchanged} are already current, and ${preview.skipped} will be skipped.`,
-              confirmText: 'Apply tag rule',
+              title: t('st.fm.applyMainTag.confirmTitle'),
+              message: t('st.fm.applyMainTag.confirmMessage', {
+                scanned: preview.scanned,
+                updated: preview.updated,
+                unchanged: preview.unchanged,
+                skipped: preview.skipped,
+              }),
+              confirmText: t('st.fm.applyMainTag.confirmButton'),
             });
             if (!confirmed) return;
-            button.setButtonText('Applying...');
+            button.setButtonText(t('st.common.applying'));
             const result = await service.applyMainTag(options);
             new Notice(`Main tag: ${result.updated} updated, ${result.unchanged} unchanged, ${result.skipped} skipped, ${result.failed} failed.`);
           } catch (error) {
             console.error('[Social Archiver] Main tag backfill failed:', error);
             new Notice('Failed to apply the main tag. Check console for details.');
           } finally {
-            button.setDisabled(false).setButtonText('Preview & Apply');
+            button.setDisabled(false).setButtonText(t('st.common.previewApply'));
           }
         }));
 
     new Setting(bodyContainer)
-      .setName('Mirror archive tags to Obsidian tags')
-      .setDesc('Also write Social Archiver archive tags into the native frontmatter tags field. Existing Obsidian tags are preserved.')
+      .setName(t('st.fm.mirror.name'))
+      .setDesc(t('st.fm.mirror.desc'))
       .addToggle((toggle) => toggle
         .setValue(this.plugin.settings.mirrorArchiveTagsToObsidianTags)
         .onChange(async (value) => {
@@ -3121,10 +3129,10 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         }));
 
     new Setting(bodyContainer)
-      .setName('Reset frontmatter settings')
-      .setDesc('Reset property order, custom rows, visibility toggles, and archive tag settings.')
+      .setName(t('st.fm.reset.name'))
+      .setDesc(t('st.fm.reset.desc'))
       .addButton((button) => button
-        .setButtonText('Reset all')
+        .setButtonText(t('st.fm.reset.button'))
         .setWarning()
         .onClick(() => {
           rememberArchiveTagRuleAtOpen();
@@ -3161,14 +3169,14 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       const mobileNote = container.createDiv({
         cls: 'setting-item-description'
       });
-      mobileNote.textContent = 'ⓘ transcription is only available on desktop';
+      mobileNote.textContent = t('st.whisper.mobileOnly');
       mobileNote.addClass('sa-settings-info');
       return;
     }
 
     // Show loading state
     const loadingEl = container.createDiv({
-      text: 'Detecting Whisper installation...',
+      text: t('st.whisper.detecting'),
       cls: 'setting-item-description'
     });
     loadingEl.addClass('sa-text-muted');
@@ -3193,14 +3201,14 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         });
         // Indicate if using custom path
         const isUsingCustomPath = customPath && detection.path.includes(customPath.replace(/\//g, '\\').split('\\').pop() || '');
-        statusEl.textContent = `✓ Detected: ${detection.variant}${isUsingCustomPath ? ' (custom path)' : ''}`;
+        statusEl.textContent = t('st.whisper.detected', { variant: detection.variant }) + (isUsingCustomPath ? t('st.whisper.customPathSuffix') : '');
         statusEl.addClass('sa-status-success');
 
         // Show path
         const pathEl = container.createDiv({
           cls: 'setting-item-description'
         });
-        pathEl.textContent = `  Path: ${detection.path}`;
+        pathEl.textContent = t('st.whisper.path', { path: detection.path });
         pathEl.addClass('sa-status-path');
 
         // Show version if available
@@ -3208,7 +3216,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           const versionEl = container.createDiv({
             cls: 'setting-item-description'
           });
-          versionEl.textContent = `  Version: ${detection.version}`;
+          versionEl.textContent = t('st.whisper.version', { version: detection.version });
           versionEl.addClass('sa-status-version');
         }
 
@@ -3217,14 +3225,14 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           const modelsEl = container.createDiv({
             cls: 'setting-item-description'
           });
-          modelsEl.textContent = `  Models: ${detection.installedModels.join(', ')}`;
+          modelsEl.textContent = t('st.whisper.models', { models: detection.installedModels.join(', ') });
           modelsEl.addClass('sa-status-models');
         }
       } else {
         const statusEl = container.createDiv({
           cls: 'setting-item-description'
         });
-        statusEl.textContent = '✗ Whisper not detected';
+        statusEl.textContent = t('st.whisper.notDetected');
         statusEl.addClass('sa-status-error');
 
         // Show specific hint if custom path was set but failed
@@ -3232,19 +3240,19 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           const customPathHintEl = container.createDiv({
             cls: 'setting-item-description'
           });
-          customPathHintEl.textContent = `⚠ Custom path could not be validated: ${customPath}`;
+          customPathHintEl.textContent = t('st.whisper.customPathInvalid', { path: customPath });
           customPathHintEl.addClass('sa-status-warning', 'sa-text-sm', 'sa-mt-4');
 
           const checkHintEl = container.createDiv({
             cls: 'setting-item-description'
           });
-          checkHintEl.textContent = 'Please verify the file exists and is a valid Whisper binary.';
+          checkHintEl.textContent = t('st.whisper.verifyHint');
           checkHintEl.addClass('sa-status-path');
         } else {
           const hintEl = container.createDiv({
             cls: 'setting-item-description'
           });
-          hintEl.textContent = 'Install faster-whisper: pip install faster-whisper';
+          hintEl.textContent = t('st.whisper.installHint');
           hintEl.addClass('sa-settings-hint');
         }
       }
@@ -3253,7 +3261,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       const errorEl = container.createDiv({
         cls: 'setting-item-description'
       });
-      errorEl.textContent = '⚠ Could not detect Whisper';
+      errorEl.textContent = t('st.whisper.detectError');
       errorEl.addClass('sa-status-warning');
     }
   }
@@ -3263,12 +3271,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    */
   private renderRedditSettings(containerEl: HTMLElement): void {
     // Section Header with Reddit icon
-    new Setting(containerEl).setName('Reddit sync').setHeading()
+    new Setting(containerEl).setName(t('st.reddit.heading')).setHeading()
       .settingEl.addClass('sa-settings-section-header');
 
     // Description
     const redditDesc = containerEl.createEl('p', {
-      text: 'Automatically sync your Reddit saved posts to your vault. Requires connecting your Reddit account.'
+      text: t('st.reddit.desc')
     });
     redditDesc.addClass('sa-settings-info');
 
@@ -3279,16 +3287,16 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Connect/Disconnect button
     const connectSetting = new Setting(containerEl)
-      .setName('Reddit account')
+      .setName(t('st.reddit.account.name'))
       .setDesc(this.plugin.settings.redditConnected
-        ? `Connected as u/${this.plugin.settings.redditUsername}`
-        : 'Connect your Reddit account to enable sync');
+        ? t('st.reddit.connectedAs', { username: this.plugin.settings.redditUsername })
+        : t('st.reddit.connectDesc'));
 
     if (this.plugin.settings.redditConnected) {
       connectSetting.addButton(button => {
         button.buttonEl.addClass('sa-mobile-compact-btn');
         return button
-          .setButtonText('Disconnect')
+          .setButtonText(t('st.reddit.disconnect'))
           .setWarning()
           .onClick(async () => {
             await this.disconnectReddit();
@@ -3300,7 +3308,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       connectSetting.addButton(button => {
         button.buttonEl.addClass('sa-mobile-compact-btn');
         return button
-          .setButtonText('Connect Reddit')
+          .setButtonText(t('st.reddit.connect'))
           .setCta()
           .onClick(async () => {
             await this.connectReddit();
@@ -3312,8 +3320,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     if (this.plugin.settings.redditConnected) {
       // Enable sync toggle
       new Setting(containerEl)
-        .setName('Enable automatic sync')
-        .setDesc('Automatically sync saved posts on a schedule')
+        .setName(t('st.reddit.autoSync.name'))
+        .setDesc(t('st.reddit.autoSync.desc'))
         .addToggle(toggle => toggle
           .setValue(this.plugin.settings.redditSyncEnabled)
           .onChange((value) => {
@@ -3323,8 +3331,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
       // Sync folder
       new Setting(containerEl)
-        .setName('Sync folder')
-        .setDesc('Folder where synced Reddit posts will be saved')
+        .setName(t('st.reddit.folder.name'))
+        .setDesc(t('st.reddit.folder.desc'))
         .addText(text => {
           text
             .setPlaceholder('Social archives/Reddit saved')
@@ -3340,15 +3348,15 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
       // Manual sync button
       new Setting(containerEl)
-        .setName('Sync now')
-        .setDesc('Manually trigger a sync of your Reddit saved posts')
+        .setName(t('st.reddit.syncNow.name'))
+        .setDesc(t('st.reddit.syncNow.desc'))
         .addButton(button => {
           button.buttonEl.addClass('sa-mobile-compact-btn');
           return button
-            .setButtonText('Sync now')
+            .setButtonText(t('st.reddit.syncNow.name'))
             .onClick(async () => {
               button.setDisabled(true);
-              button.setButtonText('Syncing...');
+              button.setButtonText(t('st.reddit.syncing'));
               try {
                 // TODO: Implement actual sync trigger when Reddit API is approved
                 // For now, show a notice
@@ -3357,7 +3365,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                 new Notice(`Sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
               } finally {
                 button.setDisabled(false);
-                button.setButtonText('Sync now');
+                button.setButtonText(t('st.reddit.syncNow.name'));
               }
             });
         });
@@ -3366,13 +3374,13 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     // Info callout
     const infoDiv = containerEl.createDiv({ cls: 'setting-info' });
     infoDiv.addClass('sa-settings-info-box', 'sa-mt-16');
-    infoDiv.createEl('strong', { text: 'About Reddit sync' });
+    infoDiv.createEl('strong', { text: t('st.reddit.about') });
     const ul = infoDiv.createEl('ul');
     ul.addClass('sa-settings-info-list');
-    ul.createEl('li', { text: 'Syncs posts you\'ve saved on Reddit' });
-    ul.createEl('li', { text: 'Requires Reddit OAuth authentication' });
-    ul.createEl('li', { text: 'Runs automatically once per day when enabled' });
-    ul.createEl('li', { text: 'Only new saved posts are synced (deduplication)' });
+    ul.createEl('li', { text: t('st.reddit.about.li1') });
+    ul.createEl('li', { text: t('st.reddit.about.li2') });
+    ul.createEl('li', { text: t('st.reddit.about.li3') });
+    ul.createEl('li', { text: t('st.reddit.about.li4') });
   }
 
   /**
@@ -3388,7 +3396,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       iconEl.addClass('sa-text-success', 'sa-font-semibold');
 
       const textEl = statusEl.createSpan();
-      textEl.textContent = 'Connected as ';
+      textEl.textContent = t('st.reddit.status.connectedPrefix');
       const strong = textEl.createEl('strong', { text: `u/${this.plugin.settings.redditUsername}` });
       strong.addClass('st-reddit-username');
     } else {
@@ -3396,7 +3404,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       const iconEl = statusEl.createSpan({ text: '○' });
       iconEl.addClass('sa-text-muted');
 
-      const textEl = statusEl.createSpan({ text: 'Not connected' });
+      const textEl = statusEl.createSpan({ text: t('st.reddit.status.notConnected') });
       textEl.addClass('sa-text-muted');
     }
   }
@@ -3451,7 +3459,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    */
   private async renderAIToolsStatus(container: HTMLElement): Promise<void> {
     const loadingEl = container.createDiv({
-      text: 'Detecting AI tools...',
+      text: t('st.ai.detecting'),
       cls: 'setting-item-description'
     });
     loadingEl.addClass('sa-text-muted');
@@ -3493,13 +3501,13 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
         if (!isDetected) {
           itemEl.addClass('sa-clickable');
-          itemEl.title = `Click to learn how to install ${info.displayName}`;
+          itemEl.title = t('st.ai.installTooltip', { name: info.displayName });
           itemEl.onclick = () => window.open(info.installUrl, '_blank');
         }
       }
 
       // Refresh button
-      const refreshBtn = container.createEl('button', { text: 'Refresh detection' });
+      const refreshBtn = container.createEl('button', { text: t('st.ai.refresh') });
       refreshBtn.addClass('sa-refresh-btn');
       refreshBtn.onclick = async () => {
         AICliDetector.resetCache();
@@ -3510,7 +3518,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       const errorEl = container.createDiv({
         cls: 'setting-item-description'
       });
-      errorEl.textContent = '⚠ could not detect AI tools';
+      errorEl.textContent = t('st.ai.detectError');
       errorEl.addClass('sa-status-warning');
     }
   }
@@ -3537,10 +3545,10 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     headerEl.addClass('sa-settings-collapsible-header');
 
     const headerInfo = headerEl.createDiv({ cls: 'setting-item-info' });
-    const headerName = headerInfo.createDiv({ cls: 'setting-item-name', text: '▶ Platform visibility' });
+    const headerName = headerInfo.createDiv({ cls: 'setting-item-name', text: t('st.ai.pv.collapsed') });
     headerInfo.createDiv({
       cls: 'setting-item-description',
-      text: 'Choose which platform types show AI comment banners'
+      text: t('st.ai.pv.desc')
     });
 
     const contentEl = containerEl.createDiv({ cls: 'platform-visibility-content' });
@@ -3549,7 +3557,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     let isExpanded = false;
     headerEl.onclick = () => {
       isExpanded = !isExpanded;
-      headerName.textContent = isExpanded ? '▼ Platform visibility' : '▶ Platform visibility';
+      headerName.textContent = isExpanded ? t('st.ai.pv.expanded') : t('st.ai.pv.collapsed');
       if (isExpanded) {
         contentEl.addClass('st-collapsible-visible');
         contentEl.removeClass('sa-hidden');
@@ -3560,7 +3568,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Category toggles
     new Setting(contentEl)
-      .setName('Social media')
+      .setName(t('st.ai.pv.social'))
       .setDesc('Facebook, Instagram, X, Threads, LinkedIn, TikTok, Bluesky, Mastodon, Reddit, Pinterest, Tumblr')
       .addToggle(toggle => toggle
         .setValue(settings.platformVisibility.socialMedia)
@@ -3570,7 +3578,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         }));
 
     new Setting(contentEl)
-      .setName('Blog & news')
+      .setName(t('st.ai.pv.blog'))
       .setDesc('Blog, Substack, Medium, Velog')
       .addToggle(toggle => toggle
         .setValue(settings.platformVisibility.blogNews)
@@ -3580,7 +3588,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
         }));
 
     new Setting(contentEl)
-      .setName('Video & audio')
+      .setName(t('st.ai.pv.video'))
       .setDesc('YouTube, Podcast')
       .addToggle(toggle => toggle
         .setValue(settings.platformVisibility.videoAudio)
@@ -3596,7 +3604,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     const excludeHeader = excludeEl.createDiv({
       cls: 'setting-item-name',
-      text: 'Excluded platforms'
+      text: t('st.ai.pv.excluded')
     });
     excludeHeader.addClass('sa-mb-8');
 
@@ -3646,10 +3654,10 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     headerEl.addClass('sa-settings-collapsible-header');
 
     const headerInfo = headerEl.createDiv({ cls: 'setting-item-info' });
-    const headerName = headerInfo.createDiv({ cls: 'setting-item-name', text: '▶ Vault context (connections)' });
+    const headerName = headerInfo.createDiv({ cls: 'setting-item-name', text: t('st.ai.vc.collapsed') });
     headerInfo.createDiv({
       cls: 'setting-item-description',
-      text: 'Configure how AI finds connections to your notes'
+      text: t('st.ai.vc.desc')
     });
 
     const contentEl = containerEl.createDiv({ cls: 'vault-context-content' });
@@ -3658,7 +3666,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     let isExpanded = false;
     headerEl.onclick = () => {
       isExpanded = !isExpanded;
-      headerName.textContent = isExpanded ? '▼ Vault context (connections)' : '▶ Vault context (connections)';
+      headerName.textContent = isExpanded ? t('st.ai.vc.expanded') : t('st.ai.vc.collapsed');
       if (isExpanded) {
         contentEl.addClass('st-collapsible-visible');
         contentEl.removeClass('sa-hidden');
@@ -3669,8 +3677,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Enable vault context
     new Setting(contentEl)
-      .setName('Enable vault context')
-      .setDesc('Allow AI to scan your vault for related notes when using "connections" comment type')
+      .setName(t('st.ai.vc.enable.name'))
+      .setDesc(t('st.ai.vc.enable.desc'))
       .addToggle(toggle => toggle
         .setValue(settings.vaultContext.enabled)
         .onChange((value) => {
@@ -3680,8 +3688,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Smart filtering
     new Setting(contentEl)
-      .setName('Smart filtering')
-      .setDesc('Use keyword matching to select only relevant notes for context')
+      .setName(t('st.ai.vc.smart.name'))
+      .setDesc(t('st.ai.vc.smart.desc'))
       .addToggle(toggle => toggle
         .setValue(settings.vaultContext.smartFiltering)
         .onChange((value) => {
@@ -3691,8 +3699,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Max context notes
     new Setting(contentEl)
-      .setName('Max context notes')
-      .setDesc('Maximum number of notes to include in AI context')
+      .setName(t('st.ai.vc.maxNotes.name'))
+      .setDesc(t('st.ai.vc.maxNotes.desc'))
       .addText(text => text
         .setPlaceholder('10')
         .setValue(String(settings.vaultContext.maxContextNotes || 10))
@@ -3704,12 +3712,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
 
     // Exclude paths - with folder suggester
     const excludeSetting = new Setting(contentEl)
-      .setName('Exclude folders')
-      .setDesc('Select folders to exclude from context scanning');
+      .setName(t('st.ai.vc.exclude.name'))
+      .setDesc(t('st.ai.vc.exclude.desc'));
 
     const inputEl = activeWindow.createEl('input');
     inputEl.type = 'text';
-    inputEl.placeholder = 'Select folder...';
+    inputEl.placeholder = t('st.ai.vc.selectFolder');
     inputEl.classList.add('sa-input-w-150');
 
     new FolderSuggest(this.app, inputEl);
