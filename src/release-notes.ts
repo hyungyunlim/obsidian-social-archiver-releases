@@ -24,6 +24,25 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.7.0': {
+    title: 'Safer tags, sounder notes',
+    date: '2026-08-16',
+    notes: `## Tags stay readable in Obsidian
+
+- Tag names can contain a space, and Obsidian's own tag field cannot. Mirroring used to copy them across anyway, so a tag could land in your note struck through in red. Only names Obsidian accepts are mirrored now — the full name is still kept on the archive and still shows in the timeline.
+- The tag picker no longer offers the tags the plugin generates for you (the \`archive/…\` style tag from **Settings → Frontmatter**). Picking one used to turn it into a real tag that then spread to every matching note and to your phone.
+
+## Notes with unusual titles no longer break
+
+- A tag or title starting with certain punctuation could break a note's whole properties block — Obsidian showed the note's frontmatter as invalid. Those values are quoted properly now. This applies to notes written from here on; a note already broken this way needs the offending line fixed by hand or the post re-archived.
+
+## Sync
+
+- **Settings → Mobile sync** now lists which notes are behind an "Ambiguous" match, instead of only counting them. This happens when two notes claim the same archive, usually because an author's display name changed between saves.
+- Fixed a case where an archive created while a sync was running could be skipped by every later sync.
+- Fixed Facebook reels arriving twice under different share links.
+`,
+  },
   '4.6.9': {
     title: 'Tags from your phone reach your vault',
     date: '2026-08-13',

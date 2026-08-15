@@ -8,6 +8,9 @@ import { TAG_NAME_MAX_LENGTH } from '@/types/tag';
 
 const TAG_WHITESPACE_PATTERN = /\s/;
 
+/** Digits and tag separators only — Obsidian rejects such a tag outright. */
+const TAG_DIGITS_ONLY_PATTERN = /^[0-9/_-]+$/;
+
 /**
  * Normalize a raw tag name: trim whitespace and strip leading `#` characters.
  *
@@ -150,11 +153,42 @@ export function mergeTagListsCaseInsensitive(...tagLists: Array<readonly string[
 }
 
 /**
+ * Keep only the names Obsidian will accept as tags.
+ *
+ * Our own `archiveTags` field holds anything the tag system allows — spaces
+ * included, which the mobile app renders fine and 39% of stored tags use. But
+ * Obsidian's native `tags` property validates its values, and one it rejects
+ * renders struck through in red. So filter at the mirroring boundary only,
+ * never on `archiveTags` itself.
+ *
+ * Deliberately narrow: it drops only what Obsidian definitely rejects (blank,
+ * whitespace, nothing but digits and separators). Accents, emoji and CJK stay
+ * — over-filtering here would silently drop a valid tag from the user's note,
+ * which is worse than the rendering bug.
+ *
+ * @param names - Raw tag names, typically the server's archive tags
+ * @returns The subset Obsidian will render as real tags
+ */
+export function obsidianSafeTagNames(names: string[]): string[] {
+  return names.filter((name) => {
+    const tag = normalizeTagName(name);
+    if (!tag) return false;
+    if (TAG_WHITESPACE_PATTERN.test(tag)) return false;
+    // Obsidian requires at least one non-numeric character.
+    return !TAG_DIGITS_ONLY_PATTERN.test(tag);
+  });
+}
+
+/**
  * Mirror archive tags into Obsidian's native `tags` field without replacing
  * unrelated user tags.
  *
  * Previous archive tags are removed first so server replacement semantics do
  * not leave stale mirrored tags behind. Other tags are preserved.
+ *
+ * Incoming tags are filtered through {@link obsidianSafeTagNames}; removal of
+ * previous tags is not, so a tag mirrored before this filter existed still
+ * gets cleaned up.
  */
 export function mirrorArchiveTagsIntoObsidianTags(
   currentTags: string[],
@@ -173,7 +207,7 @@ export function mirrorArchiveTagsIntoObsidianTags(
     return normalized && !previousArchiveTagNames.has(normalized.toLowerCase());
   });
 
-  return mergeTagListsCaseInsensitive(preservedTags, nextArchiveTags);
+  return mergeTagListsCaseInsensitive(preservedTags, obsidianSafeTagNames(nextArchiveTags));
 }
 
 /**

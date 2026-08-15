@@ -25,7 +25,12 @@ import type { ArchiveLookupService } from '../../services/ArchiveLookupService';
 import type { TagStore } from '../../services/TagStore';
 import type { SocialArchiverSettings } from '../../types/settings';
 import type { ArchiveTagOutboundService } from './ArchiveTagOutboundService';
-import { mergeTagListsCaseInsensitive, normalizeTagName, readFrontmatterTags } from '../../utils/tags';
+import {
+  mergeTagListsCaseInsensitive,
+  normalizeTagName,
+  obsidianSafeTagNames,
+  readFrontmatterTags,
+} from '../../utils/tags';
 
 const LOG_PREFIX = '[Social Archiver] [TagBackfill]';
 
@@ -166,7 +171,11 @@ export class ArchiveTagBackfillService {
       fm.archiveTags = mergedTags;
 
       if (this.deps.getSettings().mirrorArchiveTagsToObsidianTags) {
-        fm.tags = mergeTagListsCaseInsensitive(readStringArray(fm.tags), serverTags);
+        // `archiveTags` keeps every name; `tags` only takes what Obsidian accepts.
+        fm.tags = mergeTagListsCaseInsensitive(
+          readStringArray(fm.tags),
+          obsidianSafeTagNames(serverTags),
+        );
       }
     });
 

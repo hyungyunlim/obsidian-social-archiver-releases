@@ -357,6 +357,29 @@ async function handleRetryPendingDeletes() {
               <span class="stat-item failed">{t('sync.library.stat.failed', { count: librarySyncState.failedCount })}</span>
             {/if}
           </div>
+          <!-- The count alone cannot be acted on; these are the actual notes. -->
+          {#if librarySyncState.ambiguousMatches.length > 0}
+            <div class="library-sync-ambiguous">
+              <div class="library-sync-ambiguous-title">{t('sync.library.ambiguous.title')}</div>
+              <div class="library-sync-ambiguous-hint">{t('sync.library.ambiguous.hint')}</div>
+              <ul class="library-sync-ambiguous-list">
+                {#each librarySyncState.ambiguousMatches as match (match.url)}
+                  <li>
+                    {#each match.paths as path (path)}
+                      <div class="library-sync-ambiguous-path">{path}</div>
+                    {/each}
+                  </li>
+                {/each}
+              </ul>
+              {#if librarySyncState.ambiguousCount > librarySyncState.ambiguousMatches.length}
+                <div class="library-sync-ambiguous-hint">
+                  {t('sync.library.ambiguous.more', {
+                    count: librarySyncState.ambiguousCount - librarySyncState.ambiguousMatches.length,
+                  })}
+                </div>
+              {/if}
+            </div>
+          {/if}
         {:else if librarySyncPersistedStatus === 'completed' && librarySyncCompletedAt}
           <div class="library-sync-status completed">
             <span class="library-sync-phase-indicator completed"></span>
@@ -806,6 +829,42 @@ async function handleRetryPendingDeletes() {
 .stat-item.skipped {
   background: var(--background-modifier-border);
   color: var(--text-muted);
+}
+
+.library-sync-ambiguous {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border-left: 2px solid var(--text-warning);
+  background: color-mix(in srgb, var(--text-warning) 8%, transparent);
+  font-size: 12px;
+}
+
+.library-sync-ambiguous-title {
+  font-weight: 600;
+  color: var(--text-warning);
+}
+
+.library-sync-ambiguous-hint {
+  margin-top: 2px;
+  color: var(--text-muted);
+}
+
+.library-sync-ambiguous-list {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.library-sync-ambiguous-list li {
+  margin-bottom: 6px;
+}
+
+.library-sync-ambiguous-path {
+  font-family: var(--font-monospace);
+  font-size: 11px;
+  color: var(--text-normal);
+  overflow-wrap: anywhere;
 }
 
 .stat-item.ambiguous {

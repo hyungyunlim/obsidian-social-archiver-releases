@@ -468,6 +468,60 @@ describe('FrontmatterGenerator', () => {
       expect(document).toContain('authorBio: "Code: Python # Developer"');
     });
 
+    // Tag names come from other clients, where the only rule is 1..30 chars.
+    // An unquoted YAML indicator in a list item does not mis-render one tag —
+    // it voids the whole frontmatter block, which is what Obsidian draws in red.
+    it('quotes tag names opening with any YAML indicator', () => {
+      const postData = createTestPostData({});
+      const frontmatter = generator.generateFrontmatter(postData);
+      frontmatter.tags = ['`backtick', '- dash', '?query', ', comma', ']bracket'];
+
+      const document = generator.generateFullDocument(frontmatter, 'Test content');
+
+      expect(document).toContain('  - "`backtick"');
+      expect(document).toContain('  - "- dash"');
+      expect(document).toContain('  - "?query"');
+      expect(document).toContain('  - ", comma"');
+      expect(document).toContain('  - "]bracket"');
+    });
+
+    // Bare `null` parses as null, so the tag disappears entirely.
+    it('quotes tag names YAML would resolve to a boolean or null', () => {
+      const postData = createTestPostData({});
+      const frontmatter = generator.generateFrontmatter(postData);
+      frontmatter.tags = ['true', 'null', '~', 'No', 'off'];
+
+      const document = generator.generateFullDocument(frontmatter, 'Test content');
+
+      expect(document).toContain('  - "true"');
+      expect(document).toContain('  - "null"');
+      expect(document).toContain('  - "~"');
+      expect(document).toContain('  - "No"');
+      expect(document).toContain('  - "off"');
+    });
+
+    it('escapes backslashes so a quoted value cannot open an escape sequence', () => {
+      const postData = createTestPostData({});
+      const frontmatter = generator.generateFrontmatter(postData);
+      frontmatter.tags = ['back\\slash: here'];
+
+      const document = generator.generateFullDocument(frontmatter, 'Test content');
+
+      expect(document).toContain('  - "back\\\\slash: here"');
+    });
+
+    it('leaves ordinary tag names unquoted', () => {
+      const postData = createTestPostData({});
+      const frontmatter = generator.generateFrontmatter(postData);
+      frontmatter.tags = ['drone', 'veille/linkedin/2026/06', 'stratégie'];
+
+      const document = generator.generateFullDocument(frontmatter, 'Test content');
+
+      expect(document).toContain('  - drone');
+      expect(document).toContain('  - veille/linkedin/2026/06');
+      expect(document).toContain('  - stratégie');
+    });
+
     it('should quote bio containing single quotes to prevent YAML parsing errors', () => {
       const postData = createTestPostData({
         author: {

@@ -54,6 +54,26 @@ const LIBRARY_SYNC_RETRY_BASE_DELAY_MS = 1000;
  */
 const LIBRARY_SYNC_RATE_LIMIT_FALLBACK_DELAY_MS = 15_000;
 
+/**
+ * Overlap subtracted from the persisted cursor.
+ *
+ * Pinning the cursor to the run's first-page serverTime already keeps rows that
+ * land mid-pagination reachable. What it cannot cover: the server stamps
+ * archived_at/updated_at slightly BEFORE the row becomes visible (media
+ * dimension probes sit between the stamp and the INSERT), so a row can carry a
+ * stamp below a cursor it never appeared beneath. `(updated_at > ? OR
+ * archived_at > ?)` would then never match it again and no later sweep
+ * backfills it, so the cursor is held back deliberately.
+ */
+const LIBRARY_SYNC_CURSOR_OVERLAP_MS = 10 * 60 * 1_000; // 10 minutes
+
+/** Hold a cursor one overlap window back; pass through unparseable input. */
+function cursorWithOverlap(serverTime: string): string {
+  const parsed = Date.parse(serverTime);
+  if (Number.isNaN(parsed)) return serverTime;
+  return new Date(parsed - LIBRARY_SYNC_CURSOR_OVERLAP_MS).toISOString();
+}
+
 // ============================================================================
 // Interface contracts (implemented by other agents / parallel modules)
 // ============================================================================
@@ -80,6 +100,25 @@ export type ArchiveLibrarySyncMode = 'bootstrap' | 'resume' | 'manual-reconcile'
 /** Phase within a sync run. */
 export type ArchiveLibrarySyncPhase = 'idle' | 'scanning' | 'delta-sweep' | 'completed' | 'error';
 
+/** How many ambiguous matches to keep paths for. The count stays exact. */
+const MAX_REPORTED_AMBIGUOUS_MATCHES = 20;
+
+/**
+ * Notes that all claim one server archive, so the sync cannot choose between
+ * them and leaves every one of them alone.
+ *
+ * The filename templates `{author}`, so an author whose display name changed
+ * between two writes lands the same post in two files — which is what a user
+ * reported as `patrickng` and `Patrick Ng` sitting side by side. Nothing
+ * server-side can repair that: the server holds one row and cannot see the
+ * vault. Only the person looking at the two notes knows which one carries their
+ * highlights, so this reports and never merges.
+ */
+export interface ArchiveLibraryAmbiguousMatch {
+  readonly url: string;
+  readonly paths: readonly string[];
+}
+
 /** Snapshot of the runtime state — emitted on each progress event. */
 export interface ArchiveLibrarySyncRuntimeState {
   mode: ArchiveLibrarySyncMode;
@@ -89,6 +128,8 @@ export interface ArchiveLibrarySyncRuntimeState {
   savedCount: number;
   skippedCount: number;
   ambiguousCount: number;
+  /** Sample of the ambiguous matches behind `ambiguousCount`, capped. */
+  ambiguousMatches: readonly ArchiveLibraryAmbiguousMatch[];
   failedCount: number;
   currentOffset: number;
   startedAt: string | null;
@@ -368,6 +409,7 @@ export class ArchiveLibrarySyncService {
       savedCount: 0,
       skippedCount: 0,
       ambiguousCount: 0,
+      ambiguousMatches: [],
       failedCount: 0,
       currentOffset: resumeOffset,
       startedAt: new Date().toISOString(),
@@ -452,6 +494,7 @@ export class ArchiveLibrarySyncService {
       savedCount: 0,
       skippedCount: 0,
       ambiguousCount: 0,
+      ambiguousMatches: [],
       failedCount: 0,
       currentOffset: 0,
       startedAt: new Date().toISOString(),
@@ -471,7 +514,9 @@ export class ArchiveLibrarySyncService {
 
       if (settings.archiveLibrarySync) {
         settings.archiveLibrarySync.completedAt = completedAt;
-        settings.archiveLibrarySync.lastServerTime = nextServerTime ?? completedAt;
+        settings.archiveLibrarySync.lastServerTime = cursorWithOverlap(
+          nextServerTime ?? completedAt
+        );
         settings.archiveLibrarySync.runAnchorTime = '';
         settings.archiveLibrarySync.resumeOffset = 0;
         settings.archiveLibrarySync.lastError = '';
@@ -624,7 +669,9 @@ export class ArchiveLibrarySyncService {
     const settings = this.deps.settings();
     if (settings.archiveLibrarySync) {
       settings.archiveLibrarySync.completedAt = completedAt;
-      settings.archiveLibrarySync.lastServerTime = runAnchorTime ?? completedAt;
+      settings.archiveLibrarySync.lastServerTime = cursorWithOverlap(
+        runAnchorTime ?? completedAt
+      );
       settings.archiveLibrarySync.runAnchorTime = '';
       settings.archiveLibrarySync.resumeOffset = 0;
     }
@@ -851,13 +898,22 @@ export class ArchiveLibrarySyncService {
 
       if (existingByUrl.length > 1) {
         // Ambiguous: multiple files matched by URL — do not act
+        const paths = existingByUrl.map(f => f.path);
         console.warn('[Social Archiver] [LibrarySync] Ambiguous URL match — skipping', {
           archiveId: archive.id,
           url: archive.originalUrl,
           matchCount: existingByUrl.length,
-          paths: existingByUrl.map(f => f.path),
+          paths,
         });
-        this.updateState({ ambiguousCount: this.runtimeState.ambiguousCount + 1 });
+        // The count alone tells a user something is wrong but not which notes,
+        // and the paths were reachable only from the developer console.
+        const { ambiguousCount, ambiguousMatches } = this.runtimeState;
+        this.updateState({
+          ambiguousCount: ambiguousCount + 1,
+          ambiguousMatches: ambiguousMatches.length < MAX_REPORTED_AMBIGUOUS_MATCHES
+            ? [...ambiguousMatches, { url: archive.originalUrl, paths }]
+            : ambiguousMatches,
+        });
         return;
       }
 
@@ -1282,6 +1338,7 @@ export class ArchiveLibrarySyncService {
       savedCount: 0,
       skippedCount: 0,
       ambiguousCount: 0,
+      ambiguousMatches: [],
       failedCount: 0,
       currentOffset: 0,
       startedAt: null,

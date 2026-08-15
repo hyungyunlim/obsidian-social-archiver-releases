@@ -141,6 +141,18 @@ export const syncTabStrings = {
     en: 'Ambiguous: {count}',
     ko: '모호함: {count}',
   },
+  'sync.library.ambiguous.title': {
+    en: 'More than one note holds the same post',
+    ko: '같은 게시물을 가진 노트가 둘 이상입니다',
+  },
+  'sync.library.ambiguous.hint': {
+    en: 'Sync left these alone because it cannot tell which one to keep. Keep whichever holds your highlights and notes, then delete the other.',
+    ko: '어느 쪽을 남길지 판단할 수 없어 동기화가 건드리지 않았습니다. 하이라이트와 메모가 있는 쪽을 남기고 나머지를 삭제하세요.',
+  },
+  'sync.library.ambiguous.more': {
+    en: 'and {count} more',
+    ko: '외 {count}건',
+  },
   'sync.library.stat.failed': {
     en: 'Failed: {count}',
     ko: '실패: {count}',

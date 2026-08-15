@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildManagedArchiveTag,
   getManagedArchiveTagCandidates,
+  isManagedArchiveTagName,
   normalizeArchiveTagRoot,
   rememberManagedArchiveTagRule,
 } from '@/utils/archive-tag-rules';
@@ -38,6 +39,34 @@ describe('archive tag rules', () => {
     expect(candidates).toContain('new-root/x/2024/03');
     expect(candidates).toContain('old-root/x/2024/03');
     expect(candidates).not.toContain('old-root/manual');
+  });
+
+  it('recognizes managed tags from every organization mode', () => {
+    const rules = [{ tagRoot: 'veille', tagOrganization: 'hierarchical' as const }];
+
+    // Whatever buildManagedArchiveTag emits must be recognized.
+    expect(isManagedArchiveTagName('veille/linkedin/2026/06', rules)).toBe(true);
+    expect(isManagedArchiveTagName('veille/x', rules)).toBe(true);
+    expect(isManagedArchiveTagName('#Veille', rules)).toBe(true);
+
+    // A user tag that merely starts with the same letters is not managed.
+    expect(isManagedArchiveTagName('veilleur', rules)).toBe(false);
+    expect(isManagedArchiveTagName('drone', rules)).toBe(false);
+  });
+
+  it('recognizes tags from a rule the user has since replaced', () => {
+    const rules = [
+      { tagRoot: 'archive', tagOrganization: 'flat' as const },
+      { tagRoot: 'veille', tagOrganization: 'hierarchical' as const },
+    ];
+
+    expect(isManagedArchiveTagName('veille/linkedin/2026/06', rules)).toBe(true);
+    expect(isManagedArchiveTagName('archive', rules)).toBe(true);
+  });
+
+  it('treats an empty root as matching nothing', () => {
+    expect(isManagedArchiveTagName('drone', [{ tagRoot: '', tagOrganization: 'flat' }])).toBe(false);
+    expect(isManagedArchiveTagName('', [{ tagRoot: 'veille', tagOrganization: 'flat' }])).toBe(false);
   });
 
   it('deduplicates remembered rules and keeps the most recent first', () => {

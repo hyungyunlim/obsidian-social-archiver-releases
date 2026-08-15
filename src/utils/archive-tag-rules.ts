@@ -24,6 +24,32 @@ export function normalizeArchiveTagRoot(value: unknown): string {
     .join('/');
 }
 
+/**
+ * True when a tag belongs to a managed archive-tag root.
+ *
+ * Every tag `buildManagedArchiveTag` emits is either the root itself (flat) or
+ * sits under `root/`, so a prefix test covers all three organization modes
+ * without needing the note's platform or date.
+ *
+ * Used to keep the plugin's own generated tags out of the user-facing tag
+ * picker. They live in `tags` as an organizing scheme; offering them as
+ * Social Archiver tags lets one get promoted into the cross-device tag system,
+ * after which it is written onto every matching note and synced to mobile.
+ *
+ * @param name - A tag name discovered in frontmatter
+ * @param rules - The current rule plus `archiveTagRuleHistory`
+ */
+export function isManagedArchiveTagName(name: string, rules: ManagedArchiveTagRule[]): boolean {
+  const lower = String(name ?? '').trim().replace(/^#+/, '').toLowerCase();
+  if (!lower) return false;
+
+  return rules.some((rule) => {
+    const root = normalizeArchiveTagRoot(rule.tagRoot).toLowerCase();
+    if (!root) return false;
+    return lower === root || lower.startsWith(`${root}/`);
+  });
+}
+
 function getYearMonth(value: unknown): { year: string; month: string } | null {
   if (typeof value === 'string') {
     const match = value.trim().match(/^(\d{4})-(\d{2})/);

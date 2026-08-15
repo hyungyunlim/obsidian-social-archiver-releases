@@ -4,6 +4,8 @@ import {
   mergeTagsCaseInsensitive,
   mirrorArchiveTagsIntoObsidianTags,
   normalizeTagName,
+  obsidianSafeTagNames,
+  readFrontmatterTags,
   sanitizeTagNames,
   validateTagName,
 } from '@/utils/tags';
@@ -144,6 +146,72 @@ describe('mirrorArchiveTagsIntoObsidianTags', () => {
         ['research', 'AI']
       )
     ).toEqual(['Local', 'Research', 'AI']);
+  });
+});
+
+describe('readFrontmatterTags', () => {
+  it('reads a YAML list', () => {
+    expect(readFrontmatterTags(['work', 'reading'])).toEqual(['work', 'reading']);
+  });
+
+  // Obsidian accepts `tags: work, reading`. Reading that as "no tags" and then
+  // writing an array back is what deleted hand-written tags.
+  it('reads an inline comma-separated string', () => {
+    expect(readFrontmatterTags('work, reading')).toEqual(['work', 'reading']);
+  });
+
+  it('reads a bare scalar', () => {
+    expect(readFrontmatterTags('work')).toEqual(['work']);
+  });
+
+  it('returns empty for absent or non-tag values', () => {
+    expect(readFrontmatterTags(undefined)).toEqual([]);
+    expect(readFrontmatterTags(42)).toEqual([]);
+    expect(readFrontmatterTags('  ,  ')).toEqual([]);
+  });
+});
+
+describe('obsidianSafeTagNames', () => {
+  it('drops names Obsidian renders as invalid', () => {
+    // A space is legal in our tag system (39% of stored tags use one) but
+    // Obsidian strikes it through in red.
+    expect(obsidianSafeTagNames(['AI Agents', 'ai-agents'])).toEqual(['ai-agents']);
+  });
+
+  it('drops tags made only of digits and separators', () => {
+    expect(obsidianSafeTagNames(['2026', '2026/06', 'veille/2026/06'])).toEqual([
+      'veille/2026/06'
+    ]);
+  });
+
+  it('keeps accents, CJK and emoji — over-filtering would lose a valid tag', () => {
+    expect(obsidianSafeTagNames(['stratégie', '전략', '🔥'])).toEqual([
+      'stratégie',
+      '전략',
+      '🔥'
+    ]);
+  });
+
+  it('keeps nested tags and drops blanks', () => {
+    expect(obsidianSafeTagNames(['IA/data', '', '   ', '#drone'])).toEqual([
+      'IA/data',
+      '#drone'
+    ]);
+  });
+});
+
+describe('mirrorArchiveTagsIntoObsidianTags — invalid names', () => {
+  it('does not mirror a name Obsidian rejects', () => {
+    expect(mirrorArchiveTagsIntoObsidianTags(['keep'], [], ['AI Agents', 'drone'])).toEqual([
+      'keep',
+      'drone'
+    ]);
+  });
+
+  it('still removes a previously mirrored invalid tag', () => {
+    expect(
+      mirrorArchiveTagsIntoObsidianTags(['keep', 'AI Agents'], ['AI Agents'], ['drone'])
+    ).toEqual(['keep', 'drone']);
   });
 });
 

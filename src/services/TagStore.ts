@@ -1,7 +1,19 @@
 import { TFile, TFolder, type App } from 'obsidian';
 import type { TagDefinition, TagWithCount } from '@/types/tag';
 import { TAG_COLORS } from '@/types/tag';
-import { mergeTagListsCaseInsensitive, normalizeTagName, readFrontmatterTags, validateTagName } from '@/utils/tags';
+import {
+  mergeTagListsCaseInsensitive,
+  normalizeTagName,
+  obsidianSafeTagNames,
+  readFrontmatterTags,
+  validateTagName,
+} from '@/utils/tags';
+import { isManagedArchiveTagName } from '@/utils/archive-tag-rules';
+import {
+  isArchiveOrganizationMode,
+  normalizeArchiveTagRuleHistory,
+  type ManagedArchiveTagRule,
+} from '@/types/settings';
 import type SocialArchiverPlugin from '@/main';
 import type { WorkersAPIClient } from './WorkersAPIClient';
 
@@ -212,7 +224,7 @@ export class TagStore {
       if (this.plugin.settings.mirrorArchiveTagsToObsidianTags) {
         frontmatter.tags = mergeTagListsCaseInsensitive(
           this.readStringArray(frontmatter.tags),
-          [normalizedTagName]
+          obsidianSafeTagNames([normalizedTagName])
         );
       }
     });
@@ -294,9 +306,10 @@ export class TagStore {
       if (archiveTags.length === 0) continue;
 
       await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
+        // Only names Obsidian accepts — an invalid one renders struck through in red.
         frontmatter.tags = mergeTagListsCaseInsensitive(
           this.readStringArray(frontmatter.tags),
-          this.readStringArray(frontmatter.archiveTags)
+          obsidianSafeTagNames(this.readStringArray(frontmatter.archiveTags))
         );
       });
       count++;
@@ -312,6 +325,7 @@ export class TagStore {
   getAllDiscoveredTags(): TagDefinition[] {
     const definitions = this.getTagDefinitions();
     const definedLower = new Set(definitions.map(d => d.name.toLowerCase()));
+    const managedRules = this.getManagedArchiveTagRules();
 
     // Scan archive folder for all tags
     const archivePath = this.plugin.settings.archivePath || 'Social Archives';
@@ -330,9 +344,11 @@ export class TagStore {
         );
         for (const tag of tags) {
           const lower = tag.toLowerCase();
-          if (!definedLower.has(lower) && !discovered.has(lower)) {
-            discovered.set(lower, tag);
-          }
+          if (definedLower.has(lower) || discovered.has(lower)) continue;
+          // The plugin writes these itself; picking one promotes it into the
+          // cross-device tag system and it spreads to every note and to mobile.
+          if (isManagedArchiveTagName(tag, managedRules)) continue;
+          discovered.set(lower, tag);
         }
       }
     }
@@ -665,6 +681,20 @@ export class TagStore {
 
   private readStringArray(value: unknown): string[] {
     return readFrontmatterTags(value);
+  }
+
+  /** The current managed archive-tag rule plus every rule it replaced. */
+  private getManagedArchiveTagRules(): ManagedArchiveTagRule[] {
+    const frontmatter = this.plugin.settings.frontmatter;
+    return [
+      {
+        tagRoot: frontmatter?.tagRoot || '',
+        tagOrganization: isArchiveOrganizationMode(frontmatter?.tagOrganization)
+          ? frontmatter.tagOrganization
+          : 'flat',
+      },
+      ...normalizeArchiveTagRuleHistory(frontmatter?.archiveTagRuleHistory),
+    ];
   }
 
   private removeTagName(tags: string[], tagName: string): string[] {

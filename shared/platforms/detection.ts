@@ -264,8 +264,11 @@ export function extractPostIdFromUrl(platform: Platform, url: string): string | 
         const v = parsed.searchParams.get('v');
         if (v) return v;
 
-        // /posts/{id} or /permalink/{id} or /videos/{id}
-        const postMatch = pathname.match(/\/(?:posts|permalink|videos)\/(\d+)/);
+        // /posts/{id} or /permalink/{id} or /videos/{id} or /reel/{id}
+        // `reel` matters for the already-archived lookup: FacebookDirectService
+        // stores reels under the id in the URL, and without it every reel fell
+        // through to `null` and the duplicate check never fired (feedback #120).
+        const postMatch = pathname.match(/\/(?:posts|permalink|videos|reel)\/(\d+)/);
         if (postMatch) return postMatch[1] ?? null;
 
         // /{user}/posts/{id}

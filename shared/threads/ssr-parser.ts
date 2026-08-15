@@ -177,6 +177,15 @@ export function extractPostsFromSSR(scripts: string[], targetShortcode: string):
 
 	const selfThreadPosts: SSRPost[] = [];
 	const replyThreads: SSRPost[][] = [];
+	// The author's continuation posts are the edges that FOLLOW the main post
+	// with no other account in between. Threads gives a continuation and a
+	// self-reply the same shape, so position is the only signal: once someone
+	// else has spoken, later author posts are replies, not article body. Same
+	// rule the extension's DOM walk applies, so both surfaces agree.
+	// ponytail: assumes edges arrive thread-first, replies after. If that order
+	// ever breaks, a continuation lands in the comments — reach for taken_at
+	// gaps or reply_to_author then.
+	let continuationRun = true;
 
 	// Process each edge
 	for (const [i, edge] of mainPostEdges.entries()) {
@@ -196,11 +205,17 @@ export function extractPostsFromSSR(scripts: string[], targetShortcode: string):
 		// Skip edges before main post
 		if (mainPostEdgeIdx === -1) continue;
 
-		// Classify: all-self-author vs conversation thread
-		const allSelf = posts.every((p) => p.user?.username === mainUsername);
-		if (allSelf) {
-			selfThreadPosts.push(...posts);
+		// Split at the first post by another account: the author's leading run is
+		// the continuation, whatever follows is a reply TO it. Judging the whole
+		// edge (`every`) flipped an entire continuation into the comment section
+		// the moment one stranger replied to it.
+		const otherIdx = posts.findIndex((p) => p.user?.username !== mainUsername);
+		if (continuationRun && otherIdx !== 0) {
+			const cut = otherIdx === -1 ? posts.length : otherIdx;
+			selfThreadPosts.push(...posts.slice(0, cut));
+			if (cut < posts.length) replyThreads.push(posts.slice(cut));
 		} else {
+			continuationRun = false;
 			replyThreads.push(posts);
 		}
 	}

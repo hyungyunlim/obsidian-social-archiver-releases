@@ -89,6 +89,18 @@ export interface FrontmatterOptions {
 
 const CORE_LOCKED_FRONTMATTER_FIELDS = new Set<string>(FRONTMATTER_CORE_LOCKED_FIELDS);
 
+/**
+ * Every YAML indicator character, which may not open a plain scalar.
+ *
+ * `-`, `?` and `:` only introduce structure when followed by a space, but they
+ * are quoted unconditionally here: quoting a string that did not need it is
+ * invisible after parsing, while missing one corrupts the note.
+ */
+const YAML_LEADING_INDICATOR_PATTERN = /^[-?:,[\]{}#&*!|>'"%@`]/;
+
+/** Scalars YAML resolves to a boolean or null instead of a string. */
+const YAML_RESERVED_WORD_PATTERN = /^(?:true|false|null|~|yes|no|on|off)$/i;
+
 const CUSTOM_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
 const CATEGORY_FIELDS: Record<keyof FrontmatterFieldVisibility, string[]> = {
@@ -556,19 +568,17 @@ ${content}`;
         value.includes('#') ||
         value.includes("'") || // Single quotes are YAML string delimiters
         value.includes('"') || // Double quotes are YAML string delimiters
-        value.startsWith('@') ||
-        value.startsWith('!') || // YAML tag indicator
-        value.startsWith('&') || // YAML anchor
-        value.startsWith('*') || // YAML alias
-        value.startsWith('|') || // YAML literal block scalar
-        value.startsWith('>') || // YAML folded block scalar
-        value.startsWith('%') || // YAML directive
-        value.startsWith('[') || // YAML array start
-        value.startsWith('{') || // YAML object start
+        // Any YAML indicator in first position. Written as one class so the set
+        // stays complete: a missed one (a backtick, say) is not a mis-quoted
+        // value, it is a parse error that voids the note's whole frontmatter.
+        YAML_LEADING_INDICATOR_PATTERN.test(value) ||
         value.includes('\n') || // Newlines need quoting
+        // Bare `true`/`null`/`~` parse as a boolean or null, not as the tag the
+        // user typed — `null` makes the value vanish outright.
+        YAML_RESERVED_WORD_PATTERN.test(value) ||
         /^\d+$/.test(value); // Numeric-only strings need quoting
       if (needsQuoting) {
-        return `"${value.replace(/"/g, '\\"')}"`;
+        return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
       }
     }
 

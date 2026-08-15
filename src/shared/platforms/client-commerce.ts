@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/client-commerce.ts
- * Generated: 2026-08-13T12:36:35.270Z
+ * Generated: 2026-08-02T11:32:26.264Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared

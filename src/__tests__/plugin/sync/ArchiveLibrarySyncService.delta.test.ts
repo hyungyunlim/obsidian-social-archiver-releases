@@ -101,7 +101,11 @@ describe('ArchiveLibrarySyncService delta catch-up', () => {
     });
     expect(saveSubscriptionPostDetailed).toHaveBeenCalledOnce();
     expect(applyInboundDeletedIds).toHaveBeenCalledWith(['deleted-archive'], 'delta');
-    expect(settings.archiveLibrarySync.lastServerTime).toBe('2026-05-09T00:00:00.000Z');
+    // Advances to the sweep's first-page serverTime (2026-05-09T00:00:00Z),
+    // held back one LIBRARY_SYNC_CURSOR_OVERLAP_MS so a row stamped just under
+    // that instant — but not yet visible when the page was read — is still
+    // above the cursor next run.
+    expect(settings.archiveLibrarySync.lastServerTime).toBe('2026-05-08T23:50:00.000Z');
     expect(settings.archiveLibrarySync.lastStatus).toBe('completed');
     expect(settings.archiveLibrarySync.lastError).toBe('');
     expect(service.getState()).toMatchObject({
@@ -255,5 +259,71 @@ describe('ArchiveLibrarySyncService delta catch-up', () => {
       failedCount: 0,
       skippedCount: 1,
     });
+  });
+});
+
+// A count on its own tells the user something is wrong but not which notes to
+// look at, and the paths only ever reached the developer console. This is the
+// `patrickng` / `Patrick Ng` pair: one post, two files, sync declining to guess.
+describe('ArchiveLibrarySyncService ambiguous matches', () => {
+  const duplicates = [
+    { path: 'Social Archives/Instagram/2026-07-24 - patrickng - Southwark (cZoIRW).md' },
+    { path: 'Social Archives/Instagram/2026-07-24 - Patrick Ng - Southwark (cZoIRW).md' },
+  ];
+
+  function makeService(findByOriginalUrl: unknown, saveSubscriptionPostDetailed = vi.fn()) {
+    const archive = makeArchive();
+    return new ArchiveLibrarySyncService({
+      apiClient: () => ({
+        getUserArchives: vi.fn().mockResolvedValue({
+          archives: [archive],
+          total: 1,
+          hasMore: false,
+          serverTime: '2026-05-09T00:00:00.000Z',
+          deletedIds: [],
+        }),
+      }) as any,
+      settings: () => makeSettings(),
+      saveSettings: vi.fn().mockResolvedValue(undefined),
+      findBySourceArchiveId: vi.fn().mockReturnValue(null),
+      findByOriginalUrl,
+      findByClientPostId: vi.fn().mockReturnValue(null),
+      indexSavedFile: vi.fn(),
+      backfillFileIdentity: vi.fn().mockResolvedValue(undefined),
+      saveSubscriptionPostDetailed,
+      convertUserArchiveToPostData: vi.fn().mockReturnValue({
+        platform: 'x',
+        url: archive.originalUrl,
+        author: { name: 'Author' },
+        content: { text: 'Content' },
+      }),
+      notify: vi.fn(),
+      applyInboundDeletedIds: vi.fn().mockResolvedValue(undefined),
+    } as any);
+  }
+
+  it('reports which notes collided instead of only counting them', async () => {
+    const saveSubscriptionPostDetailed = vi.fn();
+    const service = makeService(vi.fn().mockReturnValue(duplicates), saveSubscriptionPostDetailed);
+
+    await service.startDeltaSync();
+
+    // Still refuses to guess — only the user knows which note holds their work.
+    expect(saveSubscriptionPostDetailed).not.toHaveBeenCalled();
+    expect(service.getState()).toMatchObject({
+      ambiguousCount: 1,
+      ambiguousMatches: [{
+        url: 'https://example.com/post/1',
+        paths: duplicates.map((f) => f.path),
+      }],
+    });
+  });
+
+  it('leaves no stale report when nothing collided', async () => {
+    const service = makeService(vi.fn().mockReturnValue([]));
+
+    await service.startDeltaSync();
+
+    expect(service.getState()).toMatchObject({ ambiguousCount: 0, ambiguousMatches: [] });
   });
 });
