@@ -125,6 +125,14 @@ import { DesktopCapabilityReporter } from './plugin/ai-comment/DesktopCapability
 import { AICommentJobProcessor } from './plugin/ai-comment/AICommentJobProcessor';
 import { TranscriptionCapabilityReporter } from './plugin/transcription/TranscriptionCapabilityReporter';
 import { TranscriptionJobProcessor, type PendingTranscriptUploadRecord } from './plugin/transcription/TranscriptionJobProcessor';
+import { UnifiedExecutorScheduler, createProcessorDispatch } from './plugin/executor/UnifiedExecutorScheduler';
+import {
+  UNIFIED_ERROR_BACKOFF_MAX_MS,
+  UNIFIED_IDLE_FLOOR_MS,
+  UNIFIED_PARTIAL_POLL_MS,
+  createUnifiedPoll,
+  passthroughClaim,
+} from './plugin/executor/UnifiedExecutorTransport';
 import { LocalLockRegistry } from './plugin/locks/LocalLockRegistry';
 
 // Import styles for Vite to process
@@ -352,6 +360,7 @@ export default class SocialArchiverPlugin extends Plugin {
   public archiveDeleteSyncService: ArchiveDeleteSyncService | null = null;
   private aiCommentCapabilityReporter?: DesktopCapabilityReporter;
   public aiCommentJobProcessor?: AICommentJobProcessor;
+  private unifiedExecutorScheduler: UnifiedExecutorScheduler | null = null;
   private transcriptionCapabilityReporter?: TranscriptionCapabilityReporter;
   public transcriptionJobProcessor?: TranscriptionJobProcessor;
 
@@ -930,13 +939,68 @@ export default class SocialArchiverPlugin extends Plugin {
     this.apiClient.setClientId(this.settings.syncClientId);
     await this.aiCommentCapabilityReporter?.refreshNow();
     await this.transcriptionCapabilityReporter?.refreshNow();
-    this.aiCommentJobProcessor?.start();
-    this.transcriptionJobProcessor?.start();
+    this.startUnifiedExecutorPolling();
 
     if (options.reconnectRealtime) {
       console.debug('[Social Archiver] Reconnecting realtime after executor capability refresh', { reason });
       this.reconnectRealtimeClient();
     }
+  }
+
+  /**
+   * ONE unified poll (GET /api/executor/jobs) replaces the two processors'
+   * per-kind backlog timers (3 GETs per 3 minutes → 1). Jobs dispatch into
+   * the processors' existing push seams, so claiming/processing is identical
+   * to a WS push. Only an explicit 404/426 falls back to the legacy timers,
+   * and that choice sticks for the session.
+   */
+  private startUnifiedExecutorPolling(): void {
+    if (!this.aiCommentJobProcessor || !this.transcriptionJobProcessor || !this.settings.syncClientId) {
+      return;
+    }
+    if (this.unifiedExecutorScheduler) {
+      if (this.unifiedExecutorScheduler.mode === 'legacy') {
+        this.aiCommentJobProcessor.start();
+        this.transcriptionJobProcessor.start();
+        return;
+      }
+      this.unifiedExecutorScheduler.start();
+      return;
+    }
+    this.unifiedExecutorScheduler = new UnifiedExecutorScheduler(
+      {
+        clock: {
+          now: () => Date.now(),
+          setTimer: (fn, ms) => this.scheduleTrackedTimeout(fn, ms),
+          clearTimer: (handle) => {
+            window.clearTimeout(handle as number);
+            this.pendingTimeouts.delete(handle as number);
+          },
+        },
+        poll: createUnifiedPoll(() => this.apiClient, () => this.settings.syncClientId),
+        claim: passthroughClaim,
+        // Re-resolve processors and clientId per dispatch: re-init rebuilds the
+        // processor instances while this scheduler keeps running.
+        dispatch: (claimed) => {
+          const aiComment = this.aiCommentJobProcessor;
+          const transcription = this.transcriptionJobProcessor;
+          const clientId = this.settings.syncClientId;
+          if (!aiComment || !transcription || !clientId) return;
+          return createProcessorDispatch({ aiComment, transcription }, clientId)(claimed);
+        },
+        onLegacyFallback: (reason) => {
+          console.warn('[Social Archiver] Unified executor poll unavailable; using legacy per-kind polling', { reason });
+          this.aiCommentJobProcessor?.start();
+          this.transcriptionJobProcessor?.start();
+        },
+      },
+      {
+        idlePollMs: UNIFIED_IDLE_FLOOR_MS,
+        partialPollMs: UNIFIED_PARTIAL_POLL_MS,
+        errorBackoffMaxMs: UNIFIED_ERROR_BACKOFF_MAX_MS,
+      },
+    );
+    this.unifiedExecutorScheduler.start();
   }
 
   private async ensureRuntimeScopedSyncClient(reason: string): Promise<void> {
@@ -1419,6 +1483,8 @@ export default class SocialArchiverPlugin extends Plugin {
     this.annotationFallbackPoller = undefined;
 
     // Stop desktop AI-comment executor services
+    this.unifiedExecutorScheduler?.stop();
+    this.unifiedExecutorScheduler = null;
     this.aiCommentJobProcessor?.stop();
     this.aiCommentJobProcessor = undefined;
     this.aiCommentCapabilityReporter?.dispose();

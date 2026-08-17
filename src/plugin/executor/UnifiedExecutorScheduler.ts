@@ -76,13 +76,21 @@ export interface SchedulerConfig {
 
 export type SchedulerMode = 'unified' | 'legacy' | 'stopped';
 
+/**
+ * How long a dispatched job id stays deduped. Long enough to ignore re-lists
+ * while the processor is still working the job, short enough that a
+ * server-side retry of the SAME id (retry_scheduled → listed again) gets
+ * re-dispatched instead of being ignored for the rest of the session.
+ */
+export const CLAIMED_MEMORY_MS = 10 * 60 * 1000;
+
 export class UnifiedExecutorScheduler {
   private state: SchedulerMode = 'unified';
   private timer: unknown = null;
   private ticking = false;
   private errors = 0;
   private readonly inflight = new Set<string>();
-  private readonly claimed = new Set<string>();
+  private readonly claimed = new Map<string, number>();
 
   constructor(private readonly deps: SchedulerDeps, private readonly config: SchedulerConfig) {}
 
@@ -161,6 +169,10 @@ export class UnifiedExecutorScheduler {
   }
 
   private async dispatchAll(jobs: readonly UnifiedJob[]): Promise<void> {
+    const now = this.deps.clock.now();
+    for (const [id, at] of this.claimed) {
+      if (now - at >= CLAIMED_MEMORY_MS) this.claimed.delete(id);
+    }
     let rank = 0;
     for (const job of jobs) {
       const position = rank;
@@ -169,7 +181,7 @@ export class UnifiedExecutorScheduler {
       this.inflight.add(job.id);
       try {
         const result = await this.deps.claim(job);
-        this.claimed.add(job.id);
+        this.claimed.set(job.id, now);
         if (result.ok) {
           this.deps.onEvent?.({ type: 'dispatch', kind: job.kind, id: job.id, rank: position });
           await this.deps.dispatch({ kind: result.kind, id: result.id, lockToken: result.lockToken, lockTokenVersion: result.lockTokenVersion, rank: position });

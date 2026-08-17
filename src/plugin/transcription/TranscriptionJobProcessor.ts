@@ -243,6 +243,7 @@ export class TranscriptionJobProcessor {
   private readonly queue: string[] = [];
   private readonly queued = new Set<string>();
   private backlogTimer: number | null = null;
+  private draining = false;
   private processing = false;
   private currentJobId: string | null = null;
   private currentAbortController: AbortController | null = null;
@@ -254,7 +255,10 @@ export class TranscriptionJobProcessor {
   constructor(private readonly deps: TranscriptionJobProcessorDeps) {}
 
   start(): void {
-    if (this.backlogTimer !== null) return;
+    // `draining` also guards the window where the timer callback has nulled
+    // backlogTimer but its drain is still in flight — without it a focus or
+    // settings event lands here and runs a duplicate concurrent drain.
+    if (this.backlogTimer !== null || this.draining) return;
     void this.drainBacklog();
     this.scheduleBacklogPoll();
   }
@@ -299,19 +303,25 @@ export class TranscriptionJobProcessor {
   }
 
   async drainBacklog(): Promise<void> {
+    if (this.draining) return;
     const apiClient = this.deps.apiClient();
     const clientId = this.deps.settings().syncClientId;
     if (!apiClient || !clientId || !this.deps.settings().authToken) return;
 
-    const response = await apiClient.getAvailableTranscriptionJobs();
-    if (response.jobs.length > 0) {
-      console.debug('[TranscriptionJobProcessor] Draining available transcription jobs:', {
-        count: response.jobs.length,
-        clientId,
-      });
-    }
-    for (const job of response.jobs) {
-      this.enqueue(job.jobId);
+    this.draining = true;
+    try {
+      const response = await apiClient.getAvailableTranscriptionJobs();
+      if (response.jobs.length > 0) {
+        console.debug('[TranscriptionJobProcessor] Draining available transcription jobs:', {
+          count: response.jobs.length,
+          clientId,
+        });
+      }
+      for (const job of response.jobs) {
+        this.enqueue(job.jobId);
+      }
+    } finally {
+      this.draining = false;
     }
     this.updateQueueDepth();
     await this.processQueue();

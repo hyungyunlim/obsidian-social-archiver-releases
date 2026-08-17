@@ -92,6 +92,7 @@ export class AICommentJobProcessor {
   private readonly actionQueue: string[] = [];
   private readonly queuedActions = new Set<string>();
   private backlogTimer: number | null = null;
+  private draining = false;
   private processing = false;
   private currentJobId: string | null = null;
   private currentService: AICommentService | null = null;
@@ -102,7 +103,10 @@ export class AICommentJobProcessor {
   constructor(private readonly deps: AICommentJobProcessorDeps) {}
 
   start(): void {
-    if (this.backlogTimer !== null) return;
+    // `draining` also guards the window where the timer callback has nulled
+    // backlogTimer but its drain is still in flight — without it a focus or
+    // settings event lands here and runs a duplicate concurrent drain.
+    if (this.backlogTimer !== null || this.draining) return;
     void this.drainBacklog();
     this.scheduleBacklogPoll();
   }
@@ -174,21 +178,27 @@ export class AICommentJobProcessor {
   }
 
   async drainBacklog(): Promise<void> {
+    if (this.draining) return;
     const apiClient = this.deps.apiClient();
     const clientId = this.deps.settings().syncClientId;
     if (!apiClient || !clientId || !this.deps.settings().authToken) return;
 
-    const response = await apiClient.getAvailableAICommentJobs(clientId);
-    for (const job of response.jobs) {
-      this.enqueue(job.jobId);
-    }
+    this.draining = true;
     try {
-      const actionResponse = await apiClient.getAvailableAIActionJobs(clientId);
-      for (const job of actionResponse.jobs) {
-        this.enqueueAction(job.jobId);
+      const response = await apiClient.getAvailableAICommentJobs(clientId);
+      for (const job of response.jobs) {
+        this.enqueue(job.jobId);
       }
-    } catch (error) {
-      console.warn('[AICommentJobProcessor] Failed to fetch AI action backlog:', safeError(error));
+      try {
+        const actionResponse = await apiClient.getAvailableAIActionJobs(clientId);
+        for (const job of actionResponse.jobs) {
+          this.enqueueAction(job.jobId);
+        }
+      } catch (error) {
+        console.warn('[AICommentJobProcessor] Failed to fetch AI action backlog:', safeError(error));
+      }
+    } finally {
+      this.draining = false;
     }
     this.updateQueueDepth();
     await this.processQueue();

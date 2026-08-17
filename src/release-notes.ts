@@ -24,6 +24,18 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.7.1': {
+    title: 'Lighter background polling',
+    date: '2026-08-18',
+    notes: `## One background check instead of three
+
+- The desktop executor used to ask the server about AI-comment, AI-action and transcription work in three separate requests every few minutes. It now asks once and gets all three answers together. Jobs still arrive instantly over the live connection — the background check is only the safety net, and it now costs a third of the requests.
+- If the server cannot serve the combined check yet, the plugin quietly falls back to the old per-kind checks, so nothing changes for you either way.
+
+## Small fix
+
+- Switching back to Obsidian mid-check could kick off a duplicate background sweep. Only one runs now.`,
+  },
   '4.7.0': {
     title: 'Safer tags, sounder notes',
     date: '2026-08-16',

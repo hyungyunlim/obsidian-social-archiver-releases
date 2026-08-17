@@ -149,6 +149,24 @@ export interface GetSyncClientsResponse {
   clients: SyncClient[];
 }
 
+// ============================================================================
+// Unified Executor Poll Types (GET /api/executor/jobs)
+// ============================================================================
+
+export interface UnifiedExecutorPollJob {
+  kind: 'ai_comment' | 'ai_action' | 'transcription';
+  id: string;
+  claimUrl?: string;
+}
+
+export interface UnifiedExecutorPollData {
+  jobs: UnifiedExecutorPollJob[];
+  partial: boolean;
+  indeterminateKinds: string[];
+  nextPollAfterMs: number;
+  presenceAcceptedAt: string | null;
+}
+
 export interface UpdateSyncClientRequest {
   clientName?: string;
   enabled?: boolean;
@@ -3350,6 +3368,26 @@ export class WorkersAPIClient implements IService {
       body: JSON.stringify(request),
       headers: {
         'Idempotency-Key': request.idempotencyKey,
+      },
+    });
+  }
+
+  /**
+   * One unified poll replacing the three per-kind backlog GETs. The extra
+   * `unified-v1` capability token routes the request onto the server's
+   * credit-free poll auth; `runtime` doubles as the presence heartbeat.
+   */
+  async pollUnifiedExecutorJobs(clientId: string): Promise<UnifiedExecutorPollData> {
+    this.ensureInitialized();
+    const query = new URLSearchParams({
+      clientId,
+      capabilities: 'ai_comment,ai_action,transcription',
+      runtime: 'obsidian',
+    });
+    return this.request<UnifiedExecutorPollData>(`/api/executor/jobs?${query.toString()}`, {
+      method: 'GET',
+      headers: {
+        'X-Client-Capabilities': `${PLACE_CONTEXT_NOTE_CAPABILITY},archive-note-ops-v1,unified-v1`,
       },
     });
   }

@@ -29,6 +29,7 @@ const XSSI_PREFIX_LF = ")]}'\n";
 const XSSI_PREFIX_CRLF = ")]}'\r\n";
 const MAX_PHOTOS = 12;
 const MAX_REVIEWS = 10;
+const MAX_CATEGORIES = 10;
 const PHOTO_LONG_SIDE = 1600;
 
 const PlaceIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,255}$/);
@@ -46,6 +47,9 @@ const RecordSchema = z.array(z.unknown()).min(179).max(512);
 const PhotoUrlSchema = z.string().trim().min(1).max(2_048);
 const PhotoDimensionSchema = z.number().int().min(1).max(65_535);
 const ReviewTextSchema = z.string().trim().min(1).max(2_000);
+const CategorySchema = z.string().trim().min(1).max(256);
+const DescriptionSchema = z.string().trim().min(1).max(1_000);
+const HoursTextSchema = z.string().trim().min(1).max(64);
 
 export type GoogleMapDirectPhoto = {
 	readonly url: string;
@@ -64,6 +68,8 @@ export type GoogleMapDirectPlace = {
 	readonly latitude?: number;
 	readonly longitude?: number;
 	readonly category?: string;
+	readonly categories?: readonly string[];
+	readonly description?: string;
 	readonly website?: string;
 	readonly phone?: string;
 	readonly businessHours?: readonly string[];
@@ -138,11 +144,25 @@ function previewPayloadBody(payload: string): string {
 	throw parseError('GOOGLE_MAP_SCHEMA_MISMATCH');
 }
 
+/**
+ * The payload wraps a place's website in Google's click tracker
+ * (`/url?q=<encoded>&opi=…&usg=…`), which is not an absolute URL — so every
+ * business website was being dropped here. Unwrap `q` and validate THAT;
+ * an absolute value is still accepted as-is.
+ */
 function normalizedHttpUrl(value: unknown): string | undefined {
 	const text = parsedValue(UrlTextSchema, value);
 	if (!text) return undefined;
+	// `/url?q=<encoded>&opi=…&usg=…` — the click tracker the payload wraps every
+	// business website in. It is not an absolute URL, so the plain parse below
+	// rejected it and the website was dropped. Unwrap once and validate the
+	// target; anything still relative after unwrapping is not a website.
+	const target = text.startsWith('/url?')
+		? new URLSearchParams(text.slice('/url?'.length)).get('q')
+		: text;
+	if (!target) return undefined;
 	try {
-		const url = new URL(text);
+		const url = new URL(target);
 		return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : undefined;
 	} catch (error) {
 		if (error instanceof TypeError) return undefined;
@@ -240,6 +260,68 @@ function collectReviews(record: readonly unknown[]): GoogleMapDirectReview[] {
 	return reviews;
 }
 
+/**
+ * record[13] is the FULL category list (`["Vegan restaurant", "Asian
+ * restaurant", "Health food restaurant"]`) — the same list BrightData bills for.
+ * Only `[0]` was ever read, so every direct place archived with one category.
+ */
+function collectCategories(record: readonly unknown[]): readonly string[] | undefined {
+	const items = valueArray(record[13]);
+	if (!items) return undefined;
+	const categories: string[] = [];
+	for (const item of items) {
+		if (categories.length >= MAX_CATEGORIES) break;
+		const text = parsedValue(CategorySchema, item);
+		if (text && !categories.includes(text)) categories.push(text);
+	}
+	return categories.length > 0 ? categories : undefined;
+}
+
+/**
+ * record[32] holds the editorial blurbs as `[null, text, …]` rows — a short
+ * generic one and Google's longer editorial summary. Take the longest; it is
+ * byte-identical to the `description` BrightData returns for the same place.
+ */
+function collectDescription(record: readonly unknown[]): string | undefined {
+	const rows = valueArray(record[32]);
+	if (!rows) return undefined;
+	let longest: string | undefined;
+	for (const row of rows) {
+		const text = parsedValue(DescriptionSchema, valueArray(row)?.[1]);
+		if (text && (!longest || text.length > longest.length)) longest = text;
+	}
+	return longest;
+}
+
+/**
+ * record[203][0] is the opening-hours block: one row per day, `[dayName, …,
+ * [[hoursText]], …]`.
+ *
+ * ponytail: today's row is all this endpoint carries — verified across places,
+ * the weekly table is not in the payload at any index. A place needing the full
+ * week has to come from the BrightData row. The day name is kept as the prefix
+ * so the value stays true when read back later, and so the row adapter's
+ * split-on-first-colon keeps producing a day-keyed record.
+ *
+ * The neighbouring live-status strings ("Open · Closes 6 PM") are deliberately
+ * NOT emitted: they are true at fetch time and false forever after in an
+ * archive.
+ */
+function collectBusinessHours(record: readonly unknown[]): readonly string[] | undefined {
+	const days = valueArray(valueArray(record[203])?.[0]);
+	if (!days) return undefined;
+	const hours: string[] = [];
+	for (const day of days) {
+		const row = valueArray(day);
+		const name = parsedValue(CategorySchema, row?.[0]);
+		const text = parsedValue(HoursTextSchema, valueArray(valueArray(row?.[3])?.[0])?.[0]);
+		if (!name || !text) continue;
+		const line = `${name}: ${text}`;
+		if (!hours.includes(line)) hours.push(line);
+	}
+	return hours.length > 0 ? hours : undefined;
+}
+
 export function parseGoogleMapDirectMedia(record: readonly unknown[]): GoogleMapDirectMedia {
 	const photos = collectPhotos(record);
 	const reviews = collectReviews(record);
@@ -314,6 +396,9 @@ export function parseGoogleMapPreviewPayload(
 	const phone = parsedValue(PhoneSchema, phoneData?.[0]);
 	const rating = parsedValue(RatingSchema, ratingData?.[7]);
 	const reviewCount = parsedValue(ReviewCountSchema, ratingData?.[8]);
+	const categories = collectCategories(record.data);
+	const description = collectDescription(record.data);
+	const businessHours = collectBusinessHours(record.data);
 
 	return {
 		externalId: expectedPlaceId,
@@ -321,6 +406,9 @@ export function parseGoogleMapPreviewPayload(
 		...(address ? { address } : {}),
 		...(latitude !== undefined && longitude !== undefined ? { latitude, longitude } : {}),
 		...(category ? { category } : {}),
+		...(categories ? { categories } : {}),
+		...(description ? { description } : {}),
+		...(businessHours ? { businessHours } : {}),
 		...(website ? { website } : {}),
 		...(phone ? { phone } : {}),
 		...(rating !== undefined ? { rating } : {}),

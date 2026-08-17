@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  CLAIMED_MEMORY_MS,
   UnifiedExecutorScheduler,
   createProcessorDispatch,
   percentile,
@@ -102,6 +103,21 @@ describe('Obsidian UnifiedExecutorScheduler', () => {
     await h.clock.fire();
     await h.clock.fire();
     expect(h.claims).toEqual(['ai_comment:c1']);
+  });
+
+  it('re-dispatches the same id once the claimed memory expires (server-side retry)', async () => {
+    const listing = (nextPollAfterMs: number): PollOutcome => ({
+      type: 'jobs',
+      jobs: [job('ai_comment', 'c1')],
+      partial: false,
+      indeterminateKinds: [],
+      nextPollAfterMs,
+    });
+    const h = harness([listing(CLAIMED_MEMORY_MS + 1_000), listing(CONFIG.idlePollMs)]);
+    h.scheduler.start();
+    await h.clock.fire();
+    await h.clock.fire();
+    expect(h.claims).toEqual(['ai_comment:c1', 'ai_comment:c1']);
   });
 
   it('falls back to legacy only on explicit 404/426', async () => {
