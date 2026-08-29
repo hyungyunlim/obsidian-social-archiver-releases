@@ -11313,6 +11313,7 @@ export class PostCardRenderer extends Component {
         id: meta.id,
         cli: meta.cli,
         ...(meta.model ? { model: meta.model } : {}),
+        ...(meta.executedModel ? { executedModel: meta.executedModel } : {}),
         type: meta.type,
         generatedAt: meta.generatedAt,
         ...(typeof meta.processingTime === 'number' ? { processingTime: meta.processingTime } : {}),

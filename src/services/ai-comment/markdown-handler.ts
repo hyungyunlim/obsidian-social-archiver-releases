@@ -50,7 +50,7 @@ interface ParsedHeader {
 type AICommentMetadataExtras = Partial<
   Pick<
     AICommentMeta,
-    'model' | 'processingTime' | 'contentHash' | 'customPrompt' | 'sourceLanguage' | 'targetLanguage'
+    'model' | 'executedModel' | 'processingTime' | 'contentHash' | 'customPrompt' | 'sourceLanguage' | 'targetLanguage'
   >
 >;
 
@@ -156,6 +156,7 @@ export function parseAIComments(markdown: string): ParsedAIComments {
       id: commentId,
       cli: parsedHeader.cli,
       ...(metadata.model ? { model: metadata.model } : {}),
+      ...(metadata.executedModel ? { executedModel: metadata.executedModel } : {}),
       type: parsedHeader.type,
       generatedAt: parsedHeader.date,
       processingTime: metadata.processingTime ?? 0,
@@ -301,6 +302,9 @@ function parseHiddenMetadata(textContent: string): AICommentMetadataExtras {
     if (typeof raw.model === 'string' && raw.model.trim()) {
       metadata.model = raw.model.trim();
     }
+    if (typeof raw.executedModel === 'string' && raw.executedModel.trim()) {
+      metadata.executedModel = raw.executedModel.trim();
+    }
     if (typeof raw.processingTime === 'number' && Number.isFinite(raw.processingTime) && raw.processingTime >= 0) {
       metadata.processingTime = raw.processingTime;
     }
@@ -384,6 +388,7 @@ function formatHiddenMetadata(meta: AICommentMeta): string | null {
   const metadata: Record<string, string | number> = {};
 
   if (meta.model?.trim()) metadata.model = meta.model.trim();
+  if (meta.executedModel?.trim()) metadata.executedModel = meta.executedModel.trim();
   if (typeof meta.processingTime === 'number' && Number.isFinite(meta.processingTime) && meta.processingTime > 0) {
     metadata.processingTime = meta.processingTime;
   }

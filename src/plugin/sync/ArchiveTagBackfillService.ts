@@ -7,14 +7,16 @@
  * `ws:archive_tags_updated` event, so every tag added on mobile while Obsidian
  * was closed never reached the vault (tag definitions synced, mappings did not).
  *
- * Semantics: **additive only**. Server tags missing locally are added; local
- * tags are never removed. Removals keep flowing through the WS event, which has
- * replacement semantics.
+ * Semantics: additive for active mappings (server tags missing locally are
+ * added; local-only tags survive, so an outbound push that failed while offline
+ * can't be wiped), plus explicit removal for server-side tombstones — a tag
+ * removed from ONE archive on another device (feedback #131) is pulled via
+ * `deletedPairs` and stripped from that note. Never full replacement.
  *
- * ponytail: additive-only so an outbound push that failed while offline can't be
- * wiped by the next startup. Full replacement needs local dirty-tracking first
- * (mobile's TagSyncService push-then-pull) — add that if remote tag *removals*
- * made while Obsidian was closed turn out to matter.
+ * ponytail: epoch cursor (updatedAfter=1970 + includeDeleted) returns the full
+ * active set AND all-time deletedPairs in one stateless GET — same trick as
+ * TagStore.pullTagDefinitionsFromServer. Switch to a persisted cursor if the
+ * tombstone set ever gets big enough to matter.
  *
  * Single Responsibility: inbound archive-tag reconciliation (server → vault).
  */
@@ -27,21 +29,26 @@ import type { SocialArchiverSettings } from '../../types/settings';
 import type { ArchiveTagOutboundService } from './ArchiveTagOutboundService';
 import {
   mergeTagListsCaseInsensitive,
+  mirrorArchiveTagsIntoObsidianTags,
   normalizeTagName,
-  obsidianSafeTagNames,
   readFrontmatterTags,
 } from '../../utils/tags';
+
+/** Matches every `created_at`, so one call yields all active mappings + all tombstones. */
+const EPOCH_CURSOR = '1970-01-01T00:00:00.000Z';
 
 const LOG_PREFIX = '[Social Archiver] [TagBackfill]';
 
 export interface ArchiveTagBackfillResult {
   /** Active mappings returned by the server. */
   serverMappings: number;
+  /** Tombstoned (archiveId, tagId) pairs returned by the server. */
+  serverDeletedPairs: number;
   /** Distinct archives carrying at least one resolvable tag. */
   taggedArchives: number;
   /** Mappings whose tag ID has no local definition (definition pull lagging). */
   unknownTagIds: number;
-  /** Tagged archives with no matching vault note. */
+  /** Archives needing reconciliation with no matching vault note. */
   missingFiles: number;
   /** Notes that already carried every server tag. */
   alreadySyncedCount: number;
@@ -66,6 +73,7 @@ export interface ArchiveTagBackfillDeps {
 function emptyResult(): ArchiveTagBackfillResult {
   return {
     serverMappings: 0,
+    serverDeletedPairs: 0,
     taggedArchives: 0,
     unknownTagIds: 0,
     missingFiles: 0,
@@ -89,7 +97,8 @@ export class ArchiveTagBackfillService {
   constructor(private readonly deps: ArchiveTagBackfillDeps) {}
 
   /**
-   * Pull every active archive-tag mapping and add the missing ones to the
+   * Pull every active archive-tag mapping plus the server's tombstoned pairs,
+   * then add the missing tags to and strip the tombstoned tags from the
    * matching vault notes. Safe to run on every startup — a vault already in
    * sync performs a single GET and no writes.
    */
@@ -104,9 +113,14 @@ export class ArchiveTagBackfillService {
       throw new Error('API client not initialised');
     }
 
-    const response = await apiClient.getArchiveTags();
+    const response = await apiClient.getArchiveTags({
+      updatedAfter: EPOCH_CURSOR,
+      includeDeleted: true,
+    });
+    const deletedPairs = response.deletedPairs ?? [];
     result.serverMappings = response.archiveTags.length;
-    if (result.serverMappings === 0) return result;
+    result.serverDeletedPairs = deletedPairs.length;
+    if (result.serverMappings === 0 && deletedPairs.length === 0) return result;
 
     const tagNameById = new Map(
       this.deps.tagStore.getTagDefinitions().map(def => [def.id, def.name]),
@@ -128,9 +142,27 @@ export class ArchiveTagBackfillService {
       }
     }
 
+    // Tombstones whose tag ID no longer resolves are skipped: the definition
+    // tombstone path (removeTagFromAllPosts) already owns whole-tag deletions.
+    const deletedByArchive = new Map<string, string[]>();
+    for (const pair of deletedPairs) {
+      const name = tagNameById.get(pair.tagId);
+      if (!name) continue;
+
+      const existing = deletedByArchive.get(pair.archiveId);
+      if (existing) {
+        existing.push(name);
+      } else {
+        deletedByArchive.set(pair.archiveId, [name]);
+      }
+    }
+
     result.taggedArchives = tagsByArchive.size;
 
-    for (const [archiveId, serverTags] of tagsByArchive) {
+    const archiveIds = new Set([...tagsByArchive.keys(), ...deletedByArchive.keys()]);
+    for (const archiveId of archiveIds) {
+      const serverTags = tagsByArchive.get(archiveId) ?? [];
+
       const file = this.deps.archiveLookup.findBySourceArchiveId(archiveId);
       if (!file) {
         result.missingFiles += 1;
@@ -139,13 +171,23 @@ export class ArchiveTagBackfillService {
 
       const frontmatter = this.deps.app.metadataCache.getFileCache(file)?.frontmatter;
       const localTags = readStringArray(frontmatter?.archiveTags);
-      if (findMissingTags(localTags, serverTags).length === 0) {
+      const localLower = new Set(
+        localTags.map(normalizeTagName).filter(Boolean).map(tag => tag.toLowerCase()),
+      );
+      // Only strip a tombstoned name that is actually present locally and not
+      // also active on this archive under another tag ID.
+      const activeLower = new Set(serverTags.map(tag => tag.toLowerCase()));
+      const removeTags = (deletedByArchive.get(archiveId) ?? []).filter(
+        name => localLower.has(name.toLowerCase()) && !activeLower.has(name.toLowerCase()),
+      );
+
+      if (findMissingTags(localTags, serverTags).length === 0 && removeTags.length === 0) {
         result.alreadySyncedCount += 1;
         continue;
       }
 
       try {
-        await this.applyServerTags(file, archiveId, serverTags);
+        await this.applyServerTags(file, archiveId, serverTags, removeTags);
         result.updatedCount += 1;
       } catch (error) {
         result.failedCount += 1;
@@ -157,7 +199,12 @@ export class ArchiveTagBackfillService {
     return result;
   }
 
-  private async applyServerTags(file: TFile, archiveId: string, serverTags: string[]): Promise<void> {
+  private async applyServerTags(
+    file: TFile,
+    archiveId: string,
+    serverTags: string[],
+    removeTags: string[],
+  ): Promise<void> {
     const outbound = this.deps.archiveTagOutbound?.();
 
     // Our own write triggers MetadataCache.changed; without this the outbound
@@ -165,16 +212,23 @@ export class ArchiveTagBackfillService {
     outbound?.addSuppression(archiveId);
 
     let mergedTags: string[] = [];
+    const removeLower = new Set(removeTags.map(tag => tag.toLowerCase()));
 
     const write = (): Promise<void> => this.deps.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-      mergedTags = mergeTagListsCaseInsensitive(readStringArray(fm.archiveTags), serverTags);
+      const keptTags = readStringArray(fm.archiveTags).filter(tag => {
+        const normalized = normalizeTagName(tag);
+        return normalized && !removeLower.has(normalized.toLowerCase());
+      });
+      mergedTags = mergeTagListsCaseInsensitive(keptTags, serverTags);
       fm.archiveTags = mergedTags;
 
       if (this.deps.getSettings().mirrorArchiveTagsToObsidianTags) {
-        // `archiveTags` keeps every name; `tags` only takes what Obsidian accepts.
-        fm.tags = mergeTagListsCaseInsensitive(
+        // `archiveTags` keeps every name; `tags` only takes what Obsidian
+        // accepts. Tombstoned names are stripped from the mirror too.
+        fm.tags = mirrorArchiveTagsIntoObsidianTags(
           readStringArray(fm.tags),
-          obsidianSafeTagNames(serverTags),
+          removeTags,
+          serverTags,
         );
       }
     });

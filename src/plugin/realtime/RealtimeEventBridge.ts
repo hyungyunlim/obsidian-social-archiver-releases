@@ -187,7 +187,8 @@ function isDirectProfileCrawlPayload(message: WsProfileCrawlCompleteMessage): bo
 
 interface RealtimeApiClient {
   deletePendingJob(jobId: string): Promise<unknown>;
-  getUserTags(): ReturnType<WorkersAPIClient['getUserTags']>;
+  getUserTags(...args: Parameters<WorkersAPIClient['getUserTags']>): ReturnType<WorkersAPIClient['getUserTags']>;
+  deleteUserTag(...args: Parameters<WorkersAPIClient['deleteUserTag']>): ReturnType<WorkersAPIClient['deleteUserTag']>;
 }
 
 // ============================================================================

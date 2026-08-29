@@ -24,6 +24,22 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.7.2': {
+    title: 'See which AI model wrote it',
+    date: '2026-08-29',
+    notes: `## See which AI model actually ran
+
+- AI comments now show the model next to the provider — "Claude · Sonnet 4.5" instead of just "Claude". The plugin records the model the CLI actually ran, not only the alias you picked, so "sonnet" resolves to the real version on the card. Shown in the timeline and Reader Mode for comments generated from this version on.
+
+## Tag deletions now sync
+
+- Deleting a tag in Obsidian removes it on the server and your other devices too, and tags deleted elsewhere now disappear here as well — including removals from individual archives. Deletions made while offline are queued and applied when you reconnect.
+
+## Windows: Claude CLI found reliably
+
+- The plugin now detects Claude Code installed with the native Windows installer, so AI comments stop reporting the provider as missing even though the terminal sees it.
+- When a provider genuinely is not installed on this device, the job is handed to another of your devices instead of failing outright.`,
+  },
   '4.7.1': {
     title: 'Lighter background polling',
     date: '2026-08-18',

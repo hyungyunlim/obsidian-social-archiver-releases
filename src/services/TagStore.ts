@@ -17,7 +17,15 @@ import {
 import type SocialArchiverPlugin from '@/main';
 import type { WorkersAPIClient } from './WorkersAPIClient';
 
-type TagDefinitionApiClient = Pick<WorkersAPIClient, 'getUserTags'>;
+type TagDefinitionApiClient = Pick<WorkersAPIClient, 'getUserTags' | 'deleteUserTag'>;
+
+/**
+ * Delta cursor sent on every definition pull. An epoch cursor makes the
+ * server return the full active tag set (same payload as before) PLUS the
+ * all-time tombstone id list, so server-side deletions propagate without the
+ * plugin having to persist a real cursor.
+ */
+const FULL_SYNC_EPOCH = '1970-01-01T00:00:00.000Z';
 
 /**
  * TagStore - Manages user-defined tag definitions and tag-post assignments
@@ -136,7 +144,67 @@ export class TagStore {
     // Remove from definitions
     const filtered = definitions.filter(t => t.id !== id);
     await this.saveTagDefinitions(filtered);
+
+    // Propagate to the server (soft-deletes the tag + its archive-tag
+    // mappings account-wide). Queue-first so an offline delete is retried
+    // before the next pull instead of being resurrected by it.
+    await this.pushTagDeleteToServer(id);
     return true;
+  }
+
+  // ============================================================
+  // Server Tag Deletion (outbound: local delete → server)
+  // ============================================================
+
+  private getPendingTagDeleteIds(): string[] {
+    return this.plugin.settings.pendingTagDeleteIds || [];
+  }
+
+  private async savePendingTagDeleteIds(ids: string[]): Promise<void> {
+    await this.plugin.saveSettingsPartial(
+      { pendingTagDeleteIds: Array.from(new Set(ids)) },
+      { reinitialize: false, notify: false }
+    );
+  }
+
+  /** Enqueue + attempt the server delete. Never throws (deletion is already applied locally). */
+  private async pushTagDeleteToServer(id: string): Promise<void> {
+    if (!this.plugin.settings.authToken) return; // not signed in — nothing to sync
+    const apiClient = this.plugin.getApiClient();
+    if (!apiClient) return;
+
+    try {
+      await this.savePendingTagDeleteIds([...this.getPendingTagDeleteIds(), id]);
+      await this.flushPendingTagDeletes(apiClient);
+    } catch (err) {
+      console.warn('[Social Archiver] Failed to push tag deletion to server:', err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /**
+   * Retry queued tag deletions against the server.
+   * TAG_NOT_FOUND counts as success (already deleted, possibly by another device).
+   */
+  private async flushPendingTagDeletes(apiClient: TagDefinitionApiClient): Promise<void> {
+    const pending = this.getPendingTagDeleteIds();
+    if (pending.length === 0) return;
+
+    const clientId = this.plugin.settings.syncClientId || '';
+    const remaining: string[] = [];
+    for (const tagId of pending) {
+      try {
+        await apiClient.deleteUserTag(tagId, clientId);
+      } catch (err) {
+        const code = (err as Error & { code?: string }).code;
+        if (code !== 'TAG_NOT_FOUND') {
+          remaining.push(tagId);
+        }
+      }
+    }
+
+    if (remaining.length !== pending.length) {
+      await this.savePendingTagDeleteIds(remaining);
+    }
   }
 
   // ============================================================
@@ -466,7 +534,15 @@ export class TagStore {
    */
   async pullTagDefinitionsFromServer(apiClient: TagDefinitionApiClient): Promise<number> {
     try {
-      const response = await apiClient.getUserTags();
+      // Push queued local deletions first so the pull below can't resurrect them.
+      await this.flushPendingTagDeletes(apiClient);
+
+      // ponytail: epoch cursor = full active set + all-time tombstone ids on
+      // every pull; move to a persisted delta cursor if payloads ever grow.
+      const response = await apiClient.getUserTags({
+        updatedAfter: FULL_SYNC_EPOCH,
+        includeDeleted: true,
+      });
       const { tags: serverTags, deletedIds } = response;
 
       if (serverTags.length === 0 && deletedIds.length === 0) return 0;
@@ -481,20 +557,29 @@ export class TagStore {
 
       let changeCount = 0;
 
-      // Remove server-deleted tags from local
+      // Remove server-deleted tags from local (definitions + note frontmatter,
+      // mirroring what a local deleteTag does)
       if (deletedIds.length > 0) {
         const deleteSet = new Set(deletedIds);
-        const before = definitions.length;
-        const filtered = definitions.filter(d => !deleteSet.has(d.id));
-        if (filtered.length < before) {
+        const removedDefs = definitions.filter(d => deleteSet.has(d.id));
+        if (removedDefs.length > 0) {
+          const filtered = definitions.filter(d => !deleteSet.has(d.id));
           definitions.length = 0;
           definitions.push(...filtered);
-          changeCount += before - filtered.length;
+          for (const removed of removedDefs) {
+            localById.delete(removed.id);
+            localByName.delete(removed.name.toLowerCase());
+            await this.removeTagFromAllPosts(removed.name);
+          }
+          changeCount += removedDefs.length;
         }
       }
 
-      // Merge server tags
+      // Merge server tags — skip ids queued for deletion locally (an unpushed
+      // offline delete must not be resurrected by the pull)
+      const pendingDeleteIds = new Set(this.getPendingTagDeleteIds());
       for (const serverTag of serverTags) {
+        if (pendingDeleteIds.has(serverTag.id)) continue;
         const normalizedName = normalizeTagName(serverTag.name);
         if (!normalizedName) continue;
 

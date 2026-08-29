@@ -851,6 +851,7 @@ export interface AICommentPayload {
     id: string;
     cli: AICommentSourceId;
     model?: string;
+    executedModel?: string;
     type: AICommentType;
     generatedAt: string;
     processingTime?: number;
@@ -3567,14 +3568,46 @@ export class WorkersAPIClient implements IService {
    *
    * GET /api/user/tags
    *
+   * `deletedIds` is only populated by the server when both `updatedAfter`
+   * and `includeDeleted` are supplied.
+   *
    * @returns Tags list, deleted IDs, and server time
    */
-  async getUserTags(): Promise<UserTagsResponse> {
+  async getUserTags(options: { updatedAfter?: string; includeDeleted?: boolean } = {}): Promise<UserTagsResponse> {
     this.ensureInitialized();
 
-    return await this.request<UserTagsResponse>('/api/user/tags', {
-      method: 'GET',
-    });
+    const params = new URLSearchParams();
+    if (options.updatedAfter) params.set('updatedAfter', options.updatedAfter);
+    if (options.includeDeleted) params.set('includeDeleted', 'true');
+
+    const query = params.toString();
+
+    return await this.request<UserTagsResponse>(
+      `/api/user/tags${query ? `?${query}` : ''}`,
+      { method: 'GET' },
+    );
+  }
+
+  /**
+   * Soft-delete a tag on the server (also soft-deletes its archive-tag mappings)
+   *
+   * DELETE /api/user/tags/:tagId
+   *
+   * @param tagId - Tag ID to delete
+   * @param clientId - Source client ID for echo suppression (sent as X-Client-Id header)
+   */
+  async deleteUserTag(tagId: string, clientId: string): Promise<{ tagId: string }> {
+    this.ensureInitialized();
+
+    const extraHeaders: Record<string, string> = {};
+    if (clientId) {
+      extraHeaders['X-Client-Id'] = clientId;
+    }
+
+    return await this.request<{ tagId: string }>(
+      `/api/user/tags/${encodeURIComponent(tagId)}`,
+      { method: 'DELETE', headers: extraHeaders },
+    );
   }
 
   /**

@@ -44,6 +44,8 @@ export interface AICommentMeta {
   cli: AICommentProviderId;
   /** Model selected for generation, if explicitly requested */
   model?: string;
+  /** Resolved model id the CLI actually ran (e.g. claude-sonnet-4-5-…) */
+  executedModel?: string;
   /** Type of comment generated */
   type: AICommentType;
   /** ISO timestamp of generation */

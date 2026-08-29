@@ -227,6 +227,55 @@ describe('AI CLI Detection Utilities', () => {
     });
   });
 
+  describe('AICliDetector.detectCli PATH lookup', () => {
+    /**
+     * Run the private detectCli with child_process mocked so every probe
+     * fails, and return the version commands it attempted in order.
+     */
+    async function recordProbeCommands(cli: AICli, platform: string): Promise<string[]> {
+      const commands: string[] = [];
+      const execMock = async (command: string) => {
+        commands.push(command);
+        throw new Error('command not found');
+      };
+      vi.spyOn(nodeRequireModule, 'default').mockImplementation((id: string) => {
+        if (id === 'child_process') return { exec: execMock };
+        if (id === 'util') return { promisify: () => execMock };
+        if (id === 'os') {
+          return {
+            platform: () => platform,
+            homedir: () => (platform === 'win32' ? 'C:\\Users\\test' : '/home/test'),
+          };
+        }
+        throw new Error(`Unexpected nodeRequire id in test: ${id}`);
+      });
+
+      const result = await (AICliDetector as any).detectCli(cli, platform);
+      expect(result.available).toBe(false);
+      return commands;
+    }
+
+    it('probes the bare name first on Windows so PATHEXT finds claude.exe (native installer) as well as claude.cmd (npm)', async () => {
+      const commands = await recordProbeCommands('claude', 'win32');
+
+      expect(commands[0]).toBe('"claude" --version');
+      expect(commands[1]).toBe('"claude.cmd" --version');
+    });
+
+    it('probes the native-installer claude.exe path on Windows even when PATH is stale', async () => {
+      const commands = await recordProbeCommands('claude', 'win32');
+
+      expect(commands).toContain('"C:\\Users\\test\\.local\\bin\\claude.exe" --version');
+    });
+
+    it('does not duplicate the bare-name probe on macOS', async () => {
+      const commands = await recordProbeCommands('claude', 'darwin');
+
+      expect(commands[0]).toBe('"claude" --version');
+      expect(commands.filter((c) => c === '"claude" --version')).toHaveLength(1);
+    });
+  });
+
   // Integration tests - these actually run on the system
   // Skip these tests in CI environments
   describe('AICliDetector integration tests', () => {

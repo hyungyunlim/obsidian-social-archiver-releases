@@ -149,6 +149,14 @@ export class AICommentRenderer {
     nameSpan.addClass('sa-text-normal');
     nameSpan.textContent = display.headerLabel;
 
+    // Model badge (executed/requested model, when known and not already in the header)
+    if (display.modelLabel && !display.headerLabel.includes(display.modelLabel)) {
+      const modelSpan = headerLine.createSpan();
+      modelSpan.addClass('sa-text-xs');
+      modelSpan.addClass('sa-text-muted');
+      modelSpan.textContent = display.modelLabel;
+    }
+
     // Separator after name
     const sep1 = headerLine.createSpan({ text: '·' });
     sep1.addClass('sa-text-faint');

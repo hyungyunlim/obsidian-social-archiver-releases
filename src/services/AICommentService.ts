@@ -63,6 +63,8 @@ interface ClaudeStreamEvent {
   };
   result?: string;
   subtype?: string;
+  /** Resolved model id on the system:init event. */
+  model?: string;
 }
 
 /** Tool name to progress message mapping */
@@ -95,6 +97,8 @@ export class AICommentService {
   private currentProcess: ChildProcess | null = null;
   private isCancelled = false;
   private lastReportedPercentage = 0;
+  /** Resolved model id reported by the CLI stream for the current run. */
+  private lastExecutedModel: string | null = null;
   private static shellPath: string | null = null;
   private static shellPathPromise: Promise<string | null> | null = null;
 
@@ -222,6 +226,7 @@ export class AICommentService {
   async generateComment(content: string, options: AICommentOptions): Promise<AICommentResult> {
     this.isCancelled = false;
     this.lastReportedPercentage = 0;
+    this.lastExecutedModel = null;
 
     const startTime = Date.now();
 
@@ -268,6 +273,7 @@ export class AICommentService {
         id: commentId,
         cli: options.cli,
         ...(selectedModel ? { model: selectedModel } : {}),
+        ...(this.lastExecutedModel ? { executedModel: this.lastExecutedModel } : {}),
         type: options.type,
         generatedAt: new Date().toISOString(),
         processingTime,
@@ -1212,6 +1218,11 @@ Content:
     try {
       const event = JSON.parse(jsonLine) as ClaudeStreamEvent;
 
+      // system:init reports the resolved model id (alias → concrete model)
+      if (event.type === 'system' && typeof event.model === 'string' && event.model) {
+        this.lastExecutedModel = event.model;
+      }
+
       // Handle result event - extract final output
       if (event.type === 'result' && event.result) {
         return { result: event.result };
@@ -1279,6 +1290,9 @@ Content:
 
       // Handle init event - update progress
       if (event.type === 'init') {
+        if (typeof event.model === 'string' && event.model) {
+          this.lastExecutedModel = event.model;
+        }
         if (options.onProgress && this.lastReportedPercentage < 15) {
           this.lastReportedPercentage = 15;
           options.onProgress({

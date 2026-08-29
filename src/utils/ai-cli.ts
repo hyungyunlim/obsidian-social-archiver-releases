@@ -102,6 +102,8 @@ export class AICliDetector {
         '~/.local/bin/claude',
       ],
       win32: [
+        // Claude Code 2.x native installer
+        '%USERPROFILE%\\.local\\bin\\claude.exe',
         '%APPDATA%\\npm\\claude.cmd',
         '%LOCALAPPDATA%\\npm\\claude.cmd',
         '%USERPROFILE%\\.npm-global\\claude.cmd',
@@ -310,9 +312,12 @@ export class AICliDetector {
     const paths = this.DETECTION_PATHS[cli][platform] || [];
     const expandedPaths = paths.map((p: string) => this.expandPath(p, os));
 
-    // Also try PATH lookup
+    // Also try PATH lookup — bare name first, so the shell resolves ANY
+    // install layout: on Windows cmd.exe's PATHEXT finds claude.exe (native
+    // installer) as well as claude.cmd (npm). The legacy suffixed name stays
+    // as a fallback for shells resolving with an explicit extension.
     const pathBinary = this.getPathBinaryName(cli, platform);
-    expandedPaths.unshift(pathBinary);
+    expandedPaths.unshift(...(pathBinary === cli ? [cli] : [cli, pathBinary]));
 
     // Extended PATH for Obsidian environment
     const isWindows = platform === 'win32';
@@ -325,6 +330,7 @@ export class AICliDetector {
           `${homedir}\\AppData\\Roaming\\npm`,
           `${homedir}\\AppData\\Local\\npm`,
           `${homedir}\\.npm-global`,
+          `${homedir}\\.local\\bin`,
           `${homedir}\\.bun\\bin`,
           'C:\\Program Files\\nodejs',
           'C:\\Program Files (x86)\\nodejs',

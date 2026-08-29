@@ -2,7 +2,7 @@ import type { App, TFile } from 'obsidian';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AICommentJobProcessor } from '../../../plugin/ai-comment/AICommentJobProcessor';
 import type { AIActionExecutorJob, WorkersAPIClient } from '../../../services/WorkersAPIClient';
-import type { AICommentResult } from '../../../types/ai-comment';
+import { AICommentError, type AICommentResult } from '../../../types/ai-comment';
 import type { SocialArchiverSettings } from '../../../types/settings';
 
 const serviceMocks = vi.hoisted(() => ({
@@ -188,5 +188,38 @@ describe('AICommentJobProcessor AI action comment jobs', () => {
     );
     expect(markdown).toContain('Container orchestration platform.');
     expect(failAIActionJob).not.toHaveBeenCalled();
+  });
+
+  it('reports CLI_NOT_INSTALLED as a retryable PROVIDER_MISSING', () => {
+    // Retryable is what lets the server re-dispatch the job to another
+    // executor on the account (desktop app / standalone CLI) instead of
+    // terminal-failing it because THIS machine cannot see the provider.
+    const processor = new AICommentJobProcessor({
+      app: {} as unknown as App,
+      apiClient: () => ({}) as unknown as WorkersAPIClient,
+      settings: () => ({}) as unknown as SocialArchiverSettings,
+      saveSettings: vi.fn(async () => undefined),
+      archiveLookupService: () => ({}) as never,
+      ingestRemoteArchive: vi.fn(async () => 'existing' as const),
+      isArchiveLibrarySyncRunning: () => false,
+      refreshTimelineView: vi.fn(),
+      schedule: vi.fn(),
+      clearSchedule: vi.fn(),
+      notify: vi.fn(),
+    });
+
+    const error = new AICommentError('CLI_NOT_INSTALLED', 'claude not found');
+    const internals = processor as unknown as {
+      mapAICommentError(e: AICommentError): string;
+      isRetryableAIError(e: AICommentError): boolean;
+    };
+    expect(internals.mapAICommentError(error)).toBe('PROVIDER_MISSING');
+    expect(internals.isRetryableAIError(error)).toBe(true);
+    // TIMEOUT stays retryable; auth failures stay terminal (a retry cannot
+    // sign the CLI in).
+    expect(internals.isRetryableAIError(new AICommentError('TIMEOUT', 't'))).toBe(true);
+    expect(
+      internals.isRetryableAIError(new AICommentError('CLI_NOT_AUTHENTICATED', 'a')),
+    ).toBe(false);
   });
 });

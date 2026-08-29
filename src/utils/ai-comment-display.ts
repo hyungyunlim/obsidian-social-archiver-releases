@@ -13,7 +13,7 @@ const LOCAL_PROVIDER_DISPLAY: Record<string, Pick<ProviderDisplay, 'icon' | 'pro
   codex: { icon: '💡', providerLabel: 'Codex' },
 };
 
-export function getAICommentDisplay(meta: Pick<AICommentMeta, 'cli' | 'model' | 'id'>): ProviderDisplay {
+export function getAICommentDisplay(meta: Pick<AICommentMeta, 'cli' | 'model' | 'executedModel' | 'id'>): ProviderDisplay {
   const cloudDisplay = getCloudAIModelDisplay(meta.model);
   if (cloudDisplay) {
     const headerLabel = cloudDisplay.modelLabel
@@ -37,12 +37,44 @@ export function getAICommentDisplay(meta: Pick<AICommentMeta, 'cli' | 'model' | 
   }
 
   const local = LOCAL_PROVIDER_DISPLAY[meta.cli] ?? { icon: '🤖', providerLabel: String(meta.cli || 'AI') };
+  // headerLabel stays provider-only: it is written into the markdown comment
+  // header, whose `·`-split round-trip parse expects a bare provider name.
   return {
     icon: local.icon,
     providerLabel: local.providerLabel,
-    modelLabel: '',
+    modelLabel: formatAIModelLabel(meta.executedModel || meta.model),
     headerLabel: local.providerLabel,
   };
+}
+
+/**
+ * Human label for a local model id or alias.
+ * "claude-sonnet-4-5-20250929" → "Sonnet 4.5", "claude-3-5-sonnet-20241022" → "Sonnet 3.5",
+ * "sonnet" → "Sonnet", "gpt-5.4-mini" → "GPT 5.4 Mini".
+ */
+export function formatAIModelLabel(raw: string | undefined): string {
+  const model = raw?.trim();
+  if (!model) return '';
+  const lower = model.toLowerCase();
+
+  // claude-<name>-<major>[-<minor>][-YYYYMMDD]  (version parts capped at 3 digits so the date never matches)
+  let m = lower.match(/^claude-([a-z]+)(?:-(\d{1,3}))?(?:-(\d{1,3}))?(?:-\d{8})?$/);
+  if (m?.[1]) return `${capitalize(m[1])}${formatVersion(m[2], m[3])}`;
+
+  // claude-<major>[-<minor>]-<name>[-YYYYMMDD]  (older id scheme)
+  m = lower.match(/^claude-(\d{1,3})(?:-(\d{1,3}))?-([a-z]+)(?:-\d{8})?$/);
+  if (m?.[3]) return `${capitalize(m[3])}${formatVersion(m[1], m[2])}`;
+
+  return formatModelParts(model.split(/[-_\s]+/).filter(Boolean));
+}
+
+function formatVersion(major?: string, minor?: string): string {
+  if (!major) return '';
+  return minor ? ` ${major}.${minor}` : ` ${major}`;
+}
+
+function capitalize(value: string): string {
+  return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 }
 
 export function cleanAICommentModelId(model: string): string {

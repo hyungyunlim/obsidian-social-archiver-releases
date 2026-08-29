@@ -542,6 +542,11 @@ export default class SocialArchiverPlugin extends Plugin {
    * per archive; the version is stamped only when an API client exists so an
    * offline boot retries on the next foreground catch-up.
    */
+  /** Expose the API client to services (e.g. TagStore server-delete push). */
+  getApiClient(): WorkersAPIClient | undefined {
+    return this.apiClient;
+  }
+
   private async runMentionWikilinkBackfill(): Promise<void> {
     const BACKFILL_VERSION = 2;
     if (!this.settings.enableMobileAnnotationSync) return;
@@ -828,8 +833,9 @@ export default class SocialArchiverPlugin extends Plugin {
    * Pull archive→tag mappings created on other clients into the vault.
    *
    * Tag definitions sync on their own, but the mappings only ever arrived via
-   * the live `archive_tags_updated` event — tags added on mobile while Obsidian
-   * was closed never reached the note. Additive; never removes local tags.
+   * the live `archive_tags_updated` event — tags added or removed on mobile
+   * while Obsidian was closed never reached the note. Additive for active
+   * mappings; per-archive removals apply via server tombstones (feedback #131).
    */
   async reconcileArchiveTagsFromServer(): Promise<void> {
     const archiveLookup = this.archiveLookupService;

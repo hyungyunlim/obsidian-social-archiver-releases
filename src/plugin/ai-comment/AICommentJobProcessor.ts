@@ -1172,7 +1172,11 @@ export class AICommentJobProcessor {
   }
 
   private isRetryableAIError(error: AICommentError): boolean {
-    return error.code === 'TIMEOUT';
+    // CLI_NOT_INSTALLED is retryable: "not installed HERE" is not "not
+    // installed anywhere" — the server re-dispatches and, past the adoption
+    // cutoff, another executor on the account (desktop app / standalone CLI)
+    // picks the job up. The server bounds attempts.
+    return error.code === 'TIMEOUT' || error.code === 'CLI_NOT_INSTALLED';
   }
 
   private getVaultBasePath(): string | undefined {
