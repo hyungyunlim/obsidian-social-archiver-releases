@@ -2303,6 +2303,7 @@ export default class SocialArchiverPlugin extends Plugin {
       // Create ArchiveLibrarySyncService
       this.archiveLibrarySyncService = new ArchiveLibrarySyncService({
         apiClient: () => this.apiClient,
+        waitForLookupIndex: () => this.waitForMetadataCacheResolved(),
         settings: () => this.settings,
         saveSettings: () => this.saveSettingsPartial({}, { reinitialize: false, notify: false }),
         findBySourceArchiveId: (id) => this.archiveLookupService?.findBySourceArchiveId(id) ?? null,

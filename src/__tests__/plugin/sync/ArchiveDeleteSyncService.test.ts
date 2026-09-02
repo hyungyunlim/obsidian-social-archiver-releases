@@ -376,6 +376,40 @@ describe('ArchiveDeleteSyncService', () => {
       })).toBe(false);
     });
 
+    it('writes no tombstone and no server delete when another note still holds the archive', async () => {
+      const survivor = { path: 'Social Archives/2026-07-24 - Patrick Ng - Southwark (cZoIRW).md' };
+      const deleted = { path: 'Social Archives/2026-07-24 - patrickng - Southwark (cZoIRW).md' };
+      const identity = { ...deleted, archiveId: 'wU1te95aeJ', originalUrl: 'https://www.instagram.com/reel/DbKBEcZoIRW/' };
+
+      for (const outboundEnabled of [false, true]) {
+        const settings = makeSettings({ deleteSync: { ...OUTBOUND_OFF, outboundEnabled, confirmBeforeServerDelete: false } });
+        const saveSettings = vi.fn().mockResolvedValue(undefined);
+        const apiClient = { deleteArchive: vi.fn().mockResolvedValue({ success: true }) };
+        const service = new ArchiveDeleteSyncService({
+          apiClient: () => apiClient as any,
+          settings: () => settings,
+          saveSettings,
+          app: { fileManager: { trashFile: vi.fn() } } as any,
+          // Index not yet pruned: the deleted file is still listed next to the survivor.
+          findBySourceArchiveId: vi.fn().mockReturnValue(deleted),
+          findByOriginalUrl: vi.fn().mockReturnValue([deleted, survivor]),
+          isLibrarySyncRunning: () => false,
+          notify: vi.fn(),
+        });
+
+        await (service as any).handleOutboundDelete(identity);
+
+        expect(settings.localArchiveDeleteTombstones ?? []).toHaveLength(0);
+        expect(settings.pendingArchiveDeletes ?? []).toHaveLength(0);
+        expect(apiClient.deleteArchive).not.toHaveBeenCalled();
+        expect(service.isServerArchiveTombstoned({
+          id: 'wU1te95aeJ',
+          originalUrl: identity.originalUrl,
+          archivedAt: '2026-07-24T02:02:18.899Z',
+        })).toBe(false);
+      }
+    });
+
     it('lets a newer server re-archive through, and a re-delete re-blocks it', async () => {
       vi.setSystemTime(new Date('2026-08-01T00:00:00.000Z'));
       const settings = makeSettings({ deleteSync: OUTBOUND_OFF });

@@ -7,6 +7,11 @@ function getRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+/** 409 SUBSCRIPTION_LIMIT_EXCEEDED: plan cap on ENABLED subscriptions. Not a paywall, not retryable. */
+export function isSubscriptionLimitError(error: unknown): boolean {
+  return getRecord(error)?.['code'] === 'SUBSCRIPTION_LIMIT_EXCEEDED';
+}
+
 export function isSubscriptionPaywallError(error: unknown): boolean {
   const record = getRecord(error);
   const code = record?.['code'];

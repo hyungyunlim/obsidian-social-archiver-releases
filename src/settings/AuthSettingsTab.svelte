@@ -253,6 +253,8 @@ let rawBillingPlan = $derived(billingUsage?.plan ?? settings.billingUsage?.plan 
 let billingPlanDisplay = $derived(formatBillingPlan(rawBillingPlan));
 let betaFreeSunsetLine = $derived(getBetaFreeSunsetLine(rawBillingPlan, billingUsage?.policy ?? settings.billingUsage?.policy));
 let archiveQuotaProgress = $derived(getArchiveQuotaProgress(archiveQuota));
+let subscriptionQuota = $derived(billingUsage?.subscriptionQuota ?? settings.billingUsage?.subscriptionQuota);
+let subscriptionQuotaProgress = $derived(getArchiveQuotaProgress(subscriptionQuota));
 let cloudCreditQuotaProgress = $derived(getCloudCreditQuotaProgress(cloudCreditQuota));
 let isLifetimePlan = $derived(rawBillingPlan === 'lifetime');
 let archiveQuotaExhausted = $derived(
@@ -328,7 +330,9 @@ function getBetaFreeSunsetLine(plan: string, policy?: BillingUsageSummary['polic
   return t('auth.billing.betaFreeEnds', { date: sunsetDate });
 }
 
-function getArchiveQuotaProgress(quota: BillingUsageSummary['archiveQuota'] | undefined): number {
+function getArchiveQuotaProgress(
+  quota: { used: number; limit: number; unlimited?: boolean } | undefined
+): number {
   if (!quota || quota.limit <= 0 || quota.limit === -1 || quota.unlimited) return 0;
   return Math.max(0, Math.min(100, (quota.used / quota.limit) * 100));
 }
@@ -1046,6 +1050,22 @@ $effect(() => {
               AI: {t('auth.billing.breakdown.used', { count: cloudCreditBreakdown.ai.used })}{cloudCreditBreakdown.ai.reserved > 0 ? t('auth.billing.breakdown.pending', { count: cloudCreditBreakdown.ai.reserved }) : ''}
               · Google Maps: {t('auth.billing.breakdown.used', { count: cloudCreditBreakdown.googleMaps.used })}{cloudCreditBreakdown.googleMaps.reserved > 0 ? t('auth.billing.breakdown.pending', { count: cloudCreditBreakdown.googleMaps.reserved }) : ''}
             </div>
+          </div>
+        {/if}
+
+        {#if subscriptionQuota && subscriptionQuota.limit > 0}
+          <div class="billing-usage-subsection">
+            <div class="billing-usage-label">{t('auth.billing.subscriptions')}</div>
+            <div class="billing-usage-main">
+              <span class="billing-usage-value">{subscriptionQuota.used}</span>
+              <span class="billing-usage-separator">/</span>
+              <span class="billing-usage-limit">{subscriptionQuota.limit}</span>
+              <span class="billing-usage-muted">{t('auth.billing.left', { count: subscriptionQuota.remaining })}</span>
+            </div>
+            <div class="billing-progress-track" aria-hidden="true">
+              <div class="billing-progress-bar" style={`width: ${subscriptionQuotaProgress}%`}></div>
+            </div>
+            <div class="billing-usage-reset">{t('auth.billing.subscriptionsHint')}</div>
           </div>
         {/if}
       </div>

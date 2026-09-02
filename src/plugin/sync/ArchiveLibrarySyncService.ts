@@ -206,6 +206,13 @@ export interface ArchiveLibrarySyncDeps {
   isArchiveTombstoned?: (archive: UserArchive) => boolean;
 
   /**
+   * Resolves once the vault lookup index is built from a fully parsed
+   * MetadataCache. Tier 1/2 dedup reads that index; a sweep that starts
+   * before it is complete cannot see existing notes and creates duplicates.
+   */
+  waitForLookupIndex?: () => Promise<void>;
+
+  /**
    * Apply inbound deletes for archive IDs reported as deleted in the delta sweep.
    * Wired to a function that calls ArchiveDeleteSyncService.handleInboundDelete()
    * for each ID.
@@ -397,6 +404,7 @@ export class ArchiveLibrarySyncService {
 
     this.isSyncing = true;
     this.abortController = new AbortController();
+    await this.deps.waitForLookupIndex?.();
 
     const resolvedMode = mode ?? this.resolveMode(settings);
     const resumeOffset = settings.archiveLibrarySync?.resumeOffset ?? 0;
@@ -485,6 +493,7 @@ export class ArchiveLibrarySyncService {
 
     this.isSyncing = true;
     this.abortController = new AbortController();
+    await this.deps.waitForLookupIndex?.();
 
     this.updateState({
       mode,

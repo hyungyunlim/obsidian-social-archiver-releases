@@ -31,6 +31,7 @@ import {
   type ArchivePreferences,
   type ArchivePreferencesPatch,
 } from '@/types/archive-preferences';
+import { parsePromptLibraryResponse, type SavedPrompt } from '@/types/prompt-library';
 import {
   InvalidPlaceApiResponseError,
   parseProviderPlaceSelectionResponse,
@@ -1567,6 +1568,32 @@ export class WorkersAPIClient implements IService {
     return body.data?.dismissed === true;
   }
 
+  /**
+   * Named custom AI prompt presets (GET /api/user/ai-prompts). Read-only in
+   * the plugin — presets are managed from the mobile/desktop apps.
+   */
+  async getPromptLibrary(): Promise<readonly SavedPrompt[]> {
+    this.ensureInitialized();
+    if (!this.config.authToken) {
+      throw new Error('Authentication required');
+    }
+
+    const response = await requestUrl({
+      url: `${this.config.endpoint}/api/user/ai-prompts`,
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getClientHeaders(),
+        Authorization: `Bearer ${this.config.authToken}`,
+      },
+      throw: false,
+    });
+
+    const prompts = parsePromptLibraryResponse(response.json);
+    if (response.status >= 200 && response.status < 300 && prompts) return prompts;
+    throw new Error(`Failed to load prompt library (${response.status})`);
+  }
+
   async getArchivePreferences(): Promise<ArchivePreferences> {
     this.ensureInitialized();
     if (!this.config.authToken) {
@@ -2069,7 +2096,7 @@ export class WorkersAPIClient implements IService {
           method: 'GET',
           throw: false,
         });
-        if (response.status !== 200) {
+        if (response.status < 200 || response.status >= 300) {
           throw new Error(`Direct fetch failed: ${response.status}`);
         }
         return response.arrayBuffer;
@@ -2093,7 +2120,8 @@ export class WorkersAPIClient implements IService {
         throw: false,
       });
 
-      if (response.status !== 200) {
+      // 206 is a whole body too — the proxy adds its own Range header upstream.
+      if (response.status < 200 || response.status >= 300) {
         throw new Error(`Proxy returned ${response.status}: ${response.text}`);
       }
 

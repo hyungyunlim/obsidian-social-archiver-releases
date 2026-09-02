@@ -114,6 +114,11 @@ export const authStrings = {
   'auth.billing.noMonthlyLimit': { en: 'No monthly limit', ko: '월간 제한 없음' },
   'auth.billing.archivedThisMonth': { en: '{count} archived this month', ko: '이번 달 {count}개 아카이브됨' },
   'auth.billing.left': { en: '({count} left)', ko: '({count}개 남음)' },
+  'auth.billing.subscriptions': { en: 'Active subscriptions', ko: '활성 구독' },
+  'auth.billing.subscriptionsHint': {
+    en: 'Paused subscriptions do not count toward the limit.',
+    ko: '일시정지된 구독은 개수에 포함되지 않습니다.',
+  },
   'auth.billing.quotaResets': {
     en: 'Monthly quota resets {date}',
     ko: '월간 할당량은 {date}에 초기화됩니다',

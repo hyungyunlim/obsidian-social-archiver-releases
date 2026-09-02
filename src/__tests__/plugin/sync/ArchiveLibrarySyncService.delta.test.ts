@@ -319,6 +319,39 @@ describe('ArchiveLibrarySyncService ambiguous matches', () => {
     });
   });
 
+  it('does not touch the server until the lookup index is built (dedup needs it)', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const waitForLookupIndex = vi.fn(() => gate);
+    const getUserArchives = vi.fn().mockResolvedValue({
+      archives: [], total: 0, hasMore: false, serverTime: '2026-05-09T00:00:00.000Z', deletedIds: [],
+    });
+    const service = new ArchiveLibrarySyncService({
+      apiClient: () => ({ getUserArchives }) as any,
+      settings: () => makeSettings(),
+      saveSettings: vi.fn().mockResolvedValue(undefined),
+      findBySourceArchiveId: vi.fn().mockReturnValue(null),
+      findByOriginalUrl: vi.fn().mockReturnValue([]),
+      indexSavedFile: vi.fn(),
+      backfillFileIdentity: vi.fn().mockResolvedValue(undefined),
+      saveSubscriptionPostDetailed: vi.fn(),
+      convertUserArchiveToPostData: vi.fn(),
+      notify: vi.fn(),
+      waitForLookupIndex,
+    } as any);
+
+    const run = service.startDeltaSync();
+    await Promise.resolve();
+
+    expect(waitForLookupIndex).toHaveBeenCalledTimes(1);
+    expect(getUserArchives).not.toHaveBeenCalled();
+
+    release();
+    await run;
+
+    expect(getUserArchives).toHaveBeenCalled();
+  });
+
   it('leaves no stale report when nothing collided', async () => {
     const service = makeService(vi.fn().mockReturnValue([]));
 

@@ -390,6 +390,72 @@ describe('SubscriptionSyncService', () => {
       );
     });
 
+    it('leaves a note alone when the server media is only a localpath sentinel (Unavailable callout renders zero embeds)', async () => {
+      const deps = makeDeps();
+      vi.mocked(deps.app.vault.read).mockResolvedValue([
+        '---',
+        'platform: instagram',
+        'sourceArchiveId: archive-1',
+        '---',
+        '',
+        'Caption',
+        '',
+        '<!-- sa:media:start id=archive-1 -->',
+        '> [!note] Media Unavailable',
+        '> This media is stored only on the original device.',
+        '<!-- sa:media:end -->',
+      ].join('\n'));
+
+      const service = new SubscriptionSyncService(deps);
+      const file = { path: 'Social Archives/Instagram/2022/12/post.md' } as TFile;
+      const result = await service.replaceExistingLimitedArchiveFile(file, makePendingPost({
+        platform: 'instagram',
+        mediaPreservationStatus: 'failed',
+        media: [{ type: 'video', url: 'localpath:media/CmzwMjzPUa0/00-video.mp4' }],
+        quotedPost: undefined,
+      }));
+
+      expect(result.status).toBe('existing');
+      expect(serviceMocks.vaultStorageSavePost).not.toHaveBeenCalled();
+    });
+
+    it('upgrades a failed-download CDN fallback link once the server holds an R2 copy', async () => {
+      const deps = makeDeps();
+      vi.mocked(deps.app.vault.read).mockResolvedValue([
+        '---',
+        'platform: instagram',
+        'sourceArchiveId: archive-1',
+        '---',
+        '',
+        'Caption',
+        '',
+        '[🎥 Video](https://scontent-sea5-1.cdninstagram.com/o1/v/t2/f2/m86/AQMz.mp4?oe=6A83180F)',
+      ].join('\n'));
+
+      const service = new SubscriptionSyncService(deps);
+      const file = { path: 'Social Archives/Instagram/2026/07/post.md' } as TFile;
+      const withCdnOnly = await service.replaceExistingLimitedArchiveFile(file, makePendingPost({
+        platform: 'instagram',
+        mediaPreservationStatus: 'failed',
+        media: [{ type: 'video', url: 'https://scontent-sea5-1.cdninstagram.com/o1/v/t2/f2/m86/AQMz.mp4?oe=6A83180F' }],
+        quotedPost: undefined,
+      }));
+      expect(withCdnOnly.status).toBe('existing');
+
+      const withR2 = await service.replaceExistingLimitedArchiveFile(file, makePendingPost({
+        platform: 'instagram',
+        mediaPreservationStatus: 'completed',
+        media: [{
+          type: 'video',
+          url: 'https://scontent-sea5-1.cdninstagram.com/o1/v/t2/f2/m86/AQMz.mp4?oe=6A83180F',
+          r2Url: 'https://api.example/media/archives/patrickng/kNQE8YmoYe/00-video.mp4',
+        }],
+        quotedPost: undefined,
+      }));
+      expect(withR2.status).toBe('updated');
+      expect(serviceMocks.vaultStorageSavePost).toHaveBeenCalledTimes(1);
+    });
+
     it('does not replace a non-limited note while server media preservation is still processing', async () => {
       const deps = makeDeps();
       vi.mocked(deps.app.vault.read).mockResolvedValue([

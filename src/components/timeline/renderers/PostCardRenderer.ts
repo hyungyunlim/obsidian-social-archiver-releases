@@ -18,6 +18,7 @@ import { YouTubePlayerController } from '../controllers/YouTubePlayerController'
 import { VideoTranscriptPlayer } from './VideoTranscriptPlayer';
 import { ShareAPIClient } from '../../../services/ShareAPIClient';
 import type { AIActionType, AICommentPayload, ContentVariant, ExtractPlaceCandidatesResult, PlaceCandidate, PlaceCandidateAttachmentResult, TranscriptionJobMode, TranscriptionMediaRef, WorkersAPIClient } from '../../../services/WorkersAPIClient';
+import type { SavedPrompt } from '../../../types/prompt-library';
 import { TextFormatter } from '../../../services/markdown/formatters/TextFormatter';
 import { TranscriptFormatter } from '../../../services/markdown/formatters/TranscriptFormatter';
 import { getAuthorCatalogStore } from '../../../services/AuthorCatalogStore';
@@ -9683,6 +9684,24 @@ export class PostCardRenderer extends Component {
   /**
    * Render AI comment banner on a post card
    */
+  /**
+   * Prompt Library presets for the AI banner's custom prompt input, cached
+   * for 30s so a timeline full of banners costs at most one request.
+   */
+  private promptLibraryCache: { prompts: readonly SavedPrompt[]; fetchedAt: number } | null = null;
+
+  private async loadSavedPromptPresets(): Promise<readonly SavedPrompt[]> {
+    const cached = this.promptLibraryCache;
+    if (cached && Date.now() - cached.fetchedAt < 30_000) return cached.prompts;
+    try {
+      const prompts = await this.plugin.workersApiClient.getPromptLibrary();
+      this.promptLibraryCache = { prompts, fetchedAt: Date.now() };
+      return prompts;
+    } catch {
+      return cached?.prompts ?? [];
+    }
+  }
+
   private async renderAICommentBanner(
     contentArea: HTMLElement,
     post: PostData,
@@ -9722,6 +9741,7 @@ export class PostCardRenderer extends Component {
       defaultCli,
       defaultType: settings.defaultType,
       isGenerating: false,
+      loadSavedPrompts: () => this.loadSavedPromptPresets(),
       ...(resumedRun ? {
         activeRun: {
           startTime: resumedRun.startTime,

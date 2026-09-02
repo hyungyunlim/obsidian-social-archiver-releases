@@ -1897,8 +1897,11 @@ export class RealtimeEventBridge {
       const region = SentinelMediaRegionManager.findRegion(content, archiveId);
 
       if (!region) {
-        // No plugin-owned region: never rewrite structurally. Append a single
-        // review-needed callout (idempotent — skip if one already exists).
+        // No plugin-owned region: never rewrite structurally. A note with no
+        // sentinel has nothing to repair — plugin-command notes carry no region
+        // and used to collect this callout after every ordinary preservation.
+        if (!this.hasSentinelEmbed(content)) return null;
+        // Append a single review-needed callout (idempotent).
         if (content.includes(REVIEW_NEEDED_MARKER)) return null;
         const callout = this.buildReviewNeededCallout();
         const trimmed = content.replace(/\n+$/, '');
@@ -1939,6 +1942,21 @@ export class RealtimeEventBridge {
         filename: stripLocalpathPrefix(url),
       });
     });
+  }
+
+  /** True when the note embeds at least one unresolved `localpath:` sentinel. */
+  private hasSentinelEmbed(content: string): boolean {
+    for (const match of content.matchAll(/!\[[^\]]*\]\(([^)\s]+)[^)]*\)/g)) {
+      const raw = match[1] ?? '';
+      let url = raw;
+      try {
+        url = decodeURIComponent(raw);
+      } catch {
+        // malformed escape — judge the raw target
+      }
+      if (isLocalSentinel(url)) return true;
+    }
+    return false;
   }
 
   /** Build the non-destructive "media updated — review needed" callout. */

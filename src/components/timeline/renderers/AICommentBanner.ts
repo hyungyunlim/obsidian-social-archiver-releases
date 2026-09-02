@@ -33,10 +33,24 @@ export interface AICommentBannerActionItem {
   label: string;
 }
 
+/** Named custom-prompt preset from the user's Prompt Library. */
+export interface SavedPromptOption {
+  id: string;
+  name: string;
+  prompt: string;
+  isDefault?: boolean;
+}
+
 export interface AICommentBannerOptions {
   availableClis: AICli[];
   defaultCli: AICli;
   defaultType: AICommentType;
+  /**
+   * Lazily load the user's saved custom prompt presets. Called at most once
+   * per banner render, only when the custom type is (or becomes) selected.
+   * The banner has no plugin access, so the caller wires this to the API.
+   */
+  loadSavedPrompts?: () => Promise<readonly SavedPromptOption[]>;
   onGenerate: (cli: AICli, type: AICommentType, customPrompt?: string, language?: AIOutputLanguage) => Promise<void>;
   onGenerateMulti?: (clis: AICli[], type: AICommentType, customPrompt?: string, language?: AIOutputLanguage) => Promise<void>;
   onRunAction?: (actionId: AICommentBannerActionId, cli: AICli, language?: AIOutputLanguage) => Promise<void>;
@@ -146,6 +160,9 @@ export class AICommentBanner {
   private selectedLanguage: AIOutputLanguage = 'auto';
   private customPrompt: string = '';
   private customPromptInput: HTMLInputElement | null = null;
+  private promptPresetSelect: HTMLSelectElement | null = null;
+  private promptPresetsRequested = false;
+  private savedPromptOptions: readonly SavedPromptOption[] = [];
   private options: AICommentBannerOptions | null = null;
   private generatingStartTime: number = 0;
   private elapsedTimerInterval: number | null = null;
@@ -330,6 +347,7 @@ export class AICommentBanner {
       if (customPromptRow) {
         if (!this.selectedActionId && this.selectedType === 'custom') {
           customPromptRow.removeClass('sa-hidden');
+          this.ensurePromptPresetsLoaded();
           if (this.customPromptInput) {
             this.customPromptInput.focus();
           }
@@ -476,7 +494,24 @@ export class AICommentBanner {
     customPromptRow.addClass('sa-flex-row', 'sa-gap-8');
     if (this.selectedActionId || this.selectedType !== 'custom') {
       customPromptRow.addClass('sa-hidden');
+    } else {
+      this.ensurePromptPresetsLoaded();
     }
+
+    // Saved prompt presets (Prompt Library) — populated lazily on first custom
+    // selection; the wrapper stays hidden when the user has no presets.
+    const presetWrapper = customPromptRow.createDiv();
+    presetWrapper.addClass('sa-flex-row', 'acb-select-wrapper', 'sa-hidden');
+    const presetSelect = this.createMinimalSelect(presetWrapper);
+    presetSelect.createEl('option', { text: 'Presets', value: '' });
+    this.promptPresetSelect = presetSelect;
+    presetSelect.addEventListener('change', () => {
+      const preset = this.savedPromptOptions.find((p) => p.id === presetSelect.value);
+      if (!preset || !this.customPromptInput) return;
+      this.customPromptInput.value = preset.prompt;
+      this.customPrompt = preset.prompt;
+      this.customPromptInput.focus();
+    });
 
     const promptInput = customPromptRow.createEl('input', {
       type: 'text',
@@ -679,6 +714,39 @@ export class AICommentBanner {
   // ============================================================================
   // Helper Methods
   // ============================================================================
+
+  /**
+   * Load the user's saved custom prompt presets once per banner render.
+   * Populates the preset select and prefills an empty input with the
+   * default preset. Failures are silent — presets are optional sugar.
+   */
+  private ensurePromptPresetsLoaded(): void {
+    const loader = this.options?.loadSavedPrompts;
+    if (this.promptPresetsRequested || !loader) return;
+    this.promptPresetsRequested = true;
+    loader().then((presets) => {
+      if (presets.length === 0 || !this.promptPresetSelect) return;
+      this.savedPromptOptions = presets;
+      const ordered = [...presets].sort(
+        (a, b) => Number(Boolean(b.isDefault)) - Number(Boolean(a.isDefault)),
+      );
+      for (const preset of ordered) {
+        this.promptPresetSelect.createEl('option', {
+          text: preset.isDefault ? `★ ${preset.name}` : preset.name,
+          value: preset.id,
+        });
+      }
+      this.promptPresetSelect.parentElement?.removeClass('sa-hidden');
+      const defaultPreset = presets.find((p) => p.isDefault);
+      if (defaultPreset && this.customPromptInput && !this.customPromptInput.value) {
+        this.customPromptInput.value = defaultPreset.prompt;
+        this.customPrompt = defaultPreset.prompt;
+        this.promptPresetSelect.value = defaultPreset.id;
+      }
+    }).catch(() => {
+      // Presets are optional; the custom input works without them.
+    });
+  }
 
   private createMinimalSelect(parent: HTMLElement): HTMLSelectElement {
     const select = parent.createEl('select');

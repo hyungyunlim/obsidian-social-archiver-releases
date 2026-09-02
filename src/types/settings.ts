@@ -139,6 +139,13 @@ export interface ArchiveQuotaSummary {
   unlimited?: boolean;
 }
 
+/** Enabled profile subscriptions vs plan cap (GET /api/user/usage). */
+export interface SubscriptionQuotaSummary {
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
 export interface AIActionQuotaSummary {
   period: string;
   used: number;
@@ -168,6 +175,7 @@ export interface BillingUsageSummary {
   archiveQuota: ArchiveQuotaSummary;
   aiActionQuota?: AIActionQuotaSummary;
   cloudCreditQuota?: CloudCreditQuotaSummary;
+  subscriptionQuota?: SubscriptionQuotaSummary;
   billing?: {
     entitlementActive?: boolean;
     source?: string;

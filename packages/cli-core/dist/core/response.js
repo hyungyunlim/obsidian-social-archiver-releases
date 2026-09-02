@@ -29,6 +29,7 @@ export const ErrorCode = {
     TIMEOUT_ERROR: 'TIMEOUT_ERROR',
     CIRCUIT_OPEN: 'CIRCUIT_OPEN',
     DOC_ID_STALE: 'DOC_ID_STALE',
+    SUBSCRIPTION_LIMIT_EXCEEDED: 'SUBSCRIPTION_LIMIT_EXCEEDED',
     OPERATION_FAILED: 'OPERATION_FAILED',
 };
 /**
@@ -50,6 +51,8 @@ export const RETRYABLE_BY_CODE = Object.freeze({
     [ErrorCode.TIMEOUT_ERROR]: true,
     [ErrorCode.CIRCUIT_OPEN]: true,
     [ErrorCode.DOC_ID_STALE]: true,
+    // Plan cap on enabled subscriptions: pause/delete one first, never retry.
+    [ErrorCode.SUBSCRIPTION_LIMIT_EXCEEDED]: false,
     // OPERATION_FAILED is generic; callers may override with `retryable` opt.
     [ErrorCode.OPERATION_FAILED]: false,
 });

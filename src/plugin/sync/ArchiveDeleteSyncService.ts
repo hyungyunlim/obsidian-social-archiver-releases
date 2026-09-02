@@ -288,6 +288,18 @@ export class ArchiveDeleteSyncService {
       return;
     }
 
+    // Duplicate pair: another note still carries this archive. Neither a
+    // server delete (would orphan and then inbound-delete the survivor) nor a
+    // tombstone (Tier 0.5 would freeze the survivor out of every ingest path)
+    // is right — the user is cleaning up, not deleting the post.
+    if (this.hasSurvivingNote(identity)) {
+      console.debug(`${LOG_PREFIX} Another note still holds this archive — local cleanup only`, {
+        path: identity.path,
+        archiveId: identity.archiveId,
+      });
+      return;
+    }
+
     const settings = this.deps.settings();
 
     // Feature flag
@@ -726,6 +738,18 @@ export class ArchiveDeleteSyncService {
         this.suppressedInboundDeleteIds.delete(archiveId);
       }
     }
+  }
+
+  /**
+   * True when a different vault file still resolves to the same archive.
+   * Runs before the lookup index prunes the deleted file, so the deleted path
+   * itself is excluded rather than relied upon.
+   */
+  private hasSurvivingNote(identity: ArchiveFileIdentity): boolean {
+    const byId = identity.archiveId ? this.deps.findBySourceArchiveId(identity.archiveId) : null;
+    if (byId && byId.path !== identity.path) return true;
+    const byUrl = identity.originalUrl ? this.deps.findByOriginalUrl(identity.originalUrl) : [];
+    return byUrl.some((file) => file.path !== identity.path);
   }
 
   // --------------------------------------------------------------------------

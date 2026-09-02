@@ -26,6 +26,7 @@ export declare const ErrorCode: {
     readonly TIMEOUT_ERROR: "TIMEOUT_ERROR";
     readonly CIRCUIT_OPEN: "CIRCUIT_OPEN";
     readonly DOC_ID_STALE: "DOC_ID_STALE";
+    readonly SUBSCRIPTION_LIMIT_EXCEEDED: "SUBSCRIPTION_LIMIT_EXCEEDED";
     readonly OPERATION_FAILED: "OPERATION_FAILED";
 };
 export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode];

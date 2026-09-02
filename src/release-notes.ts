@@ -24,6 +24,24 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.7.3': {
+    title: 'Videos download again, quieter sync',
+    date: '2026-09-02',
+    notes: `## Videos archived from the plugin download again
+
+- Since mid-June, archiving a post with a video from the plugin ended in "Video download failed" even though the server had kept a copy — the media proxy answered in a form the plugin rejected. Fixed on both sides. For notes that already carry the failure, archive the same URL again: the plugin now pulls the stored copy.
+
+## Old notes stop resurfacing as "edited"
+
+- Notes whose media exists only on the original device were rewritten on every sync pass (and showed \`media_expired\`). They are now left alone.
+- The "Media updated — review needed" callout no longer lands on every note archived from the plugin. It appears only when the note actually has a missing local media reference to review.
+- A server-side author avatar refresh no longer marks every archive by that author as updated, so the vault stops re-walking thousands of notes after a subscription run.
+
+## Fewer duplicate notes, safer clean-up
+
+- Sync now waits for Obsidian's file index before matching server archives to existing notes, closing a source of duplicate notes on a cold start.
+- Deleting one copy of a duplicate pair is now just local clean-up: it no longer deletes the archive on the server or blocks the surviving note from future updates.`,
+  },
   '4.7.2': {
     title: 'See which AI model wrote it',
     date: '2026-08-29',

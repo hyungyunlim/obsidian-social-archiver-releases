@@ -506,6 +506,20 @@ describe('profile-crawl types', () => {
         expect(result.retryable).toBe(true);
       });
 
+      it('maps the server subscription cap to a non-retryable limit error with the server copy', () => {
+        // 409 SUBSCRIPTION_LIMIT_EXCEEDED from SubscriptionManager.apiRequest /
+        // WorkersAPIClient: `code` is attached to the Error instance.
+        const error = Object.assign(
+          new Error('You have reached the limit of 100 active subscriptions. Pause or delete a subscription to add another.'),
+          { code: 'SUBSCRIPTION_LIMIT_EXCEEDED', details: { limit: 100, used: 100 } },
+        );
+        const result = parseCrawlError(error);
+
+        expect(result.code).toBe('SUBSCRIPTION_LIMIT_REACHED');
+        expect(result.retryable).toBe(false);
+        expect(result.message).toContain('100 active subscriptions');
+      });
+
       it('should parse network errors', () => {
         const error = new Error('Network request failed');
         const result = parseCrawlError(error);

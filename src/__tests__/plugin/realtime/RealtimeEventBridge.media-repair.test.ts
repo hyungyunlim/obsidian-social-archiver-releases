@@ -183,8 +183,25 @@ describe('RealtimeEventBridge — media repair (Ship 3)', () => {
     expect(state.content).toContain('No managed region here.');
   });
 
+  it('leaves a note without sentinels alone when no region exists (ordinary post-archive preservation)', async () => {
+    const note = '# Title\nPlugin-command note.\n[🎥 Video](https://scontent.cdninstagram.com/v.mp4)';
+    const { state, file } = makeVaultFile(note);
+    const events = makeEvents() as any;
+    const deps = makeDeps({
+      events,
+      app: makeApp(state, file) as any,
+      archiveLookupService: { findBySourceArchiveId: vi.fn().mockReturnValue(file) } as any,
+    });
+    new RealtimeEventBridge(deps).setup();
+
+    await fireRepair(events, 'completed');
+
+    expect(state.content).toBe(note);
+    expect(state.content).not.toContain('<!-- sa:media:review-needed -->');
+  });
+
   it('does not duplicate the review-needed callout on repeated events', async () => {
-    const note = '# Title\nNo region.';
+    const note = '# Title\nNo region.\n![](localpath:media/x.jpg)';
     const { state, file } = makeVaultFile(note);
     const events = makeEvents() as any;
     const deps = makeDeps({

@@ -13,6 +13,7 @@ import type { Platform } from './post';
 import {
   isSubscriptionPaywallError,
   SUBSCRIPTION_PAYWALL_NOTICE_MESSAGE,
+  isSubscriptionLimitError,
 } from '@/utils/subscriptionPaywall';
 
 // ============================================================================
@@ -334,6 +335,7 @@ export type CrawlErrorCode =
   | 'THREADS_PROFILE_DISCOVERY_UNAVAILABLE'
   | 'CREDITS_INSUFFICIENT'
   | 'SUBSCRIPTION_REQUIRED'
+  | 'SUBSCRIPTION_LIMIT_REACHED'
   | 'PROFILE_NOT_FOUND'
   | 'PROFILE_PRIVATE'
   | 'SERVER_ERROR'
@@ -356,6 +358,7 @@ export const CRAWL_ERROR_MESSAGES: Record<CrawlErrorCode, string> = {
   THREADS_PROFILE_DISCOVERY_UNAVAILABLE: 'Threads profile discovery is unavailable for this profile. Please try another profile or try again later.',
   CREDITS_INSUFFICIENT: 'Insufficient credits. Please upgrade your plan or wait for monthly reset.',
   SUBSCRIPTION_REQUIRED: SUBSCRIPTION_PAYWALL_NOTICE_MESSAGE,
+  SUBSCRIPTION_LIMIT_REACHED: 'You have reached your active subscription limit. Pause or delete a subscription to add another.',
   PROFILE_NOT_FOUND: 'Profile not found. Please check the URL is correct.',
   PROFILE_PRIVATE: 'This profile is private. Only public profiles can be archived.',
   SERVER_ERROR: 'Server error occurred. Please try again later.',
@@ -463,6 +466,15 @@ function isThreadsProfileDiscoveryApiError(code: string | undefined, message: st
 export function parseCrawlError(error: unknown): CrawlError {
   if (isSubscriptionPaywallError(error)) {
     return createCrawlError('SUBSCRIPTION_REQUIRED');
+  }
+  if (isSubscriptionLimitError(error)) {
+    // Server copy carries the actual cap ("limit of 100 active subscriptions").
+    return createCustomCrawlError(
+      'SUBSCRIPTION_LIMIT_REACHED',
+      error instanceof Error && error.message
+        ? error.message
+        : CRAWL_ERROR_MESSAGES.SUBSCRIPTION_LIMIT_REACHED
+    );
   }
 
   // Handle Error objects

@@ -23,6 +23,7 @@ import type { PostData, Platform, Media } from '../../types/post';
 import type { MediaExpiredResult } from '../../services/MediaPlaceholderGenerator';
 import { DEFAULT_ARCHIVE_PATH } from '../../shared/constants';
 import { getPlatformName } from '../../shared/platforms';
+import { isHlsVideoUrl } from '../../utils/substack';
 import { TimelineView, VIEW_TYPE_TIMELINE } from '../../views/TimelineView';
 import type { WsProfileMetadataMessage } from '../realtime/RealtimeEventBridge';
 
@@ -879,14 +880,23 @@ export class SubscriptionSyncService {
       return false;
     }
 
+    // Only media the plugin can actually fetch counts. A `localpath:` sentinel
+    // renders as an Unavailable callout (zero embeds), so comparing the raw
+    // array length rewrote those notes on every sync pass.
+    const downloadable = media.filter(item => this.hasDownloadableMedia(item));
+    if (downloadable.length === 0) return false;
+
     const existingMediaCount = this.countRenderedMediaItems(existingContent);
-    if (media.length > existingMediaCount) {
+    if (downloadable.length > existingMediaCount) {
       return true;
     }
 
+    // A `[🎥 Video](remote)` link is the failed-download fallback. Upgrade it
+    // only once the server holds an R2 copy — a CDN URL can fail again and
+    // would loop the rewrite.
     return (
-      this.hasRemoteVideoFallback(existingContent, post.url) &&
-      media.some(item => item.type === 'video' && this.hasDownloadableMedia(item))
+      this.hasRemoteVideoFallback(existingContent) &&
+      downloadable.some(item => item.type === 'video' && Boolean(item.r2Url))
     );
   }
 
@@ -897,12 +907,15 @@ export class SubscriptionSyncService {
     return imageEmbeds.length + videoLinks.length;
   }
 
-  private hasRemoteVideoFallback(content: string, postUrl: string): boolean {
+  private hasRemoteVideoFallback(content: string): boolean {
     const body = this.stripFrontmatter(content);
     const videoLinks = body.matchAll(/(?<!!)\[🎥 Video[^\]]*\]\(([^)]+)\)/g);
     for (const match of videoLinks) {
       const target = match[1] ?? '';
-      if (target === postUrl || /^https?:\/\/(?:www\.)?instagram\.com\//i.test(target)) {
+      // MediaFormatter writes the CDN URL when the download failed and the
+      // post URL when it had nothing better; both mean "no local copy". HLS
+      // resolver links are kept on purpose (PRD §22.4) — not a failure.
+      if (/^https?:\/\//i.test(target) && !isHlsVideoUrl(target)) {
         return true;
       }
     }
