@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/json-ld-product.ts
- * Generated: 2026-09-02T00:32:16.921Z
+ * Generated: 2026-09-05T10:05:00.183Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -302,9 +302,38 @@ interface OgProduct {
   title?: string;
 }
 
+/**
+ * Meta Pixel `ViewContent` price. Korean malls built on Godomall / NHN Commerce
+ * (measured: lasheyewear.com, a goods_view.php storefront) emit `og:type=product`
+ * with a title and an image but NO `og:price:amount` — the only machine-readable
+ * price on the page is the pixel payload the checkout funnel already needs:
+ *
+ *   fbq('track', 'ViewContent', { content_type: 'product', value: 298000.00, currency: 'KRW' })
+ *
+ * Without this the OG fallback below sees no price, and since that branch treats
+ * price as mandatory the whole page degraded to a plain web clip — a real product
+ * page produced no card at all.
+ *
+ * `content_type: 'product'` is required so this never reads the pixel on a
+ * category or article page, which fires ViewContent without a product type.
+ */
+function readPixelPrice(html: string): { price?: number; currency?: string } {
+  for (const call of html.matchAll(/ViewContent['"]\s*,\s*(\{[^}]{0,600}\})/gi)) {
+    const body = call[1] ?? '';
+    if (!/content_type\s*:\s*['"]product/i.test(body)) continue;
+    const price = toFiniteNumber(body.match(/\bvalue\s*:\s*['"]?([0-9]+(?:\.[0-9]+)?)/i)?.[1]);
+    const currency = body.match(/\bcurrency\s*:\s*['"]([A-Za-z]{3})['"]/)?.[1];
+    if (price !== undefined && price > 0 && currency) return { price, currency };
+  }
+  return {};
+}
+
 function readOpenGraph(html: string, pageUrl?: string): OgProduct {
-  const price = toFiniteNumber(readMeta(html, ['og:price:amount', 'product:price:amount']));
-  const currency = readMeta(html, ['og:price:currency', 'product:price:currency']);
+  const pixel = readPixelPrice(html);
+  const price = toFiniteNumber(readMeta(html, ['og:price:amount', 'product:price:amount']))
+    ?? pixel.price;
+  const currency = readMeta(html, ['og:price:currency', 'product:price:currency'])
+    ?? (price === pixel.price ? pixel.currency : undefined);
   const siteName = toTrimmedString(readMeta(html, ['og:site_name']), 200);
   return {
     ...(siteName ? { siteName } : {}),

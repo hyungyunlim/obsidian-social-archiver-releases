@@ -236,8 +236,8 @@ export function extractPostIdFromUrl(platform: Platform, url: string): string | 
 
     switch (platform) {
       case 'instagram': {
-        // /p/{code}/ or /reel/{code}/
-        const m = pathname.match(/\/(?:p|reel)\/([A-Za-z0-9_-]+)/);
+        // /p/{code}/, /reel/{code}/, /reels/{code}/, /tv/{code}/ — one shortcode namespace
+        const m = pathname.match(/\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/);
         return m?.[1] ?? null;
       }
 

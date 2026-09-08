@@ -59,6 +59,7 @@ const SHORTENER_DOMAINS = new Set([
   'fb.me',
   'youtu.be',
   'pin.it',
+  'api.pinterest.com', // pin.it → api.pinterest.com/url_shortener/… → pin page
   'kko.kakao.com',
 ]);
 

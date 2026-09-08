@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/detection.ts
- * Generated: 2026-09-02T00:32:16.920Z
+ * Generated: 2026-09-05T11:10:12.901Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -246,8 +246,8 @@ export function extractPostIdFromUrl(platform: Platform, url: string): string | 
 
     switch (platform) {
       case 'instagram': {
-        // /p/{code}/ or /reel/{code}/
-        const m = pathname.match(/\/(?:p|reel)\/([A-Za-z0-9_-]+)/);
+        // /p/{code}/, /reel/{code}/, /reels/{code}/, /tv/{code}/ — one shortcode namespace
+        const m = pathname.match(/\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/);
         return m?.[1] ?? null;
       }
 

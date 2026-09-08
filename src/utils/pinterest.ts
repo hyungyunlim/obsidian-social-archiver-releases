@@ -2,7 +2,9 @@ import { requestUrl } from 'obsidian';
 import { URLExpander } from '@/services/URLExpander';
 import { isPinterestBoardUrl } from '@/schemas/platforms';
 
-const PINTEREST_SHORT_DOMAINS = new Set(['pin.it']);
+// api.pinterest.com is the hop pin.it 308s to, and what the Pinterest app's
+// share sheet hands out directly (…/url_shortener/{code}/redirect/).
+const PINTEREST_SHORT_DOMAINS = new Set(['pin.it', 'api.pinterest.com']);
 const pinterestExpander = new URLExpander({ requestUrl });
 
 /**

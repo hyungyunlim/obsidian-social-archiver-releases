@@ -86,6 +86,15 @@ export interface SubscriptionSyncServiceDeps {
   ensureFolderExists: (path: string) => Promise<void>;
   notify: (message: string, timeout?: number) => void;
   withArchiveWriteLocks: <T>(archiveId: string, fn: () => Promise<T>) => Promise<T>;
+  /**
+   * Resolves once MetadataCache has finished its initial parse. Dedup
+   * (`findExistingArchiveFile` -> ArchiveLookupService) reads an index built
+   * from `getFileCache()`, and that index freezes whatever the cache holds at
+   * build time — syncing before it resolves makes existing notes invisible and
+   * re-creates every pending post as a new file in the subscription folder.
+   * Same gating contract as the clip-batch import path.
+   */
+  waitForVaultIndexReady?: () => Promise<void>;
 }
 
 // ============================================================================
@@ -207,6 +216,12 @@ export class SubscriptionSyncService {
     }
 
     try {
+      // Dedup depends on the MetadataCache-backed lookup index — wait for the
+      // cache before touching the vault (see `waitForVaultIndexReady`).
+      if (this.deps.waitForVaultIndexReady) {
+        await this.deps.waitForVaultIndexReady();
+      }
+
       const result = await subscriptionManager.syncPendingPosts(
         async (pendingPost: PendingPost) => {
           const archiveId = pendingPost.archiveId ?? pendingPost.post.sourceArchiveId;

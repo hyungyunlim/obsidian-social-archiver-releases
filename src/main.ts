@@ -2278,6 +2278,7 @@ export default class SocialArchiverPlugin extends Plugin {
             ],
             fn,
           ),
+        waitForVaultIndexReady: () => this.waitForMetadataCacheResolved(),
       });
 
       // Create BatchGoogleMapsArchiver

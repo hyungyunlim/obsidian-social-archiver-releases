@@ -21,6 +21,7 @@ describe('pinterest utils', () => {
 
   it('detects pin.it short links', () => {
     expect(isPinterestShortLink('https://pin.it/abc123')).toBe(true);
+    expect(isPinterestShortLink('https://api.pinterest.com/url_shortener/74iAFQ6ME/redirect/')).toBe(true);
     expect(isPinterestShortLink('https://www.pinterest.com/pin/428545720815525504/')).toBe(false);
   });
 

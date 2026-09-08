@@ -24,6 +24,22 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.7.4': {
+    title: 'Subscriptions stop duplicating notes',
+    date: '2026-09-08',
+    notes: `## Subscription posts no longer land twice
+
+- A subscription sync that started while Obsidian was still indexing the vault could not see the notes you already had, so every pending post was written again — usually into a different folder than the first copy, which is why the same post showed up twice in the timeline. Sync now waits for the file index, the same guard the rest of the plugin already uses.
+- Leftover pairs from earlier runs are safe to delete: with two notes pointing at one archive, removing either one is local clean-up and never touches the copy on the server.
+
+## Pinterest share links archive as pins
+
+- Links from Pinterest's share sheet (\`pin.it\` and \`api.pinterest.com\`) were read as a board and archived as the wrong thing. They now resolve to the pin you shared.
+
+## Product cards for more Korean shops
+
+- Product pages on Godomall / NHN Commerce malls publish their price only in the checkout pixel, so they were saved as a plain web clip. The price is now read from there and the page becomes a product card.`,
+  },
   '4.7.3': {
     title: 'Videos download again, quieter sync',
     date: '2026-09-02',

@@ -1,6 +1,14 @@
 import { z } from 'zod';
 
 const PIN_PATH_REGEX = /^\/pin\/[A-Za-z0-9_-]+(?:\/.*)?$/i;
+// api.pinterest.com/url_shortener/{code}/redirect — the hop pin.it 308s to,
+// and what the Pinterest app's share sheet emits directly.
+const SHORTENER_PATH_REGEX = /^\/url_shortener\/[A-Za-z0-9_-]+\/redirect$/i;
+
+/** pinterest.com and its country subdomains; api.pinterest.com only ever redirects. */
+function isPinterestContentHost(hostname: string): boolean {
+	return (hostname === 'pinterest.com' || hostname.endsWith('.pinterest.com')) && hostname !== 'api.pinterest.com';
+}
 
 const DISALLOWED_BOARD_ROOTS = new Set(['ideas', 'explore', 'topics', 'login', 'settings', 'pin']);
 
@@ -21,8 +29,7 @@ export function isPinterestBoardUrl(url: string): boolean {
 		const urlObj = new URL(url);
 		const hostname = urlObj.hostname.toLowerCase();
 		const pathname = urlObj.pathname;
-		const isPinterestDomain = hostname === 'pinterest.com' || hostname.endsWith('.pinterest.com');
-		if (!isPinterestDomain) return false;
+		if (!isPinterestContentHost(hostname)) return false;
 		if (PIN_PATH_REGEX.test(pathname)) return false;
 		return hasValidBoardPath(pathname);
 	} catch {
@@ -41,7 +48,7 @@ export const PinterestPinIdSchema = z
 
 /**
  * Pinterest pin/board URL validation
- * Supports standard pin URLs, pin.it short links, and board URLs
+ * Supports standard pin URLs, pin.it / api.pinterest.com short links, and board URLs
  */
 export const PinterestURLSchema = z
 	.string()
@@ -55,22 +62,23 @@ export const PinterestURLSchema = z
 				const hostname = urlObj.hostname.toLowerCase();
 				const pathname = urlObj.pathname.replace(/\/+$/, '');
 
-				const isPinterestDomain = hostname === 'pinterest.com' || hostname.endsWith('.pinterest.com');
-				const isPinItDomain = hostname === 'pin.it';
+				if (hostname === 'api.pinterest.com') {
+					return SHORTENER_PATH_REGEX.test(pathname);
+				}
 
-				if (!isPinterestDomain && !isPinItDomain) {
+				if (hostname === 'pin.it') {
+					// pin.it short links: /abc123
+					return /^\/[A-Za-z0-9_-]+$/i.test(pathname);
+				}
+
+				if (!isPinterestContentHost(hostname)) {
 					return false;
 				}
 
-				if (isPinterestDomain) {
-					if (PIN_PATH_REGEX.test(pathname)) {
-						return true;
-					}
-					return hasValidBoardPath(pathname);
+				if (PIN_PATH_REGEX.test(pathname)) {
+					return true;
 				}
-
-				// pin.it short links: /abc123
-				return /^\/[A-Za-z0-9_-]+$/i.test(pathname);
+				return hasValidBoardPath(pathname);
 			} catch {
 				return false;
 			}

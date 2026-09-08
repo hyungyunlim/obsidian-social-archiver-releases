@@ -27,6 +27,7 @@ import {
 	validateAndDetectPlatform,
 	validatePlatformUrl,
 	isSupportedPlatformUrl,
+	isPinterestBoardUrl,
 } from '@/schemas/platforms';
 import { detectPlatform } from '@/shared/platforms';
 
@@ -436,6 +437,8 @@ describe('PinterestURLSchema', () => {
 				'https://www.pinterest.com/pin/428545720815525504/',
 				'https://pinterest.com/pin/428545720815525504',
 				'https://pin.it/aBc123Xy',
+				// What the Pinterest app's share sheet emits; pin.it 308s to the same URL.
+				'https://api.pinterest.com/url_shortener/74iAFQ6ME/redirect/',
 				'https://fr.pinterest.com/66fd5c023f94f77eeed8517814d3c7/a-4/',
 				'https://www.pinterest.com/acmeagency/brand-refresh/',
 			];
@@ -453,6 +456,7 @@ describe('PinterestURLSchema', () => {
 				'https://pinterest.com/',
 				'https://www.pinterest.com/pin/',
 				'https://pin.it/',
+				'https://api.pinterest.com/v5/pins/123',
 				'https://pinimg.com/pin/123',
 				'https://www.pinterest.com/ideas/',
 				'not a url',
@@ -464,6 +468,14 @@ describe('PinterestURLSchema', () => {
 					expect(result.success).toBe(false);
 				});
 			});
+		});
+	});
+
+	describe('isPinterestBoardUrl', () => {
+		it('treats the api.pinterest.com shortener hop as a pin link, not a board', () => {
+			expect(isPinterestBoardUrl('https://api.pinterest.com/url_shortener/74iAFQ6ME/redirect/')).toBe(false);
+			expect(isPinterestBoardUrl('https://www.pinterest.com/pin/235524255529158462/sent/?invite_code=x')).toBe(false);
+			expect(isPinterestBoardUrl('https://www.pinterest.com/acmeagency/brand-refresh/')).toBe(true);
 		});
 	});
 

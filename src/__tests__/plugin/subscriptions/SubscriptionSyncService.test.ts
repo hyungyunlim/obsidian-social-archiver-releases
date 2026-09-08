@@ -504,6 +504,31 @@ describe('SubscriptionSyncService', () => {
     });
 
     // --------------------------------------------------------------------------
+    // 1b. Vault index gate: no vault work before MetadataCache resolves
+    // --------------------------------------------------------------------------
+
+    it('does not pull pending posts until the vault index gate resolves', async () => {
+      const manager = makeMockSubscriptionManager({ syncResult: { total: 1, saved: 1 } });
+      let openGate!: () => void;
+      const gate = new Promise<void>((resolve) => { openGate = resolve; });
+      const deps = makeDeps({
+        subscriptionManager: () => manager as any,
+        waitForVaultIndexReady: () => gate,
+      });
+
+      const service = new SubscriptionSyncService(deps);
+      const pending = service.syncSubscriptionPosts('test');
+      await Promise.resolve();
+
+      // Dedup index is not ready yet — syncing now would re-create existing notes
+      expect(manager.syncPendingPosts).not.toHaveBeenCalled();
+
+      openGate();
+      await pending;
+      expect(manager.syncPendingPosts).toHaveBeenCalledOnce();
+    });
+
+    // --------------------------------------------------------------------------
     // 2. Getter returns undefined: returns early without error
     // --------------------------------------------------------------------------
 

@@ -43,6 +43,9 @@
 const ARTICLE_BODY_SELECTORS: Record<string, string> = {
   // ── News outlets ────────────────────────────────────────────────────────
   'donga.com': 'section.news_view',
+  // Daum News view — the translation-widget language list and the bottom
+  // article rail live outside the article container.
+  'v.daum.net': '.article_view',
   'edaily.co.kr': '.news_body',
   'hani.co.kr': '.article-text',
   'hankyung.com': '#articletxt',
@@ -135,4 +138,42 @@ export function articleBodySelectorForHost(hostname: string): string | undefined
     if (host === site || host.endsWith(`.${site}`)) return selector;
   }
   return undefined;
+}
+
+interface RemovableNode {
+  parentNode: { insertBefore(node: unknown, before: unknown): unknown } | null;
+  nextSibling: unknown;
+  remove(): void;
+}
+
+/**
+ * Remove this host's strip matches (in-body 관련기사 blocks) from a document
+ * and return a function that puts every node back exactly where it was.
+ *
+ * For the extension, which runs Defuddle against the LIVE page: a clone has no
+ * `defaultView`, so parsing a stripped clone would change Defuddle's
+ * hidden-element handling for every page. Removing before the synchronous
+ * `parse()` and restoring right after mutates nothing the user can see — the
+ * browser never paints mid-task. Restoration runs in reverse so an adjacent
+ * removed sibling's anchor is already back in the tree.
+ */
+export function removeArticleClutterInPlace(
+  document: { querySelectorAll(selector: string): Iterable<RemovableNode> },
+  hostname: string
+): () => void {
+  const selector = articleStripSelectorForHost(hostname);
+  if (!selector) return () => {};
+
+  const removed: Array<{ node: RemovableNode; parent: NonNullable<RemovableNode['parentNode']>; next: unknown }> = [];
+  for (const node of document.querySelectorAll(selector)) {
+    if (!node.parentNode) continue;
+    removed.push({ node, parent: node.parentNode, next: node.nextSibling });
+    node.remove();
+  }
+  return () => {
+    for (let i = removed.length - 1; i >= 0; i--) {
+      const entry = removed[i]!;
+      entry.parent.insertBefore(entry.node, entry.next);
+    }
+  };
 }
