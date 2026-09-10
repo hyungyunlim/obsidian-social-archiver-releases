@@ -24,6 +24,15 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.7.5': {
+    title: 'AI actions say why they cannot run',
+    date: '2026-09-10',
+    notes: `## An AI action that cannot run now says so first
+
+- Asking for a summary on a post with no text used to fail only after you tapped it, with a message that did not explain anything. The check now looks at the post itself, so an action that cannot run is greyed out up front and tells you the text is missing.
+- The reason wording changed too: a post with no description, captions or transcript has nothing to analyze, and the notice says that instead of implying some text is there and more is needed.
+`,
+  },
   '4.7.4': {
     title: 'Subscriptions stop duplicating notes',
     date: '2026-09-08',

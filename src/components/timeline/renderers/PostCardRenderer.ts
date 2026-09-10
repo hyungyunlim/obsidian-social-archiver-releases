@@ -10370,6 +10370,10 @@ export class PostCardRenderer extends Component {
     const targetClientId = availability.capableClientIds.includes(clientId)
       ? clientId
       : availability.capableClientIds[0];
+    if (availability.reason === 'unsupported_archive') {
+      new Notice('There is little or no text in this post to analyze.');
+      throw new Error('AI action unsupported archive');
+    }
     if (!availability.available || !targetClientId) {
       new Notice('No capable Obsidian client is available for this AI action.');
       throw new Error('No capable AI action client');

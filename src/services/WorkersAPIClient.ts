@@ -357,7 +357,7 @@ export interface AIActionJobSummary {
 export interface AIActionAvailability {
   available: boolean;
   mode: 'queued' | 'unavailable';
-  reason: null | 'active_job_exists' | 'no_capable_executor';
+  reason: null | 'active_job_exists' | 'no_capable_executor' | 'server_ai_consent_required' | 'unsupported_archive';
   actionType: AIActionType;
   resultKind: AIActionResultKind;
   capableClientIds: string[];
