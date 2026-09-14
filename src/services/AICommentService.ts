@@ -950,6 +950,7 @@ Content:
       let streamJsonBuffer = ''; // Buffer for incomplete JSON lines
       let streamJsonResult = ''; // Final result extracted from stream-json
       let accumulatedText = ''; // Accumulated text from assistant messages
+      let codexErrorMessage = ''; // Codex reports API failures on stdout (`error` / `turn.failed`), not stderr
       const isClaudeStreamJson = options.cli === 'claude';
       const isCodexJson = options.cli === 'codex';
       const isGeminiStreamJson = options.cli === 'gemini';
@@ -1074,6 +1075,9 @@ Content:
                 // Codex may emit intermediate agent messages before the final answer.
                 accumulatedText = parsed.text;
               }
+              if (parsed.error) {
+                codexErrorMessage = parsed.error;
+              }
             }
           }
         } else {
@@ -1135,6 +1139,9 @@ Content:
           if (parsed.text) {
             accumulatedText = parsed.text;
           }
+          if (parsed.error) {
+            codexErrorMessage = parsed.error;
+          }
         }
 
         // Report parsing phase
@@ -1192,9 +1199,9 @@ Content:
             );
           }
         } else {
-          // Error - parse stderr
-          console.error(`[AICommentService] Process failed. Exit code: ${code}, stderr: ${stderrData.slice(0, 500)}`);
-          reject(this.parseError(stderrData, code, options.cli));
+          // Error - parse stderr (Codex: the API failure arrives on stdout, stderr only has MCP noise)
+          console.error(`[AICommentService] Process failed. Exit code: ${code}, error: ${(codexErrorMessage || stderrData).slice(0, 500)}`);
+          reject(this.parseError(codexErrorMessage || stderrData, code, options.cli));
         }
       });
 
@@ -1408,9 +1415,21 @@ Content:
    * item.completed contains: { item: { type: "agent_message", text: "..." } }
    * Returns { text } if message content found
    */
-  private parseCodexJsonEvent(jsonLine: string, options: AICommentOptions): { text?: string } {
+  private parseCodexJsonEvent(jsonLine: string, options: AICommentOptions): { text?: string; error?: string } {
     try {
       const event = JSON.parse(jsonLine) as Record<string, unknown>;
+
+      // `{"type":"error","message":…}` / `{"type":"turn.failed","error":{"message":…}}`
+      // carry the real reason (e.g. "The 'gpt-5.4-mini' model is not supported when
+      // using Codex with a ChatGPT account.") — feedback #170.
+      if (event.type === 'error' || event.type === 'turn.failed') {
+        const message = event.type === 'turn.failed'
+          ? (event.error as Record<string, unknown> | undefined)?.message
+          : event.message;
+        if (typeof message === 'string' && message.trim()) {
+          return { error: message.trim() };
+        }
+      }
 
       // Handle thread.started - update progress
       if (event.type === 'thread.started' && options.onProgress) {
@@ -1989,7 +2008,10 @@ Content:
     }
 
     // Model not found
-    if (lowerStderr.includes('model') && (lowerStderr.includes('not found') || lowerStderr.includes('does not exist'))) {
+    if (
+      lowerStderr.includes('model') &&
+      (lowerStderr.includes('not found') || lowerStderr.includes('does not exist') || lowerStderr.includes('not supported'))
+    ) {
       return new AICommentError('MODEL_NOT_FOUND', `Model not found: ${stderr.slice(0, 200)}`, { cli });
     }
 

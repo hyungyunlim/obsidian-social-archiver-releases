@@ -25,6 +25,8 @@ type AICommentServiceInternals = AICommentService & {
     isWindows: boolean,
     model?: string
   ): { command: string; args: string[]; stdinPrompt?: string };
+  parseCodexJsonEvent(jsonLine: string, options: AICommentOptions): { text?: string; error?: string };
+  parseError(stderr: string, exitCode: number | null, cli: AICli): { code: string; message: string };
 };
 
 describe('AICommentService Types and Utilities', () => {
@@ -186,6 +188,22 @@ describe('AICommentService Types and Utilities', () => {
       expect(command.args).toContain('--ephemeral');
       expect(command.args).toContain('danger-full-access');
       expect(command.args.at(-1)).toBe('Check this claim');
+    });
+
+    it('surfaces a refused model from the Codex JSON stream as MODEL_NOT_FOUND (feedback #170)', () => {
+      const service = new AICommentService() as AICommentServiceInternals;
+      const options = { type: 'summary', cli: 'codex' } as AICommentOptions;
+      const refused =
+        '{"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The \'gpt-5.4-mini\' model is not supported when using Codex with a ChatGPT account."}}';
+
+      // Codex reports the API failure on stdout; stderr only carries MCP transport noise.
+      expect(service.parseCodexJsonEvent(`{"type":"error","message":${JSON.stringify(refused)}}`, options).error).toBe(refused);
+      expect(service.parseCodexJsonEvent(`{"type":"turn.failed","error":{"message":${JSON.stringify(refused)}}}`, options).error).toBe(refused);
+      expect(service.parseCodexJsonEvent('{"type":"turn.completed","usage":{}}', options)).toEqual({});
+
+      const error = service.parseError(refused, 1, 'codex');
+      expect(error.code).toBe('MODEL_NOT_FOUND');
+      expect(error.message).toContain('not supported when using Codex with a ChatGPT account');
     });
 
     it('passes the selected model to Codex when requested', () => {

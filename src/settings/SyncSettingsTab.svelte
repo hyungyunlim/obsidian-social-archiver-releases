@@ -570,10 +570,11 @@ async function handleRetryPendingDeletes() {
   flex-shrink: 0;
 }
 
-/* Error Display */
+/* Error Display — --background-modifier-error is the SOLID red (same hue as
+   --text-error), which rendered the message as an empty red bar. Tint it. */
 .sync-error {
   padding: 8px 12px;
-  background: var(--background-modifier-error);
+  background: rgba(var(--background-modifier-error-rgb, 233, 49, 71), 0.12);
   color: var(--text-error);
   border-radius: 6px;
   font-size: 13px;

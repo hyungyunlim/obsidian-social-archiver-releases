@@ -24,6 +24,19 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.7.6': {
+    title: 'Local AI with ChatGPT works again',
+    date: '2026-09-14',
+    notes: `## Summaries through ChatGPT (Codex) work again
+
+- Since about September 8, OpenAI stopped offering the \`gpt-5.4-mini\` model to Codex when it is signed in with a ChatGPT account, and every summary or other AI action sent to Codex failed with a bare "AI action failed." even though Codex showed as logged in. The server now asks Codex for \`gpt-5.5\`, the model ChatGPT accounts still get, so requests from the mobile app and shared pages succeed again with no change on your side.
+- When Codex does refuse a request, the plugin now keeps the reason Codex gives (it arrives in Codex's JSON output, not on stderr, which is why it was lost) instead of reporting a generic failure.
+
+## Sync settings show their error text again
+
+- The error banner in Mobile sync settings painted its text in the same red as its background, so a failed connection looked like an empty red bar. The message is readable again.
+`,
+  },
   '4.7.5': {
     title: 'AI actions say why they cannot run',
     date: '2026-09-10',
