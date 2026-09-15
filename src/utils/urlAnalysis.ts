@@ -1,6 +1,7 @@
 import type { Platform } from '@/types/post';
 import { PlatformDetector } from '@/services/PlatformDetector';
 import { isPodcastFeedUrl } from '@/shared/platforms';
+import { isWebLanePlatform } from '@/shared/platforms';
 
 /**
  * URL Analysis Result
@@ -839,7 +840,7 @@ export function analyzeUrl(url: string): UrlAnalysisResult {
     // For 'blog' and 'web' platforms, treat as post if we can't determine type.
     // These platforms don't have structured post IDs, so not being able to extract
     // one doesn't mean the URL is invalid — it's still a valid web page to archive.
-    if (platform === 'blog' || platform === 'web') {
+    if (platform === 'blog' || isWebLanePlatform(platform)) {
       return {
         type: 'post',
         platform,

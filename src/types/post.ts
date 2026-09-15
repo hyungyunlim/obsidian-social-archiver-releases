@@ -389,7 +389,7 @@ export interface PostData {
   aiComments?: Array<{
     meta: {
       id: string;
-      cli: 'claude' | 'gemini' | 'codex' | 'workers-ai';
+      cli: 'claude' | 'gemini' | 'codex' | 'apple' | 'workers-ai';
       model?: string;
       type: 'summary' | 'factcheck' | 'critique' | 'keypoints' | 'sentiment' | 'connections' | 'translation' | 'translate-transcript' | 'glossary' | 'reformat' | 'custom';
       generatedAt: string;

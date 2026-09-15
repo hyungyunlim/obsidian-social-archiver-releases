@@ -64,6 +64,7 @@ import {
   buildGoogleMapsDirectionsUrl,
 } from './PreviewableHelpers';
 import type { PreviewContext } from './PreviewableContext';
+import { isWebLanePlatform } from '@/shared/platforms';
 
 // Re-export so existing direct imports of `PreviewContext` from this file
 // keep working without a cascade of touch-ups across the codebase.
@@ -970,7 +971,7 @@ export class PreviewableContentRenderer {
    */
   private shouldRenderAsBlog(post: PostData): boolean {
     if (!post.content.rawMarkdown) return false;
-    if (post.platform === 'web' || post.platform === 'threads') return true;
+    if (isWebLanePlatform(post.platform) || post.platform === 'threads') return true;
     if (post.platform === 'x' && post.content.rawMarkdown) return true;
     return PreviewableContentRenderer.isRssBasedPlatform(post.platform);
   }
@@ -978,7 +979,7 @@ export class PreviewableContentRenderer {
   /** Title strip eligibility check. Mirrors the source. */
   private isRssLikeWithTitle(post: PostData): boolean {
     if (!post.title) return false;
-    if (post.platform === 'web') return true;
+    if (isWebLanePlatform(post.platform)) return true;
     return PreviewableContentRenderer.isRssBasedPlatform(post.platform);
   }
 

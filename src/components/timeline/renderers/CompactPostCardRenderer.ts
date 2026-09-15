@@ -564,6 +564,12 @@ export class CompactPostCardRenderer extends Component {
       webtoons: 'WEBTOON',
       brunch: 'Brunch',
       xiaohongshu: 'Xiaohongshu',
+      chatgpt: 'ChatGPT',
+      claude: 'Claude',
+      gemini: 'Gemini',
+      perplexity: 'Perplexity',
+      grok: 'Grok',
+      adventai: 'AdventAI',
       web: 'Web Article',
       post: 'Post'
     };

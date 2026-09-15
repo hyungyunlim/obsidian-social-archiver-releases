@@ -49,6 +49,7 @@ import { resolveTTSProvider } from '../../../services/tts/resolveProvider';
 import type { PluginTTSProvider } from '../../../services/tts/types';
 import type { TextHighlight, HighlightRenderProfile } from '../../../types/annotations';
 import { getRenderProfileForArchive, RENDER_PROFILE_CONFIG } from '../../../vendor/highlight-core';
+import { isWebLanePlatform } from '@/shared/platforms';
 
 interface ReaderActionSheetItem {
   icon: string;
@@ -1891,7 +1892,7 @@ export class ReaderModeOverlay {
     const hasRawMd = rawMarkdown.trim().length > 0;
     const platform = post.platform;
 
-    const isWebArticle = platform === 'web' && hasRawMd;
+    const isWebArticle = isWebLanePlatform(platform) && hasRawMd;
     const isXArticle = platform === 'x' && hasRawMd;
     // `platform: 'post'` is user-created composed content — treat as article-
     // like when it carries raw markdown (matches the "writer" reader experience).

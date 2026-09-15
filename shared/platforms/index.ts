@@ -60,6 +60,10 @@ export {
   PREVIEW_SUPPORTED_PLATFORMS,
 } from './types';
 
+// AI chat share links (feedback #139)
+export type { AIChatPlatform } from './types';
+export { AI_CHAT_PLATFORMS, isAIChatPlatform, isWebLanePlatform } from './types';
+
 // Definitions
 export type {
   PlatformDefinition,

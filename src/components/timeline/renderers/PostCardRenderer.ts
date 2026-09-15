@@ -104,6 +104,7 @@ import {
   type FormattedBusinessHours,
 } from './PreviewableHelpers';
 import { isFailedArchiveAttemptPost } from '../../../utils/archiveAttempts';
+import { isWebLanePlatform } from '@/shared/platforms';
 
 interface DeletePostOptions {
   skipConfirm?: boolean;
@@ -909,7 +910,7 @@ export class PostCardRenderer extends Component {
       /<img\b/i.test(rawMarkdown);
     const isThreadsInlineArchive = post.platform === 'threads' && !!post.content.rawMarkdown && hasInlineImageMarkdown;
     const isXArticleWithInline = post.platform === 'x' && !!post.content.rawMarkdown;
-    const isWebArticleWithInlineImages = post.platform === 'web' && !!post.content.rawMarkdown && hasInlineImageMarkdown;
+    const isWebArticleWithInlineImages = isWebLanePlatform(post.platform) && !!post.content.rawMarkdown && hasInlineImageMarkdown;
     // PRD §22.2: Substack Notes (vs articles) render their images through the
     // media gallery/carousel (same as IG/TikTok multi-image), NOT the stacked
     // RSS/article inline-image path. A single-image note renders a single image;

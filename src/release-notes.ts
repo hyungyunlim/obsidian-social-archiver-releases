@@ -24,6 +24,22 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.7.7': {
+    title: 'AI chat links get their own platform, and AI comments say who wrote them',
+    date: '2026-09-15',
+    notes: `## ChatGPT, Claude, Gemini, Perplexity and Grok links are their own platform
+
+- Shared conversations from those services (and AdventAI) are now archived as their own platform instead of a generic web link: each gets its own icon in notes and in the timeline, and its own filter. Existing archives keep working; new ones pick up the icon.
+
+## AI comments show the tool that actually wrote them
+
+- A comment generated on your desktop app could arrive here labelled as another provider, because the note header only carried an id the plugin did not recognise. Comments now name the tool that ran them — including **Apple Intelligence**, the on-device model the desktop app can use from macOS 26 on Apple silicon, which shows with a 🍎 and an "On-device" badge.
+- Comments produced through the desktop app's action flow were shown as "Cloud AI" even when they ran locally on your own machine. They now show the real provider.
+
+> [!NOTE]
+> Running Apple Intelligence itself needs the desktop app 0.6.16 or newer; the plugin displays and syncs those comments but does not run them.
+`,
+  },
   '4.7.6': {
     title: 'Local AI with ChatGPT works again',
     date: '2026-09-14',

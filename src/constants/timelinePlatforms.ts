@@ -24,6 +24,12 @@ export const TIMELINE_PLATFORM_IDS = [
   'naver-webtoon',
   'brunch',
   'xiaohongshu',
+  'chatgpt',
+  'claude',
+  'gemini',
+  'perplexity',
+  'grok',
+  'adventai',
   'web'
 ] as const;
 
@@ -63,5 +69,11 @@ export const TIMELINE_PLATFORM_LABELS: Record<TimelinePlatformId, string> = {
   'naver-webtoon': 'Webtoon',
   brunch: 'Brunch',
   xiaohongshu: 'Xiaohongshu',
+  chatgpt: 'ChatGPT',
+  claude: 'Claude',
+  gemini: 'Gemini',
+  perplexity: 'Perplexity',
+  grok: 'Grok',
+  adventai: 'AdventAI',
   web: 'Web Article'
 };

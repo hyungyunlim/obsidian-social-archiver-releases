@@ -17,7 +17,7 @@ import { SentinelMediaRegionManager } from '@/plugin/realtime/SentinelMediaRegio
 import { isRssBasedPlatform } from '@/constants/rssPlatforms';
 import { isSubstackNote } from '@/utils/substack';
 import { extractTrailingReaderChatSection, stripTrailingReaderChatSection } from '@/utils/reader-chat-section';
-import { getPlatformName } from '@/shared/platforms';
+import { AI_CHAT_PLATFORMS, getPlatformName } from '@/shared/platforms';
 import { encodePathForMarkdownLink } from '@/utils/url';
 import { toRelativeMediaPath } from '@/utils/path';
 import type { FrontmatterCustomizationSettings } from '@/types/settings';
@@ -1444,6 +1444,12 @@ const DEFAULT_TEMPLATES: Record<Platform, string> = {
 **Original URL:** {{url}}
 `,
 
+  chatgpt: '', // filled from `web` below (feedback #139)
+  claude: '', // filled from `web` below (feedback #139)
+  gemini: '', // filled from `web` below (feedback #139)
+  perplexity: '', // filled from `web` below (feedback #139)
+  grok: '', // filled from `web` below (feedback #139)
+  adventai: '', // filled from `web` below (feedback #139)
   web: `{{#if comment}}
 > **My Note:**
 > {{comment}}
@@ -1518,6 +1524,8 @@ const DEFAULT_TEMPLATES: Record<Platform, string> = {
 **Author:** {{author.name}} | **Published:** {{metadata.timestamp}}
 `,
 };
+// AI chat share links render exactly like a web article.
+for (const platform of AI_CHAT_PLATFORMS) DEFAULT_TEMPLATES[platform] = DEFAULT_TEMPLATES.web;
 
 /**
  * Markdown conversion result
@@ -2198,6 +2206,12 @@ export class MarkdownConverter implements IService {
       webtoons: '📚',
       brunch: '📝',
       xiaohongshu: '📕',
+      chatgpt: '🤖',
+      claude: '🤖',
+      gemini: '🤖',
+      perplexity: '🤖',
+      grok: '🤖',
+      adventai: '🤖',
       web: '🌐',
       post: '📝'
     };

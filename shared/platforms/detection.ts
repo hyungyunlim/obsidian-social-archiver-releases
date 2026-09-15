@@ -49,6 +49,12 @@ const DETECTION_ORDER: Platform[] = [
   'naver', // Korean portal - blog, cafe, news (must be before blog/mastodon)
   'brunch', // Korean publishing platform by Kakao
   'xiaohongshu', // Chinese lifestyle SNS - covers xhslink/xhs.cn/rednote share domains
+  'chatgpt', // AI chat share links (feedback #139) — host-anchored, before the generic tail
+  'claude',
+  'gemini',
+  'perplexity',
+  'grok',
+  'adventai',
   'bluesky',
   'googlemaps',
   'kakaomap',

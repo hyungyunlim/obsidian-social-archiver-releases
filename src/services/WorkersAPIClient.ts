@@ -179,7 +179,8 @@ export interface UpdateSyncClientRequest {
 // ============================================================================
 
 export type AICommentProviderId = 'claude' | 'gemini' | 'codex';
-export type AICommentSourceId = AICommentProviderId | 'workers-ai';
+/** Where a stored comment came from: this executor's CLIs, the desktop app's on-device model, or Cloud AI. */
+export type AICommentSourceId = AICommentProviderId | 'apple' | 'workers-ai';
 export type AICommentJobStatus =
   | 'queued'
   | 'dispatched'

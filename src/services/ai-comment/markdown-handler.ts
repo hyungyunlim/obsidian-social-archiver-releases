@@ -102,7 +102,7 @@ export function parseAIComments(markdown: string): ParsedAIComments {
 
   // Find all AI comment headers (with specific provider icon + · + Type + · + Date pattern)
   const headerMatches: { header: string; fullMatch: string; index: number }[] = [];
-  const headerRegex = /^### ((?:🤖|✨|💡|🦙|☁️?|⚡)\s*[^·\n]+?\s*·\s*.+?\s*·\s*.+)$/gm;
+  const headerRegex = /^### ((?:🤖|✨|💡|🦙|☁️?|⚡|🍎)\s*[^·\n]+?\s*·\s*.+?\s*·\s*.+)$/gm;
   let match;
 
   while ((match = headerRegex.exec(sectionContent)) !== null) {
@@ -227,16 +227,17 @@ function parseCommentHeader(header: string, model?: string): ParsedHeader | null
  * Note: 🦙 (Ollama) kept in regex patterns for backwards compatibility with existing comments.
  */
 function isValidCommentProvider(value: string): value is AICommentProviderId {
-  return ['claude', 'gemini', 'codex', 'workers-ai'].includes(value);
+  return ['claude', 'gemini', 'codex', 'apple', 'workers-ai'].includes(value);
 }
 
 function parseHeaderProvider(providerPart: string, model?: string): AICommentProviderId | null {
-  const providerNameMatch = providerPart.match(/(?:🤖|✨|💡|🦙|☁️?|⚡)?\s*([^·]+)/);
+  const providerNameMatch = providerPart.match(/(?:🤖|✨|💡|🦙|☁️?|⚡|🍎)?\s*([^·]+)/);
   const providerName = providerNameMatch?.[1]?.trim().toLowerCase();
 
   if (providerName) {
     const normalized = providerName.replace(/\s+/g, '-');
     if (normalized === 'cloud-ai') return 'workers-ai';
+    if (normalized === 'apple-intelligence') return 'apple';
     if (isValidCommentProvider(normalized)) return normalized;
   }
 

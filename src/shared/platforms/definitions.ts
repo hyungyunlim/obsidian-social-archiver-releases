@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/definitions.ts
- * Generated: 2026-07-30T13:45:29.793Z
+ * Generated: 2026-09-15T01:21:35.467Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -291,6 +291,92 @@ export const PLATFORM_DEFINITIONS: Record<Platform, PlatformDefinition> = {
     supportsAI: true,
     // Measured max note video is 103MB; 100MB (threads) would reject it.
     maxMediaSize: 200 * 1024 * 1024, // 200MB
+    rateLimit: { requestsPerHour: 200, requestsPerDay: 2000 },
+    features: { stories: false, live: false, reels: false, threads: false },
+  },
+
+  // AI chat share links (feedback #139). Host-anchored like xiaohongshu so a
+  // mere mention of the domain in a query string never claims the URL.
+  chatgpt: {
+    id: 'chatgpt',
+    displayName: 'ChatGPT',
+    emoji: '🤖',
+    domains: ['chatgpt.com', 'chat.openai.com'],
+    urlPattern: /^(?:https?:\/\/)?(?:[\w-]+\.)*(?:chatgpt\.com|chat\.openai\.com)(?:[:/?#]|$)/i,
+    // No brightDataDatasetId: extracted through WebContentService like 'web'.
+    supportsMedia: true,
+    supportsAI: true,
+    maxMediaSize: 50 * 1024 * 1024, // 50MB
+    rateLimit: { requestsPerHour: 200, requestsPerDay: 2000 },
+    features: { stories: false, live: false, reels: false, threads: false },
+  },
+
+  claude: {
+    id: 'claude',
+    displayName: 'Claude',
+    emoji: '🤖',
+    domains: ['claude.ai'],
+    urlPattern: /^(?:https?:\/\/)?(?:[\w-]+\.)*claude\.ai(?:[:/?#]|$)/i,
+    // No brightDataDatasetId: extracted through WebContentService like 'web'.
+    supportsMedia: true,
+    supportsAI: true,
+    maxMediaSize: 50 * 1024 * 1024, // 50MB
+    rateLimit: { requestsPerHour: 200, requestsPerDay: 2000 },
+    features: { stories: false, live: false, reels: false, threads: false },
+  },
+
+  gemini: {
+    id: 'gemini',
+    displayName: 'Gemini',
+    emoji: '🤖',
+    domains: ['gemini.google.com', 'g.co'],
+    urlPattern: /^(?:https?:\/\/)?(?:gemini\.google\.com(?:[:/?#]|$)|g\.co\/gemini(?:[/?#]|$))/i,
+    // No brightDataDatasetId: extracted through WebContentService like 'web'.
+    supportsMedia: true,
+    supportsAI: true,
+    maxMediaSize: 50 * 1024 * 1024, // 50MB
+    rateLimit: { requestsPerHour: 200, requestsPerDay: 2000 },
+    features: { stories: false, live: false, reels: false, threads: false },
+  },
+
+  perplexity: {
+    id: 'perplexity',
+    displayName: 'Perplexity',
+    emoji: '🤖',
+    domains: ['perplexity.ai', 'pplx.ai'],
+    urlPattern: /^(?:https?:\/\/)?(?:[\w-]+\.)*(?:perplexity\.ai|pplx\.ai)(?:[:/?#]|$)/i,
+    // No brightDataDatasetId: extracted through WebContentService like 'web'.
+    supportsMedia: true,
+    supportsAI: true,
+    maxMediaSize: 50 * 1024 * 1024, // 50MB
+    rateLimit: { requestsPerHour: 200, requestsPerDay: 2000 },
+    features: { stories: false, live: false, reels: false, threads: false },
+  },
+
+  grok: {
+    id: 'grok',
+    displayName: 'Grok',
+    emoji: '🤖',
+    domains: ['grok.com'],
+    urlPattern: /^(?:https?:\/\/)?(?:[\w-]+\.)*grok\.com(?:[:/?#]|$)/i,
+    // No brightDataDatasetId: extracted through WebContentService like 'web'.
+    supportsMedia: true,
+    supportsAI: true,
+    maxMediaSize: 50 * 1024 * 1024, // 50MB
+    rateLimit: { requestsPerHour: 200, requestsPerDay: 2000 },
+    features: { stories: false, live: false, reels: false, threads: false },
+  },
+
+  adventai: {
+    id: 'adventai',
+    displayName: 'AdventAI',
+    emoji: '🤖',
+    domains: ['adventai.app'],
+    urlPattern: /^(?:https?:\/\/)?(?:[\w-]+\.)*adventai\.app(?:[:/?#]|$)/i,
+    // No brightDataDatasetId: extracted through WebContentService like 'web'.
+    supportsMedia: true,
+    supportsAI: true,
+    maxMediaSize: 50 * 1024 * 1024, // 50MB
     rateLimit: { requestsPerHour: 200, requestsPerDay: 2000 },
     features: { stories: false, live: false, reels: false, threads: false },
   },
@@ -759,6 +845,42 @@ export const PLATFORM_AI_COMMENT_CONFIG: Record<Platform, PlatformAICommentConfi
     requiresTranscription: false,
     defaultEnabled: true,
     contentSource: 'text',
+  },
+  chatgpt: {
+    showBanner: true,
+    requiresTranscription: false,
+    defaultEnabled: true,
+    contentSource: 'rawMarkdown', // web-extracted like 'web'
+  },
+  claude: {
+    showBanner: true,
+    requiresTranscription: false,
+    defaultEnabled: true,
+    contentSource: 'rawMarkdown', // web-extracted like 'web'
+  },
+  gemini: {
+    showBanner: true,
+    requiresTranscription: false,
+    defaultEnabled: true,
+    contentSource: 'rawMarkdown', // web-extracted like 'web'
+  },
+  perplexity: {
+    showBanner: true,
+    requiresTranscription: false,
+    defaultEnabled: true,
+    contentSource: 'rawMarkdown', // web-extracted like 'web'
+  },
+  grok: {
+    showBanner: true,
+    requiresTranscription: false,
+    defaultEnabled: true,
+    contentSource: 'rawMarkdown', // web-extracted like 'web'
+  },
+  adventai: {
+    showBanner: true,
+    requiresTranscription: false,
+    defaultEnabled: true,
+    contentSource: 'rawMarkdown', // web-extracted like 'web'
   },
   web: {
     showBanner: true,

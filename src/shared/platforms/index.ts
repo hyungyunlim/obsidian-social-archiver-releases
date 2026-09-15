@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/index.ts
- * Generated: 2026-07-28T02:27:51.585Z
+ * Generated: 2026-09-15T01:53:47.619Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -69,6 +69,10 @@ export {
   SUBSCRIPTION_PLATFORMS,
   PREVIEW_SUPPORTED_PLATFORMS,
 } from './types';
+
+// AI chat share links (feedback #139)
+export type { AIChatPlatform } from './types';
+export { AI_CHAT_PLATFORMS, isAIChatPlatform, isWebLanePlatform } from './types';
 
 // Definitions
 export type {

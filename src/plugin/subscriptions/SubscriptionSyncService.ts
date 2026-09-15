@@ -26,6 +26,7 @@ import { getPlatformName } from '../../shared/platforms';
 import { isHlsVideoUrl } from '../../utils/substack';
 import { TimelineView, VIEW_TYPE_TIMELINE } from '../../views/TimelineView';
 import type { WsProfileMetadataMessage } from '../realtime/RealtimeEventBridge';
+import { isWebLanePlatform } from '@/shared/platforms';
 
 const WEB_ARTICLE_SEPARATOR = '\n\n---\n\n';
 const GENERATED_METADATA_FOOTER_PATTERN = /^\*\*Platform:\*\*/i;
@@ -809,7 +810,7 @@ export class SubscriptionSyncService {
   }
 
   private hasTruncatedWebArticleReplacement(existingContent: string, post: PostData): boolean {
-    if (post.platform !== 'web') return false;
+    if (!isWebLanePlatform(post.platform)) return false;
 
     const replacement = (
       post.content?.rawMarkdown ||

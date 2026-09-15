@@ -35,6 +35,13 @@ export type Platform =
   | 'webtoons'
   | 'brunch'
   | 'xiaohongshu'
+  // AI chat share links (feedback #139) — web-extracted, own brand bubble
+  | 'chatgpt'
+  | 'claude'
+  | 'gemini'
+  | 'perplexity'
+  | 'grok'
+  | 'adventai'
   | 'web'
   | 'post';
 
@@ -69,6 +76,12 @@ export const PLATFORMS = [
   'webtoons',
   'brunch',
   'xiaohongshu',
+  'chatgpt',
+  'claude',
+  'gemini',
+  'perplexity',
+  'grok',
+  'adventai',
   'web',
   'post',
 ] as const;
@@ -106,6 +119,12 @@ export const PLATFORM_DETECTION_ORDER = [
   'naver',
   'brunch',
   'xiaohongshu',
+  'chatgpt',
+  'claude',
+  'gemini',
+  'perplexity',
+  'grok',
+  'adventai',
   'podcast',
   'blog',
   'mastodon',
@@ -281,6 +300,12 @@ export const MOBILE_PLATFORMS = [
   'pinterest',
   'tumblr',
   'xiaohongshu',
+  'chatgpt',
+  'claude',
+  'gemini',
+  'perplexity',
+  'grok',
+  'adventai',
   'web',
   'post',
   'googlemaps',
@@ -315,6 +340,12 @@ export const MOBILE_PLATFORM_INFO: Record<MobilePlatform, { name: string; placeh
   pinterest: { name: 'Pinterest', placeholder: 'Pinterest pin URL' },
   tumblr: { name: 'Tumblr', placeholder: 'Tumblr post URL' },
   xiaohongshu: { name: 'Xiaohongshu', placeholder: 'Xiaohongshu note or share link' },
+  chatgpt: { name: 'ChatGPT', placeholder: 'ChatGPT shared conversation link' },
+  claude: { name: 'Claude', placeholder: 'Claude shared conversation link' },
+  gemini: { name: 'Gemini', placeholder: 'Gemini shared conversation link' },
+  perplexity: { name: 'Perplexity', placeholder: 'Perplexity thread or page link' },
+  grok: { name: 'Grok', placeholder: 'Grok shared conversation link' },
+  adventai: { name: 'AdventAI', placeholder: 'AdventAI shared chat link' },
   web: { name: 'Web Article', placeholder: 'Web page or article URL' },
   post: { name: 'My Post', placeholder: 'Your composed post' },
   googlemaps: { name: 'Google Maps', placeholder: 'Google Maps place URL' },
@@ -369,6 +400,34 @@ export const VIDEO_AUDIO_PLATFORMS = [
 ] as const;
 
 export type VideoAudioPlatform = typeof VIDEO_AUDIO_PLATFORMS[number];
+
+/**
+ * AI chat share links (feedback #139). Extracted like a web article — the
+ * platform id only buys a brand icon and its own timeline bubble.
+ */
+export const AI_CHAT_PLATFORMS = [
+  'chatgpt',
+  'claude',
+  'gemini',
+  'perplexity',
+  'grok',
+  'adventai',
+] as const;
+export type AIChatPlatform = typeof AI_CHAT_PLATFORMS[number];
+
+export function isAIChatPlatform(platform: string): platform is AIChatPlatform {
+  return (AI_CHAT_PLATFORMS as readonly string[]).includes(platform);
+}
+
+/**
+ * Archives extracted by the generic web lane (Defuddle markdown, site-level
+ * author, external images): `web` itself plus the AI chat ids. Clients that
+ * special-case `platform === 'web'` for article rendering should use this so
+ * an AI chat archive keeps the web-article treatment it had before #139.
+ */
+export function isWebLanePlatform(platform: string | null | undefined): boolean {
+  return platform === 'web' || (typeof platform === 'string' && isAIChatPlatform(platform));
+}
 
 /**
  * Platform category type for AI comments

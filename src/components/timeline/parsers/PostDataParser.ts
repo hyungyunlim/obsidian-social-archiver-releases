@@ -20,6 +20,7 @@ import {
   IMPORT_MODE_FRONTMATTER_KEY,
   IMPORT_SOURCE_FRONTMATTER_KEY,
 } from '../../../services/import/local/LocalArchiveScanner';
+import { isWebLanePlatform } from '@/shared/platforms';
 
 /**
  * Vault folder node with children (Obsidian internal structure)
@@ -433,7 +434,7 @@ export class PostDataParser {
 
       // For web articles: extract external image URLs (OG/hero images from CDN)
       // Unlike other platforms, web articles keep images as external URLs (not downloaded locally)
-      if (frontmatter.platform === 'web' && mediaArray.length === 0) {
+      if (isWebLanePlatform(frontmatter.platform) && mediaArray.length === 0) {
         const externalImageRegex = /!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g;
         let imgMatch;
         while ((imgMatch = externalImageRegex.exec(content)) !== null) {
@@ -649,7 +650,7 @@ export class PostDataParser {
           snippet,
           // For RSS-based platforms and web articles: preserve raw markdown with inline images for proper rendering
           // For X articles: extract article body and unescape markdown artifacts
-          rawMarkdown: (isRssBasedPlatform(frontmatter.platform) || frontmatter.platform === 'web')
+          rawMarkdown: (isRssBasedPlatform(frontmatter.platform) || isWebLanePlatform(frontmatter.platform))
             ? this.extractBlogContentWithInlineMedia(content, mediaUrls)
             : (threadsArticleMarkdown || threadsInlineMarkdown)
               ? (threadsArticleMarkdown || threadsInlineMarkdown)

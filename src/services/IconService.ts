@@ -44,6 +44,12 @@ import {
   siNaverWebtoon,
   siBrunch,
   siXiaohongshu,
+  siChatgpt,
+  siClaude,
+  siGemini,
+  siPerplexity,
+  siGrok,
+  siAdventai,
   siKidsnote,
   siRss,
   siWeb,
@@ -100,6 +106,12 @@ const SIMPLE_ICON_MAP: Record<string, PlatformIcon | null> = {
   webtoons: siNaverWebtoon, // WEBTOON Global (same icon as Naver Webtoon)
   brunch: siBrunch, // Brunch (Kakao publishing platform)
   xiaohongshu: siXiaohongshu, // Xiaohongshu / RedNote
+  chatgpt: siChatgpt,
+  claude: siClaude,
+  gemini: siGemini,
+  perplexity: siPerplexity,
+  grok: siGrok,
+  adventai: siAdventai,
   kidsnote: siKidsnote,
   blog: siRss,
   web: siWeb,
@@ -149,6 +161,12 @@ const EMOJI_MAP: Record<string, string> = {
   webtoons: '📚', // WEBTOON Global (same icon as Naver Webtoon)
   brunch: '☕',
   xiaohongshu: '📕',
+  chatgpt: '🤖',
+  claude: '🤖',
+  gemini: '🤖',
+  perplexity: '🤖',
+  grok: '🤖',
+  adventai: '🤖',
   blog: '📝',
   post: '📝',
   default: '🌐',

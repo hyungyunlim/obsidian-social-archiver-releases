@@ -91,6 +91,12 @@ function getPlatformName(platform: Platform): string {
     navermap: 'Naver Map',
     kakaomap: 'Kakao Map',
     kidsnote: 'Kidsnote',
+    chatgpt: 'ChatGPT',
+    claude: 'Claude',
+    gemini: 'Gemini',
+    perplexity: 'Perplexity',
+    grok: 'Grok',
+    adventai: 'AdventAI',
     web: 'Web Article',
     post: 'Post'
   };

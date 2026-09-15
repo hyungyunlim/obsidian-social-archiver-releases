@@ -59,6 +59,8 @@ vi.mock('../../../services/CdnExpiryDetector', () => ({
 
 vi.mock('../../../shared/platforms', () => ({
   getPlatformName: vi.fn().mockReturnValue('X'),
+  // Partial mock: the service only needs the `web` case here (feedback #139 widened the real one).
+  isWebLanePlatform: (platform: string) => platform === 'web',
 }));
 
 import {

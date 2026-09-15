@@ -118,6 +118,18 @@ describe('parseAIComments', () => {
     expect(result.commentTexts.get(meta.id)).toBe('Model-specific output');
   });
 
+  it('round-trips an Apple on-device comment synced from the desktop app', () => {
+    const meta = createMockMeta({ id: 'apple-summary-20260915T120000Z', cli: 'apple', model: 'system' });
+    const markdown = appendAIComment(SAMPLE_MARKDOWN_NO_COMMENTS, meta, 'On-device summary');
+    expect(markdown).toContain('### 🍎 Apple Intelligence · ');
+
+    const result = parseAIComments(markdown);
+    // Before the provider was known here, this parsed as 'claude'.
+    expect(result.comments[0]?.cli).toBe('apple');
+    expect(result.comments[0]?.model).toBe('system');
+    expect(result.commentTexts.get(meta.id)).toBe('On-device summary');
+  });
+
   it('should parse cloud AI comments rendered with model provider labels', () => {
     const meta = createMockMeta({
       id: 'ai-action-comment-job-1',

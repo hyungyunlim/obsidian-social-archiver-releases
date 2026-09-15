@@ -10,6 +10,7 @@
 import type { PostData, Media, Platform, Comment } from '../../types/post';
 import type { UserArchive, UserArchiveComment } from '../../services/WorkersAPIClient';
 import type { ProductSnapshot } from '../../shared/platforms/products';
+import { isWebLanePlatform } from '@/shared/platforms';
 
 const LEGACY_WEB_CLIP_SEPARATOR = '\n\n---\n\n';
 const LEADING_WEB_CLIP_SEPARATOR = '---\n\n';
@@ -257,7 +258,7 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
   const platform = archive.platform as Platform;
   const isKidsnote = platform === 'kidsnote';
   const isXArticle = platform === 'x' && (archive.isArticle === true || !!archive.articleMarkdown);
-  const normalizedWebBody = platform === 'web'
+  const normalizedWebBody = isWebLanePlatform(platform)
     ? extractWebArticleBody(archive)
     : isXArticle
       ? extractXArticleIntro(archive)
@@ -364,7 +365,7 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
     content: {
       text: normalizedWebBody,
       html: (archive.isArticle || archive.articleMarkdown) ? (archive.articleMarkdown ?? undefined) : undefined,
-      ...(platform === 'web' && normalizedWebBody ? {
+      ...(isWebLanePlatform(platform) && normalizedWebBody ? {
         markdown: normalizedWebBody,
         rawMarkdown: normalizedWebBody,
       } : {}),

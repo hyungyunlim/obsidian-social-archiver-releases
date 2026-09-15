@@ -11,9 +11,27 @@ const LOCAL_PROVIDER_DISPLAY: Record<string, Pick<ProviderDisplay, 'icon' | 'pro
   claude: { icon: '🤖', providerLabel: 'Claude' },
   gemini: { icon: '✨', providerLabel: 'Gemini' },
   codex: { icon: '💡', providerLabel: 'Codex' },
+  // Desktop app's on-device executor; the label round-trips through the
+  // markdown header parser as "apple-intelligence" → 'apple'.
+  apple: { icon: '🍎', providerLabel: 'Apple Intelligence' },
 };
 
 export function getAICommentDisplay(meta: Pick<AICommentMeta, 'cli' | 'model' | 'executedModel' | 'id'>): ProviderDisplay {
+  // The recorded provider is authoritative for local providers: the server mints
+  // `ai-action-comment-<job>` ids for EVERY action-path comment, including ones a
+  // desktop executor (Claude, Apple on-device) ran, so the id prefix alone would
+  // render them as Cloud AI. A Cloudflare model id still means Cloud AI.
+  const isCloudModel = meta.model?.trim().startsWith('@cf/') === true;
+  const local = LOCAL_PROVIDER_DISPLAY[meta.cli];
+  if (local && !isCloudModel) {
+    return {
+      icon: local.icon,
+      providerLabel: local.providerLabel,
+      modelLabel: meta.cli === 'apple' ? 'On-device' : formatAIModelLabel(meta.executedModel || meta.model),
+      headerLabel: local.providerLabel,
+    };
+  }
+
   const cloudDisplay = getCloudAIModelDisplay(meta.model);
   if (cloudDisplay) {
     const headerLabel = cloudDisplay.modelLabel
@@ -36,14 +54,14 @@ export function getAICommentDisplay(meta: Pick<AICommentMeta, 'cli' | 'model' | 
     };
   }
 
-  const local = LOCAL_PROVIDER_DISPLAY[meta.cli] ?? { icon: '🤖', providerLabel: String(meta.cli || 'AI') };
+  const fallback = { icon: '🤖', providerLabel: String(meta.cli || 'AI') };
   // headerLabel stays provider-only: it is written into the markdown comment
   // header, whose `·`-split round-trip parse expects a bare provider name.
   return {
-    icon: local.icon,
-    providerLabel: local.providerLabel,
+    icon: fallback.icon,
+    providerLabel: fallback.providerLabel,
     modelLabel: formatAIModelLabel(meta.executedModel || meta.model),
-    headerLabel: local.providerLabel,
+    headerLabel: fallback.providerLabel,
   };
 }
 

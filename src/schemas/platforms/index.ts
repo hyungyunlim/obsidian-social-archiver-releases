@@ -66,6 +66,7 @@ import {
 	XiaohongshuURLSchema,
 	isXiaohongshuProfileUrl
 } from './xiaohongshu';
+import { PLATFORM_DEFINITIONS, type AIChatPlatform } from '@/shared/platforms';
 
 /**
  * Re-export all platform-specific schemas
@@ -181,6 +182,13 @@ export {
  * 'post' is excluded as it's for user-created local posts
  */
 type ExternalPlatform = Exclude<Platform, 'post' | 'kidsnote'>;
+
+function aiChatUrlSchema(platform: AIChatPlatform): z.ZodType {
+	const { urlPattern, displayName } = PLATFORM_DEFINITIONS[platform];
+	return WebURLSchema.refine((url) => urlPattern.test(url), {
+		message: `URL must be a ${displayName} share link`,
+	});
+}
 
 /**
  * Naver Webtoon URL schema
@@ -353,6 +361,15 @@ const PLATFORM_SCHEMA_MAP = {
 	webtoons: WebtoonsURLSchema,
 	brunch: BrunchURLSchema,
 	xiaohongshu: XiaohongshuURLSchema,
+	// AI chat share links (feedback #139): a web URL on the brand's own host.
+	// Host-anchored, because detection walks this map in PLATFORM_DETECTION_ORDER
+	// and an accept-anything schema here would claim every URL after it.
+	chatgpt: aiChatUrlSchema('chatgpt'),
+	claude: aiChatUrlSchema('claude'),
+	gemini: aiChatUrlSchema('gemini'),
+	perplexity: aiChatUrlSchema('perplexity'),
+	grok: aiChatUrlSchema('grok'),
+	adventai: aiChatUrlSchema('adventai'),
 	web: WebURLSchema,
 } as const satisfies Record<ExternalPlatform, z.ZodType>;
 
