@@ -62,6 +62,37 @@ export const AI_CLI_INFO: Record<AICli, AICliInfo> = {
   },
 };
 
+/**
+ * PATH a GUI-launched Obsidian usually lacks: Homebrew, ~/.local/bin, npm and
+ * Bun globals ahead of whatever PATH the process inherited. Shared by AI CLI
+ * detection and the standalone `social-archiver` lookup.
+ */
+export function buildExtendedPath(platform: string, homedir: string, envPath: string): string {
+  const isWindows = platform === 'win32';
+  const dirs = isWindows
+    ? [
+        `${homedir}\\AppData\\Roaming\\npm`,
+        `${homedir}\\AppData\\Local\\npm`,
+        `${homedir}\\.npm-global`,
+        `${homedir}\\.local\\bin`,
+        `${homedir}\\.bun\\bin`,
+        'C:\\Program Files\\nodejs',
+        'C:\\Program Files (x86)\\nodejs',
+        envPath,
+      ]
+    : [
+        '/opt/homebrew/bin',
+        '/usr/local/bin',
+        '/usr/bin',
+        '/bin',
+        `${homedir}/.local/bin`,
+        `${homedir}/.npm-global/bin`,
+        `${homedir}/.bun/bin`,
+        envPath,
+      ];
+  return dirs.join(isWindows ? ';' : ':');
+}
+
 export class AICliDetector {
   private static readonly SUPPORTED_CLIS: AICli[] = ['claude', 'gemini', 'codex'];
 
@@ -320,34 +351,8 @@ export class AICliDetector {
     expandedPaths.unshift(...(pathBinary === cli ? [cli] : [cli, pathBinary]));
 
     // Extended PATH for Obsidian environment
-    const isWindows = platform === 'win32';
-    const pathSeparator = isWindows ? ';' : ':';
     const homedir = os.homedir();
-
-    const extendedPathDirs = isWindows
-      ? [
-          // Windows common paths
-          `${homedir}\\AppData\\Roaming\\npm`,
-          `${homedir}\\AppData\\Local\\npm`,
-          `${homedir}\\.npm-global`,
-          `${homedir}\\.local\\bin`,
-          `${homedir}\\.bun\\bin`,
-          'C:\\Program Files\\nodejs',
-          'C:\\Program Files (x86)\\nodejs',
-          process.env.PATH || '',
-        ]
-      : [
-          // macOS/Linux common paths
-          '/opt/homebrew/bin',
-          '/usr/local/bin',
-          '/usr/bin',
-          '/bin',
-          `${homedir}/.local/bin`,
-          `${homedir}/.npm-global/bin`,
-          `${homedir}/.bun/bin`,
-          process.env.PATH || '',
-        ];
-    const extendedPath = extendedPathDirs.join(pathSeparator);
+    const extendedPath = buildExtendedPath(platform, homedir, process.env.PATH || '');
 
     for (const cliPath of expandedPaths) {
       try {

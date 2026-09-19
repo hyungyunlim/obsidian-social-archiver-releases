@@ -715,6 +715,15 @@ export interface AICommentSettings {
   outputLanguage: AIOutputLanguage;
   /** Language for AI-suggested tags ('auto' = match content language) */
   tagLanguage: AIOutputLanguage;
+  /**
+   * Hand local AI execution to the standalone Social Archiver CLI
+   * (`social-archiver executor`) when it is installed. The built-in executor
+   * then stays off and the CLI's providers — including Apple Intelligence on
+   * macOS — serve this vault. Desktop only.
+   */
+  useStandaloneCli: boolean;
+  /** Absolute path of the standalone CLI; empty = find it on PATH. */
+  standaloneCliPath: string;
 }
 
 /**
@@ -864,6 +873,8 @@ export type MultiAIGenerationResult =
 export const DEFAULT_AI_COMMENT_SETTINGS: AICommentSettings = {
   enabled: true,
   defaultCli: 'claude',
+  useStandaloneCli: true,
+  standaloneCliPath: '',
   defaultType: 'summary',
   platformVisibility: {
     socialMedia: true,

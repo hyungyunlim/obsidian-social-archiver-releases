@@ -147,14 +147,30 @@ export function extractPostsFromSSR(scripts: string[], targetShortcode: string):
 
 	// Parse all scripts and find edges
 	for (const text of scripts) {
-		if (!text.includes('thread_items')) continue;
+		if (!hasParseableBlock(text)) continue;
 
 		try {
 			const json = JSON.parse(text);
-			threadItemsFound = true;
+			if (text.includes('thread_items')) threadItemsFound = true;
 			findEdges(json, mainPostEdges, relatedPosts);
 		} catch {
 			// Skip non-JSON or malformed JSON
+		}
+	}
+
+	// 2026-09-16: Threads stopped shipping the permalink thread as
+	// `data.data.edges[].node.thread_items[]` and now ships the main post as
+	// `data.media`, its replies as `media.text_post_app_info.direct_replies`,
+	// and a reply permalink's ancestors as `...containing_thread`. The three
+	// arrive in SEPARATE data-sjs blocks that share one `pk` (Relay @defer), so
+	// the walk collects across blocks. Adapting them to the old EdgeNode shape
+	// keeps the classification below — main post, continuation run, replies —
+	// working untouched for both payload shapes.
+	if (mainPostEdges.length === 0) {
+		const mediaEdges = collectMediaEdges(scripts, targetShortcode);
+		if (mediaEdges.length > 0) {
+			mainPostEdges.push(...mediaEdges);
+			threadItemsFound = true;
 		}
 	}
 
@@ -288,6 +304,103 @@ export function extractReplyThreadsFromPages(pages: string[]): SSRPost[][] {
 		}
 	}
 	return threads;
+}
+
+/** Blocks worth JSON.parsing: the old `thread_items` shape or the new `media` one. */
+function hasParseableBlock(text: string): boolean {
+	return text.includes('thread_items') || text.includes('text_post_app_info');
+}
+
+/** `{ posts: { edges: [{ node: post }] } }` — the new payload's post list shape. */
+interface PostConnection {
+	edges?: ({ node?: SSRPost } | null)[];
+}
+
+interface MediaThreadInfo {
+	containing_thread?: { posts?: PostConnection };
+	direct_replies?: { edges?: ({ node?: { posts?: PostConnection } } | null)[] };
+}
+
+function postsFromConnection(connection: PostConnection | undefined): SSRPost[] {
+	return (connection?.edges ?? [])
+		.map((edge) => edge?.node)
+		.filter((post): post is SSRPost => Boolean(post && (post.pk || post.code)));
+}
+
+function toEdge(posts: SSRPost[]): EdgeNode {
+	return { node: { thread_items: posts.map((post) => ({ post })) } };
+}
+
+/**
+ * Adapt the 2026-09 `data.media` payload to the `EdgeNode[]` shape the
+ * classification in {@link extractPostsFromSSR} already understands.
+ *
+ * Relay splits one permalink across several data-sjs blocks that share a `pk`:
+ * one carries the post itself (`code`, `caption`, `user`, `taken_at`), another
+ * `containing_thread` (a reply permalink's ancestors), another `direct_replies`.
+ * Ancestors are emitted BEFORE the main post so the caller skips them, which is
+ * what the old payload's edge order made it do.
+ */
+function collectMediaEdges(scripts: string[], targetShortcode: string): EdgeNode[] {
+	const medias: SSRPost[] = [];
+	for (const text of scripts) {
+		if (!text.includes('text_post_app_info')) continue;
+		try {
+			findMediaObjects(JSON.parse(text), medias);
+		} catch {
+			// Skip non-JSON or malformed JSON
+		}
+	}
+
+	const mainPost = medias.find((media) => media.code === targetShortcode);
+	if (!mainPost) return [];
+
+	const ancestors: SSRPost[] = [];
+	const replyThreads: SSRPost[][] = [];
+	for (const media of medias) {
+		// Other posts' chunks (quoted posts, recommendations) ride along in the
+		// same blocks — only this permalink's chunks describe this conversation.
+		// `id` is the key that every chunk carries: the one holding
+		// `direct_replies` ships neither `pk` nor `code`.
+		if (!sameMedia(media, mainPost)) continue;
+		const info = media.text_post_app_info as MediaThreadInfo | undefined;
+		ancestors.push(...postsFromConnection(info?.containing_thread?.posts));
+		for (const edge of info?.direct_replies?.edges ?? []) {
+			const posts = postsFromConnection(edge?.node?.posts);
+			if (posts.length > 0) replyThreads.push(posts);
+		}
+	}
+
+	return [
+		...ancestors.map((post) => toEdge([post])),
+		toEdge([mainPost]),
+		...replyThreads.map((posts) => toEdge(posts)),
+	];
+}
+
+/** Same post across Relay's deferred chunks: `id` first, `pk` only as a backstop. */
+function sameMedia(a: SSRPost, b: SSRPost): boolean {
+	if (a.id && b.id) return a.id === b.id;
+	return Boolean(a.pk && b.pk && a.pk === b.pk);
+}
+
+/** Collect every `media` object that identifies a post. */
+function findMediaObjects(obj: unknown, out: SSRPost[]): void {
+	if (!obj || typeof obj !== 'object') return;
+
+	if (Array.isArray(obj)) {
+		for (const item of obj) findMediaObjects(item, out);
+		return;
+	}
+
+	const typedObj = obj as Record<string, unknown>;
+	const media = typedObj.media;
+	if (media && typeof media === 'object' && !Array.isArray(media)) {
+		const candidate = media as SSRPost;
+		if (candidate.id || candidate.pk) out.push(candidate);
+	}
+
+	for (const value of Object.values(typedObj)) findMediaObjects(value, out);
 }
 
 /**

@@ -34,6 +34,12 @@ export interface AICommentJobProcessorDeps {
   app: App;
   apiClient: () => WorkersAPIClient | undefined;
   settings: () => SocialArchiverSettings;
+  /**
+   * True while the standalone CLI executor serves this vault: the built-in
+   * processor then neither polls nor accepts pushed jobs, so one job is never
+   * claimed by two executors.
+   */
+  isSuspended?: () => boolean;
   saveSettings: () => Promise<void>;
   archiveLookupService: () => ArchiveLookupService | undefined;
   ingestRemoteArchive: (archiveId: string, source: 'ai_comment_job') => Promise<IngestResult>;
@@ -103,6 +109,7 @@ export class AICommentJobProcessor {
   constructor(private readonly deps: AICommentJobProcessorDeps) {}
 
   start(): void {
+    if (this.deps.isSuspended?.()) return;
     // `draining` also guards the window where the timer callback has nulled
     // backlogTimer but its drain is still in flight — without it a focus or
     // settings event lands here and runs a duplicate concurrent drain.
@@ -178,6 +185,8 @@ export class AICommentJobProcessor {
   }
 
   async drainBacklog(): Promise<void> {
+    // Legacy per-kind timer: keep ticking, never claim while the CLI serves this vault.
+    if (this.deps.isSuspended?.()) return;
     if (this.draining) return;
     const apiClient = this.deps.apiClient();
     const clientId = this.deps.settings().syncClientId;
@@ -205,12 +214,14 @@ export class AICommentJobProcessor {
   }
 
   async handleRequestedJob(jobId: string, targetClientId: string): Promise<void> {
+    if (this.deps.isSuspended?.()) return;
     if (targetClientId !== this.deps.settings().syncClientId) return;
     this.enqueue(jobId);
     await this.processQueue();
   }
 
   async handleRequestedAIActionJob(jobId: string, targetClientId?: string | null): Promise<void> {
+    if (this.deps.isSuspended?.()) return;
     if (targetClientId && targetClientId !== this.deps.settings().syncClientId) return;
     this.enqueueAction(jobId);
     await this.processQueue();

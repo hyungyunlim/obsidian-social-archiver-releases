@@ -35,6 +35,12 @@ export interface DesktopCapabilityReporterDeps {
   pluginVersion: string;
   schedule: (callback: () => void, delay: number) => number;
   clearSchedule: (id: number) => void;
+  /**
+   * True while the standalone CLI executor runs on this vault's behalf. The
+   * plugin then advertises its own executor as disabled so the server routes
+   * AI jobs to the CLI's client instead of this one.
+   */
+  delegatedToCli?: () => boolean;
 }
 
 export class DesktopCapabilityReporter {
@@ -83,7 +89,7 @@ export class DesktopCapabilityReporter {
       : readyProviders[0]?.id;
 
     let status: AICommentExecutorCapabilityPayload['status'] = 'ready';
-    if (!settings.aiComment.enabled) status = 'settings_disabled';
+    if (!settings.aiComment.enabled || this.deps.delegatedToCli?.()) status = 'settings_disabled';
     else if (providers.every((provider) => !provider.available)) status = 'provider_missing';
     else if (readyProviders.length === 0) status = 'provider_auth_required';
 

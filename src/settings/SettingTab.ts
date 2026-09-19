@@ -33,6 +33,12 @@ import SyncSettingsTab from './SyncSettingsTab.svelte';
 import CrossPostSettingsTab from './CrossPostSettingsTab.svelte';
 import type { AICli, AICliDetectionResult } from '../utils/ai-cli';
 import { AICliDetector, AI_CLI_INFO } from '../utils/ai-cli';
+import {
+  STANDALONE_CLI_BREW_COMMAND,
+  STANDALONE_CLI_GUIDE_URL,
+  STANDALONE_CLI_MIN_VERSION,
+  StandaloneCliDetector,
+} from '../utils/standalone-cli';
 import { COMMENT_TYPE_DISPLAY_NAMES, OUTPUT_LANGUAGE_NAMES } from '../types/ai-comment';
 import { FEATURE_READER_TTS_ENABLED, FEATURE_CROSSPOST_ENABLED } from '../shared/constants';
 import { DEFAULT_TTS_SETTINGS } from '../types/settings';
@@ -1667,6 +1673,47 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             const aiToolsContainer = host.createDiv({ cls: 'ai-tools-status-container' });
             aiToolsContainer.addClass('sa-settings-subsection');
             void this.renderAIToolsStatus(aiToolsContainer);
+          }),
+          visible: available,
+        },
+        {
+          name: t('st.ai.cli.enable.name'),
+          desc: t('st.ai.cli.enable.desc'),
+          visible: available,
+          render: (setting): void => {
+            setting.addToggle(toggle => toggle
+              .setValue(settings().useStandaloneCli)
+              .onChange(async (value) => {
+                settings().useStandaloneCli = value;
+                await this.plugin.saveSettingsPartial(
+                  { aiComment: this.plugin.settings.aiComment },
+                  { reinitialize: false, notify: true },
+                );
+              }));
+          },
+        },
+        {
+          name: t('st.ai.cli.path.name'),
+          desc: t('st.ai.cli.path.desc'),
+          visible: available,
+          render: (setting): void => {
+            setting.addText(text => {
+              text
+                .setPlaceholder('/opt/homebrew/bin/social-archiver')
+                .setValue(settings().standaloneCliPath)
+                .onChange((value) => {
+                  settings().standaloneCliPath = value.trim();
+                  StandaloneCliDetector.resetCache();
+                  this.markDirty();
+                });
+            });
+          },
+        },
+        {
+          ...this.blockRow('CLI executor status', (host) => {
+            const container = host.createDiv({ cls: 'sa-cli-executor-status' });
+            container.addClass('sa-settings-subsection');
+            void this.renderCliExecutorStatus(container);
           }),
           visible: available,
         },
@@ -3521,6 +3568,101 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       errorEl.textContent = t('st.ai.detectError');
       errorEl.addClass('sa-status-warning');
     }
+  }
+
+  /**
+   * Standalone CLI executor: what was found, whether it runs for this vault,
+   * and the providers it sees (Apple Intelligence included). Paints the
+   * detection first; the provider probe spawns the CLI and lands later.
+   */
+  private async renderCliExecutorStatus(container: HTMLElement): Promise<void> {
+    container.empty();
+    const aiSettings = this.plugin.settings.aiComment;
+    const detection = await StandaloneCliDetector.detect({ overridePath: aiSettings.standaloneCliPath });
+    if (!container.isConnected) return;
+
+    const installHint = (): void => {
+      const hint = container.createDiv({ cls: 'setting-item-description' });
+      const code = hint.createEl('code', { text: STANDALONE_CLI_BREW_COMMAND });
+      code.addClass('sa-text-xs');
+      hint.createSpan({ text: ' · ' });
+      hint.createEl('a', { text: t('st.ai.cli.status.guide'), href: STANDALONE_CLI_GUIDE_URL });
+    };
+
+    const line = container.createDiv({ cls: 'setting-item-description' });
+    if (!detection.available) {
+      line.textContent = t('st.ai.cli.status.notFound');
+      line.addClass('sa-status-warning');
+      installHint();
+    } else if (!detection.supported || !detection.path) {
+      line.textContent = t('st.ai.cli.status.tooOld', {
+        version: detection.version ?? '?',
+        path: detection.path ?? '?',
+        min: STANDALONE_CLI_MIN_VERSION,
+      });
+      line.addClass('sa-status-warning');
+      installHint();
+    } else {
+      line.textContent = t('st.ai.cli.status.found', { version: detection.version ?? '?', path: detection.path });
+      const snapshot = this.plugin.getCliExecutorSnapshot();
+      const stateEl = container.createDiv({ cls: 'setting-item-description' });
+      if (!aiSettings.useStandaloneCli || !this.plugin.isCliDelegationActive() || !snapshot) {
+        stateEl.textContent = t('st.ai.cli.builtinActive');
+      } else {
+        const stateKeys = {
+          stopped: 'st.ai.cli.state.stopped',
+          starting: 'st.ai.cli.state.starting',
+          running: 'st.ai.cli.state.running',
+          auth_required: 'st.ai.cli.state.auth_required',
+          not_ready: 'st.ai.cli.state.not_ready',
+          crashed: 'st.ai.cli.state.crashed',
+        } as const;
+        stateEl.textContent = t(stateKeys[snapshot.state], {
+          clientId: snapshot.clientId ?? '…',
+          restarts: snapshot.restarts,
+        });
+        if (snapshot.state === 'crashed' || snapshot.state === 'auth_required' || snapshot.state === 'not_ready') {
+          stateEl.addClass('sa-status-warning');
+          if (snapshot.lastError) {
+            const detail = container.createDiv({ cls: 'setting-item-description' });
+            detail.textContent = snapshot.lastError;
+            detail.addClass('sa-text-faint', 'sa-text-xs');
+          }
+        }
+      }
+
+      const providersHost = container.createDiv({ cls: 'ai-tools-status-container' });
+      const providersTitle = providersHost.createDiv({ cls: 'setting-item-description', text: t('st.ai.cli.providers') });
+      providersTitle.addClass('sa-text-faint');
+      void StandaloneCliDetector.probeProviders(detection.path).then((providers) => {
+        if (!providersHost.isConnected) return;
+        for (const provider of providers) {
+          const item = providersHost.createDiv({ cls: 'ai-tool-status-item' });
+          const ready = provider.available && provider.authenticated;
+          const label = provider.id === 'apple'
+            ? t('st.ai.cli.providerApple')
+            : (AI_CLI_INFO[provider.id as AICli]?.displayName ?? provider.id);
+          item.createSpan({ text: `${ready ? '✓' : '✗'} ${label}` });
+          const extra = [
+            provider.version ? `v${provider.version}` : '',
+            provider.contextSize ? `${provider.contextSize} tokens` : '',
+            !ready && provider.reason ? provider.reason : '',
+          ].filter((part) => part.length > 0).join(' · ');
+          if (extra) {
+            const extraEl = item.createSpan({ text: extra });
+            extraEl.addClass('sa-text-faint', 'sa-text-xs', 'sa-ml-auto');
+          }
+        }
+      });
+    }
+
+    const refreshBtn = container.createEl('button', { text: t('st.ai.refresh') });
+    refreshBtn.addClass('sa-refresh-btn');
+    refreshBtn.onclick = async () => {
+      refreshBtn.disabled = true;
+      await this.plugin.refreshCliExecutor();
+      await this.renderCliExecutorStatus(container);
+    };
   }
 
   /**

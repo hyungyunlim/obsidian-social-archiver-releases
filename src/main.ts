@@ -44,6 +44,14 @@ import {
 import { normalizeUrlForDedup } from './utils/url';
 
 import { ProcessManager } from './services/ProcessManager';
+import nodeRequire from './utils/nodeRequire';
+import { buildExtendedPath } from './utils/ai-cli';
+import { StandaloneCliDetector, type StandaloneCliDetection } from './utils/standalone-cli';
+import {
+  StandaloneCliExecutorSupervisor,
+  type CliExecutorSnapshot,
+} from './plugin/executor/StandaloneCliExecutorSupervisor';
+import { cliExecutorConfigDir, vaultExecutorKey } from './plugin/executor/cliExecutorConfigDir';
 import { YtDlpDetector } from './utils/yt-dlp';
 import { detectPlatform } from '@/shared/platforms';
 import type { TranscriptionResult } from './types/transcription';
@@ -360,6 +368,10 @@ export default class SocialArchiverPlugin extends Plugin {
   public archiveDeleteSyncService: ArchiveDeleteSyncService | null = null;
   private aiCommentCapabilityReporter?: DesktopCapabilityReporter;
   public aiCommentJobProcessor?: AICommentJobProcessor;
+  /** `social-archiver executor` child that serves this vault instead of the built-in processor. */
+  private cliExecutorSupervisor?: StandaloneCliExecutorSupervisor;
+  private cliDelegationActive = false;
+  private cliDetection: StandaloneCliDetection | null = null;
   private unifiedExecutorScheduler: UnifiedExecutorScheduler | null = null;
   private transcriptionCapabilityReporter?: TranscriptionCapabilityReporter;
   public transcriptionJobProcessor?: TranscriptionJobProcessor;
@@ -935,6 +947,114 @@ export default class SocialArchiverPlugin extends Plugin {
     });
   }
 
+  // --- Standalone CLI delegation ------------------------------------------
+  //
+  // cli-runtime (the desktop app's and the standalone CLI's executor) is the
+  // one local-AI implementation; this plugin's own processor is a port that
+  // drifts. When `social-archiver` 0.1.15+ is installed, a `social-archiver
+  // executor --watch` child serves this vault — every provider it has,
+  // Apple Intelligence included — and the built-in processor stays off.
+
+  getCliExecutorSnapshot(): CliExecutorSnapshot | null {
+    return this.cliExecutorSupervisor?.getSnapshot() ?? null;
+  }
+
+  getCliDetection(): StandaloneCliDetection | null {
+    return this.cliDetection;
+  }
+
+  isCliDelegationActive(): boolean {
+    return this.cliDelegationActive;
+  }
+
+  /** Settings tab "refresh": re-detect the CLI and re-decide who executes. */
+  async refreshCliExecutor(): Promise<void> {
+    StandaloneCliDetector.resetCache();
+    await this.refreshDesktopAICommentExecutor('cli-refresh', { reconnectRealtime: true });
+  }
+
+  private async reconcileCliDelegation(reason: string): Promise<boolean> {
+    if (ObsidianPlatform.isMobile) return false;
+    const ai = this.settings.aiComment;
+    const token = this.settings.authToken;
+    const wanted = ai.enabled && ai.useStandaloneCli && typeof token === 'string' && token.length > 0;
+    if (!wanted) {
+      await this.stopCliExecutor();
+      return false;
+    }
+    let detection: StandaloneCliDetection;
+    try {
+      detection = await StandaloneCliDetector.detect({ overridePath: ai.standaloneCliPath });
+    } catch (error) {
+      console.warn('[Social Archiver] standalone CLI detection failed', error);
+      detection = { available: false, path: null, version: null, supported: false };
+    }
+    this.cliDetection = detection;
+    if (!detection.available || !detection.supported || !detection.path) {
+      await this.stopCliExecutor();
+      return false;
+    }
+    try {
+      const os = nodeRequire('os') as typeof import('os');
+      const homedir = os.homedir();
+      const supervisor = this.ensureCliSupervisor(homedir);
+      await supervisor.start({
+        binaryPath: detection.path,
+        token,
+        configDir: cliExecutorConfigDir({
+          platform: process.platform,
+          homedir,
+          env: process.env,
+          vaultKey: vaultExecutorKey(this.app.vault.getName(), this.settings.syncClientId),
+        }),
+        outputLanguage: ai.outputLanguage ?? 'auto',
+      });
+    } catch (error) {
+      console.warn('[Social Archiver] could not start the standalone CLI executor; using the built-in one', error);
+      await this.stopCliExecutor();
+      return false;
+    }
+    if (!this.cliDelegationActive) {
+      console.debug('[Social Archiver] AI executor delegated to social-archiver CLI', {
+        reason,
+        version: detection.version,
+        path: detection.path,
+      });
+    }
+    this.cliDelegationActive = true;
+    return true;
+  }
+
+  private async stopCliExecutor(): Promise<void> {
+    this.cliDelegationActive = false;
+    await this.cliExecutorSupervisor?.stop();
+  }
+
+  private ensureCliSupervisor(homedir: string): StandaloneCliExecutorSupervisor {
+    if (this.cliExecutorSupervisor) return this.cliExecutorSupervisor;
+    const { spawn } = nodeRequire('child_process') as typeof import('child_process');
+    this.cliExecutorSupervisor = new StandaloneCliExecutorSupervisor({
+      spawn: (file, args, options) => spawn(file, args, options),
+      schedule: (cb, delay) => this.scheduleTrackedTimeout(cb, delay),
+      clearSchedule: (handle) => {
+        window.clearTimeout(handle as number);
+        this.pendingTimeouts.delete(handle as number);
+      },
+      now: () => Date.now(),
+      env: process.env,
+      extendedPath: buildExtendedPath(process.platform, homedir, process.env.PATH ?? ''),
+      registerProcess: (child) =>
+        ProcessManager.register(child as unknown as import('child_process').ChildProcess, 'ai-comment', 'social-archiver executor'),
+      log: (level, message, data) => {
+        const line = `[Social Archiver] CLI executor: ${message}`;
+        if (level === 'error') console.error(line, data);
+        else if (level === 'warn') console.warn(line, data);
+        else console.debug(line, data);
+      },
+    });
+    return this.cliExecutorSupervisor;
+  }
+
   private async refreshDesktopAICommentExecutor(
     reason: string,
     options: { reconnectRealtime?: boolean } = {},
@@ -943,6 +1063,9 @@ export default class SocialArchiverPlugin extends Plugin {
     if (!this.apiClient || !this.settings.authToken || !this.settings.syncClientId) return;
 
     this.apiClient.setClientId(this.settings.syncClientId);
+    // Decide who executes BEFORE advertising: the reporter reads
+    // cliDelegationActive and the processor refuses to start while delegated.
+    await this.reconcileCliDelegation(reason);
     await this.aiCommentCapabilityReporter?.refreshNow();
     await this.transcriptionCapabilityReporter?.refreshNow();
     this.startUnifiedExecutorPolling();
@@ -1315,7 +1438,7 @@ export default class SocialArchiverPlugin extends Plugin {
     this.registerEvent(
       this.events.on('settings-changed', (...data: unknown[]) => {
         const changedKeys = data[1] as Array<keyof SocialArchiverSettings> | undefined;
-        if (changedKeys?.some(key => key.startsWith('aiComment') || key === 'transcription')) {
+        if (changedKeys?.some(key => key.startsWith('aiComment') || key === 'transcription' || key === 'authToken')) {
           void this.refreshDesktopAICommentExecutor('settings-changed', { reconnectRealtime: true });
           return;
         }
@@ -1491,6 +1614,8 @@ export default class SocialArchiverPlugin extends Plugin {
     // Stop desktop AI-comment executor services
     this.unifiedExecutorScheduler?.stop();
     this.unifiedExecutorScheduler = null;
+    this.cliDelegationActive = false;
+    void this.cliExecutorSupervisor?.stop();
     this.aiCommentJobProcessor?.stop();
     this.aiCommentJobProcessor = undefined;
     this.aiCommentCapabilityReporter?.dispose();
@@ -2372,6 +2497,7 @@ export default class SocialArchiverPlugin extends Plugin {
       this.aiCommentCapabilityReporter = new DesktopCapabilityReporter({
         apiClient: () => this.apiClient,
         settings: () => this.settings,
+        delegatedToCli: () => this.cliDelegationActive,
         pluginVersion: this.manifest.version,
         schedule: (cb, delay) => this.scheduleTrackedTimeout(cb, delay),
         clearSchedule: (id) => {
@@ -2396,6 +2522,7 @@ export default class SocialArchiverPlugin extends Plugin {
         app: this.app,
         apiClient: () => this.apiClient,
         settings: () => this.settings,
+        isSuspended: () => this.cliDelegationActive,
         saveSettings: () => this.saveSettingsPartial({}, { reinitialize: false, notify: false }),
         archiveLookupService: () => this.archiveLookupService,
         ingestRemoteArchive: (archiveId) =>

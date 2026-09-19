@@ -24,6 +24,19 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.7.8': {
+    title: 'Local AI runs through the Social Archiver CLI, with Apple Intelligence on the Mac',
+    date: '2026-09-20',
+    notes: `## Local AI now runs through the Social Archiver CLI
+
+- **One executor for every app.** When the \`social-archiver\` command-line tool (0.1.15 or newer) is installed, the plugin hands local AI comments and AI actions to it instead of running its own copy of the executor. Every provider the CLI has is available here — Claude Code, Gemini CLI, Codex, and on a Mac with macOS 26 on Apple silicon, **Apple Intelligence** — and later provider fixes reach you without a plugin update.
+- **Nothing to set up.** The plugin finds the CLI on its own (Homebrew, \`~/.local/bin\`, npm, or the copy bundled with the desktop app) and uses the newest install it finds. Settings → AI comment shows which executor is active, the CLI version and the providers it sees, with a toggle to stay on the built-in executor and a field to point at a specific binary.
+- **Safe fallback.** Without the CLI, or when it is too old, signed out or stops, the built-in executor keeps working exactly as before.
+
+> [!NOTE]
+> Install the CLI with \`brew install hyungyunlim/tap/social-archiver-cli\`, from npm, or with the installer in the CLI guide: https://docs.social-archive.org/en/guide/cli. Apple Intelligence needs macOS 26 on Apple silicon with Apple Intelligence switched on; fact check and transcript translation still use the cloud providers.
+`,
+  },
   '4.7.7': {
     title: 'AI chat links get their own platform, and AI comments say who wrote them',
     date: '2026-09-15',

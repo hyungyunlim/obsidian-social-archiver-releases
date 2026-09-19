@@ -452,6 +452,44 @@ export const settingTabStrings = {
     en: 'Show AI comment suggestions on archived posts. Requires local AI CLI tools.',
     ko: '아카이브한 포스트에 AI 코멘트 제안을 표시합니다. 로컬 AI CLI 도구가 필요합니다.',
   },
+  'st.ai.cli.enable.name': { en: 'Run through the Social Archiver CLI', ko: 'Social Archiver CLI로 실행' },
+  'st.ai.cli.enable.desc': {
+    en: 'When the standalone CLI is installed, its executor serves this vault (Apple Intelligence on macOS 26+, plus Claude, Gemini and Codex) and the built-in executor stays off.',
+    ko: '독립 CLI가 설치돼 있으면 CLI 실행기가 이 볼트를 담당합니다(macOS 26 이상에서는 Apple Intelligence, 그리고 Claude·Gemini·Codex). 내장 실행기는 꺼집니다.',
+  },
+  'st.ai.cli.path.name': { en: 'CLI path', ko: 'CLI 경로' },
+  'st.ai.cli.path.desc': {
+    en: 'Leave empty to find social-archiver on PATH (Homebrew, npm, the desktop app). Set an absolute path to override.',
+    ko: '비워 두면 PATH에서 social-archiver를 찾습니다(Homebrew, npm, 데스크톱 앱). 절대 경로를 넣으면 그 파일을 씁니다.',
+  },
+  'st.ai.cli.status.notFound': {
+    en: 'social-archiver CLI not found. Install it to run AI comments through the CLI:',
+    ko: 'social-archiver CLI를 찾지 못했습니다. CLI로 AI 코멘트를 실행하려면 설치하세요:',
+  },
+  'st.ai.cli.status.tooOld': {
+    en: 'social-archiver {version} found at {path}, but {min} or newer is needed. Update it:',
+    ko: 'social-archiver {version}이(가) {path}에 있지만 {min} 이상이 필요합니다. 업데이트하세요:',
+  },
+  'st.ai.cli.status.found': { en: 'social-archiver {version} at {path}', ko: 'social-archiver {version} · {path}' },
+  'st.ai.cli.status.guide': { en: 'CLI guide', ko: 'CLI 가이드' },
+  'st.ai.cli.state.stopped': { en: 'Executor: not running', ko: '실행기: 실행 중 아님' },
+  'st.ai.cli.state.starting': { en: 'Executor: starting…', ko: '실행기: 시작 중…' },
+  'st.ai.cli.state.running': { en: 'Executor: running (client {clientId})', ko: '실행기: 실행 중 (client {clientId})' },
+  'st.ai.cli.state.auth_required': {
+    en: 'Executor: the CLI rejected the sign-in token. Sign out and back in.',
+    ko: '실행기: CLI가 로그인 토큰을 거부했습니다. 로그아웃 후 다시 로그인하세요.',
+  },
+  'st.ai.cli.state.not_ready': {
+    en: 'Executor: no ready provider yet (retrying). Install and sign in to an AI CLI, or enable Apple Intelligence.',
+    ko: '실행기: 준비된 provider가 없습니다(재시도 중). AI CLI를 설치·로그인하거나 Apple Intelligence를 켜세요.',
+  },
+  'st.ai.cli.state.crashed': { en: 'Executor: exited unexpectedly, restarting ({restarts})', ko: '실행기: 예기치 않게 종료됨, 재시작 중 ({restarts})' },
+  'st.ai.cli.providers': { en: 'Providers seen by the CLI', ko: 'CLI가 보는 provider' },
+  'st.ai.cli.providerApple': { en: 'Apple Intelligence', ko: 'Apple Intelligence' },
+  'st.ai.cli.builtinActive': {
+    en: 'The built-in executor is active for this vault.',
+    ko: '이 볼트에서는 내장 실행기가 동작합니다.',
+  },
   'st.ai.defaultTool.name': { en: 'Default AI tool', ko: '기본 AI 도구' },
   'st.ai.defaultTool.desc': {
     en: 'Choose which AI CLI to use by default',
