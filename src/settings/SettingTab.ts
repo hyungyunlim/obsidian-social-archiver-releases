@@ -194,6 +194,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       // Mobile sync sits directly below Account.
       ...this.mobileSyncSettingDefinitions(),
       ...this.viewSettingDefinitions(),
+      ...this.reviewSettingDefinitions(),
       ...this.authorSettingDefinitions(),
       ...this.instagramImportSettingDefinitions(),
       ...this.archiveSettingDefinitions(),
@@ -856,6 +857,104 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                   { reinitialize: false, notify: false }
                 );
                 this.markDirty();
+              }));
+          },
+        },
+      ],
+    }];
+  }
+
+  /**
+   * Today's review. "Daily review" and "Email digest" are account settings on
+   * the server (the same switches the apps show), read when the row renders;
+   * the status-bar count is this device's own preference.
+   */
+  private reviewSettingDefinitions(): SettingDefinitionItem[] {
+    const feature = this.plugin.getReviewFeature();
+    const signedIn = isAuthenticated(this.plugin);
+    const failed = (): void => {
+      new Notice(t('rv.settings.failed'));
+    };
+    return [{
+      type: 'group',
+      heading: t('rv.settings.heading'),
+      items: [
+        {
+          name: t('rv.settings.enabled.name'),
+          desc: signedIn ? t('rv.settings.enabled.desc') : t('rv.settings.signedOut'),
+          render: (setting): void => {
+            setting.addToggle(toggle => {
+              toggle.setDisabled(true);
+              if (!signedIn || !feature) return;
+              void feature.client.getStatus()
+                .then(({ enabled }) => { toggle.setValue(enabled).setDisabled(false); })
+                .catch(() => undefined);
+              toggle.onChange(async (value) => {
+                try {
+                  await feature.client.setEnabled(value);
+                  await feature.refreshStatusBar();
+                } catch {
+                  failed();
+                }
+              });
+            });
+          },
+        },
+        {
+          name: t('rv.settings.statusBar.name'),
+          desc: t('rv.settings.statusBar.desc'),
+          render: (setting): void => {
+            setting.addToggle(toggle => toggle
+              .setValue(this.plugin.settings.reviewStatusBar)
+              .onChange(async (value) => {
+                await this.plugin.saveSettingsPartial(
+                  { reviewStatusBar: value },
+                  { reinitialize: false, notify: false }
+                );
+                this.markDirty();
+                await feature?.refreshStatusBar();
+              }));
+          },
+        },
+        {
+          name: t('rv.settings.email.name'),
+          desc: t('rv.settings.email.desc', { time: '08:00' }),
+          render: (setting): void => {
+            setting.addToggle(toggle => {
+              toggle.setDisabled(true);
+              if (!signedIn || !feature) return;
+              let current: Awaited<ReturnType<typeof feature.client.getDigest>> | null = null;
+              void feature.client.getDigest()
+                .then((digest) => {
+                  current = digest;
+                  setting.setDesc(t('rv.settings.email.desc', {
+                    time: `${String(digest.hour).padStart(2, '0')}:00`,
+                  }));
+                  toggle.setValue(digest.emailEnabled).setDisabled(false);
+                })
+                .catch(() => undefined);
+              toggle.onChange(async (value) => {
+                if (!current) return;
+                try {
+                  current = await feature.client.setEmailDigest(value, {
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    locale: getLanguage() || window.navigator.language,
+                  }, current);
+                } catch {
+                  failed();
+                }
+              });
+            });
+          },
+        },
+        {
+          name: t('rv.settings.open.name'),
+          render: (setting): void => {
+            setting.addButton(button => button
+              .setButtonText(t('rv.settings.open.button'))
+              .setDisabled(!feature)
+              .onClick(() => {
+                void feature?.open();
               }));
           },
         },
@@ -3628,6 +3727,14 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             detail.textContent = snapshot.lastError;
             detail.addClass('sa-text-faint', 'sa-text-xs');
           }
+        } else if (snapshot.state === 'running' && snapshot.consecutivePollErrors >= 2) {
+          // Still alive but backing off (up to a minute between polls), so jobs wait.
+          const detail = container.createDiv({ cls: 'setting-item-description' });
+          detail.textContent = t('st.ai.cli.state.pollFailing', {
+            count: snapshot.consecutivePollErrors,
+            message: snapshot.lastPollError ?? '?',
+          });
+          detail.addClass('sa-status-warning', 'sa-text-xs');
         }
       }
 

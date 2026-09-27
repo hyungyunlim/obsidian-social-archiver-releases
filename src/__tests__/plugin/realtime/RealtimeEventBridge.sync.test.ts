@@ -369,6 +369,52 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
     expect(refreshTimelineView).toHaveBeenCalledTimes(1);
   });
 
+  it('pulls an AI comment another executor finished into the note, but not one it wrote itself', async () => {
+    const events = makeEvents();
+    const resyncArchive = vi.fn().mockResolvedValue(undefined);
+    const handleStatusEvent = vi.fn().mockResolvedValue(undefined);
+    const bridge = new RealtimeEventBridge(makeDeps({
+      events,
+      annotationSyncService: { resyncArchive } as any,
+      aiCommentJobProcessor: { handleRequestedJob: vi.fn(), handleStatusEvent } as any,
+    }));
+    bridge.setup();
+
+    await events.trigger('ws:ai_comment_updated', {
+      data: { jobId: 'aiaj_apple', archiveId: 'archive-1', targetClientId: 'cli-executor', updatedAt: '2026-09-27T00:00:00.000Z' },
+    });
+    await events.trigger('ws:ai_comment_updated', {
+      data: { jobId: 'aiaj_own', archiveId: 'archive-2', targetClientId: 'my-client-id' },
+    });
+
+    expect(resyncArchive).toHaveBeenCalledTimes(1);
+    expect(resyncArchive).toHaveBeenCalledWith('archive-1');
+    // The result routes send no terminal status: this event settles the job banner.
+    expect(handleStatusEvent).toHaveBeenCalledWith({
+      jobId: 'aiaj_apple',
+      archiveId: 'archive-1',
+      status: 'completed',
+      updatedAt: '2026-09-27T00:00:00.000Z',
+    });
+  });
+
+  it('leaves the note alone when Mobile Annotation Sync is off', async () => {
+    const events = makeEvents();
+    const resyncArchive = vi.fn().mockResolvedValue(undefined);
+    const bridge = new RealtimeEventBridge(makeDeps({
+      events,
+      annotationSyncService: { resyncArchive } as any,
+      settings: () => ({ enableMobileAnnotationSync: false, syncClientId: 'my-client-id' } as any),
+    }));
+    bridge.setup();
+
+    await events.trigger('ws:ai_comment_updated', {
+      data: { jobId: 'aiaj_apple', archiveId: 'archive-1', targetClientId: 'cli-executor' },
+    });
+
+    expect(resyncArchive).not.toHaveBeenCalled();
+  });
+
   it('handles transcription status updates when transcription execution is disabled', async () => {
     const drainBacklog = vi.fn().mockResolvedValue(undefined);
     const handleRequestedJob = vi.fn().mockResolvedValue(undefined);

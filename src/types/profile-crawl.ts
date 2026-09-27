@@ -51,6 +51,17 @@ export function isLocalFetchPlatform(platform: string): boolean {
   return LOCAL_FETCH_PLATFORMS.includes(platform as typeof LOCAL_FETCH_PLATFORMS[number]);
 }
 
+/**
+ * Max posts for an RSS crawl. Feeds are crawled by the server, whose
+ * profile-crawl schema rejects postCount above MAX_POST_COUNT; only local
+ * fetches go higher.
+ */
+export function getRssMaxPostCount(platform: string): number {
+  return isLocalFetchPlatform(platform)
+    ? CRAWL_LIMITS.MAX_POST_COUNT_LOCAL
+    : CRAWL_LIMITS.MAX_POST_COUNT;
+}
+
 // ============================================================================
 // Core Types
 // ============================================================================
@@ -729,5 +740,54 @@ export function createDefaultSubscribeOptions(
     hour: 8, // Default to 8 AM
     timezone: timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
     destinationFolder,
+  };
+}
+
+// ============================================================================
+// Worker Request Builders
+// ============================================================================
+
+/**
+ * Clamp a post count headed for the Worker. Local fetches (Naver, Brunch) allow
+ * up to MAX_POST_COUNT_LOCAL, but the Worker answers 400 when
+ * crawlOptions.postCount or a subscription's options.maxPostsPerRun exceeds
+ * MAX_POST_COUNT.
+ */
+export function toServerPostCount(postCount: number): number {
+  return Math.min(postCount, CRAWL_LIMITS.MAX_POST_COUNT);
+}
+
+/**
+ * Immediate fetch of a generic RSS feed. With `subscribeHour` the Worker also
+ * creates a daily subscription at that local hour, copying rssMetadata into it.
+ */
+export function buildRssFetchRequest(params: {
+  feedUrl: string;
+  platform: Platform;
+  handle: string;
+  postCount: number;
+  timezone: string;
+  destinationFolder: string;
+  subscribeHour?: number;
+}): ProfileArchiveRequest {
+  const { feedUrl, handle, timezone, destinationFolder, subscribeHour } = params;
+  return {
+    profileUrl: feedUrl,
+    platform: params.platform,
+    handle,
+    crawlOptions: {
+      mode: 'post_count',
+      postCount: toServerPostCount(params.postCount),
+      timezone,
+      maxPosts: CRAWL_LIMITS.MAX_POST_COUNT,
+    },
+    destination: { folder: destinationFolder },
+    subscribeOptions: subscribeHour === undefined ? undefined : {
+      enabled: true,
+      hour: subscribeHour,
+      timezone,
+      destinationFolder,
+    },
+    rssMetadata: { feedUrl, feedType: 'rss', siteTitle: handle },
   };
 }

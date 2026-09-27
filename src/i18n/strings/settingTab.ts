@@ -484,6 +484,10 @@ export const settingTabStrings = {
     ko: '실행기: 준비된 provider가 없습니다(재시도 중). AI CLI를 설치·로그인하거나 Apple Intelligence를 켜세요.',
   },
   'st.ai.cli.state.crashed': { en: 'Executor: exited unexpectedly, restarting ({restarts})', ko: '실행기: 예기치 않게 종료됨, 재시작 중 ({restarts})' },
+  'st.ai.cli.state.pollFailing': {
+    en: 'The last {count} polls for jobs failed, so jobs are picked up late: {message}',
+    ko: '작업 확인이 {count}번 연속 실패해 작업이 늦게 처리됩니다: {message}',
+  },
   'st.ai.cli.providers': { en: 'Providers seen by the CLI', ko: 'CLI가 보는 provider' },
   'st.ai.cli.providerApple': { en: 'Apple Intelligence', ko: 'Apple Intelligence' },
   'st.ai.cli.builtinActive': {

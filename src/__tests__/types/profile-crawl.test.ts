@@ -520,6 +520,18 @@ describe('profile-crawl types', () => {
         expect(result.message).toContain('100 active subscriptions');
       });
 
+      it('reads the server\'s X-source-unavailable crawl error as our service, not the user\'s network', () => {
+        // Copy of workers X_PROFILE_CRAWL_UNAVAILABLE_MESSAGE (503 X_PROFILE_CRAWL_UNAVAILABLE).
+        const error = Object.assign(
+          new Error('X profile crawling is unavailable: our X scraping source is refusing requests. Single X posts can still be archived by URL.'),
+          { code: 'X_PROFILE_CRAWL_UNAVAILABLE', status: 503 },
+        );
+        const result = parseCrawlError(error);
+
+        expect(result.code).toBe('BRIGHTDATA_ERROR');
+        expect(result.message).toBe(CRAWL_ERROR_MESSAGES.BRIGHTDATA_ERROR);
+      });
+
       it('should parse network errors', () => {
         const error = new Error('Network request failed');
         const result = parseCrawlError(error);

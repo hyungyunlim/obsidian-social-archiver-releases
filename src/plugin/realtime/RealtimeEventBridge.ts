@@ -484,6 +484,29 @@ export class RealtimeEventBridge {
           targetClientId: data.targetClientId,
         });
 
+        // Another executor (this vault's CLI executor for Apple Intelligence,
+        // the desktop app, Cloud AI) saved it on the server only — pull it into
+        // the note now instead of at the next foreground catch-up. Our own
+        // executor already wrote the note.
+        const settings = this.deps.settings();
+        if (data.targetClientId !== settings.syncClientId && settings.enableMobileAnnotationSync) {
+          const archiveId = data.archiveId;
+          void this.withArchiveWriteLocks(archiveId, async () => {
+            await this.deps.annotationSyncService?.resyncArchive(archiveId);
+          });
+        }
+        // This event IS the comment job's completion signal — the result routes
+        // broadcast no terminal status — so settle the job banner, as the
+        // desktop app does.
+        if (data.jobId) {
+          void this.deps.aiCommentJobProcessor?.handleStatusEvent({
+            jobId: data.jobId,
+            archiveId: data.archiveId,
+            status: 'completed',
+            updatedAt: data.updatedAt,
+          });
+        }
+
         this.deps.refreshTimelineView();
       }),
       this.deps.events.on('ws:ai_action_requested', (payload: unknown) => {

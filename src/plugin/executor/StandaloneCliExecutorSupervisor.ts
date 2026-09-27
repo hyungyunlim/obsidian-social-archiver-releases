@@ -36,9 +36,23 @@ export interface CliExecutorSnapshot {
   providers: StandaloneCliProvider[];
   lastError: string | null;
   lastErrorCode: string | null;
+  /** Consecutive failed `--watch` polls (the CLI backs off; the state stays `running`). */
+  consecutivePollErrors: number;
+  lastPollError: string | null;
   restarts: number;
   startedAt: number | null;
   binaryPath: string | null;
+}
+
+/**
+ * The running executor's clientId when it can run Apple Intelligence now, else
+ * null. ponytail: `providers` is what the executor saw when it registered — a
+ * model that finishes downloading later shows up after the executor restarts.
+ */
+export function appleExecutorClientId(snapshot: CliExecutorSnapshot | null): string | null {
+  if (snapshot?.state !== 'running' || !snapshot.clientId) return null;
+  const apple = snapshot.providers.find((provider) => provider.id === 'apple');
+  return apple?.available && apple.authenticated ? snapshot.clientId : null;
 }
 
 /** The subset of `child_process.ChildProcess` the supervisor touches (tests fake it). */
@@ -123,6 +137,8 @@ export class StandaloneCliExecutorSupervisor {
     providers: [],
     lastError: null,
     lastErrorCode: null,
+    consecutivePollErrors: 0,
+    lastPollError: null,
     restarts: 0,
     startedAt: null,
     binaryPath: null,
@@ -194,7 +210,14 @@ export class StandaloneCliExecutorSupervisor {
     this.stdoutBuffer = '';
     this.stderrTail = '';
     this.deps.registerProcess?.(child);
-    this.update({ state: 'starting', startedAt: this.deps.now(), clientId: null, provider: null });
+    this.update({
+      state: 'starting',
+      startedAt: this.deps.now(),
+      clientId: null,
+      provider: null,
+      consecutivePollErrors: 0,
+      lastPollError: null,
+    });
     child.stdout?.on('data', (chunk) => this.onStdout(String(chunk)));
     child.stderr?.on('data', (chunk) => {
       this.stderrTail = (this.stderrTail + String(chunk)).slice(-STDERR_KEEP);
@@ -246,6 +269,17 @@ export class StandaloneCliExecutorSupervisor {
         return;
       case 'failed':
         this.deps.log?.('warn', 'executor job failed', record);
+        return;
+      case 'poll':
+        if (this.snapshot.consecutivePollErrors > 0) this.update({ consecutivePollErrors: 0, lastPollError: null });
+        return;
+      case 'poll_error':
+        this.deps.log?.('warn', 'executor poll failed', record);
+        this.update({
+          consecutivePollErrors:
+            typeof record.consecutiveErrors === 'number' ? record.consecutiveErrors : this.snapshot.consecutivePollErrors + 1,
+          lastPollError: typeof record.message === 'string' ? record.message : null,
+        });
         return;
       default:
         return;

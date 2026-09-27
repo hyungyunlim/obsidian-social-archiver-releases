@@ -60,7 +60,7 @@ export interface PendingJobOrchestratorDeps {
   archiveJobTracker: ArchiveJobTracker;
   processingJobs: Set<string>;
   processCompletedJob: (job: PendingJob, payload: CompletedJobResponse) => Promise<void>;
-  processFailedJob: (job: PendingJob, message: string) => Promise<void>;
+  processFailedJob: (job: PendingJob, message: string, userMessageCode?: string) => Promise<void>;
   processBatchArchiveResult: (result: unknown, pendingJobId?: string, sourceNotePath?: string) => Promise<void>;
   fetchNaverCafeLocally: (url: string, filePath: string | undefined, downloadMode: MediaDownloadMode, options?: { comment?: string }) => Promise<void>;
   fetchNaverBlogLocally: (url: string, filePath: string | undefined, downloadMode: MediaDownloadMode, options?: { comment?: string }) => Promise<void>;
@@ -482,6 +482,14 @@ export class PendingJobOrchestrator {
             continue; // Skip to next job
           }
 
+          // Synchronous failure (direct lanes, the Instagram Story gate): the
+          // server already settled this job, so don't park it as processing
+          // until the next poll.
+          if (response.status === 'failed') {
+            await this.deps.processFailedJob(job, response.error || 'Unknown error', response.userMessageCode);
+            continue;
+          }
+
           // Handle series selection required (Naver Webtoon series URL)
           if (response.type === 'series_selection_required' || response.status === 'series_selection_required') {
             console.debug(`[Social Archiver] 📚 Series selection required for Naver Webtoon`);
@@ -696,6 +704,7 @@ export class PendingJobOrchestrator {
         } else if (result.status === 'failed') {
           // Process failed job reported by Workers API
           const errorMessage = result.error || result.data?.error || 'Unknown error';
+          const userMessageCode = result.data?.userMessageCode;
 
           // Check if this is a transient "not ready yet" error from BrightData
           const isTransientError = errorMessage.includes('Snapshot does not exist') ||
@@ -725,7 +734,7 @@ export class PendingJobOrchestrator {
 
             // Only mark as truly failed after timeout (2 minutes)
             if (elapsed >= MISSING_STATUS_TIMEOUT) {
-              await this.deps.processFailedJob({ ...currentJob, metadata: updatedMetadata }, errorMessage);
+              await this.deps.processFailedJob({ ...currentJob, metadata: updatedMetadata }, errorMessage, userMessageCode);
             } else {
               if (!scheduledMissingStatusRecheck) {
                 this.scheduleMissingStatusCheck();
@@ -734,7 +743,7 @@ export class PendingJobOrchestrator {
             }
           } else {
             // Real failure - process as failed
-            await this.deps.processFailedJob(pendingJob, errorMessage);
+            await this.deps.processFailedJob(pendingJob, errorMessage, userMessageCode);
           }
         } else if (result.status === null) {
           // Job status temporarily unavailable (e.g., KV not replicated yet).

@@ -9,10 +9,37 @@ import { setIcon } from 'obsidian';
 import type { AICli, AICommentType, AICommentProgress, AIOutputLanguage } from '../../../types/ai-comment';
 import { COMMENT_TYPE_DISPLAY_NAMES } from '../../../types/ai-comment';
 import { AI_CLI_INFO } from '../../../utils/ai-cli';
+import type { AIActionType } from '../../../services/WorkersAPIClient';
 
 // ============================================================================
 // Types
 // ============================================================================
+
+/**
+ * The plugin's own AI CLIs, plus Apple's on-device model — which only this
+ * vault's `social-archiver` executor runs, so it goes out as a queued job.
+ */
+export type AIBannerProvider = AICli | 'apple';
+
+/**
+ * Comment types Apple Intelligence can run, and the job each one queues. No
+ * web access (no fact check), and critique/sentiment/connections/transcript
+ * translation exist only in the plugin's direct CLI runner.
+ */
+export const APPLE_COMMENT_ACTIONS: Partial<Record<AICommentType, AIActionType>> = {
+  summary: 'comment.summary',
+  glossary: 'comment.glossary',
+  reformat: 'comment.reformat',
+  custom: 'comment.custom',
+};
+
+export function isCommentTypeSupported(provider: AIBannerProvider | null, type: AICommentType): boolean {
+  return provider !== 'apple' || type in APPLE_COMMENT_ACTIONS;
+}
+
+export function providerDisplayName(provider: AIBannerProvider): string {
+  return provider === 'apple' ? 'Apple Intelligence' : AI_CLI_INFO[provider].displayName;
+}
 
 export type AICommentBannerState =
   | 'default'
@@ -42,8 +69,8 @@ export interface SavedPromptOption {
 }
 
 export interface AICommentBannerOptions {
-  availableClis: AICli[];
-  defaultCli: AICli;
+  availableClis: AIBannerProvider[];
+  defaultCli: AIBannerProvider;
   defaultType: AICommentType;
   /**
    * Lazily load the user's saved custom prompt presets. Called at most once
@@ -51,9 +78,9 @@ export interface AICommentBannerOptions {
    * The banner has no plugin access, so the caller wires this to the API.
    */
   loadSavedPrompts?: () => Promise<readonly SavedPromptOption[]>;
-  onGenerate: (cli: AICli, type: AICommentType, customPrompt?: string, language?: AIOutputLanguage) => Promise<void>;
+  onGenerate: (cli: AIBannerProvider, type: AICommentType, customPrompt?: string, language?: AIOutputLanguage) => Promise<void>;
   onGenerateMulti?: (clis: AICli[], type: AICommentType, customPrompt?: string, language?: AIOutputLanguage) => Promise<void>;
-  onRunAction?: (actionId: AICommentBannerActionId, cli: AICli, language?: AIOutputLanguage) => Promise<void>;
+  onRunAction?: (actionId: AICommentBannerActionId, cli: AIBannerProvider, language?: AIOutputLanguage) => Promise<void>;
   onDecline: () => void;
   isGenerating: boolean;
   progress?: AICommentProgress;
@@ -154,7 +181,7 @@ export class AICommentBanner {
   private container: HTMLElement | null = null;
   private contentEl: HTMLElement | null = null;
   private state: AICommentBannerState = 'default';
-  private selectedCli: AICli | null = null;
+  private selectedCli: AIBannerProvider | null = null;
   private selectedType: AICommentType = 'summary';
   private selectedActionId: AICommentBannerActionId | null = null;
   private selectedLanguage: AIOutputLanguage = 'auto';
@@ -293,6 +320,20 @@ export class AICommentBanner {
       }
     }
 
+    // Grey out the comment types the selected provider cannot run (Apple
+    // Intelligence: fact check and friends) and step off one that just did.
+    const syncTypeAvailability = (): void => {
+      for (const option of Array.from(typeSelect.options)) {
+        const parsed = this.parseTypeSelectValue(option.value);
+        option.disabled = parsed.kind === 'comment' && !isCommentTypeSupported(this.selectedCli, parsed.type);
+      }
+      if (!this.selectedActionId && !isCommentTypeSupported(this.selectedCli, this.selectedType)) {
+        this.selectedType = 'summary';
+        typeSelect.value = 'comment:summary';
+      }
+    };
+    syncTypeAvailability();
+
     // Chevron icon for type
     const typeChevron = typeWrapper.createDiv();
     typeChevron.addClass('sa-icon-14', 'sa-text-muted', 'sa-pointer-none');
@@ -380,7 +421,7 @@ export class AICommentBanner {
       for (const cli of this.options.availableClis) {
         const option = cliSelect.createEl('option', {
           value: cli,
-          text: AI_CLI_INFO[cli].displayName
+          text: providerDisplayName(cli)
         });
         if (cli === this.selectedCli) {
           option.selected = true;
@@ -394,15 +435,17 @@ export class AICommentBanner {
       adjustWidth(cliSelect);
 
       cliSelect.addEventListener('change', () => {
-        this.selectedCli = cliSelect.value as AICli;
+        this.selectedCli = cliSelect.value as AIBannerProvider;
         adjustWidth(cliSelect);
+        syncTypeAvailability();
+        adjustWidth(typeSelect);
       });
     }
     // Single AI mode with only one CLI: show CLI name as text
     else if (this.options.availableClis.length === 1) {
       const singleCli = this.options.availableClis[0];
       if (singleCli) {
-        const cliName = messageSection.createSpan({ text: AI_CLI_INFO[singleCli].displayName });
+        const cliName = messageSection.createSpan({ text: providerDisplayName(singleCli) });
         cliName.addClass('sa-text-base', 'sa-text-muted');
       }
     }
@@ -657,11 +700,13 @@ export class AICommentBanner {
     checkIcon.addClass('sa-icon-16');
     setIcon(checkIcon, 'check');
 
-    // Places runs to completion before this state; the other actions queue a job.
+    // Places runs to completion before this state; the other actions, and every
+    // Apple Intelligence run, queue a job.
     successMsg.createSpan({
       text: this.selectedActionId === 'places.extract_candidates'
         ? 'Analysis complete'
-        : this.selectedActionId ? 'AI action queued' : 'AI comment added',
+        : this.selectedActionId ? 'AI action queued'
+        : this.selectedCli === 'apple' ? 'AI comment queued' : 'AI comment added',
     });
 
     // Auto-dismiss after 2 seconds (shorter since no action needed)
@@ -676,7 +721,8 @@ export class AICommentBanner {
    * Auth required state
    */
   private renderAuthRequiredState(parent: HTMLElement): void {
-    if (!this.options || !this.selectedCli) return;
+    // Apple Intelligence has no sign-in; handleGenerate never lands here for it.
+    if (!this.options || !this.selectedCli || this.selectedCli === 'apple') return;
 
     // Reset parent to row layout
     parent.removeClass('sa-flex-col');
@@ -835,7 +881,7 @@ export class AICommentBanner {
       // A cancel mid-run already reset the state to 'default' — keep it.
       if (this.state === 'generating') this.state = 'complete';
     } catch (error) {
-      if (error instanceof Error && error.message.includes('not authenticated')) {
+      if (this.selectedCli !== 'apple' && error instanceof Error && error.message.includes('not authenticated')) {
         this.state = 'authRequired';
       } else {
         this.state = 'default';

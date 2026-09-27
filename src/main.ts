@@ -65,6 +65,7 @@ import type { BatchMode } from './types/batch-transcription';
 import { EditorTTSController } from './services/tts/EditorTTSController';
 import { FEATURE_EDITOR_TTS_ENABLED } from './shared/constants';
 import { ArchiveLookupService } from './services/ArchiveLookupService';
+import { ReviewFeature } from './plugin/review/ReviewFeature';
 import { AnnotationSyncService } from './services/AnnotationSyncService';
 import { AnnotationRenderer } from './services/AnnotationRenderer';
 import { AnnotationSectionManager } from './services/AnnotationSectionManager';
@@ -135,10 +136,9 @@ import { TranscriptionCapabilityReporter } from './plugin/transcription/Transcri
 import { TranscriptionJobProcessor, type PendingTranscriptUploadRecord } from './plugin/transcription/TranscriptionJobProcessor';
 import { UnifiedExecutorScheduler, createProcessorDispatch } from './plugin/executor/UnifiedExecutorScheduler';
 import {
-  UNIFIED_ERROR_BACKOFF_MAX_MS,
-  UNIFIED_IDLE_FLOOR_MS,
-  UNIFIED_PARTIAL_POLL_MS,
-  createUnifiedPoll,
+  BACKLOG_ERROR_BACKOFF_MAX_MS,
+  BACKLOG_POLL_MS,
+  createBacklogPoll,
   passthroughClaim,
 } from './plugin/executor/UnifiedExecutorTransport';
 import { LocalLockRegistry } from './plugin/locks/LocalLockRegistry';
@@ -192,6 +192,7 @@ function isUnknownArray(value: unknown): value is unknown[] {
 export default class SocialArchiverPlugin extends Plugin {
   settings: SocialArchiverSettings = DEFAULT_SETTINGS;
   private apiClient?: WorkersAPIClient;
+  private reviewFeature?: ReviewFeature;
   private orchestrator?: ArchiveOrchestrator;
 
   /**
@@ -555,6 +556,11 @@ export default class SocialArchiverPlugin extends Plugin {
    * offline boot retries on the next foreground catch-up.
    */
   /** Expose the API client to services (e.g. TagStore server-delete push). */
+  /** Today's review — the settings tab's Review section reads and flips it. */
+  getReviewFeature(): ReviewFeature | undefined {
+    return this.reviewFeature;
+  }
+
   getApiClient(): WorkersAPIClient | undefined {
     return this.apiClient;
   }
@@ -1077,22 +1083,18 @@ export default class SocialArchiverPlugin extends Plugin {
   }
 
   /**
-   * ONE unified poll (GET /api/executor/jobs) replaces the two processors'
-   * per-kind backlog timers (3 GETs per 3 minutes → 1). Jobs dispatch into
-   * the processors' existing push seams, so claiming/processing is identical
-   * to a WS push. Only an explicit 404/426 falls back to the legacy timers,
-   * and that choice sticks for the session.
+   * ONE poll timer replaces the two processors' per-kind backlog timers (3 GETs
+   * per 3 minutes → 1): each tick lists one backlog (BACKLOG_LANES). WS push
+   * stays the primary path; this catches what it misses (a dead socket, a
+   * sleeping laptop), jobs adoptable from an offline executor, and due retries.
+   * Jobs dispatch into the processors' existing push seams, so claiming and
+   * processing are identical to a WS push.
    */
   private startUnifiedExecutorPolling(): void {
     if (!this.aiCommentJobProcessor || !this.transcriptionJobProcessor || !this.settings.syncClientId) {
       return;
     }
     if (this.unifiedExecutorScheduler) {
-      if (this.unifiedExecutorScheduler.mode === 'legacy') {
-        this.aiCommentJobProcessor.start();
-        this.transcriptionJobProcessor.start();
-        return;
-      }
       this.unifiedExecutorScheduler.start();
       return;
     }
@@ -1106,7 +1108,7 @@ export default class SocialArchiverPlugin extends Plugin {
             this.pendingTimeouts.delete(handle as number);
           },
         },
-        poll: createUnifiedPoll(() => this.apiClient, () => this.settings.syncClientId),
+        poll: createBacklogPoll(() => this.apiClient, () => this.settings.syncClientId),
         claim: passthroughClaim,
         // Re-resolve processors and clientId per dispatch: re-init rebuilds the
         // processor instances while this scheduler keeps running.
@@ -1117,16 +1119,10 @@ export default class SocialArchiverPlugin extends Plugin {
           if (!aiComment || !transcription || !clientId) return;
           return createProcessorDispatch({ aiComment, transcription }, clientId)(claimed);
         },
-        onLegacyFallback: (reason) => {
-          console.warn('[Social Archiver] Unified executor poll unavailable; using legacy per-kind polling', { reason });
-          this.aiCommentJobProcessor?.start();
-          this.transcriptionJobProcessor?.start();
-        },
       },
       {
-        idlePollMs: UNIFIED_IDLE_FLOOR_MS,
-        partialPollMs: UNIFIED_PARTIAL_POLL_MS,
-        errorBackoffMaxMs: UNIFIED_ERROR_BACKOFF_MAX_MS,
+        idlePollMs: BACKLOG_POLL_MS,
+        errorBackoffMaxMs: BACKLOG_ERROR_BACKOFF_MAX_MS,
       },
     );
     this.unifiedExecutorScheduler.start();
@@ -1387,6 +1383,23 @@ export default class SocialArchiverPlugin extends Plugin {
     this.addRibbonIcon('bookmark-plus', 'Archive social media post', () => {
       this.openArchiveModal();
     });
+
+    // Today's review: side panel, ribbon, command, status-bar count.
+    this.reviewFeature = new ReviewFeature({
+      app: this.app,
+      plugin: this,
+      apiClient: (): WorkersAPIClient | undefined => this.apiClient,
+      isSignedIn: (): boolean => isAuthenticated(this),
+      showStatusBar: (): boolean => this.settings.reviewStatusBar,
+      archiveLookup: (): ArchiveLookupService | undefined => this.archiveLookupService,
+      openSettings: (): void => {
+        // `app.setting` is not in Obsidian's public typings (ClipGuideModal does the same).
+        const { setting } = this.app as unknown as { setting?: { open?: () => void; openTabById?: (id: string) => void } };
+        setting?.open?.();
+        setting?.openTabById?.(this.manifest.id);
+      },
+    });
+    this.reviewFeature.register();
 
     // Add ribbon icon for timeline
     this.addRibbonIcon('calendar-clock', 'Open timeline view', () => {
@@ -2530,11 +2543,6 @@ export default class SocialArchiverPlugin extends Plugin {
           Promise.resolve('skipped' as const),
         isArchiveLibrarySyncRunning: () => this.archiveLibrarySyncService?.isRunning ?? false,
         refreshTimelineView: () => this.refreshTimelineView(),
-        schedule: (cb, delay) => this.scheduleTrackedTimeout(cb, delay),
-        clearSchedule: (id) => {
-          window.clearTimeout(id);
-          this.pendingTimeouts.delete(id);
-        },
         notify: (msg, timeout) => new Notice(msg, timeout),
         localLockRegistry: this.localLockRegistry,
       });
@@ -2575,11 +2583,6 @@ export default class SocialArchiverPlugin extends Plugin {
 	        refreshTimelineView: () => this.refreshTimelineView(),
 	        loadPendingUploads: () => this.loadTranscriptionPendingUploads(),
 	        savePendingUploads: (records) => this.saveTranscriptionPendingUploads(records),
-	        schedule: (cb, delay) => this.scheduleTrackedTimeout(cb, delay),
-        clearSchedule: (id) => {
-          window.clearTimeout(id);
-          this.pendingTimeouts.delete(id);
-        },
         notify: (msg, timeout) => new Notice(msg, timeout),
         localLockRegistry: this.localLockRegistry,
       });
@@ -2618,7 +2621,7 @@ export default class SocialArchiverPlugin extends Plugin {
         archiveJobTracker: this.archiveJobTracker,
         processingJobs: this.processingJobs,
         processCompletedJob: (job, payload) => completionService.processCompletedJob(job, payload),
-        processFailedJob: (job, msg) => completionService.processFailedJob(job, msg),
+        processFailedJob: (job, msg, code) => completionService.processFailedJob(job, msg, code),
         processBatchArchiveResult: (result, id, path) =>
           this.processBatchArchiveResult(
             result as import('./services/WorkersAPIClient').BatchArchiveJobStatusResponse,
@@ -3363,6 +3366,14 @@ export default class SocialArchiverPlugin extends Plugin {
       // the protocol action name itself.
       if (params.op === 'clip') {
         await this.handleClipProtocol(params);
+        return;
+      }
+
+      // Today's review — the digest email's landing page links here. The day
+      // is untrusted: anything that is not YYYY-MM-DD falls back to today.
+      if (params.op === 'review') {
+        const day = /^\d{4}-\d{2}-\d{2}$/.test(params.day ?? '') ? params.day : undefined;
+        await this.reviewFeature?.open(day);
         return;
       }
 

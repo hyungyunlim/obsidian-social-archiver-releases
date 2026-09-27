@@ -92,7 +92,10 @@ export function encodeMapPlaceQuery(value: string): string | null {
   return name ? encodeURIComponent(toWellFormedMapPlaceText(name)) : null;
 }
 
-export const NAVER_MAP_URL_PATTERN = /^https?:\/\/(?:map\.naver\.com\/(?:p\/(?:entry\/place\/\d{1,30}|search\/[^/?#]+\/place\/\d{1,30})|v5\/entry\/place\/\d{1,30})|(?:m|pcmap)\.place\.naver\.com\/place\/\d{1,30}(?:\/home)?)\/?(?:[?#].*)?$/i;
+// map.naver.com/?…&pinId=…&pinType=site&… is the legacy pin form naver.me place
+// shares redirect to, so the place id lives in the query string (see
+// extractNaverPlaceId).
+export const NAVER_MAP_URL_PATTERN = /^https?:\/\/(?:(?:map\.naver\.com\/(?:p\/(?:entry\/place\/\d{1,30}|search\/[^/?#]+\/place\/\d{1,30})|v5\/entry\/place\/\d{1,30})|(?:m|pcmap)\.place\.naver\.com\/place\/\d{1,30}(?:\/home)?)\/?(?:[?#].*)?|map\.naver\.com\/?(?=\?(?:[^#]*&)?pinType=site(?:[&#]|$))\?(?:[^#]*&)?pinId=\d{1,30}(?:[&#].*)?)$/i;
 // applink.map.kakao.com/place?id=… is what the KakaoMap app's share sheet
 // produces (via the kko.to shortener), so the place id lives in the query
 // string rather than the path.
@@ -117,7 +120,14 @@ function extractNaverPlaceId(parsed: URL): string | null {
     if (directMatch?.[1]) return directMatch[1];
 
     const searchMatch = parsed.pathname.match(/^\/p\/search\/[^/]+\/place\/(\d{1,30})\/?$/);
-    return searchMatch?.[1] ?? null;
+    if (searchMatch?.[1]) return searchMatch[1];
+
+    // naver.me place shares redirect to the legacy pin form
+    // (map.naver.com/?lat=…&pinId=16476677&pinType=site&…); pinId is the place id.
+    if (parsed.pathname === '/' && parsed.searchParams.get('pinType') === 'site') {
+      return parsed.searchParams.get('pinId');
+    }
+    return null;
   }
 
   if (hostname === 'm.place.naver.com' || hostname === 'pcmap.place.naver.com') {

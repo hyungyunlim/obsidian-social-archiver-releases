@@ -39,17 +39,20 @@ class FakeClock implements SchedulerClock {
   }
 }
 
-const CONFIG = { idlePollMs: 15_000, partialPollMs: 1_000, errorBackoffMaxMs: 60_000 };
+const CONFIG = { idlePollMs: 15_000, errorBackoffMaxMs: 60_000 };
 
-function job(kind: UnifiedJob['kind'], id: string): UnifiedJob {
-  return { kind, id };
+function job(kind: UnifiedJob['kind'], id: string, version?: string): UnifiedJob {
+  return { kind, id, version };
+}
+
+function jobs(list: UnifiedJob[], nextPollAfterMs = CONFIG.idlePollMs): PollOutcome {
+  return { type: 'jobs', jobs: list, nextPollAfterMs };
 }
 
 function harness(script: PollOutcome[]) {
   const clock = new FakeClock();
   const claims: string[] = [];
   const dispatched: string[] = [];
-  const fallbacks: string[] = [];
   const scheduler = new UnifiedExecutorScheduler(
     {
       clock,
@@ -61,11 +64,10 @@ function harness(script: PollOutcome[]) {
       dispatch: (c) => {
         dispatched.push(`${c.kind}:${c.id}@${c.rank}`);
       },
-      onLegacyFallback: (reason) => fallbacks.push(reason),
     },
     CONFIG,
   );
-  return { clock, scheduler, claims, dispatched, fallbacks };
+  return { clock, scheduler, claims, dispatched };
 }
 
 describe('Obsidian UnifiedExecutorScheduler', () => {
@@ -79,74 +81,41 @@ describe('Obsidian UnifiedExecutorScheduler', () => {
   });
 
   it('dispatches server rows by exact kind in rank order', async () => {
-    const h = harness([
-      {
-        type: 'jobs',
-        jobs: [job('transcription', 't1'), job('ai_comment', 'c1'), job('ai_action', 'a1')],
-        partial: false,
-        indeterminateKinds: [],
-        nextPollAfterMs: CONFIG.idlePollMs,
-      },
-    ]);
+    const h = harness([jobs([job('transcription', 't1'), job('ai_comment', 'c1'), job('ai_action', 'a1')])]);
     h.scheduler.start();
     await h.clock.fire();
     expect(h.claims).toEqual(['transcription:t1', 'ai_comment:c1', 'ai_action:a1']);
     expect(h.dispatched).toEqual(['transcription:t1@0', 'ai_comment:c1@1', 'ai_action:a1@2']);
   });
 
-  it('never claims a job twice across overlapping polls', async () => {
+  it('does not re-dispatch an unchanged row it already dispatched', async () => {
+    const h = harness([jobs([job('ai_action', 'a1', 'v1')]), jobs([job('ai_action', 'a1', 'v1')])]);
+    h.scheduler.start();
+    await h.clock.fire();
+    await h.clock.fire();
+    expect(h.claims).toEqual(['ai_action:a1']);
+  });
+
+  it('re-dispatches at once when the row version changes (a due retry)', async () => {
+    const h = harness([jobs([job('ai_action', 'a1', 'v1')]), jobs([job('ai_action', 'a1', 'v2')])]);
+    h.scheduler.start();
+    await h.clock.fire();
+    await h.clock.fire();
+    expect(h.claims).toEqual(['ai_action:a1', 'ai_action:a1']);
+  });
+
+  it('retries an unchanged row once the claimed memory expires', async () => {
     const h = harness([
-      { type: 'jobs', jobs: [job('ai_comment', 'c1')], partial: false, indeterminateKinds: [], nextPollAfterMs: CONFIG.idlePollMs },
-      { type: 'jobs', jobs: [job('ai_comment', 'c1')], partial: false, indeterminateKinds: [], nextPollAfterMs: CONFIG.idlePollMs },
+      jobs([job('ai_action', 'a1', 'v1')], CLAIMED_MEMORY_MS - 1_000),
+      jobs([job('ai_action', 'a1', 'v1')], 1_000),
+      jobs([job('ai_action', 'a1', 'v1')]),
     ]);
     h.scheduler.start();
     await h.clock.fire();
     await h.clock.fire();
-    expect(h.claims).toEqual(['ai_comment:c1']);
-  });
-
-  it('re-dispatches the same id once the claimed memory expires (server-side retry)', async () => {
-    const listing = (nextPollAfterMs: number): PollOutcome => ({
-      type: 'jobs',
-      jobs: [job('ai_comment', 'c1')],
-      partial: false,
-      indeterminateKinds: [],
-      nextPollAfterMs,
-    });
-    const h = harness([listing(CLAIMED_MEMORY_MS + 1_000), listing(CONFIG.idlePollMs)]);
-    h.scheduler.start();
+    expect(h.claims).toEqual(['ai_action:a1']);
     await h.clock.fire();
-    await h.clock.fire();
-    expect(h.claims).toEqual(['ai_comment:c1', 'ai_comment:c1']);
-  });
-
-  it('falls back to legacy only on explicit 404/426', async () => {
-    const notFound = harness([{ type: 'not_found' }]);
-    notFound.scheduler.start();
-    await notFound.clock.fire();
-    expect(notFound.fallbacks).toEqual(['not_found']);
-    expect(notFound.scheduler.mode).toBe('legacy');
-    expect(notFound.clock.pending()).toBe(0);
-
-    const upgrade = harness([{ type: 'upgrade' }]);
-    upgrade.scheduler.start();
-    await upgrade.clock.fire();
-    expect(upgrade.fallbacks).toEqual(['upgrade']);
-  });
-
-  it('stays unified on 503/partial/transient (no fallback)', async () => {
-    const h = harness([
-      { type: 'indeterminate', nextPollAfterMs: CONFIG.partialPollMs },
-      { type: 'jobs', jobs: [], partial: true, indeterminateKinds: ['transcription'], nextPollAfterMs: CONFIG.idlePollMs },
-      { type: 'transient' },
-    ]);
-    h.scheduler.start();
-    await h.clock.fire();
-    await h.clock.fire();
-    await h.clock.fire();
-    expect(h.fallbacks).toEqual([]);
-    expect(h.scheduler.mode).toBe('unified');
-    expect(h.clock.pending()).toBe(1);
+    expect(h.claims).toEqual(['ai_action:a1', 'ai_action:a1']);
   });
 
   it('backs off transient errors then resumes; restart is safe', async () => {

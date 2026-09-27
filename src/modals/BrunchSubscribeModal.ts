@@ -23,7 +23,8 @@ export interface BrunchSubscribeInitialValues {
 
 const MAX_POSTS_PER_RUN = {
   MIN: 1,
-  MAX: 50,
+  // Worker rejects options.maxPostsPerRun above 20 (POST/PATCH /api/subscriptions)
+  MAX: 20,
   DEFAULT: 10,
 };
 
@@ -269,7 +270,7 @@ export class BrunchSubscribeModal extends Modal {
       maxPostsRow.addClass('sa-flex-between', 'sa-gap-16');
       const maxPostsLabel = maxPostsRow.createEl('label');
       maxPostsLabel.addClass('sa-text-sm', 'sa-text-normal');
-      maxPostsLabel.setText('Posts per run (max 50)');
+      maxPostsLabel.setText(`Posts per run (max ${MAX_POSTS_PER_RUN.MAX})`);
       const maxPostsInput = maxPostsRow.createEl('input', { type: 'number' });
       maxPostsInput.addClass('sa-px-10', 'sa-text-sm', 'sa-text-center', 'sa-border', 'bsm-mobile-input');
       maxPostsInput.setCssProps({'--sa-height': '32px', '--sa-width': '80px', '--sa-bg': 'var(--background-modifier-form-field)'});

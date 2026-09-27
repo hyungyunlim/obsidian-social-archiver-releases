@@ -121,8 +121,6 @@ function createProcessor(job: AIActionExecutorJob) {
     }),
     isArchiveLibrarySyncRunning: () => false,
     refreshTimelineView: vi.fn(),
-    schedule: vi.fn(),
-    clearSchedule: vi.fn(),
     notify: vi.fn(),
   });
   return {

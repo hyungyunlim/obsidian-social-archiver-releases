@@ -38,8 +38,6 @@ export interface TranscriptionJobProcessorDeps {
   refreshTimelineView: () => void;
   loadPendingUploads?: () => Promise<PendingTranscriptUploadRecord[]>;
   savePendingUploads?: (records: PendingTranscriptUploadRecord[]) => Promise<void>;
-  schedule: (callback: () => void, delay: number) => number;
-  clearSchedule: (id: number) => void;
   notify: (message: string, timeout?: number) => void;
   localLockRegistry?: LocalLockRegistry;
 }
@@ -111,7 +109,6 @@ export interface TranscriptionJobBannerState {
   updatedAt: string;
 }
 
-const BACKLOG_POLL_MS = 3 * 60 * 1000;
 const LEASE_RENEW_RATIO = 0.5;
 const AUDIO_EXTENSIONS = new Set(['mp3', 'm4a', 'ogg', 'wav', 'flac', 'aac', 'wma']);
 const VIDEO_EXTENSIONS = new Set(['mp4', 'webm', 'mov', 'avi', 'mkv', 'm4v']);
@@ -242,7 +239,6 @@ export function applyDownloadedAudioFrontmatter(
 export class TranscriptionJobProcessor {
   private readonly queue: string[] = [];
   private readonly queued = new Set<string>();
-  private backlogTimer: number | null = null;
   private draining = false;
   private processing = false;
   private currentJobId: string | null = null;
@@ -254,20 +250,7 @@ export class TranscriptionJobProcessor {
 
   constructor(private readonly deps: TranscriptionJobProcessorDeps) {}
 
-  start(): void {
-    // `draining` also guards the window where the timer callback has nulled
-    // backlogTimer but its drain is still in flight — without it a focus or
-    // settings event lands here and runs a duplicate concurrent drain.
-    if (this.backlogTimer !== null || this.draining) return;
-    void this.drainBacklog();
-    this.scheduleBacklogPoll();
-  }
-
   stop(): void {
-    if (this.backlogTimer !== null) {
-      this.deps.clearSchedule(this.backlogTimer);
-      this.backlogTimer = null;
-    }
     this.currentAbortController?.abort();
     this.currentAbortController = null;
     this.queue.length = 0;
@@ -407,15 +390,6 @@ export class TranscriptionJobProcessor {
       console.warn('[TranscriptionJobProcessor] Failed to materialize updated transcript archive:', safeError(error));
     });
     this.deps.refreshTimelineView();
-  }
-
-  private scheduleBacklogPoll(): void {
-    this.backlogTimer = this.deps.schedule(() => {
-      this.backlogTimer = null;
-      void this.drainBacklog().finally(() => {
-        if (this.backlogTimer === null) this.scheduleBacklogPoll();
-      });
-    }, BACKLOG_POLL_MS);
   }
 
   private enqueue(jobId: string): void {

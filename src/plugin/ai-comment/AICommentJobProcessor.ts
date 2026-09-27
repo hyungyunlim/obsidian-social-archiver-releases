@@ -45,8 +45,6 @@ export interface AICommentJobProcessorDeps {
   ingestRemoteArchive: (archiveId: string, source: 'ai_comment_job') => Promise<IngestResult>;
   isArchiveLibrarySyncRunning: () => boolean;
   refreshTimelineView: () => void;
-  schedule: (callback: () => void, delay: number) => number;
-  clearSchedule: (id: number) => void;
   notify: (message: string, timeout?: number) => void;
   localLockRegistry?: LocalLockRegistry;
 }
@@ -86,7 +84,6 @@ export interface AICommentJobBannerState {
   updatedAt: string;
 }
 
-const BACKLOG_POLL_MS = 3 * 60 * 1000;
 const LEASE_RENEW_RATIO = 0.5;
 const PLACE_EXTRACTION_ACTION_TYPE = 'places.extract_candidates';
 const PLACE_EXTRACTION_TIMEOUT_MS = 5 * 60 * 1000;
@@ -97,7 +94,6 @@ export class AICommentJobProcessor {
   private readonly queued = new Set<string>();
   private readonly actionQueue: string[] = [];
   private readonly queuedActions = new Set<string>();
-  private backlogTimer: number | null = null;
   private draining = false;
   private processing = false;
   private currentJobId: string | null = null;
@@ -108,33 +104,10 @@ export class AICommentJobProcessor {
 
   constructor(private readonly deps: AICommentJobProcessorDeps) {}
 
-  start(): void {
-    if (this.deps.isSuspended?.()) return;
-    // `draining` also guards the window where the timer callback has nulled
-    // backlogTimer but its drain is still in flight — without it a focus or
-    // settings event lands here and runs a duplicate concurrent drain.
-    if (this.backlogTimer !== null || this.draining) return;
-    void this.drainBacklog();
-    this.scheduleBacklogPoll();
-  }
-
   stop(): void {
-    if (this.backlogTimer !== null) {
-      this.deps.clearSchedule(this.backlogTimer);
-      this.backlogTimer = null;
-    }
     this.currentService?.cancel();
     this.currentService = null;
     this.setBannerState(null);
-  }
-
-  private scheduleBacklogPoll(): void {
-    this.backlogTimer = this.deps.schedule(() => {
-      this.backlogTimer = null;
-      void this.drainBacklog().finally(() => {
-        if (this.backlogTimer === null) this.scheduleBacklogPoll();
-      });
-    }, BACKLOG_POLL_MS);
   }
 
   onUpdate(listener: (state: AICommentJobBannerState | null) => void): () => void {
@@ -185,7 +158,6 @@ export class AICommentJobProcessor {
   }
 
   async drainBacklog(): Promise<void> {
-    // Legacy per-kind timer: keep ticking, never claim while the CLI serves this vault.
     if (this.deps.isSuspended?.()) return;
     if (this.draining) return;
     const apiClient = this.deps.apiClient();

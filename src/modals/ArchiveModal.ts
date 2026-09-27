@@ -30,6 +30,8 @@ import {
   type ProfileArchiveRequest,
   type ProfileCrawlOptions,
   validateCrawlOptions,
+  toServerPostCount,
+  buildRssFetchRequest,
   type CrawlError,
   parseCrawlError,
   type TimeRangePreset,
@@ -41,6 +43,7 @@ import {
   REDDIT_SORT_BY_OPTIONS,
   REDDIT_SORT_BY_TIME_OPTIONS,
   isLocalFetchPlatform,
+  getRssMaxPostCount,
 } from '@/types/profile-crawl';
 import { detectUserTimezone } from '@/utils/date';
 import type { CreateSubscriptionInput } from '@/services/SubscriptionManager';
@@ -1338,11 +1341,8 @@ export class ArchiveModal extends Modal {
 
     const contentContainer = this.profileOptionsContainer;
 
-    // Determine max post count based on platform
-    // Local fetch platforms (Naver): 100 (no API cost), Others: 50 (typical RSS feed limit)
-    const maxPostCount = isLocalFetchPlatform(this.detectedPlatform ?? '')
-      ? CRAWL_LIMITS.MAX_POST_COUNT_LOCAL
-      : 50;
+    // Local fetch platforms (Naver): 100 (no API cost); other feeds hit the server cap
+    const maxPostCount = getRssMaxPostCount(this.detectedPlatform ?? '');
 
     // Adjust post count if exceeds limit
     if (this.postCount > maxPostCount) {
@@ -1819,17 +1819,14 @@ export class ArchiveModal extends Modal {
       return;
     }
 
-    // Profile crawling is supported for Instagram, Facebook, Threads, LinkedIn, Reddit, TikTok, Pinterest, Bluesky, Mastodon, and YouTube
-    // X disabled - BrightData returns non-chronological posts when not logged in
+    // Profile crawling is supported for Instagram, Facebook, Threads, X, LinkedIn, Reddit, TikTok, Pinterest, Bluesky, Mastodon, and YouTube
+    // X reads the anonymous x.com profile page (no BrightData credits)
     // Bluesky, Mastodon use free direct API (no BrightData credits)
     // YouTube uses free RSS feed (no BrightData credits for subscription runs)
     if (!PROFILE_ARCHIVE_SUPPORTED_PLATFORMS.includes(this.detectedPlatform as typeof PROFILE_ARCHIVE_SUPPORTED_PLATFORMS[number])) {
-      const isX = this.detectedPlatform === 'x';
       this.renderErrorState({
         code: 'UNSUPPORTED_PLATFORM',
-        message: isX
-          ? 'X (Twitter) profile crawling is temporarily disabled. Only Instagram, Facebook, LinkedIn, Reddit, TikTok, Pinterest, Bluesky, Mastodon, and YouTube are supported.'
-          : `Profile crawling is currently only supported for Instagram, Facebook, Threads, LinkedIn, Reddit, TikTok, Pinterest, Bluesky, Mastodon, and YouTube. ${this.getPlatformName(this.detectedPlatform)} support coming soon!`,
+        message: `Profile crawling is currently only supported for Instagram, Facebook, Threads, X (Twitter), LinkedIn, Reddit, TikTok, Pinterest, Bluesky, Mastodon, and YouTube. ${this.getPlatformName(this.detectedPlatform)} support coming soon!`,
         retryable: false,
       });
       return;
@@ -1997,7 +1994,7 @@ export class ArchiveModal extends Modal {
   }
 
   /**
-   * Handle RSS feed fetch action (immediate fetch without subscription)
+   * Handle RSS feed fetch action (immediate fetch, plus a subscription when enabled)
    */
   private async handleRSSFetch(): Promise<void> {
     // Prevent double-submit
@@ -2049,38 +2046,22 @@ export class ArchiveModal extends Modal {
       return;
     }
 
-    // Build ProfileArchiveRequest for immediate RSS fetch (without subscription)
-    const timezone = detectUserTimezone();
-
     // For RSS feeds, keep platform-specific IDs or use 'blog' for generic RSS
     const apiPlatform: PlatformType = isRssPlatformWithOwnId(this.detectedPlatform ?? '')
       ? this.detectedPlatform
       : 'blog';
 
-    const crawlOptions: ProfileCrawlOptions = {
-      mode: 'post_count',
-      postCount: this.postCount,
-      timezone,
-      maxPosts: CRAWL_LIMITS.MAX_POST_COUNT,
-    };
-
-    const request: ProfileArchiveRequest = {
-      profileUrl: feedUrl,
-      platform: apiPlatform, // Keep platform-specific IDs for velog, substack, tumblr, naver
+    // Naver Blog and Brunch branched off to local fetches above
+    const request = buildRssFetchRequest({
+      feedUrl,
+      platform: apiPlatform,
       handle,
-      crawlOptions,
-      destination: {
-        folder: this.plugin.settings.archivePath,
-      },
-      // No subscribeOptions - immediate fetch only
-      // Include RSS metadata for RSS feed
-      rssMetadata: {
-        feedUrl: feedUrl,
-        feedType: 'rss',
-        siteTitle: handle,
-      },
-      // Note: Naver Blog is handled separately by handleNaverBlogFetch()
-    };
+      postCount: this.postCount,
+      timezone: detectUserTimezone(),
+      destinationFolder: this.plugin.settings.archivePath,
+      // "Fetch & Subscribe": daily run at the current hour, like handleProfileCrawl
+      subscribeHour: this.subscribeEnabled ? new Date().getHours() : undefined,
+    });
 
     // Set processing state with loading UI
     this.isProcessing = true;
@@ -2093,17 +2074,30 @@ export class ArchiveModal extends Modal {
     }
 
     try {
-      // Submit to Worker API (immediate crawl)
-      await this.plugin.workersApiClient.crawlProfile(request);
+      // Submit to Worker API (immediate crawl, plus subscription if requested)
+      const response = await this.plugin.workersApiClient.crawlProfile(request);
 
       // Close modal
       this.close();
 
+      // Refresh SubscriptionManager to update UI immediately (if subscription was created)
+      if (response.subscriptionId) {
+        try {
+          await this.plugin.subscriptionManager?.refresh();
+        } catch (refreshError) {
+          console.warn('[ArchiveModal] Failed to refresh subscriptions:', refreshError);
+        }
+      }
+
       // Show success notice
-      new Notice(`📄 RSS feed fetch started for ${handle}. Check status in Timeline.`, 5000);
+      const subscribeMsg = response.subscriptionId ? ' Subscription created.' : '';
+      new Notice(`📄 RSS feed fetch started for ${handle}. Check status in Timeline.${subscribeMsg}`, 5000);
 
     } catch (error) {
       console.error('[ArchiveModal] RSS fetch failed:', error);
+      if (this.subscribeEnabled) {
+        this.showSubscriptionPaywallNotice(error);
+      }
 
       // Parse and render error with retry option
       const crawlError = parseCrawlError(error);
@@ -2193,7 +2187,8 @@ export class ArchiveModal extends Modal {
 
     const crawlOptions: ProfileCrawlOptions = {
       mode: 'post_count',
-      postCount: this.postCount,
+      // The UI allows local-fetch counts (Brunch: 100); the Worker caps at 20
+      postCount: toServerPostCount(this.postCount),
       timezone,
       maxPosts: CRAWL_LIMITS.MAX_POST_COUNT,
       // Reddit-specific options
@@ -3038,7 +3033,7 @@ export class ArchiveModal extends Modal {
               folder: this.plugin.settings.archivePath,
             },
             options: {
-              maxPostsPerRun: this.postCount,
+              maxPostsPerRun: toServerPostCount(this.postCount),
               backfillDays: timeRangePresetToBackfillDays(this.timeRangePreset),
             },
             naverOptions: {
@@ -3212,7 +3207,7 @@ export class ArchiveModal extends Modal {
               folder: this.plugin.settings.archivePath,
             },
             options: {
-              maxPostsPerRun: this.postCount,
+              maxPostsPerRun: toServerPostCount(this.postCount),
               backfillDays: timeRangePresetToBackfillDays(this.timeRangePreset),
             },
             naverOptions: {
@@ -3514,7 +3509,7 @@ export class ArchiveModal extends Modal {
               folder: archivePath,
             },
             options: {
-              maxPostsPerRun: postCount,
+              maxPostsPerRun: toServerPostCount(postCount),
               backfillDays: timeRangePresetToBackfillDays(timeRangePreset),
             },
             brunchOptions: {
@@ -3603,7 +3598,7 @@ export class ArchiveModal extends Modal {
           folder: this.plugin.settings.archivePath,
         },
         options: {
-          maxPostsPerRun: this.postCount,
+          maxPostsPerRun: toServerPostCount(this.postCount),
           backfillDays,
         },
         naverOptions: {
@@ -3728,7 +3723,7 @@ export class ArchiveModal extends Modal {
           folder: this.plugin.settings.archivePath,
         },
         options: {
-          maxPostsPerRun: this.postCount,
+          maxPostsPerRun: toServerPostCount(this.postCount),
           backfillDays: timeRangePresetToBackfillDays(this.timeRangePreset),
         },
         naverOptions: {

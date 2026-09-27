@@ -150,24 +150,6 @@ export interface GetSyncClientsResponse {
   clients: SyncClient[];
 }
 
-// ============================================================================
-// Unified Executor Poll Types (GET /api/executor/jobs)
-// ============================================================================
-
-export interface UnifiedExecutorPollJob {
-  kind: 'ai_comment' | 'ai_action' | 'transcription';
-  id: string;
-  claimUrl?: string;
-}
-
-export interface UnifiedExecutorPollData {
-  jobs: UnifiedExecutorPollJob[];
-  partial: boolean;
-  indeterminateKinds: string[];
-  nextPollAfterMs: number;
-  presenceAcceptedAt: string | null;
-}
-
 export interface UpdateSyncClientRequest {
   clientName?: string;
   enabled?: boolean;
@@ -369,7 +351,10 @@ export interface CreateAIActionJobRequest {
   archiveId: string;
   actionType: AIActionType;
   targetClientId?: string;
-  provider?: AICommentProviderId;
+  /** 'local-executor' pins the job to targetClientId even for a "Cloud first" account. */
+  executionProvider?: 'local-executor' | 'workers-ai';
+  /** Any provider the TARGET executor runs — `apple` lives on the CLI executor, not this plugin. */
+  provider?: AICommentProviderId | 'apple';
   model?: string;
   outputLanguage?: string;
   targetLanguage?: string;
@@ -1027,6 +1012,9 @@ export interface ArchiveResponse {
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'series_selection_required';
   estimatedTime?: number;
   creditsRequired?: number;
+  // Synchronous failure fields (status === 'failed')
+  error?: string;
+  userMessageCode?: string;
   // Synchronous completion result (Fediverse, Podcast, Naver, Naver Webtoon episode)
   result?: {
     postData: unknown;
@@ -1062,6 +1050,8 @@ export interface JobStatusResponse {
   progress?: number;
   result?: ArchiveResult;
   error?: string;
+  /** Stable client-localizable archive failure code. */
+  userMessageCode?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -3398,26 +3388,6 @@ export class WorkersAPIClient implements IService {
       body: JSON.stringify(request),
       headers: {
         'Idempotency-Key': request.idempotencyKey,
-      },
-    });
-  }
-
-  /**
-   * One unified poll replacing the three per-kind backlog GETs. The extra
-   * `unified-v1` capability token routes the request onto the server's
-   * credit-free poll auth; `runtime` doubles as the presence heartbeat.
-   */
-  async pollUnifiedExecutorJobs(clientId: string): Promise<UnifiedExecutorPollData> {
-    this.ensureInitialized();
-    const query = new URLSearchParams({
-      clientId,
-      capabilities: 'ai_comment,ai_action,transcription',
-      runtime: 'obsidian',
-    });
-    return this.request<UnifiedExecutorPollData>(`/api/executor/jobs?${query.toString()}`, {
-      method: 'GET',
-      headers: {
-        'X-Client-Capabilities': `${PLACE_CONTEXT_NOTE_CAPABILITY},archive-note-ops-v1,unified-v1`,
       },
     });
   }

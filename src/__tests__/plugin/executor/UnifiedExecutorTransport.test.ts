@@ -1,100 +1,79 @@
 import { describe, expect, it } from 'vitest';
 import {
-  UNIFIED_IDLE_FLOOR_MS,
-  UNIFIED_PARTIAL_POLL_MS,
-  createUnifiedPoll,
-  mapUnifiedPollFailure,
-  mapUnifiedPollSuccess,
+  BACKLOG_LANES,
+  BACKLOG_POLL_MS,
+  createBacklogPoll,
   passthroughClaim,
 } from '../../../plugin/executor/UnifiedExecutorTransport';
 import type { WorkersAPIClient } from '../../../services/WorkersAPIClient';
 
-describe('mapUnifiedPollSuccess', () => {
-  it('clamps the server idle cadence up to the plugin floor', () => {
-    const outcome = mapUnifiedPollSuccess({ jobs: [], partial: false, nextPollAfterMs: 15_000 });
-    expect(outcome).toEqual({ type: 'empty', nextPollAfterMs: UNIFIED_IDLE_FLOOR_MS });
+type Row = { jobId: string; updatedAt: string };
+
+function fakeClient(rows: { action?: Row[]; comment?: Row[]; transcription?: Row[]; fail?: boolean } = {}) {
+  const calls: string[] = [];
+  const list = async (lane: string, jobs: Row[] | undefined) => {
+    calls.push(lane);
+    if (rows.fail) throw Object.assign(new Error('gone'), { status: 404 });
+    return { jobs: jobs ?? [] };
+  };
+  const client = {
+    getAvailableAIActionJobs: (clientId: string) => list(`ai_action:${clientId}`, rows.action),
+    getAvailableAICommentJobs: (clientId: string) => list(`ai_comment:${clientId}`, rows.comment),
+    getAvailableTranscriptionJobs: () => list('transcription', rows.transcription),
+  } as unknown as WorkersAPIClient;
+  return { client, calls };
+}
+
+describe('createBacklogPoll', () => {
+  it('sends one listing per tick: the AI-action lane, plus transcription and legacy comments once per cycle', async () => {
+    const { client, calls } = fakeClient();
+    const poll = createBacklogPoll(() => client, () => 'c1');
+    for (let i = 0; i < BACKLOG_LANES.length + 1; i += 1) await poll();
+    expect(calls).toEqual([
+      'ai_action:c1', 'ai_action:c1', 'ai_action:c1', 'ai_action:c1', 'transcription',
+      'ai_action:c1', 'ai_action:c1', 'ai_action:c1', 'ai_action:c1', 'ai_comment:c1',
+      'ai_action:c1',
+    ]);
   });
 
-  it('keeps a server cadence slower than the floor', () => {
-    const outcome = mapUnifiedPollSuccess({ jobs: [], partial: false, nextPollAfterMs: UNIFIED_IDLE_FLOOR_MS * 2 });
-    expect(outcome).toEqual({ type: 'empty', nextPollAfterMs: UNIFIED_IDLE_FLOOR_MS * 2 });
-  });
-
-  it('maps job rows and drops unknown kinds or missing ids', () => {
-    const outcome = mapUnifiedPollSuccess({
-      jobs: [
-        { kind: 'ai_comment', id: 'c1' },
-        { kind: 'transcription', id: 't1', claimUrl: '/claim' },
-        { kind: 'mystery', id: 'x1' },
-        { kind: 'ai_action' },
-      ],
-      partial: false,
-      indeterminateKinds: ['transcription', 'mystery'],
-      nextPollAfterMs: 15_000,
-    });
-    expect(outcome).toEqual({
+  it('maps listed rows to jobs carrying the row version, and an empty listing to empty', async () => {
+    const { client } = fakeClient({ action: [{ jobId: 'aiaj_1', updatedAt: 'v1' }] });
+    expect(await createBacklogPoll(() => client, () => 'c1')()).toEqual({
       type: 'jobs',
-      jobs: [
-        { kind: 'ai_comment', id: 'c1', claimUrl: undefined },
-        { kind: 'transcription', id: 't1', claimUrl: '/claim' },
-      ],
-      partial: false,
-      indeterminateKinds: ['transcription'],
-      nextPollAfterMs: UNIFIED_IDLE_FLOOR_MS,
+      jobs: [{ kind: 'ai_action', id: 'aiaj_1', version: 'v1' }],
+      nextPollAfterMs: BACKLOG_POLL_MS,
+    });
+    expect(await createBacklogPoll(() => fakeClient().client, () => 'c1')())
+      .toEqual({ type: 'empty', nextPollAfterMs: BACKLOG_POLL_MS });
+  });
+
+  it('routes the legacy comment listing by id prefix', async () => {
+    const { client } = fakeClient({
+      comment: [{ jobId: 'aicj_1', updatedAt: 'v1' }, { jobId: 'aiaj_2', updatedAt: 'v2' }],
+      transcription: [{ jobId: 'tj_1', updatedAt: 'v3' }],
+    });
+    const poll = createBacklogPoll(() => client, () => 'c1');
+    const outcomes = [];
+    for (let i = 0; i < BACKLOG_LANES.length; i += 1) outcomes.push(await poll());
+    expect(outcomes[4]).toMatchObject({ type: 'jobs', jobs: [{ kind: 'transcription', id: 'tj_1', version: 'v3' }] });
+    expect(outcomes[9]).toMatchObject({
+      type: 'jobs',
+      jobs: [{ kind: 'ai_comment', id: 'aicj_1' }, { kind: 'ai_action', id: 'aiaj_2' }],
     });
   });
 
-  it('treats a partial response with zero jobs as a jobs outcome, not empty', () => {
-    const outcome = mapUnifiedPollSuccess({ jobs: [], partial: true, nextPollAfterMs: 15_000 });
-    expect(outcome.type).toBe('jobs');
-    if (outcome.type === 'jobs') expect(outcome.partial).toBe(true);
+  it('treats any failure as transient and still moves to the next lane', async () => {
+    const failing = fakeClient({ fail: true });
+    const poll = createBacklogPoll(() => failing.client, () => 'c1');
+    for (let i = 0; i < 5; i += 1) expect(await poll()).toEqual({ type: 'transient' });
+    expect(failing.calls[4]).toBe('transcription');
   });
 
-  it('survives a malformed payload', () => {
-    expect(mapUnifiedPollSuccess(null)).toEqual({ type: 'empty', nextPollAfterMs: UNIFIED_IDLE_FLOOR_MS });
-  });
-});
-
-describe('mapUnifiedPollFailure', () => {
-  it('maps the explicit protocol statuses', () => {
-    expect(mapUnifiedPollFailure({ status: 404 })).toEqual({ type: 'not_found' });
-    expect(mapUnifiedPollFailure({ status: 426 })).toEqual({ type: 'upgrade' });
-    expect(mapUnifiedPollFailure({ status: 503 }))
-      .toEqual({ type: 'indeterminate', nextPollAfterMs: UNIFIED_PARTIAL_POLL_MS });
-  });
-
-  it('treats everything else as transient', () => {
-    expect(mapUnifiedPollFailure({ status: 500 })).toEqual({ type: 'transient' });
-    expect(mapUnifiedPollFailure({ status: 429 })).toEqual({ type: 'transient' });
-    expect(mapUnifiedPollFailure(new Error('network'))).toEqual({ type: 'transient' });
-    expect(mapUnifiedPollFailure(null)).toEqual({ type: 'transient' });
-  });
-});
-
-describe('createUnifiedPoll', () => {
-  it('polls through the api client and maps the payload', async () => {
-    const seen: string[] = [];
-    const client = {
-      pollUnifiedExecutorJobs: async (clientId: string) => {
-        seen.push(clientId);
-        return { jobs: [{ kind: 'ai_comment', id: 'c1' }], partial: false, indeterminateKinds: [], nextPollAfterMs: 15_000, presenceAcceptedAt: null };
-      },
-    } as unknown as WorkersAPIClient;
-    const poll = createUnifiedPoll(() => client, () => 'client-1');
-    const outcome = await poll();
-    expect(seen).toEqual(['client-1']);
-    expect(outcome.type).toBe('jobs');
-  });
-
-  it('maps thrown statuses and missing client/clientId to outcomes', async () => {
-    const throwing = {
-      pollUnifiedExecutorJobs: async () => {
-        throw Object.assign(new Error('gone'), { status: 404 });
-      },
-    } as unknown as WorkersAPIClient;
-    expect(await createUnifiedPoll(() => throwing, () => 'client-1')()).toEqual({ type: 'not_found' });
-    expect(await createUnifiedPoll(() => null, () => 'client-1')()).toEqual({ type: 'transient' });
-    expect(await createUnifiedPoll(() => throwing, () => undefined)()).toEqual({ type: 'transient' });
+  it('is transient without a request when the client or clientId is missing', async () => {
+    const { client, calls } = fakeClient();
+    expect(await createBacklogPoll(() => null, () => 'c1')()).toEqual({ type: 'transient' });
+    expect(await createBacklogPoll(() => client, () => undefined)()).toEqual({ type: 'transient' });
+    expect(calls).toEqual([]);
   });
 });
 

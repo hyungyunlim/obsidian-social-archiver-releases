@@ -161,9 +161,11 @@ export function extractPostsFromSSR(scripts: string[], targetShortcode: string):
 	// 2026-09-16: Threads stopped shipping the permalink thread as
 	// `data.data.edges[].node.thread_items[]` and now ships the main post as
 	// `data.media`, its replies as `media.text_post_app_info.direct_replies`,
-	// and a reply permalink's ancestors as `...containing_thread`. The three
-	// arrive in SEPARATE data-sjs blocks that share one `pk` (Relay @defer), so
-	// the walk collects across blocks. Adapting them to the old EdgeNode shape
+	// the author's continuation as `...self_thread` (unread until 2026-09-24,
+	// so every archive lost its thread), and a reply permalink's ancestors as
+	// `...containing_thread`. They arrive in SEPARATE data-sjs blocks that
+	// share one `pk` (Relay @defer), so the walk collects across blocks.
+	// Adapting them to the old EdgeNode shape
 	// keeps the classification below — main post, continuation run, replies —
 	// working untouched for both payload shapes.
 	if (mainPostEdges.length === 0) {
@@ -318,6 +320,7 @@ interface PostConnection {
 
 interface MediaThreadInfo {
 	containing_thread?: { posts?: PostConnection };
+	self_thread?: { posts?: PostConnection };
 	direct_replies?: { edges?: ({ node?: { posts?: PostConnection } } | null)[] };
 }
 
@@ -337,9 +340,11 @@ function toEdge(posts: SSRPost[]): EdgeNode {
  *
  * Relay splits one permalink across several data-sjs blocks that share a `pk`:
  * one carries the post itself (`code`, `caption`, `user`, `taken_at`), another
- * `containing_thread` (a reply permalink's ancestors), another `direct_replies`.
+ * `containing_thread` (a reply permalink's ancestors), another `direct_replies`
+ * and `self_thread` (the author's continuation — never inside `direct_replies`).
  * Ancestors are emitted BEFORE the main post so the caller skips them, which is
- * what the old payload's edge order made it do.
+ * what the old payload's edge order made it do; the continuation right after
+ * it, so the caller's leading-author-run rule files it as the thread body.
  */
 function collectMediaEdges(scripts: string[], targetShortcode: string): EdgeNode[] {
 	const medias: SSRPost[] = [];
@@ -356,6 +361,9 @@ function collectMediaEdges(scripts: string[], targetShortcode: string): EdgeNode
 	if (!mainPost) return [];
 
 	const ancestors: SSRPost[] = [];
+	// Keyed so a continuation repeated across chunks (or also listed as a reply)
+	// lands in the note once.
+	const selfThread = new Map<string, SSRPost>();
 	const replyThreads: SSRPost[][] = [];
 	for (const media of medias) {
 		// Other posts' chunks (quoted posts, recommendations) ride along in the
@@ -365,17 +373,29 @@ function collectMediaEdges(scripts: string[], targetShortcode: string): EdgeNode
 		if (!sameMedia(media, mainPost)) continue;
 		const info = media.text_post_app_info as MediaThreadInfo | undefined;
 		ancestors.push(...postsFromConnection(info?.containing_thread?.posts));
+		for (const post of postsFromConnection(info?.self_thread?.posts)) {
+			selfThread.set(postKey(post), post);
+		}
 		for (const edge of info?.direct_replies?.edges ?? []) {
 			const posts = postsFromConnection(edge?.node?.posts);
 			if (posts.length > 0) replyThreads.push(posts);
 		}
 	}
 
+	const replies = replyThreads
+		.map((posts) => posts.filter((post) => !selfThread.has(postKey(post))))
+		.filter((posts) => posts.length > 0);
+
 	return [
 		...ancestors.map((post) => toEdge([post])),
 		toEdge([mainPost]),
-		...replyThreads.map((posts) => toEdge(posts)),
+		...(selfThread.size > 0 ? [toEdge([...selfThread.values()])] : []),
+		...replies.map((posts) => toEdge(posts)),
 	];
+}
+
+function postKey(post: SSRPost): string {
+	return post.pk ?? post.id ?? post.code ?? '';
 }
 
 /** Same post across Relay's deferred chunks: `id` first, `pk` only as a backstop. */

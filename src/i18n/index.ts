@@ -21,6 +21,7 @@ import { syncTabStrings } from './strings/syncTab';
 import { crossPostStrings } from './strings/crossPost';
 import { dangerZoneStrings } from './strings/dangerZone';
 import { newsletterStrings } from './strings/newsletter';
+import { reviewStrings } from './strings/review';
 
 /** One translatable string. `ja` can be added later without touching callers. */
 export interface LocaleText {
@@ -35,6 +36,7 @@ const strings = {
   ...crossPostStrings,
   ...dangerZoneStrings,
   ...newsletterStrings,
+  ...reviewStrings,
 } satisfies Record<string, LocaleText>;
 
 export type TranslationKey = keyof typeof strings;

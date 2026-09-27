@@ -1,0 +1,149 @@
+/* Today's review: side panel (ReviewPanel.svelte) and the status-bar count. */
+
+.sa-review-view {
+  padding: var(--size-4-3);
+}
+
+.sa-review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-3);
+}
+
+.sa-review-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--size-4-2);
+}
+
+.sa-review-title {
+  font-size: var(--font-ui-medium);
+  font-weight: var(--font-semibold);
+}
+
+.sa-review-progress,
+.sa-review-streak {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.sa-review-streak {
+  margin-left: auto;
+}
+
+.sa-review-message {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.sa-review-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+  padding: var(--size-4-3);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-primary);
+}
+
+.sa-review-byline {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.sa-review-card-title {
+  font-weight: var(--font-semibold);
+}
+
+.sa-review-kicker {
+  color: var(--text-accent);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+}
+
+.sa-review-question {
+  margin: 0;
+  font-weight: var(--font-medium);
+}
+
+.sa-review-text {
+  margin: 0;
+  line-height: var(--line-height-normal);
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.sa-review-text.is-highlight {
+  padding-left: var(--size-4-2);
+  border-left: 3px solid var(--text-highlight-bg);
+}
+
+.sa-review-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.sa-review-reveal {
+  align-self: flex-start;
+}
+
+.sa-review-card-actions {
+  display: flex;
+  gap: var(--size-4-2);
+}
+
+.sa-review-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--size-4-2);
+}
+
+.sa-review-done {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+}
+
+.sa-review-done > button {
+  align-self: flex-start;
+}
+
+.sa-review-done-title {
+  font-size: var(--font-ui-medium);
+  font-weight: var(--font-semibold);
+}
+
+.sa-review-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Titles wrap: Obsidian buttons are single-line by default. */
+.sa-review-list-item {
+  width: 100%;
+  height: auto;
+  justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
+}
+
+.sa-review-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-2-2);
+}
+
+.sa-review-status-icon {
+  display: inline-flex;
+}
+
+.sa-review-status-icon svg {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+}

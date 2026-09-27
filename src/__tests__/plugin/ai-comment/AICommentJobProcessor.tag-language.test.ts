@@ -147,8 +147,6 @@ async function runTagJobAndCapturePrompt(outputLanguage: string | null): Promise
     ingestRemoteArchive: vi.fn(async () => 'existing'),
     isArchiveLibrarySyncRunning: () => false,
     refreshTimelineView: vi.fn(),
-    schedule: vi.fn(),
-    clearSchedule: vi.fn(),
     notify: vi.fn(),
   });
 

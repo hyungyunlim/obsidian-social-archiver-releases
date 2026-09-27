@@ -28,6 +28,27 @@ import { formatRateLimitMessage, isRateLimitError } from '../../utils/rateLimitE
 // Re-export for convenience
 export type { CompletedJobResponse };
 
+/**
+ * Failure codes the server files as the user's side (private, login-only,
+ * malformed URL, billing): the same URL fails the same way every time, so a
+ * retry only opens another job.
+ *
+ * ponytail: hand copy of USER_SIDE_ARCHIVE_ERROR_CODES in
+ * workers/src/utils/direct-lane-failure.ts (a separate build root) — add new
+ * user-side codes to both.
+ */
+const TERMINAL_ARCHIVE_FAILURE_CODES: ReadonlySet<string> = new Set([
+  'ARCHIVE_CONTENT_NOT_PUBLIC',
+  'ARCHIVE_GROUP_NOT_ACCESSIBLE',
+  'ARCHIVE_INSTAGRAM_STORY_LOGIN_REQUIRED',
+  'MAP_PLACE_NOT_FOUND',
+  'ARCHIVE_MISSING_POST_IDENTIFIER',
+  'INVALID_MAP_URL',
+  'MAP_PROVIDER_MISMATCH',
+  'INSUFFICIENT_CREDITS',
+  'PAYWALL_REQUIRED',
+]);
+
 // ─── Deps ────────────────────────────────────────────────────────────
 
 export interface ArchiveCompletionServiceDeps {
@@ -150,7 +171,8 @@ export class ArchiveCompletionService {
    */
   async processFailedJob(
     pendingJob: PendingJob,
-    errorMessage: string
+    errorMessage: string,
+    userMessageCode?: string
   ): Promise<void> {
     try {
       // Check if job still exists (might have been processed by WebSocket)
@@ -170,38 +192,19 @@ export class ArchiveCompletionService {
       // Rate-limit failures are not retried here — the user can retry manually
       // after the suggested wait.
       if (isRateLimitError(errorMessage)) {
-        const displayMessage = formatRateLimitMessage(errorMessage);
-        await this.pendingJobsManager.updateJob(currentJob.id, {
-          status: 'failed',
-          retryCount: currentRetryCount,
-          metadata: {
-            ...currentJob.metadata,
-            lastError: displayMessage,
-            failedAt: Date.now(),
-          },
-        });
-
-        this.archiveJobTracker.failJob(currentJob.id, displayMessage);
-        await this.pendingJobsManager.removeJob(currentJob.id);
-        new Notice(displayMessage, 8000);
+        await this.failWithoutRetry(currentJob, formatRateLimitMessage(errorMessage), 8000);
         return;
       }
 
       if (isPaywallRequiredError(errorMessage)) {
-        const displayMessage = formatPaywallRequiredMessage(errorMessage);
-        await this.pendingJobsManager.updateJob(currentJob.id, {
-          status: 'failed',
-          retryCount: currentRetryCount,
-          metadata: {
-            ...currentJob.metadata,
-            lastError: displayMessage,
-            failedAt: Date.now(),
-          },
-        });
+        await this.failWithoutRetry(currentJob, formatPaywallRequiredMessage(errorMessage), 10000);
+        return;
+      }
 
-        this.archiveJobTracker.failJob(currentJob.id, displayMessage);
-        await this.pendingJobsManager.removeJob(currentJob.id);
-        new Notice(displayMessage, 10000);
+      // The server's message for these is complete and already localized, so
+      // show all of it instead of the truncated retry-exhausted notice.
+      if (userMessageCode && TERMINAL_ARCHIVE_FAILURE_CODES.has(userMessageCode)) {
+        await this.failWithoutRetry(currentJob, errorMessage, 10000);
         return;
       }
 
@@ -247,6 +250,23 @@ export class ArchiveCompletionService {
     } catch (error) {
       console.error(`[Social Archiver] Error processing failed job ${pendingJob.id}:`, error);
     }
+  }
+
+  /** Settle a job that must not be retried: record why, drop it, tell the user. */
+  private async failWithoutRetry(job: PendingJob, message: string, noticeMs: number): Promise<void> {
+    await this.pendingJobsManager.updateJob(job.id, {
+      status: 'failed',
+      retryCount: job.retryCount || 0,
+      metadata: {
+        ...job.metadata,
+        lastError: message,
+        failedAt: Date.now(),
+      },
+    });
+
+    this.archiveJobTracker.failJob(job.id, message);
+    await this.pendingJobsManager.removeJob(job.id);
+    new Notice(message, noticeMs);
   }
 
   // ─── enrichAuthorMetadata ────────────────────────────────────────

@@ -24,6 +24,33 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.7.9': {
+    title: 'Today’s review comes to Obsidian, and missed AI jobs get picked up',
+    date: '2026-09-27',
+    notes: `## Today’s review, right in Obsidian
+
+- **Your daily review without the apps.** A "Today’s review" side panel shows the posts and highlights chosen for you each day, one card at a time. A recall question keeps its answer hidden until you ask, "Open note" jumps to the archive in your vault (or the original post when the note isn’t there), and finishing counts toward the same streak the mobile and desktop apps show.
+- **Always a click away.** The status bar shows how many cards are left, and the ribbon icon, the "Open today’s review" command and \`obsidian://social-archive?op=review\` links all open it — including the "Open in Obsidian" button on the web review page the daily email links to.
+- **Settings › Review** switches the daily review and the email digest on or off for your account, and hides the status-bar count on this device.
+
+## AI comments and actions no longer get stuck
+
+- **Missed jobs are picked up.** When the plugin runs AI jobs itself and misses the realtime notice for one — a sleeping laptop, a dropped connection — it now finds the job within a few minutes. Since 4.7.1 such a job could wait until another device took it over.
+- **Finished comments reach the note right away.** A comment produced by another device or by the social-archiver CLI updates the note as soon as it is done, instead of waiting for the next catch-up while the banner sat at "Uploading result… 90%".
+- **Apple Intelligence in the AI banner.** When this vault’s social-archiver CLI reports Apple Intelligence ready, the banner on a card offers it next to the other AI tools. Types the on-device model can’t run (fact check, critique, sentiment, connections, transcript translation) are greyed out.
+- **CLI trouble shows up.** If the CLI executor keeps failing to reach the server, Settings → AI comment now shows a warning with the error; before, it only said "running".
+
+## Archiving
+
+- **Permanent failures stop retrying.** When the server reports that a post can’t be archived — private content, a closed group, a login-only Instagram Story — the plugin fails once and shows the server’s full explanation, instead of retrying three times and cutting the reason short.
+- **RSS "Fetch & Subscribe" subscribes.** For Substack, Medium, velog, Tumblr, podcasts and other feeds, the button now also creates the daily subscription; before, it only fetched.
+- **Post counts match the server’s limit.** Server-fetched feeds and Naver/Brunch subscriptions take up to 20 posts per run; the inputs used to allow up to 50 and then failed. One-time Naver and Brunch fetches still go up to 100.
+- **Naver Map app share links** (naver.me) are recognized as place links.
+
+> [!NOTE]
+> Jobs handed to the social-archiver CLI are claimed within seconds with CLI 0.1.16 or newer (older versions could take up to two minutes). Update with \`brew upgrade social-archiver-cli\`, npm, or the installer in the CLI guide: https://docs.social-archive.org/en/guide/cli
+`,
+  },
   '4.7.8': {
     title: 'Local AI runs through the Social Archiver CLI, with Apple Intelligence on the Mac',
     date: '2026-09-20',

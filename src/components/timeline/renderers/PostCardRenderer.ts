@@ -48,10 +48,14 @@ import { isSupportedPlatformUrl, validateAndDetectPlatform, isPinterestBoardUrl 
 import { resolvePinterestUrl } from '../../../utils/pinterest';
 import {
   AICommentBanner,
+  APPLE_COMMENT_ACTIONS,
+  providerDisplayName,
+  type AIBannerProvider,
   type AICommentBannerActionId,
   type AICommentBannerOptions,
   type AICommentBannerState,
 } from './AICommentBanner';
+import { appleExecutorClientId } from '../../../plugin/executor/StandaloneCliExecutorSupervisor';
 import { COMMENT_TYPE_DISPLAY_NAMES } from '../../../types/ai-comment';
 import { PlaceCandidateBanner } from './PlaceCandidateBanner';
 import { PlaceCandidateStore } from '../../../services/PlaceCandidateStore';
@@ -9622,8 +9626,8 @@ export class PostCardRenderer extends Component {
       return false;
     }
 
-    // At least one local AI CLI must be available on desktop.
-    const availableClis = await this.getAvailableClis();
+    // At least one local AI provider must be available on desktop.
+    const availableClis = await this.getAvailableClisForAICommentBanner();
     return availableClis.length > 0;
   }
 
@@ -9714,7 +9718,7 @@ export class PostCardRenderer extends Component {
     const settings = this.plugin.settings.aiComment;
     // availableClis is guaranteed non-empty (checked above)
     const defaultCliFromSettings = settings.defaultCli;
-    const defaultCli: AICli = availableClis.includes(defaultCliFromSettings)
+    const defaultCli: AIBannerProvider = availableClis.includes(defaultCliFromSettings)
       ? defaultCliFromSettings
       : (availableClis[0] ?? 'claude');
 
@@ -9753,7 +9757,15 @@ export class PostCardRenderer extends Component {
       onCancelRun: () => {
         this.activeAIBannerRuns.get(post.id)?.controller.abort();
       },
-      onGenerate: async (cli: AICli, type: AICommentType, customPrompt?: string, language?: AIOutputLanguage) => {
+      onGenerate: async (cli: AIBannerProvider, type: AICommentType, customPrompt?: string, language?: AIOutputLanguage) => {
+        // The plugin never runs Apple Intelligence itself: queue the comment
+        // for this vault's CLI executor, like the actions below.
+        if (cli === 'apple') {
+          const actionType = APPLE_COMMENT_ACTIONS[type];
+          if (!actionType) throw new Error(`${COMMENT_TYPE_DISPLAY_NAMES[type]} is not available with Apple Intelligence`);
+          await this.handleTimelineAIActionRequest(post, actionType, cli, language, customPrompt);
+          return;
+        }
         await this.trackBannerRun(post, null, `Generating ${COMMENT_TYPE_DISPLAY_NAMES[type]}`, (signal) =>
           this.handleAICommentGenerate(post, cli, type, banner, rootElement, customPrompt, language, signal));
       },
@@ -9761,7 +9773,7 @@ export class PostCardRenderer extends Component {
         await this.trackBannerRun(post, null, `Generating ${COMMENT_TYPE_DISPLAY_NAMES[type]} (${clis.length} AIs)`, (signal) =>
           this.handleAICommentGenerateMulti(post, clis, type, banner, rootElement, customPrompt, language, signal));
       },
-      onRunAction: async (actionId: AICommentBannerActionId, cli: AICli, language?: AIOutputLanguage) => {
+      onRunAction: async (actionId: AICommentBannerActionId, cli: AIBannerProvider, language?: AIOutputLanguage) => {
         // Places is not a CLI action: run the extraction headlessly (desktop
         // parity) and open the review modal only once candidates exist. The
         // banner shows the run progress and supports cancel via its signal.
@@ -9841,11 +9853,14 @@ export class PostCardRenderer extends Component {
     if (live && live.getState() === 'generating') live.setState(state);
   }
 
-  private async getAvailableClisForAICommentBanner(): Promise<AICli[]> {
+  private async getAvailableClisForAICommentBanner(): Promise<AIBannerProvider[]> {
     if (ObsidianPlatform.isMobile) {
       return [this.plugin.settings.aiComment.defaultCli ?? 'claude'];
     }
-    return this.getAvailableClis();
+    const providers: AIBannerProvider[] = await this.getAvailableClis();
+    // On a Mac whose CLI executor reports Apple Intelligence ready.
+    if (appleExecutorClientId(this.plugin.getCliExecutorSnapshot())) providers.push('apple');
+    return providers;
   }
 
   // ============================================================================
@@ -10351,8 +10366,9 @@ export class PostCardRenderer extends Component {
   private async handleTimelineAIActionRequest(
     post: PostData,
     actionType: AIActionType,
-    cli: AICli,
-    language?: string
+    provider: AIBannerProvider,
+    language?: string,
+    customPrompt?: string
   ): Promise<void> {
     const archiveId = this.resolveArchiveIdForContentVariants(post);
     const apiClient = this.plugin.workersApiClient;
@@ -10368,15 +10384,22 @@ export class PostCardRenderer extends Component {
       throw new Error('AI action already queued');
     }
 
-    const targetClientId = availability.capableClientIds.includes(clientId)
+    let targetClientId = availability.capableClientIds.includes(clientId)
       ? clientId
       : availability.capableClientIds[0];
+    if (provider === 'apple') {
+      // Apple Intelligence exists only on this vault's CLI executor.
+      const appleClientId = appleExecutorClientId(this.plugin.getCliExecutorSnapshot());
+      targetClientId = appleClientId && availability.capableClientIds.includes(appleClientId) ? appleClientId : undefined;
+    }
     if (availability.reason === 'unsupported_archive') {
       new Notice('There is little or no text in this post to analyze.');
       throw new Error('AI action unsupported archive');
     }
     if (!availability.available || !targetClientId) {
-      new Notice('No capable Obsidian client is available for this AI action.');
+      new Notice(provider === 'apple'
+        ? 'Apple Intelligence is not ready on this Mac right now.'
+        : 'No capable Obsidian client is available for this AI action.');
       throw new Error('No capable AI action client');
     }
 
@@ -10384,13 +10407,16 @@ export class PostCardRenderer extends Component {
       archiveId,
       actionType,
       targetClientId,
-      provider: cli,
+      // On-device stays on-device: a "Cloud first" account must not reroute it.
+      ...(provider === 'apple' ? { executionProvider: 'local-executor' as const } : {}),
+      provider,
+      ...(customPrompt ? { customPrompt } : {}),
       outputLanguage: this.resolveTimelineAIActionLanguage(actionType, language),
       sourceClientId: clientId,
     });
 
     new Notice(response.delivery === 'websocket' ? 'AI action sent.' : 'AI action queued.');
-    this.plugin.aiCommentJobProcessor?.trackAIActionSummary?.(response.activeJob, cli);
+    this.plugin.aiCommentJobProcessor?.trackAIActionSummary?.(response.activeJob, providerDisplayName(provider));
     if (targetClientId === clientId) {
       void this.plugin.aiCommentJobProcessor?.handleRequestedAIActionJob(response.jobId, targetClientId);
     }

@@ -49,5 +49,8 @@
 /* Local archive → account import modal */
 @import './components/import-local-archives-modal.css';
 
+/* Today's review side panel + status-bar count */
+@import './components/review-panel.css';
+
 /* Timeline and reader-mode incremental styles */
 @import '../components/timeline/managers/skeleton-card.css';

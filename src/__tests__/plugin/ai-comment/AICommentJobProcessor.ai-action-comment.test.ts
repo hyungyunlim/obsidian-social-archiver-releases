@@ -156,8 +156,6 @@ describe('AICommentJobProcessor AI action comment jobs', () => {
       ingestRemoteArchive: vi.fn(async () => 'existing'),
       isArchiveLibrarySyncRunning: () => false,
       refreshTimelineView: vi.fn(),
-      schedule: vi.fn(),
-      clearSchedule: vi.fn(),
       notify: vi.fn(),
     });
 
@@ -203,8 +201,6 @@ describe('AICommentJobProcessor AI action comment jobs', () => {
       ingestRemoteArchive: vi.fn(async () => 'existing' as const),
       isArchiveLibrarySyncRunning: () => false,
       refreshTimelineView: vi.fn(),
-      schedule: vi.fn(),
-      clearSchedule: vi.fn(),
       notify: vi.fn(),
     });
 

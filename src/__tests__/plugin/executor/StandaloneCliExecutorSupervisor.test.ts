@@ -5,6 +5,7 @@ import {
   RESTART_BASE_MS,
   STOP_GRACE_MS,
   StandaloneCliExecutorSupervisor,
+  appleExecutorClientId,
   executorArgs,
   executorEnv,
   restartDelayMs,
@@ -113,6 +114,44 @@ describe('StandaloneCliExecutorSupervisor', () => {
     expect(snap.clientId).toBe('cli_1');
     expect(snap.provider).toBe('claude');
     expect(snap.providers[0]?.id).toBe('apple');
+  });
+
+  it('offers Apple Intelligence only while a registered executor reports it usable', async () => {
+    const h = harness();
+    await h.supervisor.start(launch);
+    const child = h.spawned[0]!.child;
+    child.line({ event: 'registered', clientId: 'cli_1', providers: [{ id: 'apple', available: true, authenticated: true }] });
+    expect(appleExecutorClientId(h.supervisor.getSnapshot())).toBeNull(); // not watching yet
+    child.line({ event: 'watching', pollSeconds: 15 });
+    expect(appleExecutorClientId(h.supervisor.getSnapshot())).toBe('cli_1');
+
+    child.exit(1);
+    expect(appleExecutorClientId(h.supervisor.getSnapshot())).toBeNull();
+
+    h.fire(0);
+    const next = h.spawned[1]!.child;
+    // Model still downloading: the row is visible but not usable.
+    next.line({ event: 'registered', clientId: 'cli_1', providers: [{ id: 'apple', available: true, authenticated: false, reason: 'modelNotReady' }] });
+    next.line({ event: 'watching', pollSeconds: 15 });
+    expect(appleExecutorClientId(h.supervisor.getSnapshot())).toBeNull();
+    expect(appleExecutorClientId(null)).toBeNull();
+  });
+
+  it('counts consecutive poll errors while running and clears them on the next good poll', async () => {
+    const h = harness();
+    await h.supervisor.start(launch);
+    const child = h.spawned[0]!.child;
+    child.line({ event: 'watching', pollSeconds: 15 });
+    child.line({ event: 'poll_error', message: 'HTTP 503', consecutiveErrors: 1, nextPollSeconds: 15 });
+    child.line({ event: 'poll_error', message: 'HTTP 503', consecutiveErrors: 2, nextPollSeconds: 30 });
+    expect(h.supervisor.getSnapshot()).toMatchObject({
+      state: 'running',
+      consecutivePollErrors: 2,
+      lastPollError: 'HTTP 503',
+    });
+
+    child.line({ event: 'poll', drained: 0, nextPollSeconds: 15 });
+    expect(h.supervisor.getSnapshot()).toMatchObject({ consecutivePollErrors: 0, lastPollError: null });
   });
 
   it('handles partial stdout chunks', async () => {

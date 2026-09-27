@@ -819,6 +819,9 @@ export interface SocialArchiverSettings {
   showReleaseNotes: boolean; // Show release notes modal after updates (default: true)
   debugAlwaysShowReleaseNotes: boolean; // DEV: Always show release notes on load (default: false)
 
+  // Today's review
+  reviewStatusBar: boolean; // Show today's remaining review count in the status bar (default: true)
+
   // Naver Settings
   naverCookie: string; // Built from nidAut + nidSes (legacy, kept for API compatibility)
   nidAut: string; // NID_AUT cookie value
@@ -1035,6 +1038,9 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
   showReleaseNotes: true, // Show release notes by default
   debugAlwaysShowReleaseNotes: false, // DEV: Always show release notes on load
 
+  // Today's review
+  reviewStatusBar: true,
+
   // Naver Settings
   naverCookie: '', // Built from nidAut + nidSes
   nidAut: '', // Empty by default
@@ -1227,6 +1233,9 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
   }
   if (migrated.debugAlwaysShowReleaseNotes === undefined) {
     migrated.debugAlwaysShowReleaseNotes = false;
+  }
+  if (migrated.reviewStatusBar === undefined) {
+    migrated.reviewStatusBar = true;
   }
 
   // Initialize series current episode state if missing (migration)
