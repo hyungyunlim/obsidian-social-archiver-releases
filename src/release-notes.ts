@@ -24,6 +24,24 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.7.10': {
+    title: 'Review cards look like your timeline, and Facebook notes stay with their own post',
+    date: '2026-09-27',
+    notes: `## Today’s review shows your posts the way the timeline does
+
+- **Timeline cards in the review.** For a post whose note is in this vault, the review card now shows the author, caption, photos and counts the way the timeline does. "Open in reader" opens the timeline’s reader and steps through the rest of today’s posts, and tapping a post in the finished list opens it there too.
+- **Each card asks before it tells.** A recall question shows the author and photos with the caption covered until you choose "Show the answer", which uncovers it and adds the gist. A post with photos but no question asks "What was this post about?" over its photos, and a highlight is quoted above the post it came from.
+- Posts without a note in this vault keep the server’s text and "Open original".
+
+## Fixes
+
+- **Facebook notes stay with their own post.** Some Facebook posts archived from share links were stored under the same bare link (facebook.com/story.php or photo.php). The plugin matched notes by that link, so one note could end up tied to another post’s archive, showing that post’s comments and review card, while the other posts never got a note. The plugin no longer treats a link like that as a post’s identity.
+- **AI comments you request from this vault appear as soon as they finish.** When one runs elsewhere (Apple Intelligence through this vault’s CLI, the desktop app, Cloud AI), the timeline card updates once the comment is in the note, even with the reader or fullscreen view open.
+
+> [!NOTE]
+> The server now keeps each Facebook post’s real link, and the affected archives were repaired on September 27, so their original links open again in every app. Your vault re-links the note and adds the missing posts on its next sync. To finish at once, choose "Re-sync Archives" in Settings › Mobile sync › Archive Library Sync.
+`,
+  },
   '4.7.9': {
     title: 'Today’s review comes to Obsidian, and missed AI jobs get picked up',
     date: '2026-09-27',

@@ -7,13 +7,15 @@
  * picks and fills the set; see LearningReviewClient.
  */
 
-import { Notice, setIcon, type App, type Plugin, type TFile, type WorkspaceLeaf } from 'obsidian';
+import { Notice, setIcon, type App, type TFile, type WorkspaceLeaf } from 'obsidian';
 import type { ReviewPanelProps } from '../../components/review/types';
 import { t } from '../../i18n';
+import type SocialArchiverPlugin from '../../main';
 import type { ArchiveLookupService } from '../../services/ArchiveLookupService';
 import { LearningReviewClient, type LearningReviewClientDeps, type ReviewArchiveLabel } from '../../services/learning/LearningReviewClient';
 import { ReviewSession, remainingCards, type DeckProgress, type PanelState } from '../../services/learning/ReviewSession';
 import { ReviewView, VIEW_TYPE_REVIEW } from '../../views/ReviewView';
+import { ReviewCardHost } from './ReviewCardHost';
 
 /** Vault-scoped (`app.saveLocalStorage`), so two vaults keep their own cursor. */
 const PROGRESS_KEY = 'social-archiver-review-progress';
@@ -22,7 +24,7 @@ const STATUS_REFRESH_MS = 60 * 60 * 1000;
 
 export interface ReviewFeatureDeps {
   app: App;
-  plugin: Plugin;
+  plugin: SocialArchiverPlugin;
   apiClient: LearningReviewClientDeps['apiClient'];
   isSignedIn: () => boolean;
   showStatusBar: () => boolean;
@@ -51,7 +53,7 @@ export class ReviewFeature {
 
   register(): void {
     const { plugin, app } = this.deps;
-    plugin.registerView(VIEW_TYPE_REVIEW, (leaf) => new ReviewView(leaf, () => this.panelProps()));
+    plugin.registerView(VIEW_TYPE_REVIEW, (leaf) => new ReviewView(leaf, (view) => this.panelProps(view)));
     plugin.addRibbonIcon('book-open', t('rv.open'), () => void this.open());
     plugin.addCommand({ id: 'open-todays-review', name: t('rv.open'), callback: () => void this.open() });
 
@@ -105,11 +107,13 @@ export class ReviewFeature {
     el.show();
   }
 
-  private panelProps(): ReviewPanelProps {
+  private panelProps(view: ReviewView): ReviewPanelProps {
     const initialDay = this.pendingDay;
     this.pendingDay = undefined;
+    const { app, plugin } = this.deps;
     return {
       session: this.session,
+      cards: new ReviewCardHost({ app, plugin, component: view, noteFor: (archiveId) => this.noteFor(archiveId) }),
       initialDay,
       hasNote: (archiveId) => this.noteFor(archiveId) !== null,
       openArchive: (archiveId, label) => void this.openArchive(archiveId, label),

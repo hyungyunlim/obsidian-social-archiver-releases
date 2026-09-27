@@ -366,7 +366,7 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
       },
     });
 
-    expect(refreshTimelineView).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(refreshTimelineView).toHaveBeenCalledTimes(1));
   });
 
   it('pulls an AI comment another executor finished into the note, but not one it wrote itself', async () => {
@@ -396,6 +396,47 @@ describe('RealtimeEventBridge -- subscription sync reliability', () => {
       status: 'completed',
       updatedAt: '2026-09-27T00:00:00.000Z',
     });
+  });
+
+  it('refreshes the timeline only after another executor\'s comment is in the note', async () => {
+    const events = makeEvents();
+    const refreshTimelineView = vi.fn();
+    let finishResync: () => void = () => {};
+    const resyncArchive = vi.fn(() => new Promise<void>((resolve) => { finishResync = resolve; }));
+    const bridge = new RealtimeEventBridge(makeDeps({
+      events,
+      refreshTimelineView,
+      annotationSyncService: { resyncArchive } as any,
+    }));
+    bridge.setup();
+
+    await events.trigger('ws:ai_comment_updated', {
+      data: { jobId: 'aiaj_apple', archiveId: 'archive-1', targetClientId: 'cli-executor' },
+    });
+    expect(resyncArchive).toHaveBeenCalledWith('archive-1');
+    expect(refreshTimelineView).not.toHaveBeenCalled();
+
+    finishResync();
+    await vi.waitFor(() => expect(refreshTimelineView).toHaveBeenCalledTimes(1));
+  });
+
+  it('refreshes the timeline right away for a comment this vault wrote itself', async () => {
+    const events = makeEvents();
+    const refreshTimelineView = vi.fn();
+    const resyncArchive = vi.fn();
+    const bridge = new RealtimeEventBridge(makeDeps({
+      events,
+      refreshTimelineView,
+      annotationSyncService: { resyncArchive } as any,
+    }));
+    bridge.setup();
+
+    await events.trigger('ws:ai_comment_updated', {
+      data: { jobId: 'aiaj_own', archiveId: 'archive-2', targetClientId: 'my-client-id' },
+    });
+
+    expect(resyncArchive).not.toHaveBeenCalled();
+    expect(refreshTimelineView).toHaveBeenCalledTimes(1);
   });
 
   it('leaves the note alone when Mobile Annotation Sync is off', async () => {

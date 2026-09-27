@@ -74,9 +74,37 @@
   user-select: text;
 }
 
-.sa-review-text.is-highlight {
+.sa-review-prompt,
+.sa-review-fallback,
+.sa-review-answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2-2);
+}
+
+.sa-review-quote {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2-2);
+  margin: 0;
   padding-left: var(--size-4-2);
   border-left: 3px solid var(--text-highlight-bg);
+}
+
+.sa-review-answer {
+  padding: var(--size-4-2);
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+}
+
+/* The timeline's own card (post-card.css); the review card already pads it. */
+.sa-review-post .pcr-card {
+  padding: 0;
+}
+
+/* Recall first: the caption stays hidden until "Show the answer". */
+.sa-review-post.is-covered .pcr-content {
+  display: none;
 }
 
 .sa-review-note {

@@ -489,10 +489,16 @@ export class RealtimeEventBridge {
         // the note now instead of at the next foreground catch-up. Our own
         // executor already wrote the note.
         const settings = this.deps.settings();
-        if (data.targetClientId !== settings.syncClientId && settings.enableMobileAnnotationSync) {
+        const pullIntoNote = data.targetClientId !== settings.syncClientId && settings.enableMobileAnnotationSync;
+        if (pullIntoNote) {
           const archiveId = data.archiveId;
           void this.withArchiveWriteLocks(archiveId, async () => {
-            await this.deps.annotationSyncService?.resyncArchive(archiveId);
+            try {
+              await this.deps.annotationSyncService?.resyncArchive(archiveId);
+            } finally {
+              // Refresh once the note holds the comment: refreshing first re-reads the old note.
+              this.deps.refreshTimelineView();
+            }
           });
         }
         // This event IS the comment job's completion signal — the result routes
@@ -507,7 +513,7 @@ export class RealtimeEventBridge {
           });
         }
 
-        this.deps.refreshTimelineView();
+        if (!pullIntoNote) this.deps.refreshTimelineView();
       }),
       this.deps.events.on('ws:ai_action_requested', (payload: unknown) => {
         const message = payload as { data?: { jobId?: string; targetClientId?: string | null }; jobId?: string; targetClientId?: string | null };

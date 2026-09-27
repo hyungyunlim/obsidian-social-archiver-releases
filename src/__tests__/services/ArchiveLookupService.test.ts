@@ -359,6 +359,55 @@ describe('ArchiveLookupService', () => {
       // Without sig param — different normalized URL, no match
       expect(svc.findByOriginalUrl('https://reddit.com/r/all/comments/abc123/title')).toHaveLength(0);
     });
+
+    it('never matches a Facebook endpoint stripped of the query that identifies the post', () => {
+      // Prod: nine different posts of one user stored as a bare story.php; the
+      // one note carrying that URL was re-bound to each archive in turn.
+      const { app } = createMockApp([
+        {
+          path: 'Social Archives/post-a.md',
+          frontmatter: { sourceArchiveId: 'archive-a', originalUrl: 'https://www.facebook.com/story.php' },
+        },
+        { path: 'Social Archives/photo.md', frontmatter: { originalUrl: 'https://web.facebook.com/photo.php' } },
+        { path: 'Social Archives/watch.md', frontmatter: { originalUrl: 'https://www.facebook.com/watch/' } },
+      ]);
+      const svc = new ArchiveLookupService(app);
+      svc.initialize();
+
+      expect(svc.findByOriginalUrl('https://www.facebook.com/story.php')).toEqual([]);
+      expect(svc.findByOriginalUrl('https://www.facebook.com/story.php?fbclid=abc')).toEqual([]);
+      expect(svc.findByOriginalUrl('https://web.facebook.com/photo.php')).toEqual([]);
+      expect(svc.findByOriginalUrl('https://www.facebook.com/watch')).toEqual([]);
+      // The stable id still resolves.
+      expect(svc.findBySourceArchiveId('archive-a')?.path).toBe('Social Archives/post-a.md');
+    });
+
+    it('still matches the same endpoint when its query carries the post id', () => {
+      const url = 'https://www.facebook.com/story.php?story_fbid=100000000000001&id=200000000000002';
+      const { app } = createMockApp([
+        { path: 'Social Archives/post-a.md', frontmatter: { originalUrl: url } },
+        { path: 'Social Archives/web-watch.md', frontmatter: { originalUrl: 'https://example.com/watch' } },
+      ]);
+      const svc = new ArchiveLookupService(app);
+      svc.initialize();
+
+      expect(svc.findByOriginalUrl(url)).toHaveLength(1);
+      expect(svc.findByOriginalUrl('https://example.com/watch')).toHaveLength(1);
+    });
+
+    it('does not register a bare Facebook endpoint for a freshly saved file', () => {
+      const { app } = createMockApp([]);
+      const svc = new ArchiveLookupService(app);
+      svc.initialize();
+
+      svc.indexSavedFile(makeTFile('Social Archives/new.md'), {
+        sourceArchiveId: 'archive-b',
+        originalUrl: 'https://www.facebook.com/story.php',
+      });
+
+      expect(svc.findByOriginalUrl('https://www.facebook.com/story.php')).toEqual([]);
+      expect(svc.findBySourceArchiveId('archive-b')?.path).toBe('Social Archives/new.md');
+    });
   });
 
   // --------------------------------------------------------------------------

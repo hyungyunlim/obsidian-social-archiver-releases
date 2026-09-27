@@ -15,7 +15,7 @@ export class ReviewView extends ItemView {
 
   constructor(
     leaf: WorkspaceLeaf,
-    private readonly panelProps: () => ReviewPanelProps,
+    private readonly panelProps: (view: ReviewView) => ReviewPanelProps,
   ) {
     super(leaf);
   }
@@ -35,7 +35,7 @@ export class ReviewView extends ItemView {
   async onOpen(): Promise<void> {
     this.contentEl.empty();
     this.contentEl.addClass('sa-review-view');
-    this.panel = mount(ReviewPanel, { target: this.contentEl, props: this.panelProps() }) as unknown as ReviewPanelExports;
+    this.panel = mount(ReviewPanel, { target: this.contentEl, props: this.panelProps(this) }) as unknown as ReviewPanelExports;
   }
 
   async onClose(): Promise<void> {

@@ -17,6 +17,23 @@ import type { IService } from './base/IService';
 // URL Normalization
 // ============================================================================
 
+/** Facebook endpoints that name no post: the post is in the query (`story.php?story_fbid=…`). */
+const FACEBOOK_QUERY_IDENTITY_PATHS = new Set([
+  '/story.php', '/photo.php', '/photo', '/permalink.php', '/watch', '/video.php',
+]);
+
+/**
+ * Such an endpoint without its query is shared by every post of that shape.
+ * The server stored 247 Facebook archives that way (Feb–Sep 2026), and URL
+ * matching then bound one note to other posts' archives — sourceArchiveId,
+ * comments and all. It is never an identity.
+ */
+function isIdentityLessUrl(parsed: URL): boolean {
+  const host = parsed.hostname.toLowerCase();
+  if (host !== 'facebook.com' && !host.endsWith('.facebook.com')) return false;
+  return parsed.search === '' && FACEBOOK_QUERY_IDENTITY_PATHS.has(parsed.pathname);
+}
+
 /**
  * Normalize a URL for comparison purposes.
  *
@@ -26,9 +43,10 @@ import type { IService } from './base/IService';
  * - Do NOT blindly strip query/hash — only remove known tracking params
  *
  * This is intentionally conservative. False negatives (missed matches) are
- * safer than false positives (wrong file overwritten).
+ * safer than false positives (wrong file overwritten). Returns null for a URL
+ * that identifies no content, so it never matches.
  */
-function normalizeUrl(url: string): string {
+function normalizeUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
     // Remove known tracking query parameters only
@@ -45,6 +63,7 @@ function normalizeUrl(url: string): string {
       pathname = pathname.slice(0, -1);
     }
     parsed.pathname = pathname;
+    if (isIdentityLessUrl(parsed)) return null;
     // Normalize to lowercase scheme + host, preserve case for path (platform-significant)
     return `${parsed.protocol}//${parsed.host}${parsed.pathname}${parsed.search}`;
   } catch {
@@ -286,7 +305,7 @@ export class ArchiveLookupService implements IService {
   findByOriginalUrl(originalUrl: string): TFile[] {
     this.ensureIndexBuilt();
     const normalized = normalizeUrl(originalUrl);
-    return this.index.byOriginalUrl.get(normalized) ?? [];
+    return normalized ? this.index.byOriginalUrl.get(normalized) ?? [] : [];
   }
 
   /**
@@ -431,8 +450,8 @@ export class ArchiveLookupService implements IService {
     }
 
     // Register by normalized originalUrl (many-to-one mapping)
-    if (data.originalUrl && data.originalUrl.length > 0) {
-      const normalized = normalizeUrl(data.originalUrl);
+    const normalized = data.originalUrl ? normalizeUrl(data.originalUrl) : null;
+    if (normalized) {
       const existing = this.index.byOriginalUrl.get(normalized);
       if (existing) {
         // Avoid duplicate TFile references for the same path
@@ -549,8 +568,10 @@ export class ArchiveLookupService implements IService {
     }
 
     // Index by normalised originalUrl (may be many-to-one)
-    if (typeof originalUrl === 'string' && originalUrl.length > 0) {
-      const normalized = normalizeUrl(originalUrl);
+    const normalized = typeof originalUrl === 'string' && originalUrl.length > 0
+      ? normalizeUrl(originalUrl)
+      : null;
+    if (normalized) {
       const existing = this.index.byOriginalUrl.get(normalized);
       if (existing) {
         // Avoid duplicate TFile references for the same path
