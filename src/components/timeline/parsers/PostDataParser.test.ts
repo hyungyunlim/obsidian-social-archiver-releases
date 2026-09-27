@@ -90,6 +90,26 @@ Shared post body that should only render once.
     expect(archives[0].media?.[0]?.url).toBe('attachments/social-archives/facebook/sample-1.webp');
   });
 
+  it('drops the hidden header for any platform, with stale copies stacked under it', () => {
+    const archives = (parser as any).extractEmbeddedArchives(`
+## Referenced Social Media Posts
+
+<!-- Embedded: google - Author -->
+
+<!-- Embedded: Google Maps - author -->
+
+Cafe &lt;best>
+
+---
+
+**Platform:** Google Maps | **Author:** [Author](https://maps.google.com/a) | **Published:** 2024-06-01 19:00
+
+**Original URL:** https://maps.google.com/place/1`, [], []);
+
+    expect(archives).toHaveLength(1);
+    expect(archives[0].content.text).toBe('Cafe &lt;best>');
+  });
+
   it('ignores quoted post sections that live inside the embedded archives section for top-level posts', () => {
     const [mainContentBeforeArchives] = markdown.split(/(?:\n|^)## (?:📦 )?Referenced Social Media Posts/);
     const quotedPost = (parser as any).extractQuotedPost(mainContentBeforeArchives);

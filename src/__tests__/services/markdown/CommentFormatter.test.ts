@@ -438,6 +438,46 @@ describe('CommentFormatter', () => {
       );
     });
 
+    it('keeps `<tag>` text as text, written as `&lt;`, beside a converted anchor', () => {
+      const comments: Comment[] = [
+        {
+          id: '1',
+          author: { name: 'Commenter', url: 'https://linkedin.com/in/commenter' },
+          content: 'Thanks <a href="/in/main-author">Main Author</a> for the <inputs> tip',
+        },
+      ];
+
+      const result = formatter.formatComments(comments, 'linkedin');
+
+      expect(result).toContain(
+        'Thanks [Main Author](https://www.linkedin.com/in/main-author) for the &lt;inputs> tip'
+      );
+    });
+
+    it('keeps a `<tag>` block in a reply as text; code spans and `\\<` stay verbatim', () => {
+      const comments: Comment[] = [
+        {
+          id: '1',
+          author: { name: 'Alice', url: 'https://www.threads.com/@alice', handle: 'alice' },
+          content: 'use `<video>` or \\<kept>',
+          replies: [
+            {
+              id: '2',
+              author: { name: 'Bob', url: 'https://www.threads.com/@bob', handle: 'bob' },
+              content: '<inputs>\nAsk me\n</inputs> and &lt;책 제목&gt;',
+            },
+          ],
+        },
+      ];
+
+      const result = formatter.formatComments(comments, 'threads');
+
+      expect(result).toBe(
+        '**@alice**\nuse `<video>` or \\<kept>\n\n' +
+          '  ↳ **@bob**\n  &lt;inputs>\nAsk me\n&lt;/inputs> and &lt;책 제목>'
+      );
+    });
+
     it('default platform branch: falls back to @handle or name at every depth', () => {
       const comments: Comment[] = [
         {

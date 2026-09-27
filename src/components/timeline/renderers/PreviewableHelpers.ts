@@ -140,6 +140,27 @@ export function extractYouTubeVideoId(url: string | undefined | null): string | 
   return null;
 }
 
+/**
+ * Escape `<` `>` in social post text so MarkdownRenderer doesn't treat
+ * `<책 제목>` as HTML. Leading blockquote markers stay intact for Substack Note
+ * excerpts. A `\<` the note already carries (Chrome-extension captures) is
+ * left alone: escaping it again would show a literal `&lt;`.
+ */
+export function escapeAngleBrackets(content: string): string {
+  return content
+    .replace(/(?<!\\)</g, '&lt;')
+    .split('\n')
+    .map((line) => {
+      const blockquotePrefix = line.match(/^([ \t]{0,3}(?:>[ \t]?)+)/)?.[1] ?? '';
+      if (!blockquotePrefix) {
+        return line.replace(/>/g, '&gt;');
+      }
+
+      return blockquotePrefix + line.slice(blockquotePrefix.length).replace(/>/g, '&gt;');
+    })
+    .join('\n');
+}
+
 // ---------------------------------------------------------------------------
 // Google Maps helpers (Round 3 dedupe)
 //

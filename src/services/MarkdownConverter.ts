@@ -17,9 +17,10 @@ import { SentinelMediaRegionManager } from '@/plugin/realtime/SentinelMediaRegio
 import { isRssBasedPlatform } from '@/constants/rssPlatforms';
 import { isSubstackNote } from '@/utils/substack';
 import { extractTrailingReaderChatSection, stripTrailingReaderChatSection } from '@/utils/reader-chat-section';
-import { AI_CHAT_PLATFORMS, getPlatformName } from '@/shared/platforms';
+import { AI_CHAT_PLATFORMS, getPlatformName, isWebLanePlatform } from '@/shared/platforms';
 import { encodePathForMarkdownLink } from '@/utils/url';
 import { toRelativeMediaPath } from '@/utils/path';
+import { escapeHtmlOpeners } from '@/utils/escape-html-openers';
 import type { FrontmatterCustomizationSettings } from '@/types/settings';
 import {
   DEFAULT_FRONTMATTER_CUSTOMIZATION_SETTINGS,
@@ -1823,10 +1824,10 @@ export class MarkdownConverter implements IService {
           section += `**📺 ${archive.title}**\n\n`;
         }
 
-        // Description (if exists)
+        // Description (if exists), its `<` escaped like the post body's
         const contentText = archive.content.text.trim();
         if (contentText) {
-          section += `**Description:**\n${contentText}\n\n`;
+          section += `**Description:**\n${escapeHtmlOpeners(contentText)}\n\n`;
         }
 
         // Transcript (if formatted entries exist)
@@ -1856,9 +1857,13 @@ export class MarkdownConverter implements IService {
           contentText = this.textFormatter.linkifyInlineHashtags(contentText, archive.platform);
         }
 
-        // Content as plain text (matching main archives)
+        // Content as plain text (matching main archives), its `<` escaped like
+        // the post body's. Web-lane and blog-like RSS archives carry converted
+        // markdown here (raw `<img>` and all), which stays as written.
         if (contentText) {
-          section += `${contentText}\n\n`;
+          const isMarkdown = isWebLanePlatform(archive.platform)
+            || (isRssBasedPlatform(archive.platform) && !isSubstackNote(archive.postType, archive.url));
+          section += `${isMarkdown ? contentText : escapeHtmlOpeners(contentText)}\n\n`;
         }
 
         // Hashtags section (if exists)
@@ -2024,7 +2029,7 @@ export class MarkdownConverter implements IService {
       });
     } else if (archive.content?.text?.trim()) {
       // Fallback to text if pin list is missing
-      section += `${archive.content.text.trim()}\n\n`;
+      section += `${escapeHtmlOpeners(archive.content.text.trim())}\n\n`;
     }
 
     // Media (if exists)
@@ -2079,13 +2084,15 @@ export class MarkdownConverter implements IService {
     let section = `## ${headerEmoji} ${headerText}\n\n`;
     section += `### ${platformName} - ${authorName}\n\n`;
 
-    // Content as plain text (hashtags are already included in text)
+    // Content as plain text (hashtags are already included in text). Its `<` is
+    // escaped like the post body's; a markdown fallback is left as written.
+    const isPlainText = !!quotedPost.content.text;
     let contentText = (quotedPost.content.text || quotedPost.content.markdown || '').trim();
     if (quotedPost.platform === 'reddit' && contentText) {
       contentText = this.textFormatter.linkifyRedditReferences(contentText);
     }
     if (contentText) {
-      section += `${contentText}\n\n`;
+      section += `${isPlainText ? escapeHtmlOpeners(contentText) : contentText}\n\n`;
     }
 
     // External link preview (if exists) - render before media
@@ -2473,7 +2480,8 @@ export class MarkdownConverter implements IService {
 
     // For RSS-based platforms, web articles, and X Articles, preserve markdown headings and ordered lists
     // (they come from HTML/Draft.js conversion and are intentional)
-    // For other platforms, escape headings and ordered lists to prevent rendering issues
+    // For other platforms, escape headings, ordered lists and `<` (a `<tag>` line would
+    // open an HTML block) to prevent rendering issues
     // Browser-clip markdown bodies carry deliberate markup (==highlights==,
     // ``` code fences); escaping leading #/N. would corrupt fenced code, so
     // preserve them as-is. Mentions/hashtag linkify still run (those passes
@@ -2481,7 +2489,7 @@ export class MarkdownConverter implements IService {
     const preserveMarkdown = isBlogLikeRss || isWebArticle || isXArticle || isThreadsInlineArchive || !!clipMarkdownBody;
     const sanitizedText = preserveMarkdown
       ? baseText
-      : this.escapeOrderedListPatterns(this.escapeLeadingMarkdownHeadings(baseText));
+      : escapeHtmlOpeners(this.escapeOrderedListPatterns(this.escapeLeadingMarkdownHeadings(baseText)));
 
     // For RSS-based platforms and web articles with inline images, don't show a
     // duplicate media section at the bottom of the note.

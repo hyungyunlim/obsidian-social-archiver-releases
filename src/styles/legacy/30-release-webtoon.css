@@ -1,127 +1,224 @@
 /* Legacy split chunk: 30-release-webtoon.css (preserves original rule order) */
 
-.sa-release-notes-modal {
-  max-width: 500px
+/* Desktop gets the desktop app's room; phones and tablets use am-modal--mobile. */
+.sa-release-notes-modal.sa-release-notes-modal--wide {
+  width: 680px;
+  max-width: var(--dialog-max-width, 80vw)
 }
 
-.sa-release-notes-modal .sa-release-notes-title {
+/* Same content as the mobile/desktop "What's new" dialogs: one-line header
+ * (eyebrow · version · date · Important), summary as the lead, highlights,
+ * then hub link · Got it. Skipped releases are listed beside the text on
+ * wider screens and paged (with the position) on phones. */
+.sa-release-notes-modal .sa-release-notes-header {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 0 8px;
-  font-size: 20px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  /* Clear Obsidian's close (×) button in the top-right corner. */
+  padding-right: 28px;
+  margin: 0 0 12px
+}
+
+.sa-release-notes-modal .sa-release-notes-eyebrow {
+  font-size: 12px;
   font-weight: 600;
-  color: var(--text-normal)
+  color: var(--text-accent)
+}
+
+.sa-release-notes-modal .sa-release-notes-position {
+  min-width: 40px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--text-muted)
+}
+
+.sa-release-notes-modal .sa-release-notes-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted)
 }
 
 .sa-release-notes-modal .sa-release-notes-badge {
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  flex-shrink: 0
+  padding: 1px 6px;
+  border: 1px solid rgba(var(--color-orange-rgb, 236, 117, 0), 0.35);
+  border-radius: var(--radius-s);
+  background: rgba(var(--color-orange-rgb, 236, 117, 0), 0.12);
+  color: var(--color-orange);
+  font-size: 11px;
+  font-weight: 600
 }
 
-.sa-release-notes-modal .sa-release-notes-date {
-  margin: 0 0 16px;
-  font-size: 12px
-}
-
-.sa-release-notes-modal .sa-release-notes-content {
-  /* Drop inner scroll: let the content flow at full height. The modal's
-   * outer container handles overflow when needed, with its scrollbar
-   * flush against the right edge instead of an inset 8px in. */
-  margin-bottom: 20px
-}
-
-.sa-release-notes-modal .sa-release-notes-content h2 {
-  font-size: 17px;
-  font-weight: 600;
-  margin: 16px 0 8px;
+.sa-release-notes-modal .sa-release-notes-summary {
+  margin: 0 0 12px;
+  font-size: 14px;
+  line-height: 1.6;
   color: var(--text-normal)
 }
 
-.sa-release-notes-modal .sa-release-notes-content h2:first-child {
-  margin-top: 0
-}
-
 .sa-release-notes-modal .sa-release-notes-content ul {
-  margin: 8px 0;
+  margin: 0;
   padding-left: 20px
 }
 
 .sa-release-notes-modal .sa-release-notes-content li {
-  margin: 4px 0;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.6;
   color: var(--text-normal)
 }
 
-.sa-release-notes-modal .sa-release-notes-content p {
-  margin: 8px 0;
-  font-size: 15px;
-  line-height: 1.6;
-  color: var(--text-normal)
+.sa-release-notes-modal .sa-release-notes-content li + li {
+  margin-top: 4px
 }
 
-.sa-release-notes-modal .sa-release-notes-content strong {
-  font-weight: 600;
-  color: var(--text-normal)
+.sa-release-notes-modal .modal-content {
+  container-type: inline-size
 }
 
-.sa-release-notes-modal .sa-release-notes-content ol {
-  margin: 8px 0;
-  padding-left: 20px
+.sa-release-notes-modal .sa-release-notes-main.mod-list {
+  display: grid;
+  grid-template-columns: 172px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  max-height: min(520px, 62vh)
+}
+
+.sa-release-notes-modal .sa-release-notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  padding: 2px 10px 2px 2px;
+  overflow-y: auto;
+  border-right: 1px solid var(--background-modifier-border)
+}
+
+.sa-release-notes-modal .sa-release-notes-tab {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 6px;
+  width: 100%;
+  height: auto;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-m);
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-normal);
+  font-weight: var(--font-normal);
+  text-align: left;
+  white-space: normal
+}
+
+.sa-release-notes-modal .sa-release-notes-tab:hover {
+  background: var(--background-modifier-hover)
+}
+
+.sa-release-notes-modal .sa-release-notes-tab[aria-selected="true"] {
+  background: var(--background-modifier-active-hover)
+}
+
+.sa-release-notes-modal .sa-release-notes-tab-version {
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-semibold);
+  font-variant-numeric: tabular-nums
+}
+
+.sa-release-notes-modal .sa-release-notes-tab[aria-selected="true"] .sa-release-notes-tab-version {
+  color: var(--text-accent)
+}
+
+.sa-release-notes-modal .sa-release-notes-tab-date {
+  grid-column: 1 / -1;
+  font-size: var(--font-ui-smaller);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted)
+}
+
+.sa-release-notes-modal .mod-list .sa-release-notes-content {
+  min-height: 0;
+  padding: 2px 4px 2px 20px;
+  overflow-y: auto
+}
+
+.sa-release-notes-modal .mod-list .sa-release-notes-content:focus-visible {
+  outline: 2px solid var(--background-modifier-border-focus);
+  outline-offset: -2px;
+  border-radius: var(--radius-s)
+}
+
+/* Too narrow for two columns: the list sits above the text. */
+@container (max-width: 480px) {
+  .sa-release-notes-modal .sa-release-notes-main.mod-list {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr)
+  }
+
+  .sa-release-notes-modal .sa-release-notes-list {
+    max-height: 132px;
+    padding: 2px 2px 8px;
+    border-right: 0;
+    border-bottom: 1px solid var(--background-modifier-border)
+  }
+
+  .sa-release-notes-modal .mod-list .sa-release-notes-content {
+    padding: 12px 4px 2px
+  }
+}
+
+/* With the list, the height follows the shown release; anchored at the top,
+ * the header and list stay put while it changes. */
+.modal-container.sa-release-notes-container {
+  align-items: flex-start
+}
+
+.modal-container.sa-release-notes-container .sa-release-notes-modal {
+  margin-top: clamp(48px, 12vh, 140px)
 }
 
 .sa-release-notes-modal .sa-release-notes-footer {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 20px;
   padding-top: 12px;
   border-top: 1px solid var(--background-modifier-border)
 }
 
-.sa-release-notes-modal .sa-release-notes-footer button {
+.sa-release-notes-modal .sa-release-notes-pager {
+  display: flex;
+  align-items: center;
+  gap: 4px
+}
+
+.sa-release-notes-modal .sa-release-notes-page:disabled {
+  opacity: 0.4;
+  cursor: default
+}
+
+.sa-release-notes-modal .sa-release-notes-link {
+  margin-left: auto;
+  font-size: 13px
+}
+
+.sa-release-notes-modal .sa-release-notes-footer .mod-cta {
   min-width: 80px;
   min-height: 36px
 }
 
 @media(max-width:480px) {
-  .sa-release-notes-modal .sa-release-notes-footer button {
+  .sa-release-notes-modal .sa-release-notes-footer .mod-cta,
+  .sa-release-notes-modal .sa-release-notes-page {
+    min-width: 44px;
     min-height: 44px
   }
-}
-
-.sa-release-notes-modal .sa-release-notes-content iframe {
-  width: 100%;
-  max-width: 100%;
-  aspect-ratio: 16/9;
-  border-radius: 8px;
-  margin: 12px 0
-}
-
-.sa-release-notes-modal .sa-release-notes-content .external-embed {
-  width: 100%;
-  max-width: 100%;
-  margin: 12px 0
-}
-
-.sa-release-notes-modal .sa-release-notes-content .external-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 12px;
-  background: var(--background-secondary);
-  border-radius: 6px;
-  color: var(--text-accent);
-  text-decoration: none;
-  font-size: 13px;
-  margin: 8px 0
-}
-
-.sa-release-notes-modal .sa-release-notes-content .external-link:hover {
-  background: var(--background-modifier-hover)
 }
 
 .sa-episode-item {

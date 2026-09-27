@@ -9,6 +9,7 @@ import {
   parseGoogleMapsBusinessData,
   formatBusinessHours,
   buildGoogleMapsDirectionsUrl,
+  escapeAngleBrackets,
 } from '@/components/timeline/renderers/PreviewableHelpers';
 import type { PostData } from '@/types/post';
 
@@ -381,6 +382,18 @@ describe('PreviewableHelpers', () => {
     it('falls back to place name when only that is provided', () => {
       const url = buildGoogleMapsDirectionsUrl(undefined, undefined, undefined, 'Pho 24');
       expect(url).toContain('destination=Pho%2024');
+    });
+  });
+
+  describe('escapeAngleBrackets', () => {
+    it('escapes angle brackets but keeps leading blockquote markers', () => {
+      expect(escapeAngleBrackets('<책 제목> a > b\n> quote <x>')).toBe(
+        '&lt;책 제목&gt; a &gt; b\n> quote &lt;x&gt;',
+      );
+    });
+
+    it('leaves a `\\<` or `&lt;` the note already carries, so it renders as `<`', () => {
+      expect(escapeAngleBrackets('\\<inputs> and &lt;done>')).toBe('\\<inputs&gt; and &lt;done&gt;');
     });
   });
 });

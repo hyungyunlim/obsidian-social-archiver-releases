@@ -104,6 +104,7 @@ import {
   parseGoogleMapsBusinessData as helperParseGoogleMapsBusinessData,
   formatBusinessHours as helperFormatBusinessHours,
   buildGoogleMapsDirectionsUrl as helperBuildGoogleMapsDirectionsUrl,
+  escapeAngleBrackets as helperEscapeAngleBrackets,
   type GoogleMapsBusinessData,
   type FormattedBusinessHours,
 } from './PreviewableHelpers';
@@ -2089,22 +2090,12 @@ export class PostCardRenderer extends Component {
    * Escape angle brackets to prevent HTML interpretation.
    * Social media text uses <book title> or <인수공통> literally,
    * but MarkdownRenderer treats them as HTML tags (e.g. <A ...> → anchor).
-   * Preserve leading Markdown blockquote markers so Substack Notes render
-   * quoted excerpts as quotes instead of literal "&gt;" text.
+   *
+   * Round-3: delegates to `PreviewableHelpers.escapeAngleBrackets` — single
+   * canonical implementation shared with the previewable sub-renderer family.
    */
   private escapeAngleBrackets(content: string): string {
-    return content
-      .replace(/</g, '&lt;')
-      .split('\n')
-      .map((line) => {
-        const blockquotePrefix = line.match(/^([ \t]{0,3}(?:>[ \t]?)+)/)?.[1] ?? '';
-        if (!blockquotePrefix) {
-          return line.replace(/>/g, '&gt;');
-        }
-
-        return blockquotePrefix + line.slice(blockquotePrefix.length).replace(/>/g, '&gt;');
-      })
-      .join('\n');
+    return helperEscapeAngleBrackets(content);
   }
 
   /**

@@ -77,6 +77,19 @@ describe('ArchiveCompletionService terminal failures', () => {
     expect(noticeMock).toHaveBeenCalledWith(STORY_MESSAGE, 10000);
   });
 
+  it('does not retry an RSS feed link and shows the whole subscription hint', async () => {
+    const feedMessage =
+      'This is an RSS feed, not a web page. To follow this site, add it as a subscription instead.';
+    const job = makeJob();
+    const deps = makeDeps(job);
+    const service = new ArchiveCompletionService(deps);
+
+    await service.processFailedJob(job, feedMessage, 'ARCHIVE_FEED_URL');
+
+    expect(deps.archiveJobTracker.markRetrying).not.toHaveBeenCalled();
+    expect(noticeMock).toHaveBeenCalledWith(feedMessage, 10000);
+  });
+
   it('still retries a generic failure, even when it carries a non-terminal code', async () => {
     const job = makeJob();
     const deps = makeDeps(job);

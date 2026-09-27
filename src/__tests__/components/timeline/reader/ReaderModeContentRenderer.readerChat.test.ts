@@ -203,3 +203,37 @@ describe('ReaderModeContentRenderer reader AI chat', () => {
     expect(assistantMessages[1]?.textContent).toContain('Second answer.');
   });
 });
+
+describe('ReaderModeContentRenderer social post body', () => {
+  it('escapes a raw `<` but keeps a `\\<` the note already carries', async () => {
+    markdownRenderSpy.mockClear();
+    const app = {
+      vault: { adapter: { getResourcePath: (path: string) => path } },
+    } as App;
+    const plugin = { app, settings: {} } as SocialArchiverPlugin;
+    const modal = new Modal(app);
+    document.body.appendChild(modal.contentEl);
+    const renderer = new ReaderModeContentRenderer(
+      app,
+      plugin,
+      new MediaGalleryRenderer((path) => path),
+      new LinkPreviewRenderer(),
+    );
+    const post: PostData = {
+      platform: 'x',
+      id: 'escaped-post',
+      url: 'https://x.com/someone/status/1',
+      author: { name: 'Someone', url: 'https://x.com/someone' },
+      content: { text: '\\<kept> and <raw>' },
+      media: [],
+      metadata: { timestamp: '2026-09-27T12:00:00.000Z' },
+    };
+
+    await renderer.render(modal.contentEl, post, 0, 1, createCallbacks());
+
+    const bodyMarkdown = markdownRenderSpy.mock.calls
+      .map((call) => call[1])
+      .find((markdown) => markdown.includes('kept'));
+    expect(bodyMarkdown).toBe('\\<kept&gt; and &lt;raw&gt;');
+  });
+});

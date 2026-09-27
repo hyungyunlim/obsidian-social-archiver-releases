@@ -643,8 +643,9 @@ export class ReaderModeContentRenderer extends Component {
       source = source.replace(/^([-=]+)$/gm, '\\$1');
       // Escape ordered list patterns (e.g. "2025. 11. 6" parsed as nested lists)
       source = source.replace(/^(\s*)(\d+)\.(?=\s|$)/gm, '$1$2\\.');
-      // Escape angle brackets to prevent HTML interpretation (e.g. <책 제목>)
-      source = source.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      // Escape angle brackets to prevent HTML interpretation (e.g. <책 제목>);
+      // a `\<` the note already carries stays, or it would show as `&lt;`.
+      source = source.replace(/(?<!\\)</g, '&lt;').replace(/>/g, '&gt;');
     }
 
     source = normalizeHighlightMarks(source);
@@ -695,7 +696,7 @@ export class ReaderModeContentRenderer extends Component {
     if (bodyText.trim()) {
       const bodyEl = wrapper.createDiv({ cls: 'sa-reader-mode-body rmcr-quoted-body' });
       const escaped = normalizeHighlightMarks(
-        bodyText.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        bodyText.replace(/(?<!\\)</g, '&lt;').replace(/>/g, '&gt;')
       );
       await MarkdownRenderer.render(this.app, escaped, bodyEl, sourcePath, this);
     }

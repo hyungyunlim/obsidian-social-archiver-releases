@@ -33,7 +33,12 @@ import { ReleaseNotesModal } from './modals/ReleaseNotesModal';
 import { InstagramImportModal } from './modals/InstagramImportModal';
 import type { ImportOrchestrator } from './types/import';
 import { NaverWebtoonLocalService } from './services/NaverWebtoonLocalService';
-import { RELEASE_NOTES } from './release-notes';
+import { currentLang } from './i18n';
+import {
+  checkReleaseNotes,
+  fetchReleaseNoteUpdates,
+  toReleaseNoteLocale,
+} from './plugin/release-notes/releaseNoteUpdates';
 import { completeAuthentication, showAuthError, showAuthSuccess, refreshUserCredits, refreshUserBillingUsage, isAuthenticated, isPaidPlan } from './utils/auth';
 import { showAccountRequiredNotice } from './utils/accountGate';
 import {
@@ -1317,8 +1322,11 @@ export default class SocialArchiverPlugin extends Plugin {
       );
     }
 
-    // Check for version update and show release notes if applicable
-    await this.checkAndShowReleaseNotes();
+    // After an update, show what changed (fetched from the release hub, so it
+    // waits for the workspace instead of holding up plugin load).
+    this.app.workspace.onLayoutReady(() => {
+      void this.checkAndShowReleaseNotes();
+    });
 
     // Register Timeline View
     this.registerView(
@@ -1856,51 +1864,20 @@ export default class SocialArchiverPlugin extends Plugin {
   }
 
   /**
-   * Check for version updates and show release notes modal if applicable
+   * Show the release-hub entries for every version released since the one the
+   * user last saw notes for.
    */
   private async checkAndShowReleaseNotes(): Promise<void> {
-    const currentVersion = this.manifest.version;
-    const lastSeenVersion = this.settings.lastSeenVersion;
-    const isDebugMode = this.settings.debugAlwaysShowReleaseNotes;
-
-    // Check if release notes exist for this version
-    const releaseNote = RELEASE_NOTES[currentVersion];
-
-    // DEV: Always show if debug mode is enabled and release notes exist
-    if (isDebugMode && releaseNote) {
-      const modal = new ReleaseNotesModal(this.app, currentVersion, releaseNote);
-      modal.open();
-      return;
-    }
-
-    // Same version - no update needed
-    if (currentVersion === lastSeenVersion) {
-      return;
-    }
-
-    // User disabled release notes - just update the version silently
-    if (!this.settings.showReleaseNotes) {
-      await this.saveSettingsPartial({ lastSeenVersion: currentVersion });
-      return;
-    }
-
-    if (!releaseNote) {
-      // No release notes for this version (minor patch) - update silently
-      await this.saveSettingsPartial({ lastSeenVersion: currentVersion });
-      return;
-    }
-
-    // Show release notes modal
-    const modal = new ReleaseNotesModal(
-      this.app,
-      currentVersion,
-      releaseNote,
-      () => {
-        // Update lastSeenVersion after modal closes
-        void this.saveSettingsPartial({ lastSeenVersion: currentVersion });
-      }
-    );
-    modal.open();
+    await checkReleaseNotes({
+      currentVersion: this.manifest.version,
+      lastSeenVersion: this.settings.lastSeenVersion,
+      enabled: this.settings.showReleaseNotes,
+      alwaysShow: this.settings.debugAlwaysShowReleaseNotes,
+      locale: toReleaseNoteLocale(currentLang()),
+      fetchUpdates: fetchReleaseNoteUpdates,
+      saveLastSeen: (version) => this.saveSettingsPartial({ lastSeenVersion: version }),
+      show: (entries, onClose) => new ReleaseNotesModal(this.app, entries, onClose).open(),
+    });
   }
 
   /**

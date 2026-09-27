@@ -1,195 +1,210 @@
-import { Modal, App, MarkdownRenderer, Platform, Component } from 'obsidian';
-import type { ReleaseNote } from '../release-notes';
+import { App, Modal, Platform, setIcon } from 'obsidian';
+import { t } from '../i18n';
+import type { ReleaseNoteUpdate } from '../plugin/release-notes/releaseNoteUpdates';
 
 /**
- * Release Notes Modal
+ * "What's new" after a plugin update, opening on the newest release. When
+ * several releases were skipped, wider screens list them beside the text
+ * (newest first), like the desktop app; phones page one at a time with
+ * Previous/Next, like the mobile app.
  *
- * Displays release notes to users after plugin updates.
- * Uses Obsidian's native Modal with MarkdownRenderer for proper rendering.
- * Follows the same pattern as ArchiveModal and RedditSubscribeModal.
+ * Same content as the mobile and desktop apps: a one-line header (What's new ·
+ * version · date · Important), the summary as the lead, highlights, a link to
+ * the entry on the release notes page, and Got it. The hub entry's headline is
+ * left out — the header names the release and the summary opens with the
+ * gist. Copy is plain text (setText), never HTML.
  */
 export class ReleaseNotesModal extends Modal {
-  private version: string;
-  private releaseNote: ReleaseNote;
-  private onCloseCallback?: () => void;
-  private component: Component;
+  private readonly entries: ReleaseNoteUpdate[];
+  private readonly onCloseCallback?: () => void;
+  private index: number;
 
-  constructor(
-    app: App,
-    version: string,
-    releaseNote: ReleaseNote,
-    onCloseCallback?: () => void
-  ) {
+  private positionEl?: HTMLElement;
+  private metaEl!: HTMLElement;
+  private bodyEl!: HTMLElement;
+  private linkEl!: HTMLAnchorElement;
+  private previousButton?: HTMLButtonElement;
+  private nextButton?: HTMLButtonElement;
+  /** Index-aligned with `entries`; empty without the list. */
+  private readonly tabs: HTMLButtonElement[] = [];
+
+  constructor(app: App, entries: ReleaseNoteUpdate[], onCloseCallback?: () => void) {
     super(app);
-    this.version = version;
-    this.releaseNote = releaseNote;
+    this.entries = entries;
     this.onCloseCallback = onCloseCallback;
-    this.component = new Component();
+    this.index = entries.length - 1;
   }
 
   onOpen(): void {
     const { contentEl, modalEl } = this;
     contentEl.empty();
-
-    // Load component for markdown rendering lifecycle
-    this.component.load();
-
-    // Add modal class for styling (same pattern as ArchiveModal)
     modalEl.addClass('social-archiver-modal', 'sa-release-notes-modal');
-
-    // ARIA attributes for accessibility
-    modalEl.setAttribute('role', 'dialog');
-    modalEl.setAttribute('aria-modal', 'true');
+    modalEl.addClass(Platform.isMobile ? 'am-modal--mobile' : 'sa-release-notes-modal--wide');
     modalEl.setAttribute('aria-labelledby', 'sa-release-notes-title');
+    const withList = this.entries.length > 1 && !Platform.isPhone;
 
-    // Mobile modal size adjustments (same as ArchiveModal)
-    if (Platform.isMobile) {
-      modalEl.addClass('am-modal--mobile');
-      contentEl.addClass('rnm-content--mobile');
-    }
-
-    // Title with ARIA id
-    const titleEl = contentEl.createEl('h2', {
-      text: `Social Archiver — What's New in v${this.version}`,
-      cls: 'sa-release-notes-title',
+    const header = contentEl.createDiv({ cls: 'sa-release-notes-header' });
+    header.createSpan({
+      cls: 'sa-release-notes-eyebrow',
+      text: t('rn.eyebrow'),
+      attr: { id: 'sa-release-notes-title' },
     });
-    titleEl.id = 'sa-release-notes-title';
+    this.metaEl = header.createDiv({ cls: 'sa-release-notes-meta' });
 
-    // Important badge (inline with title)
-    if (this.releaseNote.isImportant) {
-      const badgeEl = titleEl.createSpan({ cls: 'sa-release-notes-badge mod-cta' });
-      badgeEl.textContent = 'Important';
+    const main = contentEl.createDiv({ cls: 'sa-release-notes-main' });
+    if (withList) {
+      main.addClass('mod-list');
+      // The height follows the shown release; anchoring at the top keeps the
+      // header and list still while it changes.
+      this.containerEl.addClass('sa-release-notes-container');
+      this.createList(main);
     }
-
-    // Date subtitle
-    contentEl.createEl('p', {
-      text: this.releaseNote.date,
-      cls: 'sa-release-notes-date setting-item-description',
+    this.bodyEl = main.createDiv({
+      cls: 'sa-release-notes-content',
+      // Focusable so the keyboard can scroll long notes.
+      attr: withList ? { id: 'sa-release-notes-panel', role: 'tabpanel', tabindex: '0' } : {},
     });
 
-    // Content container with markdown
-    const contentContainer = contentEl.createDiv({ cls: 'sa-release-notes-content' });
-
-    // Render markdown content
-    void MarkdownRenderer.render(
-      this.app,
-      this.releaseNote.notes.trim(),
-      contentContainer,
-      '',
-      this.component
-    );
-
-    // iOS: Convert YouTube embeds to clickable links (embeds don't work on iOS)
-    if (Platform.isMobile && !Platform.isAndroidApp) {
-      this.convertYouTubeEmbedsToLinks(contentContainer);
-    }
-
-    // QR code block (if provided) — insert after the first section (before second h2)
-    if (this.releaseNote.qrCode) {
-      const { svgBase64, url, label } = this.releaseNote.qrCode;
-      const qrContainer = activeWindow.createDiv();
-      qrContainer.className = 'sa-release-notes-qr rnm-qr-container';
-
-      const qrImg = qrContainer.createEl('img', {
-        attr: { src: `data:image/svg+xml;base64,${svgBase64}`, alt: 'QR Code' },
-      });
-      const size = Platform.isMobile ? '110px' : '140px';
-      qrImg.setCssProps({'--rnm-qr-size': size});
-      qrImg.addClass('rnm-qr-image');
-
-      const linksContainer = qrContainer.createDiv({ cls: 'rnm-qr-links' });
-
-      linksContainer.createEl('a', {
-        text: label,
-        cls: 'external-link rnm-qr-link',
-        attr: { href: url, target: '_blank' },
-      });
-
-      if (this.releaseNote.qrCode.playStoreUrl) {
-        linksContainer.createEl('a', {
-          text: 'Get it on Google Play',
-          cls: 'external-link rnm-qr-link',
-          attr: { href: this.releaseNote.qrCode.playStoreUrl, target: '_blank' },
-        });
+    const footer = contentEl.createDiv({ cls: 'sa-release-notes-footer' });
+    if (this.entries.length > 1) {
+      if (!withList) {
+        const pager = footer.createDiv({ cls: 'sa-release-notes-pager' });
+        this.previousButton = this.createPageButton(pager, 'chevron-left', t('rn.previous'), -1);
+        this.positionEl = pager.createSpan({ cls: 'sa-release-notes-position' });
+        this.nextButton = this.createPageButton(pager, 'chevron-right', t('rn.next'), 1);
       }
-
-      // Insert before the second h2 (after iOS section, before Performance section)
-      const headings = contentContainer.querySelectorAll('h2');
-      const secondHeading = headings.item(1);
-      if (secondHeading) {
-        secondHeading.before(qrContainer);
-      } else {
-        contentContainer.appendChild(qrContainer);
-      }
+      this.scope.register([], 'ArrowLeft', () => this.go(-1));
+      this.scope.register([], 'ArrowRight', () => this.go(1));
     }
-
-    // Footer with button
-    const footerEl = contentEl.createDiv({ cls: 'sa-release-notes-footer' });
-
-    // Got it button - uses Obsidian's mod-cta class
-    const buttonEl = footerEl.createEl('button', {
-      text: 'Got it',
-      cls: 'mod-cta',
+    this.linkEl = footer.createEl('a', {
+      cls: 'external-link sa-release-notes-link',
+      text: t('rn.openHub'),
+      attr: { target: '_blank', rel: 'noopener' },
     });
-    buttonEl.addEventListener('click', () => this.close());
+    const doneButton = footer.createEl('button', { cls: 'mod-cta', text: t('rn.done') });
+    doneButton.addEventListener('click', () => this.close());
 
-    // Focus button for keyboard accessibility
-    buttonEl.focus();
-
-    // Keyboard shortcuts
-    this.scope.register([], 'Escape', () => {
-      this.close();
-      return false;
-    });
-    this.scope.register([], 'Enter', () => {
-      this.close();
-      return false;
-    });
+    this.showPage();
+    doneButton.focus();
   }
 
   onClose(): void {
-    const { contentEl } = this;
-
-    // Unload component to prevent memory leaks
-    this.component.unload();
-
-    contentEl.empty();
-
-    // Call the callback after modal closes
-    if (this.onCloseCallback) {
-      this.onCloseCallback();
-    }
+    this.contentEl.empty();
+    this.onCloseCallback?.();
   }
 
-  /**
-   * Convert YouTube embeds/iframes to clickable links (for iOS compatibility)
-   */
-  private convertYouTubeEmbedsToLinks(container: HTMLElement): void {
-    // Find YouTube iframes
-    const iframes = container.querySelectorAll('iframe[src*="youtube"]');
-    iframes.forEach((iframe) => {
-      const src = iframe.getAttribute('src') || '';
-      const videoId = src.match(/embed\/([^?]+)/)?.[1];
-      if (videoId) {
-        const link = activeWindow.createEl('a');
-        link.href = `https://www.youtube.com/watch?v=${videoId}`;
-        link.textContent = `Watch on YouTube`;
-        link.className = 'external-link';
-        link.setAttribute('target', '_blank');
-        iframe.replaceWith(link);
+  /** A vertical tablist, newest first; ↑/↓ and Home/End move in list order. */
+  private createList(parent: HTMLElement): void {
+    const list = parent.createDiv({
+      cls: 'sa-release-notes-list',
+      attr: { role: 'tablist', 'aria-orientation': 'vertical', 'aria-label': t('rn.releases') },
+    });
+    for (let i = this.entries.length - 1; i >= 0; i--) {
+      const entry = this.entries[i];
+      if (!entry) continue;
+      const tab = list.createEl('button', {
+        cls: 'sa-release-notes-tab',
+        attr: {
+          type: 'button',
+          role: 'tab',
+          id: `sa-release-notes-tab-${i}`,
+          'aria-controls': 'sa-release-notes-panel',
+        },
+      });
+      tab.createSpan({ cls: 'sa-release-notes-tab-version', text: `v${entry.version}` });
+      if (entry.important) {
+        tab.createSpan({ cls: 'sa-release-notes-badge', text: t('rn.important') });
       }
+      tab.createSpan({ cls: 'sa-release-notes-tab-date', text: entry.dateLabel });
+      tab.addEventListener('click', () => this.select(i));
+      this.tabs[i] = tab;
+    }
+    list.addEventListener('keydown', (event) => {
+      const moves: Record<string, number> = {
+        ArrowUp: this.index + 1,
+        ArrowDown: this.index - 1,
+        Home: this.entries.length - 1,
+        End: 0,
+      };
+      const next = moves[event.key];
+      if (next === undefined) return;
+      event.preventDefault();
+      this.select(next);
     });
+  }
 
-    // Find any YouTube external embed elements (Obsidian's format)
-    const externalEmbeds = container.querySelectorAll('.external-embed[src*="youtube"]');
-    externalEmbeds.forEach((embed) => {
-      const src = embed.getAttribute('src') || '';
-      const link = activeWindow.createEl('a');
-      link.href = src;
-      link.textContent = `Watch on YouTube`;
-      link.className = 'external-link';
-      link.setAttribute('target', '_blank');
-      embed.replaceWith(link);
+  private createPageButton(
+    parent: HTMLElement,
+    icon: string,
+    label: string,
+    step: number
+  ): HTMLButtonElement {
+    const button = parent.createEl('button', {
+      cls: 'clickable-icon sa-release-notes-page',
+      attr: { 'aria-label': label, type: 'button' },
     });
+    setIcon(button, icon);
+    button.addEventListener('click', () => this.go(step));
+    return button;
+  }
+
+  /** Returns false so Obsidian's scope treats the arrow key as handled. */
+  private go(step: number): boolean {
+    this.select(this.index + step);
+    return false;
+  }
+
+  private select(next: number): void {
+    if (next < 0 || next >= this.entries.length || next === this.index) return;
+    this.index = next;
+    this.showPage();
+  }
+
+  private showPage(): void {
+    const entry = this.entries[this.index];
+    if (!entry) return;
+    const total = this.entries.length;
+
+    this.positionEl?.setText(t('rn.position', { index: this.index + 1, total }));
+
+    this.metaEl.empty();
+    if (entry.important) {
+      this.metaEl.createSpan({ cls: 'sa-release-notes-badge', text: t('rn.important') });
+    }
+    this.metaEl.createSpan({ cls: 'sa-release-notes-version', text: `v${entry.version}` });
+    this.metaEl.createSpan({ text: '·', attr: { 'aria-hidden': 'true' } });
+    this.metaEl.createSpan({ cls: 'sa-release-notes-date', text: entry.dateLabel });
+
+    this.bodyEl.empty();
+    this.bodyEl.createEl('p', { cls: 'sa-release-notes-summary', text: entry.summary });
+    const list = this.bodyEl.createEl('ul');
+    for (const highlight of entry.highlights) list.createEl('li', { text: highlight });
+
+    this.linkEl.href = entry.url;
+
+    if (this.tabs.length > 0) {
+      const tabHadFocus = this.tabs.some((tab) => tab === activeDocument.activeElement);
+      this.tabs.forEach((tab, i) => {
+        tab.setAttribute('aria-selected', String(i === this.index));
+        tab.tabIndex = i === this.index ? 0 : -1;
+      });
+      this.bodyEl.setAttribute('aria-labelledby', `sa-release-notes-tab-${this.index}`);
+      // Keyboard focus follows the selection when it came from the list.
+      if (tabHadFocus) this.tabs[this.index]?.focus();
+    }
+
+    if (this.previousButton && this.nextButton) {
+      const wasFocused = activeDocument.activeElement;
+      this.previousButton.disabled = this.index === 0;
+      this.nextButton.disabled = this.index === total - 1;
+      // Paging to either end disables the button under focus; keep keyboard
+      // focus on the pager instead of dropping it to the document.
+      if (wasFocused instanceof HTMLButtonElement && wasFocused.disabled) {
+        (wasFocused === this.previousButton ? this.nextButton : this.previousButton).focus();
+      }
+    }
+
+    this.modalEl.scrollTop = 0;
+    this.bodyEl.scrollTop = 0;
   }
 }

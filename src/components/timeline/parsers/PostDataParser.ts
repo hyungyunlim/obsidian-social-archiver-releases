@@ -1781,9 +1781,11 @@ export class PostDataParser {
         const authorHandle = (rawAuthor || metadataAuthorMatch?.[1] || 'Unknown').split('\n')[0]?.trim() || 'Unknown';
 
         // Extract content: everything between header and "---" line
-        // Remove header line first
+        // Remove header line first. The hidden header comes off whatever the
+        // platform name, with the stale copies earlier re-saves stacked under
+        // it: left in the text, the next save escapes them into visible lines.
         const withoutHeader = block.replace(
-          /^\s*(?:(?:### )|(?:<!--\s*Embedded:\s*))(?:Facebook|Instagram|X|Linkedin|Tiktok|Threads|Youtube|Reddit|Post|Pinterest|Substack|Tumblr|Mastodon|Bluesky)\s*-\s*.+?(?:-->)?\n+/i,
+          /^\s*(?:### (?:Facebook|Instagram|X|Linkedin|Tiktok|Threads|Youtube|Reddit|Post|Pinterest|Substack|Tumblr|Mastodon|Bluesky)\s*-\s*.+?\n+|(?:<!--\s*Embedded:[^\n]*?-->\s*)+)/i,
           ''
         );
 

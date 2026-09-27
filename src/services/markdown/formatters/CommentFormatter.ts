@@ -3,6 +3,7 @@ import { DateNumberFormatter } from './DateNumberFormatter';
 import { TextFormatter } from './TextFormatter';
 import { encodePathForMarkdownLink } from '@/utils/url';
 import { sortPinnedCommentRoots } from '@/utils/comments';
+import { escapeHtmlOpeners } from '@/utils/escape-html-openers';
 
 /**
  * CommentFormatter - Format comments for markdown
@@ -235,7 +236,10 @@ export class CommentFormatter {
       },
     );
 
-    return withLinks.replace(/<[^>]*>/g, '');
+    // Anything else in angle brackets is the commenter's text (`<inputs>`,
+    // `<책 제목>`), as every other client shows it. It stays, written as `&lt;`
+    // so a `<tag>` line can't open an HTML block that hides it.
+    return escapeHtmlOpeners(withLinks);
   }
 
   private decodeHtmlEntities(text: string): string {

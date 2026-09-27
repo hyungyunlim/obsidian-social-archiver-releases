@@ -96,6 +96,23 @@ describe('CommentRenderer', () => {
     expect(content?.querySelector('a.cr-link')?.textContent).toBe('https://example.com/link');
   });
 
+  it('shows the `&lt;` a note writes for a `<` as the `<` it stands for', () => {
+    const container = document.createElement('div');
+    const comments: Comment[] = [
+      {
+        id: '1',
+        author: { name: 'Commenter', url: 'https://x.com/commenter' },
+        content: '&lt;inputs>\nAsk me\n&lt;/inputs>',
+      },
+    ];
+
+    new CommentRenderer().render(container, comments, 'x');
+
+    expect(container.querySelector('.cr-comment-content')?.textContent).toBe(
+      '<inputs>\nAsk me\n</inputs>'
+    );
+  });
+
   it('renders Reddit quote lines as styled quote blocks while preserving links', () => {
     const container = document.createElement('div');
     const comments: Comment[] = [

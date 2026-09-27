@@ -22,6 +22,7 @@ import { crossPostStrings } from './strings/crossPost';
 import { dangerZoneStrings } from './strings/dangerZone';
 import { newsletterStrings } from './strings/newsletter';
 import { reviewStrings } from './strings/review';
+import { releaseNotesStrings } from './strings/releaseNotes';
 
 /** One translatable string. `ja` can be added later without touching callers. */
 export interface LocaleText {
@@ -37,13 +38,15 @@ const strings = {
   ...dangerZoneStrings,
   ...newsletterStrings,
   ...reviewStrings,
+  ...releaseNotesStrings,
 } satisfies Record<string, LocaleText>;
 
 export type TranslationKey = keyof typeof strings;
 
 let cachedLang: string | null = null;
 
-function currentLang(): string {
+/** Obsidian's UI language code ('en', 'ko', 'ja', …), read once. */
+export function currentLang(): string {
   if (cachedLang === null) {
     try {
       // Guarded: the test mock/older Obsidian may not provide getLanguage.

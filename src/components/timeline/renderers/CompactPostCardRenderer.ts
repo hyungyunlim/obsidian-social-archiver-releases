@@ -36,8 +36,12 @@ export class CompactPostCardRenderer extends Component {
    * Example: [#girlblogger](url) -> #girlblogger
    */
   private extractPlainTextFromMarkdown(text: string): string {
-    // Convert markdown links [text](url) to just text
-    return text.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+    // Convert markdown links [text](url) to just text, and read the escapes the
+    // note writer adds (`1\.`, `\#`, the `&lt;` for a plain `<`) as their text.
+    return text
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/\\([!-/:-@[-`{-~])/g, '$1') // backslash + ASCII punctuation
+      .replace(/&lt;/g, '<');
   }
 
   /**

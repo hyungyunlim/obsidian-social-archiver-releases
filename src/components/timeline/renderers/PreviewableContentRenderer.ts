@@ -62,6 +62,7 @@ import {
   parseGoogleMapsBusinessData,
   formatBusinessHours,
   buildGoogleMapsDirectionsUrl,
+  escapeAngleBrackets,
 } from './PreviewableHelpers';
 import type { PreviewContext } from './PreviewableContext';
 import { isWebLanePlatform } from '@/shared/platforms';
@@ -814,7 +815,7 @@ export class PreviewableContentRenderer {
           let processed = source;
           processed = PreviewableContentRenderer.escapeMarkdownHeadings(processed);
           processed = PreviewableContentRenderer.escapeOrderedListPatterns(processed);
-          processed = PreviewableContentRenderer.escapeAngleBrackets(processed);
+          processed = escapeAngleBrackets(processed);
           await renderer.render(app, processed, target, '', component);
           return;
         }
@@ -1010,25 +1011,6 @@ export class PreviewableContentRenderer {
    */
   private static escapeMarkdownHeadings(content: string): string {
     return content.replace(/^([-=]+)$/gm, '\\$1');
-  }
-
-  /**
-   * Escape `<` `>` so MarkdownRenderer doesn't treat `<책 제목>` as HTML.
-   * Leading blockquote markers stay intact for Substack Note excerpts.
-   */
-  private static escapeAngleBrackets(content: string): string {
-    return content
-      .replace(/</g, '&lt;')
-      .split('\n')
-      .map((line) => {
-        const blockquotePrefix = line.match(/^([ \t]{0,3}(?:>[ \t]?)+)/)?.[1] ?? '';
-        if (!blockquotePrefix) {
-          return line.replace(/>/g, '&gt;');
-        }
-
-        return blockquotePrefix + line.slice(blockquotePrefix.length).replace(/>/g, '&gt;');
-      })
-      .join('\n');
   }
 
   /**

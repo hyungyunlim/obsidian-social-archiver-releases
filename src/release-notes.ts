@@ -1,8 +1,10 @@
 /**
  * Release Notes Data
  *
- * Contains release notes for versions that warrant user notification.
- * Minor patches without entries are silently skipped.
+ * Source of the GitHub release body: the release workflow in
+ * obsidian-social-archiver-releases (scripts/extract-release-notes.mjs) reads
+ * this file as text. The in-app "What's new" modal no longer uses it — it
+ * shows the release hub entries (src/plugin/release-notes/releaseNoteUpdates.ts).
  */
 
 export interface ReleaseNote {
@@ -24,6 +26,27 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.7.11': {
+    title: 'See what’s new after every update, and text in angle brackets stays in your notes',
+    date: '2026-09-28',
+    notes: `## See what’s new after every update
+
+- **A “What’s new” window after each update.** The first time the plugin loads after an update, it shows what changed in that version, straight from the release notes and in your language. A new install doesn’t show it, and it opens only once the workspace is ready, so it never holds up startup.
+- **Every release you skipped, in one place.** On desktop and tablets, skipped releases are listed beside the text, newest first. ↑ and ↓ move through the list, and ← and → step to an older or newer release. On a phone, Previous and Next page through them.
+
+## Text in angle brackets stays in your notes
+
+- **\`<inputs>\` no longer vanishes.** A line like \`<inputs>\` or \`<book title>\`, common in shared AI prompts, opened an HTML block, so the note’s reading view hid it and ran the lines inside it together. The note now keeps it as text in the post, its comments, a quoted post and embedded archives. Comments used to drop anything in angle brackets altogether.
+- **The timeline agrees.** Thread captures from the Chrome extension no longer show a literal \`&lt;\` in the timeline, and embedded archive previews show \`1.\` and \`#\` without the backslash the note keeps.
+
+## Fixes
+
+- **Feed addresses point to subscriptions.** Archiving an RSS or Atom feed’s address now stops at once with a hint to subscribe to the feed, instead of retrying three times.
+
+> [!NOTE]
+> Part of this is on the server and already reaches you without this update: X posts saved through your X session in the mobile or desktop app are stored as posts again rather than long-form articles, an X post with a numbered list archived on another device keeps its \`<tag>\` text when it syncs to this vault, and a web page with nothing to read is no longer saved as an empty note or charged a credit.
+`,
+  },
   '4.7.10': {
     title: 'Review cards look like your timeline, and Facebook notes stay with their own post',
     date: '2026-09-27',

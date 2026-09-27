@@ -766,6 +766,97 @@ describe('MarkdownConverter', () => {
       expect(result.content).toContain('\\*asterisks\\*');
       expect(result.content).toContain('\\[brackets\\]');
     });
+
+    it('keeps a `<tag>` block in plain post text as text, and code spans verbatim', () => {
+      const text = 'steal the prompt\n\n<inputs>\nAsk me for a name\n</inputs>\n\nuse `<video>` and \\<kept>';
+      const post: PostData = { ...mockPostData, platform: 'x', content: { text } };
+
+      const result = converter.convert(post);
+
+      expect(result.content).toContain('&lt;inputs>\nAsk me for a name\n&lt;/inputs>');
+      expect(result.content).toContain('use `<video>` and \\<kept>');
+      // Only the note body is escaped; the post data stays plain text.
+      expect(post.content.text).toBe(text);
+    });
+
+    it('leaves fenced code in a synced body verbatim', () => {
+      const text = 'a <b> line\n\n```javascript\nconst ok = a < b;\n```';
+
+      const result = converter.convert({ ...mockPostData, content: { text } });
+
+      expect(result.content).toContain('a &lt;b> line');
+      expect(result.content).toContain('```javascript\nconst ok = a < b;\n```');
+    });
+
+    it('does not touch a markdown body the platform already provides', () => {
+      const markdown = 'Thread body with <sup>1</sup>';
+      const post: PostData = {
+        ...mockPostData,
+        platform: 'threads',
+        content: { text: markdown, markdown },
+        media: [],
+      };
+
+      const result = converter.convert(post);
+
+      expect(result.content).toContain('Thread body with <sup>1</sup>');
+    });
+
+    it('keeps a `<tag>` block in quoted post text as text, and a markdown fallback verbatim', () => {
+      const quoted = (content: PostData['content']): PostData['quotedPost'] => ({
+        platform: 'x',
+        id: 'quoted-1',
+        url: 'https://x.com/someone/status/1',
+        author: { name: 'Someone', url: 'https://x.com/someone' },
+        content,
+        media: [],
+        metadata: { timestamp: new Date('2024-01-01T10:00:00Z') },
+      });
+
+      const plain = converter.convert({
+        ...mockPostData,
+        quotedPost: quoted({ text: 'steal the prompt\n<inputs>\nAsk me\n</inputs>\nuse `<video>`' }),
+      });
+      const markdown = converter.convert({
+        ...mockPostData,
+        quotedPost: quoted({ text: '', markdown: 'Quoted body with <sup>1</sup>' }),
+      });
+
+      expect(plain.content).toContain('steal the prompt\n&lt;inputs>\nAsk me\n&lt;/inputs>\nuse `<video>`');
+      expect(markdown.content).toContain('Quoted body with <sup>1</sup>');
+    });
+
+    it('keeps a `<tag>` block in embedded archive text as text, and a web or blog body verbatim', () => {
+      const embedded = (platform: Platform, text: string, extra: Partial<PostData> = {}): PostData => ({
+        platform,
+        id: `${platform}-1`,
+        url: `https://example.com/${platform}/1`,
+        author: { name: 'Someone', url: 'https://example.com/someone' },
+        content: { text },
+        media: [],
+        metadata: { timestamp: new Date('2024-01-01T10:00:00Z') },
+        ...extra,
+      });
+
+      const result = converter.convert({
+        ...mockPostData,
+        platform: 'post',
+        media: [],
+        embeddedArchives: [
+          embedded('x', 'steal the prompt\n<inputs>\nAsk me\n</inputs>\nuse `<video>`'),
+          embedded('youtube', 'Prompt: <inputs>'),
+          embedded('pinterest', 'Board <b>', { raw: { board_name: 'Board' } }),
+          embedded('web', 'Article with <sup>1</sup>'),
+          embedded('naver', 'Blog with <img src="a.jpg">'),
+        ],
+      });
+
+      expect(result.content).toContain('steal the prompt\n&lt;inputs>\nAsk me\n&lt;/inputs>\nuse `<video>`');
+      expect(result.content).toContain('**Description:**\nPrompt: &lt;inputs>');
+      expect(result.content).toContain('Board &lt;b>');
+      expect(result.content).toContain('Article with <sup>1</sup>');
+      expect(result.content).toContain('Blog with <img src="a.jpg">');
+    });
   });
 
   describe('YAML frontmatter formatting', () => {
