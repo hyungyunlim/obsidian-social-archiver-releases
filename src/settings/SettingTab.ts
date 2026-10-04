@@ -201,6 +201,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       ...this.localArchivesSettingDefinitions(),
       ...this.frontmatterSettingDefinitions(),
       ...this.sharingSettingDefinitions(),
+      ...this.collectionSettingDefinitions(),
       // Explains the Obsidian scanner warning before the desktop-local features.
       ...this.localCommandExecutionNoticeDefinitions(),
       ...this.transcriptionSettingDefinitions(),
@@ -1270,6 +1271,74 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    * social-archive.org, so the signed-out state renders the sign-in CTA
    * instead of dead controls.
    */
+  /**
+   * Collections (prd-collections-obsidian-plugin §4.2): the opt-in property
+   * mirror, and the account's collaborative-activity notification switch
+   * (a server preference shared with the apps).
+   */
+  private collectionSettingDefinitions(): SettingDefinitionItem[] {
+    const signedIn = (): boolean => isAuthenticated(this.plugin);
+    return [{
+      type: 'group',
+      heading: t('col.settings.heading'),
+      items: [
+        this.signedOutRow(t('col.signedOut')),
+        {
+          name: t('col.settings.mirrorName'),
+          desc: t('col.settings.mirrorDesc'),
+          visible: signedIn,
+          render: (setting): void => {
+            setting.addToggle(toggle => toggle
+              .setValue(this.plugin.settings.collectionPropertyMirror)
+              .onChange(async (value) => {
+                toggle.setDisabled(true);
+                try {
+                  await this.plugin.setCollectionPropertyMirror(value);
+                } finally {
+                  toggle.setDisabled(false);
+                }
+              }));
+          },
+        },
+        {
+          name: t('col.settings.activityName'),
+          desc: t('col.settings.activityDesc'),
+          visible: signedIn,
+          render: (setting): void => {
+            setting.addToggle(toggle => {
+              // setValue fires onChange; programmatic updates must not save again.
+              let programmatic = false;
+              const show = (value: boolean): void => {
+                programmatic = true;
+                toggle.setValue(value);
+                programmatic = false;
+              };
+              // The value lives on the server; disabled until it is known.
+              toggle.setDisabled(true);
+              void this.plugin.workersApiClient.getCollectionActivityNotificationsEnabled()
+                .then((enabled) => show(enabled))
+                .catch(() => undefined)
+                .finally(() => toggle.setDisabled(false));
+              toggle.onChange(async (value) => {
+                if (programmatic) return;
+                toggle.setDisabled(true);
+                try {
+                  show(await this.plugin.workersApiClient.setCollectionActivityNotificationsEnabled(value));
+                } catch {
+                  new Notice(t('col.settings.activityFailed'));
+                  show(!value);
+                } finally {
+                  toggle.setDisabled(false);
+                }
+              });
+              return toggle;
+            });
+          },
+        },
+      ],
+    }];
+  }
+
   private sharingSettingDefinitions(): SettingDefinitionItem[] {
     // Preview length only applies in preview mode. The share-mode dropdown
     // toggles it live, so the two rows exchange the element rather than

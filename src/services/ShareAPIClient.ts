@@ -11,6 +11,7 @@
  * Uses Obsidian's requestUrl for all network requests (required for Obsidian plugin compliance)
  */
 
+import type { PostShareDisplayMode, PostShareVisibility } from '../types/collections';
 import { requestUrl, Platform, type Vault } from 'obsidian';
 import type { PostData, Media } from '@/types/post';
 import type { IService } from './base/IService';
@@ -56,6 +57,14 @@ export interface ShareAPIRequest {
     tier?: UserTier; // User tier for video upload permissions
     archiveId?: string; // Server archive ID for composed posts (associates share with archive record)
     sourceArchiveId?: string; // Archive-backed local note — lets the worker reuse preserved R2 media (PRD §6.3)
+    /**
+     * Share settings for a NEW share (prd-collections-obsidian-plugin §4.3). The
+     * server ignores them when the archive already has a live share, and an
+     * update that leaves them out keeps the stored values.
+     */
+    visibility?: PostShareVisibility;
+    displayMode?: PostShareDisplayMode;
+    includeAnnotations?: boolean;
     /**
      * Frontmatter `mediaSourceUrls` forwarded from the caller so
      * `updateShareWithMedia` can auto-build resolve hints without the caller

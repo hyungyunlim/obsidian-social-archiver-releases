@@ -2269,7 +2269,8 @@ export class MarkdownConverter implements IService {
     mediaResults?: import('./MediaHandler').MediaResult[],
     outputFilePath?: string
   ): Record<string, unknown> {
-    const isWebArticle = postData.platform === 'web';
+    // AI chat ids ride the web lane too (feedback #139): Defuddle markdown body.
+    const isWebArticle = isWebLanePlatform(postData.platform);
     const isThreadsInlineArchive = postData.platform === 'threads' && !!postData.content.markdown?.trim();
     // PRD §22.3: Substack Notes are NOT treated as RSS/blog articles for media
     // handling. Their image media must localize via the {{media}} section (using

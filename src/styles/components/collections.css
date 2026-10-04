@@ -1,0 +1,510 @@
+/* ==========================================================================
+   Collections (prd-collections-obsidian-plugin) — modals, the timeline's
+   collection bar and member feed, card chips. Obsidian variables only, so
+   every theme (and the mobile app) gets matching colours.
+   ========================================================================== */
+
+/* ---------- Shared modal pieces ---------- */
+
+.sa-collection-search {
+  width: 100%;
+  margin-bottom: var(--size-4-3);
+}
+
+.sa-collection-picker-list,
+.sa-collection-invites,
+.sa-collection-roster {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.sa-collection-row,
+.sa-collection-suggestion {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  padding: var(--size-4-2) var(--size-4-2);
+  border-radius: var(--radius-s);
+  cursor: pointer;
+  color: var(--text-normal);
+}
+
+.sa-collection-row:hover,
+.sa-collection-row.is-selected {
+  background-color: var(--background-modifier-hover);
+}
+
+.sa-collection-row-check,
+.sa-collection-row-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.sa-collection-row[aria-checked="true"] .sa-collection-row-check,
+.sa-collection-row[aria-checked="mixed"] .sa-collection-row-check {
+  color: var(--interactive-accent);
+}
+
+.sa-collection-row-create .sa-collection-row-icon {
+  color: var(--interactive-accent);
+}
+
+.sa-collection-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.sa-collection-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-collection-row-meta,
+.sa-collection-hint {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.sa-collection-empty {
+  padding: var(--size-4-3) var(--size-4-2);
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.sa-collection-loading {
+  padding: var(--size-4-4);
+  text-align: center;
+  color: var(--text-faint);
+}
+
+.sa-collection-modal-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  justify-content: flex-end;
+  margin-top: var(--size-4-4);
+}
+
+.sa-collection-footer-spacer {
+  flex: 1;
+}
+
+.sa-collection-section-label {
+  margin: var(--size-4-4) 0 var(--size-4-2);
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-semibold);
+  color: var(--text-normal);
+}
+
+.sa-collection-section-label:first-child {
+  margin-top: 0;
+}
+
+.sa-collection-badge {
+  margin-left: var(--size-4-2);
+  padding: 0 var(--size-4-1);
+  border-radius: var(--radius-s);
+  background-color: var(--background-modifier-hover);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+/* ---------- Edit form ---------- */
+
+.sa-collection-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-3);
+}
+
+.sa-collection-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-1);
+}
+
+.sa-collection-field input,
+.sa-collection-field textarea {
+  width: 100%;
+}
+
+.sa-collection-field-label {
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+}
+
+.sa-collection-form-error {
+  color: var(--text-error);
+  font-size: var(--font-ui-small);
+}
+
+/* ---------- Who can see it (option cards) ----------
+   Scoped under the group: Obsidian's `button:not(.clickable-icon)` would
+   otherwise paint the cards as plain grey buttons. */
+
+.sa-visibility-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--size-4-2);
+}
+
+.sa-visibility-choices button.sa-visibility-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--size-4-2);
+  height: auto;
+  min-height: 64px;
+  padding: var(--size-4-2) var(--size-4-3);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  text-align: left;
+  white-space: normal;
+  cursor: pointer;
+}
+
+.sa-visibility-choices button.sa-visibility-choice:hover:not(:disabled) {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.sa-visibility-choices button.sa-visibility-choice.is-checked {
+  border-color: var(--interactive-accent);
+  box-shadow: inset 0 0 0 1px var(--interactive-accent);
+  color: var(--text-normal);
+}
+
+.sa-visibility-choices button.sa-visibility-choice:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.sa-visibility-choice-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.sa-visibility-choice.is-checked .sa-visibility-choice-icon {
+  color: var(--interactive-accent);
+}
+
+.sa-visibility-choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sa-visibility-choice-label {
+  font-size: var(--font-ui-small);
+  color: var(--text-normal);
+}
+
+.sa-visibility-choice.is-checked .sa-visibility-choice-label {
+  font-weight: var(--font-semibold);
+}
+
+.sa-visibility-choice-hint {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* ---------- Share settings ---------- */
+
+.modal.sa-collection-share-settings,
+.modal.sa-collection-members {
+  width: min(680px, 100%);
+}
+
+.sa-collection-hidden-items {
+  margin-top: var(--size-4-3);
+  padding: var(--size-4-2) var(--size-4-3);
+  border-radius: var(--radius-s);
+  background-color: var(--background-secondary);
+  font-size: var(--font-ui-small);
+}
+
+.sa-collection-link-row {
+  display: flex;
+  gap: var(--size-4-2);
+  margin-top: var(--size-4-4);
+}
+
+.sa-collection-link-input {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-muted);
+}
+
+.sa-collection-link-actions {
+  display: flex;
+  gap: var(--size-4-2);
+  justify-content: flex-end;
+  margin-top: var(--size-4-2);
+}
+
+/* ---------- Members ---------- */
+
+.sa-collection-roster-row,
+.sa-collection-invite-row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  padding: var(--size-4-2) var(--size-4-1);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.sa-collection-roster-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.sa-collection-roster-role {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.sa-collection-roster-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-1);
+}
+
+.sa-collection-invite-row .sa-collection-row-text {
+  flex: 1;
+}
+
+/* ---------- Timeline collection bar ---------- */
+
+.sa-collection-bar-host:empty {
+  display: none;
+}
+
+.sa-collection-bar {
+  margin-bottom: var(--size-4-4);
+  padding: var(--size-4-3) var(--size-4-3);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background-color: var(--background-secondary);
+}
+
+.sa-collection-bar-top {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+}
+
+.sa-collection-bar-title {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.sa-collection-bar-icon {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+
+.sa-collection-bar-name {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-ui-large);
+}
+
+.sa-collection-bar-actions {
+  display: flex;
+  gap: var(--size-4-1);
+}
+
+.sa-collection-bar-meta {
+  margin-top: var(--size-4-1);
+  padding-left: calc(var(--icon-size) + var(--size-4-4));
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.sa-collection-bar-description {
+  margin-top: var(--size-4-2);
+  padding-left: calc(var(--icon-size) + var(--size-4-4));
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+  white-space: pre-wrap;
+}
+
+.sa-collection-bar-note {
+  margin-top: var(--size-4-2);
+  padding-left: calc(var(--icon-size) + var(--size-4-4));
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+}
+
+.sa-collection-empty-state {
+  padding: var(--size-4-8) var(--size-4-4);
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* ---------- Collaborative member feed ---------- */
+
+.sa-member-feed-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-3);
+}
+
+.sa-member-card {
+  padding: var(--size-4-3);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background-color: var(--background-primary);
+}
+
+.sa-member-card.is-hidden {
+  background-color: var(--background-secondary);
+}
+
+.sa-member-card-hidden {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.sa-member-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  margin-bottom: var(--size-4-2);
+}
+
+.sa-member-card-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.sa-member-card-author {
+  font-weight: var(--font-semibold);
+}
+
+.sa-member-card-meta,
+.sa-member-card-added-by {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.sa-member-card-title {
+  margin-bottom: var(--size-4-1);
+  font-weight: var(--font-semibold);
+}
+
+.sa-member-card-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: var(--line-height-normal);
+}
+
+.sa-member-card-media {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  margin-top: var(--size-4-2);
+  border-radius: var(--radius-s);
+  object-fit: cover;
+}
+
+.sa-member-card-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-1);
+  margin-top: var(--size-4-2);
+}
+
+.sa-member-feed-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--size-4-2);
+  padding: var(--size-4-4) 0;
+}
+
+/* ---------- Post card chips ---------- */
+
+.post-collection-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-4-1);
+  margin-top: var(--size-4-2);
+}
+
+.post-collection-chips-icon {
+  display: inline-flex;
+  color: var(--text-faint);
+}
+
+.post-collection-chips-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.post-collection-chips button.post-collection-chip {
+  height: auto;
+  padding: 1px var(--size-4-2);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-l);
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  cursor: pointer;
+}
+
+.post-collection-chips button.post-collection-chip:hover {
+  border-color: var(--interactive-accent);
+  color: var(--text-normal);
+}
+
+/* ---------- Activity notice ---------- */
+
+.sa-collection-activity-notice {
+  cursor: pointer;
+}
+
+/* ---------- Mobile: 44px touch targets ---------- */
+
+.is-mobile .sa-collection-row,
+.is-mobile .sa-collection-suggestion,
+.is-mobile .sa-collection-roster-row,
+.is-mobile .sa-collection-invite-row {
+  min-height: 44px;
+}
+
+.is-mobile .post-collection-chips button.post-collection-chip {
+  min-height: 32px;
+  padding: var(--size-4-1) var(--size-4-3);
+}
+
+.is-mobile .sa-collection-bar-meta,
+.is-mobile .sa-collection-bar-description,
+.is-mobile .sa-collection-bar-note {
+  padding-left: 0;
+}

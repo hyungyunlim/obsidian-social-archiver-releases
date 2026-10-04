@@ -83,9 +83,10 @@ describe('rateLimitError utilities', () => {
   });
 
   describe('isUpgradePromptScope', () => {
-    it('returns true only for archive_create_rpm and archive_concurrent_jobs', () => {
+    it('returns true only for archive_create_rpm', () => {
       expect(isUpgradePromptScope('archive_create_rpm')).toBe(true);
-      expect(isUpgradePromptScope('archive_concurrent_jobs')).toBe(true);
+      // Free and Pro share the same concurrent cap (#188).
+      expect(isUpgradePromptScope('archive_concurrent_jobs')).toBe(false);
       expect(isUpgradePromptScope('archive_create_burst')).toBe(false);
       expect(isUpgradePromptScope('archive_polling_rpm')).toBe(false);
       expect(isUpgradePromptScope('ip_hourly_floor')).toBe(false);
@@ -123,12 +124,14 @@ describe('rateLimitError utilities', () => {
       expect(msg).toContain('45s');
     });
 
-    it('mentions Pro license for free tier on archive_concurrent_jobs', () => {
-      const error = Object.assign(new Error('Too many concurrent jobs'), {
-        code: 'RATE_LIMIT_EXCEEDED',
-        details: { retryAfter: 60, scope: 'archive_concurrent_jobs', tier: 'free' },
-      });
-      expect(formatRateLimitMessage(error)).toContain('Pro license');
+    it('says archives are in progress on archive_concurrent_jobs, for every tier', () => {
+      for (const tier of ['free', 'pro']) {
+        const error = Object.assign(new Error('Too many concurrent jobs'), {
+          code: 'RATE_LIMIT_EXCEEDED',
+          details: { retryAfter: 30, scope: 'archive_concurrent_jobs', tier },
+        });
+        expect(formatRateLimitMessage(error)).toBe('Too many archives in progress. Try again when one finishes.');
+      }
     });
 
     it('uses neutral copy for free tier on burst/polling/floor scopes', () => {

@@ -664,6 +664,8 @@ export interface SocialArchiverSettings {
   // Tag Management
   tagDefinitions: TagDefinition[]; // User-defined tag definitions (name, color, sortOrder)
   mirrorArchiveTagsToObsidianTags: boolean; // Also write Social Archiver archiveTags into Obsidian's native tags field
+  /** Write the collections a note is in to its `archiveCollections` property (prd-collections-obsidian-plugin O6). Off by default. */
+  collectionPropertyMirror: boolean;
   pendingTagDeleteIds?: string[]; // Tag ids deleted locally but not yet confirmed deleted on the server (retried before each definition pull)
 
   // Sharing Settings
@@ -946,6 +948,7 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
   // Tag Management
   tagDefinitions: [], // No tags by default
   mirrorArchiveTagsToObsidianTags: false, // Keep server-synced archive tags separate by default
+  collectionPropertyMirror: false, // Notes stay untouched unless the user opts in
   pendingTagDeleteIds: [], // No unpushed tag deletions by default
 
   // Sharing Settings
@@ -1417,6 +1420,9 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
     migrated.enableMobileAnnotationSync = true;
   }
 
+  if (migrated.collectionPropertyMirror === undefined) {
+    migrated.collectionPropertyMirror = false;
+  }
   if (migrated.mirrorArchiveTagsToObsidianTags === undefined) {
     migrated.mirrorArchiveTagsToObsidianTags = false;
   }

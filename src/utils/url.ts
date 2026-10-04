@@ -61,6 +61,14 @@ export function encodePathForMarkdownLink(path: string): string {
   return path.replace(/%/g, '%25').replace(/ /g, '%20').replace(/\)/g, '%29');
 }
 
+/** The vault path `encodePathForMarkdownLink` encoded. */
+export function decodePathFromMarkdownLink(path: string): string {
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+  return path.replace(/%(?:20|25|29)/g, (escape) => decodeURIComponent(escape));
+}
+
 export function isValidPreviewUrl(url: string): boolean {
   if (!url || typeof url !== 'string') return false;
 

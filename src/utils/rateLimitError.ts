@@ -49,9 +49,10 @@ export interface RateLimitDetails {
   [key: string]: unknown;
 }
 
+// Only scopes where Pro really has a higher limit: `archive_concurrent_jobs`
+// is 2 for every tier in production (feedback #188).
 const UPGRADE_PROMPT_SCOPES = new Set<RateLimitScope>([
   'archive_create_rpm',
-  'archive_concurrent_jobs',
 ]);
 
 type ErrorRecord = Record<string, unknown>;
@@ -185,6 +186,11 @@ export function formatRateLimitMessage(error: unknown): string {
           ? 'Daily'
           : 'Archive';
     return `${period} archive limit reached. This is a Social Archiver safety limit, not an upstream platform limit. Try again in ${wait}.`;
+  }
+
+  // A slot frees when one of the user's own jobs ends, not on a timer.
+  if (details.scope === 'archive_concurrent_jobs') {
+    return 'Too many archives in progress. Try again when one finishes.';
   }
 
   if (tier === 'free' && isUpgradePromptScope(details.scope)) {

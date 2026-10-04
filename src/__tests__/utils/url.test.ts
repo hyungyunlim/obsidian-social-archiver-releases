@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { encodePathForMarkdownLink } from '@/utils/url';
+import { decodePathFromMarkdownLink, encodePathForMarkdownLink } from '@/utils/url';
 
 describe('encodePathForMarkdownLink', () => {
   it('should encode spaces as %20', () => {
@@ -48,5 +48,17 @@ describe('encodePathForMarkdownLink', () => {
 
   it('should handle path with only spaces', () => {
     expect(encodePathForMarkdownLink('   ')).toBe('%20%20%20');
+  });
+});
+
+describe('decodePathFromMarkdownLink', () => {
+  it('gives back the path encodePathForMarkdownLink encoded', () => {
+    const path = 'My Attachments/100%20 done/a (1).jpg';
+    expect(decodePathFromMarkdownLink(encodePathForMarkdownLink(path))).toBe(path);
+  });
+
+  it('leaves web URLs as written', () => {
+    const url = 'https://cdn.example.com/a%20b.jpg';
+    expect(decodePathFromMarkdownLink(url)).toBe(url);
   });
 });

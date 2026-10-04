@@ -25,6 +25,8 @@ export const USER_CONTROLLED_FRONTMATTER_FIELDS = [
   'comment',
   'tags',
   'archiveTags',
+  // Collections the note is in (prd-collections-obsidian-plugin O6; written only when mirroring is on)
+  'archiveCollections',
   // Vault-local relationship to an author note
   'authorNote',
   // Per-URL download/transcription decisions

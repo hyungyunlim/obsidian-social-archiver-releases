@@ -77,7 +77,9 @@ const DETECTION_ORDER: Platform[] = [
  * detectPlatform('https://www.facebook.com/post/456') // 'facebook'
  * detectPlatform('https://unknown.com') // 'post'
  */
-export function detectPlatform(url: string): Platform {
+export function detectPlatform(rawUrl: string): Platform {
+  // Host-anchored patterns (`^`) must not be defeated by whitespace around a pasted URL.
+  const url = rawUrl.trim();
   for (const platformId of DETECTION_ORDER) {
     const def = PLATFORM_DEFINITIONS[platformId];
     if (def?.urlPattern.test(url)) {

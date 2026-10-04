@@ -1,4 +1,6 @@
 import { setIcon, getLanguage, Notice, Scope, TFile, TFolder, MarkdownRenderer, Component, Modal, Menu, Platform as ObsidianPlatform, requestUrl, type Vault, type App } from 'obsidian';
+import { t } from '../../../i18n';
+import { toPostShareDisplayMode } from '../../../services/collections/collectionDisplayMode';
 import { addBasemap, observeMapSize, renderBasemapAttribution } from '../places/basemap';
 import type { PostData, Comment, PostMetadata, Platform } from '../../../types/post';
 import type SocialArchiverPlugin from '../../../main';
@@ -1131,6 +1133,7 @@ export class PostCardRenderer extends Component {
     // Tag chips row (only for non-embedded posts)
     if (!isEmbedded) {
       this.renderTagChips(contentArea, post, rootElement);
+      this.renderCollectionChips(contentArea, post);
     }
 
     // Interaction bar (always render to show action buttons)
@@ -1178,6 +1181,7 @@ export class PostCardRenderer extends Component {
         // Tag button
         if (!isEmbedded) {
           this.renderTagButton(actionsBar, post, rootElement);
+          this.renderCollectionButton(actionsBar, post, rootElement);
           this.renderPlaceButton(actionsBar, post);
         }
 
@@ -2318,7 +2322,7 @@ export class PostCardRenderer extends Component {
     const shouldRenderMarkdown =
       Boolean(post.content.rawMarkdown) ||
       isRssBasedPlatform(post.platform) ||
-      post.platform === 'web' ||
+      isWebLanePlatform(post.platform) ||
       post.platform === 'threads' ||
       post.platform === 'x';
 
@@ -2424,7 +2428,7 @@ export class PostCardRenderer extends Component {
     const isSubstackNoteContent = post.platform === 'substack' && isSubstackNote(post.postType, post.url);
 
     // For RSS-based platforms and web articles: show article title at top of content area with larger, bolder styling
-    if ((isRssBasedPlatform(post.platform) || post.platform === 'web') && post.title && !isSubstackNoteContent) {
+    if ((isRssBasedPlatform(post.platform) || isWebLanePlatform(post.platform)) && post.title && !isSubstackNoteContent) {
       const titleEl = contentContainer.createDiv({ cls: 'blog-article-title pcr-title-blog' });
       titleEl.setText(post.title);
     }
@@ -2452,7 +2456,7 @@ export class PostCardRenderer extends Component {
     // use rawMarkdown with inline images.
     // PRD §22.2: Substack Notes are excluded — they render as compact social
     // posts (plain text + media carousel handled separately), not articles.
-    if ((isRssBasedPlatform(post.platform) || post.platform === 'threads' || post.platform === 'web' || (post.platform === 'x' && post.content.rawMarkdown))
+    if ((isRssBasedPlatform(post.platform) || post.platform === 'threads' || isWebLanePlatform(post.platform) || (post.platform === 'x' && post.content.rawMarkdown))
         && post.content.rawMarkdown
         && !isSubstackNoteContent) {
       await this.renderBlogContent(contentContainer, post);
@@ -2724,7 +2728,7 @@ export class PostCardRenderer extends Component {
     const titleIsRenderedSeparately =
       !!post.title &&
       (isRssBasedPlatform(post.platform) ||
-        post.platform === 'web' ||
+        isWebLanePlatform(post.platform) ||
         post.platform === 'x' ||
         (post.platform === 'threads' && this.isStructuredArticleMarkdown(rawMarkdown)));
 
@@ -3654,6 +3658,7 @@ export class PostCardRenderer extends Component {
       this.renderShareButton(interactions, post);
       if (!isEmbedded) {
         this.renderTagButton(interactions, post, rootElement);
+        this.renderCollectionButton(interactions, post, rootElement);
         this.renderPlaceButton(interactions, post);
       }
       this.renderArchiveButton(interactions, post, rootElement);
@@ -4327,6 +4332,19 @@ export class PostCardRenderer extends Component {
         }
       }
 
+      // Add to collection (signed-in only: collections are account data)
+      if (!isEmbedded && this.isSignedInForCollections()) {
+        menu.addItem((item) => {
+          item
+            .setIcon('folder-plus')
+            .setTitle(t('col.action.add'))
+            .setChecked(this.collectionIdsFor(post).length > 0)
+            .onClick(() => {
+              this.plugin.collectionUi.openPickerForPosts([post], () => this.refreshCollectionChips(rootElement, post));
+            });
+        });
+      }
+
       // Reader mode
       menu.addItem((item) => {
         item
@@ -4485,7 +4503,7 @@ export class PostCardRenderer extends Component {
       shareBtn.setAttribute('title', 'Log in to share posts');
       shareBtn.addClass('pcr-action-btn-disabled');
     } else {
-      shareBtn.setAttribute('title', isShared ? 'Shared - Click to unshare' : 'Share this post to the web');
+      shareBtn.setAttribute('title', isShared ? t('col.share.title') : 'Share this post to the web');
     }
 
     const shareIcon = shareBtn.createDiv({ cls: 'pcr-action-icon' });
@@ -4511,16 +4529,41 @@ export class PostCardRenderer extends Component {
       const currentShareUrl = post.shareUrl;
       const currentlyShared = !!currentShareUrl;
 
-      void (async () => {
-        if (currentlyShared) {
-          // Click to unshare
-          await this.unsharePost(post, shareBtn, shareIcon);
-        } else {
-          // Create new share
-          await this.createShare(post, shareBtn, shareIcon);
-        }
-      })();
+      if (currentlyShared && currentShareUrl) {
+        // Shared: a menu instead of an instant unshare (prd-collections-obsidian-plugin O9).
+        this.showSharedPostMenu(post, currentShareUrl, shareBtn, shareIcon);
+        return;
+      }
+      void this.createShare(post, shareBtn, shareIcon);
     });
+  }
+
+  /** Copy the link, open the post's share settings, or stop sharing. */
+  private showSharedPostMenu(post: PostData, shareUrl: string, shareBtn: HTMLElement, shareIcon: HTMLElement): void {
+    const menu = new Menu();
+    menu.addItem((item) => item
+      .setIcon('copy')
+      .setTitle(t('col.postShare.copyLink'))
+      .onClick(() => {
+        void navigator.clipboard.writeText(getShareUrlForClipboard(shareUrl, this.plugin.settings.copyShareLinkAsReaderMode))
+          .then(() => new Notice(t('col.toast.linkCopied')));
+      }));
+    if (this.plugin.collectionUi) {
+      menu.addItem((item) => item
+        .setIcon('settings-2')
+        .setTitle(t('col.postShare.settings'))
+        .onClick(() => this.plugin.collectionUi.openPostShareSettings(shareUrl)));
+    }
+    menu.addSeparator();
+    menu.addItem((item) => item
+      .setIcon('link-2-off')
+      .setTitle(t('col.postShare.stop'))
+      .setWarning(true)
+      .onClick(() => {
+        void this.unsharePost(post, shareBtn, shareIcon);
+      }));
+    const rect = shareBtn.getBoundingClientRect();
+    menu.showAtPosition({ x: rect.left, y: rect.bottom });
   }
 
   private showMapPlaceShareMenu(post: PostData, shareBtn: HTMLElement, shareIcon: HTMLElement): void {
@@ -4599,6 +4642,83 @@ export class PostCardRenderer extends Component {
 
     const rect = shareBtn.getBoundingClientRect();
     menu.showAtPosition({ x: rect.left, y: rect.bottom });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Collections (prd-collections-obsidian-plugin §4.2)
+  // ---------------------------------------------------------------------------
+
+  private isSignedInForCollections(): boolean {
+    return Boolean(this.plugin.collectionUi && this.plugin.settings.isVerified && this.plugin.settings.authToken);
+  }
+
+  /** Collections this post is in (via its server archive id; local-only notes have none). */
+  private collectionIdsFor(post: PostData): string[] {
+    const archiveId = post.sourceArchiveId;
+    if (!archiveId) return [];
+    return this.plugin.collectionStore?.getCollectionIdsForArchive(archiveId) ?? [];
+  }
+
+  /** "Add to collection" in the desktop action bar; accent when the post is in one. */
+  private renderCollectionButton(parent: HTMLElement, post: PostData, rootElement: HTMLElement): void {
+    if (!this.isSignedInForCollections()) return;
+    const button = parent.createEl('button', { cls: 'pcr-action-btn pcr-collection-btn' });
+    button.type = 'button';
+    button.setAttribute('title', t('col.action.add'));
+    button.setAttribute('aria-label', t('col.action.add'));
+    const icon = button.createDiv({ cls: 'pcr-action-icon' });
+    setIcon(icon, 'folder-plus');
+    button.toggleClass('pcr-action-btn-active', this.collectionIdsFor(post).length > 0);
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.plugin.collectionUi.openPickerForPosts([post], () => this.refreshCollectionChips(rootElement, post));
+    });
+  }
+
+  /** The collections a post is in, as chips that open the collection. */
+  private renderCollectionChips(contentArea: HTMLElement, post: PostData): void {
+    const row = this.buildCollectionChips(post);
+    if (row) contentArea.appendChild(row);
+  }
+
+  private buildCollectionChips(post: PostData): HTMLElement | null {
+    if (!this.isSignedInForCollections()) return null;
+    const store = this.plugin.collectionStore;
+    const collections = this.collectionIdsFor(post)
+      .map((id) => store.getCollection(id))
+      .filter((collection): collection is NonNullable<typeof collection> => Boolean(collection));
+    if (collections.length === 0) return null;
+    const row = createDiv({ cls: 'post-collection-chips' });
+    row.setAttribute('aria-label', t('col.title'));
+    const icon = row.createSpan({ cls: 'post-collection-chips-icon' });
+    setIcon(icon, 'library');
+    for (const collection of collections) {
+      const chip = row.createEl('button', { cls: 'post-collection-chip', text: collection.name, attr: { type: 'button' } });
+      chip.addEventListener('click', (event) => {
+        event.stopPropagation();
+        void this.plugin.openCollectionInTimeline(collection.id);
+      });
+    }
+    return row;
+  }
+
+  /** After the picker: redraw this card's chips and button state only. */
+  private refreshCollectionChips(rootElement: HTMLElement, post: PostData): void {
+    const inCollections = this.collectionIdsFor(post).length > 0;
+    rootElement.querySelectorAll<HTMLElement>('.pcr-collection-btn').forEach((button) => button.toggleClass('pcr-action-btn-active', inCollections));
+    const contentArea = rootElement.querySelector<HTMLElement>('.post-content-area');
+    if (!contentArea) return;
+    const next = this.buildCollectionChips(post);
+    const existing = contentArea.querySelector<HTMLElement>('.post-collection-chips');
+    if (existing) {
+      if (next) existing.replaceWith(next);
+      else existing.remove();
+      return;
+    }
+    if (!next) return;
+    const tagChips = contentArea.querySelector<HTMLElement>('.post-tag-chips');
+    if (tagChips) tagChips.after(next);
+    else contentArea.appendChild(next);
   }
 
   /**
@@ -4760,6 +4880,10 @@ export class PostCardRenderer extends Component {
           username: username, // Username for URL generation
           // NOTE: Do not include shareId - let Workers generate it for new shares
           ...(rendererSourceArchiveId ? { sourceArchiveId: rendererSourceArchiveId } : {}),
+          // Same defaults as the apps for a new share; change them in Share settings.
+          visibility: 'public',
+          displayMode: toPostShareDisplayMode(this.plugin.settings.copyShareLinkAsReaderMode),
+          includeAnnotations: true,
         },
       });
 

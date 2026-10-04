@@ -26,6 +26,38 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.8.0': {
+    title: 'Collections come to Obsidian, and AI chat archives read like articles',
+    date: '2026-10-04',
+    notes: `## Collections, now in Obsidian
+
+- **Open a collection from the timeline.** The **Collections** button in the timeline header lists your collections, collaborative ones included. Choose one to see only its posts: the bar above them shows who can see it and how many posts it holds, copies its link and opens its other actions. Search, platform, tag and date filters still narrow it, while the tabs and quick filters step aside, as in the desktop app.
+- **Add posts from wherever you are.** **Add to collection** is on every card (in the **More** menu on a phone), in the selection bar for several posts at once, in an archive note’s file menu and in the command palette. Type a new name to create a collection on the spot. Cards show which collections a post is in; click one to open it.
+- **Share a collection.** **Copy link** makes a private collection viewable by anyone with the link and copies it. **Share settings** picks who can see it, what viewers see first and whether your notes and highlights appear, and can reset the link or stop sharing. A shared collection shows its posts in full, photos and videos included, so the plugin asks before the first share: your Preview share mode applies only to single posts.
+- **Collect together.** **Members** creates invite links with a role and an expiry, changes roles and removes members, or lets you leave. In a collaborative collection, posts other members added appear below yours as read-only cards (this needs an internet connection), and **Show my notes and highlights** decides whether the others see yours.
+- **Activity, in Obsidian too.** When someone adds posts to, joins or shares a collaborative collection you’re in, and neither your phone nor the desktop app gets it, a notice appears here; click it to open the collection. **Collaborative collection activity** in Settings › Collections turns these off for your account.
+- **Collections in Bases.** **Write collections to note properties** in Settings › Collections adds an \`archiveCollections\` list to your archive notes for Bases, Dataview and search. It’s off by default because it writes to your notes, and editing the property doesn’t change a collection. **Create base from collection** makes a \`.base\` file that lists one collection’s notes.
+- Which posts are in which collection is kept on this device and synced with your account, not written into your notes, so vault sync never conflicts over it. A note can join a collection once it’s uploaded to your account.
+
+## Sharing a single post
+
+- **A shared post’s share button opens a menu** with **Copy share link**, **Share settings…** and **Stop sharing**, instead of unsharing at once. **Share settings** chooses Public or Anyone with the link, whether the link opens the post or the reader, and whether your notes and highlights appear.
+- New shares start the way they do in the apps: Public, opening as the post (or in the reader when **Copy reader mode link by default** is on), with your notes and highlights.
+
+## AI chat archives read like articles
+
+- **ChatGPT, Claude, Gemini, Perplexity, Grok and AdventAI archives** keep their headings, numbered lists and inline images. The note no longer escapes them (\`\\#\\#\`, \`1\\.\`) or repeats the images in a media section, and the timeline card shows the conversation as an article instead of a 300-character excerpt without its images. Notes saved before this update stay as they are.
+
+## Fixes
+
+- **Embedded archives stay as written.** Adding an archive to one of your own posts rewrote the archives already embedded in it, a little worse on every save: dates reset to the time of the save, names like Google Maps or Naver Webtoon were cut short, YouTube descriptions wrapped themselves again and Reddit posts lost their community. Each save now writes them back unchanged.
+- **Links opened in in-app browsers.** A link opened from the Threads, Facebook or Instagram app, such as a Naver blog post, is recognized as the site it points to rather than as a Threads, Facebook or Instagram post. A pasted link with spaces around it is still recognized.
+- **No upgrade prompt on the two-at-once limit.** With two archives already running, the message now reads “Too many archives in progress. Try again when one finishes.” The limit is the same on every plan, so it no longer suggests upgrading.
+
+> [!NOTE]
+> Collections belong to your Social Archiver account. The ones you made in the mobile (2.4.0 or later) or desktop (0.8.0 or later) app appear here once you’re signed in, and changes made here show up there.
+`,
+  },
   '4.7.11': {
     title: 'See what’s new after every update, and text in angle brackets stays in your notes',
     date: '2026-09-28',

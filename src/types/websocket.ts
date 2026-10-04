@@ -196,6 +196,57 @@ export interface UserTagsUpdatedEventData {
   sourceClientId?: string;
 }
 
+// ============================================================================
+// Collections (private channel, prd-collections-obsidian-plugin §3)
+// ============================================================================
+
+/** A collection list changed. No `collectionIds` = a list-level change (e.g. this user was removed). */
+export interface UserCollectionsUpdatedEventData {
+  updatedAt: string;
+  timestamp: number;
+  sourceClientId?: string;
+  collectionIds?: string[];
+}
+
+export interface UserCollectionsUpdatedEvent {
+  type: 'user_collections_updated';
+  data: UserCollectionsUpdatedEventData;
+}
+
+export interface CollectionItemsUpdatedEventData {
+  collectionIds: string[];
+  archiveIds: string[];
+  archiveIdsTruncated?: boolean;
+  updatedAt: string;
+  timestamp: number;
+  sourceClientId?: string;
+}
+
+export interface CollectionItemsUpdatedEvent {
+  type: 'collection_items_updated';
+  data: CollectionItemsUpdatedEventData;
+}
+
+/** Someone else's activity in a collaborative collection; the client words it. */
+export interface CollectionActivityReadyEventData {
+  notificationId: string;
+  kind: 'items_added' | 'member_joined' | 'collection_shared';
+  collectionId: string;
+  collectionName: string;
+  /** Up to 3 usernames, most recent last. */
+  actors: string[];
+  actorCount: number;
+  count: number;
+  visibility?: 'unlisted' | 'public';
+  displayNotification: true;
+  createdAt: string;
+}
+
+export interface CollectionActivityReadyEvent {
+  type: 'collection_activity_ready';
+  data: CollectionActivityReadyEventData;
+}
+
 export interface UserTagsUpdatedEvent {
   type: 'user_tags_updated';
   data: UserTagsUpdatedEventData;
@@ -465,6 +516,9 @@ export type WebSocketEvent =
   | ArchiveDeletedEvent
   | ArchiveTagsUpdatedEvent
   | UserTagsUpdatedEvent
+  | UserCollectionsUpdatedEvent
+  | CollectionItemsUpdatedEvent
+  | CollectionActivityReadyEvent
   | AuthorProfileUpdatedEvent
   | SubscriptionChangedEvent
   | MediaPreservedEvent

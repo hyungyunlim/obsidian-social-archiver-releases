@@ -42,6 +42,8 @@ import { NoticeDetailModal } from '../../modals/NoticeDetailModal';
 import { ClipGuideModal } from '../../modals/ClipGuideModal';
 import type { NoticePayloadV1 } from '../../types/notices';
 import { TagChipBar } from './filters/TagChipBar';
+import { CollectionTimelineMode } from './collections/CollectionTimelineMode';
+import { t } from '../../i18n';
 import { StoreChipBar, type StoreSummary } from './filters/StoreChipBar';
 import { AddPlaceModal } from './modals/AddPlaceModal';
 import { PlaceDetailRenderer } from './places/PlaceDetailRenderer';
@@ -227,6 +229,8 @@ export class TimelineContainer {
   private archivePath: string;
   private plugin: SocialArchiverPlugin;
   private containerEl: HTMLElement;
+  /** An open collection narrows this timeline (prd-collections-obsidian-plugin O5). */
+  private readonly collectionMode: CollectionTimelineMode;
 
   private posts: PostData[] = [];
   private filteredPosts: PostData[] = [];
@@ -411,6 +415,29 @@ export class TimelineContainer {
     this.onUIModify = props.onUIModify;
 
     this.viewMode = props.plugin.settings.timelineViewMode || 'timeline';
+
+    this.collectionMode = new CollectionTimelineMode({
+      store: props.plugin.collectionStore,
+      service: props.plugin.collectionService,
+      ui: props.plugin.collectionUi,
+      events: props.plugin.events,
+      resolveFilePath: (archiveId) => props.plugin.getArchiveLookupService()?.findBySourceArchiveId(archiveId)?.path ?? null,
+      openFile: (path) => {
+        void this.app.workspace.openLinkText(path, '', false);
+      },
+      openUrl: (url) => {
+        window.open(url, '_blank');
+      },
+      host: {
+        applyCollectionFilter: (paths) => {
+          this.filterSortManager.updateFilter({ collectionFilePaths: paths });
+          void this.updatePostsFeedIncremental();
+        },
+        rerender: () => {
+          void (this.viewMode !== 'timeline' ? this.renderGalleryView() : this.renderPosts());
+        },
+      },
+    });
 
     // Initialize PostDataParser
     this.postDataParser = new PostDataParser(this.vault, this.app);
@@ -1585,6 +1612,12 @@ export class TimelineContainer {
       existingGallery.remove();
     }
 
+    if (this.collectionMode.getActiveId() !== null) {
+      this.containerEl.querySelectorAll('.sa-collection-empty-state').forEach((el) => el.remove());
+      this.containerEl.createDiv({ cls: 'sa-collection-empty-state timeline-feed max-w-2xl mx-auto', text: t('col.emptyCollection') });
+      return;
+    }
+
     // Check if empty because all tagged posts are archived
     const filterState = this.filterSortManager.getFilterState();
     if ((filterState.selectedTags.size > 0 || filterState.untaggedOnly) && filterState.activeTab === 'inbox') {
@@ -2497,6 +2530,7 @@ export class TimelineContainer {
     // Tag manage, Archive, Tab Cycle and View Switcher buttons (now also visible in Author mode)
     this.renderArchiveButton(rightButtons);
     this.renderTagManageButton(rightButtons);
+    this.renderCollectionsButton(rightButtons);
     this.renderTabCycleButton(rightButtons);
     this.renderViewSwitcherButton(rightButtons);
 
@@ -3435,6 +3469,34 @@ export class TimelineContainer {
     window.setTimeout(() => {
       activeDocument.addEventListener('click', closePanel);
     }, 100);
+  }
+
+  /**
+   * Collections button: the plugin's stand-in for the apps' sidebar section.
+   * Opens the collection list; inside a collection it also offers All posts.
+   */
+  private renderCollectionsButton(parent: HTMLElement): void {
+    const button = parent.createDiv();
+    button.addClass('sa-action-btn');
+    const active = this.collectionMode.getActiveId() !== null;
+    button.setAttribute('title', t('col.title'));
+    button.setAttribute('aria-label', t('col.title'));
+    const icon = button.createDiv();
+    icon.addClass('sa-icon-16', 'sa-transition-color', active ? 'sa-text-accent' : 'sa-text-muted');
+    setIcon(icon, 'library');
+    button.addEventListener('click', () => {
+      this.plugin.collectionUi.openSwitcher({
+        offerAllPosts: this.collectionMode.getActiveId() !== null,
+        onChoose: (choice) => {
+          if (choice.kind === 'all') this.collectionMode.open(null);
+          else if (choice.kind === 'collection') this.collectionMode.open(choice.collection.id);
+          else {
+            const result = this.plugin.collectionService.create(choice.name);
+            if (result.ok) this.collectionMode.open(result.collection.id);
+          }
+        },
+      });
+    });
   }
 
   /**
@@ -5432,6 +5494,7 @@ export class TimelineContainer {
 
     // Render header with filter/sort controls
     this.renderHeader();
+    this.collectionMode.renderBar(this.containerEl);
 
     // Places renders a LIST, not a chip bar — measured cardinality is inverted
     // from Shopping (45 distinct places across 14 notes), so a chip per place
@@ -5477,6 +5540,12 @@ export class TimelineContainer {
     // Mark that posts have been rendered (for subsequent reloads)
     this.hasRenderedPosts = true;
 
+    // A collaborative collection shows every contributor's posts from the server.
+    if (this.collectionMode.isCollaborativeActive()) {
+      this.collectionMode.renderMemberFeed(this.containerEl);
+      return;
+    }
+
     if (this.filteredPosts.length === 0) {
       this.renderFilteredEmptyState();
       return;
@@ -5496,6 +5565,7 @@ export class TimelineContainer {
     if (this.isSubscriptionViewActive) {
       return;
     }
+    if (this.collectionMode.isCollaborativeActive()) return;
 
     if (this.filteredPosts.length === 0) {
       this.exitBulkSelectionIfResultsEmpty();
@@ -5647,6 +5717,7 @@ export class TimelineContainer {
   private async updatePostsFeedIncremental(): Promise<void> {
     // Don't render posts if in subscription view
     if (this.isSubscriptionViewActive) return;
+    if (this.collectionMode.isCollaborativeActive()) return;
 
     // Gallery mode always does full re-render (different DOM structure)
     if (this.viewMode !== 'timeline') {
@@ -6489,7 +6560,10 @@ export class TimelineContainer {
       { key: 'subscribedOnly', icon: isMobile ? 'rss' : 'bell', label: 'Subscribed', titleOn: 'Showing subscribed only', titleOff: 'Show subscribed only' },
     ];
 
-    for (const qf of quickFilters) {
+    // Inside a collection these filters don't apply (desktop D2-10), so they aren't offered.
+    const inCollection = this.collectionMode.getActiveId() !== null;
+
+    for (const qf of inCollection ? [] : quickFilters) {
       const active = filterState[qf.key];
       const btn = parent.createEl('button', {
         cls: 'tc-quick-filter-btn',
@@ -6693,6 +6767,18 @@ export class TimelineContainer {
     starBtn.addEventListener('click', () => {
       void this.setSelectedPostsStarred(starTargetState);
     });
+
+    if (this.plugin.settings.isVerified && this.plugin.settings.authToken) {
+      const collectionBtn = actions.createEl('button', {
+        text: t('col.action.add'),
+        cls: 'tc-selection-action-btn',
+        attr: { type: 'button' },
+      });
+      collectionBtn.disabled = selectedPosts.length === 0;
+      collectionBtn.addEventListener('click', () => {
+        this.plugin.collectionUi.openPickerForPosts(selectedPosts);
+      });
+    }
 
     if (activeTab === 'archive') {
       const unarchiveBtn = actions.createEl('button', {
@@ -7362,6 +7448,7 @@ export class TimelineContainer {
       subscribedOnly: false,
       placesOnly: false,
       placeFilePaths: null,
+      collectionFilePaths: this.collectionMode.getFilterPaths(),
       transcribed: null,
       productsOnly: false,
       productSource: null,
@@ -8063,7 +8150,19 @@ export class TimelineContainer {
     }
   }
 
+  /** Show one collection (null = all posts). */
+  public openCollection(collectionId: string | null): void {
+    if (!this.hasRenderedPosts && collectionId) {
+      // Still loading: the first render will draw it.
+      this.filterSortManager.updateFilter({ collectionFilePaths: this.collectionMode.preset(collectionId) });
+      return;
+    }
+    this.collectionMode.open(collectionId);
+  }
+
   public destroy(): void {
+    this.collectionMode.destroy();
+
     // Destroy inline author detail if active
     if (this.authorDetailContainer) {
       this.authorDetailContainer.destroy();
@@ -8680,6 +8779,7 @@ export class TimelineContainer {
 
     // Render header with filter/sort controls (same as timeline view)
     this.renderHeader();
+    this.collectionMode.renderBar(this.containerEl);
 
     // Places list works the same in gallery mode — the selection narrows which
     // photos the grid shows.
@@ -8701,6 +8801,11 @@ export class TimelineContainer {
     this.renderAICommentJobStatusBanner();
     this.renderTranscriptionJobStatusBanner();
     this.renderCrossPostStatusBanner();
+
+    if (this.collectionMode.isCollaborativeActive()) {
+      this.collectionMode.renderMemberFeed(this.containerEl);
+      return;
+    }
 
     // Render mode-specific controls (below header):
     // gallery → group-by dropdown, mosaic → card-size slider
@@ -8880,6 +8985,7 @@ export class TimelineContainer {
     if (this.isSubscriptionViewActive) {
       return;
     }
+    if (this.collectionMode.isCollaborativeActive()) return;
 
     // Mosaic shares every gallery dispatch site but renders posts, not media files.
     if (this.viewMode === 'mosaic') {

@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/detection.ts
- * Generated: 2026-09-15T01:21:35.468Z
+ * Generated: 2026-10-03T01:01:46.956Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -87,7 +87,9 @@ const DETECTION_ORDER: Platform[] = [
  * detectPlatform('https://www.facebook.com/post/456') // 'facebook'
  * detectPlatform('https://unknown.com') // 'post'
  */
-export function detectPlatform(url: string): Platform {
+export function detectPlatform(rawUrl: string): Platform {
+  // Host-anchored patterns (`^`) must not be defeated by whitespace around a pasted URL.
+  const url = rawUrl.trim();
   for (const platformId of DETECTION_ORDER) {
     const def = PLATFORM_DEFINITIONS[platformId];
     if (def?.urlPattern.test(url)) {

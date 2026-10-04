@@ -18,6 +18,16 @@ import { WebtoonSyncService } from './services/WebtoonSyncService';
 import { AuthorAvatarService } from './services/AuthorAvatarService';
 import { AuthorNoteService } from './services/AuthorNoteService';
 import { TagStore } from './services/TagStore';
+import { CollectionStore } from './services/collections/CollectionStore';
+import { CollectionService } from './services/collections/CollectionService';
+import { CollectionSyncService } from './plugin/sync/CollectionSyncService';
+import { CollectionRealtimeListener } from './plugin/realtime/CollectionRealtimeListener';
+import { CollectionActivityNotifier } from './plugin/collections/CollectionActivityNotifier';
+import { CollectionUiActions } from './plugin/collections/CollectionUiActions';
+import { CollectionPropertyMirror } from './plugin/collections/CollectionPropertyMirror';
+import { writeCollectionBase } from './plugin/collections/CollectionBaseWriter';
+import { registerCollectionCommands, registerCollectionFileMenu } from './plugin/collections/CollectionCommands';
+import { toCollectionDisplayMode } from './services/collections/collectionDisplayMode';
 import type { PostData, Platform } from './types/post';
 import { ClipPayloadError } from './types/clip';
 import { CLIP_BATCH_MAX_POST_COUNT, ClipBatchError, isValidClipBatchId } from './types/clip-batch';
@@ -33,7 +43,8 @@ import { ReleaseNotesModal } from './modals/ReleaseNotesModal';
 import { InstagramImportModal } from './modals/InstagramImportModal';
 import type { ImportOrchestrator } from './types/import';
 import { NaverWebtoonLocalService } from './services/NaverWebtoonLocalService';
-import { currentLang } from './i18n';
+import { currentLang, t } from './i18n';
+import { showConfirmModal } from './utils/confirm-modal';
 import {
   checkReleaseNotes,
   fetchReleaseNoteUpdates,
@@ -312,6 +323,13 @@ export default class SocialArchiverPlugin extends Plugin {
   public crawlJobTracker!: CrawlJobTracker; // Profile crawl progress tracker
   public archiveJobTracker!: ArchiveJobTracker; // Archive progress tracker for banner UI
   public tagStore!: TagStore; // User-defined tag management
+  /** Collections (prd-collections-obsidian-plugin): created once, re-scoped to the signed-in user on every init. */
+  public collectionStore!: CollectionStore;
+  public collectionSync!: CollectionSyncService;
+  public collectionService!: CollectionService;
+  public collectionUi!: CollectionUiActions;
+  private collectionRealtimeListener?: CollectionRealtimeListener;
+  private collectionPropertyMirror?: CollectionPropertyMirror;
   public batchTranscriptionManager: BatchTranscriptionManager | null = null;
   private batchTranscriptionNotice: BatchTranscriptionNotice | null = null;
   /**
@@ -502,6 +520,10 @@ export default class SocialArchiverPlugin extends Plugin {
       await this.runForegroundSyncStep('archive library delta catch-up', () =>
         this.archiveLibrarySyncService?.startDeltaSync('delta-catch-up') ?? Promise.resolve()
       );
+
+      await this.runForegroundSyncStep('collections sync', async () => {
+        await this.collectionSync?.performSync();
+      });
 
       // After the library delta sync settles (local files exist/are up to date),
       // pull link-relation deltas and re-render `## Linked archives` sections.
@@ -1502,6 +1524,16 @@ export default class SocialArchiverPlugin extends Plugin {
       uploadLocalArchiveToAccount: (file) => this.uploadLocalArchiveToAccount(file),
     });
 
+    const collectionCommandDeps = {
+      app: this.app,
+      plugin: this,
+      ui: () => this.collectionUi,
+      store: () => this.collectionStore,
+      createBase: (collectionId: string) => this.createCollectionBase(collectionId),
+    };
+    registerCollectionCommands(collectionCommandDeps);
+    registerCollectionFileMenu(collectionCommandDeps);
+
     // Per-note graduation entry point (PRD S5.3): context menu on local-only
     // archive notes.
     this.registerEvent(
@@ -1624,6 +1656,9 @@ export default class SocialArchiverPlugin extends Plugin {
 
     // Clear WebSocket listeners
     this.realtimeEventBridge?.clear();
+    this.collectionRealtimeListener?.clear();
+    this.collectionSync?.stop();
+    this.collectionPropertyMirror?.stop();
 
     // Disconnect WebSocket
     this.realtimeClient?.disconnect();
@@ -1900,6 +1935,10 @@ export default class SocialArchiverPlugin extends Plugin {
    * Initialize API client and orchestrator
    */
   private async initializeServices(): Promise<void> {
+    // First and outside the try below: the timeline view needs these, and a
+    // failure further down must not leave them undefined.
+    this.ensureCollectionServices();
+
     // Clean up existing services
     this.apiClient?.dispose();
     await this.orchestrator?.dispose();
@@ -2810,6 +2849,16 @@ export default class SocialArchiverPlugin extends Plugin {
         });
         this.realtimeEventBridge.setup();
 
+        this.collectionRealtimeListener?.clear();
+        this.collectionRealtimeListener = new CollectionRealtimeListener({
+          events: this.events,
+          syncClientId: () => this.settings.syncClientId,
+          performSync: () => this.collectionSync.performSync(),
+          onRemoteChange: (collectionIds) => this.events.trigger('collections:remote-change', collectionIds),
+          onActivity: (data) => this.collectionActivityNotifier.show(data),
+        });
+        this.collectionRealtimeListener.setup();
+
         // Connect to WebSocket (async - private channel needs ticket fetch)
         void this.realtimeClient.connect();
       }
@@ -2840,6 +2889,10 @@ export default class SocialArchiverPlugin extends Plugin {
             });
           }, 4000);
         }
+
+        this.scheduleTrackedTimeout(() => {
+          void this.collectionSync.performSync();
+        }, 4500);
 
         if (this.authorProfileSyncService) {
           this.scheduleTrackedTimeout(() => {
@@ -3018,6 +3071,146 @@ export default class SocialArchiverPlugin extends Plugin {
         (view.refresh as () => void)();
       }
     }
+  }
+
+  /** A collection asked for before a timeline view existed (see openCollectionInTimeline). */
+  private pendingTimelineCollectionId: string | null = null;
+
+  /** Open a collection in the timeline, opening the timeline first when none is open. */
+  public async openCollectionInTimeline(collectionId: string): Promise<void> {
+    if (this.app.workspace.getLeavesOfType(VIEW_TYPE_TIMELINE).length === 0) {
+      await this.activateTimelineView();
+    }
+    const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_TIMELINE)[0];
+    if (!leaf) return;
+    // A background leaf is a deferred placeholder until revealed; awaiting loads the real view.
+    await this.app.workspace.revealLeaf(leaf);
+    if (leaf.view instanceof TimelineView) {
+      leaf.view.openCollection(collectionId);
+      return;
+    }
+    // Still a stand-in: the view type registers only once onload has finished
+    // initializing services. The timeline takes this when it opens.
+    this.pendingTimelineCollectionId = collectionId;
+  }
+
+  /** For a newly opened timeline: the collection asked for before it existed, once. */
+  public consumePendingTimelineCollection(): string | null {
+    const collectionId = this.pendingTimelineCollectionId;
+    this.pendingTimelineCollectionId = null;
+    return collectionId;
+  }
+
+  /**
+   * Collections are created once: settings saves re-run initializeServices(),
+   * and the store must keep its session state (id remaps, queued pass). Each
+   * init only re-scopes it to whoever is signed in now.
+   */
+  private ensureCollectionServices(): void {
+    if (!this.collectionStore) {
+      this.collectionStore = new CollectionStore({
+        load: (key) => this.app.loadLocalStorage(key) as unknown,
+        save: (key, value) => this.app.saveLocalStorage(key, value),
+      });
+      this.collectionSync = new CollectionSyncService({
+        store: this.collectionStore,
+        api: () => this.apiClient,
+        isAuthenticated: () => isAuthenticated(this),
+        schedule: (callback, delay) => this.scheduleTrackedTimeout(callback, delay),
+        cancel: (handle) => window.clearTimeout(handle),
+      });
+      this.collectionService = new CollectionService({
+        store: this.collectionStore,
+        sync: this.collectionSync,
+        api: () => this.apiClient,
+        isAuthenticated: () => isAuthenticated(this),
+        username: () => this.settings.username || null,
+      });
+      this.collectionUi = new CollectionUiActions({
+        app: this.app,
+        service: this.collectionService,
+        store: this.collectionStore,
+        isSignedIn: () => isAuthenticated(this) && Boolean(this.settings.username),
+        username: () => this.settings.username || null,
+        currentDisplayMode: () => toCollectionDisplayMode(this.settings.timelineViewMode ?? 'timeline'),
+        openCollection: (collectionId) => {
+          void this.openCollectionInTimeline(collectionId);
+        },
+        createBase: (collectionId) => this.createCollectionBase(collectionId),
+      });
+      this.collectionPropertyMirror = new CollectionPropertyMirror({
+        app: this.app,
+        store: this.collectionStore,
+        enabled: () => this.settings.collectionPropertyMirror === true,
+        listArchiveIds: () => this.archiveLookupService?.listSourceArchiveIds() ?? [],
+        fileFor: (archiveId) => this.archiveLookupService?.findBySourceArchiveId(archiveId) ?? null,
+        markUiModify: (path) => this.markTimelineUiModify(path),
+        schedule: (callback, delay) => this.scheduleTrackedTimeout(callback, delay),
+        cancel: (handle) => window.clearTimeout(handle),
+      });
+    }
+    if (this.settings.collectionPropertyMirror) this.collectionPropertyMirror?.start();
+    else this.collectionPropertyMirror?.stop();
+    this.collectionSync.start();
+    this.collectionStore.switchUser(isAuthenticated(this) && this.settings.username ? this.settings.username : null);
+  }
+
+  /** Tell open timelines a note write is ours: no refresh, no automatic re-share. */
+  private markTimelineUiModify(path: string): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_TIMELINE)) {
+      if (leaf.view instanceof TimelineView) leaf.view.registerUIModify(path);
+    }
+  }
+
+  /** Settings toggle for the `archiveCollections` property. Turning it off removes what it wrote. */
+  public async setCollectionPropertyMirror(enabled: boolean): Promise<void> {
+    if (this.settings.collectionPropertyMirror === enabled) return;
+    await this.saveSettingsPartial({ collectionPropertyMirror: enabled }, { reinitialize: false, notify: false });
+    if (enabled) {
+      this.collectionPropertyMirror?.start();
+      await this.collectionPropertyMirror?.reconcile();
+    } else {
+      this.collectionPropertyMirror?.stop();
+      await this.collectionPropertyMirror?.clearAll();
+    }
+  }
+
+  /** "Create base from collection" (O7). Bases filter on properties, so the mirror comes first. */
+  private async createCollectionBase(collectionId: string): Promise<void> {
+    const collection = this.collectionStore.getCollection(collectionId);
+    if (!collection) return;
+    if (!this.settings.collectionPropertyMirror) {
+      const confirmed = await showConfirmModal(this.app, {
+        title: t('col.base.enableMirrorTitle'),
+        message: t('col.base.enableMirrorBody'),
+        confirmText: t('col.base.enableMirrorConfirm'),
+        cancelText: t('col.edit.cancel'),
+      });
+      if (!confirmed) return;
+      await this.setCollectionPropertyMirror(true);
+    }
+    try {
+      const { file, created } = await writeCollectionBase(this.app, this.settings.archivePath, collection.name);
+      await this.app.workspace.getLeaf('tab').openFile(file);
+      if (created) new Notice(t('col.base.created', { path: file.path }));
+    } catch (error) {
+      console.error('[Social Archiver] Creating a collection base failed:', error);
+      new Notice(t('col.failed'));
+    }
+  }
+
+  private collectionActivityNotifierInstance?: CollectionActivityNotifier;
+
+  private get collectionActivityNotifier(): CollectionActivityNotifier {
+    this.collectionActivityNotifierInstance ??= new CollectionActivityNotifier({
+      openCollection: (collectionId) => {
+        void this.openCollectionInTimeline(collectionId);
+      },
+      markOpened: async (notificationId) => {
+        await this.apiClient?.markNotificationOpened(notificationId);
+      },
+    });
+    return this.collectionActivityNotifierInstance;
   }
 
   public async reconcileArchiveLocation(archiveId: string): Promise<void> {
@@ -4272,8 +4465,10 @@ export default class SocialArchiverPlugin extends Plugin {
 
     // 2. Disconnect WebSocket gracefully
     this.realtimeEventBridge?.clear();
+    this.collectionRealtimeListener?.clear();
     this.realtimeClient?.disconnect();
     this.realtimeClient = undefined;
+    this.collectionStore?.switchUser(null);
 
     // 3. Clear auth settings
     this.settings.authToken = '';

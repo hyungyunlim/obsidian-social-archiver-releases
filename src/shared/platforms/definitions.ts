@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/definitions.ts
- * Generated: 2026-09-15T01:21:35.467Z
+ * Generated: 2026-10-03T01:00:35.462Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -89,7 +89,9 @@ export const PLATFORM_DEFINITIONS: Record<Platform, PlatformDefinition> = {
     displayName: 'Facebook',
     emoji: '📘',
     domains: ['facebook.com', 'fb.com', 'fb.watch', 'm.facebook.com'],
-    urlPattern: /(?:facebook\.com|fb\.com|fb\.watch)/i,
+    // Host-anchored like threads: in-app browsers put l.facebook.com in the
+    // query (proxyReferer), and facebook is checked first of all platforms.
+    urlPattern: /^(?:https?:\/\/)?(?:[\w-]+\.)*(?:facebook\.com|fb\.com|fb\.watch)(?:[:/?#]|$)/i,
     brightDataDatasetId: 'gd_l7q7dkf244hwgcqr2',
     supportsMedia: true,
     supportsAI: true,
@@ -117,7 +119,8 @@ export const PLATFORM_DEFINITIONS: Record<Platform, PlatformDefinition> = {
     displayName: 'Instagram',
     emoji: '📷',
     domains: ['instagram.com', 'instagr.am'],
-    urlPattern: /(?:instagram\.com|instagr\.am)/i,
+    // Host-anchored like threads (l.instagram.com referers, cdninstagram.com).
+    urlPattern: /^(?:https?:\/\/)?(?:[\w-]+\.)*(?:instagram\.com|instagr\.am)(?:[:/?#]|$)/i,
     brightDataDatasetId: 'gd_l1kj3kf244hwgcqq1',
     supportsMedia: true,
     supportsAI: true,
@@ -163,7 +166,10 @@ export const PLATFORM_DEFINITIONS: Record<Platform, PlatformDefinition> = {
     displayName: 'Threads',
     emoji: '🧵',
     domains: ['threads.net', 'threads.com'],
-    urlPattern: /(?:threads\.net|threads\.com)/i,
+    // Host-anchored: links opened from the Threads app carry the link shim in
+    // their query (`proxyReferer=https%3A%2F%2Fl.threads.com%2F`), and Threads
+    // is checked before Naver, so a substring match stole Naver blog posts.
+    urlPattern: /^(?:https?:\/\/)?(?:[\w-]+\.)*threads\.(?:net|com)(?:[:/?#]|$)/i,
     brightDataDatasetId: 'gd_l1kj3kf244hwgcqs1',
     supportsMedia: true,
     supportsAI: true,

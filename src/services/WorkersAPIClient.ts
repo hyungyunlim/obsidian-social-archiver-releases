@@ -26,6 +26,28 @@ import type { AICommentType } from '@/types/ai-comment';
 import type { RelationWithSummary, RelationPullResponse } from '@/types/link-relations';
 import type { ArchiveAttempt, ArchiveAttemptStatus } from '@/types/post';
 import {
+  COLLECTIONS_SHARED_CAPABILITY,
+  type CollectionInvite,
+  type CollectionItemPair,
+  type CollectionMember,
+  type CollectionMemberRole,
+  type CollectionMembersResponse,
+  type CollectionMembershipSettings,
+  type CollectionShareState,
+  type CollectionShareUpdate,
+  type CollectionUpsertInput,
+  type CreateCollectionInviteBody,
+  type DeleteCollectionItemsResponse,
+  type DeleteCollectionResponse,
+  type GetUserCollectionItemsResponse,
+  type GetUserCollectionsResponse,
+  type MemberCollectionViewPage,
+  type PostShareSettings,
+  type PostShareSettingsResponse,
+  type UpsertCollectionItemsResponse,
+  type UpsertCollectionsResponse,
+} from '@/types/collections';
+import {
   ArchivePreferencesApiError,
   parseArchivePreferencesResponse,
   type ArchivePreferences,
@@ -2002,9 +2024,14 @@ export class WorkersAPIClient implements IService {
   }
 
   /**
-   * Make HTTP request
+   * Make HTTP request. `responseKey` names the envelope field holding the
+   * payload: `data` everywhere except notification preferences (`preferences`).
    */
-  private async request<T>(path: string, options: Partial<RequestUrlParam> = {}): Promise<T> {
+  private async request<T>(
+    path: string,
+    options: Partial<RequestUrlParam> = {},
+    responseKey: 'data' | 'preferences' = 'data',
+  ): Promise<T> {
     const url = `${this.config.endpoint}${path}`;
 
     // Build headers with optional Authorization
@@ -2051,7 +2078,7 @@ export class WorkersAPIClient implements IService {
         throw extError;
       }
 
-      return data.data as T;
+      return (responseKey === 'data' ? data.data : (data as APIResponse<T> & { preferences?: T }).preferences) as T;
     } catch (error) {
       const failure = {
         url,
@@ -3760,6 +3787,268 @@ export class WorkersAPIClient implements IService {
       headers: extraHeaders,
       body: JSON.stringify({ pairs }),
     });
+  }
+
+  // ============================================================================
+  // Collections API (prd-collections-obsidian-plugin §3)
+  // ============================================================================
+
+  /**
+   * Collection calls replace the default capability header, so they repeat
+   * the defaults and add `collections-shared-v1` (collaborative collections
+   * and the role fields come only with it).
+   */
+  private collectionHeaders(): Record<string, string> {
+    return {
+      'X-Client-Capabilities': `${PLACE_CONTEXT_NOTE_CAPABILITY},archive-note-ops-v1,${COLLECTIONS_SHARED_CAPABILITY}`,
+    };
+  }
+
+  private collectionPath(collectionId: string, suffix = ''): string {
+    return `/api/user/collections/${encodeURIComponent(collectionId)}${suffix}`;
+  }
+
+  private deltaQuery(options: { updatedAfter?: string; includeDeleted?: boolean }): string {
+    const params = new URLSearchParams();
+    if (options.updatedAfter) params.set('updatedAfter', options.updatedAfter);
+    if (options.includeDeleted) params.set('includeDeleted', 'true');
+    const query = params.toString();
+    return query ? `?${query}` : '';
+  }
+
+  /** GET /api/user/collections — without a cursor every active row, and `deletedIds` stays empty. */
+  async getUserCollections(
+    options: { updatedAfter?: string; includeDeleted?: boolean } = {},
+  ): Promise<GetUserCollectionsResponse> {
+    this.ensureInitialized();
+    return await this.request<GetUserCollectionsResponse>(`/api/user/collections${this.deltaQuery(options)}`, {
+      method: 'GET',
+      headers: this.collectionHeaders(),
+    });
+  }
+
+  /** POST /api/user/collections — outcomes are per entity (`resolvedCollections`, `rejected`), not HTTP errors. */
+  async upsertCollections(collections: CollectionUpsertInput[]): Promise<UpsertCollectionsResponse> {
+    this.ensureInitialized();
+    return await this.request<UpsertCollectionsResponse>('/api/user/collections', {
+      method: 'POST',
+      headers: this.collectionHeaders(),
+      body: JSON.stringify({ collections }),
+    });
+  }
+
+  /** DELETE /api/user/collections/:id — soft-deletes the collection and every contributor's items. */
+  async deleteCollection(collectionId: string): Promise<DeleteCollectionResponse> {
+    this.ensureInitialized();
+    return await this.request<DeleteCollectionResponse>(this.collectionPath(collectionId), {
+      method: 'DELETE',
+      headers: this.collectionHeaders(),
+    });
+  }
+
+  /** GET /api/user/collection-items — only the caller's own item rows. */
+  async getUserCollectionItems(
+    options: { updatedAfter?: string; includeDeleted?: boolean } = {},
+  ): Promise<GetUserCollectionItemsResponse> {
+    this.ensureInitialized();
+    return await this.request<GetUserCollectionItemsResponse>(
+      `/api/user/collection-items${this.deltaQuery(options)}`,
+      { method: 'GET', headers: this.collectionHeaders() },
+    );
+  }
+
+  /** POST /api/user/collection-items — at most 500 pairs; refusals come back in `skippedPairs`. */
+  async upsertCollectionItems(items: CollectionItemPair[]): Promise<UpsertCollectionItemsResponse> {
+    this.ensureInitialized();
+    return await this.request<UpsertCollectionItemsResponse>('/api/user/collection-items', {
+      method: 'POST',
+      headers: this.collectionHeaders(),
+      body: JSON.stringify({ items }),
+    });
+  }
+
+  /** DELETE /api/user/collection-items — at most 500 pairs; pairs the caller can't touch are ignored. */
+  async deleteCollectionItems(pairs: CollectionItemPair[]): Promise<DeleteCollectionItemsResponse> {
+    this.ensureInitialized();
+    return await this.request<DeleteCollectionItemsResponse>('/api/user/collection-items', {
+      method: 'DELETE',
+      headers: this.collectionHeaders(),
+      body: JSON.stringify({ pairs }),
+    });
+  }
+
+  /** GET /api/user/collections/:id/share (owner only). */
+  async getCollectionShareState(collectionId: string): Promise<CollectionShareState> {
+    this.ensureInitialized();
+    return await this.request<CollectionShareState>(this.collectionPath(collectionId, '/share'), {
+      method: 'GET',
+      headers: this.collectionHeaders(),
+    });
+  }
+
+  /** POST /api/user/collections/:id/share (owner only). Missing optional keys keep their values; `private` stops sharing. */
+  async updateCollectionShare(collectionId: string, body: CollectionShareUpdate): Promise<CollectionShareState> {
+    this.ensureInitialized();
+    return await this.request<CollectionShareState>(this.collectionPath(collectionId, '/share'), {
+      method: 'POST',
+      headers: this.collectionHeaders(),
+      body: JSON.stringify(body),
+    });
+  }
+
+  /** POST /api/user/collections/:id/rotate-link (owner only). The old link stops working. */
+  async rotateCollectionLink(collectionId: string): Promise<CollectionShareState> {
+    this.ensureInitialized();
+    return await this.request<CollectionShareState>(this.collectionPath(collectionId, '/rotate-link'), {
+      method: 'POST',
+      headers: this.collectionHeaders(),
+    });
+  }
+
+  /** GET /api/user/collections/:id/invites (owner only) — active links, newest first. */
+  async listCollectionInvites(collectionId: string): Promise<CollectionInvite[]> {
+    this.ensureInitialized();
+    const data = await this.request<{ invites: CollectionInvite[] }>(this.collectionPath(collectionId, '/invites'), {
+      method: 'GET',
+      headers: this.collectionHeaders(),
+    });
+    return data.invites;
+  }
+
+  /** POST /api/user/collections/:id/invites (owner only). */
+  async createCollectionInvite(collectionId: string, body: CreateCollectionInviteBody): Promise<CollectionInvite> {
+    this.ensureInitialized();
+    return await this.request<CollectionInvite>(this.collectionPath(collectionId, '/invites'), {
+      method: 'POST',
+      headers: this.collectionHeaders(),
+      body: JSON.stringify(body),
+    });
+  }
+
+  /** DELETE /api/user/collections/:id/invites/:token (owner only, idempotent). */
+  async revokeCollectionInvite(collectionId: string, token: string): Promise<void> {
+    this.ensureInitialized();
+    await this.request<unknown>(this.collectionPath(collectionId, `/invites/${encodeURIComponent(token)}`), {
+      method: 'DELETE',
+      headers: this.collectionHeaders(),
+    });
+  }
+
+  /** GET /api/user/collections/:id/members (owner or active member). */
+  async getCollectionMembers(collectionId: string): Promise<CollectionMembersResponse> {
+    this.ensureInitialized();
+    return await this.request<CollectionMembersResponse>(this.collectionPath(collectionId, '/members'), {
+      method: 'GET',
+      headers: this.collectionHeaders(),
+    });
+  }
+
+  /** PATCH /api/user/collections/:id/members/:username (owner only). */
+  async updateCollectionMemberRole(
+    collectionId: string,
+    username: string,
+    role: CollectionMemberRole,
+  ): Promise<CollectionMember> {
+    this.ensureInitialized();
+    return await this.request<CollectionMember>(
+      this.collectionPath(collectionId, `/members/${encodeURIComponent(username)}`),
+      { method: 'PATCH', headers: this.collectionHeaders(), body: JSON.stringify({ role }) },
+    );
+  }
+
+  /** DELETE /api/user/collections/:id/members/:username (owner only). The member's items stay. */
+  async removeCollectionMember(collectionId: string, username: string): Promise<void> {
+    this.ensureInitialized();
+    await this.request<unknown>(this.collectionPath(collectionId, `/members/${encodeURIComponent(username)}`), {
+      method: 'DELETE',
+      headers: this.collectionHeaders(),
+    });
+  }
+
+  /** POST /api/user/collections/:id/leave (editor or viewer). */
+  async leaveCollection(collectionId: string): Promise<void> {
+    this.ensureInitialized();
+    await this.request<unknown>(this.collectionPath(collectionId, '/leave'), {
+      method: 'POST',
+      headers: this.collectionHeaders(),
+    });
+  }
+
+  /** PATCH /api/user/collections/:id/membership (editor or viewer): my notes opt-in and my sort order. */
+  async updateCollectionMembership(
+    collectionId: string,
+    body: { includeAnnotations?: boolean; sortOrder?: number },
+  ): Promise<CollectionMembershipSettings> {
+    this.ensureInitialized();
+    return await this.request<CollectionMembershipSettings>(this.collectionPath(collectionId, '/membership'), {
+      method: 'PATCH',
+      headers: this.collectionHeaders(),
+      body: JSON.stringify(body),
+    });
+  }
+
+  /** GET /api/user/collections/:id/view — the server-rendered list, every contributor's posts included. */
+  async getMemberCollectionView(
+    collectionId: string,
+    options: { cursor?: string | null; limit?: number } = {},
+  ): Promise<MemberCollectionViewPage> {
+    this.ensureInitialized();
+    const params = new URLSearchParams();
+    if (options.cursor) params.set('cursor', options.cursor);
+    if (options.limit) params.set('limit', String(options.limit));
+    const query = params.toString();
+    return await this.request<MemberCollectionViewPage>(
+      this.collectionPath(collectionId, `/view${query ? `?${query}` : ''}`),
+      { method: 'GET', headers: this.collectionHeaders() },
+    );
+  }
+
+  /** GET /api/share/:shareId/settings (share owner only). */
+  async getShareSettings(shareId: string): Promise<PostShareSettingsResponse> {
+    this.ensureInitialized();
+    return await this.request<PostShareSettingsResponse>(`/api/share/${encodeURIComponent(shareId)}/settings`, {
+      method: 'GET',
+    });
+  }
+
+  /** PATCH /api/share/:shareId/settings — at least one key; an identical patch writes nothing. */
+  async updateShareSettings(shareId: string, patch: Partial<PostShareSettings>): Promise<PostShareSettingsResponse> {
+    this.ensureInitialized();
+    return await this.request<PostShareSettingsResponse>(`/api/share/${encodeURIComponent(shareId)}/settings`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }
+
+  /** GET /api/users/notification-preferences → the collaborative-collection activity switch. */
+  async getCollectionActivityNotificationsEnabled(): Promise<boolean> {
+    this.ensureInitialized();
+    const preferences = await this.request<{ collectionActivityNotificationsEnabled?: boolean }>(
+      '/api/users/notification-preferences',
+      { method: 'GET' },
+      'preferences',
+    );
+    return preferences.collectionActivityNotificationsEnabled !== false;
+  }
+
+  /** POST /api/users/notifications/:id/opened — the tap counts like an app tap (notification analytics). */
+  async markNotificationOpened(notificationId: string): Promise<void> {
+    this.ensureInitialized();
+    await this.request<unknown>(`/api/users/notifications/${encodeURIComponent(notificationId)}/opened`, {
+      method: 'POST',
+      body: JSON.stringify({ openedAt: new Date().toISOString() }),
+    });
+  }
+
+  /** PATCH /api/users/notification-preferences (strict schema: send only this key). */
+  async setCollectionActivityNotificationsEnabled(enabled: boolean): Promise<boolean> {
+    this.ensureInitialized();
+    const preferences = await this.request<{ collectionActivityNotificationsEnabled?: boolean }>(
+      '/api/users/notification-preferences',
+      { method: 'PATCH', body: JSON.stringify({ collectionActivityNotificationsEnabled: enabled }) },
+      'preferences',
+    );
+    return preferences.collectionActivityNotificationsEnabled !== false;
   }
 
   /**

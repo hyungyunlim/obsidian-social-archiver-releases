@@ -23,6 +23,7 @@ import { dangerZoneStrings } from './strings/dangerZone';
 import { newsletterStrings } from './strings/newsletter';
 import { reviewStrings } from './strings/review';
 import { releaseNotesStrings } from './strings/releaseNotes';
+import { collectionStrings } from './strings/collections';
 
 /** One translatable string. `ja` can be added later without touching callers. */
 export interface LocaleText {
@@ -39,6 +40,7 @@ const strings = {
   ...newsletterStrings,
   ...reviewStrings,
   ...releaseNotesStrings,
+  ...collectionStrings,
 } satisfies Record<string, LocaleText>;
 
 export type TranslationKey = keyof typeof strings;

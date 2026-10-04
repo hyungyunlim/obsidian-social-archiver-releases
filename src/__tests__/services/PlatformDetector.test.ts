@@ -507,9 +507,9 @@ describe('PlatformDetector', () => {
   describe('Edge cases', () => {
     it('should handle malformed URLs', () => {
       expect(detector.detectPlatform('not-a-valid-url')).toBeNull();
-      // Note: The shared detection normalizes URLs, so typos like 'htp' get corrected to 'https'
-      // This is actually more user-friendly behavior - detecting the intended platform
-      expect(detector.detectPlatform('htp://facebook.com')).toBe('facebook');
+      // A mistyped scheme is not an http(s) URL and cannot be fetched. It only
+      // used to detect as Facebook because the pattern matched anywhere in the string.
+      expect(detector.detectPlatform('htp://facebook.com')).toBeNull();
     });
 
     it('should handle empty strings', () => {

@@ -37,6 +37,13 @@ export interface FilterState {
    */
   placeFilePaths: ReadonlySet<string> | null;
   /**
+   * An open collection (prd-collections-obsidian-plugin O5): the vault paths of
+   * this user's posts in it. A path set for the same reason as
+   * `placeFilePaths` — membership lives in the collection store, not in the
+   * post index. It is a mode rather than a filter, so resetting filters keeps it.
+   */
+  collectionFilePaths: ReadonlySet<string> | null;
+  /**
    * Tri-state transcribed filter (feedback #91 parity with mobile):
    * - null: off (matches everything)
    * - true: only posts that have a transcript
@@ -178,6 +185,9 @@ export class FilterSortManager {
    */
   private applyFilters(posts: PostData[]): PostData[] {
     let filtered = [...posts];
+    // Inside a collection every post in it shows, whichever tab or quick
+    // filter was on (desktop D2-10); search, platform, tag and date still narrow.
+    const navFilters = this.filterState.collectionFilePaths === null;
 
     // Filter by platform
     // Note: 'webtoons' platform is shown under 'naver-webtoon' filter (both are webtoon platforms)
@@ -202,22 +212,22 @@ export class FilterSortManager {
     }
 
     // Filter by liked only
-    if (this.filterState.likedOnly) {
+    if (navFilters && this.filterState.likedOnly) {
       filtered = filtered.filter(post => post.like === true);
     }
 
     // Filter by commented only
-    if (this.filterState.commentedOnly) {
+    if (navFilters && this.filterState.commentedOnly) {
       filtered = filtered.filter(post => post.comment && post.comment.trim().length > 0);
     }
 
     // Filter by shared only
-    if (this.filterState.sharedOnly) {
+    if (navFilters && this.filterState.sharedOnly) {
       filtered = filtered.filter(post => post.shareUrl && post.shareUrl.trim().length > 0);
     }
 
     // Filter by local-only notes
-    if (this.filterState.localOnlyOnly) {
+    if (navFilters && this.filterState.localOnlyOnly) {
       filtered = filtered.filter(post => post.isLocalOnly === true);
     }
 
@@ -233,6 +243,11 @@ export class FilterSortManager {
 
     if (this.filterState.placeFilePaths) {
       const paths = this.filterState.placeFilePaths;
+      filtered = filtered.filter(post => post.filePath !== undefined && paths.has(post.filePath));
+    }
+
+    if (this.filterState.collectionFilePaths) {
+      const paths = this.filterState.collectionFilePaths;
       filtered = filtered.filter(post => post.filePath !== undefined && paths.has(post.filePath));
     }
 
@@ -262,7 +277,7 @@ export class FilterSortManager {
     }
 
     // Filter by archive status
-    switch (this.filterState.activeTab) {
+    switch (navFilters ? this.filterState.activeTab : 'all') {
       case 'inbox':
         filtered = filtered.filter(post => post.archive !== true);
         break;
@@ -376,6 +391,9 @@ export class FilterSortManager {
    */
   private applyFiltersIndex(entries: PostIndexEntry[]): PostIndexEntry[] {
     let filtered = entries;
+    // Inside a collection every post in it shows, whichever tab or quick
+    // filter was on (desktop D2-10); search, platform, tag and date still narrow.
+    const navFilters = this.filterState.collectionFilePaths === null;
 
     // Filter by platform
     filtered = filtered.filter(entry => {
@@ -398,19 +416,19 @@ export class FilterSortManager {
     }
 
     // Boolean filters
-    if (this.filterState.likedOnly) {
+    if (navFilters && this.filterState.likedOnly) {
       filtered = filtered.filter(e => e.like);
     }
-    if (this.filterState.commentedOnly) {
+    if (navFilters && this.filterState.commentedOnly) {
       filtered = filtered.filter(e => e.comment && e.comment.trim().length > 0);
     }
-    if (this.filterState.sharedOnly) {
+    if (navFilters && this.filterState.sharedOnly) {
       filtered = filtered.filter(e => e.shareUrl && e.shareUrl.trim().length > 0);
     }
-    if (this.filterState.localOnlyOnly) {
+    if (navFilters && this.filterState.localOnlyOnly) {
       filtered = filtered.filter(e => e.isLocalOnly === true);
     }
-    if (this.filterState.subscribedOnly) {
+    if (navFilters && this.filterState.subscribedOnly) {
       filtered = filtered.filter(e => e.subscribed);
     }
     if (this.filterState.placesOnly) {
@@ -419,6 +437,11 @@ export class FilterSortManager {
 
     if (this.filterState.placeFilePaths) {
       const paths = this.filterState.placeFilePaths;
+      filtered = filtered.filter(e => paths.has(e.filePath));
+    }
+
+    if (this.filterState.collectionFilePaths) {
+      const paths = this.filterState.collectionFilePaths;
       filtered = filtered.filter(e => paths.has(e.filePath));
     }
 
@@ -439,7 +462,7 @@ export class FilterSortManager {
         filtered = filtered.filter(e => e.hasVideo === true && e.hasTranscript !== true);
       }
     }
-    switch (this.filterState.activeTab) {
+    switch (navFilters ? this.filterState.activeTab : 'all') {
       case 'inbox':
         filtered = filtered.filter(e => !e.archive);
         break;
@@ -650,6 +673,7 @@ export class FilterSortManager {
       subscribedOnly: initialFilterState?.subscribedOnly ?? false,
       placesOnly: initialFilterState?.placesOnly ?? false,
       placeFilePaths: initialFilterState?.placeFilePaths ?? null,
+      collectionFilePaths: initialFilterState?.collectionFilePaths ?? null,
       transcribed: initialFilterState?.transcribed ?? null,
       productsOnly: initialFilterState?.productsOnly ?? false,
       productSource: initialFilterState?.productSource ?? null,

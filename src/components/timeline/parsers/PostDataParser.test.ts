@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { TFile, type Vault } from 'obsidian';
 import { PostDataParser } from './PostDataParser';
+import { MarkdownConverter } from '@/services/MarkdownConverter';
+import type { Platform, PostData } from '@/types/post';
 
 describe('PostDataParser - Facebook shared posts inside embedded archives', () => {
   const parser = new PostDataParser({} as any);
@@ -1042,5 +1044,149 @@ describe('PostDataParser - trailing media gallery stripping is not catastrophic'
     const out = (parser as any).extractXArticleContent(input) as string;
     expect(performance.now() - t0).toBeLessThan(1000);
     expect(out).toContain('trailing caption line that is not an image');
+  });
+});
+
+describe('PostDataParser - embedded archive round trip', () => {
+  // Adding an archive to a post re-writes the other embeds from the parsed
+  // note, so write → parse → write must give back the same section.
+  const converter = new MarkdownConverter();
+  const parser = new PostDataParser({} as any);
+  const notePath = 'Social Archives/Post/2024/06/My post.md';
+  const at = new Date('2024-06-01T10:30:00Z');
+
+  const section = (embeddedArchives: PostData[]): string => {
+    const { content } = converter.convert({
+      platform: 'post',
+      id: 'post-1',
+      url: '',
+      author: { name: 'Me', url: '' },
+      content: { text: 'My post' },
+      media: [],
+      metadata: { timestamp: at },
+      embeddedArchives,
+    }, undefined, undefined, { outputFilePath: notePath });
+    return content.slice(content.indexOf('## Referenced Social Media Posts'));
+  };
+  const reparse = (markdown: string): PostData[] =>
+    (parser as any).extractEmbeddedArchives(markdown, [], [], notePath);
+
+  const archive = (platform: Platform, extra: Partial<PostData> = {}): PostData => ({
+    platform,
+    id: `${platform}-1`,
+    url: `https://example.com/${platform}/1`,
+    author: { name: 'Some One', url: `https://example.com/${platform}/someone`, handle: 'someone' },
+    content: { text: `A ${platform} post\n<inputs>\nsecond line` },
+    media: [],
+    metadata: { timestamp: at },
+    ...extra,
+  });
+
+  const cases: Record<string, PostData> = {
+    x: archive('x', {
+      url: 'https://x.com/someone/status/1',
+      content: { text: 'Prompt below\n<inputs>\nhello\n</inputs>', hashtags: ['ai'] },
+      media: [{ type: 'image', url: 'attachments/social-archives/x/1/20240601-someone-1-1.jpg', altText: 'A chart' }],
+      metadata: { timestamp: at, likes: 1200, comments: 34, shares: 5, views: 45000 },
+    }),
+    youtube: archive('youtube', {
+      url: 'https://www.youtube.com/watch?v=abc123XYZ00',
+      videoId: 'abc123XYZ00',
+      title: 'How it works',
+      author: { name: 'The Channel', url: 'https://www.youtube.com/@channel', handle: '@channel' },
+      content: { text: 'Description with <tag>\n\nSecond paragraph' },
+      transcript: {
+        formatted: [
+          { start_time: 0, end_time: 4.2, duration: 4.2, text: 'Hello' },
+          { start_time: 65.5, end_time: 70, duration: 4.5, text: 'World' },
+        ],
+      },
+      metadata: { timestamp: at, views: 1234567, likes: 890, comments: 12, duration: 754 },
+    }),
+    googlemaps: archive('googlemaps', {
+      url: 'https://www.google.com/maps/place/Cafe/@37.5,127.0,17z',
+      author: { name: 'Cafe Onion', url: 'https://www.google.com/maps/place/Cafe/@37.5,127.0,17z' },
+      content: { text: 'Cafe Onion\n123 Seoul-ro' },
+      metadata: { timestamp: at, likes: 4 },
+    }),
+    'pinterest pin': archive('pinterest', {
+      url: 'https://www.pinterest.com/pin/123/',
+      media: [{ type: 'image', url: 'attachments/social-archives/pinterest/123/pin-1.jpg' }],
+    }),
+    'pinterest board': archive('pinterest', {
+      url: 'https://www.pinterest.com/someone/board/',
+      content: { text: '' },
+      raw: {
+        board_name: 'Board',
+        board_url: 'https://www.pinterest.com/someone/board/',
+        creator_name: 'Some One',
+        creator_url: 'https://www.pinterest.com/someone/',
+        pins: [
+          { pin_title: 'Pin A', pin_url: 'https://www.pinterest.com/pin/1/' },
+          { pin_title: 'Pin B' },
+        ],
+      },
+    }),
+    // A rule before a ### heading must not split the article into two archives
+    web: archive('web', {
+      url: 'https://example.com/article',
+      content: { text: '## Heading\n\nArticle with <sup>1</sup>\n\n---\n\n### Part two\n\nMore' },
+    }),
+    naver: archive('naver', {
+      url: 'https://blog.naver.com/someone/223',
+      content: { text: 'Blog with <img src="a.jpg">' },
+    }),
+    navermap: archive('navermap', { url: 'https://map.naver.com/p/entry/place/123' }),
+    webtoons: archive('webtoons', { url: 'https://www.webtoons.com/en/fantasy/x/list?title_no=1' }),
+    reddit: archive('reddit', {
+      url: 'https://www.reddit.com/r/ObsidianMD/comments/abc/title/',
+      author: { name: 'poster', url: 'https://www.reddit.com/user/poster', handle: 'poster' },
+      content: { text: 'Posted in r/ObsidianMD', community: { name: 'ObsidianMD', url: 'https://www.reddit.com/r/ObsidianMD/' } },
+      metadata: { timestamp: at, comments: 12 },
+    }),
+    // Published is the metadata line's last field
+    'no engagement counts': archive('threads', { url: 'https://www.threads.com/@someone/post/abc' }),
+    'quoted post with a link preview': archive('x', {
+      url: 'https://x.com/someone/status/3',
+      quotedPost: archive('x', {
+        url: 'https://x.com/other/status/2',
+        author: { name: 'Other', url: 'https://x.com/other', handle: 'other' },
+        metadata: {
+          timestamp: at,
+          likes: 3,
+          externalLink: 'https://example.com/story',
+          externalLinkTitle: 'Story',
+          externalLinkDescription: 'What happened',
+          externalLinkImage: 'attachments/social-archives/x/2/preview.jpg',
+        },
+      }),
+    }),
+    'media in a folder with spaces': archive('instagram', {
+      media: [{ type: 'image', url: 'Social Media/instagram/1/a (1).jpg' }],
+    }),
+  };
+
+  it.each(Object.entries(cases))('%s', (_name, embedded) => {
+    const first = section([embedded]);
+    expect(section(reparse(first))).toBe(first);
+  });
+
+  it('keeps every archive of a section apart', () => {
+    const first = section(Object.values(cases));
+    expect(section(reparse(first))).toBe(first);
+  });
+
+  it('writes back what re-saves with the old parser left of a section as first written', () => {
+    // The views and duration those re-saves dropped are gone from the note.
+    const youtube = { ...cases.youtube!, metadata: { timestamp: at, likes: 890 } };
+    const first = section([youtube, cases.googlemaps!, cases.navermap!]);
+    const damaged = first
+      .replace('**📺 ', '**Description:**\n**Description:**\n**📺 ')
+      .replace('[The Channel]', '[The Channel (@channel) (@channel)]')
+      .replaceAll('Google Maps', 'google')
+      .replace('<!-- Embedded: Naver Map - someone -->', '<!-- Embedded: Naver - Some One -->\n\n<!-- Embedded: Naver Map - someone -->')
+      .replace('**Platform:** Naver Map', '**Platform:** Naver');
+
+    expect(section(reparse(damaged))).toBe(first);
   });
 });

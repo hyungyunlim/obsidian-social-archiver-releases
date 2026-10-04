@@ -30,6 +30,7 @@ interface TimelineComponent {
   destroy?(): void;
   softRefresh?(): Promise<void>;
   syncMapTheme?(): void;
+  openCollection?(collectionId: string | null): void;
   openStreamingFullscreen?(
     seriesInfo: { seriesId: string; seriesTitle: string; author: string; platform: string; thumbnailUrl?: string },
     episodeDetail: { titleId: number; no: number; subtitle: string; imageUrls: string[]; thumbnailUrl?: string },
@@ -40,6 +41,8 @@ interface TimelineComponent {
 export class TimelineView extends ItemView {
   private plugin: SocialArchiverPlugin;
   private component: TimelineComponent | undefined;
+  /** A collection asked for before onOpen built the timeline. */
+  private pendingCollectionId: string | null | undefined;
   private suppressRefresh = false; // Suppress refresh during batch operations
   private uiDeletedPaths: Set<string> = new Set(); // Track files deleted via UI to skip refresh
   private uiModifiedPaths: Set<string> = new Set(); // Track files modified via UI to skip refresh
@@ -354,6 +357,11 @@ export class TimelineView extends ItemView {
       onUIDelete: (filePath) => this.registerUIDelete(filePath),
       onUIModify: (filePath) => this.registerUIModify(filePath),
     });
+    const pendingCollection = this.pendingCollectionId !== undefined
+      ? this.pendingCollectionId
+      : this.plugin.consumePendingTimelineCollection();
+    this.pendingCollectionId = undefined;
+    if (pendingCollection) this.component.openCollection?.(pendingCollection);
 
     // Register vault file change listeners
     const archivePath = this.plugin.settings.archivePath || 'Social Archives';
@@ -638,6 +646,16 @@ export class TimelineView extends ItemView {
     if (this.component && this.component.reload) {
       await this.component?.reload?.();
     }
+  }
+
+  /** Show one collection in this timeline (null = back to all posts). */
+  public openCollection(collectionId: string | null): void {
+    if (!this.component?.openCollection) {
+      // onOpen hasn't built the timeline yet (e.g. right after startup); it applies this.
+      this.pendingCollectionId = collectionId;
+      return;
+    }
+    this.component.openCollection(collectionId);
   }
 
   /**

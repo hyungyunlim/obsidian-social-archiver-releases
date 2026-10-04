@@ -802,6 +802,20 @@ describe('MarkdownConverter', () => {
       expect(result.content).toContain('Thread body with <sup>1</sup>');
     });
 
+    it('keeps an AI chat archive body verbatim, like a web article (feedback #139)', () => {
+      const markdown = '## You said\n\n1. first\n\nuse <b>bold</b>';
+      const post: PostData = {
+        ...mockPostData,
+        platform: 'chatgpt',
+        content: { text: markdown, markdown },
+        media: [],
+      };
+
+      const result = converter.convert(post);
+
+      expect(result.content).toContain(markdown);
+    });
+
     it('keeps a `<tag>` block in quoted post text as text, and a markdown fallback verbatim', () => {
       const quoted = (content: PostData['content']): PostData['quotedPost'] => ({
         platform: 'x',

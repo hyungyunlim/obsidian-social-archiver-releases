@@ -1,5 +1,5 @@
 import { TFile, type TAbstractFile, type Vault, type App } from 'obsidian';
-import type { PostData, Comment, Media, MultiLangTranscript } from '../../../types/post';
+import type { PostData, Comment, Media, MultiLangTranscript, TranscriptEntry } from '../../../types/post';
 import type { YamlFrontmatter } from '../../../types/archive';
 import { ArchiveLocationSchema, type ArchiveLocation } from '../../../types/archive-location';
 import { LocationBodyBlock } from '../../../services/markdown/LocationBodyBlock';
@@ -20,7 +20,8 @@ import {
   IMPORT_MODE_FRONTMATTER_KEY,
   IMPORT_SOURCE_FRONTMATTER_KEY,
 } from '../../../services/import/local/LocalArchiveScanner';
-import { isWebLanePlatform } from '@/shared/platforms';
+import { PLATFORM_DEFINITIONS, isWebLanePlatform } from '@/shared/platforms';
+import { decodePathFromMarkdownLink } from '@/utils/url';
 
 /**
  * Vault folder node with children (Obsidian internal structure)
@@ -65,6 +66,37 @@ function readPostContentType(value: unknown): PostData['contentType'] {
     default:
       return undefined;
   }
+}
+
+// An embedded archive's visible `### Youtube - handle` header predates the
+// hidden `<!-- Embedded: … -->` one and exists only for the platforms of that
+// time, named by capitalized id.
+const LEGACY_EMBED_PLATFORMS = 'Facebook|Instagram|X|Linkedin|Tiktok|Threads|Youtube|Reddit|Post|Pinterest|Substack|Tumblr|Mastodon|Bluesky';
+const LEGACY_EMBED_HEADER = new RegExp(`^\\s*### (${LEGACY_EMBED_PLATFORMS})\\s*-\\s*(.+)`, 'i');
+const EMBED_HEADERS = new RegExp(`^\\s*(?:### (?:${LEGACY_EMBED_PLATFORMS})\\s*-\\s*.+?\\n+|(?:<!--\\s*Embedded:[^\\n]*?-->\\s*)+)`, 'i');
+// The hidden header, or the last of the copies earlier re-saves stacked above
+// it: that one is the original, with the real platform name and handle.
+const HIDDEN_EMBED_HEADER = /^\s*(?:<!--\s*Embedded:[^\n]*?-->\s*)*<!--\s*Embedded:[ \t]*(.+?) - ([^\n]*?)[ \t]*-->/;
+
+// A Pinterest board's header name, and the first words an earlier parser cut
+// multi-word platform names down to, which the notes it re-saved still carry.
+const EMBED_PLATFORM_ALIASES: Record<string, Platform> = {
+  'pinterest board': 'pinterest',
+  google: 'googlemaps',
+  kakao: 'kakaomap',
+  webtoon: 'webtoons',
+  user: 'post',
+};
+
+/**
+ * The platform an embedded archive's header or metadata line names: its
+ * display name ("Google Maps"), its id, or the capitalized id older notes use.
+ */
+function embedPlatformFromName(name: string | undefined): Platform | undefined {
+  const key = name?.trim().toLowerCase();
+  if (!key) return undefined;
+  return EMBED_PLATFORM_ALIASES[key]
+    ?? Object.values(PLATFORM_DEFINITIONS).find((def) => def.id === key || def.displayName.toLowerCase() === key)?.id;
 }
 
 function isArchiveMediaNoteContentType(contentType: PostData['contentType']): boolean {
@@ -1748,46 +1780,29 @@ export class PostDataParser {
 
     const archivesSection = archivesMatch[1];
 
-    // Each archive block is separated by "\n---\n\n" when written by MarkdownConverter
-    // Split on that boundary (when followed by another archive header or embedded comment header) to avoid
-    // treating quoted post headers ("### ...") as standalone archives.
-    const archiveBlocks = archivesSection.split(/\n---\n\n(?=(?:### |<!--\s*Embedded:))/);
+    // Each archive block is separated by "\n---\n\n" when written by MarkdownConverter.
+    // Split only where the next archive's header follows: the hidden one, which
+    // every archive of a note written since carries, or in older notes the
+    // visible "### Platform - handle". A web article's own rule and ### heading
+    // look like the latter, so it counts only where no hidden header exists.
+    const archiveBlocks = archivesSection.split(
+      /<!--\s*Embedded:/i.test(archivesSection) ? /\n---\n\n(?=<!--\s*Embedded:)/i : /\n---\n\n(?=### )/
+    );
 
     for (let i = 0; i < archiveBlocks.length; i++) {
       const block = archiveBlocks[i];
       if (!block || !block.trim()) continue;
 
       try {
-        // First block still has header/comment, others don't (because of split)
-        // Match header: visible "### PlatformName - AuthorHandle" or hidden HTML comment "<!-- Embedded: PlatformName - AuthorHandle -->"
-        const headerMatch = block.match(
-          /^\s*(?:### |<!--\s*Embedded:\s*)(Facebook|Instagram|X|Linkedin|Tiktok|Threads|Youtube|Reddit|Post|Pinterest|Substack|Tumblr|Mastodon|Bluesky)\s*-\s*(.+?)(?:-->)?(?:\n|$)/i
-        );
-
-        // Extract platform name and author, trim to first line only
-        const platformName = headerMatch?.[1];
+        // Header: hidden "<!-- Embedded: Platform Name - handle -->" or legacy visible "### Platform - handle"
+        const headerMatch = block.match(HIDDEN_EMBED_HEADER) ?? block.match(LEGACY_EMBED_HEADER);
         const rawAuthor = headerMatch?.[2];
-
-        // Fallback: derive platform from metadata line if header is missing
-        const metadataPlatformMatch = !platformName
-          ? block.match(/\*\*Platform:\*\*\s*([A-Za-z]+)/i)
-          : null;
-        const platform = (platformName || metadataPlatformMatch?.[1] || 'post').toLowerCase();
-
-        // Prefer header author, otherwise try metadata author link text
-        const metadataAuthorMatch = !rawAuthor
-          ? block.match(/\*\*Author:\*\*\s*\[([^\]]+)\]/i)
-          : null;
-        const authorHandle = (rawAuthor || metadataAuthorMatch?.[1] || 'Unknown').split('\n')[0]?.trim() || 'Unknown';
 
         // Extract content: everything between header and "---" line
         // Remove header line first. The hidden header comes off whatever the
         // platform name, with the stale copies earlier re-saves stacked under
         // it: left in the text, the next save escapes them into visible lines.
-        const withoutHeader = block.replace(
-          /^\s*(?:### (?:Facebook|Instagram|X|Linkedin|Tiktok|Threads|Youtube|Reddit|Post|Pinterest|Substack|Tumblr|Mastodon|Bluesky)\s*-\s*.+?\n+|(?:<!--\s*Embedded:[^\n]*?-->\s*)+)/i,
-          ''
-        );
+        const withoutHeader = block.replace(EMBED_HEADERS, '');
 
         // Determine metadata boundary (last occurrence of "\n---\n\n**Platform:**")
         const metadataMarker = '\n---\n\n**Platform:**';
@@ -1814,45 +1829,33 @@ export class PostDataParser {
         const urlMatch = metadataSection.match(/\*\*Original URL:\*\* (.+)/);
         const url = urlMatch?.[1]?.trim() || '';
 
-        // Extract author/channel name and URL from metadata line
-        // Format for YouTube: **Channel:** [Name](URL)
-        // Format for others: **Author:** [Name](URL)
-        const authorMetadataMatch = metadataSection.match(/\*\*(?:Channel|Author):\*\* \[(.+?)\]\((.+?)\)/);
-        const authorName = authorMetadataMatch?.[1]?.trim();
-        const authorUrl = authorMetadataMatch?.[2]?.trim() || url;
+        // The archive's single metadata line. Fields are " | "-separated and
+        // Published is often the last one, so values stop at "|" (the line
+        // holds no newline).
+        // Format: **Platform:** Name | **Author:** [Name](URL) | **Published:** Date | **Views:** N | **Likes:** N | **Comments:** N | **Shares:** N
+        // YouTube: **Channel:** [Name](URL) … | **Duration:** M:SS; Reddit: **Community:** r/name | **Author:** Name
+        const metadataLine = metadataSection.match(/\*\*Platform:\*\*[^\n]*/)?.[0] ?? '';
 
-        // Extract metadata from single-line format
-        // Format: **Platform:** Name | **Author:** [Name](URL) | **Published:** Date | **Likes:** N | **Comments:** N | **Shares:** N
-        const metadataLineMatch = metadataSection.match(/\*\*Platform:\*\*.+?\*\*Published:\*\* (.+?)(?:\s*\||$)/);
-        const timestamp = metadataLineMatch?.[1] ? new Date(metadataLineMatch[1].trim()) : new Date();
+        const platform: Platform = embedPlatformFromName(headerMatch?.[1])
+          ?? embedPlatformFromName(metadataLine.match(/\*\*Platform:\*\*([^|]+)/)?.[1])
+          ?? 'post';
 
-        // Extract likes, comments, shares from metadata line
-        const likesMatch = metadataSection.match(/\*\*Likes:\*\* ([\d,]+)/);
-        const commentsMatch = metadataSection.match(/\*\*Comments:\*\* ([\d,]+)/);
-        const sharesMatch = metadataSection.match(/\*\*Shares:\*\* ([\d,]+)/);
+        const authorLinkMatch = metadataLine.match(/\*\*(?:Channel|Author):\*\* \[(.+?)\]\((.+?)\)/);
+        const authorName = (authorLinkMatch?.[1] ?? metadataLine.match(/\*\*Author:\*\* (?!\[)([^|]+)/)?.[1])?.trim();
+        const authorUrl = authorLinkMatch?.[2]?.trim() || url;
+        // Prefer the header's handle, otherwise the metadata author name
+        const authorHandle = (rawAuthor || authorName || 'Unknown').split('\n')[0]?.trim() || 'Unknown';
 
-        const likes = likesMatch?.[1] ? parseInt(likesMatch[1].replace(/,/g, '')) : undefined;
-        const comments = commentsMatch?.[1] ? parseInt(commentsMatch[1].replace(/,/g, '')) : undefined;
-        const shares = sharesMatch?.[1] ? parseInt(sharesMatch[1].replace(/,/g, '')) : undefined;
+        const published = metadataLine.match(/\*\*Published:\*\* ([^|]+)/)?.[1]?.trim();
+        const timestamp = published ? new Date(published) : new Date();
+        const { likes, comments, shares, views } = this.extractMetadata(metadataLine);
+        const duration = metadataLine.match(/\*\*Duration:\*\* ((?:\d+:)?\d+:\d{2})/)?.[1];
+        const community = metadataLine.match(/\*\*Community:\*\* r\/([^|\s]+)/)?.[1];
 
-        // Extract media URLs from Media section
-        let media: { type: 'image' | 'video' | 'audio'; url: string; altText?: string }[] = [];
-        if (mediaMatch && mediaMatch[1]) {
-          const mediaSection = mediaMatch[1];
-          // Match ![alt](url) or ![](url) - support multiline alt text
-          const mediaRegex = /!\[([\s\S]*?)\]\(([^)]+)\)/g;
-          let match;
-          while ((match = mediaRegex.exec(mediaSection)) !== null) {
-            const altText = match[1] || undefined;
-            const mediaUrl = match[2];
-            if (!mediaUrl) continue;
-            const detectedType = detectMediaType(mediaUrl);
-            const type = detectedType === 'document' ? 'image' : detectedType;
-            media.push({ type, url: this.resolveMediaPath(mediaUrl, parentFilePath), altText });
-          }
-        }
+        const youtube = platform === 'youtube' ? this.parseEmbeddedYouTube(content) : undefined;
+        const pinterestBoard = platform === 'pinterest' ? this.parseEmbeddedPinterestBoard(content) : undefined;
 
-        media = this.dedupeMedia(media);
+        const media = mediaMatch?.[1] ? this.extractMediaList(mediaMatch[1], parentFilePath) : [];
 
         // Parse comments section (if exists)
         // Comments appear after "## 💬 Comments" header
@@ -1862,17 +1865,18 @@ export class PostDataParser {
         // Extract from the full block (before content extraction removed it)
         const quotedPost = this.extractQuotedPost(block, parentFilePath);
 
-        // Prefer metadata author name when available (handles provide usernames)
-        let displayName: string;
-        if (platform === 'youtube' && authorName) {
-          displayName = authorHandle ? `${authorName} (${authorHandle})` : authorName;
-        } else {
-          displayName = authorName || authorHandle;
+        // Prefer metadata author name when available (handles provide usernames).
+        // An earlier parser appended " (handle)" to a YouTube channel's name,
+        // which the writer kept and each re-save appended again: those come off.
+        let displayName = authorName || authorHandle;
+        const handleSuffix = ` (${authorHandle})`;
+        while (platform === 'youtube' && displayName.endsWith(handleSuffix)) {
+          displayName = displayName.slice(0, -handleSuffix.length);
         }
 
         // Create PostData
         const archiveData: PostData = {
-          platform: platform as Platform,
+          platform,
           id: url,
           url,
           author: {
@@ -1881,7 +1885,8 @@ export class PostDataParser {
             handle: authorHandle,
           },
           content: {
-            text: content,
+            text: youtube?.text ?? pinterestBoard?.text ?? content,
+            community: community ? { name: community, url: `https://www.reddit.com/r/${community}/` } : undefined,
           },
           media,
           metadata: {
@@ -1889,7 +1894,13 @@ export class PostDataParser {
             likes,
             comments,
             shares,
+            views,
+            duration: duration ? this.parseTimestampToSeconds(duration) : undefined,
           },
+          title: youtube?.title,
+          videoId: youtube?.videoId,
+          transcript: youtube?.transcript,
+          raw: pinterestBoard?.raw,
           comments: parsedComments.length > 0 ? parsedComments : undefined,
           quotedPost: quotedPost || undefined,
           downloadedUrls: parentDownloadedUrls,
@@ -1903,6 +1914,68 @@ export class PostDataParser {
     }
 
     return archives;
+  }
+
+  /**
+   * An embedded YouTube archive's text as MarkdownConverter lays it out:
+   * `**📺 title**`, the description under `**Description:**` and the
+   * transcript under `**Transcript:**`. An earlier parser read all three back
+   * as the description, which each re-save wrapped in another
+   * `**Description:**`; those wrappers come off.
+   */
+  private parseEmbeddedYouTube(content: string): Pick<PostData, 'title' | 'videoId' | 'transcript'> & { text: string } {
+    let rest = content.replace(/^(?:\*\*Description:\*\*\n)+(?=\*\*📺 |\*\*Description:\*\*\n)/, '');
+    const titleMatch = rest.match(/^\*\*📺 (.+)\*\*(?:\n\n|$)/);
+    if (titleMatch) rest = rest.slice(titleMatch[0].length);
+
+    const transcriptMatch = rest.match(/(?:^|\n\n)\*\*Transcript:\*\*\n([\s\S]*)$/);
+    if (transcriptMatch) rest = rest.slice(0, transcriptMatch.index);
+    // `[MM:SS](https://www.youtube.com/watch?v=ID&t=Ns) text`, or `[MM:SS] text` without a video id
+    const lines = [...(transcriptMatch?.[1] ?? '').matchAll(/^\[((?:\d+:)?\d+:\d{2})\](?:\(([^)]*)\))? ?(.*)$/gm)];
+    const starts = lines.map((line) => this.parseTimestampToSeconds(line[1] ?? ''));
+    const formatted: TranscriptEntry[] = lines.map((line, index) => {
+      const start = starts[index] ?? 0;
+      const end = starts[index + 1] ?? start + 8;
+      return { start_time: start, end_time: end, duration: end - start, text: line[3] ?? '' };
+    });
+
+    return {
+      text: rest.replace(/^\*\*Description:\*\*\n/, ''),
+      title: titleMatch?.[1],
+      videoId: lines[0]?.[2]?.match(/[?&]v=([^&]+)/)?.[1],
+      transcript: formatted.length > 0 ? { formatted } : undefined,
+    };
+  }
+
+  /**
+   * An embedded Pinterest board as MarkdownConverter lays it out, read back
+   * into the board data it was written from, so a re-save writes the board
+   * again. Its text stays the whole board section for the card preview, or is
+   * the text the writer falls back to when there is no pin list.
+   */
+  private parseEmbeddedPinterestBoard(content: string): { text: string; raw: Record<string, unknown> } | undefined {
+    const board = content.match(
+      /^## 📌 Pinterest Board — \[([^\]\n]*)\]\(([^)\n]*)\)\n\n\*\*Owner:\*\* \[([^\]\n]*)\]\(([^)\n]*)\)(?: \| \*\*Pins:\*\* ([\d,]+))?(?:\n\n([\s\S]*))?$/
+    );
+    if (!board) return undefined;
+
+    const [, boardName, boardUrl, creatorName, creatorUrl, pinCount, body = ''] = board;
+    // "N. title", with the pin's URL on the next line when it has one
+    const pins = body.startsWith('Pins:\n')
+      ? [...body.matchAll(/^\d+\. (.*)(?:\n(?!\d+\. )(.+))?/gm)].map(([, title, url]) => ({ pin_title: title, pin_url: url }))
+      : [];
+
+    return {
+      text: pins.length > 0 ? content : body,
+      raw: {
+        board_name: boardName,
+        board_url: boardUrl,
+        creator_name: creatorName,
+        creator_url: creatorUrl,
+        pin_count: pinCount ? Number(pinCount.replace(/,/g, '')) : undefined,
+        pins,
+      },
+    };
   }
 
   /**
@@ -1948,6 +2021,16 @@ export class PostDataParser {
       // Remove any nested quotedPost section from the content to prevent infinite nesting
       content = content.replace(/## (?:🔗 Shared Post|🔄 Reblogged Post)[\s\S]*?(?=\n---\n|$)/, '').trim();
 
+      // The link preview written after the text: "🔗 **Link:** [title](url)",
+      // then its description quoted and its image. Left in the text, a post
+      // note's re-save of its embeds wrote it once more each time.
+      const linkPreviewMatch = content.match(
+        /(?:^|\n\n)🔗 \*\*Link:\*\* \[(.+?)\]\((.+?)\)(?:\n> ([\s\S]*?))?(?:\n!\[Link Preview\]\(([^)]+)\))?$/
+      );
+      if (linkPreviewMatch) {
+        content = content.slice(0, linkPreviewMatch.index).trim();
+      }
+
       // Extract URL from metadata
       const urlMatch = quotedSection.match(/\*\*Original URL:\*\* (.+)/);
       const url = urlMatch?.[1]?.trim() || '';
@@ -1975,37 +2058,18 @@ export class PostDataParser {
       const shares = sharesMatch?.[1] ? parseInt(sharesMatch[1].replace(/,/g, '')) : undefined;
 
       // Extract external link from "🔗 **Link:** [title](url)" format
-      const externalLinkMatch = quotedSection.match(/🔗 \*\*Link:\*\* \[(.+?)\]\((.+?)\)/);
+      const externalLinkMatch = linkPreviewMatch ?? quotedSection.match(/🔗 \*\*Link:\*\* \[(.+?)\]\((.+?)\)/);
       const externalLinkTitle = externalLinkMatch?.[1]?.trim();
       const externalLink = externalLinkMatch?.[2]?.trim();
+      const externalLinkDescription = linkPreviewMatch?.[3]?.trim() || undefined;
+      const externalLinkImage = linkPreviewMatch?.[4]
+        ? this.resolveMediaPath(decodePathFromMarkdownLink(linkPreviewMatch[4]), parentFilePath)
+        : undefined;
 
-      // Extract media URLs
-      let media: { type: 'image' | 'video' | 'audio'; url: string; altText?: string }[] = [];
-      if (mediaMatch && mediaMatch[1]) {
-        const mediaSection = mediaMatch[1];
-        // Support multiline alt text for quote tweet screenshots
-        const mediaRegex = /!\[([\s\S]*?)\]\(([^)]+)\)/g;
-        let match;
-        while ((match = mediaRegex.exec(mediaSection)) !== null) {
-          const altText = match[1] || undefined;
-          const mediaUrl = match[2];
-          if (!mediaUrl) continue;
-          const detectedType = detectMediaType(mediaUrl);
-          const type = detectedType === 'document' ? 'image' : detectedType;
-          media.push({ type, url: this.resolveMediaPath(mediaUrl, parentFilePath), altText });
-        }
-      }
+      const media = mediaMatch?.[1] ? this.extractMediaList(mediaMatch[1], parentFilePath) : [];
 
-      media = this.dedupeMedia(media);
-
-      // Format author name
-      // Prefer authorName from metadata, fallback to authorHandle from header
-      let displayName: string;
-      if (platform === 'youtube' && authorName) {
-        displayName = `${authorName} (${authorHandle})`;
-      } else {
-        displayName = authorName || authorHandle;
-      }
+      // Prefer authorName from metadata, fallback to the header's (which is the name too)
+      const displayName = authorName || authorHandle;
 
       // Create quoted PostData
       const quotedPost: Omit<PostData, 'quotedPost' | 'embeddedArchives'> = {
@@ -2028,6 +2092,8 @@ export class PostDataParser {
           shares,
           externalLink,
           externalLinkTitle,
+          externalLinkDescription,
+          externalLinkImage,
         },
       };
 
@@ -2036,6 +2102,27 @@ export class PostDataParser {
       console.error('[PostDataParser] Error parsing quoted post:', err);
       return undefined;
     }
+  }
+
+  /**
+   * The `![alt](path)` entries of an embedded archive's or quoted post's
+   * `**Media:**` list. Paths come back from the markdown-link encoding the
+   * writer gives them, which a re-save would otherwise encode once more.
+   */
+  private extractMediaList(
+    mediaSection: string,
+    parentFilePath?: string
+  ): { type: 'image' | 'video' | 'audio'; url: string; altText?: string }[] {
+    const media: { type: 'image' | 'video' | 'audio'; url: string; altText?: string }[] = [];
+    // Multiline alt text too (quote tweet screenshots)
+    for (const [, altText, mediaUrl] of mediaSection.matchAll(/!\[([\s\S]*?)\]\(([^)]+)\)/g)) {
+      if (!mediaUrl) continue;
+      const path = decodePathFromMarkdownLink(mediaUrl);
+      const detectedType = detectMediaType(path);
+      const type = detectedType === 'document' ? 'image' : detectedType;
+      media.push({ type, url: this.resolveMediaPath(path, parentFilePath), altText: altText || undefined });
+    }
+    return this.dedupeMedia(media);
   }
 
   /**
