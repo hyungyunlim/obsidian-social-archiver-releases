@@ -2087,6 +2087,7 @@ export default class SocialArchiverPlugin extends Plugin {
         this.archiveLookupService,
         () => this.settings,
         this.tagStore,
+        (partial) => this.saveSettingsPartial(partial, { reinitialize: false, notify: false }),
       );
       this.archiveTagOutboundService.start();
 

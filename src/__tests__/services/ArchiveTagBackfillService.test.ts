@@ -61,6 +61,8 @@ function makeDeps(options: {
   const outbound = {
     addSuppression: vi.fn(),
     primeSnapshot: vi.fn(),
+    flushPendingSyncs: vi.fn().mockResolvedValue(undefined),
+    hasPendingSync: vi.fn().mockReturnValue(false),
   };
 
   const deps = {

@@ -26,6 +26,28 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.8.1': {
+    title: 'Collections from the Obsidian CLI, shares that stay on your profile, and tag sync fixes',
+    date: '2026-10-04',
+    notes: `## Collections from the command line
+
+- **\`social-archiver:collections\` in the Obsidian CLI.** Scripts and coding agents can list your collections, see which notes are in one, create one, add or remove notes (by path, the active note, or archive ids), print or create a collection’s share link, and open it in the timeline. Everything except sharing answers right away from this device, offline too. Sharing a private collection needs \`confirm=true\`; read the link a few seconds later with \`action=link\`.
+
+## Shared posts stay on your profile
+
+- **No more 30-day expiry.** Sharing a post from the plugin used to set one. A post with photos lost it right away, but a text-only share dropped off your profile after 30 days, even though its link kept working. New shares no longer expire, as in the apps.
+
+## Tag sync fixes
+
+- **Renaming a tag keeps it on your archives** instead of removing it from the server copy, and a slow rename no longer creates a second tag.
+- **Tag edits made offline stick.** The next startup no longer undoes them.
+- **Tags with spaces** from your other devices can be added to a note, and a note whose \`archiveTags\` holds a single value instead of a list is read correctly.
+- **Startup no longer re-sends every note’s tags**, which could bring back a tag you removed on another device.
+
+> [!NOTE]
+> The server side is already live and needs no update: shares made from older plugin versions no longer get an expiry, and the few text-only shares that had dropped off profiles are listed again.
+`,
+  },
   '4.8.0': {
     title: 'Collections come to Obsidian, and AI chat archives read like articles',
     date: '2026-10-04',

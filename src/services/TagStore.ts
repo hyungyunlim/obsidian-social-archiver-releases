@@ -6,6 +6,7 @@ import {
   normalizeTagName,
   obsidianSafeTagNames,
   readFrontmatterTags,
+  validateArchiveTagName,
   validateTagName,
 } from '@/utils/tags';
 import { isManagedArchiveTagName } from '@/utils/archive-tag-rules';
@@ -113,11 +114,6 @@ export class TagStore {
       }
     }
 
-    // If renaming, update all posts that have the old tag name
-    if (changes.name && changes.name.trim() !== existing.name) {
-      await this.renameTagInAllPosts(existing.name, changes.name.trim());
-    }
-
     const updated: TagDefinition = {
       id: existing.id,
       createdAt: existing.createdAt,
@@ -129,6 +125,13 @@ export class TagStore {
     definitions[index] = updated;
 
     await this.saveTagDefinitions(definitions);
+
+    // Rename in notes only after the definition is saved: each rewrite fires an
+    // outbound tag push that must resolve the new name to this same tag ID.
+    if (changes.name && changes.name.trim() !== existing.name) {
+      await this.renameTagInAllPosts(existing.name, changes.name.trim());
+    }
+
     return definitions[index];
   }
 
@@ -272,9 +275,12 @@ export class TagStore {
     });
   }
 
-  /** Add a Social Archiver archive tag to a post. Mirrors to `tags` when enabled. */
+  /**
+   * Add a Social Archiver archive tag to a post. Mirrors to `tags` when enabled.
+   * Server tags may contain spaces; only the native mirror drops those.
+   */
   async addArchiveTagToPost(filePath: string, tagName: string): Promise<void> {
-    const validationError = validateTagName(tagName);
+    const validationError = validateArchiveTagName(tagName);
     if (validationError) {
       throw new Error(validationError);
     }

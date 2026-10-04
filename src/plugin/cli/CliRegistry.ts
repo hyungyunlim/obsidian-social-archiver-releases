@@ -13,7 +13,7 @@
  *     `// region: ...` markers — they are anchors for follow-up agents.
  */
 
-import { Platform } from 'obsidian';
+import { Platform, TFile } from 'obsidian';
 import type SocialArchiverPlugin from '../../main';
 import type { CliData, CliHandler } from '../../types/obsidian-cli';
 import {
@@ -59,6 +59,7 @@ import {
   SUBSCRIBE_FLAGS,
   SUBSCRIPTIONS_FLAGS,
   PLACES_FLAGS,
+  COLLECTIONS_FLAGS,
   BOOKMARK_FLAGS,
   SYNC_FLAGS,
   TAGS_FLAGS,
@@ -78,6 +79,11 @@ import { ProfileCliService } from './ProfileCliService';
 import { SubscriptionsCliService } from './SubscriptionsCliService';
 import { ArchiveActionsCliService } from './ArchiveActionsCliService';
 import { PlacesCliService } from './PlacesCliService';
+import { CollectionsCliError, CollectionsCliService } from './CollectionsCliService';
+import { collectablePostForFile } from '../collections/CollectionCommands';
+import type { CollectionService } from '../../services/collections/CollectionService';
+import type { CollectionStore } from '../../services/collections/CollectionStore';
+import { SHARE_WEB_URL } from '../../types/settings';
 import { ProfileCrawlService } from '../services/ProfileCrawlService';
 import { extractGoogleMapsLinks } from '../../utils/googleMapsLinks';
 import nodeRequire from '../../utils/nodeRequire';
@@ -757,6 +763,7 @@ export class CliRegistry {
     this.register(COMMANDS.TAGS, TAGS_FLAGS, (p) => this.tagsHandler(p));
     this.register(COMMANDS.TAG_CREATE, TAG_CREATE_FLAGS, (p) => this.tagCreateHandler(p));
     this.register(COMMANDS.TAG_APPLY, TAG_APPLY_FLAGS, (p) => this.tagApplyHandler(p));
+    this.register(COMMANDS.COLLECTIONS, COLLECTIONS_FLAGS, (p) => this.collectionsHandler(p));
     this.register(COMMANDS.MEDIA, MEDIA_FLAGS, (p) => this.mediaHandler(p));
     this.register(COMMANDS.AUTHOR_NOTES, AUTHOR_NOTES_FLAGS, (p) => this.authorNotesHandler(p));
     this.register(COMMANDS.TRANSCRIBE, TRANSCRIBE_FLAGS, (p) => this.transcribeHandler(p));
@@ -867,6 +874,57 @@ export class CliRegistry {
     } catch (e) {
       return this.formatP2Error(COMMANDS.TAG_APPLY, e, fmt);
     }
+  }
+
+  /**
+   * Collections answer from the device-local store
+   * (prd-collections-obsidian-plugin O1), synchronously, so Obsidian's CLI
+   * keeps the output; only `share` reaches the server, and it is scheduled.
+   */
+  private collectionsHandler(params: CliParams): string {
+    const fmt = this.readFormat(params);
+    try {
+      const result = this.getCollectionsCliService().run(params);
+      return this.formatOk(COMMANDS.COLLECTIONS, result, fmt);
+    } catch (e) {
+      if (e instanceof CollectionsCliError) return this.formatErr(COMMANDS.COLLECTIONS, e.code, e.message, fmt);
+      return this.formatP2Error(COMMANDS.COLLECTIONS, e, fmt);
+    }
+  }
+
+  private getCollectionsCliService(): CollectionsCliService {
+    const plugin = this.plugin;
+    // Built at the start of service initialization; a CLI call can still race startup.
+    const store = plugin.collectionStore as CollectionStore | undefined;
+    const service = plugin.collectionService as CollectionService | undefined;
+    if (!store || !service) throw new Error('Collections are not initialized yet.');
+    const app = plugin.app;
+    return new CollectionsCliService({
+      username: () => store.getUsername(),
+      store,
+      service,
+      noteFor: (pathOrActive) => {
+        const path = pathOrActive === 'active' ? null : parseVaultPath({ path: pathOrActive }, 'path', app, { required: true });
+        const file = path === null ? app.workspace.getActiveFile() : app.vault.getAbstractFileByPath(path);
+        if (!(file instanceof TFile) || file.extension !== 'md') {
+          throw new CliValidationError(
+            path === null ? 'active' : 'path',
+            path === null ? 'No active note in the current workspace.' : `Vault path '${path}' is not a note.`,
+          );
+        }
+        const post = collectablePostForFile(app, file);
+        return {
+          path: file.path,
+          ...(post?.sourceArchiveId ? { archiveId: post.sourceArchiveId } : {}),
+          isLocalOnly: post?.isLocalOnly ?? false,
+        };
+      },
+      pathForArchive: (archiveId) => plugin.getArchiveLookupService()?.findBySourceArchiveId(archiveId)?.path ?? null,
+      openCollection: (collectionId) => {
+        void plugin.openCollectionInTimeline(collectionId);
+      },
+      shareWebUrl: SHARE_WEB_URL,
+    });
   }
 
   private async mediaHandler(params: CliParams): Promise<string> {

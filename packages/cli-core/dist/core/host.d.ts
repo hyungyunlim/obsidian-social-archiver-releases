@@ -52,6 +52,8 @@ export interface ArchiveCliResult {
     /** Present for async (queue) submissions. */
     jobId?: string;
     status: string;
+    /** True when the server already had this post: nothing new was archived and no credit was used. */
+    cached?: boolean;
     platform?: string;
     /** Present once the note has been written (sync/fetch, or completed queue). */
     filePath?: string;

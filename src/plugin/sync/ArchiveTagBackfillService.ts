@@ -13,6 +13,10 @@
  * removed from ONE archive on another device (feedback #131) is pulled via
  * `deletedPairs` and stripped from that note. Never full replacement.
  *
+ * Outbound pushes that failed earlier (offline edits) are replayed first; an
+ * archive whose replay still fails is left untouched, since the server's view
+ * of it is stale and re-adding a tag the user removed would undo the edit.
+ *
  * ponytail: epoch cursor (updatedAfter=1970 + includeDeleted) returns the full
  * active set AND all-time deletedPairs in one stateless GET — same trick as
  * TagStore.pullTagDefinitionsFromServer. Switch to a persisted cursor if the
@@ -50,6 +54,8 @@ export interface ArchiveTagBackfillResult {
   unknownTagIds: number;
   /** Archives needing reconciliation with no matching vault note. */
   missingFiles: number;
+  /** Archives left alone because a local edit still has not reached the server. */
+  pendingOutboundCount: number;
   /** Notes that already carried every server tag. */
   alreadySyncedCount: number;
   /** Notes whose `archiveTags` gained at least one tag. */
@@ -77,6 +83,7 @@ function emptyResult(): ArchiveTagBackfillResult {
     taggedArchives: 0,
     unknownTagIds: 0,
     missingFiles: 0,
+    pendingOutboundCount: 0,
     alreadySyncedCount: 0,
     updatedCount: 0,
     failedCount: 0,
@@ -112,6 +119,10 @@ export class ArchiveTagBackfillService {
     if (!apiClient) {
       throw new Error('API client not initialised');
     }
+
+    // Replay offline edits first, or the server's stale mappings would undo them.
+    const outbound = this.deps.archiveTagOutbound?.();
+    await outbound?.flushPendingSyncs();
 
     const response = await apiClient.getArchiveTags({
       updatedAfter: EPOCH_CURSOR,
@@ -161,6 +172,12 @@ export class ArchiveTagBackfillService {
 
     const archiveIds = new Set([...tagsByArchive.keys(), ...deletedByArchive.keys()]);
     for (const archiveId of archiveIds) {
+      // Replay still failing: the local edit wins until it lands.
+      if (outbound?.hasPendingSync(archiveId)) {
+        result.pendingOutboundCount += 1;
+        continue;
+      }
+
       const serverTags = tagsByArchive.get(archiveId) ?? [];
 
       const file = this.deps.archiveLookup.findBySourceArchiveId(archiveId);

@@ -35,6 +35,7 @@ export const COMMANDS = {
     BOOKMARK: 'social-archiver:bookmark',
     SUBSCRIPTIONS: 'social-archiver:subscriptions',
     PLACES: 'social-archiver:places',
+    COLLECTIONS: 'social-archiver:collections',
 };
 // -----------------------------------------------------------------------------
 // Shared flag fragments
@@ -267,6 +268,27 @@ export const PLACES_FLAGS = {
     limit: { description: 'list only: how many pending candidates to return.', value: '<n>' },
     ...FORMAT_FLAG,
 };
+export const COLLECTIONS_FLAGS = {
+    action: {
+        description: 'What to do: list (default), show, create, add, remove, link, share, or open.',
+        value: '<action>',
+    },
+    collection: {
+        description: 'Collection id or exact name — required for every action except list and create.',
+        value: '<id|name>',
+    },
+    name: { description: 'create only: the new collection name (up to 60 characters).', value: '<name>' },
+    description: { description: 'create only: an optional description (up to 500 characters).', value: '<text>' },
+    path: { description: 'add/remove: vault path of an archived note.', value: '<vault-path>' },
+    active: { description: 'add/remove: use the active note instead of path.' },
+    archive: { description: 'add/remove: archive ids instead of a note (comma-separated, up to 200).', value: '<id1,id2>' },
+    limit: { description: 'show only: how many of your posts to list (default 200).', value: '<n>' },
+    confirm: {
+        description: 'share only: must be true. A private collection becomes viewable by anyone with the link.',
+        value: '<true>',
+    },
+    ...FORMAT_FLAG,
+};
 export const BOOKMARK_FLAGS = {
     ids: {
         description: 'Comma-separated archive IDs to bookmark (= the "Archive" state; moves out of Inbox). Max 200 per call.',
@@ -307,6 +329,7 @@ export const COMMAND_DESCRIPTIONS = Object.freeze({
     [COMMANDS.BOOKMARK]: 'Bookmark/un-bookmark archives in bulk (the "Archive" state — moves posts in/out of the Inbox).',
     [COMMANDS.SUBSCRIPTIONS]: 'Manage existing subscriptions: list, pause, resume, run now, run history, delete.',
     [COMMANDS.PLACES]: 'Review extracted place candidates: list them with their evidence, confirm, or detach a place.',
+    [COMMANDS.COLLECTIONS]: 'Manage collections: list them, show one with your notes in it, create one, add or remove notes, print or create its share link, open it in the timeline.',
 });
 /** Flag schema lookup by command id — used by the argv layer for help/validation. */
 export const FLAGS_BY_COMMAND = Object.freeze({
@@ -337,5 +360,6 @@ export const FLAGS_BY_COMMAND = Object.freeze({
     [COMMANDS.BOOKMARK]: BOOKMARK_FLAGS,
     [COMMANDS.SUBSCRIPTIONS]: SUBSCRIPTIONS_FLAGS,
     [COMMANDS.PLACES]: PLACES_FLAGS,
+    [COMMANDS.COLLECTIONS]: COLLECTIONS_FLAGS,
 });
 //# sourceMappingURL=flags.js.map

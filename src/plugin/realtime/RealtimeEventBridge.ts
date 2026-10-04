@@ -1379,9 +1379,7 @@ export class RealtimeEventBridge {
         try {
           await this.withArchiveWriteLocks(archiveId, async () => {
             await this.deps.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-              const previousArchiveTags = Array.isArray(fm.archiveTags)
-                ? (fm.archiveTags as unknown[]).filter((t): t is string => typeof t === 'string')
-                : [];
+              const previousArchiveTags = readFrontmatterTags(fm.archiveTags);
               const currentObsidianTags = readFrontmatterTags(fm.tags);
 
               fm.archiveTags = serverTags;

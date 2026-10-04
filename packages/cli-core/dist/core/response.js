@@ -178,6 +178,7 @@ const SAFE_ID_KEYS = new Set([
     'clientId',
     'targetClientId',
     'subscriptionId',
+    'collectionId',
     'runId',
     'postId',
     'requestId',
@@ -311,7 +312,7 @@ function summarizeData(data) {
         return String(data);
     const parts = [];
     const obj = data;
-    const keys = ['jobId', 'status', 'platform', 'filePath', 'subscriptionId', 'batchJobId', 'username', 'store'];
+    const keys = ['jobId', 'status', 'cached', 'platform', 'filePath', 'subscriptionId', 'batchJobId', 'username', 'store'];
     for (const k of keys) {
         const value = obj[k];
         if (value !== undefined && value !== null) {

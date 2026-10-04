@@ -4863,9 +4863,11 @@ export class PostCardRenderer extends Component {
       postData.linkPreviews = combinedLinkPreviews;
 
       // Todo 17: delegate to ShareAPIClient so this username-bearing write
-      // carries the Bearer principal + X-Client identity, canonical
-      // epoch-seconds expiry, a stable mutation ID, and — when the post is
-      // archive-backed — the top-level archiveId.
+      // carries the Bearer principal + X-Client identity, a stable mutation
+      // ID, and — when the post is archive-backed — the top-level archiveId.
+      // No expiry: shares don't expire, as in every other client. The
+      // 30-day value this used to send only hid text-only shares from the
+      // owner's profile after 30 days.
       const rendererSourceArchiveId = this.resolveSourceArchiveId(post, file) ?? undefined;
       const shareClient = new ShareAPIClient({
         baseURL: workerUrl,
@@ -4876,7 +4878,6 @@ export class PostCardRenderer extends Component {
       const shareData = await shareClient.createShare({
         postData,
         options: {
-          expiry: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60, // 30 days, epoch seconds
           username: username, // Username for URL generation
           // NOTE: Do not include shareId - let Workers generate it for new shares
           ...(rendererSourceArchiveId ? { sourceArchiveId: rendererSourceArchiveId } : {}),

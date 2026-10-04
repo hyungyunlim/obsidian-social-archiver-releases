@@ -6,8 +6,9 @@
  * - Tag removals trigger deleteArchiveTags
  * - No change = no API calls
  * - Suppressed archiveId is skipped
- * - NOTE: ArchiveTagOutboundService does NOT have a first-observation guard.
- *   It syncs on any delta from the empty initial baseline.
+ * - Files here are written during the session (mtime = now), so their first
+ *   observation diffs against an empty baseline. Notes that predate the
+ *   session are baselined instead — see ArchiveTagSync.regressions.test.ts.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -16,8 +17,9 @@ import type { TFile } from 'obsidian';
 
 // ─── Helpers ─────────────────────────────────────────────
 
+/** A note written during the test session (mtime = now). */
 function makeFile(path: string): TFile {
-  return { path, extension: 'md' } as unknown as TFile;
+  return { path, extension: 'md', stat: { mtime: Date.now() } } as unknown as TFile;
 }
 
 // ─── Mock factories ───────────────────────────────────────
@@ -31,11 +33,11 @@ function makeApp(options: {
   fm?: Record<string, unknown>;
   fmByPath?: Map<string, Record<string, unknown>>;
 } = {}) {
-  let registeredCallback: ((file: TFile) => void) | null = null;
+  const callbacks = new Map<string, (file: TFile) => void>();
 
   const app = {
     _trigger(file: TFile) {
-      registeredCallback?.(file);
+      callbacks.get('changed')?.(file);
     },
     _setFm(path: string, fm: Record<string, unknown>) {
       if (!options.fmByPath) {
@@ -44,9 +46,9 @@ function makeApp(options: {
       options.fmByPath.set(path, fm);
     },
     metadataCache: {
-      on: vi.fn().mockImplementation((_event: string, cb: (file: TFile) => void) => {
-        registeredCallback = cb;
-        return { __type: 'eventRef' };
+      on: vi.fn().mockImplementation((event: string, cb: (file: TFile) => void) => {
+        callbacks.set(event, cb);
+        return { __type: 'eventRef', event };
       }),
       offref: vi.fn(),
       getFileCache: vi.fn().mockImplementation((file: TFile) => {
@@ -572,6 +574,52 @@ describe('ArchiveTagOutboundService', () => {
       await vi.runAllTimersAsync();
 
       expect(apiClient.upsertTags).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Scalar archiveTags (`archiveTags: work` is valid YAML) ──
+
+  describe('scalar archiveTags', () => {
+    it('reads `archiveTags: tag` as that tag, not as an empty list', async () => {
+      const file = makeFile('Social Archives/post.md');
+      const app = makeApp({ fm: { sourceArchiveId: 'archive-123', archiveTags: 'keep-tag' } });
+      const apiClient = makeApiClient();
+      const service = new ArchiveTagOutboundService(
+        app as any,
+        apiClient as any,
+        makeArchiveLookup() as any,
+        makeSettings(),
+      );
+      service.rebuildTagCache([{ id: 'id-keep', name: 'keep-tag' }]);
+      service.start();
+      service.primeSnapshot(file.path, ['keep-tag']);
+
+      app._trigger(file);
+      await vi.runAllTimersAsync();
+
+      expect(apiClient.deleteArchiveTags).not.toHaveBeenCalled();
+      expect(apiClient.upsertTags).not.toHaveBeenCalled();
+    });
+
+    it('pushes only the new name from an inline list `archiveTags: a, b`', async () => {
+      const file = makeFile('Social Archives/post.md');
+      const app = makeApp({ fm: { sourceArchiveId: 'archive-123', archiveTags: 'keep-tag, new-tag' } });
+      const apiClient = makeApiClient();
+      const service = new ArchiveTagOutboundService(
+        app as any,
+        apiClient as any,
+        makeArchiveLookup() as any,
+        makeSettings(),
+      );
+      service.rebuildTagCache([{ id: 'id-keep', name: 'keep-tag' }]);
+      service.start();
+      service.primeSnapshot(file.path, ['keep-tag']);
+
+      app._trigger(file);
+      await vi.runAllTimersAsync();
+
+      expect(apiClient.upsertTags).toHaveBeenCalledWith([expect.objectContaining({ name: 'new-tag' })], 'test-client-id');
+      expect(apiClient.deleteArchiveTags).not.toHaveBeenCalled();
     });
   });
 

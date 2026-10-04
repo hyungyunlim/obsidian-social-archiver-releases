@@ -667,6 +667,7 @@ export interface SocialArchiverSettings {
   /** Write the collections a note is in to its `archiveCollections` property (prd-collections-obsidian-plugin O6). Off by default. */
   collectionPropertyMirror: boolean;
   pendingTagDeleteIds?: string[]; // Tag ids deleted locally but not yet confirmed deleted on the server (retried before each definition pull)
+  pendingArchiveTagSyncs?: Record<string, string[]>; // archiveId → archiveTags the server last confirmed, for a local edit whose push failed (replayed before the startup tag backfill)
 
   // Sharing Settings
   shareMode: ShareMode; // 'full' or 'preview' mode for shared posts
@@ -950,6 +951,7 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
   mirrorArchiveTagsToObsidianTags: false, // Keep server-synced archive tags separate by default
   collectionPropertyMirror: false, // Notes stay untouched unless the user opts in
   pendingTagDeleteIds: [], // No unpushed tag deletions by default
+  pendingArchiveTagSyncs: {}, // No unpushed archive tag edits by default
 
   // Sharing Settings
   shareMode: 'preview', // Default to preview mode for copyright safety
@@ -1403,6 +1405,13 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
   }
   if (!Array.isArray(migrated.pendingTagDeleteIds)) {
     migrated.pendingTagDeleteIds = [];
+  }
+  if (
+    !migrated.pendingArchiveTagSyncs
+    || typeof migrated.pendingArchiveTagSyncs !== 'object'
+    || Array.isArray(migrated.pendingArchiveTagSyncs)
+  ) {
+    migrated.pendingArchiveTagSyncs = {};
   }
   if (!migrated.aiCommentPendingUploads || typeof migrated.aiCommentPendingUploads !== 'object') {
     migrated.aiCommentPendingUploads = {};

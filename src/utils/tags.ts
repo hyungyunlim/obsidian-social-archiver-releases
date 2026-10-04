@@ -26,6 +26,23 @@ export function normalizeTagName(name: string): string {
 }
 
 /**
+ * Validate a name for `archiveTags` / the server tag system: 1..TAG_NAME_MAX_LENGTH
+ * chars after normalising. Spaces are allowed — the server and mobile accept
+ * them; only Obsidian's native `tags` rejects them, which
+ * {@link obsidianSafeTagNames} handles at the mirroring boundary.
+ *
+ * @param name - Raw tag name
+ * @returns Error message when invalid, otherwise null
+ */
+export function validateArchiveTagName(name: string): string | null {
+  const normalised = normalizeTagName(name);
+  if (!normalised || normalised.length > TAG_NAME_MAX_LENGTH) {
+    return `Tag name must be 1-${TAG_NAME_MAX_LENGTH} characters`;
+  }
+  return null;
+}
+
+/**
  * Validate tag name against app rules.
  *
  * The name is normalised first (trimmed, `#` prefix stripped) before
@@ -39,11 +56,9 @@ export function normalizeTagName(name: string): string {
  * @returns Error message when invalid, otherwise null
  */
 export function validateTagName(name: string): string | null {
-  const normalised = normalizeTagName(name);
-  if (!normalised || normalised.length > TAG_NAME_MAX_LENGTH) {
-    return `Tag name must be 1-${TAG_NAME_MAX_LENGTH} characters`;
-  }
-  if (TAG_WHITESPACE_PATTERN.test(normalised)) {
+  const lengthError = validateArchiveTagName(name);
+  if (lengthError) return lengthError;
+  if (TAG_WHITESPACE_PATTERN.test(normalizeTagName(name))) {
     return 'Tag name cannot contain spaces';
   }
   return null;

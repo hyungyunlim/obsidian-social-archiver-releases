@@ -7,6 +7,7 @@ import {
   obsidianSafeTagNames,
   readFrontmatterTags,
   sanitizeTagNames,
+  validateArchiveTagName,
   validateTagName,
 } from '@/utils/tags';
 
@@ -262,5 +263,19 @@ describe('validateTagName', () => {
   it('rejects bare # (empty after normalization)', () => {
     expect(validateTagName('#')).not.toBeNull();
     expect(validateTagName('###')).not.toBeNull();
+  });
+});
+
+describe('validateArchiveTagName', () => {
+  it('accepts spaces (server tags allow them; only the native mirror drops them)', () => {
+    expect(validateArchiveTagName('road trip')).toBeNull();
+    expect(validateArchiveTagName('#road trip')).toBeNull();
+  });
+
+  it('rejects empty and over-length names like the server', () => {
+    expect(validateArchiveTagName('  ')).not.toBeNull();
+    expect(validateArchiveTagName('#')).not.toBeNull();
+    expect(validateArchiveTagName('a'.repeat(30))).toBeNull();
+    expect(validateArchiveTagName('a'.repeat(31))).not.toBeNull();
   });
 });

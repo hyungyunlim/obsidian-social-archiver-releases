@@ -39,6 +39,7 @@ export declare const COMMANDS: {
     readonly BOOKMARK: "social-archiver:bookmark";
     readonly SUBSCRIPTIONS: "social-archiver:subscriptions";
     readonly PLACES: "social-archiver:places";
+    readonly COLLECTIONS: "social-archiver:collections";
 };
 export type CommandId = (typeof COMMANDS)[keyof typeof COMMANDS];
 export declare const DEFAULT_FLAGS: CliFlags;
@@ -67,6 +68,7 @@ export declare const AI_PROVIDERS_FLAGS: CliFlags;
 export declare const SEARCH_FLAGS: CliFlags;
 export declare const SUBSCRIPTIONS_FLAGS: CliFlags;
 export declare const PLACES_FLAGS: CliFlags;
+export declare const COLLECTIONS_FLAGS: CliFlags;
 export declare const BOOKMARK_FLAGS: CliFlags;
 export declare const COMMAND_DESCRIPTIONS: Readonly<Record<CommandId, string>>;
 /** Flag schema lookup by command id — used by the argv layer for help/validation. */
