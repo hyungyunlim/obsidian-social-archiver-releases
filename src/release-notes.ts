@@ -26,6 +26,23 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.9.0': {
+    title: 'Archive straight into collections',
+    date: '2026-10-05',
+    notes: `## Pick collections while you archive
+
+- **Add to collection, in the archive window.** Under the tags, **Add to collection** lists the collections you can add to, most recently used first; you can also type a new name to create one. The post goes into them as soon as it's archived, so there's nothing to do afterwards. Nothing is picked by default.
+- **New collections and queued archives.** A collection you just created on this device is synced before the archive is sent, and the choice stays with the archive while it waits in the queue or is retried.
+- Not offered for links the plugin archives on this device (Naver Cafe with your cookie, Naver Blog, Brunch and Naver Webtoon), because those never reach the server.
+
+## From the command line
+
+- **\`social-archiver:archive collection=<id|name>\`** adds the archived post to one or more collections (comma-separated, up to 50) in queue mode. A collection that hasn't synced yet, or one where you're only a viewer, is refused before anything is sent.
+
+> [!NOTE]
+> The same option is in the mobile app (2.4.1, including the share sheet), the desktop app (0.8.2), the browser extension (1.11.0) and the \`social-archiver\` CLI (0.1.20, \`archive --collection\`). The server side is already live.
+`,
+  },
   '4.8.1': {
     title: 'Collections from the Obsidian CLI, shares that stay on your profile, and tag sync fixes',
     date: '2026-10-04',

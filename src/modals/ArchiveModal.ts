@@ -1,4 +1,8 @@
 import { Modal, App, Notice, Setting, Platform, setIcon } from 'obsidian';
+import { t } from '../i18n';
+import { CollectionPickerModal } from '../components/timeline/collections/CollectionPickerModal';
+import { applySelectionChanges, orderForArchivePicker } from '../plugin/collections/archiveCollectionSelection';
+import { isArchivedLocally } from '../plugin/jobs/localArchiveRoutes';
 import type SocialArchiverPlugin from '../main';
 import type { Platform as PlatformType, PostData } from '../types/post';
 import type { MediaDownloadMode } from '../types/settings';
@@ -112,6 +116,10 @@ export class ArchiveModal extends Modal {
   // Archive-time tag selection
   private selectedTags: string[] = [];
   private tagSelectorContainer!: HTMLElement;
+
+  // Archive-time collections (prd-archive-into-collections): the server adds the archive once it exists
+  private selectedCollectionIds: string[] = [];
+  private collectionSelectorContainer!: HTMLElement;
 
   // Profile detection state
   private urlAnalysis: UrlAnalysisResult | null = null;
@@ -373,6 +381,11 @@ export class ArchiveModal extends Modal {
     this.tagSelectorContainer.addClass('sa-hidden');
     this.tagSelectorContainer.addClass('sa-mt-12');
     this.buildTagSelector();
+
+    // Collections: same visibility as tags, except where the server never sees the archive
+    this.collectionSelectorContainer = contentEl.createDiv({ cls: 'archive-collection-selector' });
+    this.collectionSelectorContainer.addClass('sa-hidden', 'sa-mt-12');
+    this.renderCollectionSelector();
 
     // ============================================================================
     // Profile Options Section (hidden by default, shown for profile URLs)
@@ -944,6 +957,7 @@ export class ArchiveModal extends Modal {
       this.youtubeOptions.addClass('sa-hidden');
       this.commentContainer.addClass('sa-hidden');
       this.tagSelectorContainer.addClass('sa-hidden');
+      this.collectionSelectorContainer.addClass('sa-hidden');
       this.postFooterEl.addClass('sa-hidden');
       this.disclaimerEl.addClass('sa-hidden');
 
@@ -973,11 +987,13 @@ export class ArchiveModal extends Modal {
         this.commentContainer.removeClass('sa-hidden');
         window.requestAnimationFrame(() => resizeTextareaToContent(this.commentTextarea));
         this.tagSelectorContainer.removeClass('sa-hidden');
+        this.collectionSelectorContainer.toggleClass('sa-hidden', !this.canChooseCollections());
         this.postFooterEl.removeClass('sa-hidden');
         this.disclaimerEl.removeClass('sa-hidden');
       } else {
         this.commentContainer.addClass('sa-hidden');
         this.tagSelectorContainer.addClass('sa-hidden');
+        this.collectionSelectorContainer.addClass('sa-hidden');
         this.postFooterEl.addClass('sa-hidden');
         this.disclaimerEl.addClass('sa-hidden');
       }
@@ -2412,6 +2428,10 @@ export class ArchiveModal extends Modal {
       // Step 2: Build pending job via shared CLI service (single source of
       // truth for queue-mode construction). The modal owns lock + tracker +
       // notice; the service is a pure builder here.
+      // Server ids only: a collection made in the picker is pushed first.
+      const collectionIds = this.selectedCollectionIds.length > 0 && this.canChooseCollections()
+        ? await this.plugin.collectionService.serverIdsFor(this.selectedCollectionIds)
+        : [];
       const pendingJob = this.plugin.archiveCliService.buildPendingJob(
         archiveUrl,
         this.detectedPlatform,
@@ -2428,6 +2448,7 @@ export class ArchiveModal extends Modal {
           tags: this.selectedTags,
           pinterestBoard:
             this.detectedPlatform === 'pinterest' ? this.isPinterestBoard : undefined,
+          collectionIds,
         },
       );
       const jobId = pendingJob.id;
@@ -2671,6 +2692,66 @@ export class ArchiveModal extends Modal {
   /**
    * Render selected tag chips
    */
+  /** Signed in, and the archive goes through the server (the one that adds it to collections). */
+  private canChooseCollections(): boolean {
+    if (!this.plugin.collectionStore.getUsername()) return false;
+    const url = (this.resolvedUrl ?? this.url).trim();
+    return !isArchivedLocally(url, this.plugin.settings.naverCookie);
+  }
+
+  private renderCollectionSelector(): void {
+    const container = this.collectionSelectorContainer;
+    container.empty();
+
+    const label = container.createDiv({ cls: 'archive-tag-label' });
+    label.setText(t('col.archiveModal.label'));
+
+    const row = container.createDiv({ cls: 'archive-tag-chips' });
+    row.addClass('sa-flex-row', 'sa-flex-wrap', 'sa-gap-4', 'sa-mt-4');
+    const store = this.plugin.collectionStore;
+    for (const id of this.selectedCollectionIds) {
+      const collection = store.getCollection(id);
+      if (!collection) continue;
+      const chip = row.createDiv({ cls: 'archive-tag-chip' });
+      chip.addClass('am-tag-chip');
+      chip.createSpan({ text: collection.name });
+      const remove = chip.createSpan({ text: '×' });
+      remove.addClass('am-tag-chip-remove');
+      chip.addEventListener('click', () => {
+        this.selectedCollectionIds = this.selectedCollectionIds.filter((selected) => selected !== id);
+        this.renderCollectionSelector();
+      });
+    }
+
+    const add = row.createEl('button', { cls: 'archive-collection-add', attr: { type: 'button' } });
+    add.addClass('sa-flex-row', 'sa-gap-4');
+    setIcon(add.createSpan(), 'folder-plus');
+    add.createSpan({ text: t('col.action.add') });
+    add.addEventListener('click', () => this.openCollectionPicker());
+  }
+
+  private openCollectionPicker(): void {
+    const service = this.plugin.collectionService;
+    const store = this.plugin.collectionStore;
+    const selected = new Set(this.selectedCollectionIds);
+    const writable = orderForArchivePicker(service.getWritableCollections());
+    new CollectionPickerModal(this.app, {
+      collections: writable,
+      ownedCollections: store.getCollections().filter((collection) => (collection.role ?? 'owner') === 'owner'),
+      initialState: new Map(writable.map((collection) => [collection.id, selected.has(collection.id) ? 'all' : 'none'])),
+      create: (name) => {
+        const result = service.create(name);
+        if (result.ok) return result.collection;
+        new Notice(result.reason === 'limit' ? t('col.limitReached') : t('col.failed'));
+        return null;
+      },
+      apply: (changes) => {
+        this.selectedCollectionIds = applySelectionChanges(this.selectedCollectionIds, changes);
+        this.renderCollectionSelector();
+      },
+    }).open();
+  }
+
   private renderTagChips(chipsArea: HTMLElement): void {
     chipsArea.empty();
 

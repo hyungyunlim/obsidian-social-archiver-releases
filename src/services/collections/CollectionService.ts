@@ -149,6 +149,26 @@ export class CollectionService {
     return true;
   }
 
+  /**
+   * Server ids for collections chosen before an archive exists
+   * (prd-archive-into-collections A8). One created on this device is pushed
+   * first, following any remap; one that still hasn't reached the server is
+   * left out — the server would only skip it.
+   */
+  async serverIdsFor(ids: readonly string[]): Promise<string[]> {
+    const writable = (): LocalCollection[] => ids
+      .map((id) => this.deps.store.getCollection(id))
+      .filter((collection): collection is LocalCollection => Boolean(collection) && canContribute(collection?.role ?? 'owner'));
+    if (writable().some((collection) => !collection.synced)) {
+      try {
+        await this.deps.sync.pushNow();
+      } catch {
+        // Offline: the archive request itself will report it.
+      }
+    }
+    return [...new Set(writable().filter((collection) => collection.synced).map((collection) => collection.id))];
+  }
+
   /** Collections a post can go into: mine, and shared ones where I'm an editor. */
   getWritableCollections(): LocalCollection[] {
     return this.deps.store.getCollections().filter((collection) => canContribute(collection.role ?? 'owner'));

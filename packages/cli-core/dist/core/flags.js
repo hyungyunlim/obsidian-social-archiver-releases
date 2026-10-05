@@ -57,6 +57,10 @@ export const ARCHIVE_FLAGS = {
     transcript: { description: 'Request transcription for video posts.' },
     formattedTranscript: { description: 'Request formatted transcript (markdown).' },
     tags: { description: 'Comma-separated tags to attach to the archive.', value: '<tag1,tag2>' },
+    collection: {
+        description: 'Collection id or exact name to add the archived post to; comma-separated for several.',
+        value: '<id|name>',
+    },
     comment: { description: 'Inline comment to attach to the archive.', value: '<text>' },
     wait: { description: 'Block until terminal state (sync/fetch only).' },
     ...FORMAT_FLAG,

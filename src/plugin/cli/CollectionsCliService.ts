@@ -289,6 +289,28 @@ export class CollectionsCliService {
   // ---------------------------------------------------------------------------
 
   /** By id first (following id remaps), then by exact name; your own collection wins a name clash. */
+  /**
+   * `archive collection=…` (prd-archive-into-collections): the server ids to
+   * send. Each must be one the server already knows and the caller can add to —
+   * the server would only skip the rest.
+   */
+  resolveServerIds(refs: readonly string[]): string[] {
+    if (!this.deps.username()) {
+      throw new CollectionsCliError('AUTH_REQUIRED', 'Sign in to Social Archiver to use collections.');
+    }
+    const ids = refs.map((ref) => {
+      const collection = this.resolveRef(ref);
+      if (!canContribute(collection.role ?? 'owner')) {
+        throw new CliValidationError('collection', `You're a viewer in '${collection.name}', so you can't add posts to it.`);
+      }
+      if (!collection.synced) {
+        throw new CliValidationError('collection', `'${collection.name}' hasn't reached the server yet; try again in a moment.`);
+      }
+      return collection.id;
+    });
+    return [...new Set(ids)];
+  }
+
   private resolveCollection(params: CliParams, action: CollectionsCliAction): CollectionSummary {
     const ref = parseString(params, 'collection');
     if (!ref) {
@@ -297,6 +319,10 @@ export class CollectionsCliService {
         `action='${action}' requires 'collection' (an id or exact name). Run \`social-archiver:collections\` to list them.`,
       );
     }
+    return this.resolveRef(ref);
+  }
+
+  private resolveRef(ref: string): CollectionSummary {
     const collections = this.deps.store.getCollections();
     const canonicalId = this.deps.store.resolveId(ref);
     const byId = collections.find((collection) => collection.id === canonicalId);

@@ -1027,6 +1027,8 @@ export interface ArchiveRequest {
   naverCookie?: string;
   // Sync client that initiated the archive (for dedup — server skips dispatching sync back to this client)
   sourceClientId?: string;
+  /** Server collection ids the archive joins once it exists (prd-archive-into-collections). */
+  collectionIds?: string[];
 }
 
 export interface ArchiveResponse {
@@ -1410,6 +1412,7 @@ export class WorkersAPIClient implements IService {
         options: request.options,
         licenseKey: request.licenseKey || this.config.licenseKey,
         sourceClientId: request.sourceClientId,
+        ...(request.collectionIds?.length ? { collectionIds: request.collectionIds } : {}),
       }),
     });
 

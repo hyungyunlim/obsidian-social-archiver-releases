@@ -81,6 +81,9 @@ export interface PendingJob {
     /** BrightData collection ID */
     collectionId?: string;
 
+    /** Social Archiver collections (server ids) the archive joins — not BrightData's `collectionId`. */
+    collectionIds?: string[];
+
     /** BrightData snapshot ID */
     snapshotId?: string;
 

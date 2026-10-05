@@ -424,6 +424,8 @@ export class PendingJobOrchestrator {
             naverCookie: settings.naverCookie || undefined,
             // Tell server to skip dispatching sync back to this Obsidian client
             sourceClientId: settings.syncClientId || undefined,
+            // The server adds the archive to these once it exists, on any lane.
+            ...(job.metadata?.collectionIds?.length ? { collectionIds: job.metadata.collectionIds } : {}),
           });
 
           // Track URL for client-side dedup guard

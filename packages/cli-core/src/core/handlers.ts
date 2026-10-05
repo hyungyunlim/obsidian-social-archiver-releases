@@ -77,6 +77,9 @@ export const statusHandler: Handler = async (_params, { host, version }) => {
   return ok(COMMANDS.DEFAULT, version, status);
 };
 
+/** Server ceiling for `collectionIds` on one archive request (prd-archive-into-collections §3.1). */
+const MAX_ARCHIVE_COLLECTIONS = 50;
+
 export const archiveHandler: Handler = async (params, { host, version }) => {
   const url = parseString(params, 'url', { required: true });
   const mode = (parseEnum(params, 'mode', ['queue', 'sync', 'fetch'], {
@@ -90,6 +93,11 @@ export const archiveHandler: Handler = async (params, { host, version }) => {
   const includeFormattedTranscript =
     params['formattedTranscript'] !== undefined ? parseBool(params, 'formattedTranscript', false) : undefined;
   const tags = parseCsv(params, 'tags');
+  const collections = [...new Set(parseCsv(params, 'collection'))];
+  if (collections.length > MAX_ARCHIVE_COLLECTIONS) {
+    // The server ignores the whole list past this, so refuse rather than drop it silently.
+    throw new CliValidationError('collection', `Pass up to ${MAX_ARCHIVE_COLLECTIONS} collections.`);
+  }
   const comment = parseString(params, 'comment');
   const wait = params['wait'] !== undefined ? parseBool(params, 'wait', false) : undefined;
 
@@ -100,6 +108,7 @@ export const archiveHandler: Handler = async (params, { host, version }) => {
     includeTranscript,
     includeFormattedTranscript,
     tags: tags.length > 0 ? tags : undefined,
+    collections: collections.length > 0 ? collections : undefined,
     comment,
     wait,
   });

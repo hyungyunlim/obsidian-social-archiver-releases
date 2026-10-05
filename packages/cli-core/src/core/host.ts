@@ -55,6 +55,8 @@ export interface ArchiveCliOptions {
   includeTranscript?: boolean;
   includeFormattedTranscript?: boolean;
   tags?: string[];
+  /** `--collection` refs as typed (id or exact name, deduped); the host resolves them to server ids. */
+  collections?: string[];
   comment?: string;
   /** Block until terminal state (sync/fetch only). */
   wait?: boolean;

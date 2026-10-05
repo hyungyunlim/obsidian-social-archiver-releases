@@ -107,6 +107,7 @@ export const collectionStrings = {
   'col.action.edit': { en: 'Edit collection', ko: '컬렉션 편집' },
   'col.action.more': { en: 'Collection actions', ko: '컬렉션 작업' },
   'col.action.createBase': { en: 'Create base from collection', ko: '컬렉션으로 Base 만들기' },
+  'col.archiveModal.label': { en: 'Collections (optional)', ko: '컬렉션 (선택)' },
 
   // Share settings
   'col.share.title': { en: 'Share settings', ko: '공유 설정' },

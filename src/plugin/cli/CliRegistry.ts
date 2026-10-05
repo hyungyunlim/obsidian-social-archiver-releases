@@ -84,6 +84,7 @@ import { collectablePostForFile } from '../collections/CollectionCommands';
 import type { CollectionService } from '../../services/collections/CollectionService';
 import type { CollectionStore } from '../../services/collections/CollectionStore';
 import { SHARE_WEB_URL } from '../../types/settings';
+import { isArchivedLocally } from '../jobs/localArchiveRoutes';
 import { ProfileCrawlService } from '../services/ProfileCrawlService';
 import { extractGoogleMapsLinks } from '../../utils/googleMapsLinks';
 import nodeRequire from '../../utils/nodeRequire';
@@ -223,6 +224,21 @@ export class CliRegistry {
         : undefined;
       const tags = parseCsv(params, 'tags');
       const comment = parseString(params, 'comment');
+      const collectionRefs = parseCsv(params, 'collection');
+      // Only the queue carries collections to the server; sync and fetch take other paths.
+      // The server ignores the whole list past 50, so refuse rather than drop it silently.
+      if (new Set(collectionRefs).size > 50) {
+        throw new CliValidationError('collection', 'Pass up to 50 collections.');
+      }
+      if (collectionRefs.length > 0 && mode !== 'queue') {
+        throw new CliValidationError('collection', "'collection' works with mode=queue (the default).");
+      }
+      if (collectionRefs.length > 0 && isArchivedLocally(url, this.plugin.settings.naverCookie)) {
+        throw new CliValidationError('collection', "This link is archived on this device, not by the server, so it can't be added to a collection here.");
+      }
+      const collectionIds = collectionRefs.length > 0
+        ? this.getCollectionsCliService().resolveServerIds(collectionRefs)
+        : undefined;
 
       const opts: ArchiveCliOptions = {
         mediaMode,
@@ -231,6 +247,7 @@ export class CliRegistry {
         includeFormattedTranscript,
         tags: tags.length > 0 ? tags : undefined,
         comment,
+        ...(collectionIds ? { collectionIds } : {}),
       };
 
       const svc = this.plugin.archiveCliService;
@@ -267,6 +284,7 @@ export class CliRegistry {
         fmt,
       );
     } catch (e) {
+      if (e instanceof CollectionsCliError) return this.formatErr(COMMANDS.ARCHIVE, e.code, e.message, fmt);
       return this.formatArchiveError(COMMANDS.ARCHIVE, e, fmt);
     }
   }

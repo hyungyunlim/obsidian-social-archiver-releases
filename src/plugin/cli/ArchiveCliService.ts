@@ -53,6 +53,8 @@ export interface ArchiveCliOptions {
   comment?: string;
   /** Tags to attach (will be sanitized). */
   tags?: string[];
+  /** Server collection ids the archive joins once it exists. */
+  collectionIds?: string[];
   /** Pinterest: archive entire board when URL is a board. */
   pinterestBoard?: boolean;
   /** Optional pre-resolved URL (e.g. after Pinterest expansion). */
@@ -253,6 +255,7 @@ export class ArchiveCliService {
         isPinterestBoard: platform === 'pinterest' ? opts.pinterestBoard : undefined,
         originalUrl,
         selectedTags: sanitizedTags && sanitizedTags.length > 0 ? sanitizedTags : undefined,
+        collectionIds: opts.collectionIds?.length ? [...new Set(opts.collectionIds)] : undefined,
       },
     };
 
