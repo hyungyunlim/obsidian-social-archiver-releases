@@ -10,7 +10,7 @@
  *   - writes sourceArchiveId, syncState='synced', serverSyncedAt on success
  *   - calls apiClient.updateComposedPost for op='update'
  *   - removes entry from queue on success
- *   - increments retryCount on failure
+ *   - increments retryCount when the server rejects the post
  *   - marks syncState='failed' and removes after MAX_RETRIES
  * - Queue survival: persists to settings (saveSettings called)
  * - Missing vault file: removes queue entry
@@ -24,8 +24,13 @@ import type { TFile } from 'obsidian';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function makeFile(path: string, content = '---\nauthor: Me\n---\nBody text'): TFile {
+function makeFile(path: string): TFile {
   return { path } as unknown as TFile;
+}
+
+/** A composed note as savePost writes it: body, then the template's footer. */
+function composerNote(body: string): string {
+  return `---\nplatform: post\nauthor: Me\npublished: 2026-03-26 09:00\n---\n\n${body}\n\n---\n\n**Author:** Me | **Published:** 2026-03-26 09:00\n`;
 }
 
 function makeSettings(
@@ -55,13 +60,15 @@ function makeApiClient(overrides: Record<string, unknown> = {}) {
 }
 
 function makeVault(files: Record<string, string> = {}) {
+  const read = vi.fn(async (file: TFile) => {
+    return files[file.path] ?? '';
+  });
   return {
     getFileByPath: vi.fn((path: string) => {
       return path in files ? makeFile(path) : null;
     }),
-    read: vi.fn(async (file: TFile) => {
-      return files[file.path] ?? '';
-    }),
+    read,
+    cachedRead: read,
     readBinary: vi.fn(async () => new ArrayBuffer(0)),
     on: vi.fn(),
     off: vi.fn(),
@@ -76,6 +83,7 @@ function makeApp(processFrontMatterImpl?: (file: TFile, updater: (fm: Record<str
     fileManager: {
       processFrontMatter: vi.fn(processFrontMatterImpl ?? defaultImpl),
     },
+    metadataCache: { on: vi.fn(), offref: vi.fn(), getFileCache: vi.fn(() => null) },
   };
 }
 
@@ -230,7 +238,7 @@ describe('ComposedPostSyncService', () => {
 
   describe('flush — create path', () => {
     it('calls createComposedPost and writes sourceArchiveId + syncState=synced on success', async () => {
-      const fileContent = '---\nauthor: Me\n---\nBody text';
+      const fileContent = composerNote('Body text');
       const vault = makeVault({ '/note.md': fileContent });
       const apiClient = makeApiClient();
 
@@ -263,7 +271,7 @@ describe('ComposedPostSyncService', () => {
       expect(apiClient.createComposedPost).toHaveBeenCalledWith(
         expect.objectContaining({
           clientPostId: 'post_flush-create',
-          platform: 'post',
+          fullContent: 'Body text',
         })
       );
 
@@ -311,7 +319,7 @@ describe('ComposedPostSyncService', () => {
 
   describe('flush — update path', () => {
     it('calls updateComposedPost with sourceArchiveId and writes syncState=synced', async () => {
-      const vault = makeVault({ '/note.md': '---\nauthor: Me\n---\nUpdated body' });
+      const vault = makeVault({ '/note.md': composerNote('Updated body') });
       const apiClient = makeApiClient();
 
       let capturedFm: Record<string, unknown> = {};
@@ -340,7 +348,7 @@ describe('ComposedPostSyncService', () => {
 
       expect(apiClient.updateComposedPost).toHaveBeenCalledWith(
         'existing-archive-99',
-        expect.objectContaining({ platform: 'post' })
+        expect.objectContaining({ fullContent: 'Updated body' })
       );
 
       expect(capturedFm['syncState']).toBe('synced');
@@ -352,10 +360,10 @@ describe('ComposedPostSyncService', () => {
   // ── flush: failure path ────────────────────────────────────────────────────
 
   describe('flush — failure path', () => {
-    it('increments retryCount on API failure and keeps entry in queue', async () => {
-      const vault = makeVault({ '/note.md': '---\n---\nBody' });
+    it('increments retryCount when the server rejects the post and keeps entry in queue', async () => {
+      const vault = makeVault({ '/note.md': composerNote('Body') });
       const apiClient = makeApiClient({
-        createComposedPost: vi.fn().mockRejectedValue(new Error('Network error')),
+        createComposedPost: vi.fn().mockRejectedValue(Object.assign(new Error('Invalid request body'), { status: 400 })),
       });
 
       const entry: PendingComposedPostSyncEntry = {
@@ -381,13 +389,13 @@ describe('ComposedPostSyncService', () => {
       // Entry should still be in queue with incremented retryCount
       expect(settings.pendingComposedPostSyncs).toHaveLength(1);
       expect(settings.pendingComposedPostSyncs[0]!.retryCount).toBe(1);
-      expect(settings.pendingComposedPostSyncs[0]!.lastError).toBe('Network error');
+      expect(settings.pendingComposedPostSyncs[0]!.lastError).toBe('Invalid request body');
     });
 
     it('marks syncState=failed and removes from queue after MAX_RETRIES (3)', async () => {
-      const vault = makeVault({ '/note.md': '---\n---\nBody' });
+      const vault = makeVault({ '/note.md': composerNote('Body') });
       const apiClient = makeApiClient({
-        createComposedPost: vi.fn().mockRejectedValue(new Error('Persistent error')),
+        createComposedPost: vi.fn().mockRejectedValue(Object.assign(new Error('Persistent error'), { status: 409 })),
       });
 
       let capturedFm: Record<string, unknown> = {};

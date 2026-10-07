@@ -35,6 +35,7 @@ import {
   isThreadsConnectionUsable,
 } from '@/utils/crosspostStatus';
 import { showConfirmModal } from '@/utils/confirm-modal';
+import { createComposedPostId } from '@/plugin/sync/ComposedPostSyncService';
 
 /**
  * Attached image data
@@ -546,6 +547,13 @@ async function handleSubmit(): Promise<void> {
         return false;
       }),
     };
+
+    // A new post's stable sync id: savePost stamps it into the note as
+    // clientPostId and the sync queue sends the same value to the server.
+    // Edits keep the note's existing identity.
+    if (!editMode) {
+      postData.id = createComposedPostId();
+    }
 
     // Add share-on-post flag if enabled OR if post was previously shared
     // In edit mode, if post was shared before, maintain share status

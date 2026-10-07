@@ -187,7 +187,9 @@ describe('WorkersAPIClient — getActiveBillingEvents', () => {
       }),
       captured,
     );
-    const client = makeClient(undefined);
+    // '' is the logged-out settings default; makeClient(undefined) would fall
+    // back to the helper's default token.
+    const client = makeClient('');
     const result = await client.getActiveBillingEvents();
     expect(result).toEqual([]);
     // Should not have hit network at all.

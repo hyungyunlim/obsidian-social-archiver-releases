@@ -1315,34 +1315,46 @@ export interface UpsertAuthorProfilesResult {
 // Composed Post Types
 // ============================================================================
 
+/** POST /api/user/posts/media. The R2 key is archives/{user}/{clientPostId}/media/{index}.{ext}. */
+export interface ComposedMediaUploadRequest {
+  clientPostId: string;
+  /** 0-based position in the post's media list. */
+  index: number;
+  /** Extension without the dot. */
+  ext: string;
+  contentType: string;
+  type: 'image' | 'video';
+  data: ArrayBuffer;
+}
+
 export interface ComposedMediaUploadResult {
-  mediaId: string;
-  url: string;
+  r2Url: string;
+  r2Key: string;
+  type: 'image' | 'video';
+  contentType: string;
+  size: number;
+  width?: number;
+  height?: number;
 }
 
-export interface CreateComposedPostRequest {
-  clientPostId: string;
-  content: string;
-  platform: 'post';
+/**
+ * What POST and PUT /api/user/posts both take. Their zod schemas drop any other
+ * key; the author defaults to the signed-in user.
+ */
+export interface ComposedPostContent {
   title?: string | null;
   previewText?: string | null;
   fullContent?: string | null;
-  publishedAt?: string;
-  authorName?: string;
-  authorUrl?: string;
+  thumbnailUrl?: string | null;
+  /** Uploaded r2Urls. PUT replaces the whole list. */
+  media?: Array<{ url: string; type: 'image' | 'video' }>;
 }
 
-export interface UpdateComposedPostRequest {
+export interface CreateComposedPostRequest extends ComposedPostContent {
   clientPostId: string;
-  content: string;
-  platform: 'post';
-  title?: string | null;
-  previewText?: string | null;
-  fullContent?: string | null;
-  publishedAt?: string;
-  authorName?: string;
-  authorUrl?: string;
 }
+
+export type UpdateComposedPostRequest = ComposedPostContent;
 
 /**
  * Workers API Client
@@ -4102,16 +4114,9 @@ export class WorkersAPIClient implements IService {
    *
    * POST /api/user/posts/media
    */
-  async uploadComposedMedia(
-    clientPostId: string,
-    file: ArrayBuffer,
-    filename: string,
-    contentType: string,
-    index: number,
-  ): Promise<ComposedMediaUploadResult> {
+  async uploadComposedMedia(upload: ComposedMediaUploadRequest): Promise<ComposedMediaUploadResult> {
     this.ensureInitialized();
 
-    const base64 = this.arrayBufferToBase64(file);
     const extraHeaders: Record<string, string> = {};
     if (this.config.clientId) {
       extraHeaders['X-Client-Id'] = this.config.clientId;
@@ -4120,13 +4125,7 @@ export class WorkersAPIClient implements IService {
     return await this.request<ComposedMediaUploadResult>('/api/user/posts/media', {
       method: 'POST',
       headers: extraHeaders,
-      body: JSON.stringify({
-        clientPostId,
-        filename,
-        contentType,
-        index,
-        data: base64,
-      }),
+      body: JSON.stringify({ ...upload, data: this.arrayBufferToBase64(upload.data) }),
     });
   }
 

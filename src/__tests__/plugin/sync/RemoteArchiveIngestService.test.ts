@@ -35,7 +35,13 @@ function makeArchive(overrides: Partial<UserArchive> = {}): UserArchive {
 }
 
 function makeFile(path: string): TFile {
-  return { path, extension: 'md' } as unknown as TFile;
+  // Real TFiles carry their vault; the local-only guard reads note content
+  // through it. Empty content = an ordinary note, not a local-only one.
+  return {
+    path,
+    extension: 'md',
+    vault: { cachedRead: vi.fn().mockResolvedValue('') },
+  } as unknown as TFile;
 }
 
 describe('RemoteArchiveIngestService', () => {

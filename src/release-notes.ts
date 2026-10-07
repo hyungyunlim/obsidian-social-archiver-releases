@@ -26,6 +26,28 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.9.1': {
+    title: 'Posts you write reach your other apps',
+    date: '2026-10-07',
+    notes: `## Posts you write in Obsidian sync
+
+- **They reach your other apps now.** Posts written in the timeline's **What's on your mind?** box were refused by the server, so they never showed up in the mobile and desktop apps or on the web. They sync now, including the ones that have waited in the queue since 4.9.0.
+- **The post, not the note.** What syncs is the post's text and images, without the note's author line or image list. Editing a post updates its text and images in the note and everywhere else, and an edit uploads only the images it adds, so an image you removed stops showing on your other devices.
+- **Sync keeps going.** Posts written offline go out when you're back online, a post follows its note through a rename or move, and links in a post stay links instead of turning into \`[[wikilinks]]\`.
+- **Shared right after writing.** A post you share before it has synced now links to its synced copy, so later edits reach the public page.
+
+## Fixes
+
+- Adding more than one archived post to a post you wrote no longer repeats its **Referenced Social Media Posts** section, and notes that already have the repeated section read correctly again.
+
+## Collaborative collections
+
+- The collection view shows when each post was added, and members' **Collection notes** under each post, read-only. Collection notes and highlights are written in the mobile app (2.4.4) and the desktop app (0.8.5).
+
+> [!NOTE]
+> The server side is already live.
+`,
+  },
   '4.9.0': {
     title: 'Archive straight into collections',
     date: '2026-10-05',

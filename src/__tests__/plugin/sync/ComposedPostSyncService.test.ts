@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ComposedPostSyncService } from '../../../plugin/sync/ComposedPostSyncService';
 import type { SocialArchiverSettings, PendingComposedPostSyncEntry } from '../../../types/settings';
 import type { WorkersAPIClient } from '../../../services/WorkersAPIClient';
@@ -10,6 +10,17 @@ vi.mock('obsidian', () => ({
   Vault: vi.fn(),
   TFile: vi.fn(),
 }));
+
+/** What savePost writes; PostDataParser skips a 'post' note missing any of these. */
+const NOTE_FRONTMATTER = { platform: 'post', author: 'Test', published: '2026-03-26 09:00' };
+
+/** A composed note as savePost writes it: body, then the template's footer. */
+function composerNote(body: string, frontmatter: Record<string, string> = {}): string {
+  const yaml = Object.entries({ ...NOTE_FRONTMATTER, ...frontmatter })
+    .map(([key, value]) => `${key}: ${value}`)
+    .join('\n');
+  return `---\n${yaml}\n---\n\n${body}\n\n---\n\n**Author:** Test | **Published:** 2026-03-26 09:00\n`;
+}
 
 type MetadataChangedHandler = (file: TFile) => void;
 
@@ -33,7 +44,7 @@ function makeMockMetadataCache(fileFrontmatter?: Record<string, unknown>): MockM
     offref: vi.fn(),
     getFileCache: vi.fn().mockReturnValue(
       fileFrontmatter !== undefined
-        ? { frontmatter: fileFrontmatter }
+        ? { frontmatter: { ...NOTE_FRONTMATTER, ...fileFrontmatter } }
         : null
     ),
     trigger: (file: TFile) => {
@@ -55,11 +66,13 @@ function makeMockApp(
   } as unknown as App;
 }
 
-function makeMockVault(fileContent?: string, fileExists = true) {
+function makeMockVault(fileContent = composerNote('Body content'), fileExists = true) {
   const mockFile = { path: 'test/path.md' } as TFile;
+  const read = vi.fn().mockResolvedValue(fileContent);
   return {
     getFileByPath: vi.fn().mockReturnValue(fileExists ? mockFile : null),
-    read: vi.fn().mockResolvedValue(fileContent ?? '---\nauthor: Test\n---\nBody content'),
+    read,
+    cachedRead: read,
     readBinary: vi.fn().mockResolvedValue(new ArrayBuffer(0)),
     on: vi.fn(),
     off: vi.fn(),
@@ -70,7 +83,9 @@ function makeMockApiClient(overrides?: Partial<WorkersAPIClient>) {
   return {
     createComposedPost: vi.fn().mockResolvedValue({ archiveId: 'srv-123', createdAt: '2026-03-26T00:00:00Z' }),
     updateComposedPost: vi.fn().mockResolvedValue({ success: true, updatedAt: '2026-03-26T00:00:00Z' }),
-    uploadComposedMedia: vi.fn().mockResolvedValue({ mediaId: 'm1', url: 'https://cdn/m1' }),
+    uploadComposedMedia: vi.fn().mockResolvedValue({
+      r2Url: 'https://cdn/m1', r2Key: 'k1', type: 'image', contentType: 'image/jpeg', size: 1,
+    }),
     ...overrides,
   } as unknown as WorkersAPIClient;
 }
@@ -81,9 +96,18 @@ function makeSettings(queue: PendingComposedPostSyncEntry[] = []): SocialArchive
   } as unknown as SocialArchiverSettings;
 }
 
+function createEntry(clientPostId: string, filePath = 'path/post.md'): PendingComposedPostSyncEntry {
+  return { op: 'create', filePath, clientPostId, queuedAt: '2026-01-01T00:00:00Z', retryCount: 0 };
+}
+
+/** What WorkersAPIClient.request throws for a non-2xx response. */
+function httpError(message: string, status = 400): Error {
+  return Object.assign(new Error(message), { status });
+}
+
 describe('ComposedPostSyncService', () => {
   let settings: SocialArchiverSettings;
-  let saveSettings: ReturnType<typeof vi.fn>;
+  let saveSettings: () => Promise<void>;
 
   beforeEach(() => {
     settings = makeSettings();
@@ -216,7 +240,7 @@ describe('ComposedPostSyncService', () => {
       await service.flush();
 
       expect(apiClient.createComposedPost).toHaveBeenCalledWith(
-        expect.objectContaining({ clientPostId: 'cid-1', platform: 'post' })
+        expect.objectContaining({ clientPostId: 'cid-1', fullContent: 'Body content' })
       );
       expect(writtenFm[0]).toMatchObject({ sourceArchiveId: 'srv-123', syncState: 'synced' });
       expect(settings.pendingComposedPostSyncs).toHaveLength(0);
@@ -242,18 +266,11 @@ describe('ComposedPostSyncService', () => {
       expect(settings.pendingComposedPostSyncs).toHaveLength(0);
     });
 
-    it('increments retryCount on API failure', async () => {
-      const entry: PendingComposedPostSyncEntry = {
-        op: 'create',
-        filePath: 'path/post.md',
-        clientPostId: 'cid-fail',
-        queuedAt: '2026-01-01T00:00:00Z',
-        retryCount: 0,
-      };
-      settings = makeSettings([entry]);
+    it('spends a retry when the server rejects the post', async () => {
+      settings = makeSettings([createEntry('cid-fail')]);
 
       const apiClient = makeMockApiClient({
-        createComposedPost: vi.fn().mockRejectedValue(new Error('Network error')),
+        createComposedPost: vi.fn().mockRejectedValue(httpError('Invalid request body')),
       });
 
       const service = new ComposedPostSyncService(makeMockApp(), makeMockVault(), settings, apiClient, saveSettings);
@@ -261,7 +278,32 @@ describe('ComposedPostSyncService', () => {
       await service.flush();
 
       expect(settings.pendingComposedPostSyncs[0]?.retryCount).toBe(1);
-      expect(settings.pendingComposedPostSyncs[0]?.lastError).toContain('Network error');
+      expect(settings.pendingComposedPostSyncs[0]?.lastError).toContain('Invalid request body');
+    });
+
+    it('keeps the entry through failures that pass, without spending a retry', async () => {
+      settings = makeSettings([createEntry('cid-wait')]);
+      const createComposedPost = vi.fn();
+      const service = new ComposedPostSyncService(
+        makeMockApp(), makeMockVault(), settings, makeMockApiClient({ createComposedPost }), saveSettings
+      );
+
+      // Offline, signed out, over quota, rate limited, server down: each would
+      // have cost one of three tries now that every startup flushes.
+      for (const failure of [
+        new Error('net::ERR_INTERNET_DISCONNECTED'),
+        httpError('Unauthorized', 401),
+        httpError('Monthly limit reached', 402),
+        httpError('Too many requests', 429),
+        httpError('Service unavailable', 503),
+      ]) {
+        createComposedPost.mockRejectedValueOnce(failure);
+        await service.flush();
+      }
+
+      expect(settings.pendingComposedPostSyncs).toEqual([
+        expect.objectContaining({ clientPostId: 'cid-wait', retryCount: 0, lastError: 'Service unavailable' }),
+      ]);
     });
 
     it('marks syncState=failed and removes entry after MAX_RETRIES', async () => {
@@ -282,7 +324,7 @@ describe('ComposedPostSyncService', () => {
       });
 
       const apiClient = makeMockApiClient({
-        createComposedPost: vi.fn().mockRejectedValue(new Error('Persistent error')),
+        createComposedPost: vi.fn().mockRejectedValue(httpError('Persistent error')),
       });
 
       const service = new ComposedPostSyncService(app, makeMockVault(), settings, apiClient, saveSettings);
@@ -324,7 +366,7 @@ describe('ComposedPostSyncService', () => {
 
       expect(apiClient.updateComposedPost).toHaveBeenCalledWith(
         'srv-99',
-        expect.objectContaining({ clientPostId: 'cid-u1' })
+        expect.objectContaining({ fullContent: 'Body content' })
       );
       expect(writtenFm[0]).toMatchObject({ syncState: 'synced' });
       expect(settings.pendingComposedPostSyncs).toHaveLength(0);
@@ -351,8 +393,8 @@ describe('ComposedPostSyncService', () => {
         getFileByPath: vi.fn().mockReturnValue({ path: 'path/to/delete.md' }),
         read: vi.fn().mockResolvedValue('---\nauthor: Test\n---\nbody'),
         readBinary: vi.fn().mockResolvedValue(new ArrayBuffer(0)),
-        on: vi.fn().mockImplementation((_event: string, fn: (f: { path: string }) => void) => {
-          deleteHandler = fn;
+        on: vi.fn().mockImplementation((event: string, fn: (f: { path: string }) => void) => {
+          if (event === 'delete') deleteHandler = fn;
         }),
         off: vi.fn(),
       } as unknown as Vault;
@@ -377,12 +419,110 @@ describe('ComposedPostSyncService', () => {
   });
 
   // ============================================================================
+  // File rename detection
+  // ============================================================================
+
+  describe('onPluginLoad file rename listener', () => {
+    /**
+     * Like Obsidian: a TFile is found only at its current path, and a rename
+     * updates that same TFile's path, then fires 'rename' with the old one.
+     */
+    function renamingVault(...paths: string[]): { vault: Vault; rename: (oldPath: string, newPath: string) => void } {
+      const files = paths.map((path) => ({ path }) as TFile);
+      let renameHandler: ((file: TFile, oldPath: string) => void) | undefined;
+      const vault = {
+        ...makeMockVault(),
+        getFileByPath: vi.fn((path: string) => files.find((f) => f.path === path) ?? null),
+        on: vi.fn((event: string, fn: (file: TFile, oldPath: string) => void) => {
+          if (event === 'rename') renameHandler = fn;
+        }),
+      } as unknown as Vault;
+      const rename = (oldPath: string, newPath: string): void => {
+        const file = files.find((f) => f.path === oldPath);
+        if (!file) throw new Error(`No file at ${oldPath}`);
+        file.path = newPath;
+        renameHandler?.(file, oldPath);
+      };
+      return { vault, rename };
+    }
+
+    /** processFrontMatter that records the path each write landed on. */
+    function stampRecordingApp(): { app: App; stamps: { path: string; fm: Record<string, unknown> }[] } {
+      const stamps: { path: string; fm: Record<string, unknown> }[] = [];
+      const app = makeMockApp(async (file, fn) => {
+        const fm: Record<string, unknown> = {};
+        fn(fm);
+        stamps.push({ path: file.path, fm });
+      });
+      return { app, stamps };
+    }
+
+    it('creates a queued post whose note was moved, and stamps it at the new path', async () => {
+      settings = makeSettings([createEntry('cid-moved', 'Drafts/post.md')]);
+      const { vault, rename } = renamingVault('Drafts/post.md');
+      const { app, stamps } = stampRecordingApp();
+      const createComposedPost = vi.fn()
+        .mockRejectedValueOnce(new Error('net::ERR_INTERNET_DISCONNECTED'))
+        .mockResolvedValue({ archiveId: 'srv-moved', createdAt: '2026-03-26T00:00:00Z' });
+      const service = new ComposedPostSyncService(
+        app, vault, settings, makeMockApiClient({ createComposedPost }), saveSettings
+      );
+
+      await service.onPluginLoad(); // offline: the create stays queued
+      vi.mocked(saveSettings).mockClear();
+      rename('Drafts/post.md', 'Archive/2026/post.md');
+
+      // Saved, so a restart before the next flush still finds the note.
+      expect(saveSettings).toHaveBeenCalledTimes(1);
+      expect(settings.pendingComposedPostSyncs).toEqual([
+        expect.objectContaining({ clientPostId: 'cid-moved', filePath: 'Archive/2026/post.md' }),
+      ]);
+
+      await service.flush(); // back online
+
+      expect(createComposedPost).toHaveBeenCalledTimes(2);
+      expect(stamps).toEqual([{
+        path: 'Archive/2026/post.md',
+        fm: expect.objectContaining({ clientPostId: 'cid-moved', sourceArchiveId: 'srv-moved', syncState: 'synced' }),
+      }]);
+      expect(settings.pendingComposedPostSyncs).toHaveLength(0);
+    });
+
+    it('follows a note moved while the running flush pass is still on an earlier entry', async () => {
+      settings = makeSettings([createEntry('cid-1', 'Drafts/one.md'), createEntry('cid-2', 'Drafts/two.md')]);
+      const { vault, rename } = renamingVault('Drafts/one.md', 'Drafts/two.md');
+      const { app, stamps } = stampRecordingApp();
+      let release = (): void => {};
+      const createComposedPost = vi.fn()
+        .mockImplementationOnce(() => new Promise((resolve) => {
+          release = (): void => resolve({ archiveId: 'srv-1', createdAt: '2026-03-26T00:00:00Z' });
+        }))
+        .mockResolvedValue({ archiveId: 'srv-2', createdAt: '2026-03-26T00:00:00Z' });
+      const service = new ComposedPostSyncService(
+        app, vault, settings, makeMockApiClient({ createComposedPost }), saveSettings
+      );
+
+      const startup = service.onPluginLoad();
+      await vi.waitFor(() => expect(createComposedPost).toHaveBeenCalledTimes(1));
+      rename('Drafts/two.md', 'Archive/two.md'); // the pass already took its snapshot
+      release();
+      await startup;
+
+      expect(stamps.map(({ path, fm }) => [path, fm['sourceArchiveId']])).toEqual([
+        ['Drafts/one.md', 'srv-1'],
+        ['Archive/two.md', 'srv-2'],
+      ]);
+      expect(settings.pendingComposedPostSyncs).toHaveLength(0);
+    });
+  });
+
+  // ============================================================================
   // Update debounce + fingerprint
   // ============================================================================
 
   describe('enqueueUpdateDebounced', () => {
     it('skips enqueue when content fingerprint is unchanged', async () => {
-      const content = '---\nauthor: Test\n---\nSame body';
+      const content = composerNote('Same body');
       const vault = makeMockVault(content);
       const apiClient = makeMockApiClient();
       const service = new ComposedPostSyncService(makeMockApp(), vault, settings, apiClient, saveSettings);
@@ -408,11 +548,12 @@ describe('ComposedPostSyncService', () => {
 
     it('enqueues update when content fingerprint changes', async () => {
       let readCount = 0;
-      const contents = ['---\nauthor: Test\n---\nBody v1', '---\nauthor: Test\n---\nBody v2'];
+      const contents = [composerNote('Body v1'), composerNote('Body v2')];
       const mockFile = { path: 'path/post.md' } as TFile;
       const vault = {
         getFileByPath: vi.fn().mockReturnValue(mockFile),
         read: vi.fn().mockImplementation(() => Promise.resolve(contents[readCount++ % 2])),
+        cachedRead: vi.fn().mockResolvedValue(composerNote('Body v2')),
         readBinary: vi.fn().mockResolvedValue(new ArrayBuffer(0)),
         on: vi.fn(),
         off: vi.fn(),
@@ -440,8 +581,8 @@ describe('ComposedPostSyncService', () => {
         getFileByPath: vi.fn().mockReturnValue(mockFile),
         read: vi.fn().mockResolvedValue('---\nauthor: Test\n---\nBody'),
         readBinary: vi.fn().mockResolvedValue(new ArrayBuffer(0)),
-        on: vi.fn().mockImplementation((_event: string, fn: (f: { path: string }) => void) => {
-          deleteHandler = fn;
+        on: vi.fn().mockImplementation((event: string, fn: (f: { path: string }) => void) => {
+          if (event === 'delete') deleteHandler = fn;
         }),
         off: vi.fn(),
       } as unknown as Vault;
@@ -564,7 +705,8 @@ describe('ComposedPostSyncService', () => {
       const app = makeMockApp(undefined, metadataCache);
       const vault = {
         getFileByPath: vi.fn().mockReturnValue(mockFile),
-        read: vi.fn().mockResolvedValue('---\npostOrigin: composer\nsourceArchiveId: srv-bg-1\nclientPostId: cid-bg-1\n---\nEdited body content'),
+        read: vi.fn().mockResolvedValue(composerNote('Edited body content')),
+        cachedRead: vi.fn().mockResolvedValue(composerNote('Edited body content')),
         readBinary: vi.fn().mockResolvedValue(new ArrayBuffer(0)),
         on: vi.fn(),
         off: vi.fn(),
@@ -583,7 +725,7 @@ describe('ComposedPostSyncService', () => {
       // Should have called updateComposedPost (content was fresh so fingerprint was new)
       expect(apiClient.updateComposedPost).toHaveBeenCalledWith(
         'srv-bg-1',
-        expect.objectContaining({ clientPostId: 'cid-bg-1' })
+        expect.objectContaining({ fullContent: 'Edited body content' })
       );
     }, 12000);
 
@@ -597,7 +739,8 @@ describe('ComposedPostSyncService', () => {
       const app = makeMockApp(undefined, metadataCache);
       const vault = {
         getFileByPath: vi.fn().mockReturnValue(mockFile),
-        read: vi.fn().mockResolvedValue('---\npostOrigin: composer\nsourceArchiveId: srv-rapid\nclientPostId: cid-rapid\n---\nRapid edits'),
+        read: vi.fn().mockResolvedValue(composerNote('Rapid edits')),
+        cachedRead: vi.fn().mockResolvedValue(composerNote('Rapid edits')),
         readBinary: vi.fn().mockResolvedValue(new ArrayBuffer(0)),
         on: vi.fn(),
         off: vi.fn(),
@@ -642,60 +785,119 @@ describe('ComposedPostSyncService', () => {
   });
 
   // ============================================================================
-  // Self-write suppression
+  // Own sync writes
   // ============================================================================
 
-  describe('self-write suppression', () => {
-    it('does not re-trigger update after flush writes syncState to frontmatter', async () => {
+  describe('own sync writes', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('do not send the post again, while an edit made right after a sync does', async () => {
+      vi.useFakeTimers();
       const mockFile = { path: 'posts/synced.md' } as TFile;
       const metadataCache = makeMockMetadataCache({
         postOrigin: 'composer',
-        sourceArchiveId: 'srv-suppress',
-        clientPostId: 'cid-suppress',
+        sourceArchiveId: 'srv-own',
+        clientPostId: 'cid-own',
       });
-
-      const writtenFm: Record<string, unknown>[] = [];
-      // processFrontMatter triggers metadataCache changed after writing
-      const processFrontMatter = vi.fn().mockImplementation(async (_file: TFile, fn: (fm: Record<string, unknown>) => void) => {
-        const fm: Record<string, unknown> = {};
-        fn(fm);
-        writtenFm.push(fm);
-        // Simulate Obsidian triggering MetadataCache.changed after our write
+      // Like Obsidian, MetadataCache reports our own processFrontMatter write.
+      const app = makeMockApp(async (_file, fn) => {
+        fn({});
         metadataCache.trigger(mockFile);
-      });
-
-      const app = makeMockApp(processFrontMatter, metadataCache);
-      const vault = {
-        getFileByPath: vi.fn().mockReturnValue(mockFile),
-        read: vi.fn().mockResolvedValue('---\npostOrigin: composer\nsourceArchiveId: srv-suppress\nclientPostId: cid-suppress\n---\nContent'),
-        readBinary: vi.fn().mockResolvedValue(new ArrayBuffer(0)),
-        on: vi.fn(),
-        off: vi.fn(),
-      } as unknown as Vault;
-
-      const entry: PendingComposedPostSyncEntry = {
+      }, metadataCache);
+      let note = composerNote('Synced text');
+      const read = vi.fn(async () => note);
+      const vault = { ...makeMockVault(), getFileByPath: vi.fn().mockReturnValue(mockFile), read, cachedRead: read } as unknown as Vault;
+      settings = makeSettings([{
         op: 'update',
-        filePath: 'posts/synced.md',
-        clientPostId: 'cid-suppress',
-        sourceArchiveId: 'srv-suppress',
+        filePath: mockFile.path,
+        clientPostId: 'cid-own',
+        sourceArchiveId: 'srv-own',
         queuedAt: '2026-01-01T00:00:00Z',
         retryCount: 0,
-      };
-      settings = makeSettings([entry]);
-
+      }]);
       const apiClient = makeMockApiClient();
       const service = new ComposedPostSyncService(app, vault, settings, apiClient, saveSettings);
-      await service.onPluginLoad();
 
-      // Flush the pending update — should write syncState='synced', which triggers MetadataCache.changed
+      await service.onPluginLoad();
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(apiClient.updateComposedPost).toHaveBeenCalledTimes(1);
+
+      // A 10 s window after each sync used to swallow this edit.
+      note = composerNote('Edited a second later');
+      metadataCache.trigger(mockFile);
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(apiClient.updateComposedPost).toHaveBeenCalledTimes(2);
+      expect(apiClient.updateComposedPost).toHaveBeenLastCalledWith(
+        'srv-own',
+        expect.objectContaining({ fullContent: 'Edited a second later' })
+      );
+    });
+  });
+
+  // ============================================================================
+  // The plugin's one instance: overlapping flushes, stop/start, live settings
+  // ============================================================================
+
+  describe('as the plugin-wide instance', () => {
+    it('sends each entry once when flushes overlap, and what was queued during the pass', async () => {
+      settings = makeSettings([createEntry('cid-1', 'path/one.md')]);
+      let release = (): void => {};
+      const createComposedPost = vi.fn()
+        .mockImplementationOnce(() => new Promise((resolve) => {
+          release = (): void => resolve({ archiveId: 'srv-1', createdAt: '2026-03-26T00:00:00Z' });
+        }))
+        .mockResolvedValue({ archiveId: 'srv-2', createdAt: '2026-03-26T00:00:00Z' });
+      const service = new ComposedPostSyncService(
+        makeMockApp(), makeMockVault(), settings, makeMockApiClient({ createComposedPost }), saveSettings
+      );
+
+      const startup = service.flush();
+      await vi.waitFor(() => expect(createComposedPost).toHaveBeenCalledTimes(1));
+      // The composer queues a second post and flushes while the first is in flight.
+      await service.enqueueCreate('path/two.md', 'cid-2');
+      const composer = service.flush();
+      release();
+      await Promise.all([startup, composer]);
+
+      expect(createComposedPost.mock.calls.map(([request]) => (request as { clientPostId: string }).clientPostId))
+        .toEqual(['cid-1', 'cid-2']);
+      expect(settings.pendingComposedPostSyncs).toHaveLength(0);
+    });
+
+    it('sends nothing while stopped, and starting again only flushes', async () => {
+      settings = makeSettings([createEntry('cid-wait')]);
+      const app = makeMockApp();
+      const vault = makeMockVault();
+      const apiClient = makeMockApiClient();
+      const service = new ComposedPostSyncService(app, vault, settings, apiClient, saveSettings);
+
+      service.onPluginUnload(); // signed out
+      await service.flush(); // the composer
+      expect(apiClient.createComposedPost).not.toHaveBeenCalled();
+      expect(settings.pendingComposedPostSyncs).toHaveLength(1);
+
+      await service.onPluginLoad(); // signed in
+      await service.onPluginLoad(); // any later settings save re-inits
+      expect(apiClient.createComposedPost).toHaveBeenCalledTimes(1);
+      expect(settings.pendingComposedPostSyncs).toHaveLength(0);
+      expect(vault.on).toHaveBeenCalledTimes(2); // 'delete' and 'rename', once
+      expect(app.metadataCache.on).toHaveBeenCalledTimes(1);
+    });
+
+    it('writes the queue into the settings object the plugin holds now', async () => {
+      // saveSettingsPartial() replaces the plugin's settings object on every save.
+      let current = makeSettings([createEntry('cid-1', 'path/one.md'), createEntry('cid-2', 'path/two.md')]);
+      const save = vi.fn(async () => {
+        current = { ...current };
+      });
+      const service = new ComposedPostSyncService(makeMockApp(), makeMockVault(), () => current, makeMockApiClient(), save);
+
       await service.flush();
 
-      // The MetadataCache.changed event fired during processFrontMatter should be suppressed
-      // Wait beyond background debounce period
-      await new Promise((r) => setTimeout(r, 5300));
-
-      // API should only have been called once (from the flush, not again from the suppressed event)
-      expect((apiClient.updateComposedPost as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1);
-    }, 12000);
+      // A held reference removed cid-2 from a copy the plugin had already dropped.
+      expect(current.pendingComposedPostSyncs).toHaveLength(0);
+    });
   });
 });

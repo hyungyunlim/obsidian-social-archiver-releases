@@ -114,6 +114,7 @@ import { BatchGoogleMapsArchiver } from './plugin/jobs/BatchGoogleMapsArchiver';
 import { PostShareService } from './plugin/session/PostShareService';
 import { ArchiveLibrarySyncService, type ArchiveLibrarySyncMode } from './plugin/sync/ArchiveLibrarySyncService';
 import { ArchiveDeleteSyncService } from './plugin/sync/ArchiveDeleteSyncService';
+import { ComposedPostSyncService } from './plugin/sync/ComposedPostSyncService';
 import { getForegroundSyncDeferral } from './plugin/sync/foregroundSyncDeferral';
 import { AnnotationOutboundService } from './plugin/sync/AnnotationOutboundService';
 import { ArchiveTagOutboundService } from './plugin/sync/ArchiveTagOutboundService';
@@ -390,6 +391,8 @@ export default class SocialArchiverPlugin extends Plugin {
   private batchGoogleMapsArchiver?: BatchGoogleMapsArchiver;
   private postShareService?: PostShareService;
   public archiveDeleteSyncService: ArchiveDeleteSyncService | null = null;
+  /** Composer post outbound sync. One per plugin: the composer and the edit watcher share its queue pass, timers and fingerprints. */
+  public composedPostSync?: ComposedPostSyncService;
   private aiCommentCapabilityReporter?: DesktopCapabilityReporter;
   public aiCommentJobProcessor?: AICommentJobProcessor;
   /** `social-archiver executor` child that serves this vault instead of the built-in processor. */
@@ -1746,6 +1749,11 @@ export default class SocialArchiverPlugin extends Plugin {
     this.archiveDeleteSyncService?.dispose();
     this.archiveDeleteSyncService = null;
 
+    // Stop composed post sync; its queue waits in settings for the next load.
+    // Cleared so a layout-ready callback still pending can't restart it.
+    this.composedPostSync?.onPluginUnload();
+    this.composedPostSync = undefined;
+
     // Cleanup annotation sync services
     this.annotationOutboundService?.stop();
     this.annotationOutboundService = undefined;
@@ -1938,6 +1946,15 @@ export default class SocialArchiverPlugin extends Plugin {
     // First and outside the try below: the timeline view needs these, and a
     // failure further down must not leave them undefined.
     this.ensureCollectionServices();
+    // Kept across re-inits (its pending debounce timers live on); it reads
+    // settings and the client through getters.
+    this.composedPostSync ??= new ComposedPostSyncService(
+      this.app,
+      this.app.vault,
+      () => this.settings,
+      () => this.workersApiClient,
+      () => this.saveSettingsPartial({}, { reinitialize: false }),
+    );
 
     // Clean up existing services
     this.apiClient?.dispose();
@@ -2657,6 +2674,13 @@ export default class SocialArchiverPlugin extends Plugin {
       });
 
       await this.ensureRuntimeScopedSyncClient('startup');
+      // Composer posts upload while signed in and wait in the queue otherwise
+      // (sign-in and sign-out both re-init). At layout-ready: until then the
+      // vault is still loading, and flush() drops entries whose note it can't find.
+      this.app.workspace.onLayoutReady(() => {
+        if (isAuthenticated(this)) void this.composedPostSync?.onPluginLoad();
+        else this.composedPostSync?.onPluginUnload();
+      });
       await this.refreshDesktopAICommentExecutor('startup-before-ws');
 
       // ── Initialize RealtimeClient & EventBridge ───────────────────────

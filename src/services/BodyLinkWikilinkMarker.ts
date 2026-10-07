@@ -31,7 +31,9 @@
  * One-way by design: when a relation is later deleted, the body wikilink
  * stays (it is still a valid vault link; only the `## Linked archives` row is
  * removed). Reverting would require mutating body text with no anchor to the
- * original URL spelling — not worth the highlight-coordinate risk.
+ * original URL spelling — not worth the highlight-coordinate risk. Being
+ * one-way, it never runs on a composed post (`postOrigin: composer`): that
+ * body syncs back to the server as the post's text.
  */
 
 const ANNOTATIONS_START_MARKER = '<!-- social-archiver:annotations:start -->';

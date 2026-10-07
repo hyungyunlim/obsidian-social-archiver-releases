@@ -107,7 +107,10 @@ export class MemberCollectionFeed {
     }
     const who = header.createDiv({ cls: 'sa-member-card-who' });
     who.createDiv({ cls: 'sa-member-card-author', text: post.author?.name || post.author?.handle || post.author?.username || post.platform || '' });
-    const meta = [post.platform, formatDate(post.postedAt ?? post.publishedDate ?? post.archivedAt)].filter(Boolean).join(' · ');
+    // When it was added, not archived: the feed is ordered by addition.
+    const added = formatDate(item.addedAt);
+    const meta = [post.platform, formatDate(post.postedAt ?? post.publishedDate), added && t('col.feed.addedAt', { date: added })]
+      .filter(Boolean).join(' · ');
     if (meta) who.createDiv({ cls: 'sa-member-card-meta', text: meta });
 
     if (post.title) card.createDiv({ cls: 'sa-member-card-title', text: post.title });
@@ -117,7 +120,21 @@ export class MemberCollectionFeed {
     const image = firstImage(post);
     if (image) card.createEl('img', { cls: 'sa-member-card-media', attr: { src: image, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' } });
 
+    this.renderSharedNotes(card, item);
     this.renderFooterRow(card, item.archiveId, item.addedBy, post.canonicalUrl || post.url);
+  }
+
+  /** Members' shared notes, read-only here: they are written in the mobile and desktop apps. */
+  private renderSharedNotes(card: HTMLElement, item: MemberCollectionPostItem): void {
+    const notes = (item.sharedAnnotations ?? []).filter((annotation) => annotation.kind === 'note' && annotation.content);
+    if (notes.length === 0) return;
+    const block = card.createDiv({ cls: 'sa-member-card-notes' });
+    block.createDiv({ cls: 'sa-member-card-notes-title', text: t('col.feed.sharedNotes') });
+    for (const note of notes) {
+      const row = block.createDiv({ cls: 'sa-member-card-note' });
+      row.createDiv({ cls: 'sa-member-card-note-meta', text: [`@${note.authorUsername}`, formatDate(note.createdAt)].filter(Boolean).join(' · ') });
+      row.createDiv({ cls: 'sa-member-card-text', text: note.content });
+    }
   }
 
   private renderFooterRow(card: HTMLElement, archiveId: string, addedBy?: string, url?: string | null): void {

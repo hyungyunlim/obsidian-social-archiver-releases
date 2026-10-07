@@ -317,8 +317,12 @@ export class LinkRelationSyncService {
       const content = await this.deps.app.vault.read(file);
       // Body pass: archived outgoing links become [[wikilinks]] in place
       // (visible text unchanged — highlight re-anchoring degrades at worst
-      // from EXACT to WEAK; see BodyLinkWikilinkMarker header).
-      const bodyTargets = this.buildBodyWikilinkTargets(archiveId, relations);
+      // from EXACT to WEAK; see BodyLinkWikilinkMarker header). Not in a
+      // composed post: ComposedPostSyncService sends its body to the server
+      // as the post's text, where the wikilink would replace the URL. The
+      // managed block still links it in the graph.
+      const composedPost = this.deps.app.metadataCache.getFileCache(file)?.frontmatter?.['postOrigin'] === 'composer';
+      const bodyTargets = composedPost ? [] : this.buildBodyWikilinkTargets(archiveId, relations);
       const withBodyLinks = this.bodyLinkMarker.reconcile(content, bodyTargets);
       const updatedContent = this.deps.sectionManager.upsert(withBodyLinks, block);
       if (updatedContent !== content) {

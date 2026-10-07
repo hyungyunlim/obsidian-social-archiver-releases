@@ -296,6 +296,7 @@ function makeOutboundApiClient() {
       .fn()
       .mockResolvedValue({ archive: makeArchive({ id: 'srv-1', userNotes: [] }) }),
     updateArchiveActions: vi.fn().mockResolvedValue({}),
+    applyArchiveNoteOperations: vi.fn().mockResolvedValue({}),
   };
 }
 
@@ -390,12 +391,12 @@ describe('AnnotationOutboundService (PRD S5.1)', () => {
 
       if (excluded) {
         expect(apiClient.getUserArchives).not.toHaveBeenCalled();
-        expect(apiClient.updateArchiveActions).not.toHaveBeenCalled();
+        expect(apiClient.applyArchiveNoteOperations).not.toHaveBeenCalled();
       } else {
         expect(apiClient.getUserArchives).toHaveBeenCalledWith({ originalUrl: ORIGINAL_URL, limit: 1 });
-        expect(apiClient.updateArchiveActions).toHaveBeenCalledWith('srv-1', {
-          userNotes: [expect.objectContaining({ content: 'hello' })],
-        });
+        expect(apiClient.applyArchiveNoteOperations).toHaveBeenCalledWith('srv-1', 0, [
+          expect.objectContaining({ op: 'create', note: expect.objectContaining({ content: 'hello' }) }),
+        ]);
       }
     });
   }

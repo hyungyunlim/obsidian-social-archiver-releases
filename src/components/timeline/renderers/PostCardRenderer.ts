@@ -58,6 +58,7 @@ import {
   type AICommentBannerState,
 } from './AICommentBanner';
 import { appleExecutorClientId } from '../../../plugin/executor/StandaloneCliExecutorSupervisor';
+import { composedArchiveId } from '../../../plugin/sync/ComposedPostSyncService';
 import { COMMENT_TYPE_DISPLAY_NAMES } from '../../../types/ai-comment';
 import { PlaceCandidateBanner } from './PlaceCandidateBanner';
 import { PlaceCandidateStore } from '../../../services/PlaceCandidateStore';
@@ -4867,8 +4868,10 @@ export class PostCardRenderer extends Component {
       // ID, and — when the post is archive-backed — the top-level archiveId.
       // No expiry: shares don't expire, as in every other client. The
       // 30-day value this used to send only hid text-only shares from the
-      // owner's profile after 30 days.
-      const rendererSourceArchiveId = this.resolveSourceArchiveId(post, file) ?? undefined;
+      // owner's profile after 30 days. A composer note names its row even
+      // before its create syncs; the server links the share when it lands.
+      const rendererSourceArchiveId = this.resolveSourceArchiveId(post, file)
+        ?? composedArchiveId(this.app.metadataCache.getFileCache(file)?.frontmatter);
       const shareClient = new ShareAPIClient({
         baseURL: workerUrl,
         apiKey: this.plugin.settings.authToken,

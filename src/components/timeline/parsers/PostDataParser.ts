@@ -12,6 +12,7 @@ import { parseTranscriptSections } from '../../../services/markdown/TranscriptSe
 import { TRANSCRIPT_HEADER_REGEX } from '../../../constants/languages';
 import { parseAnnotationBlock } from '../../../services/markdown/AnnotationBlockParser';
 import { parseLinkedArchivesBlock } from '../../../services/markdown/LinkedArchivesBlockParser';
+import { firstArchivePerUrl, splitEmbeddedArchiveBlocks } from '../../../services/markdown/EmbeddedArchiveBlocks';
 import { mergeTagListsCaseInsensitive } from '../../../utils/tags';
 import { SentinelMediaRegionManager } from '../../../plugin/realtime/SentinelMediaRegionManager';
 import { isLocalOnlyFrontmatter } from '../../../plugin/sync/localOnlyNoteGuard';
@@ -315,7 +316,7 @@ export class PostDataParser {
           // MetadataCache returns ALL embeds in the file without section awareness
           const sharedPostIdx = content.indexOf('## 🔗 Shared Post');
           const rebloggedPostIdx = content.indexOf('## 🔄 Reblogged Post');
-          const embeddedArchivesIdx = content.indexOf('## Referenced Social Media Posts');
+          const embeddedArchivesIdx = content.search(/## (?:📦 )?Referenced Social Media Posts/);
           const excludeAfter = Math.min(
             sharedPostIdx >= 0 ? sharedPostIdx : Infinity,
             rebloggedPostIdx >= 0 ? rebloggedPostIdx : Infinity,
@@ -821,8 +822,10 @@ export class PostDataParser {
     // Remove quotedPost section to avoid including it in content
     withoutFrontmatter = this.stripQuotedPostSections(withoutFrontmatter);
 
-    // Remove embedded archives section
-    withoutFrontmatter = withoutFrontmatter.replace(/## (?:📦 )?Referenced Social Media Posts[\s\S]*?(?=\n---\n\n\*\*Author:|$)/, '');
+    // Remove embedded archives section, with the rule that opens it: left
+    // behind, it ends the post text, and a PostComposer edit writes that text
+    // back in front of a fresh rule — one more `---` per edit.
+    withoutFrontmatter = withoutFrontmatter.replace(/(?:\n---\n\s*)?## (?:📦 )?Referenced Social Media Posts[\s\S]*?(?=\n---\n\n\*\*Author:|$)/, '');
 
     // Remove comments section to avoid duplicate rendering
     withoutFrontmatter = withoutFrontmatter.replace(/\n*## 💬 Comments[\s\S]*$/, '');
@@ -873,6 +876,13 @@ export class PostDataParser {
         break;
       }
       contentSections.push(section);
+    }
+    // A rule with nothing after it is the template's, not the post's — e.g.
+    // the second `---` an older updatePost wrote above the author line on
+    // every PostComposer edit. Read back as the end of the text, each later
+    // edit wrote it back.
+    while (contentSections.length > 0 && !contentSections[contentSections.length - 1]?.trim()) {
+      contentSections.pop();
     }
     contentSection = contentSections.join('\n---\n');
 
@@ -1274,7 +1284,10 @@ export class PostDataParser {
       const url = match[1];
       // Include all relative paths (not starting with http:// or https://)
       if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
-        mediaUrls.push(url);
+        // The vault path, as the MetadataCache embeds give it: a `)` written
+        // as `%29` matches no file, so PostComposer could neither show nor
+        // trash it, and a re-render would encode it again (`%2529`).
+        mediaUrls.push(decodePathFromMarkdownLink(url));
       }
     }
 
@@ -1780,14 +1793,9 @@ export class PostDataParser {
 
     const archivesSection = archivesMatch[1];
 
-    // Each archive block is separated by "\n---\n\n" when written by MarkdownConverter.
-    // Split only where the next archive's header follows: the hidden one, which
-    // every archive of a note written since carries, or in older notes the
-    // visible "### Platform - handle". A web article's own rule and ### heading
-    // look like the latter, so it counts only where no hidden header exists.
-    const archiveBlocks = archivesSection.split(
-      /<!--\s*Embedded:/i.test(archivesSection) ? /\n---\n\n(?=<!--\s*Embedded:)/i : /\n---\n\n(?=### )/
-    );
+    // One archive per block, as VaultStorageService replaces them: the
+    // section, repeated headings and all, runs on to the author line
+    const archiveBlocks = splitEmbeddedArchiveBlocks(archivesSection);
 
     for (let i = 0; i < archiveBlocks.length; i++) {
       const block = archiveBlocks[i];
@@ -1913,7 +1921,7 @@ export class PostDataParser {
       }
     }
 
-    return archives;
+    return firstArchivePerUrl(archives);
   }
 
   /**

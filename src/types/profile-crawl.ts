@@ -239,7 +239,7 @@ export const REDDIT_SORT_BY_TIME_OPTIONS: { value: RedditSortByTime; label: stri
 export interface ProfileCrawlOptions {
   /** How to select posts for crawling */
   mode: CrawlMode;
-  /** Number of posts to crawl (10-100, default 20) - used when mode is 'post_count' */
+  /** Number of posts to crawl (CRAWL_LIMITS MIN/MAX/DEFAULT_POST_COUNT) - used when mode is 'post_count' */
   postCount?: number;
   /** Start date (UTC) - used when mode is 'date_range' */
   startDate?: Date;
@@ -247,7 +247,7 @@ export interface ProfileCrawlOptions {
   endDate?: Date;
   /** User's timezone for date display */
   timezone: string;
-  /** Hard cap on posts (always 100) */
+  /** Hard cap on posts (at most CRAWL_LIMITS.MAX_POST_COUNT) */
   maxPosts: number;
   /** Reddit-specific options (only used when platform is 'reddit') */
   reddit?: RedditCrawlOptions;

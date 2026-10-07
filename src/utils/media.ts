@@ -79,7 +79,7 @@ export function revokeObjectURL(url: string): void {
  * @param extension - File extension (without dot)
  * @returns string - MIME type
  */
-function getMimeTypeFromExtension(extension: string): string {
+export function getMimeTypeFromExtension(extension: string): string {
   const mimeTypes: Record<string, string> = {
     // Images
     'jpg': 'image/jpeg',

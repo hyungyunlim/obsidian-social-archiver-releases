@@ -58,6 +58,7 @@ import { SeriesGroupingService, type TimelineItem, isSeriesGroup } from '../../s
 // import type { SeriesGroup } from '../../types/series';
 import { mount, unmount } from 'svelte';
 import PostComposer from './PostComposer.svelte';
+import { composedArchiveId } from '../../plugin/sync/ComposedPostSyncService';
 import type { SubscriptionDisplay } from '@/types/subscription-ui';
 import { extractYouTubeChannelInfo } from '@/services/YouTubeChannelExtractor';
 import { isAuthenticated } from '../../utils/auth';
@@ -2020,16 +2021,8 @@ export class TimelineContainer {
 
             // Enqueue composed post for outbound sync (fire-and-forget from UI perspective)
             try {
-              const { ComposedPostSyncService } = await import('../../plugin/sync/ComposedPostSyncService');
-              const composedPostSyncService = new ComposedPostSyncService(
-                this.app,
-                this.vault,
-                this.plugin.settings,
-                () => this.plugin.workersApiClient,
-                () => this.plugin.saveSettingsPartial({}, { reinitialize: false }),
-              );
-              await composedPostSyncService.enqueueCreate(saveResult.path, post.id);
-              void composedPostSyncService.flush();
+              await this.plugin.composedPostSync?.enqueueCreate(saveResult.path, post.id);
+              void this.plugin.composedPostSync?.flush();
             } catch {
               // Non-fatal: local save succeeded, sync will retry on next load
             }
@@ -2068,7 +2061,10 @@ export class TimelineContainer {
                     },
                     options: {
                       username: this.plugin.settings.username,
-                      archiveId: finalPostData.sourceArchiveId,
+                      // The create queued above may not have landed. Name the row
+                      // it makes (id = clientPostId); the server links this share
+                      // to it either way.
+                      archiveId: finalPostData.sourceArchiveId ?? post.id,
                     }
                   });
 
@@ -7662,13 +7658,17 @@ export class TimelineContainer {
               deletedMediaPaths = updatedPost.deletedMediaPaths as string[];
             }
 
-            // Update post using VaultStorageService
+            // Update post using VaultStorageService. The composer's text,
+            // media and embedded archives are the new version of the body.
+            // The composer never shows the title (frontmatter, or a leading
+            // `# ` line the parser lifts out of the text), so carry it over.
             await storageService.updatePost({
               filePath: filePath,
-              postData: updatedPost,
+              postData: { ...updatedPost, title: post.title },
               mediaFiles: mediaFiles,
               deletedMediaPaths: deletedMediaPaths,
-              existingMedia: post.media || []
+              existingMedia: post.media || [],
+              replaceBody: true
             });
 
             // Enqueue composed post update for outbound sync if already synced
@@ -7680,15 +7680,7 @@ export class TimelineContainer {
                 const clientPostId = fm?.['clientPostId'] as string | undefined;
                 const sourceArchiveId = fm?.['sourceArchiveId'] as string | undefined;
                 if (clientPostId && sourceArchiveId) {
-                  const { ComposedPostSyncService } = await import('../../plugin/sync/ComposedPostSyncService');
-                  const syncService = new ComposedPostSyncService(
-                    this.app,
-                    this.vault,
-                    this.plugin.settings,
-                    () => this.plugin.workersApiClient,
-                    () => this.plugin.saveSettingsPartial({}, { reinitialize: false }),
-                  );
-                  syncService.enqueueUpdateDebounced(filePath, clientPostId, sourceArchiveId);
+                  this.plugin.composedPostSync?.enqueueUpdateDebounced(filePath, clientPostId, sourceArchiveId);
                 }
               }
             } catch {
@@ -7800,7 +7792,7 @@ export class TimelineContainer {
                     },
                     options: {
                       username: this.plugin.settings.username,
-                      archiveId: finalPostData.sourceArchiveId,
+                      archiveId: finalPostData.sourceArchiveId ?? composedArchiveId(frontmatter),
                     }
                   });
 

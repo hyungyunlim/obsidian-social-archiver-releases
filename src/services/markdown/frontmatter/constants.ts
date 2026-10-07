@@ -46,3 +46,24 @@ export type UserControlledFrontmatterField =
  */
 export const USER_CONTROLLED_FRONTMATTER_FIELD_SET: ReadonlySet<string> =
   new Set<string>(USER_CONTROLLED_FRONTMATTER_FIELDS);
+
+/**
+ * Fields binding a composed note to its server row, written by
+ * `ComposedPostSyncService`. Frontmatter rebuilt from an edit's `PostData`
+ * lacks them, and without them the note detaches: later edits never sync, and
+ * inbound sync can't match the server row, so it imports a duplicate note.
+ * `syncedContentHash` (the post the server last accepted) is kept so an edit
+ * that changes nothing the server stores doesn't send it again, and
+ * `syncedMedia`/`syncedMediaNext` (its uploaded embeds, the next unused upload
+ * index) so an edit uploads only the embeds it adds, under fresh URLs.
+ */
+export const COMPOSED_POST_SYNC_FRONTMATTER_FIELDS = [
+  'postOrigin',
+  'clientPostId',
+  'sourceArchiveId',
+  'syncState',
+  'serverSyncedAt',
+  'syncedContentHash',
+  'syncedMedia',
+  'syncedMediaNext',
+] as const;

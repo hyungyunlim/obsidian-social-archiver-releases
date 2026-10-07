@@ -808,6 +808,28 @@ Nice post.
     expect(content).not.toContain('![image');
   });
 
+  it('drops the rule an older PostComposer edit doubled above the author line', () => {
+    // Read back as the end of the post text, it went into the composer, and
+    // every later edit wrote it back.
+    const markdown = `---
+platform: post
+author: tester
+published: 2026-10-06 18:30
+---
+
+Post text.
+
+---
+
+
+---
+
+**Author:** tester | **Published:** 2026-10-06 18:30
+`;
+
+    expect(parser.extractContentText(markdown)).toBe('Post text.');
+  });
+
   it('preserves horizontal rules within actual post body', () => {
     const markdown = `---
 platform: x
@@ -1176,6 +1198,23 @@ describe('PostDataParser - embedded archive round trip', () => {
     expect(section(reparse(first))).toBe(first);
   });
 
+  it('reads the post text back without the rule that opens the section', () => {
+    // A PostComposer edit writes the text it was given back as the body, so a
+    // rule read back with it would gain a copy on every edit.
+    const { fullDocument } = converter.convert({
+      platform: 'post',
+      id: 'post-1',
+      url: '',
+      author: { name: 'Me', url: '' },
+      content: { text: 'My post\n\n---\n\nwith a rule of its own' },
+      media: [],
+      metadata: { timestamp: at },
+      embeddedArchives: [cases.x!],
+    }, undefined, undefined, { outputFilePath: notePath });
+
+    expect(parser.extractContentText(fullDocument)).toBe('My post\n\n---\n\nwith a rule of its own');
+  });
+
   it('writes back what re-saves with the old parser left of a section as first written', () => {
     // The views and duration those re-saves dropped are gone from the note.
     const youtube = { ...cases.youtube!, metadata: { timestamp: at, likes: 890 } };
@@ -1188,5 +1227,76 @@ describe('PostDataParser - embedded archive round trip', () => {
       .replace('**Platform:** Naver Map', '**Platform:** Naver');
 
     expect(section(reparse(damaged))).toBe(first);
+  });
+
+  describe('a section that updates before c0caacab2 repeated', () => {
+    // They kept the note's section and wrote the one regenerated from what was
+    // read back below it, after what they had moved up from below the author
+    // line. Read on across the second heading, its first archive joined the
+    // one before it, and the next update wrote that back as archive 1.
+    const moved = 'An AI comment on <b>both</b>, moved up from below the author line';
+    const threads = cases['no engagement counts']!;
+
+    /** `capture` (from its heading) and the section a later update wrote below it. */
+    const andThen = (capture: string, embedded: PostData[]): string =>
+      `${capture.split('\n---\n\n**Author:**')[0]!.trimEnd()}\n\n---\n\n${moved}\n\n---\n\n${section(embedded)}`;
+    /** Archive 1 as the parser read `capture` before: its block joined with the next section's first. */
+    const joined = (archive: PostData, capture: string): PostData => {
+      const [block = ''] = capture.slice(capture.indexOf('\n\n') + 2).split(/\n---\n\n(?=<!-- Embedded:)/);
+      const text = block.replace(/^<!--[^\n]*-->\s*/, '');
+      return { ...archive, content: { text: text.slice(0, text.lastIndexOf('\n---\n\n**Platform:**')).trim() } };
+    };
+
+    it('reads the archives of each section once, as first written', () => {
+      const twice = andThen(section([threads]), [threads, cases.web!]);
+
+      expect(section(reparse(twice))).toBe(section([threads, cases.web!]));
+    });
+
+    it.each([
+      ['escaped', threads],
+      ['as markup, as a web article keeps it', cases.web!],
+    ])('reads archive 1 written back from the joined blocks, the header in it %s, as first written', (_name, first) => {
+      const twice = andThen(section([first]), [first, cases.x!]);
+      const thrice = andThen(twice, [joined(first, twice), cases.x!, cases.reddit!]);
+      // Three sections, and the heading in archive 1's text
+      expect(thrice.match(/## Referenced Social Media Posts/g)).toHaveLength(4);
+      expect(thrice.includes('&lt;!-- Embedded:')).toBe(first === threads);
+
+      expect(section(reparse(thrice))).toBe(section([first, cases.x!, cases.reddit!]));
+    });
+
+    // A note's first section may carry the heading's older form
+    const headings = ['Referenced Social Media Posts', '📦 Referenced Social Media Posts'];
+    const note = (heading: string): string =>
+      `---\nplatform: post\nauthor: Me\npublished: 2024-06-01\n---\n\nMy post\n\n---\n\n![Photo](attachments/mine.jpg)\n\n---\n\n${
+        andThen(section([cases.x!]), [cases.x!, threads]).replace('Referenced Social Media Posts', heading)}`;
+
+    it.each(headings)('keeps the post text and media apart from every section (first heading "%s")', (heading) => {
+      expect(parser.extractContentText(note(heading))).toBe('My post');
+      expect(parser.extractMedia(note(heading))).toEqual(['attachments/mine.jpg']);
+    });
+
+    it.each(headings)('keeps archive media out of the post media read from MetadataCache (first heading "%s")', async (heading) => {
+      const content = note(heading);
+      // The post's photo, and the chart of the archive in each section
+      const embeds = [content.indexOf('![Photo]'), content.indexOf('![A chart]'), content.lastIndexOf('![A chart]')].map((offset, index) => ({
+        link: index === 0 ? 'attachments/mine.jpg' : '20240601-someone-1-1.jpg',
+        position: { start: { line: 0, col: 0, offset }, end: { line: 0, col: 0, offset } },
+      }));
+      const cache = { frontmatter: { platform: 'post', author: 'Me', published: '2024-06-01' }, embeds };
+      const app = {
+        metadataCache: {
+          getFileCache: (): typeof cache => cache,
+          getFirstLinkpathDest: (link: string): { path: string } => ({ path: link }),
+        },
+      };
+      const file = { basename: 'My post', path: notePath, stat: { ctime: Date.now() } };
+
+      const post = await new PostDataParser({ cachedRead: async () => content } as unknown as Vault, app as any).parseFile(file as any);
+
+      expect(post?.media.map((media) => media.url)).toEqual(['attachments/mine.jpg']);
+      expect(post?.embeddedArchives?.map((archive) => archive.url)).toEqual([cases.x!.url, threads.url]);
+    });
   });
 });

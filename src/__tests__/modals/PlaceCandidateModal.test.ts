@@ -8,6 +8,7 @@ import {
   clearPlaceCandidateReviewCache,
   savePlaceCandidateReviewCache,
 } from '@/modals/placeCandidateReviewCache';
+import { PLACE_EXTRACT_PENDING_CAP } from '@/modals/placeCandidateReviewModel';
 import { showConfirmModal } from '@/utils/confirm-modal';
 import type {
   ArchiveLocation,
@@ -530,12 +531,12 @@ describe('PlaceCandidateModal automatic place review', () => {
     expect(document.body.contains(modal.modalEl)).toBe(false);
   });
 
-  it('keeps the 20-candidate extraction capacity rule and known role chips', async () => {
-    const rows = Array.from({ length: 20 }, (_, index) => candidate(`c-${index}`, index, {
+  it('keeps the pending-cap extraction capacity rule and known role chips', async () => {
+    const rows = Array.from({ length: PLACE_EXTRACT_PENDING_CAP }, (_, index) => candidate(`c-${index}`, index, {
       role: index === 0 ? 'recommended' : null,
     }));
     const { modal } = openModal({ candidates: rows, onExtract: vi.fn() });
-    await waitForReady(modal, 20);
+    await waitForReady(modal, PLACE_EXTRACT_PENDING_CAP);
     const button = modal.contentEl.querySelector<HTMLButtonElement>('[data-extract-cta]');
     expect(button?.disabled).toBe(true);
     expect(button?.title).toBe('Review pending suggestions first');

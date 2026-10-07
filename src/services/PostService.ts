@@ -66,6 +66,19 @@ export class PostService {
    */
   async postNote(file: TFile, options?: PostOptions): Promise<PostResult> {
     try {
+      // A composer note is already a timeline post. Its copy would land on the
+      // note itself (same folder and name, within the month) or carry its sync
+      // identity into a second note, which a share then imports as a second
+      // server row.
+      if (this.app.metadataCache.getFileCache(file)?.frontmatter?.['postOrigin'] === 'composer') {
+        return {
+          success: false,
+          copiedFilePath: '',
+          copiedMediaPaths: [],
+          error: 'This note is already on the timeline. Share it from its post card.',
+        };
+      }
+
       // Check for existing post
       const existingPost = this.findExistingPost(file.path);
 

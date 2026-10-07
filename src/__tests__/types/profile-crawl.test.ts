@@ -17,9 +17,9 @@ import {
 describe('profile-crawl types', () => {
   describe('CRAWL_LIMITS', () => {
     it('should have correct constant values', () => {
-      expect(CRAWL_LIMITS.MIN_POST_COUNT).toBe(10);
-      expect(CRAWL_LIMITS.MAX_POST_COUNT).toBe(100);
-      expect(CRAWL_LIMITS.DEFAULT_POST_COUNT).toBe(20);
+      expect(CRAWL_LIMITS.MIN_POST_COUNT).toBe(1);
+      expect(CRAWL_LIMITS.MAX_POST_COUNT).toBe(20);
+      expect(CRAWL_LIMITS.DEFAULT_POST_COUNT).toBe(5);
       expect(CRAWL_LIMITS.MAX_DATE_RANGE_DAYS).toBe(90);
     });
   });
@@ -29,9 +29,9 @@ describe('profile-crawl types', () => {
       it('should validate valid post_count options', () => {
         const options: ProfileCrawlOptions = {
           mode: 'post_count',
-          postCount: 50,
+          postCount: CRAWL_LIMITS.DEFAULT_POST_COUNT,
           timezone: 'America/New_York',
-          maxPosts: 100,
+          maxPosts: CRAWL_LIMITS.MAX_POST_COUNT,
         };
 
         const result = validateCrawlOptions(options);
@@ -45,7 +45,7 @@ describe('profile-crawl types', () => {
           mode: 'post_count',
           postCount: CRAWL_LIMITS.MIN_POST_COUNT,
           timezone: 'UTC',
-          maxPosts: 100,
+          maxPosts: CRAWL_LIMITS.MAX_POST_COUNT,
         };
 
         const result = validateCrawlOptions(options);
@@ -59,7 +59,7 @@ describe('profile-crawl types', () => {
           mode: 'post_count',
           postCount: CRAWL_LIMITS.MAX_POST_COUNT,
           timezone: 'UTC',
-          maxPosts: 100,
+          maxPosts: CRAWL_LIMITS.MAX_POST_COUNT,
         };
 
         const result = validateCrawlOptions(options);
@@ -71,9 +71,9 @@ describe('profile-crawl types', () => {
       it('should reject post count below minimum', () => {
         const options: ProfileCrawlOptions = {
           mode: 'post_count',
-          postCount: 5, // Below 10
+          postCount: CRAWL_LIMITS.MIN_POST_COUNT - 1,
           timezone: 'UTC',
-          maxPosts: 100,
+          maxPosts: CRAWL_LIMITS.MAX_POST_COUNT,
         };
 
         const result = validateCrawlOptions(options);
@@ -87,9 +87,9 @@ describe('profile-crawl types', () => {
       it('should reject post count above maximum', () => {
         const options: ProfileCrawlOptions = {
           mode: 'post_count',
-          postCount: 150, // Above 100
+          postCount: CRAWL_LIMITS.MAX_POST_COUNT + 1,
           timezone: 'UTC',
-          maxPosts: 100,
+          maxPosts: CRAWL_LIMITS.MAX_POST_COUNT,
         };
 
         const result = validateCrawlOptions(options);
@@ -105,7 +105,7 @@ describe('profile-crawl types', () => {
           mode: 'post_count',
           // postCount not specified
           timezone: 'UTC',
-          maxPosts: 100,
+          maxPosts: CRAWL_LIMITS.MAX_POST_COUNT,
         };
 
         const result = validateCrawlOptions(options);
@@ -126,7 +126,7 @@ describe('profile-crawl types', () => {
           startDate: thirtyDaysAgo,
           endDate: now,
           timezone: 'Europe/London',
-          maxPosts: 100,
+          maxPosts: CRAWL_LIMITS.MAX_POST_COUNT,
         };
 
         const result = validateCrawlOptions(options);
@@ -141,7 +141,7 @@ describe('profile-crawl types', () => {
           // startDate not specified
           endDate: new Date(),
           timezone: 'UTC',
-          maxPosts: 100,
+          maxPosts: CRAWL_LIMITS.MAX_POST_COUNT,
         };
 
         const result = validateCrawlOptions(options);
@@ -160,7 +160,7 @@ describe('profile-crawl types', () => {
           startDate: thirtyDaysAgo,
           // endDate not specified
           timezone: 'UTC',
-          maxPosts: 100,
+          maxPosts: CRAWL_LIMITS.MAX_POST_COUNT,
         };
 
         const result = validateCrawlOptions(options);
@@ -175,7 +175,7 @@ describe('profile-crawl types', () => {
         const options = {
           mode: 'invalid_mode' as CrawlMode,
           timezone: 'UTC',
-          maxPosts: 100,
+          maxPosts: CRAWL_LIMITS.MAX_POST_COUNT,
         };
 
         const result = validateCrawlOptions(options);
@@ -190,7 +190,7 @@ describe('profile-crawl types', () => {
         const options = {
           mode: undefined as unknown as CrawlMode,
           timezone: 'UTC',
-          maxPosts: 100,
+          maxPosts: CRAWL_LIMITS.MAX_POST_COUNT,
         };
 
         const result = validateCrawlOptions(options);
@@ -205,7 +205,7 @@ describe('profile-crawl types', () => {
           mode: 'post_count',
           postCount: 20,
           timezone: 'Asia/Tokyo',
-          maxPosts: 100,
+          maxPosts: CRAWL_LIMITS.MAX_POST_COUNT,
         };
 
         const result = validateCrawlOptions(options);
@@ -218,7 +218,7 @@ describe('profile-crawl types', () => {
           mode: 'post_count',
           postCount: 20,
           timezone: 'Invalid/Timezone',
-          maxPosts: 100,
+          maxPosts: CRAWL_LIMITS.MAX_POST_COUNT,
         };
 
         const result = validateCrawlOptions(options);
@@ -232,7 +232,7 @@ describe('profile-crawl types', () => {
           mode: 'post_count',
           postCount: 20,
           timezone: '',
-          maxPosts: 100,
+          maxPosts: CRAWL_LIMITS.MAX_POST_COUNT,
         } as ProfileCrawlOptions;
 
         const result = validateCrawlOptions(options);
@@ -248,7 +248,7 @@ describe('profile-crawl types', () => {
           mode: 'post_count',
           postCount: 20,
           timezone: 'UTC',
-          maxPosts: 150, // Above 100
+          maxPosts: CRAWL_LIMITS.MAX_POST_COUNT + 1,
         };
 
         const result = validateCrawlOptions(options);
@@ -406,15 +406,15 @@ describe('profile-crawl types', () => {
       const options = createDefaultSubscribeOptions();
 
       expect(options.enabled).toBe(false);
-      expect(options.schedule.hour).toBe(8);
+      expect(options.hour).toBe(8);
       expect(options.destinationFolder).toBe('Social Archives');
-      expect(options.schedule.timezone).toBeDefined();
+      expect(options.timezone).toBeDefined();
     });
 
     it('should use provided timezone', () => {
       const options = createDefaultSubscribeOptions('Asia/Seoul');
 
-      expect(options.schedule.timezone).toBe('Asia/Seoul');
+      expect(options.timezone).toBe('Asia/Seoul');
     });
 
     it('should use provided destination folder', () => {

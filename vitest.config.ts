@@ -19,9 +19,7 @@ const CI_QUARANTINE = [
   'src/__tests__/components/timeline/controllers/PlaybackAdapter.test.ts',
   'src/__tests__/components/timeline/renderers/PostCardRenderer.archiveMediaNoteSuggestions.test.ts',
   'src/__tests__/integration/schema-platform-detector.test.ts',
-  'src/__tests__/modals/PlaceCandidateModal.test.ts',
   'src/__tests__/plugin/cli/ArchiveCliService.test.ts',
-  'src/__tests__/plugin/sync/RemoteArchiveIngestService.test.ts',
   'src/__tests__/schemas/tiktok.test.ts',
   'src/__tests__/services/ArchiveOrchestrator.test.ts',
   'src/__tests__/services/AuthorAvatarService.test.ts',
@@ -29,7 +27,6 @@ const CI_QUARANTINE = [
   'src/__tests__/services/BrightDataHttpClient.test.ts',
   'src/__tests__/services/CacheManager.test.ts',
   'src/__tests__/services/CircuitBreaker.test.ts',
-  'src/__tests__/services/ComposedPostSyncService.test.ts',
   'src/__tests__/services/CreditManager-CreditPack.test.ts',
   'src/__tests__/services/CreditResetScheduler.test.ts',
   'src/__tests__/services/DraftService.test.ts',
@@ -55,15 +52,12 @@ const CI_QUARANTINE = [
   'src/__tests__/services/URLExpander.test.ts',
   'src/__tests__/services/VaultManager.test.ts',
   'src/__tests__/services/VaultStorageService.test.ts',
-  'src/__tests__/services/WorkersAPIClient.billingEvents.test.ts',
   'src/__tests__/services/base/ServiceContainer.test.ts',
   'src/__tests__/services/markdown/MediaFormatter.localpath-guard.test.ts',
   'src/__tests__/shared/platform-types.test.ts',
   'src/__tests__/types/ai-comment.test.ts',
-  'src/__tests__/types/profile-crawl.test.ts',
   'src/__tests__/utils/encryption.test.ts',
-  'src/__tests__/utils/urlAnalysis.test.ts',
-  'src/plugin/sync/__tests__/localOnlySyncExclusion.test.ts'
+  'src/__tests__/utils/urlAnalysis.test.ts'
 ];
 
 export default defineConfig({

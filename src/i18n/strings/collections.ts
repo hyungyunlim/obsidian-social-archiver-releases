@@ -205,6 +205,8 @@ export const collectionStrings = {
   // Member feed (collaborative)
   'col.feed.othersTitle': { en: 'Everyone’s posts', ko: '모든 멤버의 게시물' },
   'col.feed.addedBy': { en: 'Added by @{username}', ko: '@{username} 님이 추가' },
+  'col.feed.addedAt': { en: 'added {date}', ko: '{date} 추가' },
+  'col.feed.sharedNotes': { en: 'Collection notes', ko: '컬렉션 메모' },
   'col.feed.hidden': { en: 'Hidden post — not public on its original platform', ko: '원래 플랫폼에서 공개가 아닌 게시물입니다' },
   'col.feed.loadMore': { en: 'Load more', ko: '더 불러오기' },
   'col.feed.offline': { en: 'Connect to the internet to see this collaborative collection', ko: '공동 편집 컬렉션을 보려면 인터넷에 연결하세요' },

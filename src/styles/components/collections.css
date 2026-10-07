@@ -431,6 +431,22 @@
   object-fit: cover;
 }
 
+.sa-member-card-notes {
+  margin-top: var(--size-4-2);
+  padding-left: var(--size-4-2);
+  border-left: 2px solid var(--background-modifier-border);
+}
+
+.sa-member-card-notes-title,
+.sa-member-card-note-meta {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.sa-member-card-note + .sa-member-card-note {
+  margin-top: var(--size-4-1);
+}
+
 .sa-member-card-footer {
   display: flex;
   align-items: center;

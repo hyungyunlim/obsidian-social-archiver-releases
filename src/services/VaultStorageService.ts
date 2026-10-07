@@ -15,7 +15,8 @@ import { getVaultOrganizationStrategy, type SocialArchiverSettings } from '../ty
 import type { MediaResult } from './MediaHandler';
 import { VaultManager } from './VaultManager';
 import { MarkdownConverter } from './MarkdownConverter';
-import { USER_CONTROLLED_FRONTMATTER_FIELDS } from './markdown/frontmatter/constants';
+import { COMPOSED_POST_SYNC_FRONTMATTER_FIELDS, USER_CONTROLLED_FRONTMATTER_FIELDS } from './markdown/frontmatter/constants';
+import { firstArchivePerUrl, splitEmbeddedArchiveBlocks } from './markdown/EmbeddedArchiveBlocks';
 import { App, Vault, TFile, normalizePath, stringifyYaml } from 'obsidian';
 
 /**
@@ -48,6 +49,98 @@ export function mergeUserControlledFrontmatter<T extends Record<string, unknown>
   return merged as T;
 }
 
+/** One archive of a note's "Referenced Social Media Posts" section. */
+interface SectionArchive {
+  /** Its Original URL, as PostDataParser reads it back. */
+  url: string;
+  /** Its markdown: through its Original URL line, then its comments. */
+  text: string;
+}
+
+/** `text` without the blank lines and dividers around it. */
+function trimRules(text: string): string {
+  return text.replace(/^(?:[ \t]*(?:---)?[ \t]*(?:\n|$))+/, '').replace(/(?:\n[ \t]*(?:---)?[ \t]*)+$/, '');
+}
+
+/**
+ * What `text` holds beyond the copies of `known` it starts with. Copies a
+ * re-save made come one after another, with rules and the section heading
+ * between them; they are compared line by line, without the blank lines a
+ * re-save collapses or the `<` it escapes.
+ */
+function beyondCopies(text: string, known: readonly string[]): string {
+  const plain = (line: string): string => line.replaceAll('&lt;', '<').trim();
+  const copies = known.map((copy) => copy.split('\n').map(plain).filter(Boolean)).filter((copy) => copy.length > 0);
+  const lines = text.split('\n');
+  let start = 0;
+  for (;;) {
+    while (start < lines.length && /^[ \t]*(?:---)?[ \t]*$|^## (?:📦 )?Referenced Social Media Posts$/.test(lines[start] ?? '')) start++;
+    const rest = lines.slice(start).map((line, index) => ({ line: plain(line), at: start + index })).filter(({ line }) => line);
+    const copied = Math.max(0, ...copies
+      .filter((copy) => copy.length <= rest.length && copy.every((line, index) => line === rest[index]?.line))
+      .map((copy) => copy.length));
+    if (copied === 0) return trimRules(lines.slice(start).join('\n'));
+    start = (rest[copied - 1]?.at ?? lines.length) + 1;
+  }
+}
+
+/**
+ * Split a note's body (what precedes its interaction bar) at the embedded
+ * archives section, which has no end marker, the way
+ * PostDataParser.extractEmbeddedArchives reads it: from the heading to the
+ * interaction bar, one archive per block, the first of each URL. Null when
+ * there is no section the parser would read.
+ *
+ * `strays` is what else the section holds, none of which the parser reads
+ * back, each once: what follows an archive's Original URL line other than its
+ * comments, where updates before 1aec2c16e left what had followed the
+ * interaction bar. A later copy of an archive (see splitEmbeddedArchiveBlocks)
+ * is not written again, so all that follows its Original URL line, comments
+ * too, is a stray, but for what copies text the note keeps: comments run on to
+ * the next archive, and a PostComposer edit's section ended with a copy, whose
+ * comments then hold what was moved after them.
+ */
+function readArchivesSection(body: string): { before: string; archives: SectionArchive[]; strays: string[] } | null {
+  const heading = /(?:\n---\n\s*)?## (?:📦 )?Referenced Social Media Posts\n\n/.exec(body);
+  if (!heading) return null;
+
+  const blocks = splitEmbeddedArchiveBlocks(body.slice(heading.index + heading[0].length))
+    .filter((block) => block.trim())
+    .map((block) => {
+      // An archive's metadata follows its last rule + "**Platform:**"; without
+      // one, the parser reads the whole block as the archive's text
+      const metadataStart = block.lastIndexOf('\n---\n\n**Platform:**');
+      const metadata = metadataStart < 0 ? block : block.slice(metadataStart);
+      const url = /\*\*Original URL:\*\* (.+)/.exec(metadata)?.[1]?.trim() ?? '';
+      if (metadataStart < 0) return { url, text: block, head: trimRules(block), after: '', stray: '' };
+
+      const lastLine = /\*\*Original URL:\*\*.*/.exec(metadata) ?? /\*\*Platform:\*\*.*/.exec(metadata);
+      const end = metadataStart + (lastLine ? lastLine.index + lastLine[0].length : 0);
+      const rest = block.slice(end);
+      const comments = rest.indexOf('## 💬 Comments\n\n');
+      return {
+        url,
+        text: comments < 0 ? block.slice(0, end) : `${block.slice(0, end)}\n\n---\n\n${rest.slice(comments)}`,
+        // Its header and text, which a later copy's comments may hold
+        head: trimRules(block.slice(0, metadataStart)),
+        after: trimRules(rest),
+        stray: trimRules(comments < 0 ? rest : rest.slice(0, comments)),
+      };
+    });
+
+  const archives = firstArchivePerUrl(blocks);
+  const known: string[] = [];
+  const strays: string[] = [];
+  for (const block of blocks) {
+    const kept = archives.includes(block);
+    const stray = beyondCopies(kept ? block.stray : block.after, known);
+    if (stray) strays.push(stray);
+    known.push(stray, ...(kept ? [block.head, block.after] : []));
+  }
+
+  return { before: body.slice(0, heading.index), archives, strays };
+}
+
 /**
  * Media file save result
  */
@@ -76,6 +169,14 @@ export interface UpdatePostOptions {
   mediaFiles?: File[];
   deletedMediaPaths?: string[];
   existingMedia?: Media[];
+  /**
+   * Rebuild the body (text, media, embedded archives) from `postData`, as a
+   * PostComposer edit needs. By default the body is kept and only the embedded
+   * archives are regenerated, for callers whose PostData was parsed back out of
+   * the note (adding an embedded archive): re-rendering that text would
+   * rewrite the user's markdown.
+   */
+  replaceBody?: boolean;
 }
 
 /**
@@ -496,13 +597,15 @@ export class VaultStorageService {
    * @param keptMedia - Existing media to preserve
    * @param addedMedia - Newly added media with save results
    * @param existingFile - Existing file to read frontmatter from
+   * @param replaceBody - Write the body from `postData` instead of keeping it
    * @returns Updated markdown content
    */
   private async updateMarkdownContent(
     postData: PostData,
     keptMedia: Media[],
     addedMedia: MediaSaveResult[],
-    existingFile: TFile
+    existingFile: TFile,
+    replaceBody: boolean
   ): Promise<{ fullDocument: string }> {
     // Combine kept media with successfully added media
     const allMedia: Media[] = [...keptMedia];
@@ -556,7 +659,8 @@ export class VaultStorageService {
 
     const allMediaResults: MediaResult[] = [...keptMediaResults, ...mediaResults];
 
-    // Read existing file content to preserve user's post body
+    // Read existing file content: its body (unless replaced) and whatever
+    // follows the interaction bar are kept
     const existingContent = await this.vault.read(existingFile);
 
     // Read existing frontmatter to preserve share-related fields
@@ -584,9 +688,19 @@ export class VaultStorageService {
     if (!postData.archivedDate && typeof existingFrontmatter['archived'] === 'string') {
       mergedFrontmatter.archived = existingFrontmatter['archived'];
     }
+    // Nor does it change which server row the note belongs to.
+    const merged: Record<string, unknown> = mergedFrontmatter;
+    for (const field of COMPOSED_POST_SYNC_FRONTMATTER_FIELDS) {
+      const existing: unknown = existingFrontmatter[field];
+      if (merged[field] === undefined && existing !== undefined) {
+        merged[field] = existing;
+      }
+    }
 
-    // Extract existing body content and media gallery
-    // Pattern: frontmatter -> body -> [embedded archives] -> media gallery -> interaction bar
+    // Pattern: frontmatter -> body (text, [media], [embedded archives]) ->
+    // interaction bar ("**Author:** … | **Published:** …") -> whatever other
+    // writers appended later (AI comments, transcripts, place/product blocks,
+    // annotations, downloaded-video embeds)
     const frontmatterEndMatch = existingContent.match(/^---\n[\s\S]*?\n---\n/);
     if (!frontmatterEndMatch) {
       throw new Error('Could not find frontmatter in existing file');
@@ -607,18 +721,15 @@ export class VaultStorageService {
     // Remove trailing divider (---) and whitespace from body
     const existingBody = contentBeforeInteractionBar.replace(/\n---\n\s*$/, '\n');
 
-    // Extract media gallery (everything after interaction bar line, before end of file)
-    // Pattern: **Author:** ... \n\n [media gallery content]
+    // Everything after the interaction bar line stays after it. It used to be
+    // moved above the bar behind a new `---`: a stray divider on every update
+    // (a plain note has only "\n" there), and appended blocks pulled into the body.
     const interactionBarEndIndex = (interactionBarMatch.index ?? 0) + interactionBarMatch[0].length;
     const contentAfterInteractionBar = contentAfterFrontmatter.substring(interactionBarEndIndex);
-
-    // Find where interaction bar content ends (after the "**Author: ... | Published: ..." line)
-    // This is typically followed by blank lines and then media embeds
     const interactionBarLineEnd = contentAfterInteractionBar.indexOf('\n');
-    let existingMediaGallery = '';
-    if (interactionBarLineEnd !== -1) {
-      existingMediaGallery = contentAfterInteractionBar.substring(interactionBarLineEnd);
-    }
+    const afterInteractionBar = interactionBarLineEnd === -1
+      ? ''
+      : contentAfterInteractionBar.substring(interactionBarLineEnd + 1);
 
     // Extract embedded archives and interaction bar from newly generated markdown
     const newContentWithoutFrontmatter = markdown.fullDocument.replace(/^---\n[\s\S]*?\n---\n/, '');
@@ -626,7 +737,14 @@ export class VaultStorageService {
     // Find "## Referenced Social Media Posts" section (or "## Embedded Archives")
     const referencedPostsMatch = newContentWithoutFrontmatter.match(/\n---\n\n## Referenced Social Media Posts\n[\s\S]*?(?=\n---\n\n\*\*Author:\*\*)/);
     const embeddedArchivesMatch = newContentWithoutFrontmatter.match(/\n---\n\n## Embedded Archives\n[\s\S]*?(?=\n---\n\n\*\*Author:\*\*)/);
-    const newInteractionBarMatch = newContentWithoutFrontmatter.match(/\n---\n\n\*\*Author:\*\*[\s\S]*/);
+    // The regenerated note ends at its author line. What convert() appends
+    // below it (place and product blocks, transcript) is rebuilt from PostData
+    // parsed out of this very note, so afterInteractionBar already has it —
+    // taking both doubled it on every update.
+    const newInteractionBarMatch = /\n---\n\n\*\*Author:\*\*[^\n]*/.exec(newContentWithoutFrontmatter);
+    const regenerated = newInteractionBarMatch
+      ? newContentWithoutFrontmatter.slice(0, newInteractionBarMatch.index + newInteractionBarMatch[0].length)
+      : newContentWithoutFrontmatter;
 
     // Build new embedded archives section
     let newEmbeddedArchives = '';
@@ -642,14 +760,30 @@ export class VaultStorageService {
       newInteractionBar = newInteractionBarMatch[0];
     }
 
-    // Combine: existing body + new embedded archives + existing media gallery + new interaction bar
-    // Note: newEmbeddedArchives already starts with '\n---\n'
-    // If there's media gallery, we need a divider before it
-    // If not, the interaction bar divider from newInteractionBar is used
-    const finalContent = existingBody.trimEnd() + '\n' +
-      (newEmbeddedArchives || '') +
-      (existingMediaGallery ? '\n---\n' + existingMediaGallery.trimEnd() + '\n' : '') +
-      newInteractionBar;
+    // The note's own archives section gives way to the regenerated one (with
+    // none regenerated, it stays), which a kept body would otherwise repeat
+    // below it. An archive this PostData lacks stays too, after the regenerated
+    // ones: another job's, written after this PostData was parsed; a composer
+    // edit drops what it dropped. Text in the section that is no archive's goes
+    // back below the interaction bar.
+    const section = replaceBody || newEmbeddedArchives ? readArchivesSection(existingBody) : null;
+    const parsedUrls = new Set((postData.embeddedArchives ?? []).map((archive) => archive.url));
+    const lacking = replaceBody ? [] : (section?.archives ?? []).filter((archive) => !parsedUrls.has(archive.url));
+    const archivesSection = lacking.length === 0
+      ? newEmbeddedArchives
+      : `${[newEmbeddedArchives.trimEnd(), ...lacking.map((archive) => archive.text.trim())].join('\n\n---\n\n')}\n`;
+    const strays = (section?.strays ?? []).join('\n\n');
+
+    // Replaced: the regenerated note (edited text, kept + added media, embedded
+    // archives, interaction bar). Kept: existing body + new embedded archives +
+    // new interaction bar (newEmbeddedArchives already starts with '\n---\n').
+    // ponytail: "replaced" is what the parser surfaced to the composer. A
+    // section hand-added between the media and the author line never reaches
+    // it, so an edit drops it; keep unrecognised sections if that bites.
+    const throughInteractionBar = replaceBody
+      ? regenerated
+      : (section?.before ?? existingBody).trimEnd() + '\n' + archivesSection + newInteractionBar;
+    const finalContent = `${throughInteractionBar.trimEnd()}\n${strays ? `\n${strays}\n` : ''}${afterInteractionBar}`;
 
     // Generate new frontmatter YAML
     const frontmatterYaml = stringifyYaml(mergedFrontmatter);
@@ -704,7 +838,7 @@ export class VaultStorageService {
    * @returns PostSaveResult with updated file and media information
    */
   async updatePost(options: UpdatePostOptions): Promise<PostSaveResult> {
-    const { filePath, postData, mediaFiles = [], deletedMediaPaths = [], existingMedia = [] } = options;
+    const { filePath, postData, mediaFiles = [], deletedMediaPaths = [], existingMedia = [], replaceBody = false } = options;
 
     // Step 1: Validate inputs and get existing file
     const existingFile = this.vault.getFileByPath(filePath);
@@ -764,7 +898,7 @@ export class VaultStorageService {
       }
 
       // Step 5: Update markdown content with new media references
-      const markdown = await this.updateMarkdownContent(postData, changes.toKeep, mediaSaved, existingFile);
+      const markdown = await this.updateMarkdownContent(postData, changes.toKeep, mediaSaved, existingFile, replaceBody);
 
       // Step 6: Save updated content to file
       await this.vault.process(existingFile, () => markdown.fullDocument);

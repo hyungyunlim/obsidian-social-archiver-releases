@@ -266,6 +266,19 @@ export interface MemberCollectionPostItem {
   addedAt: string;
   addedBy?: string;
   post: RemoteCollectionPost;
+  /** Shared notes and highlights every member sees (CC8), oldest first. The feed shows the notes. */
+  sharedAnnotations?: ReadonlyArray<CollectionSharedAnnotation>;
+}
+
+/** CC8, as far as this feed reads it. */
+export interface CollectionSharedAnnotation {
+  kind: 'note' | 'highlight';
+  id: string;
+  authorUsername: string;
+  /** A note's text (a highlight's note is not shown here). */
+  content?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** An item not public on its platform, shown content-free to the owner and editors who didn't add it. */

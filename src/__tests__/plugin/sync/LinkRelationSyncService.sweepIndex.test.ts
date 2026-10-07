@@ -86,6 +86,7 @@ function makeHarness(overrides: {
       read: vi.fn().mockResolvedValue('# Note body\n'),
       modify: vi.fn().mockResolvedValue(undefined),
     },
+    metadataCache: { getFileCache: vi.fn(() => null) },
   } as unknown as App;
 
   const renderer = {
