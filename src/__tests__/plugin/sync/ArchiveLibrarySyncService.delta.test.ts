@@ -360,3 +360,58 @@ describe('ArchiveLibrarySyncService ambiguous matches', () => {
     expect(service.getState()).toMatchObject({ ambiguousCount: 0, ambiguousMatches: [] });
   });
 });
+
+describe('ArchiveLibrarySyncService caption languages', () => {
+  async function syncNewNote(archive: UserArchive) {
+    const settings = makeSettings();
+    const file = { path: 'Social Archives/video.md' };
+    const reconcileCaptionVariantState = vi.fn().mockResolvedValue(undefined);
+    const service = new ArchiveLibrarySyncService({
+      apiClient: () => ({
+        getUserArchives: vi.fn().mockResolvedValue({
+          archives: [archive], total: 1, hasMore: false, serverTime: '2026-05-09T00:00:00.000Z', deletedIds: [],
+        }),
+      }) as any,
+      settings: () => settings,
+      saveSettings: vi.fn().mockResolvedValue(undefined),
+      findBySourceArchiveId: vi.fn().mockReturnValue(null),
+      findByOriginalUrl: vi.fn().mockReturnValue([]),
+      findByClientPostId: vi.fn().mockReturnValue(null),
+      indexSavedFile: vi.fn(),
+      backfillFileIdentity: vi.fn().mockResolvedValue(undefined),
+      saveSubscriptionPostDetailed: vi.fn().mockResolvedValue({ status: 'created', file }),
+      convertUserArchiveToPostData: vi.fn().mockReturnValue({ platform: 'youtube', url: archive.originalUrl, author: { name: 'A' }, content: { text: '' } }),
+      notify: vi.fn(),
+      applyInboundDeletedIds: vi.fn().mockResolvedValue(undefined),
+      reconcileCaptionVariantState,
+    });
+    await service.startDeltaSync();
+    return { reconcileCaptionVariantState, file };
+  }
+
+  it('gives a new note the server-resolved primary as its original language', async () => {
+    const archive = makeArchive({
+      platform: 'youtube',
+      transcript: { language: 'unknown', kind: null },
+      transcriptLanguages: [{ language: 'es', kind: 'manual', primary: true }, { language: 'en', kind: 'manual' }],
+    });
+    const { reconcileCaptionVariantState, file } = await syncNewNote(archive);
+    expect(reconcileCaptionVariantState).toHaveBeenCalledWith(file, archive, 'es');
+  });
+
+  it('ignores an und primary and falls back to the transcript language', async () => {
+    const archive = makeArchive({
+      platform: 'youtube',
+      transcript: { language: 'pt-BR', kind: 'asr' },
+      transcriptLanguages: [{ language: 'und', kind: null, primary: true }, { language: 'en', kind: 'manual' }],
+    });
+    const { reconcileCaptionVariantState, file } = await syncNewNote(archive);
+    expect(reconcileCaptionVariantState).toHaveBeenCalledWith(file, archive, 'pt-br');
+  });
+
+  it('does not reconcile a new note whose archive has no added languages', async () => {
+    const archive = makeArchive({ platform: 'youtube', transcriptLanguages: [{ language: 'en', kind: 'manual', primary: true }] });
+    const { reconcileCaptionVariantState } = await syncNewNote(archive);
+    expect(reconcileCaptionVariantState).not.toHaveBeenCalled();
+  });
+});

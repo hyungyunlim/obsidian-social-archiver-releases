@@ -151,6 +151,7 @@ import { DesktopCapabilityReporter } from './plugin/ai-comment/DesktopCapability
 import { AICommentJobProcessor } from './plugin/ai-comment/AICommentJobProcessor';
 import { TranscriptionCapabilityReporter } from './plugin/transcription/TranscriptionCapabilityReporter';
 import { TranscriptionJobProcessor, type PendingTranscriptUploadRecord } from './plugin/transcription/TranscriptionJobProcessor';
+import { CaptionVariantSyncService } from './plugin/transcription/CaptionVariantSyncService';
 import { UnifiedExecutorScheduler, createProcessorDispatch } from './plugin/executor/UnifiedExecutorScheduler';
 import {
   BACKLOG_ERROR_BACKOFF_MAX_MS,
@@ -402,6 +403,7 @@ export default class SocialArchiverPlugin extends Plugin {
   private unifiedExecutorScheduler: UnifiedExecutorScheduler | null = null;
   private transcriptionCapabilityReporter?: TranscriptionCapabilityReporter;
   public transcriptionJobProcessor?: TranscriptionJobProcessor;
+  public captionVariantSyncService?: CaptionVariantSyncService;
 
   /** In-app notice channel client (server-driven banner notifications). */
   public noticesService?: NoticesService;
@@ -2515,6 +2517,8 @@ export default class SocialArchiverPlugin extends Plugin {
           Promise.resolve(),
         reconcileTranscriptState: (file, archive) =>
           this.reconcileTranscriptFromLibrarySync(file, archive),
+        reconcileCaptionVariantState: (file, archive, originalLanguage) =>
+          this.captionVariantSyncService?.reconcileFromLibrarySync(file, archive, originalLanguage) ?? Promise.resolve(),
         reconcileCommentState: (file, archive) =>
           this.commentStateSyncService?.reconcileFromLibrarySync(file, archive) ??
           Promise.resolve(),
@@ -2619,6 +2623,18 @@ export default class SocialArchiverPlugin extends Plugin {
 	        savePendingUploads: (records) => this.saveTranscriptionPendingUploads(records),
         notify: (msg, timeout) => new Notice(msg, timeout),
         localLockRegistry: this.localLockRegistry,
+      });
+
+      // YouTube caption languages: note caption sections ↔ server language set.
+      this.captionVariantSyncService = new CaptionVariantSyncService({
+        app: this.app,
+        apiClient: () => this.apiClient,
+        findBySourceArchiveId: (id) => this.archiveLookupService?.findBySourceArchiveId(id) ?? null,
+        withMarkdownWriteLock: (archiveId, fn) =>
+          this.localLockRegistry.withLock({ kind: 'markdownWrite', archiveId }, fn),
+        getClientId: () => this.settings.syncClientId || undefined,
+        refreshTimelineView: () => this.refreshTimelineView(),
+        notify: (msg) => new Notice(msg),
       });
 
       // Create ArchiveDeleteSyncService
@@ -2848,6 +2864,7 @@ export default class SocialArchiverPlugin extends Plugin {
           aiCommentJobProcessor: this.aiCommentJobProcessor,
           canExecuteTranscriptionJobs: () => !ObsidianPlatform.isMobile,
           transcriptionJobProcessor: this.transcriptionJobProcessor,
+          captionVariantSyncService: this.captionVariantSyncService,
           processPendingSyncQueue: () => this.syncQueueConsumer?.consume() ?? Promise.resolve(),
           processSyncQueueItem: (queueId, archiveId, clientId) =>
             this.mobileSyncService?.processSyncQueueItem(queueId, archiveId, clientId) ?? Promise.resolve(false),

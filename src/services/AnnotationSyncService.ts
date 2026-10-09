@@ -503,12 +503,19 @@ export class AnnotationSyncService {
   }
 }
 
+const LEGACY_TRANSCRIPT_SECTION =
+  /\n{2,}---[ \t]*\n{2,}##[ \t]+Transcript[ \t]*\n+[\s\S]*?(?=\n<!--\s*social-archiver-caption:start|\n##\s|\n---\s*\n+\*\*(?:Platform|Original URL|Author|Published):\*\*|$)/;
+
 function removeMarkedTranscriptSections(content: string): string {
   const blockPattern =
     /(?:\n{2,}---[ \t]*\n{2,})?<!--\s*social-archiver-transcript:start\s+resultMarkerId=[^>]+-->\s*##\s+Transcript\s*\n+[\s\S]*?\n?<!--\s*social-archiver-transcript:end\s+resultMarkerId=[^>]+-->\s*/g;
   const withoutMarked = content.replace(blockPattern, '');
+  // Legacy unmarked transcript: remove it up to the next caption block, `##`
+  // heading or metadata footer (not to EOF — caption variants and later
+  // sections must survive).
   const withoutLegacyTrailing = withoutMarked === content
-    ? content.replace(/\n{2,}---[ \t]*\n{2,}##\s+Transcript\s*\n+[\s\S]*$/m, '')
+    ? content.replace(LEGACY_TRANSCRIPT_SECTION, (match, offset: number) =>
+      offset + match.length >= content.length ? '' : '\n')
     : withoutMarked;
 
   return withoutLegacyTrailing

@@ -33,6 +33,7 @@ export type RealtimeMessageType =
   | 'ai_comment_updated' // Archive AI comments projection updated
   | 'ai_action_requested' // Targeted Obsidian AI action job hint
   | 'content_variant_updated' // Archive content variant projection updated
+  | 'transcript_variants_updated' // Archive caption languages added/removed/swapped
   | 'transcription_requested' // Targeted desktop Obsidian transcription job hint
   | 'transcription_status_updated' // Transcription job status/progress update
   | 'transcription_cancelled' // Targeted desktop Obsidian cancellation hint

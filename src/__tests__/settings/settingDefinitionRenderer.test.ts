@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import type { Setting, SettingDefinitionItem } from 'obsidian';
-import { islandHost, renderSettingDefinitions } from '../../settings/settingDefinitionRenderer';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { Setting } from 'obsidian';
+import type { SettingDefinitionItem, SettingGroup } from 'obsidian';
+import { guardSettingRenders, islandHost, renderSettingDefinitions } from '../../settings/settingDefinitionRenderer';
 
 /**
  * `renderSettingDefinitions` is the pre-1.13 half of the declarative settings
@@ -148,5 +149,47 @@ describe('renderSettingDefinitions', () => {
       { type: 'group', heading: 'Classed', cls: 'sa-group', items: [{ name: 'row', render: () => undefined }] },
     ]);
     expect(container.querySelector('.sa-group .setting-item')).not.toBeNull();
+  });
+});
+
+/**
+ * Obsidian 1.13+ calls every row's `render` and applies `visible` afterwards;
+ * `guardSettingRenders` restores the walker's "hidden rows build nothing"
+ * contract for it (feedback #199).
+ */
+describe('guardSettingRenders', () => {
+  const nativePass = (items: readonly SettingDefinitionItem[]): Array<void | (() => void)> => {
+    const container: HTMLElement = document.createElement('div');
+    const results: Array<void | (() => void)> = [];
+    const walk = (list: readonly SettingDefinitionItem[]): void => {
+      for (const item of list) {
+        if ('type' in item) walk(item.items ?? []);
+        else if ('render' in item && item.render) {
+          results.push(item.render(new Setting(container), { listEl: container } as SettingGroup));
+        }
+      }
+    };
+    walk(items);
+    return results;
+  };
+
+  it('skips hidden rows, contains a throwing row, and keeps cleanup thunks', () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const ran: string[] = [];
+    const cleanup = (): void => undefined;
+    const results = nativePass(guardSettingRenders([{
+      type: 'group',
+      heading: 'Transcription',
+      items: [
+        { name: 'Desktop only', visible: () => false, render: () => { ran.push('hidden'); } },
+        { name: 'Broken', render: () => { throw new Error('boom'); } },
+        { name: 'Island', render: () => { ran.push('island'); return cleanup; } },
+      ],
+    }]));
+
+    expect(ran).toEqual(['island']);
+    expect(results).toEqual([undefined, undefined, cleanup]);
+    expect(errors).toHaveBeenCalledTimes(1);
+    errors.mockRestore();
   });
 });

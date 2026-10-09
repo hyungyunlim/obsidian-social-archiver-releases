@@ -271,6 +271,9 @@ export interface ContentVariantUpdatedEvent {
   data: ContentVariantUpdatedEventData;
 }
 
+/** `transcript_variants_updated` (private channel) — caption languages added/removed/swapped. */
+export type { TranscriptVariantsUpdatedEventData } from './transcript-languages';
+
 // ============================================================================
 // Author Profile Updated Event (private channel)
 // ============================================================================

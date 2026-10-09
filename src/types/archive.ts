@@ -99,6 +99,8 @@ export interface YamlFrontmatter {
   transcriptResultId?: string;       // Current server transcript result id
   transcriptResultIds?: string[];    // Completed transcript result markers
   transcriptLanguages?: string[];    // All available transcript language ISO codes (e.g., ['en', 'ko', 'ja'])
+  transcriptLanguage?: string;       // Language of the original (unlabeled) transcript section (T10)
+  transcriptDefaultLanguage?: string; // Tab opened first; written only when it differs from transcriptLanguage (L10)
   isArticle?: boolean;               // X article (long-form) post marker
   /**
    * Recognized publisher attribution (web archives only).

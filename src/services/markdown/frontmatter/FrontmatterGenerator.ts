@@ -19,6 +19,7 @@ import { USER_CONTROLLED_FRONTMATTER_FIELDS } from './constants';
 import { uniqueStrings } from '@/utils/array';
 import { normalizeUrlForDedup } from '@/utils/url';
 import { buildManagedArchiveTag } from '@/utils/archive-tag-rules';
+import { knownTranscriptLanguage } from '@/constants/languages';
 
 /**
  * Normalize author URL for consistent storage
@@ -154,6 +155,8 @@ const CATEGORY_FIELDS: Record<keyof FrontmatterFieldVisibility, string[]> = {
     'videoTranscribedAt',
     'transcriptionModel',
     'transcriptionLanguage',
+    'transcriptLanguage',
+    'transcriptDefaultLanguage',
     'transcriptionDuration',
     'transcriptionTime',
     'transcriptionProcessingTime',
@@ -289,6 +292,9 @@ export class FrontmatterGenerator {
     if (postData.transcriptionLanguage || postData.whisperTranscript?.language) {
       frontmatter.transcriptionLanguage = postData.transcriptionLanguage || postData.whisperTranscript?.language;
     }
+    // T10: the caption track's language labels the note's unlabeled `## Transcript`.
+    const transcriptLanguage = knownTranscriptLanguage(postData.transcript?.language);
+    if (transcriptLanguage) frontmatter.transcriptLanguage = transcriptLanguage;
     if (postData.transcriptionDuration != null) frontmatter.transcriptionDuration = postData.transcriptionDuration;
     if (postData.transcriptionUpdatedAt) frontmatter.transcriptionTime = postData.transcriptionUpdatedAt;
     if (postData.transcriptionProcessingTime != null) frontmatter.transcriptionProcessingTime = postData.transcriptionProcessingTime;

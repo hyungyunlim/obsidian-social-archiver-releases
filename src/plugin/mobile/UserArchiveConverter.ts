@@ -11,6 +11,7 @@ import type { PostData, Media, Platform, Comment } from '../../types/post';
 import type { UserArchive, UserArchiveComment } from '../../services/WorkersAPIClient';
 import type { ProductSnapshot } from '../../shared/platforms/products';
 import { isWebLanePlatform } from '@/shared/platforms';
+import { knownTranscriptLanguage } from '../../constants/languages';
 
 const LEGACY_WEB_CLIP_SEPARATOR = '\n\n---\n\n';
 const LEADING_WEB_CLIP_SEPARATOR = '---\n\n';
@@ -255,6 +256,7 @@ function metadataString(metadata: Record<string, unknown> | null | undefined, ke
  * - Reblog detection
  */
 export function convertUserArchiveToPostData(archive: UserArchive): PostData {
+  const transcriptLanguage = knownTranscriptLanguage(archive.transcript?.language);
   const platform = archive.platform as Platform;
   const isKidsnote = platform === 'kidsnote';
   const isXArticle = platform === 'x' && (archive.isArticle === true || !!archive.articleMarkdown);
@@ -435,6 +437,11 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
       },
     } : {}),
     ...(archive.mediaPreservationStatus ? { mediaPreservationStatus: archive.mediaPreservationStatus } : {}),
+    // Caption language metadata only — fullContent already carries the
+    // `## Transcript` body (ponytail: no raw/formatted, nothing renders twice).
+    ...(transcriptLanguage
+      ? { transcript: { language: transcriptLanguage, kind: archive.transcript?.kind ?? null } }
+      : {}),
     ...(whisperTranscript ? { whisperTranscript } : {}),
     ...(archive.transcriptionLanguage ? { transcriptionLanguage: archive.transcriptionLanguage } : {}),
     ...(archive.transcriptionModel ? { transcriptionModel: archive.transcriptionModel } : {}),

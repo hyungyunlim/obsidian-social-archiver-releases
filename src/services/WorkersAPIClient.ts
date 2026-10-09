@@ -25,6 +25,16 @@ import type { BillingEventApiPayload, BillingEventsResponse } from '@/types/bill
 import type { AICommentType } from '@/types/ai-comment';
 import type { RelationWithSummary, RelationPullResponse } from '@/types/link-relations';
 import type { ArchiveAttempt, ArchiveAttemptStatus } from '@/types/post';
+import type {
+  AddArchiveTranscriptRequest,
+  AddArchiveTranscriptResponse,
+  ArchiveTranscriptBodyResponse,
+  AvailableTranscriptTracksResponse,
+  DeleteArchiveTranscriptResponse,
+  SetPrimaryArchiveTranscriptResponse,
+  TranscriptKind,
+  TranscriptLanguageSummary,
+} from '@/types/transcript-languages';
 import {
   COLLECTIONS_SHARED_CAPABILITY,
   type CollectionInvite,
@@ -831,6 +841,10 @@ export interface UserArchive {
   transcriptResultId?: string | null;
   transcriptionDuration?: number | null;
   transcriptionProcessingTime?: number | null;
+  /** Primary caption track metadata (body omitted — fullContent carries it). */
+  transcript?: { language?: string | null; kind?: TranscriptKind | null } | null;
+  /** C2 caption language summary; null = no added languages yet. */
+  transcriptLanguages?: TranscriptLanguageSummary[] | null;
 }
 
 export type ArchiveNoteOperation =
@@ -3399,6 +3413,53 @@ export class WorkersAPIClient implements IService {
       `/api/user/archives/${encodeURIComponent(archiveId)}/content-variants/${encodeURIComponent(variantId)}`,
       { method: 'DELETE' },
     );
+  }
+
+  // ── YouTube caption languages (contract C3) ──
+
+  async getAvailableArchiveTranscripts(archiveId: string, hl?: string): Promise<AvailableTranscriptTracksResponse> {
+    this.ensureInitialized();
+    const query = hl ? `?hl=${encodeURIComponent(hl)}` : '';
+    return this.request<AvailableTranscriptTracksResponse>(
+      `${this.archiveTranscriptsPath(archiveId)}/available${query}`,
+      { method: 'GET' },
+    );
+  }
+
+  async getArchiveTranscript(archiveId: string, language: string): Promise<ArchiveTranscriptBodyResponse> {
+    this.ensureInitialized();
+    return this.request<ArchiveTranscriptBodyResponse>(
+      `${this.archiveTranscriptsPath(archiveId)}/${encodeURIComponent(language)}`,
+      { method: 'GET' },
+    );
+  }
+
+  async addArchiveTranscript(archiveId: string, body: AddArchiveTranscriptRequest): Promise<AddArchiveTranscriptResponse> {
+    this.ensureInitialized();
+    return this.request<AddArchiveTranscriptResponse>(this.archiveTranscriptsPath(archiveId), {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async deleteArchiveTranscript(archiveId: string, language: string): Promise<DeleteArchiveTranscriptResponse> {
+    this.ensureInitialized();
+    return this.request<DeleteArchiveTranscriptResponse>(
+      `${this.archiveTranscriptsPath(archiveId)}/${encodeURIComponent(language)}`,
+      { method: 'DELETE' },
+    );
+  }
+
+  async setPrimaryArchiveTranscript(archiveId: string, language: string): Promise<SetPrimaryArchiveTranscriptResponse> {
+    this.ensureInitialized();
+    return this.request<SetPrimaryArchiveTranscriptResponse>(
+      `${this.archiveTranscriptsPath(archiveId)}/${encodeURIComponent(language)}/primary`,
+      { method: 'POST' },
+    );
+  }
+
+  private archiveTranscriptsPath(archiveId: string): string {
+    return `/api/user/archives/${encodeURIComponent(archiveId)}/transcripts`;
   }
 
   async getTranscriptionAvailabilityBatch(request: {

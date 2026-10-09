@@ -81,7 +81,11 @@ export const PLATFORM_DEFINITIONS: Record<Platform, PlatformDefinition> = {
     domains: ['facebook.com', 'fb.com', 'fb.watch', 'm.facebook.com'],
     // Host-anchored like threads: in-app browsers put l.facebook.com in the
     // query (proxyReferer), and facebook is checked first of all platforms.
-    urlPattern: /^(?:https?:\/\/)?(?:[\w-]+\.)*(?:facebook\.com|fb\.com|fb\.watch)(?:[:/?#]|$)/i,
+    // fb.com is a Facebook alias only at its apex: its subdomains are Meta's
+    // corporate sites (about.fb.com newsroom, engineering.fb.com), and so are
+    // the listed facebook.com subdomains. Those are articles for the web lane,
+    // not posts the Facebook pipeline can read (feedback #196).
+    urlPattern: /^(?:https?:\/\/)?(?:(?:www\.)?fb\.(?:com|watch)|(?!(?:about|developers|engineering|investor|newsroom|research|tech|transparency)\.)(?:[\w-]+\.)*facebook\.com)(?:[:/?#]|$)/i,
     brightDataDatasetId: 'gd_l7q7dkf244hwgcqr2',
     supportsMedia: true,
     supportsAI: true,

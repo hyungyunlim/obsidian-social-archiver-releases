@@ -20,6 +20,7 @@ import { MediaGalleryRenderer } from '../renderers/MediaGalleryRenderer';
 import { LinkPreviewRenderer } from '../renderers/LinkPreviewRenderer';
 import { CommentRenderer } from '../renderers/CommentRenderer';
 import { VideoTranscriptPlayer } from '../renderers/VideoTranscriptPlayer';
+import { buildCaptionActions } from '../renderers/CaptionLanguageActions';
 import {
   getPlatformSimpleIcon,
   getPlatformLucideIcon,
@@ -742,19 +743,7 @@ export class ReaderModeContentRenderer extends Component {
 
     const transcriptContainer = parent.createDiv({ cls: 'sa-reader-mode-transcript' });
 
-    if (hasSegmentTranscript) {
-      const player = new VideoTranscriptPlayer(this.app);
-      const didRender = player.render(transcriptContainer, post, {}, {
-        startCollapsed: false,
-        initialView: 'reader',
-        readerTypography: true,
-      });
-      if (didRender) {
-        this.register(() => player.destroy());
-        return;
-      }
-      player.destroy();
-    }
+    if (hasSegmentTranscript && this.renderTranscriptPlayer(transcriptContainer, post)) return;
 
     if (rawTranscript) {
       this.renderRawTranscript(transcriptContainer, rawTranscript, post.transcriptionLanguage);
@@ -762,6 +751,40 @@ export class ReaderModeContentRenderer extends Component {
     }
 
     transcriptContainer.remove();
+  }
+
+  private renderTranscriptPlayer(container: HTMLElement, post: PostData): boolean {
+    const player = new VideoTranscriptPlayer(this.app);
+    const didRender = player.render(container, post, {}, {
+      startCollapsed: false,
+      initialView: 'reader',
+      readerTypography: true,
+      captionActions: buildCaptionActions({
+        app: this.app,
+        post,
+        service: () => this.plugin.captionVariantSyncService,
+        // Give the metadata cache a beat to pick up the frontmatter write.
+        onChanged: () => window.setTimeout(() => void this.refreshTranscriptPlayer(container, post, player), 500),
+      }),
+    });
+    if (didRender) {
+      this.register(() => player.destroy());
+      return true;
+    }
+    player.destroy();
+    return false;
+  }
+
+  /** Re-parse the note and redraw only the transcript after a caption-language change. */
+  private async refreshTranscriptPlayer(container: HTMLElement, post: PostData, player: VideoTranscriptPlayer): Promise<void> {
+    const file = post.filePath ? this.app.vault.getFileByPath(post.filePath) : null;
+    if (!file || !container.isConnected) return;
+    const { PostDataParser } = await import('../parsers/PostDataParser');
+    const refreshed = await new PostDataParser(this.app.vault, this.app).parseFile(file);
+    if (!refreshed) return;
+    player.destroy();
+    container.empty();
+    this.renderTranscriptPlayer(container, refreshed);
   }
 
   private renderRawTranscript(parent: HTMLElement, transcript: string, language?: string): void {

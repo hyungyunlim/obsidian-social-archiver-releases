@@ -33,7 +33,11 @@ export declare function parseArgv(args: string[]): {
     ok: false;
     error: string;
 };
-export declare function helpText(): string;
+/**
+ * Usage text. A host that serves only some commands passes `listCommand` so
+ * help never advertises one that would answer SERVICE_NOT_READY.
+ */
+export declare function helpText(listCommand?: (commandId: string) => boolean): string;
 export type HostFactory = () => ArchiverCliHost | Promise<ArchiverCliHost>;
 export interface RunResult {
     output: string;

@@ -18,6 +18,9 @@ import { LinkPreviewRenderer } from './LinkPreviewRenderer';
 import { CompactPostCardRenderer } from './CompactPostCardRenderer';
 import { YouTubePlayerController } from '../controllers/YouTubePlayerController';
 import { VideoTranscriptPlayer } from './VideoTranscriptPlayer';
+import { buildCaptionActions } from './CaptionLanguageActions';
+import { resolvePostArchiveId } from './postArchiveId';
+import type { TranscriptCaptionActions } from './TranscriptRenderer';
 import { ShareAPIClient } from '../../../services/ShareAPIClient';
 import type { AIActionType, AICommentPayload, ContentVariant, ExtractPlaceCandidatesResult, PlaceCandidate, PlaceCandidateAttachmentResult, TranscriptionJobMode, TranscriptionMediaRef, WorkersAPIClient } from '../../../services/WorkersAPIClient';
 import type { SavedPrompt } from '../../../types/prompt-library';
@@ -70,7 +73,7 @@ import { AICommentRenderer, type AICommentRendererOptions } from './AICommentRen
 import { AICliDetector, type AICli, type AICliDetectionResult } from '../../../utils/ai-cli';
 import { parseAIComments, appendAIComment, removeAIComment, updateFrontmatterAIComments } from '../../../services/ai-comment/markdown-handler';
 import type { AICommentMeta, AICommentType, AICommentProgress, AICommentResult, AIOutputLanguage } from '../../../types/ai-comment';
-import { insertTranscriptSection, extractTranscriptLanguages, parseTranscriptSections } from '../../../services/markdown/TranscriptSectionManager';
+import { insertTranscriptSection, extractTranscriptLanguages, parseTranscriptSections, resolveNoteTranscriptLanguages } from '../../../services/markdown/TranscriptSectionManager';
 import { languageCodeToName } from '../../../constants/languages';
 import { getPlatformCategory } from '../../../shared/platforms/types';
 import { createSVGElement } from '../../../utils/dom-helpers';
@@ -881,6 +884,8 @@ export class PostCardRenderer extends Component {
         player.render(contentArea, post, {
           videoElement: videoEl,
           youtubeController: ytController
+        }, {
+          captionActions: isEmbedded ? undefined : this.captionActionsFor(post, rootElement),
         });
         this.videoTranscriptPlayers.set(post.id, player);
       }
@@ -2205,14 +2210,22 @@ export class PostCardRenderer extends Component {
     await renderSelected(initialVariant);
   }
 
+  /** YouTube caption-language controls for this card's transcript (PL8). */
+  private captionActionsFor(post: PostData, rootElement: HTMLElement): TranscriptCaptionActions | undefined {
+    return buildCaptionActions({
+      app: this.app,
+      post,
+      service: () => this.plugin.captionVariantSyncService,
+      beforeChange: () => {
+        if (post.filePath) this.onUIModifyCallback?.(post.filePath);
+      },
+      // Give the metadata cache a beat to pick up the frontmatter write.
+      onChanged: () => window.setTimeout(() => void this.refreshPostCardFull(post, rootElement), 500),
+    });
+  }
+
   private resolveArchiveIdForContentVariants(post: PostData): string | null {
-    if (post.sourceArchiveId) return post.sourceArchiveId;
-    if (!post.filePath) return null;
-    const file = this.vault.getAbstractFileByPath(post.filePath);
-    if (!(file instanceof TFile)) return null;
-    const frontmatter: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter;
-    const sourceArchiveId = isRecord(frontmatter) ? frontmatter.sourceArchiveId : undefined;
-    return typeof sourceArchiveId === 'string' && sourceArchiveId.length > 0 ? sourceArchiveId : null;
+    return resolvePostArchiveId(this.app, post);
   }
 
   private shouldUseMobileContentVariantMenu(): boolean {
@@ -10849,12 +10862,13 @@ export class PostCardRenderer extends Component {
       if (file instanceof TFile) {
         if (type === 'translate-transcript' && targetLang) {
           // Save as transcript section instead of AI comment
-          const defaultLangCode = post.whisperTranscript?.language
-            || post.transcriptionLanguage
-            || 'en';
-
           // Check if translation already exists before committing
           const existingContent = await this.vault.read(file);
+          // T10: same original/Whisper language resolution as the timeline parser.
+          const defaultLangCode = resolveNoteTranscriptLanguages(
+            this.app.metadataCache.getFileCache(file)?.frontmatter,
+            existingContent
+          );
           if (insertTranscriptSection(existingContent, targetLang, result.content, defaultLangCode) === null) {
             new Notice(`Transcript (${languageCodeToName(targetLang)}) already exists. Delete the existing translation first.`);
             return;

@@ -1,6 +1,6 @@
 import { App, getLanguage, Notice, PluginSettingTab, Setting, Platform, setIcon } from 'obsidian';
 import type { SettingDefinitionItem, SettingDefinitionRender, SettingGroupItem } from 'obsidian';
-import { islandHost, renderSettingDefinitions } from './settingDefinitionRenderer';
+import { guardSettingRenders, islandHost, renderSettingDefinitions } from './settingDefinitionRenderer';
 import nodeRequire from '../utils/nodeRequire';
 import type SocialArchiverPlugin from '../main';
 import { FolderSuggest } from './FolderSuggest';
@@ -188,7 +188,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    * display() below, which walks the same tree. One source of truth either way.
    */
   getSettingDefinitions(): SettingDefinitionItem[] {
-    return [
+    return guardSettingRenders([
       ...this.tabDescriptionDefinitions(),
       ...this.accountSettingDefinitions(),
       // Mobile sync sits directly below Account.
@@ -214,7 +214,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       ...(FEATURE_CROSSPOST_ENABLED ? this.crossPostSettingDefinitions() : []),
       ...this.dangerZoneSettingDefinitions(),
       ...this.supportSettingDefinitions(),
-    ];
+    ]);
   }
 
   /**

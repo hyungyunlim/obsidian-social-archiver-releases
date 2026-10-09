@@ -234,7 +234,14 @@ export interface TranscriptEntry {
 export interface Transcript {
   raw?: string;                      // Full transcript text
   formatted?: TranscriptEntry[];     // Timestamp segments
+  /** Caption track language (server-normalized BCP-47; legacy rows may be raw). */
+  language?: string;
+  /** Caption track kind; absent on legacy rows. */
+  kind?: 'manual' | 'asr' | null;
 }
+
+/** Where a transcript tab's section came from in the note (T12). */
+export type TranscriptTabSource = 'original' | 'caption' | 'whisper' | 'ai';
 
 /**
  * Multi-language transcript data
@@ -243,8 +250,10 @@ export interface Transcript {
 export interface MultiLangTranscript {
   /** Default/original language ISO code (e.g., 'en', 'ko') */
   defaultLanguage: string;
-  /** Transcript segments grouped by language ISO code */
+  /** Transcript segments grouped by tab key: a language code, or `${lang}:whisper` / `${lang}:ai` when that language repeats (T12) */
   byLanguage: Record<string, Array<{ id: number; start: number; end: number; text: string }>>;
+  /** Section source per tab key */
+  sources?: Record<string, TranscriptTabSource>;
 }
 
 /**
@@ -465,6 +474,8 @@ export interface PostData {
       speaker?: string;
     }>;
     language: string;
+    /** Note section the segments were read from (parsed notes only) */
+    source?: TranscriptTabSource;
   };
 
   /**
@@ -745,7 +756,10 @@ export const PostDataSchema: z.ZodType<PostData> = z.lazy(() => z.object({
       end_time: z.number(),
       duration: z.number(),
       text: z.string()
-    })).nullish()
+    })).nullish(),
+    language: z.string().nullish(),
+    // An unexpected kind must never fail the whole archive parse.
+    kind: z.enum(['manual', 'asr']).nullish().catch(null)
   }).nullish(),
   videoId: z.string().nullish(),
   title: z.string().nullish(),

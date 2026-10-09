@@ -1,10 +1,26 @@
-import { Notice, setIcon } from 'obsidian';
+import { Menu, Notice, setIcon } from 'obsidian';
 import type { TranscriptionSegment } from '../../../types/transcription';
+import type { TranscriptTabSource } from '../../../types/post';
 import type { PlaybackAdapter } from '../controllers/PlaybackAdapter';
 import { HtmlMediaPlaybackAdapter } from '../controllers/PlaybackAdapter';
-import { languageCodeToName } from '../../../constants/languages';
+import { transcriptLanguageDisplayName } from '../../../constants/languages';
+import { t } from '../../../i18n';
 
 type TranscriptViewMode = 'reader' | 'segments';
+
+/** Tab key → language code (`ko:whisper` → `ko`). */
+export function tabKeyLanguage(tabKey: string): string {
+  return tabKey.split(':')[0] ?? tabKey;
+}
+
+/** Caption-language management callbacks (YouTube notes with a server archive). */
+export interface TranscriptCaptionActions {
+  onAddLanguage(): void;
+  /** `tabKey` is a language code (caption/original tabs only). */
+  onSetDefault(tabKey: string): void;
+  /** `tabKey` is a language code (caption tabs only). */
+  onDelete(tabKey: string): void;
+}
 
 interface SpeakerTextParts {
   speakerLabel: string | null;
@@ -39,6 +55,10 @@ export interface TranscriptRendererOptions {
   multilangSegments?: Map<string, TranscriptionSegment[]>;
   /** Callback when language tab is selected */
   onLanguageChange?: (languageCode: string) => void;
+  /** Section source per tab key (T12) — drives tab suffixes and the tab menu */
+  tabSources?: Record<string, TranscriptTabSource>;
+  /** Shows the "+" control and the tab menu when set */
+  captionActions?: TranscriptCaptionActions;
   /** Initial transcript view. Segment mode preserves timestamp/search controls. */
   initialView?: TranscriptViewMode;
   /** Apply reader-mode prose styling to the readable transcript view. */
@@ -81,6 +101,9 @@ export class TranscriptRenderer {
   private multilangSegments: Map<string, TranscriptionSegment[]> = new Map();
   private currentLanguage: string = '';
   private onLanguageChange?: (languageCode: string) => void;
+  private tabSources: Record<string, TranscriptTabSource> = {};
+  private captionActions?: TranscriptCaptionActions;
+  private languageMenuBtn: HTMLElement | null = null;
 
   // Speaker jump feature
   private speakerSegmentIndices: number[] = []; // Indices of segments with speaker markers
@@ -107,6 +130,9 @@ export class TranscriptRenderer {
     this.multilangSegments = options.multilangSegments || new Map<string, TranscriptionSegment[]>();
     this.currentLanguage = options.language || 'en';
     this.onLanguageChange = options.onLanguageChange;
+    this.tabSources = options.tabSources ?? {};
+    this.captionActions = options.captionActions;
+    this.languageMenuBtn = null;
 
     const legacyAudioEl = options.audioElement;
     if (options.adapter) {
@@ -209,6 +235,9 @@ export class TranscriptRenderer {
     // Language tabs (if multilang) or badge (if single language)
     if (this.languages.length >= 2) {
       this.renderLanguageTabs(header);
+      if (this.captionActions) {
+        this.renderLanguageMenuButton(header);
+      }
     } else if (language && language !== 'auto') {
       const langBadge = header.createSpan({
         text: language.toUpperCase(),
@@ -217,6 +246,10 @@ export class TranscriptRenderer {
       if (this.isMobile) {
         langBadge.addClass('tr-lang-badge-mobile');
       }
+    }
+
+    if (this.captionActions) {
+      this.renderAddLanguageButton(header, this.captionActions);
     }
 
     // CC (caption) toggle button -- only shown when native captions are available
@@ -485,10 +518,9 @@ export class TranscriptRenderer {
 
     for (const langCode of this.languages) {
       const isActive = langCode === this.currentLanguage;
-      const displayName = languageCodeToName(langCode);
 
       const tab = tabsContainer.createDiv({
-        text: this.isMobile ? langCode.toUpperCase() : displayName,
+        text: this.tabLabel(langCode),
         cls: 'language-tab sa-rounded-4 sa-clickable sa-flex-shrink-0 sa-font-medium sa-transition tr-lang-tab'
       });
       if (this.isMobile) {
@@ -504,7 +536,126 @@ export class TranscriptRenderer {
         e.stopPropagation();
         this.switchLanguage(langCode);
       });
+
+      this.attachTabMenu(tab, langCode);
     }
+  }
+
+  /** "Korean", "Korean (Whisper)", "Korean (AI)"; mobile: "KO", "KO W", "KO AI". */
+  private tabLabel(tabKey: string): string {
+    const [lang = tabKey, suffix] = tabKey.split(':');
+    if (this.isMobile) {
+      return lang.toUpperCase() + (suffix === 'whisper' ? ' W' : suffix === 'ai' ? ' AI' : '');
+    }
+    const name = transcriptLanguageDisplayName(lang);
+    return suffix === 'whisper' ? `${name} (Whisper)` : suffix === 'ai' ? `${name} (AI)` : name;
+  }
+
+  /** Original/caption tabs can become the default; caption tabs can also be deleted. */
+  private isManageableTab(tabKey: string): boolean {
+    const source = this.tabSources[tabKey];
+    return !!this.captionActions && (source === 'original' || source === 'caption');
+  }
+
+  private buildTabMenu(tabKey: string): Menu | null {
+    const actions = this.captionActions;
+    if (!actions || !this.isManageableTab(tabKey)) return null;
+    const menu = new Menu();
+    menu.addItem((item) => item
+      .setTitle(t('tlang.setDefault'))
+      .setIcon('star')
+      .onClick(() => actions.onSetDefault(tabKey)));
+    if (this.tabSources[tabKey] === 'caption') {
+      menu.addItem((item) => item
+        .setTitle(t('tlang.delete'))
+        .setIcon('trash-2')
+        .onClick(() => actions.onDelete(tabKey)));
+    }
+    return menu;
+  }
+
+  /** Right-click shortcut for the tab menu (desktop; iOS never fires `contextmenu`). */
+  private attachTabMenu(tab: HTMLElement, tabKey: string): void {
+    if (!this.isManageableTab(tabKey)) return;
+    tab.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.buildTabMenu(tabKey)?.showAtMouseEvent(e);
+    });
+  }
+
+  /** "⋯" beside the tabs: the active tab's menu, tappable on every platform. */
+  private renderLanguageMenuButton(parent: HTMLElement): void {
+    const label = t('tlang.menuTitle');
+    const menuBtn = parent.createDiv({ cls: 'transcript-language-menu sa-flex-row sa-rounded-4 sa-clickable sa-transition tr-toggle-btn tr-toggle-inactive' });
+    if (this.isMobile) {
+      menuBtn.addClass('tr-toggle-btn-mobile');
+      menuBtn.addClass('tr-lang-menu-btn-mobile'); // 44px touch target
+    }
+    menuBtn.title = label;
+    menuBtn.setAttribute('aria-label', label);
+    menuBtn.setAttribute('aria-haspopup', 'menu');
+    menuBtn.setAttribute('role', 'button');
+    menuBtn.setAttribute('tabindex', '0');
+
+    const icon = menuBtn.createSpan({ cls: 'transcript-language-menu-icon sa-flex-row' });
+    if (this.isMobile) {
+      icon.addClass('sa-icon-14');
+    }
+    setIcon(icon, 'more-horizontal');
+
+    const open = (e: Event): void => {
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = menuBtn.getBoundingClientRect();
+      this.buildTabMenu(this.currentLanguage)?.showAtPosition({ x: rect.left, y: rect.bottom });
+    };
+    menuBtn.addEventListener('click', open);
+    menuBtn.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') open(e);
+    });
+
+    this.languageMenuBtn = menuBtn;
+    this.syncLanguageMenuButton();
+  }
+
+  /** The "⋯" follows the active tab: hidden on Whisper/AI tabs. */
+  private syncLanguageMenuButton(): void {
+    this.languageMenuBtn?.toggleClass('sa-hidden', !this.isManageableTab(this.currentLanguage));
+  }
+
+  /** "+" control: add a caption language (stopPropagation keeps the header from collapsing). */
+  private renderAddLanguageButton(parent: HTMLElement, actions: TranscriptCaptionActions): void {
+    const label = t('tlang.addLanguage');
+    const addBtn = parent.createDiv({ cls: 'transcript-add-language sa-flex-row sa-rounded-4 sa-clickable sa-transition tr-toggle-btn tr-toggle-inactive' });
+    if (this.isMobile) {
+      addBtn.addClass('tr-toggle-btn-mobile');
+    }
+    addBtn.title = label;
+    addBtn.setAttribute('aria-label', label);
+    addBtn.setAttribute('role', 'button');
+    addBtn.setAttribute('tabindex', '0');
+
+    const icon = addBtn.createSpan({ cls: 'transcript-add-language-icon sa-flex-row' });
+    if (this.isMobile) {
+      icon.addClass('sa-icon-14');
+    }
+    setIcon(icon, 'plus');
+
+    if (!this.isMobile) {
+      addBtn.createSpan({ text: label });
+    }
+
+    addBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      actions.onAddLanguage();
+    });
+    addBtn.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      e.stopPropagation();
+      actions.onAddLanguage();
+    });
   }
 
   /**
@@ -1217,6 +1368,8 @@ export class TranscriptRenderer {
       }
     }
 
+    this.syncLanguageMenuButton();
+
     // Re-evaluate highlight based on current playback time
     const currentTime = this.adapter?.getCurrentTime() ?? this.audioElement?.currentTime ?? 0;
     if (currentTime > 0) {
@@ -1248,5 +1401,6 @@ export class TranscriptRenderer {
     this.transcriptSectionEl = null;
     this.contentEl = null;
     this.segmentsListEl = null;
+    this.languageMenuBtn = null;
   }
 }

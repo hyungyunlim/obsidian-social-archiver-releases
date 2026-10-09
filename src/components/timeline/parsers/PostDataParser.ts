@@ -1,5 +1,5 @@
 import { TFile, type TAbstractFile, type Vault, type App } from 'obsidian';
-import type { PostData, Comment, Media, MultiLangTranscript, TranscriptEntry } from '../../../types/post';
+import type { PostData, Comment, Media, MultiLangTranscript, TranscriptEntry, TranscriptTabSource } from '../../../types/post';
 import type { YamlFrontmatter } from '../../../types/archive';
 import { ArchiveLocationSchema, type ArchiveLocation } from '../../../types/archive-location';
 import { LocationBodyBlock } from '../../../services/markdown/LocationBodyBlock';
@@ -8,8 +8,14 @@ import { isRssBasedPlatform } from '../../../constants/rssPlatforms';
 import { detectMediaType, isImageUrl, isVideoUrl, isAudioUrl } from '../../../utils/mediaType';
 import { PostIndexService, type PostIndexEntry } from '../../../services/PostIndexService';
 import type { Platform } from '@shared/platforms/types';
-import { parseTranscriptSections } from '../../../services/markdown/TranscriptSectionManager';
-import { TRANSCRIPT_HEADER_REGEX } from '../../../constants/languages';
+import {
+  parseSectionSegments,
+  parseTranscriptSections,
+  resolveNoteTranscriptLanguages,
+  withSectionLanguages,
+  type TranscriptSection,
+} from '../../../services/markdown/TranscriptSectionManager';
+import { TRANSCRIPT_HEADER_REGEX, knownTranscriptLanguage } from '../../../constants/languages';
 import { parseAnnotationBlock } from '../../../services/markdown/AnnotationBlockParser';
 import { parseLinkedArchivesBlock } from '../../../services/markdown/LinkedArchivesBlockParser';
 import { firstArchivePerUrl, splitEmbeddedArchiveBlocks } from '../../../services/markdown/EmbeddedArchiveBlocks';
@@ -594,6 +600,11 @@ export class PostDataParser {
       const importMode = frontmatter[IMPORT_MODE_FRONTMATTER_KEY];
       const importSource = frontmatter[IMPORT_SOURCE_FRONTMATTER_KEY];
       const serverArchiveId = frontmatter[SERVER_ARCHIVE_ID_FRONTMATTER_KEY];
+      // T10: languages of the unlabeled original / Whisper sections. Sections are
+      // parsed once and re-labelled, not re-parsed per consumer.
+      const parsedTranscriptSections = parseTranscriptSections(content);
+      const transcriptLanguages = resolveNoteTranscriptLanguages(frontmatter, content, parsedTranscriptSections);
+      const transcriptSections = withSectionLanguages(parsedTranscriptSections, transcriptLanguages);
 
       const postData: PostData = {
         platform: frontmatter.platform as Platform,
@@ -656,15 +667,9 @@ export class PostDataParser {
         audioLocalPath: frontmatter['audioLocalPath'] as string | undefined,
         // Whisper transcription data (parsed from markdown content)
         // Support both flat (new) and nested (legacy) frontmatter structure
-        whisperTranscript: this.parseWhisperTranscript(
-          content,
-          frontmatter.transcriptionLanguage || frontmatter.transcription?.language
-        ),
+        whisperTranscript: this.parseWhisperTranscript(content, transcriptSections, transcriptLanguages.original),
         // Multi-language transcript data (parsed from markdown content)
-        multilangTranscript: this.parseMultiLangTranscripts(
-          content,
-          frontmatter.transcriptionLanguage || frontmatter.transcription?.language
-        ),
+        multilangTranscript: this.parseMultiLangTranscripts(transcriptSections, frontmatter.transcriptDefaultLanguage),
         author: {
           // For YouTube, just use frontmatter.author (channel name) without adding handle
           // YouTube handles are channel IDs (UC...) which aren't user-friendly to display
@@ -1493,72 +1498,31 @@ export class PostDataParser {
   }
 
   /**
-   * Parse Whisper transcript from markdown content
-   * Looks for transcript sections (## Transcript / ## 📄 Transcript)
-   * with [MM:SS] timestamp lines.
+   * Parse the note's primary transcript for playback: the Whisper-marked
+   * section when present, else the original section, else the first one.
+   * Legacy `<div class="podcast-transcript">` wrappers are still read.
    */
   private parseWhisperTranscript(
     content: string,
-    language?: string
+    sections: TranscriptSection[],
+    fallbackLanguage = 'en'
   ): PostData['whisperTranscript'] | undefined {
-    // Prefer transcript sections parsed by shared manager (supports emoji headers)
-    const transcriptSections = parseTranscriptSections(content, language);
-    const primarySection = transcriptSections.find((s) => s.languageName === '') || transcriptSections[0];
-    const sectionContent = primarySection?.body;
+    const primarySection = sections.find((s) => s.source === 'whisper')
+      ?? sections.find((s) => s.source === 'original')
+      ?? sections[0];
 
     // Legacy: also support old HTML wrapper format for existing files
-    const legacyMatch = !sectionContent
-      ? content.match(/<div class="podcast-transcript"[^>]*>([\s\S]*?)<\/div>/)
-      : null;
-
-    const transcriptContent = sectionContent || legacyMatch?.[1];
+    const transcriptContent = primarySection?.body
+      || content.match(/<div class="podcast-transcript"[^>]*>([\s\S]*?)<\/div>/)?.[1];
     if (!transcriptContent) return undefined;
 
-    // Strip callout prefixes (> ) from each line for YouTube formatted transcripts
-    const cleanedContent = transcriptContent
-      .split('\n')
-      .map((line) => line.replace(/^>\s?/, ''))
-      .join('\n');
-
-    const segments: Array<{ id: number; start: number; end: number; text: string }> = [];
-
-    // Parse timestamp lines:
-    // - [MM:SS] text
-    // - [H:MM:SS] text
-    // - [MM:SS](url) text (YouTube formatted links)
-    const lineRegex = /\[(\d+:)?\d{1,2}:\d{2}\](?:\([^)]*\))?\s*(.+)/g;
-    let match;
-    let id = 0;
-
-    while ((match = lineRegex.exec(cleanedContent)) !== null) {
-      const timestampStr = match[0].match(/\[([^\]]+)\]/)?.[1] || '0:00';
-      const text = match[2]?.trim();
-      if (!text) continue; // Skip if no text content
-
-      const seconds = this.parseTimestampToSeconds(timestampStr);
-
-      segments.push({
-        id: id++,
-        start: seconds,
-        end: seconds + 8, // Approximate, will be refined by next segment
-        text
-      });
-    }
-
-    // Refine end times based on next segment's start time
-    for (let i = 0; i < segments.length - 1; i++) {
-      const currentSegment = segments[i];
-      const nextSegment = segments[i + 1];
-      if (currentSegment && nextSegment) {
-        currentSegment.end = nextSegment.start;
-      }
-    }
-
+    const segments = parseSectionSegments(transcriptContent);
     if (segments.length === 0) return undefined;
 
     return {
       segments,
-      language: language || 'en'
+      language: primarySection?.languageCode ?? fallbackLanguage,
+      ...(primarySection ? { source: primarySection.source } : {}),
     };
   }
 
@@ -1581,82 +1545,43 @@ export class PostDataParser {
 
   /**
    * Parse multi-language transcript sections from markdown content.
-   * Returns MultiLangTranscript if 2+ languages found, otherwise undefined.
+   * Tab keys (T12): a language code, or `${lang}:whisper` / `${lang}:ai` when
+   * an earlier-ranked section (original/caption < whisper < ai) already holds
+   * that language. Returns MultiLangTranscript if 2+ tabs found.
    */
   private parseMultiLangTranscripts(
-    content: string,
-    defaultLanguageCode?: string
+    transcriptSections: TranscriptSection[],
+    preferredDefault?: unknown
   ): MultiLangTranscript | undefined {
-    const sections = parseTranscriptSections(content, defaultLanguageCode);
+    const rank: Record<TranscriptTabSource, number> = { original: 0, caption: 0, whisper: 1, ai: 2 };
+    const sections = transcriptSections
+      .map((section, order) => ({ section, order, segments: parseSectionSegments(section.body) }))
+      .filter((entry) => entry.segments.length > 0)
+      .sort((a, b) => rank[a.section.source] - rank[b.section.source] || a.order - b.order);
+    if (sections.length < 2) return undefined;
 
-    // Only build multilang data if we have 2+ languages
-    if (sections.length < 2) {
-      return undefined;
+    const byLanguage: MultiLangTranscript['byLanguage'] = {};
+    const sources: Record<string, TranscriptTabSource> = {};
+    for (const { section, segments } of sections) {
+      const lang = section.languageCode;
+      const key = byLanguage[lang] ? `${lang}:${section.source}` : lang;
+      if (byLanguage[key]) continue;
+      byLanguage[key] = segments;
+      sources[key] = section.source;
     }
 
-    const byLanguage: Record<string, Array<{ id: number; start: number; end: number; text: string }>> = {};
-    let defaultLanguage = defaultLanguageCode || 'en';
+    const keys = Object.keys(byLanguage);
+    if (keys.length < 2) return undefined;
 
-    // Parse timestamp lines for each section
-    const lineRegex = /\[(\d+:)?\d{1,2}:\d{2}\](?:\([^)]*\))?\s*(.+)/g;
+    const preferred = knownTranscriptLanguage(preferredDefault);
+    const isDefaultable = (key: string) => sources[key] === 'caption' || sources[key] === 'original';
+    const defaultLanguage = (preferred && isDefaultable(preferred) ? preferred : undefined)
+      ?? keys.find((key) => sources[key] === 'whisper')
+      ?? keys.find((key) => sources[key] === 'original')
+      ?? keys[0]
+      ?? 'en';
 
-    for (const section of sections) {
-      const cleanedContent = section.body
-        .split('\n')
-        .map((line) => line.replace(/^>\s?/, '')) // Strip callout prefixes
-        .join('\n');
-
-      const segments: Array<{ id: number; start: number; end: number; text: string }> = [];
-      let match;
-      let id = 0;
-
-      // Reset regex state
-      lineRegex.lastIndex = 0;
-
-      while ((match = lineRegex.exec(cleanedContent)) !== null) {
-        const timestampStr = match[0].match(/\[([^\]]+)\]/)?.[1] || '0:00';
-        const text = match[2]?.trim();
-        if (!text) continue;
-
-        const seconds = this.parseTimestampToSeconds(timestampStr);
-
-        segments.push({
-          id: id++,
-          start: seconds,
-          end: seconds + 8, // Approximate, will be refined
-          text
-        });
-      }
-
-      // Refine end times based on next segment's start time
-      for (let i = 0; i < segments.length - 1; i++) {
-        const currentSegment = segments[i];
-        const nextSegment = segments[i + 1];
-        if (currentSegment && nextSegment) {
-          currentSegment.end = nextSegment.start;
-        }
-      }
-
-      if (segments.length > 0) {
-        byLanguage[section.languageCode] = segments;
-
-        // First section is the default language
-        if (section.languageName === '') {
-          defaultLanguage = section.languageCode;
-        }
-      }
-    }
-
-    // Only return if we successfully parsed 2+ languages
-    const languageCount = Object.keys(byLanguage).length;
-    if (languageCount < 2) {
-      return undefined;
-    }
-
-    return {
-      defaultLanguage,
-      byLanguage
-    };
+    return { defaultLanguage, byLanguage, sources };
   }
 
   /**

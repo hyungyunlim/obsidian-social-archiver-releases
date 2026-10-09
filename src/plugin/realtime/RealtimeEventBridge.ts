@@ -37,6 +37,7 @@ import type {
   ArchiveDeletedEventData,
   ArchiveTagsUpdatedEventData,
   ContentVariantUpdatedEventData,
+  TranscriptVariantsUpdatedEventData,
   MediaPreservedEventData,
   AuthorProfileUpdatedEventData,
   BillingStatusUpdatedEventData,
@@ -318,6 +319,10 @@ export interface RealtimeEventBridgeDeps {
     handleUpdatedEvent: (event: { archiveId?: string; jobId?: string; transcriptResultId?: string; updatedAt?: string }) => Promise<void>;
   };
   canExecuteTranscriptionJobs?: () => boolean;
+  /** Caption-language reconcile for `ws:transcript_variants_updated` (skips self-echo itself). */
+  captionVariantSyncService?: {
+    handleUpdatedEvent: (data: TranscriptVariantsUpdatedEventData | undefined) => Promise<void>;
+  };
   processPendingSyncQueue: () => Promise<void>;
   processSyncQueueItem: (queueId: string, archiveId: string, clientId: string) => Promise<boolean>;
   getReadableErrorMessage: (code: string | undefined, msg: string | undefined) => string;
@@ -407,6 +412,7 @@ export class RealtimeEventBridge {
     this.setupArchiveTagsUpdatedListener();
     this.setupUserTagsUpdatedListener();
     this.setupContentVariantUpdatedListener();
+    this.setupTranscriptVariantsUpdatedListener();
     this.setupAuthorProfileUpdatedListener();
     this.setupArchiveRelationUpdatedListener();
     this.setupArchivesBulkUpdatedListener();
@@ -1458,6 +1464,21 @@ export class RealtimeEventBridge {
         });
 
         this.deps.refreshTimelineView();
+      }),
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // ws:transcript_variants_updated
+  // --------------------------------------------------------------------------
+
+  private setupTranscriptVariantsUpdatedListener(): void {
+    this.eventRefs.push(
+      this.deps.events.on('ws:transcript_variants_updated', (message: unknown) => {
+        const data = (message as { data?: TranscriptVariantsUpdatedEventData } | undefined)?.data;
+        void this.deps.captionVariantSyncService?.handleUpdatedEvent(data).catch((error: unknown) => {
+          console.warn('[Social Archiver] Caption language sync failed:', data?.archiveId, error);
+        });
       }),
     );
   }

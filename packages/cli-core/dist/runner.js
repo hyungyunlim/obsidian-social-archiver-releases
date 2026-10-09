@@ -74,7 +74,11 @@ export function parseArgv(args) {
     const fmt = params['format'] === 'text' ? 'text' : 'json';
     return { ok: true, value: { command, params, format: fmt, help: false } };
 }
-export function helpText() {
+/**
+ * Usage text. A host that serves only some commands passes `listCommand` so
+ * help never advertises one that would answer SERVICE_NOT_READY.
+ */
+export function helpText(listCommand = () => true) {
     const lines = [
         'social-archiver — Social Archiver CLI',
         '',
@@ -83,6 +87,8 @@ export function helpText() {
         'Commands:',
     ];
     for (const id of Object.values(COMMANDS)) {
+        if (!listCommand(id))
+            continue;
         const sub = id === COMMANDS.DEFAULT ? 'status' : id.replace('social-archiver:', '');
         lines.push(`  ${sub.padEnd(20)} ${COMMAND_DESCRIPTIONS[id]}`);
     }

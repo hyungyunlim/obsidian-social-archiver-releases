@@ -30,6 +30,7 @@ import {
   getRetryAfterMs,
   type SyncRateLimitGate,
 } from './SyncRateLimitCoordinator';
+import { knownTranscriptLanguage } from '../../constants/languages';
 
 // ============================================================================
 // Constants
@@ -275,6 +276,13 @@ export interface ArchiveLibrarySyncDeps {
 
   /** Reconcile server-generated Whisper transcript projection into existing markdown. */
   reconcileTranscriptState?: (file: TFile, archive: UserArchive) => Promise<void>;
+
+  /**
+   * Reconcile YouTube caption marker sections against `archive.transcriptLanguages`.
+   * `originalLanguage` is passed for a note just written from this archive.
+   * Wired to CaptionVariantSyncService.reconcileFromLibrarySync() in main.ts.
+   */
+  reconcileCaptionVariantState?: (file: TFile, archive: UserArchive, originalLanguage?: string) => Promise<void>;
 
   /**
    * Reconcile the managed `## 💬 Comments` section on an existing note during a
@@ -816,6 +824,7 @@ export class ArchiveLibrarySyncService {
         await this.reconcileExistingActionState(existingById, archive);
         await this.reconcileExistingAnnotationState(existingById, archive);
         await this.reconcileExistingTranscriptState(existingById, archive);
+        await this.reconcileExistingCaptionState(existingById, archive);
         await this.reconcileExistingCommentState(existingById, archive);
         await this.reconcileExistingLocationState(existingById, archive);
         await this.reconcileExistingProductState(existingById, archive);
@@ -895,6 +904,7 @@ export class ArchiveLibrarySyncService {
         await this.reconcileExistingActionState(matched, archive);
         await this.reconcileExistingAnnotationState(matched, archive);
         await this.reconcileExistingTranscriptState(matched, archive);
+        await this.reconcileExistingCaptionState(matched, archive);
         await this.reconcileExistingCommentState(matched, archive);
         await this.reconcileExistingLocationState(matched, archive);
         await this.reconcileExistingProductState(matched, archive);
@@ -1075,6 +1085,21 @@ export class ArchiveLibrarySyncService {
     }
   }
 
+  private async reconcileExistingCaptionState(file: TFile, archive: UserArchive, originalLanguage?: string): Promise<void> {
+    if (!this.deps.reconcileCaptionVariantState) return;
+    if (archive.transcriptLanguages == null) return;
+
+    try {
+      await this.deps.reconcileCaptionVariantState(file, archive, originalLanguage);
+    } catch (error) {
+      console.warn('[Social Archiver] [LibrarySync] reconcileExistingCaptionState failed', {
+        archiveId: archive.id,
+        path: file.path,
+        error,
+      });
+    }
+  }
+
   private async reconcileExistingCommentState(file: TFile, archive: UserArchive): Promise<void> {
     if (!this.deps.reconcileCommentState) return;
 
@@ -1219,6 +1244,14 @@ export class ArchiveLibrarySyncService {
       // upgrade any source note that already links to it (the relation list for
       // this archive includes the incoming side). Fire-and-forget non-fatal.
       await this.reconcileLinkRelationState(result.file, archive);
+      // A fresh note carries only the primary caption section; add the rest.
+      // The summary primary is server-resolved; the raw transcript language
+      // can be a legacy 'unknown' / display name.
+      if ((archive.transcriptLanguages?.length ?? 0) > 1) {
+        const originalLanguage = knownTranscriptLanguage(archive.transcriptLanguages?.[0]?.language)
+          ?? knownTranscriptLanguage(archive.transcript?.language);
+        await this.reconcileExistingCaptionState(result.file, archive, originalLanguage);
+      }
       this.updateState({ savedCount: this.runtimeState.savedCount + 1 });
     } else if (result.status === 'existing') {
       this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });

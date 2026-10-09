@@ -82,6 +82,46 @@ export function renderSettingDefinitions(
   }
 }
 
+/**
+ * Hold Obsidian 1.13+'s native renderer to the contract every row here was
+ * written against: a hidden row builds nothing.
+ *
+ * {@link renderSettingDefinitions} never renders a row whose `visible` is
+ * false, but 1.13+ calls EVERY row's `render` and only then applies `visible`
+ * (it toggles rows, it does not skip them — checked in the 1.13.7 and 1.14.4
+ * app.js). So desktop-only rows ran on mobile and reached `nodeRequire`, whose
+ * throw escaped Obsidian's render pass in the middle of opening the tab: on a
+ * phone the page never slid in and no row was ever hidden (feedback #199).
+ * Sign-in-gated islands also mounted, hidden, for signed-out users.
+ *
+ * A row that still throws costs only itself — the per-row form of the
+ * try/catch {@link SettingTab.display} wraps the pre-1.13 path in.
+ *
+ * ponytail: a skipped row is never back-filled. Nothing here calls
+ * `refreshDomState()` to reveal a row mid-activation; re-render with
+ * `display()`, or reopen the tab, after a change that flips `visible`.
+ */
+export function guardSettingRenders<T extends SettingDefinitionItem>(items: readonly T[]): T[] {
+  return items.map((item): T => {
+    if ('type' in item) {
+      return item.items ? { ...item, items: guardSettingRenders(item.items) } : item;
+    }
+    if (!('render' in item) || !item.render) return item;
+    const render = item.render;
+    return {
+      ...item,
+      render: (setting: Setting, group: SettingGroup): void | (() => void) => {
+        if (!isVisible(item)) return;
+        try {
+          return render(setting, group);
+        } catch (error) {
+          console.error(`[Social Archiver] Settings row "${item.name}" failed to render:`, error);
+        }
+      },
+    };
+  });
+}
+
 function isVisible(item: SettingDefinitionItem): boolean {
   if (!('visible' in item) || item.visible === undefined) return true;
   return typeof item.visible === 'function' ? item.visible() : item.visible;

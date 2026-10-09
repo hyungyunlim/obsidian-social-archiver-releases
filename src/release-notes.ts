@@ -26,6 +26,27 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.10.0': {
+    title: 'YouTube captions in the languages you want',
+    date: '2026-10-09',
+    notes: `## YouTube captions in the languages you want
+
+- **Add a language.** The **+** next to a YouTube transcript's language tabs lists the captions the video has, human-made and auto-generated, and adds the one you pick as its own **Transcript (Language)** section with its own tab.
+- **Set the default or delete.** The **⋯** button next to the tabs, or right-clicking a tab, sets a language as the default or deletes one you added. It works on Obsidian mobile too.
+- **Synced with your other apps.** Languages you add, delete or set as default here, on your phone (2.4.6) or in the desktop app (0.8.8) show up everywhere. Sync only touches the caption sections it added, never your AI translations or Whisper transcripts.
+- **The right label.** New YouTube notes record their caption language, so a Korean transcript is no longer labelled English. Older notes are labelled from the transcript's script, and corrected the first time you open the language list.
+- **Whisper and captions side by side.** A Whisper transcript in the same language as the captions gets its own **(Whisper)** tab instead of hiding them.
+
+## Fixes
+
+- **Settings open on iPhone and iPad.** On Obsidian mobile 1.13 and later, opening Social Archiver's settings could leave the screen stuck, so you couldn't finish setting up or sign in. Fixed.
+- **Delete Transcription** no longer removes everything after the transcript, such as the note's footer.
+- Meta's company sites, like the about.fb.com newsroom, are archived as web pages instead of failing as Facebook posts.
+
+> [!NOTE]
+> Only languages the video already has can be added: YouTube blocks requests for its auto-translated captions. For other languages, use **Translate Transcript** in the AI Comment menu. The server side is already live.
+`,
+  },
   '4.9.1': {
     title: 'Posts you write reach your other apps',
     date: '2026-10-07',

@@ -609,6 +609,66 @@ Keep this.`;
     });
   });
 
+  describe('transcription clear — legacy unmarked transcript', () => {
+    async function clear(content: string): Promise<string> {
+      const file = makeFile('Social Archives/test.md');
+      const app = {
+        vault: { read: vi.fn().mockResolvedValue(content), modify: vi.fn() },
+        fileManager: { processFrontMatter: vi.fn().mockResolvedValue(undefined) },
+      };
+      const service = new AnnotationSyncService(
+        app as any,
+        makeWorkersApiClient() as any,
+        makeArchiveLookup({ byId: file }) as any,
+        makeAnnotationRenderer('') as any,
+        makeSectionManager('body') as any,
+        makeSettings()
+      );
+      await service.handleActionUpdated(makeActionUpdatedData({ changes: { clearTranscription: true } }));
+      return (app.vault.modify.mock.calls[0]?.[1] as string | undefined) ?? content;
+    }
+
+    it('stops at caption blocks, later headings and the footer instead of eating the note to EOF', async () => {
+      const content = `# Video
+
+Description.
+
+---
+
+## Transcript
+
+[00:00] Old whisper line
+
+
+<!-- social-archiver-caption:start language=ko kind=asr -->
+## Transcript (Korean)
+
+[00:00] 안녕하세요
+<!-- social-archiver-caption:end language=ko -->
+
+## 💬 Comments
+
+Keep me.
+
+---
+
+**Platform:** youtube
+`;
+      const result = await clear(content);
+
+      expect(result).not.toContain('Old whisper line');
+      expect(result).toContain('Description.\n\n<!-- social-archiver-caption:start language=ko kind=asr -->');
+      expect(result).toContain('<!-- social-archiver-caption:end language=ko -->');
+      expect(result).toContain('## 💬 Comments\n\nKeep me.');
+      expect(result).toContain('**Platform:** youtube');
+    });
+
+    it('still removes a trailing legacy transcript at the end of the note', async () => {
+      const result = await clear('# Podcast\n\nNotes.\n\n---\n\n## Transcript\n\n[00:00] Hello\n');
+      expect(result).toBe('# Podcast\n\nNotes.');
+    });
+  });
+
   // ── Error handling ──
 
   describe('error handling', () => {

@@ -597,3 +597,38 @@ describe('RealtimeEventBridge — archive_tags_updated handling', () => {
     expect(fmIdx).toBeGreaterThan(suppressionIdx);
   });
 });
+
+describe('RealtimeEventBridge — transcript_variants_updated', () => {
+  it('forwards the event payload to the caption-language sync service', async () => {
+    const handleUpdatedEvent = vi.fn().mockResolvedValue(undefined);
+    const events = makeEvents();
+    const bridge = new RealtimeEventBridge(makeDeps({
+      events: events as unknown as RealtimeEventBridgeDeps['events'],
+      captionVariantSyncService: { handleUpdatedEvent },
+    }));
+    bridge.setup();
+
+    const data = {
+      archiveId: 'a1',
+      action: 'primary_changed',
+      language: 'ja',
+      languages: [{ language: 'ja', kind: 'manual', primary: true }, { language: 'en', kind: 'manual' }],
+      updatedAt: '2026-10-09T08:00:00.000Z',
+      sourceClientId: 'mobile-123',
+    };
+    await events.trigger('ws:transcript_variants_updated', { type: 'transcript_variants_updated', data });
+
+    expect(handleUpdatedEvent).toHaveBeenCalledWith(data);
+  });
+
+  it('swallows sync failures instead of raising from the WS listener', async () => {
+    const events = makeEvents();
+    const bridge = new RealtimeEventBridge(makeDeps({
+      events: events as unknown as RealtimeEventBridgeDeps['events'],
+      captionVariantSyncService: { handleUpdatedEvent: vi.fn().mockRejectedValue(new Error('offline')) },
+    }));
+    bridge.setup();
+
+    await expect(events.trigger('ws:transcript_variants_updated', { data: { archiveId: 'a1' } })).resolves.toBeUndefined();
+  });
+});

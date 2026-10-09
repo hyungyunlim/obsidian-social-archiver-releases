@@ -1321,4 +1321,25 @@ describe('FrontmatterGenerator', () => {
     expect(document).not.toContain('locations:');
     expect(document).not.toContain('[object Object]');
   });
+
+  describe('transcriptLanguage (T10)', () => {
+    it('writes the normalized caption language of the archived transcript', () => {
+      const frontmatter = generator.generateFrontmatter(createTestPostData({
+        platform: 'youtube',
+        transcript: { raw: 'Olá', formatted: [], language: 'pt-BR', kind: 'manual' },
+      }));
+      expect(frontmatter.transcriptLanguage).toBe('pt-br');
+      expect(frontmatter.transcriptDefaultLanguage).toBeUndefined();
+    });
+
+    it('omits it for unknown or missing languages', () => {
+      const unknown = generator.generateFrontmatter(createTestPostData({
+        platform: 'youtube',
+        transcript: { raw: 'x', language: 'unknown' },
+      }));
+      const missing = generator.generateFrontmatter(createTestPostData({ platform: 'youtube' }));
+      expect(unknown.transcriptLanguage).toBeUndefined();
+      expect(missing.transcriptLanguage).toBeUndefined();
+    });
+  });
 });

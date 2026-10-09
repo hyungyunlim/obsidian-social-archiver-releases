@@ -339,6 +339,13 @@
   --tr-btn-size: 10px;
 }
 
+/* Caption-language "⋯" menu — 44px touch target on mobile */
+.tr-lang-menu-btn-mobile {
+  min-width: 44px;
+  min-height: 44px;
+  justify-content: center;
+}
+
 .tr-toggle-active {
   color: var(--text-accent);
   background: var(--background-modifier-hover);

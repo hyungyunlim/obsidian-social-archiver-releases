@@ -5,7 +5,7 @@ import type { PlaybackAdapter } from '../controllers/PlaybackAdapter';
 import { HtmlMediaPlaybackAdapter, YouTubeIframePlaybackAdapter } from '../controllers/PlaybackAdapter';
 import { VideoCaptionOverlay } from '../controllers/VideoCaptionOverlay';
 import type { YouTubePlayerController } from '../controllers/YouTubePlayerController';
-import { TranscriptRenderer } from './TranscriptRenderer';
+import { TranscriptRenderer, tabKeyLanguage, type TranscriptCaptionActions } from './TranscriptRenderer';
 
 /**
  * Context for video media elements available in the post card
@@ -20,6 +20,8 @@ export interface VideoTranscriptRenderOptions {
   startCollapsed?: boolean;
   initialView?: 'reader' | 'segments';
   readerTypography?: boolean;
+  /** YouTube caption-language management ("+" and tab menu) */
+  captionActions?: TranscriptCaptionActions;
 }
 
 /**
@@ -53,7 +55,7 @@ export class VideoTranscriptPlayer {
     renderOptions: VideoTranscriptRenderOptions = {}
   ): boolean {
     // 1. Unify transcript data from different sources
-    const segments = this.unifyTranscriptSegments(post);
+    let segments = this.unifyTranscriptSegments(post);
     if (segments.length === 0) return false;
 
     // 2. Create PlaybackAdapter from available media
@@ -72,13 +74,15 @@ export class VideoTranscriptPlayer {
       for (const [langCode, segs] of Object.entries(post.multilangTranscript.byLanguage)) {
         this.multilangSegments.set(langCode, segs);
       }
+      // Open on the default tab's text, not whichever section playback parsed.
+      segments = this.multilangSegments.get(this.currentLanguage) ?? segments;
     }
 
     // 4. Inject native TextTrack captions for local video
     if (mediaContext.videoElement) {
       this.captionOverlay = new VideoCaptionOverlay();
       this.captionOverlay.attach(mediaContext.videoElement, segments, {
-        language: this.currentLanguage,
+        language: tabKeyLanguage(this.currentLanguage),
         label: 'Transcription'
       });
     }
@@ -104,7 +108,9 @@ export class VideoTranscriptPlayer {
       // Multilang support
       languages: languages.length >= 2 ? languages : undefined,
       multilangSegments: this.multilangSegments.size >= 2 ? this.multilangSegments : undefined,
-      onLanguageChange: languages.length >= 2 ? (langCode) => this.handleLanguageChange(langCode) : undefined
+      onLanguageChange: languages.length >= 2 ? (langCode) => this.handleLanguageChange(langCode) : undefined,
+      tabSources: post.multilangTranscript?.sources,
+      captionActions: renderOptions.captionActions,
     });
 
     return true;
@@ -236,7 +242,7 @@ export class VideoTranscriptPlayer {
     if ((post as PostData & { transcriptionLanguage?: string }).transcriptionLanguage) {
       return (post as PostData & { transcriptionLanguage?: string }).transcriptionLanguage;
     }
-    return undefined;
+    return post.transcript?.language;
   }
 
   /**

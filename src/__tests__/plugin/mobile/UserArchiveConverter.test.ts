@@ -221,4 +221,16 @@ describe('convertUserArchiveToPostData', () => {
       { id: 1, start: 3, end: 7, text: '반갑습니다.', speaker: 'Speaker 2' },
     ]);
   });
+
+  it('carries the primary caption language as transcript metadata without a body', () => {
+    const post = convertUserArchiveToPostData(makeArchive({
+      platform: 'youtube',
+      transcript: { language: 'ko', kind: 'asr' },
+      transcriptLanguages: [{ language: 'ko', kind: 'asr', primary: true }],
+    }));
+    expect(post.transcript).toEqual({ language: 'ko', kind: 'asr' });
+
+    const legacy = convertUserArchiveToPostData(makeArchive({ platform: 'youtube', transcript: { language: 'unknown' } }));
+    expect(legacy.transcript).toBeUndefined();
+  });
 });
