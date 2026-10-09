@@ -869,10 +869,14 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    * Today's review. "Daily review" and "Email digest" are account settings on
    * the server (the same switches the apps show), read when the row renders;
    * the status-bar count is this device's own preference.
+   *
+   * Sign-in is read inside `render`, never here: 1.13+ builds this tree once at
+   * load and renders it on every activation, so a value captured up front left
+   * both toggles disabled after signing in until the plugin reloaded.
    */
   private reviewSettingDefinitions(): SettingDefinitionItem[] {
-    const feature = this.plugin.getReviewFeature();
-    const signedIn = isAuthenticated(this.plugin);
+    const feature = (): ReturnType<typeof this.plugin.getReviewFeature> => this.plugin.getReviewFeature();
+    const signedIn = (): boolean => isAuthenticated(this.plugin);
     const failed = (): void => {
       new Notice(t('rv.settings.failed'));
     };
@@ -882,18 +886,20 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       items: [
         {
           name: t('rv.settings.enabled.name'),
-          desc: signedIn ? t('rv.settings.enabled.desc') : t('rv.settings.signedOut'),
+          desc: t('rv.settings.enabled.desc'),
           render: (setting): void => {
+            setting.setDesc(signedIn() ? t('rv.settings.enabled.desc') : t('rv.settings.signedOut'));
             setting.addToggle(toggle => {
               toggle.setDisabled(true);
-              if (!signedIn || !feature) return;
-              void feature.client.getStatus()
+              const review = feature();
+              if (!signedIn() || !review) return;
+              void review.client.getStatus()
                 .then(({ enabled }) => { toggle.setValue(enabled).setDisabled(false); })
                 .catch(() => undefined);
               toggle.onChange(async (value) => {
                 try {
-                  await feature.client.setEnabled(value);
-                  await feature.refreshStatusBar();
+                  await review.client.setEnabled(value);
+                  await review.refreshStatusBar();
                 } catch {
                   failed();
                 }
@@ -913,7 +919,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                   { reinitialize: false, notify: false }
                 );
                 this.markDirty();
-                await feature?.refreshStatusBar();
+                await feature()?.refreshStatusBar();
               }));
           },
         },
@@ -923,9 +929,10 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           render: (setting): void => {
             setting.addToggle(toggle => {
               toggle.setDisabled(true);
-              if (!signedIn || !feature) return;
-              let current: Awaited<ReturnType<typeof feature.client.getDigest>> | null = null;
-              void feature.client.getDigest()
+              const review = feature();
+              if (!signedIn() || !review) return;
+              let current: Awaited<ReturnType<typeof review.client.getDigest>> | null = null;
+              void review.client.getDigest()
                 .then((digest) => {
                   current = digest;
                   setting.setDesc(t('rv.settings.email.desc', {
@@ -937,7 +944,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
               toggle.onChange(async (value) => {
                 if (!current) return;
                 try {
-                  current = await feature.client.setEmailDigest(value, {
+                  current = await review.client.setEmailDigest(value, {
                     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
                     locale: getLanguage() || window.navigator.language,
                   }, current);
@@ -953,9 +960,9 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           render: (setting): void => {
             setting.addButton(button => button
               .setButtonText(t('rv.settings.open.button'))
-              .setDisabled(!feature)
+              .setDisabled(!feature())
               .onClick(() => {
-                void feature?.open();
+                void feature()?.open();
               }));
           },
         },

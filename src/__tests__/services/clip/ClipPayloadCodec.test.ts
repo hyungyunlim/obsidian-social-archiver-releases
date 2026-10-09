@@ -118,11 +118,14 @@ describe('ClipPayloadCodec', () => {
         })
       );
 
+      // The caption language survives too (4.10.0 records it so a note's
+      // original transcript section is labelled correctly).
       expect(payload.postData.transcript).toEqual({
         raw: 'Hello world',
         formatted: [
           { start_time: 1, end_time: 3, duration: 2, text: 'Hello world' },
         ],
+        language: 'en',
       });
     });
 

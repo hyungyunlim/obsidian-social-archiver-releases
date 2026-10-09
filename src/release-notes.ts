@@ -26,6 +26,15 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.10.1': {
+    title: 'Header icons you can reach on a phone, and review settings that wake up on sign-in',
+    date: '2026-10-09',
+    notes: `## Fixes
+
+- **Header icons scroll on phones.** On Obsidian mobile and in narrow panes, the timeline header's right-hand icons (archive, tags, collections, view, places, shopping, subscriptions, settings) ran past the edge, and swiping them opened the sidebar instead. They now scroll sideways, like the tag bar below them, and stay right-aligned when they fit.
+- **Review settings after sign-in.** **Daily review** and **Email digest** stayed disabled after you signed in until the plugin reloaded. They turn on as soon as you sign in.
+`,
+  },
   '4.10.0': {
     title: 'YouTube captions in the languages you want',
     date: '2026-10-09',

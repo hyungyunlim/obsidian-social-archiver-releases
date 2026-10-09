@@ -2501,6 +2501,7 @@ export class TimelineContainer {
     const leftButtons = header.createDiv();
     leftButtons.addClass('sa-flex-row');
     leftButtons.addClass('sa-gap-8');
+    leftButtons.addClass('sa-flex-shrink-0');
 
     // Search button (toggles search bar below)
     this.renderSearchButton(leftButtons);
@@ -2522,6 +2523,7 @@ export class TimelineContainer {
     const rightButtons = header.createDiv();
     rightButtons.addClass('sa-flex-row');
     rightButtons.addClass('sa-gap-4');
+    rightButtons.addClass('sa-header-actions');
 
     // Tag manage, Archive, Tab Cycle and View Switcher buttons (now also visible in Author mode)
     this.renderArchiveButton(rightButtons);

@@ -19,12 +19,15 @@ vi.mock('obsidian', async () => {
   // A control component: real elements where the code touches them, every
   // other builder call chains.
   const component = (): unknown => {
+    const toggleEl = document.createElement('div');
     const target: Record<string, unknown> = {
       selectEl: document.createElement('select'),
       inputEl: document.createElement('input'),
       buttonEl: document.createElement('button'),
-      toggleEl: document.createElement('div'),
+      toggleEl,
       sliderEl: document.createElement('input'),
+      // Kept on the element so a test can read a toggle's state off its row.
+      setDisabled: (disabled: boolean) => { toggleEl.toggleAttribute('disabled', disabled); return proxy; },
       then: undefined,
     };
     const proxy: unknown = new Proxy(target, {
@@ -38,7 +41,12 @@ vi.mock('obsidian', async () => {
       cb(component() as never);
       return this;
     }
-    addToggle = this.add;
+    addToggle = (cb: (c: never) => unknown): this => {
+      const toggle = component() as { toggleEl: HTMLElement };
+      this.controlEl.appendChild(toggle.toggleEl);
+      cb(toggle as never);
+      return this;
+    };
     addDropdown = this.add;
     addText = this.add;
     addTextArea = this.add;
@@ -115,15 +123,19 @@ function renderLikeObsidian113(container: HTMLElement, items: readonly SettingDe
   }
 }
 
-function mobileTab(signedIn: boolean): SocialArchiverSettingTab {
+const signIn = (settings: object): void => {
+  Object.assign(settings, { authToken: 'token', isVerified: true, username: 'aleonel' });
+};
+
+function mobileTab(signedIn: boolean, reviewFeature?: unknown): SocialArchiverSettingTab {
   const settings = structuredClone(DEFAULT_SETTINGS);
-  if (signedIn) Object.assign(settings, { authToken: 'token', isVerified: true, username: 'aleonel' });
+  if (signedIn) signIn(settings);
   const api = new Proxy({}, { get: () => () => Promise.resolve(true) });
   const plugin = {
     settings,
     manifest: { id: 'social-archiver', version: '4.9.1' },
     workersApiClient: api,
-    getReviewFeature: () => undefined,
+    getReviewFeature: () => reviewFeature,
     register: () => undefined,
     saveSettings: () => Promise.resolve(),
     saveSettingsPartial: () => Promise.resolve(),
@@ -157,5 +169,44 @@ describe('settings tab on Obsidian 1.13+ mobile (feedback #199)', () => {
     mounted.length = 0;
     renderLikeObsidian113(document.createElement('div'), mobileTab(true).getSettingDefinitions());
     expect(mounted).toEqual(['AuthSettingsTab', 'SyncSettingsTab', 'CrossPostSettingsTab', 'DangerZone']);
+  });
+});
+
+describe("Today's review toggles after sign-in", () => {
+  const reviewFeature = {
+    client: {
+      getStatus: () => Promise.resolve({ enabled: true }),
+      getDigest: () => Promise.resolve({ emailEnabled: true, hour: 8 }),
+    },
+    refreshStatusBar: () => Promise.resolve(),
+    open: () => Promise.resolve(),
+  };
+
+  /** Disabled state of the "Daily review" and "Email digest" toggles. */
+  async function reviewToggles(container: HTMLElement): Promise<boolean[]> {
+    await new Promise((resolve) => setTimeout(resolve, 0)); // let getStatus/getDigest settle
+    return [...container.querySelectorAll('.setting-item')]
+      .filter((row) => ['Daily review', 'Email digest'].includes(row.querySelector('.setting-item-name')?.textContent ?? ''))
+      .map((row) => row.querySelector('.setting-item-control > [disabled]') !== null);
+  }
+
+  it('enables them without a plugin reload', async () => {
+    const tab = mobileTab(false, reviewFeature);
+    // 1.13+ builds the tree once (addSettingTab -> update()) and re-renders that
+    // same tree on every activation of the tab.
+    const tree = tab.getSettingDefinitions();
+    const signedOut = document.createElement('div');
+    renderLikeObsidian113(signedOut, tree);
+    expect(await reviewToggles(signedOut)).toEqual([true, true]);
+
+    signIn(tab.plugin.settings);
+
+    const reopened = document.createElement('div');
+    renderLikeObsidian113(reopened, tree);
+    expect(await reviewToggles(reopened)).toEqual([false, false]);
+
+    // The pass main.ts runs right after sign-in.
+    tab.display();
+    expect(await reviewToggles(tab.containerEl)).toEqual([false, false]);
   });
 });

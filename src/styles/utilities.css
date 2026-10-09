@@ -414,6 +414,26 @@ body.is-mobile .sa-action-btn {
   border-radius: 6px;
 }
 
+/* Timeline header action row: scrolls sideways when the icons don't fit
+   (phones, narrow panes) instead of pushing the last ones off-screen. */
+.sa-header-actions {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.sa-header-actions::-webkit-scrollbar {
+  display: none;
+}
+
+/* Right-aligned while everything fits. justify-content: flex-end would make
+   the overflowing start unreachable by scrolling, an auto margin does not. */
+.sa-header-actions > :first-child {
+  margin-inline-start: auto;
+}
+
 /* Pill / badge */
 .sa-pill {
   display: inline-flex;
