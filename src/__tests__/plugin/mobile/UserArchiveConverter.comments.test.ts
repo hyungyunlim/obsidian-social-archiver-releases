@@ -126,4 +126,17 @@ describe('mapUserArchiveComment / convertUserArchiveToPostData — comment pin m
     expect(mapped.author.url).toBe('https://www.reddit.com/user/alice');
     expect(mapped.author.handle).toBe('@alice');
   });
+  it('keeps a single @ on YouTube comment handles and links channel-ID authors to /channel/', () => {
+    const channelId = 'UCTRSxkMh656FsQECwXSxlnw';
+    const post = convertUserArchiveToPostData({
+      ...makeArchive([{ id: 'c1', author: { name: '@creator', handle: '@creator' }, content: 'hi' }]),
+      platform: 'youtube',
+      authorUrl: null,
+      authorHandle: channelId,
+    } as unknown as UserArchive);
+
+    expect(post.author.url).toBe(`https://www.youtube.com/channel/${channelId}`);
+    expect(post.comments?.[0]?.author.handle).toBe('@creator');
+    expect(post.comments?.[0]?.author.url).toBe('https://www.youtube.com/@creator');
+  });
 });

@@ -889,7 +889,7 @@ export class PostCardRenderer extends Component {
         });
         this.videoTranscriptPlayers.set(post.id, player);
       }
-      // ponytail: no "Add captions…" on caption-less cards (thousands of old archives); reader mode offers it.
+      // ponytail: no inline "Add captions…" on caption-less cards (thousands of old archives); the card's "…" menu and reader mode offer it.
     }
     // TikTok embed (if TikTok platform)
     else if (post.platform === 'tiktok' && !hasRenderableTikTokVideo && (post.url || post.videoId || post.id)) {
@@ -4392,6 +4392,19 @@ export class PostCardRenderer extends Component {
             .onClick(() => {
               void this.handleMobileTranscriptionRequest(post);
             });
+        });
+      }
+
+      // The card's Add captions… lives here, not inline (see the transcript player); same picker as reader mode.
+      const captionActions = !isEmbedded && post.platform === 'youtube' && resolvePostArchiveId(this.app, post)
+        ? this.captionActionsFor(post, rootElement)
+        : undefined;
+      if (captionActions) {
+        menu.addItem((item) => {
+          item
+            .setIcon('captions')
+            .setTitle(t('tlang.addCaptions'))
+            .onClick(() => captionActions.onAddLanguage());
         });
       }
 

@@ -21,6 +21,20 @@ interface CommentContentBlock {
 }
 
 const MAX_COMMENT_RENDER_DEPTH = 20;
+
+/**
+ * YouTube identity is the channel ID. The post carries it as handle/URL, the
+ * comment as username/URL (`/channel/UC…`); only the comment knows the @handle,
+ * so handle-vs-handle never matches the creator's own comments.
+ */
+function youtubeChannelId(author: Author): string | null {
+  for (const raw of [author.username, author.handle]) {
+    const token = raw?.trim().replace(/^@+/, '');
+    if (token && /^UC[\w-]{22}$/i.test(token)) return token.toLowerCase();
+  }
+  const match = author.url?.match(/youtube\.com\/(?:channel\/|@)(UC[\w-]{22})(?=[/?#]|$)/i);
+  return match?.[1]?.toLowerCase() ?? null;
+}
 /**
  * CommentRenderer - Renders Instagram-style comments section
  * Single Responsibility: Comments rendering with replies
@@ -39,6 +53,12 @@ export class CommentRenderer {
    */
   private isPostAuthor(commentAuthor: Author): boolean {
     if (!this.postAuthor) return false;
+
+    if (this.platform === 'youtube') {
+      const commentChannel = youtubeChannelId(commentAuthor);
+      const postChannel = youtubeChannelId(this.postAuthor);
+      if (commentChannel && postChannel) return commentChannel === postChannel;
+    }
 
     // Compare by URL (most reliable - same profile URL)
     if (commentAuthor.url && this.postAuthor.url) {

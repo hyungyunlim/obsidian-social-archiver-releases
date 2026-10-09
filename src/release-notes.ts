@@ -26,6 +26,18 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.10.4': {
+    title: 'The Author badge on YouTube comments, and Add captions… in the card menu',
+    date: '2026-10-10',
+    notes: `## Fixes
+
+- **Author badge on YouTube.** Comments posted by the video's own channel now show the **Author** badge, as they already did on other platforms. YouTube comment authors are written as channel links so the badge survives sync, and handles no longer show a doubled \`@\`.
+
+## New
+
+- **Add captions… in the card menu.** On Obsidian mobile, the **…** menu of a YouTube card now has **Add captions…**, which opens the same caption picker as reader mode, without adding anything to the card itself.
+`,
+  },
   '4.10.3': {
     title: 'Add YouTube captions to notes saved without a transcript',
     date: '2026-10-09',

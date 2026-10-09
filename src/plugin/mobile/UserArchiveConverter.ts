@@ -50,7 +50,10 @@ export function buildProfileUrl(platform: Platform, handle?: string): string {
     case 'reddit':
       return `https://www.reddit.com/user/${handle}`;
     case 'youtube':
-      return `https://www.youtube.com/@${handle}`;
+      // A channel ID under /@ is a 404; YouTube archives store the ID as handle.
+      return /^UC[\w-]{22}$/.test(handle)
+        ? `https://www.youtube.com/channel/${handle}`
+        : `https://www.youtube.com/@${handle}`;
     case 'pinterest':
       return `https://www.pinterest.com/${handle}/`;
     case 'bluesky':
@@ -76,15 +79,14 @@ export function mapUserArchiveComment(
   comment: UserArchiveComment,
   platform: Platform,
 ): Comment {
+  // Some producers (YouTube) already store the handle with its '@'.
+  const handle = normalizeHandle(comment.author.handle);
   const mapped: Comment = {
     id: comment.id,
     author: {
       name: comment.author.name,
-      url:
-        comment.author.url ||
-        (comment.author.handle ? buildProfileUrl(platform, comment.author.handle) : '') ||
-        '',
-      handle: comment.author.handle ? `@${comment.author.handle}` : undefined,
+      url: comment.author.url || buildProfileUrl(platform, handle),
+      handle: handle ? `@${handle}` : undefined,
       avatar: comment.author.avatarUrl,
     },
     content: comment.content,

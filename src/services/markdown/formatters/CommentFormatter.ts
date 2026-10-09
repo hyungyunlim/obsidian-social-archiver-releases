@@ -177,11 +177,20 @@ export class CommentFormatter {
         : comment.author.name;
     }
 
+    if (platform === 'youtube') {
+      // Keep the channel link: YouTube identity is the channel ID, and the
+      // timeline needs it to badge the creator's own comments.
+      return comment.author.url
+        ? `[${comment.author.name}](${comment.author.url})`
+        : comment.author.name;
+    }
+
     if (comment.author.name === '[deleted]') {
       return '@[deleted]';
     }
 
-    return authorHandle ? `@${authorHandle}` : comment.author.name;
+    // Handles may already carry their '@' (Threads, synced comments).
+    return authorHandle ? `@${authorHandle.replace(/^@+/, '')}` : comment.author.name;
   }
 
   /**

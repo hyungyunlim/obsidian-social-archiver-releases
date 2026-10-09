@@ -230,4 +230,32 @@ describe('CommentRenderer', () => {
     expect(container.textContent).toContain('LevelOneAuthor');
     expect(container.textContent).toContain('LevelTwoAuthor');
   });
+  it('badges the YouTube creator by channel ID, not by the @handle', () => {
+    const channelId = 'UCTRSxkMh656FsQECwXSxlnw';
+    const container = document.createElement('div');
+    // Shapes as PostDataParser rebuilds them from a note: the post knows only
+    // the channel ID, the comment its @handle plus the channel link.
+    const comments: Comment[] = [
+      {
+        id: '1',
+        author: { name: 'queeeeen_ivy', username: 'queeeeen_ivy', url: `https://www.youtube.com/channel/${channelId}` },
+        content: 'Creator reply',
+      },
+      {
+        id: '2',
+        author: { name: 'viewer', username: 'viewer', url: 'https://www.youtube.com/channel/UCQXmV7aMooEAV1mLpjJ1HWQ' },
+        content: 'Viewer comment',
+      },
+    ];
+
+    new CommentRenderer().render(container, comments, 'youtube', {
+      name: 'Queen Ivy',
+      url: `https://www.youtube.com/@${channelId}`,
+      handle: `@${channelId}`,
+    });
+
+    const badges = container.querySelectorAll('.comment-author-badge');
+    expect(badges).toHaveLength(1);
+    expect(badges[0]?.parentElement?.textContent).toContain('queeeeen_ivy');
+  });
 });

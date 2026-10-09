@@ -29,6 +29,33 @@ describe('CommentFormatter', () => {
       expect(result).not.toContain('https://x.com/@example');
     });
 
+    it('normalizes default-branch handles that already include @', () => {
+      const comments: Comment[] = [
+        { id: '1', author: { name: 'T', url: '', handle: '@@thread_user' }, content: 'Threads comment' },
+      ];
+
+      expect(formatter.formatComments(comments, 'threads')).toContain('**@thread_user**');
+    });
+
+    it('links YouTube comment authors to their channel so the creator can be matched', () => {
+      const comments: Comment[] = [
+        {
+          id: '1',
+          author: {
+            name: '@creator',
+            url: 'https://www.youtube.com/channel/UCTRSxkMh656FsQECwXSxlnw',
+            handle: '@@creator',
+            username: 'UCTRSxkMh656FsQECwXSxlnw',
+          },
+          content: 'Thanks!',
+        },
+      ];
+
+      expect(formatter.formatComments(comments, 'youtube')).toContain(
+        '**[@creator](https://www.youtube.com/channel/UCTRSxkMh656FsQECwXSxlnw)**',
+      );
+    });
+
     it('should render inline image in comment', () => {
       const comments: Comment[] = [
         {
