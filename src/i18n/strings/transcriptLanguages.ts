@@ -7,8 +7,11 @@ import type { LocaleText } from '../index';
 export const transcriptLanguageStrings = {
   'tlang.menuTitle': { en: 'Transcript languages', ko: '자막 언어' },
   'tlang.addLanguage': { en: 'Add language…', ko: '언어 추가…' },
+  'tlang.addCaptions': { en: 'Add captions…', ko: '자막 추가…' },
+  'tlang.transcribeWhisper': { en: 'Transcribe with Whisper', ko: 'Whisper로 전사' },
   'tlang.loading': { en: 'Loading languages…', ko: '언어 목록을 불러오는 중…' },
   'tlang.noneAvailable': { en: 'No other caption languages for this video', ko: '이 영상에는 다른 자막 언어가 없습니다' },
+  'tlang.noCaptions': { en: 'This video has no captions on YouTube.', ko: '이 영상에는 YouTube 자막이 없습니다.' },
   'tlang.setDefault': { en: 'Set as default', ko: '기본으로 설정' },
   'tlang.delete': { en: 'Delete language', ko: '언어 삭제' },
   'tlang.added': { en: '{language} captions added', ko: '{language} 자막을 추가했습니다' },
@@ -42,9 +45,9 @@ export const transcriptLanguageStrings = {
     en: 'These captions are too long to set as default.',
     ko: '자막이 너무 길어 기본으로 설정할 수 없습니다.',
   },
-  'tlang.error.primaryMissing': {
-    en: "This video was archived without captions, so other caption languages can't be added.",
-    ko: '이 영상은 자막 없이 아카이브되어 다른 자막 언어를 추가할 수 없습니다.',
+  'tlang.error.tooLargeToAdd': {
+    en: '{language} captions are too long to save to this archive.',
+    ko: '{language} 자막이 너무 길어 이 아카이브에 저장할 수 없습니다.',
   },
   'tlang.error.rateLimited': {
     en: 'Too many caption requests. Try again in a few minutes.',

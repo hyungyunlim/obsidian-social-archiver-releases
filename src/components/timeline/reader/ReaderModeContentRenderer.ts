@@ -20,7 +20,8 @@ import { MediaGalleryRenderer } from '../renderers/MediaGalleryRenderer';
 import { LinkPreviewRenderer } from '../renderers/LinkPreviewRenderer';
 import { CommentRenderer } from '../renderers/CommentRenderer';
 import { VideoTranscriptPlayer } from '../renderers/VideoTranscriptPlayer';
-import { buildCaptionActions } from '../renderers/CaptionLanguageActions';
+import { buildCaptionActions, renderAddCaptionsEntry } from '../renderers/CaptionLanguageActions';
+import { resolvePostArchiveId } from '../renderers/postArchiveId';
 import {
   getPlatformSimpleIcon,
   getPlatformLucideIcon,
@@ -739,7 +740,10 @@ export class ReaderModeContentRenderer extends Component {
       post.transcript?.formatted?.length
     );
     const rawTranscript = post.transcript?.raw?.trim();
-    if (!hasSegmentTranscript && !rawTranscript) return;
+    if (!hasSegmentTranscript && !rawTranscript) {
+      this.renderAddCaptionsSlot(parent, post);
+      return;
+    }
 
     const transcriptContainer = parent.createDiv({ cls: 'sa-reader-mode-transcript' });
 
@@ -777,14 +781,37 @@ export class ReaderModeContentRenderer extends Component {
 
   /** Re-parse the note and redraw only the transcript after a caption-language change. */
   private async refreshTranscriptPlayer(container: HTMLElement, post: PostData, player: VideoTranscriptPlayer): Promise<void> {
-    const file = post.filePath ? this.app.vault.getFileByPath(post.filePath) : null;
-    if (!file || !container.isConnected) return;
-    const { PostDataParser } = await import('../parsers/PostDataParser');
-    const refreshed = await new PostDataParser(this.app.vault, this.app).parseFile(file);
+    const refreshed = container.isConnected ? await this.reparse(post) : null;
     if (!refreshed) return;
     player.destroy();
     container.empty();
     this.renderTranscriptPlayer(container, refreshed);
+  }
+
+  /** No transcript yet: the caption picker; a pick redraws this slot as the transcript. */
+  private renderAddCaptionsSlot(parent: HTMLElement, post: PostData): void {
+    if (post.platform !== 'youtube' || !resolvePostArchiveId(this.app, post)) return;
+    let slot: HTMLElement | undefined;
+    const actions = buildCaptionActions({
+      app: this.app,
+      post,
+      service: () => this.plugin.captionVariantSyncService,
+      onChanged: () => window.setTimeout(() => void this.reparse(post).then((refreshed) => {
+        if (!refreshed || !slot?.isConnected) return;
+        slot.empty();
+        this.renderTranscript(slot, refreshed);
+      }), 500),
+    });
+    if (!actions) return;
+    slot = parent.createDiv();
+    renderAddCaptionsEntry(slot, actions);
+  }
+
+  private async reparse(post: PostData): Promise<PostData | null> {
+    const file = post.filePath ? this.app.vault.getFileByPath(post.filePath) : null;
+    if (!file) return null;
+    const { PostDataParser } = await import('../parsers/PostDataParser');
+    return new PostDataParser(this.app.vault, this.app).parseFile(file);
   }
 
   private renderRawTranscript(parent: HTMLElement, transcript: string, language?: string): void {

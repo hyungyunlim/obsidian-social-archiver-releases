@@ -26,6 +26,19 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.10.3': {
+    title: 'Add YouTube captions to notes saved without a transcript',
+    date: '2026-10-09',
+    notes: `## New
+
+- **Add captions to a YouTube note that has none.** Many YouTube archives were saved without a transcript because YouTube refused the server's requests (fixed for new archives). Reader mode now shows **Add captions…** on those notes: it lists the captions the video has, and the one you pick becomes the note's transcript, as if it had been there from the start. Captions added on your phone or desktop land in the note the same way.
+- **Whisper when YouTube has nothing.** On Obsidian mobile, when the video has no captions, or none left to add, the picker offers **Transcribe with Whisper**, which sends the job to your desktop app like the existing transcribe action.
+
+## Fixes
+
+- A caption track too long to save as the transcript now says so, instead of a generic error.
+`,
+  },
   '4.10.2': {
     title: 'The whole header toolbar scrolls, and Substack and Tumblr authors you can subscribe to',
     date: '2026-10-09',

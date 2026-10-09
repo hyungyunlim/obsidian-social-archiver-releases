@@ -59,7 +59,8 @@ export interface AddArchiveTranscriptRequest {
 }
 
 export interface AddArchiveTranscriptResponse extends ArchiveTranscriptBodyResponse {
-  role: 'variant';
+  /** 'primary' = the archive had no transcript, so the added track became it. */
+  role: 'primary' | 'variant';
   action: 'added' | 'replaced';
   transcriptLanguages: TranscriptLanguageSummary[];
   updatedAt: string;

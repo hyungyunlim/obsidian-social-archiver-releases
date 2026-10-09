@@ -889,6 +889,7 @@ export class PostCardRenderer extends Component {
         });
         this.videoTranscriptPlayers.set(post.id, player);
       }
+      // ponytail: no "Add captions…" on caption-less cards (thousands of old archives); reader mode offers it.
     }
     // TikTok embed (if TikTok platform)
     else if (post.platform === 'tiktok' && !hasRenderableTikTokVideo && (post.url || post.videoId || post.id)) {
@@ -2221,6 +2222,10 @@ export class PostCardRenderer extends Component {
       },
       // Give the metadata cache a beat to pick up the frontmatter write.
       onChanged: () => window.setTimeout(() => void this.refreshPostCardFull(post, rootElement), 500),
+      // ponytail: mobile only — desktop's Whisper path is the download/transcribe banner already on this card.
+      onTranscribe: this.shouldShowMobileTranscriptionAction(post, false)
+        ? () => void this.handleMobileTranscriptionRequest(post)
+        : undefined,
     });
   }
 

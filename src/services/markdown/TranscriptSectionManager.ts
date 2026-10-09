@@ -335,6 +335,15 @@ export function insertTranscriptSection(
   );
 }
 
+/**
+ * Insert the unlabeled original `## Transcript` — the shape an archive-time
+ * transcript has — for a primary that arrived after the note was written.
+ * Placement follows `insertTranscriptSection`.
+ */
+export function insertOriginalTranscriptSection(markdown: string, lines: string): string {
+  return insertAtTranscriptPlacement(markdown, `\n\n## Transcript\n\n${lines.trim()}\n`);
+}
+
 function insertAtTranscriptPlacement(markdown: string, sectionText: string): string {
   const sections = parseTranscriptSections(markdown);
   const lastSection = sections[sections.length - 1];

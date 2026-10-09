@@ -127,10 +127,15 @@ const signIn = (settings: object): void => {
   Object.assign(settings, { authToken: 'token', isVerified: true, username: 'aleonel' });
 };
 
-function mobileTab(signedIn: boolean, reviewFeature?: unknown): SocialArchiverSettingTab {
+function mobileTab(signedIn: boolean, reviewFeature?: unknown, apiCalls: string[] = []): SocialArchiverSettingTab {
   const settings = structuredClone(DEFAULT_SETTINGS);
   if (signedIn) signIn(settings);
-  const api = new Proxy({}, { get: () => () => Promise.resolve(true) });
+  const api = new Proxy({}, {
+    get: (_target, prop) => () => {
+      apiCalls.push(String(prop));
+      return Promise.resolve(true);
+    },
+  });
   const plugin = {
     settings,
     manifest: { id: 'social-archiver', version: '4.9.1' },
@@ -169,6 +174,19 @@ describe('settings tab on Obsidian 1.13+ mobile (feedback #199)', () => {
     mounted.length = 0;
     renderLikeObsidian113(document.createElement('div'), mobileTab(true).getSettingDefinitions());
     expect(mounted).toEqual(['AuthSettingsTab', 'SyncSettingsTab', 'CrossPostSettingsTab', 'DangerZone']);
+  });
+
+  // GitHub releases#50: signed out on 1.14.4 desktop, the hidden Collection
+  // activity row still fetched notification-preferences, got 401s and the
+  // window froze. Hidden rows must not reach the API at all.
+  it('makes no API call while signed out; the account rows fetch once signed in', () => {
+    const signedOutCalls: string[] = [];
+    renderLikeObsidian113(document.createElement('div'), mobileTab(false, undefined, signedOutCalls).getSettingDefinitions());
+    expect(signedOutCalls).toEqual([]);
+
+    const signedInCalls: string[] = [];
+    renderLikeObsidian113(document.createElement('div'), mobileTab(true, undefined, signedInCalls).getSettingDefinitions());
+    expect(signedInCalls).toContain('getCollectionActivityNotificationsEnabled');
   });
 });
 

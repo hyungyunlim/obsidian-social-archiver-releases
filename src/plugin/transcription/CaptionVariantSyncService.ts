@@ -10,6 +10,8 @@
  * - Only `social-archiver-caption` blocks are added or removed. AI-translated
  *   and original sections are never touched; an AI section of a target language
  *   blocks the insert (one Notice per archive+language per session).
+ * - A primary the note has no original section for (archive saved without
+ *   captions, first track added later) lands once as that original section.
  */
 
 import type { App, TFile } from 'obsidian';
@@ -27,6 +29,7 @@ import {
   extractTranscriptLanguages,
   findUnmarkedSection,
   insertCaptionSection,
+  insertOriginalTranscriptSection,
   listCaptionSections,
   parseSectionSegments,
   parseTranscriptSections,
@@ -68,16 +71,24 @@ const ERROR_KEYS: Record<string, TranslationKey> = {
   TRANSCRIPT_PRIMARY_NOT_DELETABLE: 'tlang.error.primaryNotDeletable',
   TRANSCRIPT_LANGUAGE_IS_PRIMARY: 'tlang.error.isPrimary',
   TRANSCRIPT_TOO_LARGE: 'tlang.error.tooLarge',
-  TRANSCRIPT_PRIMARY_MISSING: 'tlang.error.primaryMissing',
   RATE_LIMITED: 'tlang.error.rateLimited',
   NOT_YOUTUBE: 'tlang.error.videoUnavailable',
   VIDEO_UNAVAILABLE: 'tlang.error.videoUnavailable',
 };
 
+/** On add, TOO_LARGE means a first primary over the column cap — nothing was "set as default". */
+const ADD_ERROR_KEYS: Record<string, TranslationKey> = {
+  TRANSCRIPT_TOO_LARGE: 'tlang.error.tooLargeToAdd',
+};
+
 /** Notice text for an API failure (contract C4); unknown codes read generic. */
-export function captionErrorMessage(error: unknown, language?: string): string {
+export function captionErrorMessage(
+  error: unknown,
+  language?: string,
+  overrides: Record<string, TranslationKey> = {}
+): string {
   const code = error instanceof Error ? (error as Error & { code?: unknown }).code : undefined;
-  const key = (typeof code === 'string' && ERROR_KEYS[code]) || 'tlang.error.generic';
+  const key = (typeof code === 'string' && (overrides[code] ?? ERROR_KEYS[code])) || 'tlang.error.generic';
   return t(key, { language: language ? transcriptLanguageDisplayName(language) : '' });
 }
 
@@ -101,6 +112,21 @@ export function sameOpeningText(body: ArchiveTranscriptJson, sectionBody: string
   const bodyText = openingText((body.formatted ?? []).map((segment) => segment.text));
   return [...bodyText.replace(/\s/g, '')].length >= MIN_COMPARABLE_CHARS &&
     bodyText === openingText(parseSectionSegments(sectionBody).map((s) => s.text));
+}
+
+/**
+ * The summary's primary when the note has no original section to hold it.
+ * An explicit `transcriptLanguage` means the note already placed (or its user
+ * deleted) the original, so this never resurrects one.
+ */
+function unlandedPrimary(
+  summary: TranscriptLanguageSummary[],
+  fm: Record<string, unknown> | undefined,
+  content: string
+): string | undefined {
+  const primary = summary[0]?.primary ? knownTranscriptLanguage(summary[0].language) : undefined;
+  if (!primary || knownTranscriptLanguage(fm?.transcriptLanguage)) return undefined;
+  return parseTranscriptSections(content).some((s) => s.source === 'original') ? undefined : primary;
 }
 
 export class CaptionVariantSyncService {
@@ -160,8 +186,9 @@ export class CaptionVariantSyncService {
   }
 
   async addLanguage(file: TFile, archiveId: string, track: AvailableTranscriptTrack): Promise<void> {
+    // role 'primary' needs no branch: the summary's primary lands as the original section.
     const response = await this.call(track.language, (api) =>
-      api.addArchiveTranscript(archiveId, { language: track.language, kind: track.kind }));
+      api.addArchiveTranscript(archiveId, { language: track.language, kind: track.kind }), ADD_ERROR_KEYS);
     await this.deps.withMarkdownWriteLock(archiveId, () =>
       this.applySummary(file, archiveId, response.transcriptLanguages, {
         bodies: new Map([[normalizeTranscriptLanguage(response.language) ?? response.language, response.transcript]]),
@@ -203,6 +230,11 @@ export class CaptionVariantSyncService {
     const bodies = options.bodies ?? new Map<string, ArchiveTranscriptJson>();
     const content = await vault.read(file);
     const fm = this.frontmatter(file);
+    const firstPrimary = options.originalLanguage ? undefined : unlandedPrimary(summary, fm, content);
+    if (firstPrimary && (await this.landFirstPrimary(file, archiveId, firstPrimary, bodies, options.originalUrl))) {
+      // The metadata cache may not have the new `transcriptLanguage` yet.
+      return this.applySummary(file, archiveId, summary, { ...options, originalLanguage: firstPrimary });
+    }
     const resolved = resolveNoteTranscriptLanguages(fm, content);
     const languages = options.originalLanguage ? { ...resolved, original: options.originalLanguage } : resolved;
     const originalIsExplicit = !!options.originalLanguage || !!knownTranscriptLanguage(fm?.transcriptLanguage);
@@ -268,6 +300,40 @@ export class CaptionVariantSyncService {
     });
   }
 
+  /**
+   * Write a first primary the way an archive-time transcript is written:
+   * unlabeled `## Transcript` + `transcriptLanguage`. Every later reconcile
+   * then sees it as the original — excluded from caption inserts, never
+   * removed, swaps only flip `transcriptDefaultLanguage`. A caption block of
+   * the same language (an older plugin synced the primary that way) is the
+   * same track, so it folds into the section instead of doubling it.
+   */
+  private async landFirstPrimary(
+    file: TFile,
+    archiveId: string,
+    language: string,
+    bodies: Map<string, ArchiveTranscriptJson>,
+    originalUrl: string | undefined
+  ): Promise<boolean> {
+    const { vault, fileManager } = this.deps.app;
+    const fm = this.frontmatter(file);
+    const body = bodies.get(language) ?? (await this.fetchBody(archiveId, language));
+    const lines = this.formatLines(body, this.videoId(fm, originalUrl));
+    if (!lines) return false;
+
+    let landed = '';
+    await vault.process(file, (current) => {
+      landed = insertOriginalTranscriptSection(removeCaptionSection(current, language) ?? current, lines);
+      return landed;
+    });
+    const languages = resolveNoteTranscriptLanguages({ ...fm, transcriptLanguage: language }, landed);
+    await fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
+      frontmatter.transcriptLanguage = language;
+      frontmatter.transcriptLanguages = extractTranscriptLanguages(landed, languages);
+    });
+    return true;
+  }
+
   private async fetchBody(archiveId: string, language: string): Promise<ArchiveTranscriptJson> {
     const api = this.deps.apiClient();
     if (!api) return {};
@@ -303,7 +369,11 @@ export class CaptionVariantSyncService {
   }
 
   /** Runs an API call; failures become a Notice + CaptionLanguageError. */
-  private async call<T>(language: string | undefined, fn: (api: CaptionApi) => Promise<T>): Promise<T> {
+  private async call<T>(
+    language: string | undefined,
+    fn: (api: CaptionApi) => Promise<T>,
+    errorKeys?: Record<string, TranslationKey>
+  ): Promise<T> {
     const api = this.deps.apiClient();
     if (!api) {
       this.deps.notify(t('tlang.signIn'));
@@ -312,7 +382,7 @@ export class CaptionVariantSyncService {
     try {
       return await fn(api);
     } catch (error) {
-      this.deps.notify(captionErrorMessage(error, language));
+      this.deps.notify(captionErrorMessage(error, language, errorKeys));
       throw new CaptionLanguageError(error instanceof Error ? error.message : String(error));
     }
   }

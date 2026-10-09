@@ -7,7 +7,12 @@ import {
   sameOpeningText,
   type CaptionVariantSyncDeps,
 } from '../../../plugin/transcription/CaptionVariantSyncService';
-import { insertCaptionSection, insertTranscriptSection, listCaptionSections } from '../../../services/markdown/TranscriptSectionManager';
+import {
+  insertCaptionSection,
+  insertTranscriptSection,
+  listCaptionSections,
+  parseTranscriptSections,
+} from '../../../services/markdown/TranscriptSectionManager';
 import type { UserArchive } from '../../../services/WorkersAPIClient';
 import type { ArchiveTranscriptJson, TranscriptLanguageSummary } from '../../../types/transcript-languages';
 
@@ -250,6 +255,104 @@ describe('CaptionVariantSyncService user actions', () => {
   });
 });
 
+/** A YouTube note archived while YouTube refused captions: no transcript section. */
+const NO_TRANSCRIPT = `---
+platform: youtube
+---
+
+Description
+
+---
+
+**Platform:** youtube
+`;
+
+const originals = (content: string) => parseTranscriptSections(content).filter((s) => s.source === 'original');
+
+describe('CaptionVariantSyncService first primary (archive saved without captions)', () => {
+  it('lands a plugin-added first primary as the original section, and the next sync leaves it alone', async () => {
+    const { service, file, state, api, deps } = setup(NO_TRANSCRIPT, { videoId: 'vid' });
+    api.addArchiveTranscript.mockResolvedValue({
+      language: 'en', kind: 'manual', role: 'primary', trackName: null, action: 'added',
+      transcript: { ...BODIES.en, language: 'en' }, transcriptLanguages: summary('en'), updatedAt: 'now',
+    });
+
+    // 'en' is also the guessed original language of a note without a transcript.
+    await service.addLanguage(file, 'a1', { language: 'en', kind: 'manual', name: null, state: 'available' });
+
+    expect(api.getArchiveTranscript).not.toHaveBeenCalled();
+    expect(originals(state.content)).toHaveLength(1);
+    expect(state.content).toContain('[00:00](https://www.youtube.com/watch?v=vid&t=0s) Hello there');
+    expect(listCaptionSections(state.content)).toEqual([]);
+    expect(state.frontmatter).toMatchObject({ transcriptLanguage: 'en', transcriptLanguages: ['en'] });
+    expect(state.frontmatter).not.toHaveProperty('transcriptDefaultLanguage');
+
+    const landed = state.content;
+    const process = deps.app.vault.process as ReturnType<typeof vi.fn>;
+    const writes = process.mock.calls.length;
+    await service.reconcileFromLibrarySync(file, archive(summary('en')));
+    expect(state.content).toBe(landed);
+    expect(process.mock.calls.length).toBe(writes);
+  });
+
+  it('lands a first primary synced from another device; later languages and swaps reconcile around it', async () => {
+    const { service, file, state, api } = setup(NO_TRANSCRIPT, { videoId: 'vid' });
+    api.getUserArchive.mockResolvedValue({ archive: archive(summary('ko')) });
+
+    await service.handleUpdatedEvent({
+      archiveId: 'a1', action: 'primary_changed', language: 'ko', languages: summary('ko'), updatedAt: 'now', sourceClientId: 'mobile-1',
+    });
+
+    expect(api.getArchiveTranscript).toHaveBeenCalledWith('a1', 'ko');
+    expect(originals(state.content)).toHaveLength(1);
+    expect(state.frontmatter.transcriptLanguage).toBe('ko');
+
+    await service.reconcileFromLibrarySync(file, archive(summary('ko', 'ja')));
+    expect(listCaptionSections(state.content)).toEqual([{ language: 'ja', kind: 'manual' }]);
+
+    await service.reconcileFromLibrarySync(file, archive(summary('ja', 'ko')));
+    expect(state.frontmatter.transcriptDefaultLanguage).toBe('ja');
+
+    // The old primary deleted server-side: the original section is never removed.
+    await service.reconcileFromLibrarySync(file, archive(summary('ja')));
+    expect(originals(state.content)).toHaveLength(1);
+    expect(state.content.match(/안녕하세요/g)).toHaveLength(1);
+    expect(listCaptionSections(state.content)).toEqual([{ language: 'ja', kind: 'manual' }]);
+  });
+
+  it("folds an older plugin's caption block of the primary into the original section", async () => {
+    const legacy = insertCaptionSection(NO_TRANSCRIPT, { language: 'ko', kind: 'asr', lines: '[00:00] 안녕하세요' });
+    const { service, file, state } = setup(legacy, { videoId: 'vid', transcriptDefaultLanguage: 'ko' });
+
+    await service.reconcileFromLibrarySync(file, archive(summary('ko')));
+
+    expect(listCaptionSections(state.content)).toEqual([]);
+    expect(originals(state.content)).toHaveLength(1);
+    expect(state.content.match(/안녕하세요/g)).toHaveLength(1);
+    expect(state.frontmatter.transcriptLanguage).toBe('ko');
+    expect(state.frontmatter).not.toHaveProperty('transcriptDefaultLanguage');
+  });
+
+  it('never re-lands an original the note already placed (explicit transcriptLanguage)', async () => {
+    const { service, file, state } = setup(NO_TRANSCRIPT, { videoId: 'vid', transcriptLanguage: 'en' });
+
+    await service.reconcileFromLibrarySync(file, archive(summary('en', 'ko')));
+
+    expect(originals(state.content)).toHaveLength(0);
+    expect(listCaptionSections(state.content)).toEqual([{ language: 'ko', kind: 'asr' }]);
+  });
+
+  it('reads TRANSCRIPT_TOO_LARGE on add as a size limit', async () => {
+    const { service, file, api, notify } = setup(NO_TRANSCRIPT, { videoId: 'vid' });
+    api.addArchiveTranscript.mockRejectedValue(Object.assign(new Error('409'), { code: 'TRANSCRIPT_TOO_LARGE' }));
+
+    await expect(service.addLanguage(file, 'a1', { language: 'ko', kind: 'asr', name: null, state: 'available' }))
+      .rejects.toBeInstanceOf(CaptionLanguageError);
+
+    expect(notify).toHaveBeenCalledWith('Korean captions are too long to save to this archive.');
+  });
+});
+
 describe('sameOpeningText (legacy original detection)', () => {
   const section = (...lines: string[]) => lines.map((line, i) => `[00:0${i}] ${line}`).join('\n\n');
   const body = (...texts: string[]): ArchiveTranscriptJson => ({ formatted: texts.map((text, i) => ({ start_time: i, text })) });
@@ -275,9 +378,11 @@ describe('sameOpeningText (legacy original detection)', () => {
 });
 
 describe('captionErrorMessage', () => {
-  it('explains a missing primary instead of the generic retry text', () => {
-    const error = Object.assign(new Error('409'), { code: 'TRANSCRIPT_PRIMARY_MISSING' });
-    expect(captionErrorMessage(error)).toBe("This video was archived without captions, so other caption languages can't be added.");
+  it('maps contract codes, lets a caller override one, and falls back to the generic retry text', () => {
+    const tooLarge = Object.assign(new Error('409'), { code: 'TRANSCRIPT_TOO_LARGE' });
+    expect(captionErrorMessage(tooLarge)).toBe('These captions are too long to set as default.');
+    expect(captionErrorMessage(tooLarge, 'ja', { TRANSCRIPT_TOO_LARGE: 'tlang.error.tooLargeToAdd' }))
+      .toBe('Japanese captions are too long to save to this archive.');
     expect(captionErrorMessage(new Error('boom'))).toBe("Couldn't update captions. Try again.");
   });
 });

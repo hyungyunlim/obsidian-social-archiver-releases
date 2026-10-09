@@ -3,6 +3,9 @@ import { t } from '../../../i18n';
 import { transcriptLanguageDisplayName } from '../../../constants/languages';
 import type { AvailableTranscriptTrack } from '../../../types/transcript-languages';
 
+/** A caption track, or the hand-off to the existing Whisper transcription flow (PRD §11). */
+export type CaptionPickerItem = AvailableTranscriptTrack | 'whisper';
+
 /** Row text for a caption track: YouTube's own label, else the English name (+ auto-generated). */
 export function captionTrackLabel(track: AvailableTranscriptTrack): string {
   if (track.name) return track.name;
@@ -13,35 +16,44 @@ export function captionTrackLabel(track: AvailableTranscriptTrack): string {
 /**
  * Picker for the video's live caption tracks (`GET …/transcripts/available`).
  * Default/added rows stay visible so the list matches the video; the caller
- * decides what choosing them means.
+ * decides what choosing them means. `onTranscribe` adds a trailing Whisper row.
  */
-export class CaptionLanguageSuggestModal extends SuggestModal<AvailableTranscriptTrack> {
+export class CaptionLanguageSuggestModal extends SuggestModal<CaptionPickerItem> {
   constructor(
     app: App,
     private readonly tracks: AvailableTranscriptTrack[],
-    private readonly onChoose: (track: AvailableTranscriptTrack) => void
+    private readonly onChoose: (track: AvailableTranscriptTrack) => void,
+    private readonly onTranscribe?: () => void
   ) {
     super(app);
     this.setPlaceholder(t('tlang.menuTitle'));
     this.emptyStateText = t('tlang.noneAvailable');
   }
 
-  getSuggestions(query: string): AvailableTranscriptTrack[] {
+  getSuggestions(query: string): CaptionPickerItem[] {
     const q = query.trim().toLowerCase();
-    if (!q) return this.tracks;
-    return this.tracks.filter((track) =>
-      `${captionTrackLabel(track)} ${transcriptLanguageDisplayName(track.language)} ${track.language}`
-        .toLowerCase()
-        .includes(q));
+    const tracks = q
+      ? this.tracks.filter((track) =>
+        `${captionTrackLabel(track)} ${transcriptLanguageDisplayName(track.language)} ${track.language}`
+          .toLowerCase()
+          .includes(q))
+      : this.tracks;
+    const whisper = this.onTranscribe && t('tlang.transcribeWhisper').toLowerCase().includes(q);
+    return whisper ? [...tracks, 'whisper'] : tracks;
   }
 
-  renderSuggestion(track: AvailableTranscriptTrack, el: HTMLElement): void {
-    el.createDiv({ text: captionTrackLabel(track) });
-    const state = track.state === 'primary' ? t('tlang.stateDefault') : track.state === 'added' ? t('tlang.stateAdded') : '';
+  renderSuggestion(item: CaptionPickerItem, el: HTMLElement): void {
+    if (item === 'whisper') {
+      el.createDiv({ text: t('tlang.transcribeWhisper') });
+      return;
+    }
+    el.createDiv({ text: captionTrackLabel(item) });
+    const state = item.state === 'primary' ? t('tlang.stateDefault') : item.state === 'added' ? t('tlang.stateAdded') : '';
     if (state) el.createEl('small', { text: state, cls: 'sa-text-muted' });
   }
 
-  onChooseSuggestion(track: AvailableTranscriptTrack): void {
-    this.onChoose(track);
+  onChooseSuggestion(item: CaptionPickerItem): void {
+    if (item === 'whisper') this.onTranscribe?.();
+    else this.onChoose(item);
   }
 }

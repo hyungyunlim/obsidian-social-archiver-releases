@@ -1,4 +1,4 @@
-import { Notice, type App, type TFile } from 'obsidian';
+import { Notice, setIcon, type App, type TFile } from 'obsidian';
 import { t } from '../../../i18n';
 import { transcriptLanguageDisplayName } from '../../../constants/languages';
 import type { PostData } from '../../../types/post';
@@ -18,6 +18,8 @@ export interface CaptionActionContext {
   beforeChange?: () => void;
   /** Re-render after a successful change. */
   onChanged: () => void;
+  /** The note's existing Whisper transcription action, offered when YouTube has no captions to pick (PRD §11). */
+  onTranscribe?: () => void;
 }
 
 interface CaptionTarget {
@@ -26,20 +28,15 @@ interface CaptionTarget {
   service: CaptionVariantSyncService;
 }
 
-/** True when the note has a caption section (original or added) — a Whisper-only note has no server caption primary. */
-function hasCaptionSection(post: PostData): boolean {
-  const sources = [...Object.values(post.multilangTranscript?.sources ?? {}), post.whisperTranscript?.source];
-  return sources.some((source) => source === 'original' || source === 'caption');
-}
-
 /**
  * Transcript "+" / tab-menu callbacks for a YouTube post card (PL8).
- * Undefined for other platforms, unsaved posts and notes without a caption
- * section, which hides the controls.
+ * Undefined for other platforms and unsaved posts, which hides the controls.
+ * A note without captions gets them too: its first pick becomes the archive's
+ * primary transcript (server `addFirstPrimary`).
  */
 export function buildCaptionActions(ctx: CaptionActionContext): TranscriptCaptionActions | undefined {
   const filePath = ctx.post.filePath;
-  if (ctx.post.platform !== 'youtube' || !filePath || !hasCaptionSection(ctx.post)) return undefined;
+  if (ctx.post.platform !== 'youtube' || !filePath) return undefined;
 
   const resolveTarget = (): CaptionTarget | null => {
     const archiveId = resolvePostArchiveId(ctx.app, ctx.post);
@@ -75,14 +72,16 @@ export function buildCaptionActions(ctx: CaptionActionContext): TranscriptCaptio
   return {
     onAddLanguage: () => run(resolveTarget(), async (target) => {
       const loading = new Notice(t('tlang.loading'), 0);
-      let tracks;
+      let available;
       try {
-        ({ tracks } = await target.service.listAvailable(target.file, target.archiveId));
+        available = await target.service.listAvailable(target.file, target.archiveId);
       } finally {
         loading.hide();
       }
-      if (!tracks.some((track) => track.state !== 'primary')) {
-        new Notice(t('tlang.noneAvailable'));
+      const { primary, tracks } = available;
+      const onTranscribe = !primary || tracks.length === 0 ? ctx.onTranscribe : undefined;
+      if (!onTranscribe && !tracks.some((track) => track.state !== 'primary')) {
+        new Notice(t(primary ? 'tlang.noneAvailable' : 'tlang.noCaptions'));
         return false;
       }
       new CaptionLanguageSuggestModal(ctx.app, tracks, (track) => {
@@ -94,7 +93,7 @@ export function buildCaptionActions(ctx: CaptionActionContext): TranscriptCaptio
           await chosen.service.addLanguage(chosen.file, chosen.archiveId, track);
           return true;
         });
-      }).open();
+      }, onTranscribe).open();
       return false;
     }),
     onSetDefault: (tabKey) => run(resolveTarget(), async (target) => {
@@ -106,4 +105,18 @@ export function buildCaptionActions(ctx: CaptionActionContext): TranscriptCaptio
       return true;
     }),
   };
+}
+
+/**
+ * The transcript header's "+" for a YouTube note with no transcript section
+ * yet (archived while YouTube refused captions): opens the same picker.
+ */
+export function renderAddCaptionsEntry(parent: HTMLElement, actions: TranscriptCaptionActions): void {
+  const button = parent.createEl('button', { cls: 'sa-gap-6 sa-mt-8 sa-text-sm' });
+  setIcon(button.createSpan({ cls: 'sa-icon-14' }), 'captions');
+  button.createSpan({ text: t('tlang.addCaptions') });
+  button.addEventListener('click', (event) => {
+    event.stopPropagation();
+    actions.onAddLanguage();
+  });
 }
