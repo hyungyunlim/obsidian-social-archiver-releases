@@ -2226,6 +2226,24 @@ export class WorkersAPIClient implements IService {
     }
   }
 
+  /**
+   * RSS feeds behind a profile or site URL, resolved by the server
+   * (`GET /api/subscriptions/discover-rss`). Null when discovery fails.
+   */
+  async discoverRSSFeeds(sourceUrl: string): Promise<{ candidates: Array<{ feedUrl: string }> } | null> {
+    try {
+      this.ensureInitialized();
+      const encodedUrl = encodeURIComponent(sourceUrl);
+      return await this.request<{ candidates: Array<{ feedUrl: string }> }>(
+        `/api/subscriptions/discover-rss?url=${encodedUrl}`,
+        { method: 'GET' },
+      );
+    } catch (error) {
+      console.warn('[WorkersAPIClient] RSS discovery failed:', error);
+      return null;
+    }
+  }
+
   // ============================================================================
   // Pending Jobs API (Multi-Device Sync)
   // ============================================================================

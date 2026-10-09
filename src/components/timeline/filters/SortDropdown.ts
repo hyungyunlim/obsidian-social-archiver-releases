@@ -147,13 +147,14 @@ export class SortDropdown {
     // Remove existing panels
     header.querySelectorAll('.filter-panel').forEach(el => el.remove());
 
-    // Calculate dropdown position based on button position
-    const btnRect = sortByBtn.getBoundingClientRect();
-    const headerRect = header.getBoundingClientRect();
-    const leftOffset = btnRect.left - headerRect.left;
-
     this.dropdownEl = header.createDiv({ cls: 'sort-dropdown' });
     this.dropdownEl.addClass('sa-absolute', 'sa-z-1000', 'sa-bg-primary', 'sa-border', 'sa-rounded-8', 'sa-p-8', 'sd-dropdown');
+
+    // Position against the element the dropdown is actually laid out in. The
+    // timeline header's toolbar scrolls sideways, so the group holding the
+    // button can sit left of that element by the scroll amount.
+    const anchor = this.dropdownEl.offsetParent instanceof HTMLElement ? this.dropdownEl.offsetParent : header;
+    const leftOffset = sortByBtn.getBoundingClientRect().left - anchor.getBoundingClientRect().left;
     this.dropdownEl.setCssProps({ '--sd-left': `${leftOffset}px` });
 
     const sortOptions: SortOption[] = [

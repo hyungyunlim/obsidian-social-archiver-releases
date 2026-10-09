@@ -414,9 +414,15 @@ body.is-mobile .sa-action-btn {
   border-radius: 6px;
 }
 
-/* Timeline header action row: scrolls sideways when the icons don't fit
-   (phones, narrow panes) instead of pushing the last ones off-screen. */
-.sa-header-actions {
+/* Timeline header toolbar: one strip holding both button groups that scrolls
+   sideways when the icons don't fit (phones, narrow panes), so a swipe
+   anywhere on it scrolls instead of switching panes. Deliberately not
+   positioned: the filter panel and sort dropdown anchor to the header, which
+   keeps them out of this strip's clipping. */
+.sa-header-scroll {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   flex: 1 1 auto;
   min-width: 0;
   overflow-x: auto;
@@ -424,13 +430,18 @@ body.is-mobile .sa-action-btn {
   scrollbar-width: none;
 }
 
-.sa-header-actions::-webkit-scrollbar {
+.sa-header-scroll::-webkit-scrollbar {
   display: none;
 }
 
-/* Right-aligned while everything fits. justify-content: flex-end would make
-   the overflowing start unreachable by scrolling, an auto margin does not. */
-.sa-header-actions > :first-child {
+.sa-header-scroll > * {
+  flex-shrink: 0;
+}
+
+/* The right group hugs the right edge while everything fits. An auto margin,
+   unlike justify-content: flex-end, never makes the overflowing start
+   unreachable by scrolling. */
+.sa-header-actions {
   margin-inline-start: auto;
 }
 

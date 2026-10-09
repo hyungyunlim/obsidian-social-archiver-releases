@@ -16,6 +16,7 @@ import {
 } from '../../services/IconService';
 import { TIMELINE_PLATFORM_IDS, TIMELINE_PLATFORM_LABELS } from '../../constants/timelinePlatforms';
 import { needsFeedUrlDerivation, isGenericSubscriptionSupported as isSubscriptionSupported, type SubscriptionSupportedPlatform } from '../../constants/rssPlatforms';
+import { resolveRssAuthorUrl } from '../../utils/rssAuthorUrl';
 import { PostDataParser } from './parsers/PostDataParser';
 import { FilterSortManager, type FilterState } from './filters/FilterSortManager';
 import { FilterPanel } from './filters/FilterPanel';
@@ -2497,11 +2498,18 @@ export class TimelineContainer {
     header.addClass('sa-gap-12');
     header.addClass('sa-relative');
 
+    // Both button groups share one strip that scrolls sideways when they don't
+    // fit, so a swipe anywhere on the toolbar scrolls it (Obsidian mobile only
+    // gives up its swipe gesture to an `overflow-x: auto` ancestor). The strip
+    // is not positioned: the filter panel and sort dropdown anchor to `header`
+    // and so escape its clipping.
+    const toolbar = header.createDiv();
+    toolbar.addClass('sa-header-scroll');
+
     // Left side: Search, Filter, and Sort buttons
-    const leftButtons = header.createDiv();
+    const leftButtons = toolbar.createDiv();
     leftButtons.addClass('sa-flex-row');
     leftButtons.addClass('sa-gap-8');
-    leftButtons.addClass('sa-flex-shrink-0');
 
     // Search button (toggles search bar below)
     this.renderSearchButton(leftButtons);
@@ -2520,7 +2528,7 @@ export class TimelineContainer {
     }
 
     // Right side: Archive, View Switcher, Refresh and Settings buttons
-    const rightButtons = header.createDiv();
+    const rightButtons = toolbar.createDiv();
     rightButtons.addClass('sa-flex-row');
     rightButtons.addClass('sa-gap-4');
     rightButtons.addClass('sa-header-actions');
@@ -4218,6 +4226,12 @@ export class TimelineContainer {
     return sanitized || 'unknown';
   }
 
+  /** First RSS feed the server finds behind a profile URL. */
+  private async discoverFeedUrl(sourceUrl: string): Promise<string | null> {
+    const discovery = await this.plugin.workersApiClient?.discoverRSSFeeds(sourceUrl);
+    return discovery?.candidates[0]?.feedUrl ?? null;
+  }
+
   /**
    * Derive RSS feed URL from author URL for RSS-based platforms
    * - Substack: https://{username}.substack.com/... -> https://{username}.substack.com/feed
@@ -4649,15 +4663,16 @@ export class TimelineContainer {
 
     // For RSS-based platforms (excluding Naver Cafe), derive RSS feed URL from author URL
     if (needsFeedUrlDerivation(author.platform) && !isNaverCafe) {
-      const feedUrl = this.deriveRSSFeedUrl(author.authorUrl, author.platform);
+      const rssAuthorUrl = await resolveRssAuthorUrl(author.authorUrl, (url) => this.discoverFeedUrl(url));
+      const feedUrl = this.deriveRSSFeedUrl(rssAuthorUrl, author.platform);
       if (feedUrl) {
         // Keep original platform - server will handle RSS via rssMetadata
         // Extract proper author name from URL for substack/tumblr
-        const authorHandle = this.extractAuthorFromRSSUrl(author.authorUrl, author.platform);
+        const authorHandle = this.extractAuthorFromRSSUrl(rssAuthorUrl, author.platform);
         requestBody.name = authorHandle || author.authorName;
         requestBody.target = {
           handle: authorHandle || this.deriveHandle(author),
-          profileUrl: this.deriveRSSBaseUrl(author.authorUrl, author.platform), // Use base URL, not post URL
+          profileUrl: this.deriveRSSBaseUrl(rssAuthorUrl, author.platform), // Use base URL, not post URL
         };
         requestBody.rssMetadata = {
           feedUrl: feedUrl,
@@ -4982,15 +4997,16 @@ export class TimelineContainer {
 
               // Add RSS metadata for RSS-based platforms (excluding Naver Cafe)
               if (needsFeedUrlDerivation(author.platform) && !isNaverCafeSubscription) {
-                const feedUrl = this.deriveRSSFeedUrl(author.authorUrl, author.platform);
+                const rssAuthorUrl = await resolveRssAuthorUrl(author.authorUrl, (url) => this.discoverFeedUrl(url));
+                const feedUrl = this.deriveRSSFeedUrl(rssAuthorUrl, author.platform);
                 if (feedUrl) {
                   // Keep original platform (substack, tumblr) - server will handle RSS via rssMetadata
                   // Extract proper author name from URL for substack/tumblr
-                  const authorHandle = this.extractAuthorFromRSSUrl(author.authorUrl, author.platform);
+                  const authorHandle = this.extractAuthorFromRSSUrl(rssAuthorUrl, author.platform);
                   requestBody.name = authorHandle || author.authorName;
                   requestBody.target = {
                     handle: authorHandle || this.deriveHandle(author),
-                    profileUrl: this.deriveRSSBaseUrl(author.authorUrl, author.platform), // Use base URL, not post URL
+                    profileUrl: this.deriveRSSBaseUrl(rssAuthorUrl, author.platform), // Use base URL, not post URL
                   };
                   requestBody.rssMetadata = {
                     feedUrl: feedUrl,

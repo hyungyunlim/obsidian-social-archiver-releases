@@ -26,6 +26,15 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.10.2': {
+    title: 'The whole header toolbar scrolls, and Substack and Tumblr authors you can subscribe to',
+    date: '2026-10-09',
+    notes: `## Fixes
+
+- **Swipe anywhere on the header.** In 4.10.1 only the right-hand icons scrolled, so a swipe that started on search, filter or sort still opened the sidebar on Obsidian mobile. The whole toolbar now scrolls as one strip, and the sort menu stays under its button while it is scrolled.
+- **Subscribe to Substack and Tumblr authors.** Subscribing to a Substack Notes author (\`substack.com/@handle\`) or a Tumblr blog linked as \`www.tumblr.com/<name>\` failed because the feed address was worked out from the wrong host. The plugin now finds the right publication or blog feed.
+`,
+  },
   '4.10.1': {
     title: 'Header icons you can reach on a phone, and review settings that wake up on sign-in',
     date: '2026-10-09',
