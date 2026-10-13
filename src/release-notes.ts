@@ -26,6 +26,15 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.10.5': {
+    title: 'Opening settings on a phone no longer restarts the plugin',
+    date: '2026-10-13',
+    notes: `## Fixes
+
+- **Settings on a phone that shares its vault with a computer.** If your vault syncs between a computer and a phone (for example through iCloud) and the computer reads aloud with **Supertonic**, opening Social Archiver's settings on the phone restarted all of the plugin's background work each time, which could stall the page, and switched the computer back to Azure. The phone now shows **Azure**, the engine it actually uses, and leaves the setting alone.
+- **Review settings are saved only when you change them.** Opening the settings no longer sends **Daily review** and **Email digest** back to the server.
+`,
+  },
   '4.10.4': {
     title: 'The Author badge on YouTube comments, and Add captions… in the card menu',
     date: '2026-10-10',

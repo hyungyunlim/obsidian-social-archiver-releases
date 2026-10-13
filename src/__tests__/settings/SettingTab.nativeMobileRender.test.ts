@@ -18,16 +18,32 @@ vi.mock('obsidian', async () => {
 
   // A control component: real elements where the code touches them, every
   // other builder call chains.
-  const component = (): unknown => {
+  const component = (kind: 'toggle' | 'other' = 'other'): unknown => {
     const toggleEl = document.createElement('div');
+    const selectEl = document.createElement('select');
+    let on = false;
+    let changeCallback: ((value: unknown) => unknown) | undefined;
     const target: Record<string, unknown> = {
-      selectEl: document.createElement('select'),
+      selectEl,
       inputEl: document.createElement('input'),
       buttonEl: document.createElement('button'),
       toggleEl,
       sliderEl: document.createElement('input'),
       // Kept on the element so a test can read a toggle's state off its row.
       setDisabled: (disabled: boolean) => { toggleEl.toggleAttribute('disabled', disabled); return proxy; },
+      addOption: (value: string, label: string) => { selectEl.add(new Option(label, value)); return proxy; },
+      onChange: (cb: (value: unknown) => unknown) => { changeCallback = cb; return proxy; },
+      // As in Obsidian (1.14.4 app.js): a toggle's setValue fires onChange when
+      // the value changes; a dropdown's only sets the select.
+      setValue: (value: unknown) => {
+        if (kind !== 'toggle') {
+          selectEl.value = String(value);
+        } else if (on !== value) {
+          on = value as boolean;
+          changeCallback?.(value);
+        }
+        return proxy;
+      },
       then: undefined,
     };
     const proxy: unknown = new Proxy(target, {
@@ -42,12 +58,19 @@ vi.mock('obsidian', async () => {
       return this;
     }
     addToggle = (cb: (c: never) => unknown): this => {
-      const toggle = component() as { toggleEl: HTMLElement };
+      const toggle = component('toggle') as { toggleEl: HTMLElement };
+      // Lets a test flip the toggle the way a tap does (setValue(!value)).
+      Object.assign(toggle.toggleEl, { component: toggle });
       this.controlEl.appendChild(toggle.toggleEl);
       cb(toggle as never);
       return this;
     };
-    addDropdown = this.add;
+    addDropdown = (cb: (c: never) => unknown): this => {
+      const dropdown = component() as { selectEl: HTMLSelectElement };
+      this.controlEl.appendChild(dropdown.selectEl);
+      cb(dropdown as never);
+      return this;
+    };
     addText = this.add;
     addTextArea = this.add;
     addButton = this.add;
@@ -95,7 +118,7 @@ vi.mock('../../settings/DangerZone.svelte', () => ({ default: 'DangerZone' }));
 
 import { Setting } from 'obsidian';
 import { SocialArchiverSettingTab } from '../../settings/SettingTab';
-import { DEFAULT_SETTINGS } from '../../types/settings';
+import { DEFAULT_SETTINGS, DEFAULT_TTS_SETTINGS } from '../../types/settings';
 
 // Obsidian DOM helpers the settings rows use that test/setup.ts lacks.
 const helpers: Array<[object, string, (this: never, ...args: never[]) => unknown]> = [
@@ -121,6 +144,11 @@ function renderLikeObsidian113(container: HTMLElement, items: readonly SettingDe
       item.render(setting, { listEl: container } as SettingGroup);
     }
   }
+}
+
+function rowNamed(container: HTMLElement, name: string): HTMLElement | undefined {
+  return [...container.querySelectorAll<HTMLElement>('.setting-item')]
+    .find((row) => row.querySelector('.setting-item-name')?.textContent === name);
 }
 
 const signIn = (settings: object): void => {
@@ -226,5 +254,53 @@ describe("Today's review toggles after sign-in", () => {
     // The pass main.ts runs right after sign-in.
     tab.display();
     expect(await reviewToggles(tab.containerEl)).toEqual([false, false]);
+  });
+
+  // Showing the server's value must not save it back: every open of the tab
+  // re-sent both switches to the server.
+  it('does not write the loaded values back on open; a tap still saves', async () => {
+    const setEnabled = vi.fn(() => Promise.resolve());
+    const setEmailDigest = vi.fn(() => Promise.resolve({ emailEnabled: false, hour: 8 }));
+    const tab = mobileTab(true, { ...reviewFeature, client: { ...reviewFeature.client, setEnabled, setEmailDigest } });
+    const container = document.createElement('div');
+    renderLikeObsidian113(container, tab.getSettingDefinitions());
+
+    expect(await reviewToggles(container)).toEqual([false, false]);
+    expect(setEnabled).not.toHaveBeenCalled();
+    expect(setEmailDigest).not.toHaveBeenCalled();
+
+    const tap = (name: string): void => {
+      const toggle = (rowNamed(container, name)?.querySelector('.setting-item-control > div') as
+        { component: { setValue(value: boolean): void } } | null);
+      toggle?.component.setValue(false);
+    };
+    tap('Daily review');
+    tap('Email digest');
+    expect(setEnabled).toHaveBeenCalledWith(false);
+    expect(setEmailDigest).toHaveBeenCalledWith(false, expect.anything(), { emailEnabled: true, hour: 8 });
+  });
+});
+
+// Feedback #199 follow-up: a vault shared with a desktop (iCloud) carries the
+// desktop's Supertonic choice to the phone. Rendering the row saved the Azure
+// fallback over it — a full service re-initialisation on every open of the
+// tab, and the desktop's choice lost.
+describe('TTS provider on mobile', () => {
+  it('shows the Azure fallback for a desktop-only provider without saving it', () => {
+    const tab = mobileTab(true);
+    tab.plugin.settings.tts = { ...DEFAULT_TTS_SETTINGS, provider: 'supertonic' };
+    const saveSettings = vi.fn(() => Promise.resolve());
+    tab.plugin.saveSettings = saveSettings;
+    const container = document.createElement('div');
+    renderLikeObsidian113(container, tab.getSettingDefinitions());
+
+    expect(rowNamed(container, 'TTS Provider')?.querySelector('select')?.value).toBe('azure');
+    expect(saveSettings).not.toHaveBeenCalled();
+    expect(tab.plugin.settings.tts.provider).toBe('supertonic');
+    // The Azure note follows the engine in effect, not the saved value.
+    const azureNote = tab.getSettingDefinitions()
+      .flatMap((item) => ('type' in item ? item.items ?? [] : [item]))
+      .find((item) => item.name === 'Azure cloud note');
+    expect(azureNote && 'visible' in azureNote && typeof azureNote.visible === 'function' && azureNote.visible()).toBe(true);
   });
 });

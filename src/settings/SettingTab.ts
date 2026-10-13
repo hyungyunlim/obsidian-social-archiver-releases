@@ -893,17 +893,22 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
               toggle.setDisabled(true);
               const review = feature();
               if (!signedIn() || !review) return;
+              // onChange goes on after the loaded value: setValue fires it, and
+              // showing the server's value must not save it back. Disabled until
+              // then, so no tap is lost.
               void review.client.getStatus()
-                .then(({ enabled }) => { toggle.setValue(enabled).setDisabled(false); })
+                .then(({ enabled }) => {
+                  toggle.setValue(enabled).setDisabled(false);
+                  toggle.onChange(async (value) => {
+                    try {
+                      await review.client.setEnabled(value);
+                      await review.refreshStatusBar();
+                    } catch {
+                      failed();
+                    }
+                  });
+                })
                 .catch(() => undefined);
-              toggle.onChange(async (value) => {
-                try {
-                  await review.client.setEnabled(value);
-                  await review.refreshStatusBar();
-                } catch {
-                  failed();
-                }
-              });
             });
           },
         },
@@ -931,27 +936,26 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
               toggle.setDisabled(true);
               const review = feature();
               if (!signedIn() || !review) return;
-              let current: Awaited<ReturnType<typeof review.client.getDigest>> | null = null;
+              // As above: onChange only after the loaded value is shown.
               void review.client.getDigest()
                 .then((digest) => {
-                  current = digest;
+                  let current = digest;
                   setting.setDesc(t('rv.settings.email.desc', {
                     time: `${String(digest.hour).padStart(2, '0')}:00`,
                   }));
                   toggle.setValue(digest.emailEnabled).setDisabled(false);
+                  toggle.onChange(async (value) => {
+                    try {
+                      current = await review.client.setEmailDigest(value, {
+                        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                        locale: getLanguage() || window.navigator.language,
+                      }, current);
+                    } catch {
+                      failed();
+                    }
+                  });
                 })
                 .catch(() => undefined);
-              toggle.onChange(async (value) => {
-                if (!current) return;
-                try {
-                  current = await review.client.setEmailDigest(value, {
-                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                    locale: getLanguage() || window.navigator.language,
-                  }, current);
-                } catch {
-                  failed();
-                }
-              });
             });
           },
         },
@@ -1557,18 +1561,17 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
           name: t('st.tts.provider.name'),
           desc: t('st.tts.provider.desc'),
           render: (setting): void => {
-            // Supertonic is desktop-only (FR-07 AC): fall back rather than
-            // leaving a selected engine that can never run.
-            if (!Platform.isDesktop && tts().provider === 'supertonic') {
-              tts().provider = 'azure';
-              void this.plugin.saveSettings();
-            }
+            // Supertonic is desktop-only (FR-07 AC). Off desktop,
+            // resolveTTSProvider already falls back to Azure, so the row shows
+            // that and writes nothing: data.json may be shared with a desktop
+            // vault (iCloud), and saving here re-initialised every service on
+            // each open of the tab and erased the desktop's choice (#199).
             setting.addDropdown((dropdown) => {
               dropdown.selectEl.addClass('sa-mobile-compact-dropdown');
+              dropdown.addOption('azure', t('st.tts.provider.azure'));
+              if (Platform.isDesktop) dropdown.addOption('supertonic', t('st.tts.provider.supertonic'));
               dropdown
-                .addOption('azure', t('st.tts.provider.azure'))
-                .addOption('supertonic', t('st.tts.provider.supertonic'))
-                .setValue(tts().provider)
+                .setValue(Platform.isDesktop ? tts().provider : 'azure')
                 .onChange(async (value: string) => {
                   tts().provider = value as PluginTTSProviderId;
                   // Reset voiceId when switching providers
@@ -1663,7 +1666,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             azureNote.textContent = t('st.tts.azureNote');
             azureNote.addClass('sa-settings-info');
           }),
-          visible: () => engineReady() && tts().provider === 'azure',
+          // The engine in effect: off desktop that is Azure whatever is saved.
+          visible: () => engineReady() && !isSupertonic(),
         },
         {
           name: t('st.tts.engine.name'),
