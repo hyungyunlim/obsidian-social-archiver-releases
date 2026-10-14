@@ -26,6 +26,14 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.10.6': {
+    title: 'Opening Social Archiver settings no longer freezes Obsidian',
+    date: '2026-10-14',
+    notes: `## Fixes
+
+- **Settings no longer freeze Obsidian.** Since 4.8.0, opening Social Archiver's settings while signed in froze Obsidian right after the account section showed **Refreshing**, on desktop and on mobile, until you force-quit the app. The settings page now opens normally.
+`,
+  },
   '4.10.5': {
     title: 'Opening settings on a phone no longer restarts the plugin',
     date: '2026-10-13',

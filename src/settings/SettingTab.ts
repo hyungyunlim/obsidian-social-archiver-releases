@@ -1326,10 +1326,15 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
               };
               // The value lives on the server; disabled until it is known.
               toggle.setDisabled(true);
+              // Block bodies: Obsidian components are thenables (then(cb) calls
+              // cb(this) and returns this), so a component returned into a
+              // promise is resolved forever — returning setDisabled()'s result
+              // from finally() froze the whole app for every signed-in user
+              // who opened this tab (feedback #199, releases#50).
               void this.plugin.workersApiClient.getCollectionActivityNotificationsEnabled()
-                .then((enabled) => show(enabled))
+                .then((enabled) => { show(enabled); })
                 .catch(() => undefined)
-                .finally(() => toggle.setDisabled(false));
+                .finally(() => { toggle.setDisabled(false); });
               toggle.onChange(async (value) => {
                 if (programmatic) return;
                 toggle.setDisabled(true);

@@ -13,6 +13,8 @@ import type { SettingDefinitionItem, SettingGroup } from 'obsidian';
  * tab never slid in and no row was ever shown or hidden.
  */
 
+const thenCalls = vi.hoisted(() => ({ count: 0 }));
+
 vi.mock('obsidian', async () => {
   const actual = await vi.importActual<typeof import('obsidian')>('obsidian');
 
@@ -44,7 +46,14 @@ vi.mock('obsidian', async () => {
         }
         return proxy;
       },
-      then: undefined,
+      // Obsidian components are thenables: then(cb) calls cb(this) and returns
+      // this. A promise resolved with one never settles; the cap turns that
+      // endless microtask loop into a failure instead of a hung test run.
+      then: (cb: (c: unknown) => unknown) => {
+        if (++thenCalls.count > 20) throw new Error('component resolved through a promise');
+        cb(proxy);
+        return proxy;
+      },
     };
     const proxy: unknown = new Proxy(target, {
       get: (t, prop: string) => (prop in t ? t[prop] : () => proxy),
@@ -202,6 +211,17 @@ describe('settings tab on Obsidian 1.13+ mobile (feedback #199)', () => {
     mounted.length = 0;
     renderLikeObsidian113(document.createElement('div'), mobileTab(true).getSettingDefinitions());
     expect(mounted).toEqual(['AuthSettingsTab', 'SyncSettingsTab', 'CrossPostSettingsTab', 'DangerZone']);
+  });
+
+  // Obsidian components are thenables. The Collection activity row returned
+  // setDisabled()'s result (the toggle) from a finally() callback, so the
+  // promise kept resolving it forever: every signed-in user who opened the tab
+  // froze the whole app (feedback #199, and releases#50 while signed out).
+  it('never resolves a component through a promise', async () => {
+    thenCalls.count = 0;
+    renderLikeObsidian113(document.createElement('div'), mobileTab(true).getSettingDefinitions());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(thenCalls.count).toBe(0);
   });
 
   // GitHub releases#50: signed out on 1.14.4 desktop, the hidden Collection
