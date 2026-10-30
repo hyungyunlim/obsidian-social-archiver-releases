@@ -30,6 +30,7 @@ import type { AnnotationRenderer } from './AnnotationRenderer';
 import type { AnnotationSectionManager } from './AnnotationSectionManager';
 import { HighlightBodyMarker } from './HighlightBodyMarker';
 import { removeAICommentSection, replaceAICommentSection } from './ai-comment/markdown-handler';
+import { isLocalOnlyNote } from '../plugin/sync/localOnlyNoteGuard';
 
 // ============================================================================
 // Coalescing state per archiveId
@@ -458,8 +459,11 @@ export class AnnotationSyncService {
    * Per PRD ambiguous-match policy:
    *   - If multiple files match originalUrl → log warning, return null (no auto-update)
    *   - If no file found → return null (silently)
+   *   - A local-only note (PRD S5.1) is never bound by URL → return null
+   *
+   * Also used by the annotation fallback poller in main.ts.
    */
-  private resolveFile(archiveId: string, originalUrl: string): TFile | null {
+  resolveFile(archiveId: string, originalUrl: string): TFile | null {
     // Primary: sourceArchiveId
     const byId = this.archiveLookup.findBySourceArchiveId(archiveId);
     if (byId) return byId;
@@ -482,7 +486,18 @@ export class AnnotationSyncService {
       return null;
     }
 
-    return byUrl[0] ?? null;
+    const candidate = byUrl[0] ?? null;
+    // Sync-exclusion contract (PRD S5.1): never write annotations or
+    // sourceArchiveId into a local-only note (anonymous clip) matched by URL.
+    if (candidate && isLocalOnlyNote(this.app, candidate)) {
+      console.debug(
+        '[AnnotationSyncService] URL matched a local-only note — skipping.',
+        { archiveId, path: candidate.path }
+      );
+      return null;
+    }
+
+    return candidate;
   }
 
   private async resolveFileByArchiveId(archiveId: string): Promise<TFile | null> {

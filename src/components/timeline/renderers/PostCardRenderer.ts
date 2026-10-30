@@ -1,6 +1,8 @@
 import { setIcon, getLanguage, Notice, Scope, TFile, TFolder, MarkdownRenderer, Component, Modal, Menu, Platform as ObsidianPlatform, requestUrl, type Vault, type App } from 'obsidian';
 import { t } from '../../../i18n';
 import { toPostShareDisplayMode } from '../../../services/collections/collectionDisplayMode';
+import { NewPostShareModal } from '../collections/PostShareSettingsModal';
+import type { PostShareSettings } from '../../../types/collections';
 import { addBasemap, observeMapSize, renderBasemapAttribution } from '../places/basemap';
 import type { PostData, Comment, PostMetadata, Platform } from '../../../types/post';
 import type SocialArchiverPlugin from '../../../main';
@@ -4566,7 +4568,7 @@ export class PostCardRenderer extends Component {
         this.showSharedPostMenu(post, currentShareUrl, shareBtn, shareIcon);
         return;
       }
-      void this.createShare(post, shareBtn, shareIcon);
+      void this.openNewShare(post, shareBtn, shareIcon);
     });
   }
 
@@ -4626,7 +4628,7 @@ export class PostCardRenderer extends Component {
           .setIcon('share-2')
           .setTitle('Create share link')
           .onClick(() => {
-            void this.createShare(post, shareBtn, shareIcon);
+            void this.openNewShare(post, shareBtn, shareIcon);
           });
       });
     }
@@ -4814,9 +4816,39 @@ export class PostCardRenderer extends Component {
   }
 
   /**
-   * Create share link for post
+   * A post with no link: the share settings first, defaulted as before.
+   * Publishing makes the post public, so it waits for "Create link and copy"
+   * (mobile/desktop parity). Resolves when the modal closes: the new link, or
+   * null when nothing was published.
    */
-  private async createShare(post: PostData, shareBtn: HTMLElement, shareIcon: HTMLElement): Promise<void> {
+  private openNewShare(post: PostData, shareBtn: HTMLElement, shareIcon: HTMLElement): Promise<string | null> {
+    if (!this.plugin.settings.isVerified || !this.plugin.settings.authToken) {
+      new Notice('Please log in to share posts. Go to settings → Social Archiver → authentication');
+      return Promise.resolve(null);
+    }
+    return new Promise((resolve) => {
+      new NewPostShareModal(this.app, {
+        initial: {
+          visibility: 'public',
+          displayMode: toPostShareDisplayMode(this.plugin.settings.copyShareLinkAsReaderMode),
+          includeAnnotations: true,
+        },
+        create: (settings): Promise<string | null> => this.createShare(post, shareBtn, shareIcon, settings),
+        onClosed: resolve,
+      }).open();
+    });
+  }
+
+  /**
+   * Create share link for post with the settings picked in the share modal.
+   * Returns the link, or null when it failed (a Notice says why).
+   */
+  private async createShare(
+    post: PostData,
+    shareBtn: HTMLElement,
+    shareIcon: HTMLElement,
+    shareSettings: PostShareSettings,
+  ): Promise<string | null> {
     try {
       const platform = post.platform;
 
@@ -4833,19 +4865,19 @@ export class PostCardRenderer extends Component {
       // Check if user is logged in
       if (!this.plugin.settings.isVerified || !this.plugin.settings.authToken) {
         new Notice('Please log in to share posts. Go to settings → Social Archiver → authentication');
-        return;
+        return null;
       }
 
       const filePath = post.filePath;
       if (!filePath) {
         new Notice('Cannot share: file path not found');
-        return;
+        return null;
       }
 
       const file = this.vault.getAbstractFileByPath(filePath);
       if (!file || !(file instanceof TFile)) {
         new Notice('Cannot share: file not found');
-        return;
+        return null;
       }
 
       // Show loading state
@@ -4915,10 +4947,10 @@ export class PostCardRenderer extends Component {
           username: username, // Username for URL generation
           // NOTE: Do not include shareId - let Workers generate it for new shares
           ...(rendererSourceArchiveId ? { sourceArchiveId: rendererSourceArchiveId } : {}),
-          // Same defaults as the apps for a new share; change them in Share settings.
-          visibility: 'public',
-          displayMode: toPostShareDisplayMode(this.plugin.settings.copyShareLinkAsReaderMode),
-          includeAnnotations: true,
+          // Picked in the share modal (defaults match the apps).
+          visibility: shareSettings.visibility,
+          displayMode: shareSettings.displayMode,
+          includeAnnotations: shareSettings.includeAnnotations,
         },
       });
 
@@ -4951,12 +4983,9 @@ export class PostCardRenderer extends Component {
       // Update icon to link icon
       setIcon(shareIcon, 'link');
 
-      // Copy to clipboard (reader-mode URL by default, configurable in settings)
-      const clipboardShareUrl = getShareUrlForClipboard(
-        shareUrl,
-        this.plugin.settings.copyShareLinkAsReaderMode
-      );
-      await navigator.clipboard.writeText(clipboardShareUrl);
+      // Copy the plain link: the display mode picked in the share modal decides
+      // how it opens, and a #reader hash would beat a picked Post (feedback #223).
+      await navigator.clipboard.writeText(shareUrl);
       const mediaType = isAdmin && hasVideos ? 'media' : 'images';
       const mediaMessage = hasMedia ? ` (uploading ${mediaType}...)` : '';
       new Notice(`✅ Published! Share link copied to clipboard.${mediaMessage}`);
@@ -4970,12 +4999,13 @@ export class PostCardRenderer extends Component {
             new Notice(failMsg);
           });
       }
-
+      return shareUrl;
     } catch {
       new Notice('Failed to publish post');
 
       // Reset button state
       shareBtn.removeClass('pcr-action-btn-loading', 'pcr-action-btn-active');
+      return null;
     }
   }
 
@@ -5995,7 +6025,7 @@ export class PostCardRenderer extends Component {
     if (post.shareUrl) {
       await this.unsharePost(post, tmpEl, tmpIcon);
     } else {
-      await this.createShare(post, tmpEl, tmpIcon);
+      await this.openNewShare(post, tmpEl, tmpIcon);
     }
   }
 

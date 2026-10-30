@@ -66,6 +66,7 @@ import {
 	XiaohongshuURLSchema,
 	isXiaohongshuProfileUrl
 } from './xiaohongshu';
+import { WeiboURLSchema } from './weibo';
 import { PLATFORM_DEFINITIONS, type AIChatPlatform } from '@/shared/platforms';
 
 /**
@@ -170,6 +171,8 @@ export {
 	// Xiaohongshu
 	XiaohongshuURLSchema,
 	isXiaohongshuProfileUrl,
+	// Weibo
+	WeiboURLSchema,
 	// Naver Webtoon (defined inline below)
 	// NaverWebtoonURLSchema,
 	// extractNaverWebtoonInfo,
@@ -361,6 +364,7 @@ const PLATFORM_SCHEMA_MAP = {
 	webtoons: WebtoonsURLSchema,
 	brunch: BrunchURLSchema,
 	xiaohongshu: XiaohongshuURLSchema,
+	weibo: WeiboURLSchema,
 	// AI chat share links (feedback #139): a web URL on the brand's own host.
 	// Host-anchored, because detection walks this map in PLATFORM_DETECTION_ORDER
 	// and an accept-anything schema here would claim every URL after it.

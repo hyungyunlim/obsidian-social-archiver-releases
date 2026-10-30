@@ -43,6 +43,7 @@ export {
   isConservativelySouthKoreanPlace,
 } from './map-place-policy';
 export { getMapProviderWebLinks } from './map-place-links';
+export { extractWeiboPostId, weiboMblogidToMid, weiboMidToMblogid } from './weibo-ids';
 
 // Subscription platform constants (Single Source of Truth)
 export type {

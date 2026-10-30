@@ -360,6 +360,50 @@ describe('ArchiveLookupService', () => {
       expect(svc.findByOriginalUrl('https://reddit.com/r/all/comments/abc123/title')).toHaveLength(0);
     });
 
+    it('matches one YouTube video across its URL forms, but not a comment permalink', () => {
+      // The server now stores Shorts under /shorts/; older notes carry watch?v=.
+      const { app } = createMockApp([
+        { path: 'Social Archives/short.md', frontmatter: { originalUrl: 'https://www.youtube.com/watch?v=e8U06vyZbPY' } },
+        {
+          path: 'Social Archives/comment.md',
+          frontmatter: { originalUrl: 'https://www.youtube.com/watch?v=e8U06vyZbPY&lc=UgzCommentId' },
+        },
+      ]);
+      const svc = new ArchiveLookupService(app);
+      svc.initialize();
+
+      for (const url of [
+        'https://www.youtube.com/shorts/e8U06vyZbPY',
+        'https://youtube.com/shorts/e8U06vyZbPY?si=abc',
+        'https://m.youtube.com/watch?v=e8U06vyZbPY&t=30',
+        'https://youtu.be/e8U06vyZbPY',
+      ]) {
+        expect(svc.findByOriginalUrl(url).map((f) => f.path)).toEqual(['Social Archives/short.md']);
+      }
+      expect(svc.findByOriginalUrl('https://www.youtube.com/shorts/dQw4w9WgXcQ')).toEqual([]);
+      expect(
+        svc.findByOriginalUrl('https://www.youtube.com/watch?v=e8U06vyZbPY&lc=UgzCommentId').map((f) => f.path)
+      ).toEqual(['Social Archives/comment.md']);
+    });
+
+    it('keys only a whole YouTube path id, never a longer segment or a reserved embed name', () => {
+      const { app } = createMockApp([
+        { path: 'Social Archives/short.md', frontmatter: { originalUrl: 'https://www.youtube.com/watch?v=e8U06vyZbPY' } },
+        { path: 'Social Archives/playlist.md', frontmatter: { originalUrl: 'https://www.youtube.com/embed/videoseries?list=PLaaa' } },
+        { path: 'Social Archives/channel-live.md', frontmatter: { originalUrl: 'https://www.youtube.com/embed/live_stream?channel=UCaaa' } },
+      ]);
+      const svc = new ArchiveLookupService(app);
+      svc.initialize();
+
+      expect(svc.findByOriginalUrl('https://www.youtube.com/shorts/e8U06vyZbPY/').map((f) => f.path))
+        .toEqual(['Social Archives/short.md']);
+      expect(svc.findByOriginalUrl('https://www.youtube.com/shorts/e8U06vyZbPYextra')).toEqual([]);
+      expect(svc.findByOriginalUrl('https://www.youtube.com/embed/videoseries?list=PLbbb')).toEqual([]);
+      expect(svc.findByOriginalUrl('https://www.youtube.com/embed/live_stream?channel=UCbbb')).toEqual([]);
+      expect(svc.findByOriginalUrl('https://www.youtube.com/embed/videoseries?list=PLaaa').map((f) => f.path))
+        .toEqual(['Social Archives/playlist.md']);
+    });
+
     it('never matches a Facebook endpoint stripped of the query that identifies the post', () => {
       // Prod: nine different posts of one user stored as a bare story.php; the
       // one note carrying that URL was re-bound to each archive in turn.

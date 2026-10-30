@@ -20,6 +20,7 @@ import { LinkPreviewRenderer } from '../renderers/LinkPreviewRenderer';
 import { ReaderModeContentRenderer, type ReaderContentVariantOption } from './ReaderModeContentRenderer';
 import { ReaderModeGestureHandler } from './ReaderModeGestureHandler';
 import { ReaderHighlightManager } from './ReaderHighlightManager';
+import { syncReaderHighlightChange, type ReaderHighlightChange } from './readerHighlightSync';
 import { ReaderTTSController } from './ReaderTTSController';
 import { AICommentJobStatusBanner } from '../AICommentJobStatusBanner';
 import { TranscriptionJobStatusBanner } from '../TranscriptionJobStatusBanner';
@@ -101,6 +102,8 @@ export class ReaderModeOverlay {
 
   /** Per-post highlights cache (keyed by filePath) */
   private highlightsCache: Map<string, TextHighlight[]> = new Map();
+  /** Server highlight syncs run one at a time — see syncHighlightsToServer */
+  private highlightSyncQueue: Promise<void> = Promise.resolve();
 
   // Keyboard handler ref
   private keyHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -805,7 +808,13 @@ export class ReaderModeOverlay {
 
   private async sharePost(post: PostData): Promise<void> {
     if (this.context.onShare) {
-      await this.context.onShare(post);
+      // A first share opens the share settings modal; keep reader keys off until it closes.
+      this.modalOpen = true;
+      try {
+        await this.context.onShare(post);
+      } finally {
+        window.setTimeout(() => { this.modalOpen = false; }, 0);
+      }
       this.dirty = true;
       await this.reRenderPreservingScroll();
     }
@@ -1646,7 +1655,7 @@ export class ReaderModeOverlay {
     post.highlightCount = cached.length;
 
     // 4. Sync to server API (fire-and-forget in background)
-    this.syncHighlightsToServer(post, cached);
+    this.syncHighlightsToServer(post, { type: 'add', highlight });
 
     this.dirty = true;
     if (post.filePath) this.dirtyPaths.add(post.filePath);
@@ -1666,16 +1675,14 @@ export class ReaderModeOverlay {
     const updated = cached.filter(h => h.id !== highlightId);
     this.highlightsCache.set(postKey, updated);
 
-    // Remove ==text== from vault file
+    // Remove ==text== from vault file, then from the server
     if (removed) {
       await this.removeHighlightFromVaultFile(post, removed);
+      this.syncHighlightsToServer(post, { type: 'remove', highlight: removed });
     }
 
     // Update in-memory PostData so timeline reflects the change on close
     post.highlightCount = updated.length > 0 ? updated.length : undefined;
-
-    // Sync to server
-    this.syncHighlightsToServer(post, updated);
 
     this.dirty = true;
     if (post.filePath) this.dirtyPaths.add(post.filePath);
@@ -1786,8 +1793,14 @@ export class ReaderModeOverlay {
   }
 
   /**
-   * Sync highlights to the server API (background, non-blocking).
+   * Sync one highlight edit to the server API (background, non-blocking).
    * Server broadcasts hasAnnotationUpdate via WebSocket to mobile app.
+   *
+   * The PATCH replaces the server's whole `userHighlights` array, and the
+   * local cache is rebuilt from `==marks==` (no ids/colors/notes), so the
+   * payload is built from the server's current array — see
+   * `readerHighlightSync`. Syncs are queued so each one reads what the
+   * previous one wrote; parallel read-modify-writes would drop edits.
    *
    * `sourceArchiveId` fallback:
    *   - Inbound annotation sync auto-backfills this field when the archive
@@ -1800,7 +1813,7 @@ export class ReaderModeOverlay {
    *     and proceed. If lookup finds nothing the archive is genuinely
    *     local-only and we skip quietly.
    */
-  private syncHighlightsToServer(post: PostData, highlights: TextHighlight[]): void {
+  private syncHighlightsToServer(post: PostData, change: ReaderHighlightChange): void {
     const filePath = post.filePath;
     if (!filePath) return;
 
@@ -1811,19 +1824,16 @@ export class ReaderModeOverlay {
     const directId = cache?.frontmatter?.sourceArchiveId as string | undefined;
     const originalUrl = cache?.frontmatter?.originalUrl as string | undefined;
 
-    void (async () => {
-      const archiveId = await this.resolveArchiveIdForSync(file, directId, originalUrl);
-      if (!archiveId) return; // genuinely local-only — nothing to sync
-
+    this.highlightSyncQueue = this.highlightSyncQueue.then(async () => {
       try {
-        const apiClient = this.context.plugin.workersApiClient;
-        await apiClient.updateArchiveActions(archiveId, {
-          userHighlights: highlights,
-        });
+        const archiveId = await this.resolveArchiveIdForSync(file, directId, originalUrl);
+        if (!archiveId) return; // genuinely local-only — nothing to sync
+
+        await syncReaderHighlightChange(this.context.plugin.workersApiClient, archiveId, change);
       } catch (err) {
         console.error('[Social Archiver] Failed to sync highlights to server:', err);
       }
-    })();
+    });
   }
 
   /**

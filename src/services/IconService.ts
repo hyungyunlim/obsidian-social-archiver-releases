@@ -44,6 +44,7 @@ import {
   siNaverWebtoon,
   siBrunch,
   siXiaohongshu,
+  siWeibo,
   siChatgpt,
   siClaude,
   siGemini,
@@ -106,6 +107,7 @@ const SIMPLE_ICON_MAP: Record<string, PlatformIcon | null> = {
   webtoons: siNaverWebtoon, // WEBTOON Global (same icon as Naver Webtoon)
   brunch: siBrunch, // Brunch (Kakao publishing platform)
   xiaohongshu: siXiaohongshu, // Xiaohongshu / RedNote
+  weibo: siWeibo, // Sina Weibo
   chatgpt: siChatgpt,
   claude: siClaude,
   gemini: siGemini,
@@ -161,6 +163,7 @@ const EMOJI_MAP: Record<string, string> = {
   webtoons: '📚', // WEBTOON Global (same icon as Naver Webtoon)
   brunch: '☕',
   xiaohongshu: '📕',
+  weibo: '🧣',
   chatgpt: '🤖',
   claude: '🤖',
   gemini: '🤖',

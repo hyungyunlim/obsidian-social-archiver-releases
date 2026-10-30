@@ -2738,19 +2738,14 @@ export default class SocialArchiverPlugin extends Plugin {
         // archive delta (includeDeleted=true) so annotation/action events
         // missed on the public channel still reach the vault. Stops as soon
         // as the private channel is restored.
-        if (this.apiClient && this.annotationSyncService && this.archiveLookupService) {
+        if (this.apiClient && this.annotationSyncService) {
           const apiClient = this.apiClient;
           const annotationSync = this.annotationSyncService;
-          const lookup = this.archiveLookupService;
           this.annotationFallbackPoller = new AnnotationFallbackPoller({
             apiClient,
             onArchiveUpdate: (archive): void => {
-              const urlMatches = lookup.findByOriginalUrl(archive.originalUrl);
-              const file =
-                lookup.findBySourceArchiveId(archive.id)
-                ?? (urlMatches.length === 1
-                  ? (urlMatches[0] ?? null)
-                  : null);
+              // By id, else a single URL match that is not a local-only clip.
+              const file = annotationSync.resolveFile(archive.id, archive.originalUrl);
               if (!file) return;
 
               void this.localLockRegistry.withLocks(

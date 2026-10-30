@@ -8,6 +8,7 @@
 import type { Platform } from './types';
 import { PLATFORM_DEFINITIONS, type PlatformDefinition } from './definitions';
 import { extractKoreanMapPlaceId } from './map-places';
+import { extractWeiboPostId } from './weibo-ids';
 
 function extractRedditCommentIdFromPathname(pathname: string): string | null {
   const segments = pathname.split('/').filter(Boolean);
@@ -49,6 +50,7 @@ const DETECTION_ORDER: Platform[] = [
   'naver', // Korean portal - blog, cafe, news (must be before blog/mastodon)
   'brunch', // Korean publishing platform by Kakao
   'xiaohongshu', // Chinese lifestyle SNS - covers xhslink/xhs.cn/rednote share domains
+  'weibo', // Sina Weibo - weibo.com / m.weibo.cn (host-anchored)
   'chatgpt', // AI chat share links (feedback #139) — host-anchored, before the generic tail
   'claude',
   'gemini',
@@ -412,6 +414,10 @@ export function extractPostIdFromUrl(platform: Platform, url: string): string | 
         const scoped = pathname.match(/\/user\/profile\/[0-9a-f]{24}\/([0-9a-f]{24})(?:\/|$)/i);
         return scoped?.[1]?.toLowerCase() ?? null;
       }
+
+      case 'weibo':
+        // Canonicalised to the numeric mid — see weibo-ids.ts.
+        return extractWeiboPostId(url);
 
       case 'navermap':
       case 'kakaomap':

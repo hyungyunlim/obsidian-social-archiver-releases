@@ -3253,6 +3253,8 @@ export class WorkersAPIClient implements IService {
       lockTokenVersion?: number;
       errorCode: string;
       retryable: boolean;
+      /** Operator-only runner excerpt; the server sanitizes and never returns it. */
+      errorDetail?: string;
     },
   ): Promise<{ job: AICommentJobSummary }> {
     this.ensureInitialized();
@@ -3390,6 +3392,8 @@ export class WorkersAPIClient implements IService {
       lockTokenVersion?: number;
       errorCode: string;
       retryable: boolean;
+      /** Operator-only runner excerpt; the server sanitizes and never returns it. */
+      errorDetail?: string;
     },
   ): Promise<{ job: AIActionJobSummary }> {
     this.ensureInitialized();

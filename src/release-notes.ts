@@ -26,6 +26,25 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.10.7': {
+    title: 'Weibo posts, and sharing asks before it publishes',
+    date: '2026-10-30',
+    notes: `## New
+
+- **Weibo posts.** Archive a Weibo post from its link (weibo.com or m.weibo.cn) with its full text, images, video and its most popular comments.
+- **Sharing asks first.** The first time you share a post, from its card, reader mode or the map, the share settings open before anything is published: who can see it, whether it opens as the post or in reader mode, and whether your notes and highlights come along. **Create link and copy** publishes it, and the copied link opens the way you picked. Posts that already have a link still copy in one tap.
+
+## Fixes
+
+- **Reader mode keeps your highlight notes.** Adding or removing a highlight in reader mode erased every highlight note saved on the server for that archive, including AI notes from the mobile app. Reader mode now changes only the highlight you touched.
+- **Multi-line highlight notes stay in the callout.** The lines after the first spilled out of the highlight's callout in the note.
+- **YouTube Shorts no longer duplicate.** Shorts are now saved under their /shorts/ link. Notes saved with the older watch?v= link still match their archive, so library sync and subscriptions no longer write a second note, and a deleted Short is not imported again.
+- **A delete elsewhere never removes a different note.** When an archive is deleted on another device, a note bound to a different archive of the same video, or a local-only clip, is left alone.
+
+> [!NOTE]
+> Weibo archives show up in the mobile app from its next update.
+`,
+  },
   '4.10.6': {
     title: 'Opening Social Archiver settings no longer freezes Obsidian',
     date: '2026-10-14',

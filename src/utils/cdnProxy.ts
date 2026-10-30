@@ -18,6 +18,8 @@ const PROXY_REQUIRED_DOMAINS = [
   'cdninstagram.com',
   'fbcdn.net',
   'tiktokcdn.com',
+  'sinaimg.cn', // Weibo — 403 without a weibo.com Referer
+  'weibocdn.com',
 ] as const;
 
 /**

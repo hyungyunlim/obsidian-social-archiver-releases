@@ -16,6 +16,9 @@ import { renderVisibilityChoices } from './visibilityChoices';
  * Share settings for one shared post (prd-collections-obsidian-plugin O9),
  * through GET/PATCH /api/share/:shareId/settings. Stopping the share stays
  * in the card's share menu, which also clears the note's share fields.
+ *
+ * NewPostShareModal is the same settings for a post with no link yet: chosen
+ * locally, published only by "Create link and copy" (mobile/desktop parity).
  */
 
 export interface PostShareSettingsOptions {
@@ -26,6 +29,46 @@ export interface PostShareSettingsOptions {
 }
 
 const POST_VISIBILITY_ICON: Record<PostShareVisibility, string> = { public: 'globe', unlisted: 'link' };
+
+/** Who can see it, what viewers see first, notes and highlights — for a live share or a new one. */
+export function renderPostShareSettingsFields(
+  body: HTMLElement,
+  settings: PostShareSettings,
+  disabled: boolean,
+  onChange: (patch: Partial<PostShareSettings>) => void,
+): void {
+  body.createDiv({ cls: 'sa-collection-section-label', text: t('col.share.visibility'), attr: { id: 'sa-post-visibility-label' } });
+  const handle = renderVisibilityChoices<PostShareVisibility>(body, {
+    labelledBy: 'sa-post-visibility-label',
+    choices: POST_SHARE_VISIBILITIES.map((value) => ({
+      value,
+      label: value === 'public' ? t('col.visibility.public') : t('col.visibility.unlisted'),
+      hint: value === 'public' ? t('col.visibility.publicHint') : t('col.visibility.unlistedHint'),
+      icon: POST_VISIBILITY_ICON[value],
+    })),
+    value: settings.visibility,
+    onSelect: (visibility) => onChange({ visibility }),
+  });
+  handle.setDisabled(disabled);
+
+  new Setting(body)
+    .setName(t('col.share.displayMode'))
+    .setDesc(t('col.share.displayModeHintPost'))
+    .addDropdown((dropdown) => {
+      for (const mode of POST_SHARE_DISPLAY_MODES) dropdown.addOption(mode, displayModeLabel(mode));
+      dropdown.setValue(settings.displayMode);
+      dropdown.setDisabled(disabled);
+      dropdown.onChange((value) => onChange({ displayMode: value as PostShareDisplayMode }));
+    });
+
+  new Setting(body)
+    .setName(t('col.share.includeAnnotations'))
+    .addToggle((toggle) => {
+      toggle.setValue(settings.includeAnnotations);
+      toggle.setDisabled(disabled);
+      toggle.onChange((includeAnnotations) => onChange({ includeAnnotations }));
+    });
+}
 
 export class PostShareSettingsModal extends Modal {
   private state: PostShareSettingsResponse | null = null;
@@ -64,37 +107,7 @@ export class PostShareSettingsModal extends Modal {
     const body = this.contentEl;
     body.empty();
 
-    body.createDiv({ cls: 'sa-collection-section-label', text: t('col.share.visibility'), attr: { id: 'sa-post-visibility-label' } });
-    const handle = renderVisibilityChoices<PostShareVisibility>(body, {
-      labelledBy: 'sa-post-visibility-label',
-      choices: POST_SHARE_VISIBILITIES.map((value) => ({
-        value,
-        label: value === 'public' ? t('col.visibility.public') : t('col.visibility.unlisted'),
-        hint: value === 'public' ? t('col.visibility.publicHint') : t('col.visibility.unlistedHint'),
-        icon: POST_VISIBILITY_ICON[value],
-      })),
-      value: state.settings.visibility,
-      onSelect: (visibility) => void this.apply({ visibility }),
-    });
-    handle.setDisabled(this.busy);
-
-    new Setting(body)
-      .setName(t('col.share.displayMode'))
-      .setDesc(t('col.share.displayModeHintPost'))
-      .addDropdown((dropdown) => {
-        for (const mode of POST_SHARE_DISPLAY_MODES) dropdown.addOption(mode, displayModeLabel(mode));
-        dropdown.setValue(state.settings.displayMode);
-        dropdown.setDisabled(this.busy);
-        dropdown.onChange((value) => void this.apply({ displayMode: value as PostShareDisplayMode }));
-      });
-
-    new Setting(body)
-      .setName(t('col.share.includeAnnotations'))
-      .addToggle((toggle) => {
-        toggle.setValue(state.settings.includeAnnotations);
-        toggle.setDisabled(this.busy);
-        toggle.onChange((includeAnnotations) => void this.apply({ includeAnnotations }));
-      });
+    renderPostShareSettingsFields(body, state.settings, this.busy, (patch) => void this.apply(patch));
 
     const linkRow = body.createDiv({ cls: 'sa-collection-link-row' });
     const input = linkRow.createEl('input', { type: 'text', value: state.shareUrl, cls: 'sa-collection-link-input', attr: { readonly: 'true', 'aria-label': t('col.share.copyLink') } });
@@ -112,5 +125,65 @@ export class PostShareSettingsModal extends Modal {
     if (result.ok) this.state = result.value;
     else this.options.reportFailure(result.reason, 'update');
     this.render();
+  }
+}
+
+export interface NewPostShareOptions {
+  initial: PostShareSettings;
+  /** Publishes with the chosen settings and copies; null when it failed (it reports why). */
+  create: (settings: PostShareSettings) => Promise<string | null>;
+  /** Once, when the modal closes: the new link, or null when nothing was published. */
+  onClosed?: (shareUrl: string | null) => void;
+}
+
+export class NewPostShareModal extends Modal {
+  private settings: PostShareSettings;
+  private busy = false;
+  private shareUrl: string | null = null;
+
+  constructor(app: App, private readonly options: NewPostShareOptions) {
+    super(app);
+    this.settings = { ...options.initial };
+  }
+
+  onOpen(): void {
+    this.modalEl.addClass('sa-collection-share-settings');
+    if (Platform.isMobile) this.modalEl.addClass('sa-collection-modal-mobile');
+    this.setTitle(t('col.share.title'));
+    this.render();
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+    this.options.onClosed?.(this.shareUrl);
+  }
+
+  private render(): void {
+    const body = this.contentEl;
+    body.empty();
+    renderPostShareSettingsFields(body, this.settings, this.busy, (patch) => {
+      this.settings = { ...this.settings, ...patch };
+      this.render();
+    });
+    new Setting(body)
+      .setDesc(t('col.share.createLinkHint'))
+      .addButton((button) => {
+        button.setButtonText(t('col.share.createLink')).setCta().setDisabled(this.busy);
+        button.onClick(() => void this.create());
+      });
+  }
+
+  private async create(): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    this.render();
+    try {
+      this.shareUrl = await this.options.create(this.settings);
+    } finally {
+      this.busy = false;
+    }
+    // A failure leaves the modal open to try again.
+    if (this.shareUrl) this.close();
+    else this.render();
   }
 }

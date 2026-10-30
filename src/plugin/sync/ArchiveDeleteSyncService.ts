@@ -29,8 +29,9 @@ import type {
   PendingArchiveDeleteEntry,
   LocalArchiveDeleteTombstone,
 } from '../../types/settings';
+import { normalizeUrl } from '../../services/ArchiveLookupService';
 import { showDeleteConfirmModal } from './DeleteConfirmModal';
-import { isLocalOnlyImportMode, isLocalOnlyNote } from './localOnlyNoteGuard';
+import { isLocalOnlyFrontmatter, isLocalOnlyImportMode, isLocalOnlyNote } from './localOnlyNoteGuard';
 
 // ============================================================================
 // Interfaces (provided by other agents / parallel modules)
@@ -211,13 +212,21 @@ export class ArchiveDeleteSyncService {
     const username = settings.username;
     if (!username) return false;
 
-    const match = this.getTombstones(settings).find((t) =>
+    const serverUrlKey = archive.originalUrl ? normalizeUrl(archive.originalUrl) : null;
+    // An old URL tombstone and a newer id-bound one can both match after a
+    // re-archive and re-delete; the latest deletion is the one that counts.
+    const match = this.getTombstones(settings).filter((t) =>
       t.username === username &&
       (t.archiveId
         ? t.archiveId === archive.id
         // URL matching only for id-less (legacy-note) tombstones — an id-bound
         // tombstone must not swallow a different server row for the same URL.
-        : (!!t.originalUrl && t.originalUrl === archive.originalUrl))
+        // Compared like note lookup, so a Short the server moved from watch?v=
+        // to /shorts/ stays deleted.
+        : (!!t.originalUrl && serverUrlKey !== null && normalizeUrl(t.originalUrl) === serverUrlKey))
+    ).reduce<LocalArchiveDeleteTombstone | undefined>(
+      (latest, t) => (!latest || t.deletedAt > latest.deletedAt ? t : latest),
+      undefined,
     );
     if (!match) return false;
 
@@ -743,13 +752,22 @@ export class ArchiveDeleteSyncService {
   /**
    * True when a different vault file still resolves to the same archive.
    * Runs before the lookup index prunes the deleted file, so the deleted path
-   * itself is excluded rather than relied upon.
+   * itself is excluded rather than relied upon. A local-only clip (PRD S5.1)
+   * or a note bound to another archive shares the URL but is not a copy.
    */
   private hasSurvivingNote(identity: ArchiveFileIdentity): boolean {
     const byId = identity.archiveId ? this.deps.findBySourceArchiveId(identity.archiveId) : null;
     if (byId && byId.path !== identity.path) return true;
     const byUrl = identity.originalUrl ? this.deps.findByOriginalUrl(identity.originalUrl) : [];
-    return byUrl.some((file) => file.path !== identity.path);
+    return byUrl.some((file) => {
+      if (file.path === identity.path) return false;
+      const fm = this.deps.app.metadataCache.getFileCache(file)?.frontmatter;
+      const boundId: unknown = fm?.['sourceArchiveId'];
+      if (identity.archiveId && typeof boundId === 'string' && boundId && boundId !== identity.archiveId) {
+        return false;
+      }
+      return !isLocalOnlyFrontmatter(fm);
+    });
   }
 
   // --------------------------------------------------------------------------
@@ -792,11 +810,15 @@ export class ArchiveDeleteSyncService {
     for (const candidate of candidates) {
       if (!candidate.archiveId && !candidate.originalUrl) continue;
 
+      // Same URL key as isServerArchiveTombstoned, so one video's URL forms
+      // refresh one tombstone instead of stacking up.
+      const candidateUrlKey = candidate.originalUrl ? normalizeUrl(candidate.originalUrl) : null;
       const existing = tombstones.find((t) =>
         t.username === username &&
         (candidate.archiveId
           ? t.archiveId === candidate.archiveId
-          : (!t.archiveId && !!t.originalUrl && t.originalUrl === candidate.originalUrl))
+          : (!t.archiveId && !!t.originalUrl && candidateUrlKey !== null &&
+            normalizeUrl(t.originalUrl) === candidateUrlKey))
       );
 
       if (existing) {
@@ -1020,6 +1042,17 @@ export class ArchiveDeleteSyncService {
         if (isLocalOnlyNote(this.deps.app, candidate)) {
           console.debug(`${LOG_PREFIX} Inbound delete: URL matched a local-only note — skipping`, {
             archiveId,
+            path: candidate.path,
+          });
+          return null;
+        }
+        // A note bound to another archive only shares the URL (key): one video
+        // under watch?v= and /shorts/ matches by video id. Never trash it.
+        const boundId: unknown = this.deps.app.metadataCache.getFileCache(candidate)?.frontmatter?.['sourceArchiveId'];
+        if (typeof boundId === 'string' && boundId && boundId !== archiveId) {
+          console.debug(`${LOG_PREFIX} Inbound delete: URL matched a note bound to another archive — skipping`, {
+            archiveId,
+            boundId,
             path: candidate.path,
           });
           return null;

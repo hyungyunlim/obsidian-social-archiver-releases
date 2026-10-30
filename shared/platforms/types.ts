@@ -35,6 +35,7 @@ export type Platform =
   | 'webtoons'
   | 'brunch'
   | 'xiaohongshu'
+  | 'weibo'
   // AI chat share links (feedback #139) — web-extracted, own brand bubble
   | 'chatgpt'
   | 'claude'
@@ -76,6 +77,7 @@ export const PLATFORMS = [
   'webtoons',
   'brunch',
   'xiaohongshu',
+  'weibo',
   'chatgpt',
   'claude',
   'gemini',
@@ -119,6 +121,7 @@ export const PLATFORM_DETECTION_ORDER = [
   'naver',
   'brunch',
   'xiaohongshu',
+  'weibo',
   'chatgpt',
   'claude',
   'gemini',
@@ -300,6 +303,7 @@ export const MOBILE_PLATFORMS = [
   'pinterest',
   'tumblr',
   'xiaohongshu',
+  'weibo',
   'chatgpt',
   'claude',
   'gemini',
@@ -340,6 +344,7 @@ export const MOBILE_PLATFORM_INFO: Record<MobilePlatform, { name: string; placeh
   pinterest: { name: 'Pinterest', placeholder: 'Pinterest pin URL' },
   tumblr: { name: 'Tumblr', placeholder: 'Tumblr post URL' },
   xiaohongshu: { name: 'Xiaohongshu', placeholder: 'Xiaohongshu note or share link' },
+  weibo: { name: 'Weibo', placeholder: 'Weibo post URL' },
   chatgpt: { name: 'ChatGPT', placeholder: 'ChatGPT shared conversation link' },
   claude: { name: 'Claude', placeholder: 'Claude shared conversation link' },
   gemini: { name: 'Gemini', placeholder: 'Gemini shared conversation link' },
@@ -373,6 +378,7 @@ export const SOCIAL_MEDIA_PLATFORMS = [
   'pinterest',
   'tumblr',
   'xiaohongshu',
+  'weibo',
 ] as const;
 
 export type SocialMediaPlatform = typeof SOCIAL_MEDIA_PLATFORMS[number];

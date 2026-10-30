@@ -407,11 +407,11 @@ export class AICommentJobProcessor {
           await this.failAction(context, 'PROCESS_CANCELLED', false);
           return;
         }
-        await this.failAction(context, this.mapAICommentError(error), this.isRetryableAIError(error));
+        await this.failAction(context, this.mapAICommentError(error), this.isRetryableAIError(error), operatorErrorDetail(error));
         return;
       }
       console.warn('[AICommentJobProcessor] AI action failed:', safeError(error));
-      await this.failAction(context, 'UNKNOWN', false);
+      await this.failAction(context, 'UNKNOWN', false, operatorErrorDetail(error));
     }
   }
 
@@ -665,10 +665,10 @@ export class AICommentJobProcessor {
           const cancelled = await this.confirmCancel(context);
           if (cancelled) return;
         }
-        await this.fail(context, this.mapAICommentError(error), this.isRetryableAIError(error));
+        await this.fail(context, this.mapAICommentError(error), this.isRetryableAIError(error), operatorErrorDetail(error));
         return;
       }
-      await this.fail(context, 'UNKNOWN', false);
+      await this.fail(context, 'UNKNOWN', false, operatorErrorDetail(error));
     }
   }
 
@@ -923,7 +923,12 @@ export class AICommentJobProcessor {
     });
   }
 
-  private async fail(context: ProcessingContext, errorCode: AICommentPublicJobErrorCode, retryable: boolean): Promise<void> {
+  private async fail(
+    context: ProcessingContext,
+    errorCode: AICommentPublicJobErrorCode,
+    retryable: boolean,
+    errorDetail?: string,
+  ): Promise<void> {
     const apiClient = this.deps.apiClient();
     const clientId = this.deps.settings().syncClientId;
     if (!apiClient || !clientId) return;
@@ -934,13 +939,19 @@ export class AICommentJobProcessor {
         lockTokenVersion: context.lease.lockTokenVersion,
         errorCode,
         retryable,
+        ...(errorDetail ? { errorDetail } : {}),
       })
       .catch((error) => {
         console.warn('[AICommentJobProcessor] Failed to report job failure:', safeError(error));
       });
   }
 
-  private async failAction(context: AIActionProcessingContext, errorCode: string, retryable: boolean): Promise<void> {
+  private async failAction(
+    context: AIActionProcessingContext,
+    errorCode: string,
+    retryable: boolean,
+    errorDetail?: string,
+  ): Promise<void> {
     const apiClient = this.deps.apiClient();
     const clientId = this.deps.settings().syncClientId;
     if (!apiClient || !clientId) return;
@@ -952,6 +963,7 @@ export class AICommentJobProcessor {
         lockTokenVersion: context.lease.lockTokenVersion,
         errorCode,
         retryable,
+        ...(errorDetail ? { errorDetail } : {}),
       })
       .catch((error) => {
         console.warn('[AICommentJobProcessor] Failed to report AI action failure:', safeError(error));
@@ -1513,4 +1525,15 @@ function normalizeBannerStatus(status: string | undefined): AICommentJobBannerSt
 
 function safeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * The real cause for operators (e.g. "MODEL_NOT_FOUND: ... not supported when
+ * using Codex with a ChatGPT account"), sent next to the coarse public code.
+ * The server sanitizes it and never shows it to users.
+ */
+function operatorErrorDetail(error: unknown): string | undefined {
+  if (error instanceof AICommentError) return `${error.code}: ${error.message}`.slice(0, 600);
+  if (error instanceof Error) return `${error.name}: ${error.message}`.slice(0, 600);
+  return undefined;
 }

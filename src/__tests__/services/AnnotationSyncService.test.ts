@@ -41,11 +41,15 @@ function makeActionUpdatedData(
 
 function makeApp(options: {
   fileContent?: string;
+  frontmatter?: Record<string, unknown>;
   processFrontMatterError?: Error;
   readError?: Error;
   modifyError?: Error;
 } = {}) {
   return {
+    metadataCache: {
+      getFileCache: vi.fn().mockReturnValue(options.frontmatter ? { frontmatter: options.frontmatter } : null),
+    },
     vault: {
       read: vi.fn().mockImplementation(async () => {
         if (options.readError) throw options.readError;
@@ -213,6 +217,26 @@ describe('AnnotationSyncService', () => {
 
       expect(archiveLookup.findByOriginalUrl).toHaveBeenCalledWith('https://example.com/post/123');
       expect(app.vault.read).toHaveBeenCalledWith(file);
+    });
+
+    it('never binds a local-only clip matched by URL', async () => {
+      const clip = makeFile('Social Archives/clip.md');
+      const app = makeApp({ frontmatter: { social_archiver_import_mode: 'local-only' } });
+
+      const service = new AnnotationSyncService(
+        app as any,
+        makeWorkersApiClient() as any,
+        makeArchiveLookup({ byId: null, byUrl: [clip] }) as any,
+        makeAnnotationRenderer() as any,
+        makeSectionManager() as any,
+        makeSettings()
+      );
+
+      expect(service.resolveFile('archive-123', 'https://example.com/post/123')).toBeNull();
+      await service.handleActionUpdated(makeActionUpdatedData());
+
+      expect(app.vault.read).not.toHaveBeenCalled();
+      expect(app.fileManager.processFrontMatter).not.toHaveBeenCalled();
     });
 
     it('silently returns when no file matches either lookup', async () => {

@@ -207,6 +207,42 @@ describe('ArchiveDeleteSyncService', () => {
     );
   });
 
+  it('never trashes a URL-matched note bound to a different archive on an inbound delete', async () => {
+    const settings = makeSettings();
+    const bound = { path: 'Social Archives/YouTube/short.md', basename: 'short' };
+    const unbound = { path: 'Social Archives/YouTube/legacy.md', basename: 'legacy' };
+    const frontmatterByPath: Record<string, Record<string, unknown>> = {
+      [bound.path]: { sourceArchiveId: 'archive-other', originalUrl: 'https://www.youtube.com/shorts/e8U06vyZbPY' },
+      [unbound.path]: { originalUrl: 'https://www.youtube.com/watch?v=e8U06vyZbPY' },
+    };
+    const trashFile = vi.fn().mockResolvedValue(undefined);
+    const findByOriginalUrl = vi.fn();
+    const service = new ArchiveDeleteSyncService({
+      apiClient: () => ({ deleteArchive: vi.fn(), getUserArchives: vi.fn() }) as any,
+      settings: () => settings,
+      saveSettings: vi.fn().mockResolvedValue(undefined),
+      app: {
+        fileManager: { trashFile },
+        metadataCache: {
+          getFileCache: vi.fn((file: { path: string }) => ({ frontmatter: frontmatterByPath[file.path] })),
+        },
+      } as any,
+      findBySourceArchiveId: vi.fn().mockReturnValue(null),
+      findByOriginalUrl,
+      isLibrarySyncRunning: () => false,
+      notify: vi.fn(),
+    });
+
+    findByOriginalUrl.mockReturnValue([bound]);
+    await service.handleInboundDelete('archive-deleted', 'https://www.youtube.com/watch?v=e8U06vyZbPY', 'delta');
+    expect(trashFile).not.toHaveBeenCalled();
+
+    // An unbound legacy note is still the archive's note and goes to the trash.
+    findByOriginalUrl.mockReturnValue([unbound]);
+    await service.handleInboundDelete('archive-deleted', 'https://www.youtube.com/watch?v=e8U06vyZbPY', 'delta');
+    expect(trashFile).toHaveBeenCalledWith(unbound);
+  });
+
   // ---------------------------------------------------------------------------
   // DeleteConfirmModal integration
   // ---------------------------------------------------------------------------
@@ -389,7 +425,7 @@ describe('ArchiveDeleteSyncService', () => {
           apiClient: () => apiClient as any,
           settings: () => settings,
           saveSettings,
-          app: { fileManager: { trashFile: vi.fn() } } as any,
+          app: { fileManager: { trashFile: vi.fn() }, metadataCache: { getFileCache: vi.fn().mockReturnValue(null) } } as any,
           // Index not yet pruned: the deleted file is still listed next to the survivor.
           findBySourceArchiveId: vi.fn().mockReturnValue(deleted),
           findByOriginalUrl: vi.fn().mockReturnValue([deleted, survivor]),
@@ -407,6 +443,36 @@ describe('ArchiveDeleteSyncService', () => {
           originalUrl: identity.originalUrl,
           archivedAt: '2026-07-24T02:02:18.899Z',
         })).toBe(false);
+      }
+    });
+
+    it('does not count a local-only clip or a note bound to another archive as a surviving copy', async () => {
+      vi.setSystemTime(new Date('2026-08-01T00:00:00.000Z'));
+      const deleted = { path: 'Social Archives/short.md' };
+      const identity = { ...deleted, archiveId: 'archive-1', originalUrl: 'https://www.youtube.com/shorts/e8U06vyZbPY' };
+      const sameVideo: Array<[string, Record<string, unknown>]> = [
+        ['Social Archives/clip.md', { social_archiver_import_mode: 'local-only' }],
+        ['Social Archives/other.md', { sourceArchiveId: 'archive-2' }],
+      ];
+
+      for (const [path, frontmatter] of sameVideo) {
+        const settings = makeSettings({ deleteSync: OUTBOUND_OFF });
+        const service = new ArchiveDeleteSyncService({
+          apiClient: () => undefined,
+          settings: () => settings,
+          saveSettings: vi.fn().mockResolvedValue(undefined),
+          app: { metadataCache: { getFileCache: vi.fn().mockReturnValue({ frontmatter }) } } as any,
+          findBySourceArchiveId: vi.fn().mockReturnValue(deleted),
+          findByOriginalUrl: vi.fn().mockReturnValue([deleted, { path }]),
+          isLibrarySyncRunning: () => false,
+          notify: vi.fn(),
+        });
+
+        await (service as any).handleOutboundDelete(identity);
+
+        expect(settings.localArchiveDeleteTombstones).toEqual([
+          expect.objectContaining({ archiveId: 'archive-1' }),
+        ]);
       }
     });
 
@@ -464,6 +530,80 @@ describe('ArchiveDeleteSyncService', () => {
         originalUrl: 'https://example.com/post/1',
         archivedAt: '2026-07-01T00:00:00.000Z',
       })).toBe(false);
+    });
+
+    it('keeps a URL-only YouTube tombstone when the server moves the Short to /shorts/', async () => {
+      vi.setSystemTime(new Date('2026-08-01T00:00:00.000Z'));
+      const settings = makeSettings({ deleteSync: OUTBOUND_OFF });
+      const { service } = makeTombstoneService(settings);
+
+      await (service as any).handleOutboundDelete({
+        path: 'Social Archives/short.md',
+        originalUrl: 'https://www.youtube.com/watch?v=e8U06vyZbPY',
+      });
+
+      expect(service.isServerArchiveTombstoned({
+        id: 'any-server-id',
+        originalUrl: 'https://www.youtube.com/shorts/e8U06vyZbPY',
+        archivedAt: '2026-07-01T00:00:00.000Z',
+      })).toBe(true);
+      expect(service.isServerArchiveTombstoned({
+        id: 'other-server-id',
+        originalUrl: 'https://www.youtube.com/shorts/dQw4w9WgXcQ',
+        archivedAt: '2026-07-01T00:00:00.000Z',
+      })).toBe(false);
+    });
+
+    it('a re-delete sticks even when an older URL-only tombstone also matches', async () => {
+      vi.setSystemTime(new Date('2026-08-01T00:00:00.000Z'));
+      const settings = makeSettings({ deleteSync: OUTBOUND_OFF });
+      const { service } = makeTombstoneService(settings);
+
+      await (service as any).handleOutboundDelete({
+        path: 'Social Archives/legacy.md',
+        originalUrl: 'https://www.youtube.com/watch?v=e8U06vyZbPY',
+      });
+      // Re-archived on another client, re-imported as a bound note, deleted again.
+      const reArchived = {
+        id: 'archive-1',
+        originalUrl: 'https://www.youtube.com/shorts/e8U06vyZbPY',
+        archivedAt: '2026-08-02T00:00:00.000Z',
+      };
+      expect(service.isServerArchiveTombstoned(reArchived)).toBe(false);
+
+      vi.setSystemTime(new Date('2026-08-03T00:00:00.000Z'));
+      await (service as any).handleOutboundDelete({
+        path: 'Social Archives/short.md',
+        archiveId: 'archive-1',
+        originalUrl: reArchived.originalUrl,
+      });
+
+      expect(settings.localArchiveDeleteTombstones).toHaveLength(2);
+      expect(service.isServerArchiveTombstoned(reArchived)).toBe(true);
+    });
+
+    it('refreshes one URL-only tombstone across a video\'s URL forms', async () => {
+      vi.setSystemTime(new Date('2026-08-01T00:00:00.000Z'));
+      const settings = makeSettings({ deleteSync: OUTBOUND_OFF });
+      const { service } = makeTombstoneService(settings);
+
+      await (service as any).handleOutboundDelete({
+        path: 'Social Archives/a.md',
+        originalUrl: 'https://www.youtube.com/watch?v=e8U06vyZbPY',
+      });
+      vi.setSystemTime(new Date('2026-08-03T00:00:00.000Z'));
+      await (service as any).handleOutboundDelete({
+        path: 'Social Archives/b.md',
+        originalUrl: 'https://youtu.be/e8U06vyZbPY',
+      });
+
+      expect(settings.localArchiveDeleteTombstones).toEqual([
+        {
+          originalUrl: 'https://www.youtube.com/watch?v=e8U06vyZbPY',
+          username: 'test-user',
+          deletedAt: '2026-08-03T00:00:00.000Z',
+        },
+      ]);
     });
 
     it('tombstones cleared entries when the user chooses "Keep on Server"', async () => {

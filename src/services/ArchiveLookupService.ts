@@ -34,6 +34,31 @@ function isIdentityLessUrl(parsed: URL): boolean {
   return parsed.search === '' && FACEBOOK_QUERY_IDENTITY_PATHS.has(parsed.pathname);
 }
 
+/** /embed/ names that are not video ids: the playlist and channel-live players. */
+const YOUTUBE_RESERVED_EMBED_NAMES = new Set(['videoseries', 'live_stream']);
+
+/**
+ * YouTube serves one video under several URLs (watch?v=, /shorts/, youtu.be,
+ * m./music. hosts), and the server stores Shorts under /shorts/ while older
+ * notes carry watch?v= (#206). Keying them by video id makes them match. A
+ * comment permalink (lc=) is its own archive and keeps its full URL.
+ */
+function youtubeVideoKey(parsed: URL): string | null {
+  if (parsed.searchParams.has('lc')) return null;
+  const host = parsed.hostname.toLowerCase().replace(/^(www|m|music)\./, '');
+  let id: string | null | undefined = null;
+  if (host === 'youtu.be') {
+    id = parsed.pathname.split('/')[1];
+  } else if (host === 'youtube.com') {
+    id = parsed.pathname === '/watch'
+      ? parsed.searchParams.get('v')
+      : parsed.pathname.match(/^\/(?:shorts|live|embed)\/([A-Za-z0-9_-]{11})(?:\/|$)/)?.[1];
+  }
+  return id && /^[A-Za-z0-9_-]{11}$/.test(id) && !YOUTUBE_RESERVED_EMBED_NAMES.has(id)
+    ? `youtube:${id}`
+    : null;
+}
+
 /**
  * Normalize a URL for comparison purposes.
  *
@@ -41,14 +66,17 @@ function isIdentityLessUrl(parsed: URL): boolean {
  * - Strip trailing slash when safe (trailing slash on path-only URLs is not significant)
  * - Preserve platform-significant path segments
  * - Do NOT blindly strip query/hash — only remove known tracking params
+ * - A YouTube video URL compares by its video id
  *
  * This is intentionally conservative. False negatives (missed matches) are
  * safer than false positives (wrong file overwritten). Returns null for a URL
  * that identifies no content, so it never matches.
  */
-function normalizeUrl(url: string): string | null {
+export function normalizeUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
+    const youtubeKey = youtubeVideoKey(parsed);
+    if (youtubeKey) return youtubeKey;
     // Remove known tracking query parameters only
     const TRACKING_PARAMS = [
       'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term',

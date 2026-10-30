@@ -1380,6 +1380,63 @@ const DEFAULT_TEMPLATES: Record<Platform, string> = {
 **Original URL:** {{url}}
 `,
 
+  weibo: `{{#if comment}}
+> **My Note:**
+> {{comment}}
+
+---
+
+{{/if}}{{content.text}}
+
+{{#if media}}
+
+---
+
+{{media}}
+{{/if}}
+
+{{#if quotedPost}}
+
+---
+
+{{quotedPost}}
+{{/if}}
+
+{{#if ai}}
+
+---
+
+## 🤖 AI Analysis
+
+**Summary:** {{ai.summary}}
+
+**Sentiment:** {{ai.sentiment}}
+
+**Topics:** {{ai.topics}}
+
+{{#if ai.factCheck}}
+
+### Fact Checks
+{{ai.factCheck}}
+{{/if}}
+{{/if}}
+
+{{#if comments}}
+
+---
+
+## 💬 Comments
+
+{{comments}}
+{{/if}}
+
+---
+
+**Platform:** Weibo | **Author:** [{{author.name}}]({{author.url}}) | **Published:** {{metadata.timestamp}}{{#if metadata.likes}} | **Likes:** {{metadata.likes}}{{/if}}{{#if metadata.shares}} | **Reposts:** {{metadata.shares}}{{/if}}{{#if metadata.comments}} | **Comments:** {{metadata.comments}}{{/if}}
+
+**Original URL:** {{url}}
+`,
+
   podcast: `{{#if comment}}
 > **My Note:**
 > {{comment}}
@@ -2213,6 +2270,7 @@ export class MarkdownConverter implements IService {
       webtoons: '📚',
       brunch: '📝',
       xiaohongshu: '📕',
+      weibo: '🧣',
       chatgpt: '🤖',
       claude: '🤖',
       gemini: '🤖',

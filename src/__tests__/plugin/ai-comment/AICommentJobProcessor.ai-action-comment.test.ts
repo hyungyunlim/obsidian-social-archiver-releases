@@ -218,4 +218,46 @@ describe('AICommentJobProcessor AI action comment jobs', () => {
       internals.isRetryableAIError(new AICommentError('CLI_NOT_AUTHENTICATED', 'a')),
     ).toBe(false);
   });
+
+  it('sends the runner cause as an operator-only errorDetail next to the public code', async () => {
+    serviceMocks.generateComment.mockRejectedValue(
+      new AICommentError('MODEL_NOT_FOUND', 'Model not found: not supported when using Codex with a ChatGPT account'),
+    );
+    const file = { path: 'Social Archives/Web/post.md' } as TFile;
+    const job = {
+      jobId: 'job-1', archiveId: 'archive-1', targetClientId: 'client-1', status: 'claimed',
+      actionType: 'comment.glossary', resultKind: 'comment', provider: 'codex', outputLanguage: 'en',
+      archiveSnapshot: { archive: { title: 'T', previewText: 'Body text.' } },
+      updatedAt: '2026-07-02T00:00:00.000Z', createdAt: '2026-07-02T00:00:00.000Z',
+    } satisfies AIActionExecutorJob;
+    const failAIActionJob = vi.fn<WorkersAPIClient['failAIActionJob']>(async () => ({ job } as never));
+    const processor = new AICommentJobProcessor({
+      app: {
+        vault: { read: vi.fn(async () => '---\nsourceArchiveId: archive-1\n---\nBody text.'), getMarkdownFiles: () => [file] },
+        metadataCache: { getFileCache: () => ({ frontmatter: { sourceArchiveId: 'archive-1' } }) },
+      } as unknown as App,
+      apiClient: () => ({
+        claimAIActionJob: vi.fn(async () => ({
+          jobId: 'job-1', lockToken: 'lock-1', lockTokenVersion: 1, leaseExpiresAt: '2026-07-02T00:10:00.000Z', job,
+        })),
+        updateAIActionJobProgress: vi.fn(async () => ({
+          job: { ...job, status: 'running' }, lockToken: 'lock-2', lockTokenVersion: 2, leaseExpiresAt: '2026-07-02T00:10:00.000Z',
+        })),
+        failAIActionJob,
+      } as unknown as WorkersAPIClient),
+      settings: () => ({ syncClientId: 'client-1', authToken: 'token', aiCommentPendingUploads: {} }) as SocialArchiverSettings,
+      saveSettings: vi.fn(async () => undefined),
+      archiveLookupService: () => ({ findBySourceArchiveId: vi.fn(() => file) } as never),
+      ingestRemoteArchive: vi.fn(async () => 'existing' as const),
+      isArchiveLibrarySyncRunning: () => false,
+      refreshTimelineView: vi.fn(),
+      notify: vi.fn(),
+    });
+
+    await processor.handleRequestedAIActionJob('job-1', 'client-1');
+
+    expect(failAIActionJob).toHaveBeenCalledWith('job-1', expect.objectContaining({
+      errorDetail: 'MODEL_NOT_FOUND: Model not found: not supported when using Codex with a ChatGPT account',
+    }));
+  });
 });

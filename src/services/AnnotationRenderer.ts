@@ -154,7 +154,9 @@ export class AnnotationRenderer {
 
         if (h.note && h.note.trim().length > 0) {
           calloutLines.push(`>`);
-          calloutLines.push(`> Note: ${convertInternalMentions(h.note.trim(), this.resolvers, sourcePath)}`);
+          // Escape every line, not just the first, so a multi-line note
+          // stays inside the callout.
+          calloutLines.push(escapeCalloutContent(`Note: ${convertInternalMentions(h.note.trim(), this.resolvers, sourcePath)}`));
         }
 
         calloutLines.push(`> Updated: ${formatLocalTimestamp(h.updatedAt)}`);

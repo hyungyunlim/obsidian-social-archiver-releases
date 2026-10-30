@@ -116,6 +116,15 @@ describe('AnnotationRenderer', () => {
       expect(result).toContain('> Note: This is the key argument');
     });
 
+    it('keeps every line of a multi-line inline note inside the callout', () => {
+      const hl = makeHighlight({ note: 'First line\n\nSecond paragraph\n> quoted\n---' });
+      const result = renderer.render({ notes: [], highlights: [hl] });
+
+      expect(result).toContain(
+        '> Note: First line\n> \n> Second paragraph\n> \u200B> quoted\n> \\---\n> Updated:'
+      );
+    });
+
     it('renders highlight without inline note (no "Note:" line)', () => {
       const hl = makeHighlight({ note: undefined });
       const result = renderer.render({ notes: [], highlights: [hl] });

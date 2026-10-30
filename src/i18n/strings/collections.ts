@@ -127,6 +127,8 @@ export const collectionStrings = {
   'col.share.mode.textOnly': { en: 'Text', ko: '텍스트' },
   'col.share.includeAnnotations': { en: 'Include my notes and highlights', ko: '내 메모와 하이라이트 포함' },
   'col.share.copyLink': { en: 'Copy link', ko: '링크 복사' },
+  'col.share.createLink': { en: 'Create link and copy', ko: '링크 만들고 복사' },
+  'col.share.createLinkHint': { en: 'You can change these or stop sharing at any time.', ko: '설정은 언제든 바꾸거나 공유를 중지할 수 있습니다.' },
   'col.share.rotateLink': { en: 'Reset link', ko: '링크 재설정' },
   'col.share.rotateConfirmTitle': { en: 'Reset the link?', ko: '링크를 재설정할까요?' },
   'col.share.rotateConfirmBody': { en: 'The current link will stop working.', ko: '지금 링크는 더 이상 열리지 않습니다.' },

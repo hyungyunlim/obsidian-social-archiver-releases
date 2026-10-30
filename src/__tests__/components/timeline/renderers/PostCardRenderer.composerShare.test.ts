@@ -33,6 +33,23 @@ vi.mock('@/services/ShareAPIClient', () => ({
   },
 }));
 
+/** The share modal a first share opens; the test drives its Create. */
+const shareModal = vi.hoisted(() => ({
+  options: null as null | {
+    initial: Record<string, unknown>;
+    create: (settings: Record<string, unknown>) => Promise<string | null>;
+    onClosed?: (shareUrl: string | null) => void;
+  },
+}));
+vi.mock('@/components/timeline/collections/PostShareSettingsModal', () => ({
+  NewPostShareModal: class {
+    constructor(_app: unknown, options: typeof shareModal.options) {
+      shareModal.options = options;
+    }
+    open(): void {}
+  },
+}));
+
 import { PostCardRenderer } from '@/components/timeline/renderers/PostCardRenderer';
 import { CommentRenderer } from '@/components/timeline/renderers/CommentRenderer';
 import { LinkPreviewRenderer } from '@/components/timeline/renderers/LinkPreviewRenderer';
@@ -44,8 +61,16 @@ const POST_ID = 'post_4f1c2a9e-7b3d-4c55-9a10-2e8f6d7c1b00';
 /** The test mock's TFile takes a path; obsidian's typings don't. */
 const fileAt = (path: string): TFile => new (TFile as unknown as new (p: string) => TFile)(path);
 
-/** Shares the note from its card and returns the options the share request carried. */
-async function shareFromCard(frontmatter: Record<string, unknown>): Promise<Record<string, unknown> | undefined> {
+/**
+ * Shares the note from its card — through the share modal, creating with
+ * `settings` (default: the modal's initial ones) — and returns the options
+ * the share request carried.
+ */
+async function shareFromCard(
+  frontmatter: Record<string, unknown>,
+  settings?: Record<string, unknown>,
+  copyShareLinkAsReaderMode = false,
+): Promise<Record<string, unknown> | undefined> {
   const vault = {
     getAbstractFileByPath: () => fileAt(PATH),
     read: async () => '---\nplatform: post\n---\n\nHello from the composer',
@@ -67,7 +92,7 @@ async function shareFromCard(frontmatter: Record<string, unknown>): Promise<Reco
       workerUrl: 'https://api.example.com',
       shareMode: 'full',
       tier: 'free',
-      copyShareLinkAsReaderMode: false,
+      copyShareLinkAsReaderMode,
     },
   } as unknown as SocialArchiverPlugin;
   const renderer = new PostCardRenderer(
@@ -91,14 +116,27 @@ async function shareFromCard(frontmatter: Record<string, unknown>): Promise<Reco
     metadata: { timestamp: '2026-10-06T09:30:00.000Z' },
   } as unknown as PostData;
 
-  await renderer.toggleShareForReader(post);
+  shareModal.options = null;
+  const sharing = renderer.toggleShareForReader(post);
 
+  // Nothing is published until the modal's Create.
+  const modal = shareModal.options;
+  if (!modal) throw new Error('expected the share modal');
+  expect(createShare).not.toHaveBeenCalled();
+  const shareUrl = await modal.create(settings ?? modal.initial);
+  modal.onClosed?.(shareUrl);
+  await sharing;
+
+  expect(shareUrl).toBe('https://social-archive.org/owner/share-1');
   expect(createShare).toHaveBeenCalledTimes(1);
   return (createShare.mock.calls[0]?.[0] as { options?: Record<string, unknown> }).options;
 }
 
 describe('PostCardRenderer share — composer notes', () => {
+  const writeText = vi.fn(async (_text: string) => undefined);
+
   beforeEach(() => {
+    writeText.mockClear();
     createShare.mockReset().mockResolvedValue({
       shareId: 'share-1',
       shareUrl: 'https://social-archive.org/owner/share-1',
@@ -106,7 +144,7 @@ describe('PostCardRenderer share — composer notes', () => {
     });
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
-      value: { writeText: async () => undefined },
+      value: { writeText },
     });
   });
 
@@ -122,6 +160,30 @@ describe('PostCardRenderer share — composer notes', () => {
     });
 
     expect(options?.['sourceArchiveId']).toBe(POST_ID);
+  });
+
+  it('sends the settings picked in the share modal, defaulted as before', async () => {
+    const defaults = await shareFromCard({ platform: 'post' });
+    expect(defaults).toMatchObject({ visibility: 'public', displayMode: 'card', includeAnnotations: true });
+
+    createShare.mockClear();
+    const picked = await shareFromCard(
+      { platform: 'post' },
+      { visibility: 'unlisted', displayMode: 'reader', includeAnnotations: false },
+    );
+    expect(picked).toMatchObject({ visibility: 'unlisted', displayMode: 'reader', includeAnnotations: false });
+  });
+
+  it('copies the plain link with the reader-link setting on, so a picked Post opens as a post (feedback #223)', async () => {
+    await shareFromCard({ platform: 'post' }, { visibility: 'public', displayMode: 'card', includeAnnotations: true }, true);
+
+    expect(writeText).toHaveBeenCalledWith('https://social-archive.org/owner/share-1');
+  });
+
+  it('starts a new share as Reader when the reader-link setting is on', async () => {
+    const options = await shareFromCard({ platform: 'post' }, undefined, true);
+
+    expect(options).toMatchObject({ displayMode: 'reader' });
   });
 
   it('names no row for a post with no server identity', async () => {

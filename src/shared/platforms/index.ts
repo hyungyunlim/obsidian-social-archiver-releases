@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/index.ts
- * Generated: 2026-09-15T01:53:47.619Z
+ * Generated: 2026-10-30T02:56:36.272Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -53,6 +53,7 @@ export {
   isConservativelySouthKoreanPlace,
 } from './map-place-policy';
 export { getMapProviderWebLinks } from './map-place-links';
+export { extractWeiboPostId, weiboMblogidToMid, weiboMidToMblogid } from './weibo-ids';
 
 // Subscription platform constants (Single Source of Truth)
 export type {

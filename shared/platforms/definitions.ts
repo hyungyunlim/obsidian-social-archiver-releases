@@ -295,6 +295,22 @@ export const PLATFORM_DEFINITIONS: Record<Platform, PlatformDefinition> = {
     features: { stories: false, live: false, reels: false, threads: false },
   },
 
+  weibo: {
+    id: 'weibo',
+    displayName: 'Weibo',
+    emoji: '🧣',
+    domains: ['weibo.com', 'weibo.cn'],
+    // Host-anchored like xiaohongshu. `t.cn` is deliberately absent: it is
+    // Weibo's general link shortener and points at arbitrary sites.
+    urlPattern: /^(?:https?:\/\/)?(?:[\w-]+\.)*weibo\.(?:com|cn)(?:[:/?#]|$)/i,
+    // No brightDataDatasetId: Weibo is direct-only (anonymous visitor cookie).
+    supportsMedia: true,
+    supportsAI: true,
+    maxMediaSize: 100 * 1024 * 1024, // 100MB
+    rateLimit: { requestsPerHour: 200, requestsPerDay: 2000 },
+    features: { stories: false, live: false, reels: false, threads: false },
+  },
+
   // AI chat share links (feedback #139). Host-anchored like xiaohongshu so a
   // mere mention of the domain in a query string never claims the URL.
   chatgpt: {
@@ -841,6 +857,12 @@ export const PLATFORM_AI_COMMENT_CONFIG: Record<Platform, PlatformAICommentConfi
     contentSource: 'rawMarkdown',
   },
   xiaohongshu: {
+    showBanner: true,
+    requiresTranscription: false,
+    defaultEnabled: true,
+    contentSource: 'text',
+  },
+  weibo: {
     showBanner: true,
     requiresTranscription: false,
     defaultEnabled: true,

@@ -79,6 +79,7 @@ const CORS_BLOCKED_DOMAINS = [
   'pstatic.net',      // Naver CDN (blogpfthumb-phinf.pstatic.net, blogimgs.pstatic.net)
   'redditmedia.com',  // Reddit CDN (styles.redditmedia.com)
   'daumcdn.net',      // Kakao/Brunch CDN (t1.daumcdn.net)
+  'sinaimg.cn',       // Weibo avatars — 403 without a weibo.com Referer
 ];
 
 /**

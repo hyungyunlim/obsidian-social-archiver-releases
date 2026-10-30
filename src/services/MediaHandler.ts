@@ -770,6 +770,8 @@ export class MediaHandler implements IService {
     'licdn.com',
     'threads.com',
     'medium.com',        // Medium CDN (cdn-images-1.medium.com)
+    'sinaimg.cn',        // Weibo images — 403 without a weibo.com Referer
+    'weibocdn.com',      // Weibo video — same Referer gate
   ];
 
   /**
