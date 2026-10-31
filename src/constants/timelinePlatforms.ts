@@ -31,6 +31,8 @@ export const TIMELINE_PLATFORM_IDS = [
   'perplexity',
   'grok',
   'adventai',
+  'spotify',
+  'applemusic',
   'web'
 ] as const;
 
@@ -77,5 +79,7 @@ export const TIMELINE_PLATFORM_LABELS: Record<TimelinePlatformId, string> = {
   perplexity: 'Perplexity',
   grok: 'Grok',
   adventai: 'AdventAI',
+  spotify: 'Spotify',
+  applemusic: 'Apple Music',
   web: 'Web Article'
 };

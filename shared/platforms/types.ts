@@ -43,6 +43,9 @@ export type Platform =
   | 'perplexity'
   | 'grok'
   | 'adventai'
+  // Music links (feedback #222) — web-extracted, own brand bubble
+  | 'spotify'
+  | 'applemusic'
   | 'web'
   | 'post';
 
@@ -84,6 +87,8 @@ export const PLATFORMS = [
   'perplexity',
   'grok',
   'adventai',
+  'spotify',
+  'applemusic',
   'web',
   'post',
 ] as const;
@@ -128,6 +133,8 @@ export const PLATFORM_DETECTION_ORDER = [
   'perplexity',
   'grok',
   'adventai',
+  'spotify',
+  'applemusic',
   'podcast',
   'blog',
   'mastodon',
@@ -310,6 +317,8 @@ export const MOBILE_PLATFORMS = [
   'perplexity',
   'grok',
   'adventai',
+  'spotify',
+  'applemusic',
   'web',
   'post',
   'googlemaps',
@@ -351,6 +360,8 @@ export const MOBILE_PLATFORM_INFO: Record<MobilePlatform, { name: string; placeh
   perplexity: { name: 'Perplexity', placeholder: 'Perplexity thread or page link' },
   grok: { name: 'Grok', placeholder: 'Grok shared conversation link' },
   adventai: { name: 'AdventAI', placeholder: 'AdventAI shared chat link' },
+  spotify: { name: 'Spotify', placeholder: 'Spotify track, album, playlist, or episode link' },
+  applemusic: { name: 'Apple Music', placeholder: 'Apple Music song, album, or playlist link' },
   web: { name: 'Web Article', placeholder: 'Web page or article URL' },
   post: { name: 'My Post', placeholder: 'Your composed post' },
   googlemaps: { name: 'Google Maps', placeholder: 'Google Maps place URL' },
@@ -426,13 +437,28 @@ export function isAIChatPlatform(platform: string): platform is AIChatPlatform {
 }
 
 /**
+ * Music links (feedback #222). Same deal as the AI chats: extracted like a web
+ * page, the id buys a brand icon and its own timeline bubble.
+ */
+export const MUSIC_PLATFORMS = ['spotify', 'applemusic'] as const;
+export type MusicPlatform = typeof MUSIC_PLATFORMS[number];
+
+/** Brand ids the generic web lane extracts: the AI chats and the music links. */
+export const WEB_LANE_BRAND_PLATFORMS = [...AI_CHAT_PLATFORMS, ...MUSIC_PLATFORMS] as const;
+export type WebLaneBrandPlatform = typeof WEB_LANE_BRAND_PLATFORMS[number];
+
+export function isWebLaneBrandPlatform(platform: string): platform is WebLaneBrandPlatform {
+  return (WEB_LANE_BRAND_PLATFORMS as readonly string[]).includes(platform);
+}
+
+/**
  * Archives extracted by the generic web lane (Defuddle markdown, site-level
- * author, external images): `web` itself plus the AI chat ids. Clients that
+ * author, external images): `web` itself plus the brand ids above. Clients that
  * special-case `platform === 'web'` for article rendering should use this so
- * an AI chat archive keeps the web-article treatment it had before #139.
+ * a brand-id archive keeps the web-article treatment it had before its id.
  */
 export function isWebLanePlatform(platform: string | null | undefined): boolean {
-  return platform === 'web' || (typeof platform === 'string' && isAIChatPlatform(platform));
+  return platform === 'web' || (typeof platform === 'string' && isWebLaneBrandPlatform(platform));
 }
 
 /**

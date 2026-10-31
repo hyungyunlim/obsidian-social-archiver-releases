@@ -26,6 +26,17 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.10.8': {
+    title: 'Ready for Spotify and Apple Music links',
+    date: '2026-10-31',
+    notes: `## New
+
+- **Spotify and Apple Music get their own platform.** Links from Spotify (open.spotify.com, spotify.link) and Apple Music (music.apple.com) will be saved under their own platform, with their own icon and timeline filter, instead of under Web. Their notes keep the readable article layout that saved web pages get.
+
+> [!NOTE]
+> This takes effect once our server starts recognizing these links, shortly after this update reaches most people. Until then they keep saving as web pages, and links you have already archived stay as they are.
+`,
+  },
   '4.10.7': {
     title: 'Weibo posts, and sharing asks before it publishes',
     date: '2026-10-30',

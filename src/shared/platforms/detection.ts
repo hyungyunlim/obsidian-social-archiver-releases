@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/detection.ts
- * Generated: 2026-10-30T02:56:36.272Z
+ * Generated: 2026-10-31T07:19:11.576Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -67,6 +67,8 @@ const DETECTION_ORDER: Platform[] = [
   'perplexity',
   'grok',
   'adventai',
+  'spotify', // Music links (feedback #222) — host-anchored
+  'applemusic',
   'bluesky',
   'googlemaps',
   'kakaomap',

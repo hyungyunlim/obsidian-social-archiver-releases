@@ -67,7 +67,7 @@ import {
 	isXiaohongshuProfileUrl
 } from './xiaohongshu';
 import { WeiboURLSchema } from './weibo';
-import { PLATFORM_DEFINITIONS, type AIChatPlatform } from '@/shared/platforms';
+import { PLATFORM_DEFINITIONS, type WebLaneBrandPlatform } from '@/shared/platforms';
 
 /**
  * Re-export all platform-specific schemas
@@ -186,7 +186,7 @@ export {
  */
 type ExternalPlatform = Exclude<Platform, 'post' | 'kidsnote'>;
 
-function aiChatUrlSchema(platform: AIChatPlatform): z.ZodType {
+function aiChatUrlSchema(platform: WebLaneBrandPlatform): z.ZodType {
 	const { urlPattern, displayName } = PLATFORM_DEFINITIONS[platform];
 	return WebURLSchema.refine((url) => urlPattern.test(url), {
 		message: `URL must be a ${displayName} share link`,
@@ -374,6 +374,8 @@ const PLATFORM_SCHEMA_MAP = {
 	perplexity: aiChatUrlSchema('perplexity'),
 	grok: aiChatUrlSchema('grok'),
 	adventai: aiChatUrlSchema('adventai'),
+	spotify: aiChatUrlSchema('spotify'),
+	applemusic: aiChatUrlSchema('applemusic'),
 	web: WebURLSchema,
 } as const satisfies Record<ExternalPlatform, z.ZodType>;
 

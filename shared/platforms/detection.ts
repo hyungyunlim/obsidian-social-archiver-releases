@@ -57,6 +57,8 @@ const DETECTION_ORDER: Platform[] = [
   'perplexity',
   'grok',
   'adventai',
+  'spotify', // Music links (feedback #222) — host-anchored
+  'applemusic',
   'bluesky',
   'googlemaps',
   'kakaomap',

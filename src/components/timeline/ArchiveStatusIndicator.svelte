@@ -97,6 +97,8 @@ function getPlatformName(platform: Platform): string {
     perplexity: 'Perplexity',
     grok: 'Grok',
     adventai: 'AdventAI',
+    spotify: 'Spotify',
+    applemusic: 'Apple Music',
     web: 'Web Article',
     post: 'Post'
   };

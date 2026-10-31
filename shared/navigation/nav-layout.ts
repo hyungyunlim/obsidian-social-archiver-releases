@@ -30,6 +30,7 @@ export const NAV_ITEM_KEYS = [
   'starred',
   'shared',
   'notes',
+  'history',
   'tags',
   'collections',
   'authors',

@@ -17,7 +17,7 @@ import { SentinelMediaRegionManager } from '@/plugin/realtime/SentinelMediaRegio
 import { isRssBasedPlatform } from '@/constants/rssPlatforms';
 import { isSubstackNote } from '@/utils/substack';
 import { extractTrailingReaderChatSection, stripTrailingReaderChatSection } from '@/utils/reader-chat-section';
-import { AI_CHAT_PLATFORMS, getPlatformName, isWebLanePlatform } from '@/shared/platforms';
+import { WEB_LANE_BRAND_PLATFORMS, getPlatformName, isWebLanePlatform } from '@/shared/platforms';
 import { encodePathForMarkdownLink } from '@/utils/url';
 import { toRelativeMediaPath } from '@/utils/path';
 import { escapeHtmlOpeners } from '@/utils/escape-html-openers';
@@ -1508,6 +1508,8 @@ const DEFAULT_TEMPLATES: Record<Platform, string> = {
   perplexity: '', // filled from `web` below (feedback #139)
   grok: '', // filled from `web` below (feedback #139)
   adventai: '', // filled from `web` below (feedback #139)
+  spotify: '', // filled from `web` below (feedback #139)
+  applemusic: '',
   web: `{{#if comment}}
 > **My Note:**
 > {{comment}}
@@ -1582,8 +1584,8 @@ const DEFAULT_TEMPLATES: Record<Platform, string> = {
 **Author:** {{author.name}} | **Published:** {{metadata.timestamp}}
 `,
 };
-// AI chat share links render exactly like a web article.
-for (const platform of AI_CHAT_PLATFORMS) DEFAULT_TEMPLATES[platform] = DEFAULT_TEMPLATES.web;
+// AI chat and music links render exactly like a web article.
+for (const platform of WEB_LANE_BRAND_PLATFORMS) DEFAULT_TEMPLATES[platform] = DEFAULT_TEMPLATES.web;
 
 /**
  * Markdown conversion result
@@ -2277,6 +2279,8 @@ export class MarkdownConverter implements IService {
       perplexity: '🤖',
       grok: '🤖',
       adventai: '🤖',
+      spotify: '🎵',
+      applemusic: '🎵',
       web: '🌐',
       post: '📝'
     };

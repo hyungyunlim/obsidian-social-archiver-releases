@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/platforms/definitions.ts
- * Generated: 2026-10-30T02:56:36.271Z
+ * Generated: 2026-10-31T07:19:11.576Z
  *
  * To modify, edit the source file in shared/platforms/ and run:
  *   npm run sync:shared
@@ -399,6 +399,34 @@ export const PLATFORM_DEFINITIONS: Record<Platform, PlatformDefinition> = {
     emoji: '🤖',
     domains: ['adventai.app'],
     urlPattern: /^(?:https?:\/\/)?(?:[\w-]+\.)*adventai\.app(?:[:/?#]|$)/i,
+    // No brightDataDatasetId: extracted through WebContentService like 'web'.
+    supportsMedia: true,
+    supportsAI: true,
+    maxMediaSize: 50 * 1024 * 1024, // 50MB
+    rateLimit: { requestsPerHour: 200, requestsPerDay: 2000 },
+    features: { stories: false, live: false, reels: false, threads: false },
+  },
+
+  spotify: {
+    id: 'spotify',
+    displayName: 'Spotify',
+    emoji: '🎵',
+    domains: ['open.spotify.com', 'spotify.link'],
+    urlPattern: /^(?:https?:\/\/)?(?:open\.spotify\.com|spotify\.link)(?:[:/?#]|$)/i,
+    // No brightDataDatasetId: extracted through WebContentService like 'web'.
+    supportsMedia: true,
+    supportsAI: true,
+    maxMediaSize: 50 * 1024 * 1024, // 50MB
+    rateLimit: { requestsPerHour: 200, requestsPerDay: 2000 },
+    features: { stories: false, live: false, reels: false, threads: false },
+  },
+
+  applemusic: {
+    id: 'applemusic',
+    displayName: 'Apple Music',
+    emoji: '🎵',
+    domains: ['music.apple.com'],
+    urlPattern: /^(?:https?:\/\/)?music\.apple\.com(?:[:/?#]|$)/i,
     // No brightDataDatasetId: extracted through WebContentService like 'web'.
     supportsMedia: true,
     supportsAI: true,
@@ -909,6 +937,18 @@ export const PLATFORM_AI_COMMENT_CONFIG: Record<Platform, PlatformAICommentConfi
     contentSource: 'rawMarkdown', // web-extracted like 'web'
   },
   adventai: {
+    showBanner: true,
+    requiresTranscription: false,
+    defaultEnabled: true,
+    contentSource: 'rawMarkdown', // web-extracted like 'web'
+  },
+  spotify: {
+    showBanner: true,
+    requiresTranscription: false,
+    defaultEnabled: true,
+    contentSource: 'rawMarkdown', // web-extracted like 'web'
+  },
+  applemusic: {
     showBanner: true,
     requiresTranscription: false,
     defaultEnabled: true,
