@@ -2,6 +2,9 @@ import { Notice, TFile, requestUrl } from 'obsidian';
 import type { App } from 'obsidian';
 import { VaultManager } from '../../services/VaultManager';
 import { MarkdownConverter } from '../../services/MarkdownConverter';
+import { mergeUserControlledFrontmatter } from '../../services/VaultStorageService';
+import type { ArchiveLookupService } from '../../services/ArchiveLookupService';
+import { isBookmarkStubNote, isBookmarkStubPostId } from '../../utils/bookmarkStub';
 import type { PostData, Platform, Media } from '../../types/post';
 import type { PendingJob } from '../../services/PendingJobsManager';
 import type { PendingJobsManager } from '../../services/PendingJobsManager';
@@ -63,6 +66,8 @@ export interface ArchiveCompletionServiceDeps {
   tagStore: TagStore;
   refreshTimelineView: () => void;
   refreshCredits: () => Promise<void>;
+  /** Finds the bookmark stub note an archive fills in place. */
+  archiveLookupService?: () => ArchiveLookupService | undefined;
 }
 
 // ─── ArchiveCompletionService ────────────────────────────────────────
@@ -155,7 +160,7 @@ export class ArchiveCompletionService {
       }
 
       // ========== Normal Archive Mode (existing logic) ==========
-      await this.processNormalArchive(pendingJob, postData);
+      await this.processNormalArchive(pendingJob, postData, result.archiveId);
 
     } catch (error) {
       console.error(`[Social Archiver] Error processing completed job ${pendingJob.id}:`, error);
@@ -655,7 +660,8 @@ export class ArchiveCompletionService {
 
   private async processNormalArchive(
     pendingJob: PendingJob,
-    postData: PostData
+    postData: PostData,
+    archiveId?: string,
   ): Promise<void> {
     const startTime = Date.now();
 
@@ -664,6 +670,14 @@ export class ArchiveCompletionService {
 
     // Check if we have a preliminary document to update
     const preliminaryFilePath = pendingJob.metadata?.filePath;
+
+    // The server fills a bookmark stub of this URL in place, so its note is
+    // this archive's note: written over, not beside, keeping its identity.
+    const stubFile = this.findBookmarkStubNote(postData, pendingJob, archiveId);
+    const stubFrontmatter = stubFile ? this.app.metadataCache.getFileCache(stubFile)?.frontmatter : undefined;
+    if (stubFile && !postData.sourceArchiveId && typeof stubFrontmatter?.sourceArchiveId === 'string') {
+      postData.sourceArchiveId = stubFrontmatter.sourceArchiveId;
+    }
 
     // Initialize services
     const vaultManager = new VaultManager({
@@ -945,8 +959,12 @@ export class ArchiveCompletionService {
     }
 
     // Convert to markdown (with downloaded media paths)
-    const outputFilePath = vaultManager.generateFilePath(postData);
+    const outputFilePath = stubFile?.path ?? vaultManager.generateFilePath(postData);
     let markdown = markdownConverter.convert(postData, undefined, downloadedMedia.length > 0 ? downloadedMedia : undefined, { outputFilePath });
+    if (stubFile) {
+      // Before the tag/comment merges below, so selected tags join the stub's.
+      markdown.frontmatter = mergeUserControlledFrontmatter(markdown.frontmatter, stubFrontmatter);
+    }
 
     // Add metadata to frontmatter
     markdown.frontmatter.download_time = Math.round((Date.now() - startTime) / 100) / 10;
@@ -997,7 +1015,13 @@ export class ArchiveCompletionService {
     markdown = markdownConverter.updateFullDocument(markdown);
 
     // If we have a preliminary document, update it; otherwise create new file
-    if (preliminaryFilePath) {
+    if (stubFile) {
+      await this.app.vault.process(stubFile, () => markdown.fullDocument);
+      const preliminary = preliminaryFilePath ? this.app.vault.getAbstractFileByPath(preliminaryFilePath) : null;
+      if (preliminary instanceof TFile && preliminary.path !== stubFile.path) {
+        await this.app.fileManager.trashFile(preliminary);
+      }
+    } else if (preliminaryFilePath) {
       const abstractFile = this.app.vault.getAbstractFileByPath(preliminaryFilePath);
       if (abstractFile instanceof TFile) {
         const file = abstractFile;
@@ -1065,6 +1089,25 @@ export class ArchiveCompletionService {
     } catch (refreshError) {
       console.error('[Social Archiver] Failed to refresh user credits after archive', refreshError);
     }
+  }
+
+  // ─── Private: Bookmark Stub ──────────────────────────────────────
+
+  /**
+   * The bookmark stub note a real archive fills: by the archive id the server
+   * returned (the stub's own once it claimed it), else by URL. Stub notes only.
+   */
+  private findBookmarkStubNote(postData: PostData, pendingJob: PendingJob, archiveId?: string): TFile | null {
+    const lookup = this.deps.archiveLookupService?.();
+    if (!lookup || isBookmarkStubPostId(postData.id)) return null;
+
+    const candidates = archiveId
+      ? [lookup.findBySourceArchiveId(archiveId)]
+      : [postData.url, pendingJob.url, pendingJob.metadata?.originalUrl]
+          .filter((url): url is string => !!url)
+          .flatMap((url) => lookup.findByOriginalUrl(url));
+    return candidates.find((file): file is TFile =>
+      !!file && isBookmarkStubNote(this.app.metadataCache.getFileCache(file)?.frontmatter)) ?? null;
   }
 
   // ─── Private: Tag Definitions ────────────────────────────────────

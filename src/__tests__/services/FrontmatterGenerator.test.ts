@@ -401,6 +401,23 @@ describe('FrontmatterGenerator', () => {
     });
   });
 
+  describe('bookmark stub marker', () => {
+    it('writes postId for a bookmark stub so its later fill can find it', () => {
+      const frontmatter = generator.generateFrontmatter(createTestPostData({
+        platform: 'web',
+        id: 'bm-0123456789abcdef',
+      }));
+
+      expect(frontmatter.postId).toBe('bm-0123456789abcdef');
+    });
+
+    it('writes no postId for any other archive', () => {
+      const frontmatter = generator.generateFrontmatter(createTestPostData());
+
+      expect(frontmatter).not.toHaveProperty('postId');
+    });
+  });
+
   describe('all author fields populated', () => {
     it('should generate frontmatter with all author fields', () => {
       const postData = createTestPostData({

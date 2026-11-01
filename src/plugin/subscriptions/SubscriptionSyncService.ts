@@ -27,6 +27,7 @@ import { isHlsVideoUrl } from '../../utils/substack';
 import { TimelineView, VIEW_TYPE_TIMELINE } from '../../views/TimelineView';
 import type { WsProfileMetadataMessage } from '../realtime/RealtimeEventBridge';
 import { isWebLanePlatform } from '@/shared/platforms';
+import { isBookmarkStubNote, isBookmarkStubPostId } from '@/utils/bookmarkStub';
 
 const WEB_ARTICLE_SEPARATOR = '\n\n---\n\n';
 const GENERATED_METADATA_FOOTER_PATTERN = /^\*\*Platform:\*\*/i;
@@ -390,14 +391,16 @@ export class SubscriptionSyncService {
       const { MediaHandler } = await import('../../services/MediaHandler');
 
       const post = pendingPost.post;
-      const replaceExistingFile = options.replaceExistingFile;
+      let replaceExistingFile = options.replaceExistingFile;
       if (pendingPost.archiveId && !post.sourceArchiveId) {
         post.sourceArchiveId = pendingPost.archiveId;
       }
 
       if (!replaceExistingFile) {
         const existingByIdentity = await this.findExistingArchiveFile(post);
-        if (existingByIdentity) {
+        if (existingByIdentity?.file && this.isBookmarkStubFill(existingByIdentity.file, post)) {
+          replaceExistingFile = existingByIdentity.file;
+        } else if (existingByIdentity) {
           return existingByIdentity;
         }
       }
@@ -773,6 +776,10 @@ export class SubscriptionSyncService {
     file: TFile,
     pendingPost: PendingPost,
   ): Promise<SavePendingPostResult> {
+    if (this.isBookmarkStubFill(file, pendingPost.post)) {
+      return this.saveSubscriptionPostDetailed(pendingPost, { replaceExistingFile: file });
+    }
+
     let existingContent = '';
     try {
       existingContent = await this.app.vault.read(file);
@@ -792,6 +799,16 @@ export class SubscriptionSyncService {
     }
 
     return this.saveSubscriptionPostDetailed(pendingPost, { replaceExistingFile: file });
+  }
+
+  /**
+   * A bookmark stub note met by a real archive of its URL (the server filled
+   * the stub's row in place). The note is rewritten whatever it holds; a stub
+   * never replaces a stub.
+   */
+  private isBookmarkStubFill(file: TFile, post: PostData): boolean {
+    return !isBookmarkStubPostId(post.id)
+      && isBookmarkStubNote(this.app.metadataCache.getFileCache(file)?.frontmatter);
   }
 
   private hasMeaningfulReplacementContent(post: PostData): boolean {

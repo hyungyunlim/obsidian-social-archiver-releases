@@ -26,6 +26,17 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.10.9': {
+    title: 'Imported bookmarks fill in when you archive them',
+    date: '2026-11-01',
+    notes: `## New
+
+- **Imported bookmarks fill in.** Bookmarks you import on the web (Settings > Import bookmarks at social-archive.org) arrive as short bookmark notes. When you later archive one of those links, in Obsidian or any other app, the plugin rewrites that same note with the full page instead of adding a second note. The note keeps its folder and file name, and your tags and other properties carry over.
+
+> [!NOTE]
+> Anything typed into the body of a bookmark note is replaced along with it. Bookmark notes created by an older version of the plugin stay as bookmarks, so update before you import.
+`,
+  },
   '4.10.8': {
     title: 'Ready for Spotify and Apple Music links',
     date: '2026-10-31',

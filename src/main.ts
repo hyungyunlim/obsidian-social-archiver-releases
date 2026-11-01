@@ -2354,6 +2354,7 @@ export default class SocialArchiverPlugin extends Plugin {
         tagStore: this.tagStore,
         refreshTimelineView: () => this.refreshTimelineView(),
         refreshCredits: async () => { await refreshUserCredits(this); },
+        archiveLookupService: () => this.archiveLookupService,
       });
 
       // Create MobileSyncService

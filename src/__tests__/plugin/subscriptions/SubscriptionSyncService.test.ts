@@ -108,6 +108,9 @@ function makeDeps(overrides: Partial<SubscriptionSyncServiceDeps> = {}): Subscri
       fileManager: {
         processFrontMatter: vi.fn(),
       },
+      metadataCache: {
+        getFileCache: vi.fn().mockReturnValue(null),
+      },
     } as any,
     settings: () => ({
       archivePath: 'Social Archives',
@@ -273,6 +276,74 @@ describe('SubscriptionSyncService', () => {
 
       expect(result.status).toBe('existing');
       expect(serviceMocks.vaultStorageSavePost).not.toHaveBeenCalled();
+    });
+
+    describe('bookmark stub notes', () => {
+      const file = { path: 'Social Archives/Web/2026/11/example.md' } as TFile;
+
+      function makeStubDeps(notePostId: string) {
+        const deps = makeDeps();
+        // Rich-looking body: nothing but the stub rule may trigger a rewrite.
+        vi.mocked(deps.app.vault.read).mockResolvedValue([
+          '---',
+          'platform: web',
+          'sourceArchiveId: stub-archive-1',
+          `postId: ${notePostId}`,
+          '---',
+          '',
+          '> Page excerpt',
+          '',
+          '**Source:** [Article](https://example.com/article)',
+        ].join('\n'));
+        vi.mocked(deps.app.metadataCache.getFileCache).mockReturnValue(
+          { frontmatter: { platform: 'web', postId: notePostId } } as any,
+        );
+        return deps;
+      }
+
+      function makeArchive(id: string) {
+        return makePendingPost({
+          platform: 'instagram',
+          id,
+          url: 'https://example.com/article',
+          media: [],
+          quotedPost: undefined,
+          content: { text: 'Full post' },
+          metadata: { timestamp: '2026-11-01T00:00:00.000Z' },
+        });
+      }
+
+      it('fills a stub note in place with the first real archive of its URL', async () => {
+        const service = new SubscriptionSyncService(makeStubDeps('bm-0123456789abcdef'));
+
+        const result = await service.replaceExistingLimitedArchiveFile(file, makeArchive('DRPFtcOEvbl'));
+
+        expect(result.status).toBe('updated');
+        expect(serviceMocks.vaultStorageSavePost).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'DRPFtcOEvbl', platform: 'instagram' }),
+          undefined,
+          file.path,
+          undefined,
+        );
+      });
+
+      it('never fills a stub note with another stub', async () => {
+        const service = new SubscriptionSyncService(makeStubDeps('bm-0123456789abcdef'));
+
+        const result = await service.replaceExistingLimitedArchiveFile(file, makeArchive('bm-fedcba9876543210'));
+
+        expect(result.status).toBe('existing');
+        expect(serviceMocks.vaultStorageSavePost).not.toHaveBeenCalled();
+      });
+
+      it('leaves a non-stub note alone even when it records a postId', async () => {
+        const service = new SubscriptionSyncService(makeStubDeps('DRPFtcOEvbl'));
+
+        const result = await service.replaceExistingLimitedArchiveFile(file, makeArchive('C9xYz123'));
+
+        expect(result.status).toBe('existing');
+        expect(serviceMocks.vaultStorageSavePost).not.toHaveBeenCalled();
+      });
     });
 
     it('updates a web article note truncated at the first horizontal rule', async () => {
@@ -707,6 +778,62 @@ describe('SubscriptionSyncService', () => {
       expect(serviceMocks.vaultManagerGenerateFilePath).not.toHaveBeenCalled();
       expect(serviceMocks.vaultStorageSavePost).not.toHaveBeenCalled();
       expect(serviceMocks.mediaHandlerDownloadMedia).not.toHaveBeenCalled();
+    });
+
+    describe('bookmark stub found by sourceArchiveId (sync-queue / realtime save)', () => {
+      const stubFile = new TFile('Social Archives/Web/2026/11/example.md');
+
+      function makeStubLookupDeps() {
+        const lookup = {
+          findBySourceArchiveId: vi.fn().mockReturnValue(stubFile),
+          findByOriginalUrl: vi.fn().mockReturnValue([]),
+          backfillFileIdentity: vi.fn().mockResolvedValue(undefined),
+          indexSavedFile: vi.fn(),
+        };
+        const deps = makeDeps({ archiveLookupService: () => lookup as any });
+        vi.mocked(deps.app.metadataCache.getFileCache).mockImplementation(
+          (file) => (file === stubFile ? { frontmatter: { postId: 'bm-0123456789abcdef' } } : null) as any,
+        );
+        return deps;
+      }
+
+      function makeArchive(id: string) {
+        return {
+          ...makePendingPost({
+            platform: 'instagram',
+            id,
+            url: 'https://example.com/article',
+            media: [],
+            quotedPost: undefined,
+            metadata: { timestamp: '2026-11-01T00:00:00.000Z' },
+          }),
+          archiveId: 'stub-archive-1',
+        };
+      }
+
+      it('rewrites the stub note at its own path instead of reporting it as existing', async () => {
+        const service = new SubscriptionSyncService(makeStubLookupDeps());
+
+        const result = await service.saveSubscriptionPostDetailed(makeArchive('DRPFtcOEvbl'));
+
+        expect(result.status).toBe('updated');
+        expect(serviceMocks.vaultManagerGenerateFilePath).not.toHaveBeenCalled();
+        expect(serviceMocks.vaultStorageSavePost).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'DRPFtcOEvbl', sourceArchiveId: 'stub-archive-1' }),
+          undefined,
+          stubFile.path,
+          undefined,
+        );
+      });
+
+      it('keeps returning the stub as existing for an incoming stub', async () => {
+        const service = new SubscriptionSyncService(makeStubLookupDeps());
+
+        const result = await service.saveSubscriptionPostDetailed(makeArchive('bm-0123456789abcdef'));
+
+        expect(result).toMatchObject({ status: 'existing', file: stubFile, reason: 'sourceArchiveId' });
+        expect(serviceMocks.vaultStorageSavePost).not.toHaveBeenCalled();
+      });
     });
 
     it('copies pending archiveId into PostData before saving KV-fetched posts', async () => {

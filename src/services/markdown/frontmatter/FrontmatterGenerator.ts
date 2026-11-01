@@ -18,6 +18,7 @@ import { TemplateEngine } from '../template/TemplateEngine';
 import { USER_CONTROLLED_FRONTMATTER_FIELDS } from './constants';
 import { uniqueStrings } from '@/utils/array';
 import { normalizeUrlForDedup } from '@/utils/url';
+import { isBookmarkStubPostId } from '@/utils/bookmarkStub';
 import { buildManagedArchiveTag } from '@/utils/archive-tag-rules';
 import { knownTranscriptLanguage } from '@/constants/languages';
 
@@ -271,6 +272,11 @@ export class FrontmatterGenerator {
     // Stable server-side identifier for dedup and annotation sync
     if (postData.sourceArchiveId) {
       frontmatter.sourceArchiveId = postData.sourceArchiveId;
+    }
+
+    // Marks a bookmark stub so the real archive of its URL can fill it in place.
+    if (isBookmarkStubPostId(postData.id)) {
+      frontmatter.postId = postData.id;
     }
 
     if (postData.metadata.socialArchiverImportMode) {

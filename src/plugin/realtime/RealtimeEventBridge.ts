@@ -144,6 +144,8 @@ export interface CompletedJobResponse {
     creditsUsed?: number;
     processingTime?: number;
     cached?: boolean;
+    /** Server archive id, when the completion response carries one. */
+    archiveId?: string;
   };
   metadata?: { type?: string };
 }
