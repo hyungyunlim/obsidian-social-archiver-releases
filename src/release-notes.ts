@@ -26,6 +26,14 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.10.12': {
+    title: 'Paywalled articles fill in with the full text',
+    date: '2026-11-03',
+    notes: `## Fixed
+
+- **NYT and FT notes get the full article.** When a New York Times or Financial Times article cannot be read, its note holds only the publisher's headline, summary and a link. Once you save the same article in full (from the mobile app signed in to the paper, from Safari on iPhone, or with the browser extension's Clip while signed in), the plugin now replaces that note with the full text on the next sync. Before, the headline-and-summary note stayed in the vault.
+`,
+  },
   '4.10.11': {
     title: 'Security updates for bundled libraries',
     date: '2026-11-02',

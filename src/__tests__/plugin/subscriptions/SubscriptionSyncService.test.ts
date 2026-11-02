@@ -259,6 +259,89 @@ describe('SubscriptionSyncService', () => {
       );
     });
 
+    describe('publisher API outlink notes', () => {
+      const nytUrl = 'https://www.nytimes.com/2026/11/02/world/asia/chinas-message.html';
+      // What the server writes when a paywalled article could not be read.
+      const outlinkNote = [
+        '---', 'platform: web', '---', '',
+        'Beijing is using its factories as leverage.', '',
+        '**Section:** World › Asia Pacific', '',
+        `[Read the full article on The New York Times →](${nytUrl})`, '',
+        '> [!note] Headline and summary from the official New York Times API. The full article is on nytimes.com.',
+      ].join('\n');
+      const fullText = Array.from({ length: 12 }, (_, i) => `Paragraph ${i + 1} of the full article from a subscriber clip.`).join('\n\n');
+
+      it('replaces the outlink once the same archive carries the full text', async () => {
+        const deps = makeDeps();
+        vi.mocked(deps.app.vault.read).mockResolvedValue(outlinkNote);
+
+        const service = new SubscriptionSyncService(deps);
+        const file = { path: 'Social Archives/Web Article/2026/11/china.md' } as TFile;
+        const result = await service.replaceExistingLimitedArchiveFile(file, makePendingPost({
+          platform: 'web',
+          id: 'pub-nytimes-0123456789abcdef',
+          url: nytUrl,
+          title: 'China’s Message to Its Rivals',
+          content: { text: fullText, markdown: fullText },
+          media: [],
+          quotedPost: undefined,
+        }));
+
+        expect(result.status).toBe('updated');
+        expect(serviceMocks.vaultStorageSavePost).toHaveBeenCalledWith(
+          expect.objectContaining({ content: expect.objectContaining({ markdown: fullText }) }),
+          undefined,
+          file.path,
+          undefined,
+        );
+      });
+
+      it('also replaces an FT barrier outlink, whose wording differs after the shared prefix', async () => {
+        const deps = makeDeps();
+        vi.mocked(deps.app.vault.read).mockResolvedValue([
+          '---', 'platform: web', '---', '',
+          'Standfirst from the barrier page.', '',
+          "> [!note] Headline and summary from the Financial Times' public preview. The full article is on ft.com.",
+        ].join('\n'));
+
+        const service = new SubscriptionSyncService(deps);
+        const result = await service.replaceExistingLimitedArchiveFile(
+          { path: 'Social Archives/Web Article/2026/11/ft.md' } as TFile,
+          makePendingPost({ platform: 'web', url: 'https://www.ft.com/content/abc', content: { text: fullText, markdown: fullText }, media: [], quotedPost: undefined }),
+        );
+
+        expect(result.status).toBe('updated');
+      });
+
+      it('keeps the outlink when the update is still an outlink', async () => {
+        const deps = makeDeps();
+        vi.mocked(deps.app.vault.read).mockResolvedValue(outlinkNote);
+
+        const service = new SubscriptionSyncService(deps);
+        const body = 'Updated summary.\n\n> [!note] Headline and summary from the official New York Times API. The full article is on nytimes.com.';
+        const result = await service.replaceExistingLimitedArchiveFile(
+          { path: 'Social Archives/Web Article/2026/11/china.md' } as TFile,
+          makePendingPost({ platform: 'web', url: nytUrl, content: { text: body, markdown: body }, media: [], quotedPost: undefined }),
+        );
+
+        expect(result.status).toBe('existing');
+        expect(serviceMocks.vaultStorageSavePost).not.toHaveBeenCalled();
+      });
+
+      it('never rewrites an ordinary note that merely mentions the phrase in a quote', async () => {
+        const deps = makeDeps();
+        vi.mocked(deps.app.vault.read).mockResolvedValue('---\nplatform: x\n---\n\nHeadline and summary from the official account.');
+
+        const service = new SubscriptionSyncService(deps);
+        const result = await service.replaceExistingLimitedArchiveFile(
+          { path: 'Social Archives/X/post.md' } as TFile,
+          makePendingPost({ platform: 'x', content: { text: fullText }, media: [], quotedPost: undefined }),
+        );
+
+        expect(result.status).toBe('existing');
+      });
+    });
+
     it('leaves an existing rich archive note untouched', async () => {
       const deps = makeDeps();
       vi.mocked(deps.app.vault.read).mockResolvedValue(

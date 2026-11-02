@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
  *
  * Source: shared/constants/index.ts
- * Generated: 2026-07-07T04:01:02.553Z
+ * Generated: 2026-11-02T07:57:15.000Z
  *
  * To modify, edit the source file in shared/constants/ and run:
  *   npm run sync:shared
@@ -48,3 +48,18 @@ export const FEATURE_EDITOR_TTS_ENABLED = true;
  * When false, the Cross-posting settings section and PostComposer toggle are hidden.
  */
 export const FEATURE_CROSSPOST_ENABLED = true;
+
+/**
+ * Marker in the body of a publisher-API outlink note: the archive saved when a
+ * paywalled article could not be read, holding the publisher's own headline
+ * and summary plus a link (workers NytArticleSearchService).
+ *
+ * Clients key on it the way they key on "Limited archive". The plugin rewrites
+ * a vault note that still carries it once the same archive arrives with the
+ * full text (a subscriber clip or an app session capture upserts the row).
+ * Every publisher outlink must put this phrase in its body. Kept to the prefix
+ * both live outlinks share: NYT "…from the official New York Times API" and FT
+ * "…from the Financial Times' public preview", so rows saved before the
+ * constant existed still match.
+ */
+export const PUBLISHER_OUTLINK_MARKER = 'Headline and summary from the';

@@ -21,7 +21,7 @@ import type { MediaDownloadMode, SocialArchiverSettings } from '../../types/sett
 import { getVaultOrganizationStrategy } from '../../types/settings';
 import type { PostData, Platform, Media } from '../../types/post';
 import type { MediaExpiredResult } from '../../services/MediaPlaceholderGenerator';
-import { DEFAULT_ARCHIVE_PATH } from '../../shared/constants';
+import { DEFAULT_ARCHIVE_PATH, PUBLISHER_OUTLINK_MARKER } from '../../shared/constants';
 import { getPlatformName } from '../../shared/platforms';
 import { isHlsVideoUrl } from '../../utils/substack';
 import { TimelineView, VIEW_TYPE_TIMELINE } from '../../views/TimelineView';
@@ -789,7 +789,10 @@ export class SubscriptionSyncService {
 
     const isLimited = this.isLimitedArchiveContent(existingContent);
     const hasRicherMedia = !isLimited && this.hasRicherMediaReplacement(existingContent, pendingPost.post);
-    const hasRicherText = !isLimited && this.hasTruncatedWebArticleReplacement(existingContent, pendingPost.post);
+    const hasRicherText = !isLimited && (
+      this.hasTruncatedWebArticleReplacement(existingContent, pendingPost.post)
+      || this.hasPublisherOutlinkReplacement(existingContent, pendingPost.post)
+    );
     if (!isLimited && !hasRicherMedia && !hasRicherText) {
       return { status: 'existing', file, path: file.path, reason: 'not limited archive or enrichment' };
     }
@@ -824,6 +827,29 @@ export class SubscriptionSyncService {
       ?.trim();
 
     return Boolean(content && !this.isLimitedArchiveContent(content));
+  }
+
+  /**
+   * The note is a publisher-API outlink (headline + summary + link, saved when
+   * a paywalled article could not be read) and the same archive now carries the
+   * article itself: a subscriber's clip or an app session capture upserted the
+   * row. Without this the vault kept the outlink forever.
+   */
+  private hasPublisherOutlinkReplacement(existingContent: string, post: PostData): boolean {
+    if (!isWebLanePlatform(post.platform)) return false;
+    if (!existingContent.includes(PUBLISHER_OUTLINK_MARKER)) return false;
+
+    const replacement = (
+      post.content?.rawMarkdown ||
+      post.content?.markdown ||
+      post.content?.text ||
+      ''
+    ).trim();
+    if (!replacement || replacement.includes(PUBLISHER_OUTLINK_MARKER)) return false;
+    if (this.isLimitedArchiveContent(replacement)) return false;
+
+    return this.normalizeComparableArticleText(replacement, post.title).length
+      > this.normalizeComparableArticleText(existingContent, post.title).length;
   }
 
   private hasTruncatedWebArticleReplacement(existingContent: string, post: PostData): boolean {
