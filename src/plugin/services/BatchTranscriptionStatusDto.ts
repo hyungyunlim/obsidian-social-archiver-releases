@@ -45,6 +45,8 @@ export interface BatchTranscriptionStatusDto {
   currentFilePath?: string;
   /** Most recent error string, when known. Optional — not always populated. */
   lastError?: string;
+  /** Tag the batch was scoped to (no `#`); absent when it covers the whole archive. */
+  tag?: string;
 }
 
 /**
@@ -107,6 +109,9 @@ export function snapshotTranscriptionStatus(
 
   if (currentFilePath !== undefined) {
     dto.currentFilePath = currentFilePath;
+  }
+  if (progress.tag) {
+    dto.tag = progress.tag;
   }
 
   // Deep freeze for tamper resistance. The DTO is a flat primitive record

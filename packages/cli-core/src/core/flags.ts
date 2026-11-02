@@ -230,6 +230,10 @@ export const TRANSCRIBE_FLAGS: CliFlags = {
     description: 'start, pause, resume, cancel, or status.',
     value: '<start|pause|resume|cancel|status>',
   },
+  tag: {
+    description: 'With action=start: only notes with this tag (nested tags included).',
+    value: '<tag>',
+  },
   ...FORMAT_FLAG,
 };
 
@@ -371,7 +375,7 @@ export const COMMAND_DESCRIPTIONS: Readonly<Record<CommandId, string>> = Object.
   [COMMANDS.TAGS]: 'List tag definitions.',
   [COMMANDS.TAG_CREATE]: 'Create a new tag definition.',
   [COMMANDS.TAG_APPLY]: 'Add, remove, or toggle a tag on a workspace note.',
-  [COMMANDS.TRANSCRIBE]: 'Start or control batch transcription.',
+  [COMMANDS.TRANSCRIBE]: 'Transcribe video and audio archives: one, several, or every one with a tag.',
   [COMMANDS.MEDIA]: 'Re-download expired/detached media or detach local media.',
   [COMMANDS.AUTHOR_NOTES]: 'Create or update author notes for existing authors.',
   [COMMANDS.AI_COMMENT]: 'Generate an AI comment (summary, factcheck, etc.) for a note. Fire-and-forget; result is appended to the note when complete.',

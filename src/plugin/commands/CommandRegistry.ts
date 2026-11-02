@@ -3,7 +3,7 @@ import {
   IMPORT_MODE_FRONTMATTER_KEY,
   IMPORT_MODE_LOCAL_ONLY,
 } from '../../services/import/local/LocalArchiveScanner';
-import type { BatchMode } from '../../types/batch-transcription';
+import type { BatchMode, BatchStartOptions } from '../../types/batch-transcription';
 import type { BatchTranscriptionManager } from '../../services/BatchTranscriptionManager';
 import type { EditorTTSController } from '../../services/tts/EditorTTSController';
 import type { AuthorCatalogEntry } from '../../types/author-catalog';
@@ -13,6 +13,7 @@ import { FEATURE_EDITOR_TTS_ENABLED } from '../../shared/constants';
 import { TimelineView, VIEW_TYPE_TIMELINE } from '../../views/TimelineView';
 import { AuthorDetailView, VIEW_TYPE_AUTHOR_DETAIL } from '../../views/AuthorDetailView';
 import { MediaToolDetector, type MediaToolDetectionResult } from '../../utils/media-tool-detector';
+import { TranscribeTagSuggestModal } from '../../modals/TranscribeTagSuggestModal';
 
 /**
  * Narrow dependency interface for command registration.
@@ -26,7 +27,7 @@ export interface CommandRegistryDeps {
   activateAuthorDetailView: (author: AuthorCatalogEntry, location?: 'sidebar' | 'main') => Promise<void>;
   refreshAllTimelines: () => Promise<void>;
   batchArchiveGoogleMapsLinks: (content: string, sourceNotePath?: string) => Promise<void>;
-  startBatchTranscription: (mode: BatchMode) => Promise<void>;
+  startBatchTranscription: (mode: BatchMode, options?: BatchStartOptions) => Promise<void>;
   getBatchTranscriptionManager: () => BatchTranscriptionManager | null;
   postCurrentNote: () => Promise<void>;
   postAndShareCurrentNote: () => Promise<void>;
@@ -34,7 +35,7 @@ export interface CommandRegistryDeps {
   redownloadExpiredMedia: () => Promise<void>;
   getAuthorNoteService: () => AuthorNoteService | undefined;
   getDetachedMediaService: () => DetachedMediaService | undefined;
-  getSettings: () => { enableAuthorNotes: boolean; archivePath: string };
+  getSettings: () => { enableAuthorNotes: boolean; archivePath: string; batchMode: BatchMode };
   uploadLocalArchiveToAccount: (file: TFile) => Promise<void>;
 }
 
@@ -230,6 +231,16 @@ export function registerCommands(deps: CommandRegistryDeps): void {
     name: 'Batch download & transcribe videos in archive notes',
     callback: async () => {
       await deps.startBatchTranscription('download-and-transcribe');
+    },
+  });
+
+  plugin.addCommand({
+    id: 'batch-transcribe-videos-with-tag',
+    name: 'Batch transcribe videos with a tag…',
+    callback: () => {
+      new TranscribeTagSuggestModal(app, (tag) => {
+        void deps.startBatchTranscription(deps.getSettings().batchMode, { tag });
+      }).open();
     },
   });
 

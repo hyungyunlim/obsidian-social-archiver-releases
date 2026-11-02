@@ -469,6 +469,30 @@ describe('LocalNoteCliService', () => {
       );
     });
 
+    it('start passes the tag scope to the batch manager', async () => {
+      const plugin = makePlugin({ hasBatchManager: true, batchStatus: 'idle' });
+      const svc = new LocalNoteCliService(plugin);
+      await svc.transcribe({ action: 'start', mode: 'transcribe-only', tag: '#recipes' });
+      expect(plugin.batchTranscriptionManager.start).toHaveBeenCalledWith('transcribe-only', { tag: '#recipes' });
+    });
+
+    it('rejects a blank tag instead of widening to the whole archive', async () => {
+      const plugin = makePlugin({ hasBatchManager: true, batchStatus: 'idle' });
+      const svc = new LocalNoteCliService(plugin);
+      await expect(
+        svc.transcribe({ action: 'start', mode: 'transcribe-only', tag: ' # ' }),
+      ).rejects.toBeInstanceOf(CliValidationError);
+      expect(plugin.batchTranscriptionManager.start).not.toHaveBeenCalled();
+    });
+
+    it('rejects a tag on actions other than start', async () => {
+      const plugin = makePlugin({ hasBatchManager: true, batchStatus: 'paused' });
+      const svc = new LocalNoteCliService(plugin);
+      await expect(svc.transcribe({ action: 'resume', tag: 'recipes' })).rejects.toBeInstanceOf(
+        CliValidationError,
+      );
+    });
+
     it('pause requires running state', async () => {
       const plugin = makePlugin({ hasBatchManager: true, batchStatus: 'idle' });
       const svc = new LocalNoteCliService(plugin);

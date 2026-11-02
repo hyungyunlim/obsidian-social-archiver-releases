@@ -26,6 +26,15 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.10.10': {
+    title: "Transcribe only one tag's videos",
+    date: '2026-11-02',
+    notes: `## New
+
+- **Transcribe one tag's videos.** Run "Batch transcribe videos with a tag…" from the command palette and pick a tag. Only the videos in notes with that tag are transcribed, nested tags included (\`#recipes\` covers \`#recipes/korean\`), instead of every video in the archive folder. Pausing, resuming and restarting Obsidian keep the tag, and the progress notice shows which tag is running.
+- **Plugin CLI.** \`transcribe action=start tag=<tag>\` starts the same batch for one tag.
+`,
+  },
   '4.10.9': {
     title: 'Imported bookmarks fill in when you archive them',
     date: '2026-11-01',

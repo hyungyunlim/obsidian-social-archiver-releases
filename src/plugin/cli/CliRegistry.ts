@@ -991,9 +991,11 @@ export class CliRegistry {
         'mode',
         ['transcribe-only', 'download-and-transcribe'] as const,
       );
+      const tag = parseString(params, 'tag');
       const result = await this.getLocalNoteService().transcribe({
         action,
         ...(mode ? { mode } : {}),
+        ...(tag !== undefined ? { tag } : {}),
       });
       return this.formatOk(COMMANDS.TRANSCRIBE, result, fmt);
     } catch (e) {

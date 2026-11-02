@@ -7,6 +7,12 @@
 /** Batch processing mode */
 export type BatchMode = 'transcribe-only' | 'download-and-transcribe';
 
+/** Options for starting a batch */
+export interface BatchStartOptions {
+  /** Only notes with this tag, nested children included (`recipes` covers `recipes/korean`) */
+  tag?: string;
+}
+
 /** Overall operation status */
 export type BatchOperationStatus = 'idle' | 'scanning' | 'running' | 'paused' | 'completed' | 'cancelled';
 
@@ -37,6 +43,8 @@ export interface BatchProgress {
   currentFile?: string;
   currentStage?: 'downloading' | 'transcribing';
   elapsedMs: number;
+  /** Tag the batch is scoped to (no `#`); undefined means the whole archive folder */
+  tag?: string;
 }
 
 /** Persisted state for crash recovery */
@@ -48,6 +56,8 @@ export interface PersistedBatchState {
   currentIndex: number;
   startedAt: number;
   pausedAt?: number;
+  /** Tag scope; absent in states saved before tag scoping existed */
+  tag?: string;
 }
 
 /** Observer callback for progress updates */

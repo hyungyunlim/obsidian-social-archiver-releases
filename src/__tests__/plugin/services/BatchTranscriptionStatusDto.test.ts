@@ -26,6 +26,7 @@ function makeManager(
     currentFile: overrides.currentFile,
     currentStage: overrides.currentStage,
     elapsedMs: overrides.elapsedMs ?? 0,
+    tag: overrides.tag,
   };
   return {
     getStatus(): BatchOperationStatus {
@@ -85,6 +86,11 @@ describe('BatchTranscriptionStatusDto', () => {
     expect(dto.remainingItems).toBe(2);
     expect(dto.currentFilePath).toBe('Social Archives/Post/2026/04/note.md');
     expect(dto.startedAt).not.toBeNull();
+  });
+
+  it('exposes the tag scope only when the batch has one', () => {
+    expect(snapshotTranscriptionStatus(makeManager({ status: 'scanning', tag: 'recipes' })).tag).toBe('recipes');
+    expect('tag' in snapshotTranscriptionStatus(makeManager({ status: 'scanning' }))).toBe(false);
   });
 
   it('hides currentFilePath when the batch is idle or terminal', () => {

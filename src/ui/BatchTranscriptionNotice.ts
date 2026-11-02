@@ -87,7 +87,8 @@ export class BatchTranscriptionNotice {
     if (!this.notice) return;
 
     // Title
-    this.titleEl.textContent = this.getTitle(progress.status);
+    const title = this.getTitle(progress.status);
+    this.titleEl.textContent = progress.tag ? `${title} · #${progress.tag}` : title;
 
     // Progress bar
     const pct = progress.totalItems > 0
@@ -154,8 +155,14 @@ export class BatchTranscriptionNotice {
   }
 
   private getStatusText(progress: BatchProgress): string {
-    if (progress.status === 'scanning') return 'Scanning archive folder for videos...';
-    if (progress.status === 'completed') return 'All items processed.';
+    if (progress.status === 'scanning') {
+      return progress.tag ? `Scanning notes tagged #${progress.tag} for videos...` : 'Scanning archive folder for videos...';
+    }
+    if (progress.status === 'completed') {
+      return progress.tag && progress.totalItems === 0
+        ? `No videos left to transcribe in notes tagged #${progress.tag}.`
+        : 'All items processed.';
+    }
     if (progress.status === 'cancelled') return 'Operation cancelled.';
     if (progress.status === 'paused') return `Paused at item ${progress.currentIndex + 1} of ${progress.totalItems}.`;
 

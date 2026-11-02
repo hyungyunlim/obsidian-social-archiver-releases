@@ -77,7 +77,7 @@ import { LocationBodyBlock } from './services/markdown/LocationBodyBlock';
 import { ArchiveLocationSchema, type ArchiveLocation } from './types/archive-location';
 import { BatchTranscriptionManager, type BatchTranscriptionManagerDeps } from './services/BatchTranscriptionManager';
 import { BatchTranscriptionNotice } from './ui/BatchTranscriptionNotice';
-import type { BatchMode } from './types/batch-transcription';
+import type { BatchMode, BatchStartOptions } from './types/batch-transcription';
 import { EditorTTSController } from './services/tts/EditorTTSController';
 import { FEATURE_EDITOR_TTS_ENABLED } from './shared/constants';
 import { ArchiveLookupService } from './services/ArchiveLookupService';
@@ -1517,7 +1517,7 @@ export default class SocialArchiverPlugin extends Plugin {
       activateAuthorDetailView: (author, loc) => this.activateAuthorDetailView(author, loc),
       refreshAllTimelines: () => this.refreshAllTimelines(),
       batchArchiveGoogleMapsLinks: (content, path) => this.batchArchiveGoogleMapsLinks(content, path),
-      startBatchTranscription: (mode) => this.startBatchTranscription(mode),
+      startBatchTranscription: (mode, options) => this.startBatchTranscription(mode, options),
       getBatchTranscriptionManager: () => this.batchTranscriptionManager,
       postCurrentNote: () => this.postCurrentNote(),
       postAndShareCurrentNote: () => this.postAndShareCurrentNote(),
@@ -1525,7 +1525,11 @@ export default class SocialArchiverPlugin extends Plugin {
       redownloadExpiredMedia: () => this.redownloadExpiredMedia(),
       getAuthorNoteService: () => this.authorNoteService,
       getDetachedMediaService: () => this.detachedMediaService,
-      getSettings: () => ({ enableAuthorNotes: this.settings.enableAuthorNotes, archivePath: this.settings.archivePath }),
+      getSettings: () => ({
+        enableAuthorNotes: this.settings.enableAuthorNotes,
+        archivePath: this.settings.archivePath,
+        batchMode: this.settings.transcription?.batchMode || 'transcribe-only',
+      }),
       uploadLocalArchiveToAccount: (file) => this.uploadLocalArchiveToAccount(file),
     });
 
@@ -3355,11 +3359,13 @@ export default class SocialArchiverPlugin extends Plugin {
     this.batchTranscriptionManager.tryRestore();
 
     if (this.batchTranscriptionManager.getStatus() === 'paused') {
-      new Notice('Interrupted batch transcription restored. Use command palette to resume.', 8000);
+      const tag = this.batchTranscriptionManager.getProgress().tag;
+      const scope = tag ? ` (#${tag})` : '';
+      new Notice(`Interrupted batch transcription${scope} restored. Use command palette to resume.`, 8000);
     }
   }
 
-  public async startBatchTranscription(mode: BatchMode): Promise<void> {
+  public async startBatchTranscription(mode: BatchMode, options?: BatchStartOptions): Promise<void> {
     if (ObsidianPlatform.isMobile) {
       new Notice('Video transcription batch is only available on desktop.');
       return;
@@ -3384,7 +3390,7 @@ export default class SocialArchiverPlugin extends Plugin {
     this.batchTranscriptionNotice = new BatchTranscriptionNotice(manager);
     this.batchTranscriptionNotice.show();
 
-    await manager.start(mode);
+    await manager.start(mode, options);
   }
 
   /**

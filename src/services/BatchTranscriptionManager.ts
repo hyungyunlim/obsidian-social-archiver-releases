@@ -5,10 +5,11 @@
  * with cooperative pause/cancel, persistence, and progress observer pattern.
  */
 
-import { Notice, TFile, TFolder, type App } from 'obsidian';
+import { Notice, TFile, TFolder, getAllTags, type App } from 'obsidian';
 import type { SocialArchiverSettings } from '../types/settings';
 import type {
   BatchMode,
+  BatchStartOptions,
   BatchOperationStatus,
   BatchItem,
   BatchProgress,
@@ -20,6 +21,7 @@ import type { Media } from '../types/post';
 import type { MediaResult } from './MediaHandler';
 import type { LocalLockRegistry } from '../plugin/locks/LocalLockRegistry';
 import { hashLocalLockComponent } from '../plugin/locks/LocalLockRegistry';
+import { normalizeTagName, tagMatchesScope } from '../utils/tags';
 
 const STORAGE_KEY = 'social-archiver:batch-transcription:v1';
 
@@ -45,6 +47,8 @@ export class BatchTranscriptionManager {
   private deps: BatchTranscriptionManagerDeps;
   private status: BatchOperationStatus = 'idle';
   private mode: BatchMode = 'transcribe-only';
+  /** Only notes with this tag (nested children included); undefined = whole archive */
+  private tag?: string;
   private items: BatchItem[] = [];
   private currentIndex = 0;
   private startedAt = 0;
@@ -87,6 +91,7 @@ export class BatchTranscriptionManager {
           ? 'transcribing'
           : undefined,
       elapsedMs: this.startedAt > 0 ? Date.now() - this.startedAt : 0,
+      tag: this.tag,
     };
   }
 
@@ -97,13 +102,14 @@ export class BatchTranscriptionManager {
     };
   }
 
-  async start(mode: BatchMode): Promise<void> {
+  async start(mode: BatchMode, options: BatchStartOptions = {}): Promise<void> {
     if (this.status === 'running' || this.status === 'scanning') {
       console.warn('[BatchTranscriptionManager] Already running, ignoring start()');
       return;
     }
 
     this.mode = mode;
+    this.tag = normalizeTagName(options.tag ?? '') || undefined;
     this.items = [];
     this.currentIndex = 0;
     this.startedAt = Date.now();
@@ -114,7 +120,8 @@ export class BatchTranscriptionManager {
     this.setStatus('scanning');
 
     // 1. Scan
-    console.debug(`[BatchTranscription] Starting batch (mode: ${mode}), scanning archive folder...`);
+    const scope = this.tag ? `, tag: #${this.tag}` : '';
+    console.debug(`[BatchTranscription] Starting batch (mode: ${mode}${scope}), scanning archive folder...`);
     const scanResult = await this.scan();
     if (scanResult.length === 0) {
       console.debug('[BatchTranscription] Scan complete: no eligible items found.');
@@ -194,6 +201,7 @@ export class BatchTranscriptionManager {
       if (state.version !== 1 || !Array.isArray(state.items)) return;
 
       this.mode = state.mode;
+      this.tag = state.tag || undefined;
       this.items = state.items;
       this.currentIndex = state.currentIndex;
       this.startedAt = state.startedAt;
@@ -266,6 +274,9 @@ export class BatchTranscriptionManager {
       if (this.cancelRequested) break;
 
       const cache = app.metadataCache.getFileCache(file);
+      // Tag scope: frontmatter + inline tags, as Obsidian's tag search sees them
+      if (this.tag && !tagMatchesScope((cache && getAllTags(cache)) ?? [], this.tag)) continue;
+
       const frontmatter: Record<string, unknown> = cache?.frontmatter || {};
 
       // Skip already-transcribed
@@ -705,6 +716,7 @@ export class BatchTranscriptionManager {
     const state: PersistedBatchState = {
       version: 1,
       mode: this.mode,
+      tag: this.tag,
       status: this.status,
       items: this.items,
       currentIndex: this.currentIndex,

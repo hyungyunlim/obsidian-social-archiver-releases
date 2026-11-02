@@ -9,6 +9,14 @@ vi.mock('obsidian', async () => {
   return {
     ...actual,
     normalizePath: (p: string) => p.replace(/\\/g, '/').replace(/\/+/g, '/'),
+    // Mirrors Obsidian: frontmatter tags get a `#`, inline tags already have one; null when none.
+    getAllTags: (cache: { frontmatter?: { tags?: string[] }; tags?: Array<{ tag: string }> }) => {
+      const tags = [
+        ...(cache.frontmatter?.tags ?? []).map((tag) => (tag.startsWith('#') ? tag : `#${tag}`)),
+        ...(cache.tags ?? []).map((t) => t.tag),
+      ];
+      return tags.length > 0 ? tags : null;
+    },
   };
 });
 
@@ -176,6 +184,78 @@ describe('BatchTranscriptionManager', () => {
 
       await manager.start('download-and-transcribe');
       expect(manager.getProgress().totalItems).toBe(2);
+    });
+  });
+
+  // ─── Tag Scope ─────────────────────────────────────────────────────
+
+  describe('tag scope', () => {
+    const caches: Record<string, unknown> = {
+      'Social Archives/fm.md': { frontmatter: { tags: ['Recipes'] } },
+      'Social Archives/inline.md': { tags: [{ tag: '#recipes/korean' }] },
+      'Social Archives/other.md': { frontmatter: { tags: ['travel'] }, tags: [{ tag: '#recipes-old' }] },
+      'Social Archives/untagged.md': null,
+    };
+
+    beforeEach(() => {
+      (deps.collectMarkdownFiles as Mock).mockReturnValue(Object.keys(caches).map(mockFile));
+      (deps.app.metadataCache.getFileCache as Mock).mockImplementation((file: TFile) => caches[file.path] ?? null);
+    });
+
+    it('scans only notes carrying the tag, frontmatter or inline, nested children included', async () => {
+      await manager.start('transcribe-only', { tag: '#recipes' });
+
+      const scanned = (deps.resolveLocalVideoPathsInNote as Mock).mock.calls.map((call) => call[0] as string);
+      expect(scanned).toEqual(['Social Archives/fm.md', 'Social Archives/inline.md']);
+      expect(manager.getProgress().totalItems).toBe(2);
+      expect(manager.getProgress().tag).toBe('recipes');
+    });
+
+    it('scans every note when no tag is given', async () => {
+      await manager.start('transcribe-only');
+
+      expect(deps.resolveLocalVideoPathsInNote).toHaveBeenCalledTimes(4);
+      expect(manager.getProgress().totalItems).toBe(4);
+      expect(manager.getProgress().tag).toBeUndefined();
+    });
+
+    it('treats a blank tag as no tag', async () => {
+      await manager.start('transcribe-only', { tag: ' # ' });
+      expect(manager.getProgress().totalItems).toBe(4);
+      expect(manager.getProgress().tag).toBeUndefined();
+    });
+
+    it('completes with nothing to do when no note has the tag', async () => {
+      await manager.start('transcribe-only', { tag: 'cooking' });
+      expect(deps.resolveLocalVideoPathsInNote).not.toHaveBeenCalled();
+      expect(manager.getStatus()).toBe('completed');
+      expect(manager.getProgress().tag).toBe('cooking');
+    });
+
+    it('keeps the tag across pause and an app restart', async () => {
+      let callCount = 0;
+      (deps.appendTranscriptSection as Mock).mockImplementation((content: string) => {
+        callCount++;
+        if (callCount === 1) manager.pause();
+        return content + '\n\n## Transcript\n';
+      });
+
+      await manager.start('transcribe-only', { tag: 'recipes' });
+      expect(manager.getStatus()).toBe('paused');
+      expect(manager.getProgress().tag).toBe('recipes');
+
+      const restored = new BatchTranscriptionManager(deps);
+      restored.tryRestore();
+      expect(restored.getStatus()).toBe('paused');
+      expect(restored.getProgress().tag).toBe('recipes');
+      expect(restored.getProgress().totalItems).toBe(2);
+    });
+
+    it('a new start without a tag clears the previous scope', async () => {
+      await manager.start('transcribe-only', { tag: 'recipes' });
+      await manager.start('transcribe-only');
+      expect(manager.getProgress().tag).toBeUndefined();
+      expect(manager.getProgress().totalItems).toBe(4);
     });
   });
 

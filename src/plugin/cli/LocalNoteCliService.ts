@@ -24,6 +24,7 @@ import type SocialArchiverPlugin from '../../main';
 import type { TagDefinition } from '../../types/tag';
 import type { PostData } from '../../types/post';
 import { CliValidationError } from './CliParams';
+import { normalizeTagName } from '../../utils/tags';
 import {
   snapshotTranscriptionStatus,
   type BatchTranscriptionStatusDto,
@@ -457,6 +458,8 @@ export class LocalNoteCliService {
   async transcribe(opts: {
     mode?: 'transcribe-only' | 'download-and-transcribe';
     action: TranscribeAction;
+    /** With 'start': only notes with this tag (nested children included). */
+    tag?: string;
   }): Promise<TranscribeResultDto> {
     const manager = this.plugin.batchTranscriptionManager;
     if (!manager) {
@@ -467,6 +470,16 @@ export class LocalNoteCliService {
     }
 
     const currentStatus = manager.getStatus();
+
+    if (opts.tag !== undefined) {
+      if (opts.action !== 'start') {
+        throw new CliValidationError('tag', "'tag' only applies to action=start.");
+      }
+      // A blank tag would silently widen the batch to the whole archive.
+      if (!normalizeTagName(opts.tag)) {
+        throw new CliValidationError('tag', "'tag' must name a tag, e.g. tag=recipes.");
+      }
+    }
 
     switch (opts.action) {
       case 'status': {
@@ -488,7 +501,7 @@ export class LocalNoteCliService {
         // Fire-and-forget — start() runs the whole process loop and we'd
         // otherwise block the CLI for minutes. Errors surface via subsequent
         // status calls.
-        void manager.start(opts.mode).catch((err) => {
+        void manager.start(opts.mode, { tag: opts.tag }).catch((err) => {
           console.error('[LocalNoteCliService] batch transcribe start failed:', err);
         });
         return { action: 'start', status: snapshotTranscriptionStatus(manager) };

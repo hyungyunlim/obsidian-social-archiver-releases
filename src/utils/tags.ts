@@ -226,6 +226,53 @@ export function mirrorArchiveTagsIntoObsidianTags(
 }
 
 /**
+ * Whether any of a note's tags falls under `scope`, read the way Obsidian's
+ * tag search reads `tag:#scope`: case-insensitive, `#` optional on both
+ * sides, and a parent covers its nested children (`recipes` matches
+ * `#recipes/korean` but not `#recipes-old`). An empty scope matches nothing.
+ *
+ * @param noteTags - The note's tags, e.g. from Obsidian's `getAllTags(cache)`
+ * @param scope - Tag to scope to, with or without `#`
+ */
+export function tagMatchesScope(noteTags: readonly string[], scope: string): boolean {
+  const want = normalizeTagName(scope).replace(/\/+$/, '').toLowerCase();
+  if (!want) return false;
+  return noteTags.some((raw) => {
+    const tag = normalizeTagName(raw).toLowerCase();
+    return tag === want || tag.startsWith(`${want}/`);
+  });
+}
+
+/** A tag offered as a scope, with its vault-wide use count. */
+export interface TagScopeChoice {
+  tag: string;
+  count: number;
+}
+
+/**
+ * Turn `metadataCache.getTags()` counts into scope choices: `#` stripped,
+ * merged case-insensitively (first casing wins), and every parent of a
+ * nested tag added with its children's counts summed, so a whole branch can
+ * be picked even when the parent itself is never used. Most-used first.
+ *
+ * @param counts - Tag → use count, keys with or without `#`
+ */
+export function buildTagScopeChoices(counts: Record<string, number>): TagScopeChoice[] {
+  const byKey = new Map<string, TagScopeChoice>();
+  for (const [raw, count] of Object.entries(counts)) {
+    const parts = normalizeTagName(raw).split('/');
+    for (let depth = 1; depth <= parts.length; depth++) {
+      const tag = parts.slice(0, depth).join('/');
+      if (!tag) continue;
+      const entry = byKey.get(tag.toLowerCase());
+      if (entry) entry.count += count;
+      else byKey.set(tag.toLowerCase(), { tag, count });
+    }
+  }
+  return [...byKey.values()].sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+}
+
+/**
  * Sanitize tag names for safe storage.
  * Trims whitespace, removes empty strings.
  *

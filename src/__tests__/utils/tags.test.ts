@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  buildTagScopeChoices,
   mergeTagListsCaseInsensitive,
   mergeTagsCaseInsensitive,
   mirrorArchiveTagsIntoObsidianTags,
@@ -7,6 +8,7 @@ import {
   obsidianSafeTagNames,
   readFrontmatterTags,
   sanitizeTagNames,
+  tagMatchesScope,
   validateArchiveTagName,
   validateTagName,
 } from '@/utils/tags';
@@ -277,5 +279,52 @@ describe('validateArchiveTagName', () => {
     expect(validateArchiveTagName('#')).not.toBeNull();
     expect(validateArchiveTagName('a'.repeat(30))).toBeNull();
     expect(validateArchiveTagName('a'.repeat(31))).not.toBeNull();
+  });
+});
+
+describe('tagMatchesScope', () => {
+  it('matches case-insensitively with # optional on both sides', () => {
+    expect(tagMatchesScope(['#Recipes'], 'recipes')).toBe(true);
+    expect(tagMatchesScope(['recipes'], '#RECIPES')).toBe(true);
+    expect(tagMatchesScope(['#recipes'], '  #recipes  ')).toBe(true);
+  });
+
+  it('lets a parent cover its nested children, not the other way round', () => {
+    expect(tagMatchesScope(['#recipes/korean'], 'recipes')).toBe(true);
+    expect(tagMatchesScope(['#recipes/korean/kimchi'], 'recipes/korean')).toBe(true);
+    expect(tagMatchesScope(['#recipes/korean'], 'recipes/')).toBe(true);
+    expect(tagMatchesScope(['#recipes'], 'recipes/korean')).toBe(false);
+  });
+
+  it('does not match a tag that merely shares the prefix', () => {
+    expect(tagMatchesScope(['#recipes-old', '#recipesx'], 'recipes')).toBe(false);
+  });
+
+  it('matches nothing for an empty scope or no tags', () => {
+    expect(tagMatchesScope(['#recipes'], '#')).toBe(false);
+    expect(tagMatchesScope(['#recipes'], '  ')).toBe(false);
+    expect(tagMatchesScope([], 'recipes')).toBe(false);
+  });
+});
+
+describe('buildTagScopeChoices', () => {
+  it('strips #, adds parents of nested tags and sums their counts', () => {
+    expect(buildTagScopeChoices({ '#recipes/korean': 3, '#recipes/thai': 2, '#travel': 4 })).toEqual([
+      { tag: 'recipes', count: 5 },
+      { tag: 'travel', count: 4 },
+      { tag: 'recipes/korean', count: 3 },
+      { tag: 'recipes/thai', count: 2 },
+    ]);
+  });
+
+  it('merges case variants, keeping the first casing', () => {
+    expect(buildTagScopeChoices({ '#Video': 2, '#video': 1 })).toEqual([{ tag: 'Video', count: 3 }]);
+  });
+
+  it('breaks count ties by name and drops empty tags', () => {
+    expect(buildTagScopeChoices({ '#b': 1, '#a': 1, '#': 9 })).toEqual([
+      { tag: 'a', count: 1 },
+      { tag: 'b', count: 1 },
+    ]);
   });
 });
