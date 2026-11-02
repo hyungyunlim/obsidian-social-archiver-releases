@@ -53,7 +53,6 @@ export class ShareStateSyncService {
     if (changes.shareUrl === undefined) return;
 
     const nextShareUrl = changes.shareUrl;
-    const enabling = typeof nextShareUrl === 'string' && nextShareUrl.length > 0;
 
     const settings = this.getSettings();
     if (sourceClientId && sourceClientId === settings.syncClientId) return;

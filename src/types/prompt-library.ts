@@ -20,7 +20,7 @@ const SavedPromptSchema = z.object({
 const PromptLibraryEnvelopeSchema = z.object({
   success: z.literal(true),
   prompts: z.array(SavedPromptSchema),
-}).passthrough();
+}).loose();
 
 export type SavedPrompt = Readonly<z.infer<typeof SavedPromptSchema>>;
 

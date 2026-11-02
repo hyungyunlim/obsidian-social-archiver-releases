@@ -26,6 +26,19 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.10.11': {
+    title: 'Security updates for bundled libraries',
+    date: '2026-11-02',
+    notes: `## Security
+
+- **Patched libraries.** The note editor (Tiptap/ProseMirror) is on a release that fixes how pasted content is handled. Markdown parsing (markdown-it, linkify-it) no longer slows to a crawl on some inputs, and ID generation (nanoid) is patched.
+- **Data validation on Zod 4.** Zod 4.6.7 no longer runs out of memory on oversized input. Archiving works as before.
+
+## Improved
+
+- **Settings refresh the Obsidian 1.13 way.** After you sign in, switch the read-aloud voice provider, install or remove Supertonic, or reset frontmatter, the settings page refreshes through Obsidian's own settings renderer instead of being redrawn by the plugin.
+`,
+  },
   '4.10.10': {
     title: "Transcribe only one tag's videos",
     date: '2026-11-02',

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const MastodonURLSchema = z.string().url().refine((value) => {
+export const MastodonURLSchema = z.url().refine((value) => {
   try {
     const parsed = new URL(value);
     return /^\/(?:@[^/]+\/\d+|users\/[^/]+\/statuses\/\d+)\/?$/.test(parsed.pathname);
@@ -8,9 +8,9 @@ export const MastodonURLSchema = z.string().url().refine((value) => {
     return false;
   }
 }, {
-  message: 'URL must be a valid Mastodon post (https://instance/@username/123456 or https://instance/users/username/statuses/123456)',
+  error: 'URL must be a valid Mastodon post (https://instance/@username/123456 or https://instance/users/username/statuses/123456)',
 });
 
 export const MastodonPostIdSchema = z.string().regex(/^[0-9]+$/, {
-  message: 'Mastodon post ID must be numeric',
+  error: 'Mastodon post ID must be numeric',
 });

@@ -11,7 +11,7 @@ const youtubeDomainSchema = z
 	.regex(
 		/^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be|m\.youtube\.com)/i,
 		{
-			message: 'URL must be from a valid YouTube domain (youtube.com, youtu.be, m.youtube.com)',
+			error: 'URL must be from a valid YouTube domain (youtube.com, youtu.be, m.youtube.com)',
 		}
 	);
 
@@ -19,51 +19,51 @@ const youtubeDomainSchema = z
 export const YouTubeVideoIdSchema = z
 	.string()
 	.regex(/^[a-zA-Z0-9_-]{11}$/, {
-		message: 'YouTube video ID must be 11 characters long and contain only alphanumeric characters, hyphens, and underscores',
+		error: 'YouTube video ID must be 11 characters long and contain only alphanumeric characters, hyphens, and underscores',
 	})
-	.min(11, { message: 'Video ID must be 11 characters' })
-	.max(11, { message: 'Video ID must be 11 characters' });
+	.min(11, { error: 'Video ID must be 11 characters' })
+	.max(11, { error: 'Video ID must be 11 characters' });
 
 // Standard watch URL: youtube.com/watch?v={videoId}
 const youtubeWatchUrlSchema = z
 	.string()
 	.regex(/youtube\.com\/watch\?v=[a-zA-Z0-9_-]{11}/i, {
-		message: 'Invalid YouTube watch URL format',
+		error: 'Invalid YouTube watch URL format',
 	});
 
 // Short URL: youtu.be/{videoId}
 const youtubeShortUrlSchema = z
 	.string()
 	.regex(/youtu\.be\/[a-zA-Z0-9_-]{11}/i, {
-		message: 'Invalid YouTube short URL format',
+		error: 'Invalid YouTube short URL format',
 	});
 
 // Shorts URL: youtube.com/shorts/{shortId}
 const youtubeShortsUrlSchema = z
 	.string()
 	.regex(/youtube\.com\/shorts\/[a-zA-Z0-9_-]{11}/i, {
-		message: 'Invalid YouTube Shorts URL format',
+		error: 'Invalid YouTube Shorts URL format',
 	});
 
 // Live URL: youtube.com/live/{liveId}
 const youtubeLiveUrlSchema = z
 	.string()
 	.regex(/youtube\.com\/live\/[a-zA-Z0-9_-]{11}/i, {
-		message: 'Invalid YouTube Live URL format',
+		error: 'Invalid YouTube Live URL format',
 	});
 
 // Embed URL: youtube.com/embed/{videoId}
 const youtubeEmbedUrlSchema = z
 	.string()
 	.regex(/youtube\.com\/embed\/[a-zA-Z0-9_-]{11}/i, {
-		message: 'Invalid YouTube embed URL format',
+		error: 'Invalid YouTube embed URL format',
 	});
 
 // Mobile URL: m.youtube.com/watch?v={videoId}
 const youtubeMobileUrlSchema = z
 	.string()
 	.regex(/m\.youtube\.com\/watch\?v=[a-zA-Z0-9_-]{11}/i, {
-		message: 'Invalid YouTube mobile URL format',
+		error: 'Invalid YouTube mobile URL format',
 	});
 
 /**
@@ -73,12 +73,12 @@ const youtubeMobileUrlSchema = z
 export const YouTubeURLSchema = z
 	.string()
 	.trim()
-	.min(1, { message: 'URL cannot be empty' })
-	.url({ message: 'Invalid URL format' })
+	.min(1, { error: 'URL cannot be empty' })
+	.check(z.url({ error: 'Invalid URL format' }))
 	.refine(
 		(url) => youtubeDomainSchema.safeParse(url).success,
 		{
-			message: 'URL must be from a valid YouTube domain',
+			error: 'URL must be from a valid YouTube domain',
 		}
 	)
 	.refine(
@@ -96,7 +96,7 @@ export const YouTubeURLSchema = z
 			return patterns.some((schema) => schema.safeParse(url).success);
 		},
 		{
-			message: 'URL must be a valid YouTube video, shorts, or live stream URL',
+			error: 'URL must be a valid YouTube video, shorts, or live stream URL',
 		}
 	);
 
@@ -124,7 +124,7 @@ export const YouTubeURLWithParamsSchema = YouTubeURLSchema.refine(
 		}
 	},
 	{
-		message: 'YouTube URL must contain valid video identifiers',
+		error: 'YouTube URL must contain valid video identifiers',
 	}
 );
 

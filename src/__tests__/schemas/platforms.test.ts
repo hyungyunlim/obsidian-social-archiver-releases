@@ -701,7 +701,7 @@ describe('PinterestURLSchema', () => {
 			const result = FacebookURLSchema.safeParse('');
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.errors[0].message).toContain('cannot be empty');
+				expect(result.error.issues[0].message).toContain('cannot be empty');
 			}
 		});
 
@@ -709,7 +709,7 @@ describe('PinterestURLSchema', () => {
 			const result = FacebookURLSchema.safeParse('not a url');
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.errors[0].message).toContain('Invalid URL format');
+				expect(result.error.issues[0].message).toContain('Invalid URL format');
 			}
 		});
 
@@ -717,7 +717,7 @@ describe('PinterestURLSchema', () => {
 			const result = FacebookURLSchema.safeParse('https://instagram.com/p/ABC123');
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				const errorMessage = result.error.errors[0].message;
+				const errorMessage = result.error.issues[0].message;
 				expect(errorMessage).toContain('Facebook');
 			}
 		});

@@ -1,4 +1,4 @@
-import { App, getLanguage, Notice, PluginSettingTab, Setting, Platform, setIcon } from 'obsidian';
+import { App, getLanguage, Notice, PluginSettingTab, Setting, Platform, requireApiVersion, setIcon } from 'obsidian';
 import type { SettingDefinitionItem, SettingDefinitionRender, SettingGroupItem } from 'obsidian';
 import { guardSettingRenders, islandHost, renderSettingDefinitions } from './settingDefinitionRenderer';
 import nodeRequire from '../utils/nodeRequire';
@@ -62,6 +62,7 @@ import {
 } from './MapSearchProviderPreferenceController';
 import { isMapSearchProviderPreference } from '../shared/platforms/map-search-provider';
 import { showConfirmModal } from '../utils/confirm-modal';
+import { setDestructive } from '../utils/destructiveButton';
 import { rememberManagedArchiveTagRule } from '../utils/archive-tag-rules';
 import {
   DEFAULT_AUTHOR_NOTE_LINK_ALIAS_FORMAT,
@@ -222,6 +223,23 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    * where getSettingDefinitions() drives rendering instead.
    */
   display(): void {
+    this.renderImperatively();
+  }
+
+  /**
+   * Re-render after a change to the rows themselves (sign-in, install, reset).
+   * 1.13+ rebuilds the tree with update(), which runs each row's cleanup and
+   * renders it again; older versions rebuild the whole tab by hand.
+   */
+  refresh(): void {
+    if (requireApiVersion('1.13.0')) {
+      this.update();
+      return;
+    }
+    this.renderImperatively();
+  }
+
+  private renderImperatively(): void {
     // Svelte islands must come down before the container is emptied.
     this.cleanupComponents();
     const { containerEl } = this;
@@ -1511,8 +1529,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    * Text-to-Speech section (FR-07).
    *
    * Every predicate re-reads the installer rather than closing over a snapshot:
-   * install and uninstall both call `display()`, and on 1.13+ the tree is built
-   * once and rendered many times, so captured state would go stale.
+   * install and uninstall both call `refresh()`, and on 1.13+ the tree is
+   * rendered many times between rebuilds, so captured state would go stale.
    *
    * When Supertonic is selected but not yet installed the section shows only
    * the install affordance — the playback settings below it would have no
@@ -1582,7 +1600,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                   // Reset voiceId when switching providers
                   tts().voiceId = '';
                   await this.plugin.saveSettings();
-                  this.display();
+                  this.refresh();
                 });
             });
           },
@@ -1628,7 +1646,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                   } else {
                     new Notice(`Supertonic setup failed: ${result.error}`);
                   }
-                  this.display();
+                  this.refresh();
                 });
             });
           },
@@ -1645,7 +1663,6 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
               slider
                 .setLimits(0.5, 2.0, 0.25)
                 .setValue(tts().speed)
-                .setDynamicTooltip()
                 .onChange(async (value: number) => {
                   tts().speed = value;
                   await this.plugin.saveSettings();
@@ -1707,15 +1724,13 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                     } else {
                       new Notice(`Supertonic update failed: ${result.error}`);
                     }
-                    this.display();
+                    this.refresh();
                   });
               });
             }
 
             setting.addButton((button) => {
-              button
-                .setButtonText(t('st.tts.uninstall'))
-                .setWarning()
+              setDestructive(button.setButtonText(t('st.tts.uninstall')))
                 .onClick(async () => {
                   button.setDisabled(true);
                   button.setButtonText(t('st.tts.uninstalling'));
@@ -1725,7 +1740,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                   } else {
                     new Notice(`Uninstall failed: ${result.error}`);
                   }
-                  this.display();
+                  this.refresh();
                 });
             });
           },
@@ -2508,9 +2523,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                     this.plugin.batchTranscriptionManager?.pause();
                     renderBatchButtons();
                   }));
-                setting.addButton((button) => button
-                  .setButtonText(t('st.common.cancel'))
-                  .setWarning()
+                setting.addButton((button) => setDestructive(button
+                  .setButtonText(t('st.common.cancel')))
                   .onClick(() => {
                     this.plugin.batchTranscriptionManager?.cancel();
                     renderBatchButtons();
@@ -2523,9 +2537,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
                     await this.plugin.batchTranscriptionManager?.resume();
                     renderBatchButtons();
                   }));
-                setting.addButton((button) => button
-                  .setButtonText(t('st.common.cancel'))
-                  .setWarning()
+                setting.addButton((button) => setDestructive(button
+                  .setButtonText(t('st.common.cancel')))
                   .onClick(() => {
                     this.plugin.batchTranscriptionManager?.cancel();
                     renderBatchButtons();
@@ -3362,9 +3375,8 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     new Setting(bodyContainer)
       .setName(t('st.fm.reset.name'))
       .setDesc(t('st.fm.reset.desc'))
-      .addButton((button) => button
-        .setButtonText(t('st.fm.reset.button'))
-        .setWarning()
+      .addButton((button) => setDestructive(button
+        .setButtonText(t('st.fm.reset.button')))
         .onClick(() => {
           rememberArchiveTagRuleAtOpen();
           this.plugin.settings.frontmatter = {
@@ -3378,7 +3390,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
             archiveTagRuleHistory: frontmatterSettings.archiveTagRuleHistory || [],
           };
           this.markDirty();
-          this.display();
+          this.refresh();
         }));
 
     const updateVisibility = (): void => {
@@ -3526,13 +3538,12 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
     if (this.plugin.settings.redditConnected) {
       connectSetting.addButton(button => {
         button.buttonEl.addClass('sa-mobile-compact-btn');
-        return button
-          .setButtonText(t('st.reddit.disconnect'))
-          .setWarning()
+        return setDestructive(button
+          .setButtonText(t('st.reddit.disconnect')))
           .onClick(async () => {
             await this.disconnectReddit();
             // Refresh the settings display
-            this.display();
+            this.refresh();
           });
       });
     } else {

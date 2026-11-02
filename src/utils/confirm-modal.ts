@@ -6,6 +6,7 @@
  */
 
 import { App, Modal, Platform, Setting } from 'obsidian';
+import { setDestructive } from './destructiveButton';
 
 export interface ConfirmModalOptions {
   title: string;
@@ -120,7 +121,7 @@ class ConfirmModal extends Modal {
       btn.setButtonText(confirmText);
 
       if (confirmClass === 'danger') {
-        btn.setWarning();
+        setDestructive(btn);
       } else if (confirmClass === 'default') {
         btn.setCta();
       }
@@ -252,7 +253,7 @@ class InputConfirmModal extends Modal {
       btn.setButtonText(confirmText);
 
       if (confirmClass === 'danger') {
-        btn.setWarning();
+        setDestructive(btn);
       } else if (confirmClass === 'default') {
         btn.setCta();
       }

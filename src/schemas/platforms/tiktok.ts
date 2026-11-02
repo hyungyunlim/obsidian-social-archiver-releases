@@ -13,7 +13,7 @@ const tiktokDomainSchema = z
 	.regex(
 		/^(https?:\/\/)?(www\.)?(tiktok\.com|vm\.tiktok\.com|vt\.tiktok\.com)/i,
 		{
-			message: 'URL must be from a valid TikTok domain (tiktok.com, vm.tiktok.com, vt.tiktok.com)',
+			error: 'URL must be from a valid TikTok domain (tiktok.com, vm.tiktok.com, vt.tiktok.com)',
 		}
 	);
 
@@ -21,58 +21,58 @@ const tiktokDomainSchema = z
 export const TikTokVideoIdSchema = z
 	.string()
 	.regex(/^\d+$/, {
-		message: 'TikTok video ID must be numeric',
+		error: 'TikTok video ID must be numeric',
 	})
-	.min(1, { message: 'Video ID cannot be empty' });
+	.min(1, { error: 'Video ID cannot be empty' });
 
 // Shortened URL code validation
 export const TikTokShortCodeSchema = z
 	.string()
 	.regex(/^[A-Za-z0-9]+$/, {
-		message: 'TikTok short code must contain only alphanumeric characters',
+		error: 'TikTok short code must contain only alphanumeric characters',
 	})
-	.min(1, { message: 'Short code cannot be empty' });
+	.min(1, { error: 'Short code cannot be empty' });
 
 // Standard video URL: tiktok.com/@{username}/video/{videoId}
 const tiktokVideoUrlSchema = z
 	.string()
 	.regex(/tiktok\.com\/@[^/]+\/video\/\d+/i, {
-		message: 'Invalid TikTok video URL format (expected: /@{username}/video/{videoId})',
+		error: 'Invalid TikTok video URL format (expected: /@{username}/video/{videoId})',
 	});
 
 // Video URL without username: tiktok.com/video/{videoId}
 const tiktokVideoNoUsernameSchema = z
 	.string()
 	.regex(/tiktok\.com\/video\/\d+/i, {
-		message: 'Invalid TikTok video URL format (expected: /video/{videoId})',
+		error: 'Invalid TikTok video URL format (expected: /video/{videoId})',
 	});
 
 // Shortened URL (vm): vm.tiktok.com/{shortCode}
 const tiktokVmShortenedUrlSchema = z
 	.string()
 	.regex(/vm\.tiktok\.com\/[A-Za-z0-9]+/i, {
-		message: 'Invalid TikTok shortened URL format (vm.tiktok.com)',
+		error: 'Invalid TikTok shortened URL format (vm.tiktok.com)',
 	});
 
 // Shortened URL (vt): vt.tiktok.com/{shortCode}
 const tiktokVtShortenedUrlSchema = z
 	.string()
 	.regex(/vt\.tiktok\.com\/[A-Za-z0-9]+/i, {
-		message: 'Invalid TikTok shortened URL format (vt.tiktok.com)',
+		error: 'Invalid TikTok shortened URL format (vt.tiktok.com)',
 	});
 
 // Live URL: tiktok.com/@{username}/live
 const tiktokLiveUrlSchema = z
 	.string()
 	.regex(/tiktok\.com\/@[^/]+\/live/i, {
-		message: 'Invalid TikTok live URL format (expected: /@{username}/live)',
+		error: 'Invalid TikTok live URL format (expected: /@{username}/live)',
 	});
 
 // Photo mode post: tiktok.com/@{username}/photo/{photoId}
 const tiktokPhotoUrlSchema = z
 	.string()
 	.regex(/tiktok\.com\/@[^/]+\/photo\/\d+/i, {
-		message: 'Invalid TikTok photo URL format (expected: /@{username}/photo/{photoId})',
+		error: 'Invalid TikTok photo URL format (expected: /@{username}/photo/{photoId})',
 	});
 
 /**
@@ -83,13 +83,13 @@ const tiktokPhotoUrlSchema = z
 export const TikTokURLSchema = z
 	.string()
 	.trim()
-	.min(1, { message: 'URL cannot be empty' })
-	.url({ message: 'Invalid URL format' })
+	.min(1, { error: 'URL cannot be empty' })
+	.check(z.url({ error: 'Invalid URL format' }))
 	.transform((url) => canonicalizeUrl(url)) // Sanitize URL
 	.refine(
 		(url) => tiktokDomainSchema.safeParse(url).success,
 		{
-			message: 'URL must be from a valid TikTok domain',
+			error: 'URL must be from a valid TikTok domain',
 		}
 	)
 	.refine(
@@ -107,7 +107,7 @@ export const TikTokURLSchema = z
 			return patterns.some((schema) => schema.safeParse(url).success);
 		},
 		{
-			message: 'URL must be a valid TikTok video, live, or photo URL',
+			error: 'URL must be a valid TikTok video, live, or photo URL',
 		}
 	);
 
@@ -137,7 +137,7 @@ export const TikTokURLWithVideoIdSchema = TikTokURLSchema.refine(
 		}
 	},
 	{
-		message: 'TikTok URL must contain extractable video ID or be a valid shortened URL',
+		error: 'TikTok URL must contain extractable video ID or be a valid shortened URL',
 	}
 );
 

@@ -13,7 +13,7 @@ const threadsDomainSchema = z
 	.regex(
 		/^(https?:\/\/)?(www\.)?(threads\.net|threads\.com)/i,
 		{
-			message: 'URL must be from a valid Threads domain (threads.net or threads.com)',
+			error: 'URL must be from a valid Threads domain (threads.net or threads.com)',
 		}
 	);
 
@@ -21,22 +21,22 @@ const threadsDomainSchema = z
 export const ThreadsPostIdSchema = z
 	.string()
 	.regex(/^[A-Za-z0-9_-]+$/, {
-		message: 'Threads post ID must contain only alphanumeric characters, underscores, and hyphens',
+		error: 'Threads post ID must contain only alphanumeric characters, underscores, and hyphens',
 	})
-	.min(1, { message: 'Post ID cannot be empty' });
+	.min(1, { error: 'Post ID cannot be empty' });
 
 // Standard post URL: threads.net/@{username}/post/{postId} or threads.com/@{username}/post/{postId}
 const threadsPostUrlSchema = z
 	.string()
 	.regex(/(threads\.net|threads\.com)\/@[^/]+\/post\/[A-Za-z0-9_-]+/i, {
-		message: 'Invalid Threads post URL format (expected: /@{username}/post/{postId})',
+		error: 'Invalid Threads post URL format (expected: /@{username}/post/{postId})',
 	});
 
 // Thread URL using /t/ path: threads.net/t/{threadId} or threads.com/t/{threadId}
 const threadsThreadUrlSchema = z
 	.string()
 	.regex(/(threads\.net|threads\.com)\/t\/[A-Za-z0-9_-]+/i, {
-		message: 'Invalid Threads thread URL format (expected: /t/{threadId})',
+		error: 'Invalid Threads thread URL format (expected: /t/{threadId})',
 	});
 
 // Share link produced by the Threads app share sheet: threads.com/share/{token}
@@ -45,14 +45,14 @@ const threadsThreadUrlSchema = z
 const threadsShareUrlSchema = z
 	.string()
 	.regex(/(threads\.net|threads\.com)\/share\/[A-Za-z0-9_-]+\/?$/i, {
-		message: 'Invalid Threads share URL format (expected: /share/{token})',
+		error: 'Invalid Threads share URL format (expected: /share/{token})',
 	});
 
 // Direct post link format: threads.net/{postId} or threads.com/{postId}
 const threadsDirectUrlSchema = z
 	.string()
 	.regex(/(threads\.net|threads\.com)\/[A-Za-z0-9_-]+$/i, {
-		message: 'Invalid Threads direct URL format (expected: /{postId})',
+		error: 'Invalid Threads direct URL format (expected: /{postId})',
 	});
 
 /**
@@ -63,13 +63,13 @@ const threadsDirectUrlSchema = z
 export const ThreadsURLSchema = z
 	.string()
 	.trim()
-	.min(1, { message: 'URL cannot be empty' })
-	.url({ message: 'Invalid URL format' })
+	.min(1, { error: 'URL cannot be empty' })
+	.check(z.url({ error: 'Invalid URL format' }))
 	.transform((url) => canonicalizeUrl(url)) // Sanitize URL
 	.refine(
 		(url) => threadsDomainSchema.safeParse(url).success,
 		{
-			message: 'URL must be from a valid Threads domain',
+			error: 'URL must be from a valid Threads domain',
 		}
 	)
 	.refine(
@@ -85,7 +85,7 @@ export const ThreadsURLSchema = z
 			return patterns.some((schema) => schema.safeParse(url).success);
 		},
 		{
-			message: 'URL must be a valid Threads post or thread URL',
+			error: 'URL must be a valid Threads post or thread URL',
 		}
 	);
 
@@ -111,7 +111,7 @@ export const ThreadsURLWithPostIdSchema = ThreadsURLSchema.refine(
 		}
 	},
 	{
-		message: 'Threads URL must contain extractable post ID',
+		error: 'Threads URL must contain extractable post ID',
 	}
 );
 

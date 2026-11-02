@@ -77,9 +77,9 @@ export const PlaceCandidateSchema: z.ZodType<PlaceCandidate> = z.object({
   evidenceType: z.string().min(1).max(64),
   evidenceText: z.string().max(2_048),
   confidenceBucket: z.string().max(64).nullable(),
-  score: z.number().finite().nullable(),
-  latitude: z.number().finite().min(-90).max(90).nullable(),
-  longitude: z.number().finite().min(-180).max(180).nullable(),
+  score: z.number().nullable(),
+  latitude: z.number().min(-90).max(90).nullable(),
+  longitude: z.number().min(-180).max(180).nullable(),
   externalSource: z.string().max(64).nullable(),
   externalPlaceId: z.string().max(255).nullable(),
   state: z.enum(['pending', 'confirmed', 'rejected', 'superseded']),
@@ -205,7 +205,7 @@ const PlaceKindIntentSchema: z.ZodType<PlaceKindIntent> = z.object({
   mode: z.enum(['suggest', 'override']),
 }).strict().refine(
   (value) => value.mode === 'override' || value.placeKind !== null,
-  { message: 'A suggested place kind cannot be null', path: ['placeKind'] },
+  { error: 'A suggested place kind cannot be null', path: ['placeKind'] },
 );
 
 const DirectCandidateAttachmentSchema: z.ZodType<DirectCandidateAttachment> = z.object({
@@ -224,7 +224,7 @@ export const AttachPlaceCandidatesBatchBodySchema: z.ZodType<AttachPlaceCandidat
   body.candidates.forEach((candidate, index) => {
     if (seen.has(candidate.candidateId)) {
       context.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: ['candidates', index, 'candidateId'],
         message: 'Candidate IDs must be unique',
       });

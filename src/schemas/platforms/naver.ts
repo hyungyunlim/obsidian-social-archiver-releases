@@ -70,8 +70,8 @@ function isValidNaverPath(url: string): boolean {
 export const NaverURLSchema = z
   .string()
   .trim()
-  .min(1, { message: 'URL cannot be empty' })
-  .url({ message: 'Invalid URL format' })
+  .min(1, { error: 'URL cannot be empty' })
+  .check(z.url({ error: 'Invalid URL format' }))
   .transform((url) => canonicalizeUrl(url))
   .refine((url) => {
     try {
@@ -80,9 +80,9 @@ export const NaverURLSchema = z
     } catch {
       return false;
     }
-  }, { message: 'URL must be from Naver (blog.naver.com, cafe.naver.com, or n.news.naver.com)' })
+  }, { error: 'URL must be from Naver (blog.naver.com, cafe.naver.com, or n.news.naver.com)' })
   .refine((url) => isValidNaverPath(url), {
-    message: 'URL must be a valid Naver blog post, cafe article, or news article'
+    error: 'URL must be a valid Naver blog post, cafe article, or news article'
   });
 
 /**

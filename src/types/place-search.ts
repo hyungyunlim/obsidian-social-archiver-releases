@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 const SelectionTokenSchema = z.string().min(1).max(8_192);
-const LatitudeSchema = z.number().finite().min(-90).max(90);
-const LongitudeSchema = z.number().finite().min(-180).max(180);
+const LatitudeSchema = z.number().min(-90).max(90);
+const LongitudeSchema = z.number().min(-180).max(180);
 const KakaoExternalIdSchema = z.string().regex(/^\d{1,30}$/);
 const GoogleExternalIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,255}$/);
 
@@ -23,7 +23,7 @@ const KakaoCandidateSchema = z.object({
   latitude: LatitudeSchema,
   longitude: LongitudeSchema,
   phone: z.string().max(100),
-  placeUrl: z.string().url().max(500),
+  placeUrl: z.url().max(500),
   selectionToken: SelectionTokenSchema,
 }).strict().refine(
   candidate => isCanonicalKakaoPlaceUrl(candidate.placeUrl, candidate.externalId),
@@ -36,7 +36,7 @@ const MAX_PREVIEW_PHOTOS = 3;
 const MAX_PREVIEW_REVIEWS = 3;
 
 const PreviewPhotoSchema = z.object({
-  url: z.string().url().max(2_048).startsWith('https://'),
+  url: z.url().max(2_048).startsWith('https://'),
   width: z.number().int().positive(),
   height: z.number().int().positive(),
 }).strict();
@@ -69,15 +69,15 @@ const GoogleCandidateSchema = z.object({
 type ProviderAttributionSchema<Provider extends 'Kakao' | 'Google'> = z.ZodObject<{
   provider: z.ZodLiteral<Provider>;
   label: z.ZodString;
-  url: z.ZodString;
-}, 'strict'>;
+  url: z.ZodURL;
+}, z.core.$strict>;
 
 const AttributionSchema = <Provider extends 'Kakao' | 'Google'>(
   provider: Provider,
 ): ProviderAttributionSchema<Provider> => z.object({
   provider: z.literal(provider),
   label: z.string().min(1).max(200),
-  url: z.string().url().max(500),
+  url: z.url().max(500),
 }).strict();
 
 const KakaoSearchResponseSchema = z.object({
@@ -127,7 +127,7 @@ export const ProviderPlaceSelectionResponseSchema = z.union([
       latitude: LatitudeSchema,
       longitude: LongitudeSchema,
       phone: z.string().max(100),
-      canonicalUrl: z.string().url().max(200),
+      canonicalUrl: z.url().max(200),
     }).strict().refine(
       place => isCanonicalKakaoPlaceUrl(place.canonicalUrl, place.externalId),
     ),

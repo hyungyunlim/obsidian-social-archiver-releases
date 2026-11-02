@@ -94,12 +94,12 @@ function isPodcastUrl(url: string): boolean {
 export const PodcastURLSchema = z
   .string()
   .trim()
-  .min(1, { message: 'URL cannot be empty' })
-  .url({ message: 'Invalid URL format' })
+  .min(1, { error: 'URL cannot be empty' })
+  .check(z.url({ error: 'Invalid URL format' }))
   .transform((url) => canonicalizeUrl(url))
   .refine(
     (url) => isPodcastUrl(url),
-    { message: 'URL must be from a podcast platform or RSS feed' }
+    { error: 'URL must be from a podcast platform or RSS feed' }
   );
 
 /**

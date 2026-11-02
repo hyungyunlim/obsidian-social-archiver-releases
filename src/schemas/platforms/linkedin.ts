@@ -11,7 +11,7 @@ const linkedInDomainSchema = z
 	.regex(
 		/^(https?:\/\/)?(www\.)?(linkedin\.com|lnkd\.in)/i,
 		{
-			message: 'URL must be from a valid LinkedIn domain (linkedin.com, lnkd.in)',
+			error: 'URL must be from a valid LinkedIn domain (linkedin.com, lnkd.in)',
 		}
 	);
 
@@ -19,71 +19,71 @@ const linkedInDomainSchema = z
 export const LinkedInPostIdSchema = z
 	.string()
 	.regex(/^[a-zA-Z0-9-]+$/, {
-		message: 'LinkedIn post ID must contain only alphanumeric characters and hyphens',
+		error: 'LinkedIn post ID must contain only alphanumeric characters and hyphens',
 	})
-	.min(1, { message: 'Post ID cannot be empty' });
+	.min(1, { error: 'Post ID cannot be empty' });
 
 export const LinkedInActivityIdSchema = z
 	.string()
 	.regex(/^\d+$/, {
-		message: 'LinkedIn activity ID must be numeric',
+		error: 'LinkedIn activity ID must be numeric',
 	})
-	.min(1, { message: 'Activity ID cannot be empty' });
+	.min(1, { error: 'Activity ID cannot be empty' });
 
 // Post URL: linkedin.com/posts/{username}_{activityId}
 const linkedInPostUrlSchema = z
 	.string()
 	.regex(/linkedin\.com\/posts\/[^/]+_[a-zA-Z0-9-]+/i, {
-		message: 'Invalid LinkedIn post URL format (expected: /posts/{username}_{activityId})',
+		error: 'Invalid LinkedIn post URL format (expected: /posts/{username}_{activityId})',
 	});
 
 // Activity update URL: linkedin.com/feed/update/urn:li:activity:{id}
 const linkedInActivityUpdateSchema = z
 	.string()
 	.regex(/linkedin\.com\/feed\/update\/urn:li:(?:(activity|share|ugcPost):\d+|groupPost:\d+-\d+)/i, {
-		message: 'Invalid LinkedIn activity update URL format',
+		error: 'Invalid LinkedIn activity update URL format',
 	});
 
 // Pulse article URL: linkedin.com/pulse/{slug}
 const linkedInPulseUrlSchema = z
 	.string()
 	.regex(/linkedin\.com\/pulse\/[^/]+/i, {
-		message: 'Invalid LinkedIn Pulse article URL format',
+		error: 'Invalid LinkedIn Pulse article URL format',
 	});
 
 // Video URL: linkedin.com/video/event/{eventId}
 const linkedInVideoUrlSchema = z
 	.string()
 	.regex(/linkedin\.com\/video\/event\/[^/]+/i, {
-		message: 'Invalid LinkedIn video URL format',
+		error: 'Invalid LinkedIn video URL format',
 	});
 
 // Events URL: linkedin.com/events/{eventId}
 const linkedInEventsUrlSchema = z
 	.string()
 	.regex(/linkedin\.com\/events\/[^/]+/i, {
-		message: 'Invalid LinkedIn events URL format',
+		error: 'Invalid LinkedIn events URL format',
 	});
 
 // Company posts URL: linkedin.com/company/{companyId}/posts
 const linkedInCompanyPostsSchema = z
 	.string()
 	.regex(/linkedin\.com\/company\/[^/]+\/posts/i, {
-		message: 'Invalid LinkedIn company posts URL format',
+		error: 'Invalid LinkedIn company posts URL format',
 	});
 
 // Newsletter URL: linkedin.com/newsletters/{newsletterId}
 const linkedInNewsletterSchema = z
 	.string()
 	.regex(/linkedin\.com\/newsletters\/[^/]+/i, {
-		message: 'Invalid LinkedIn newsletter URL format',
+		error: 'Invalid LinkedIn newsletter URL format',
 	});
 
 // Shortened URL: lnkd.in/{shortCode}
 const linkedInShortenedUrlSchema = z
 	.string()
 	.regex(/lnkd\.in\/[a-zA-Z0-9_-]+/i, {
-		message: 'Invalid LinkedIn shortened URL format',
+		error: 'Invalid LinkedIn shortened URL format',
 	});
 
 /**
@@ -93,12 +93,12 @@ const linkedInShortenedUrlSchema = z
 export const LinkedInURLSchema = z
 	.string()
 	.trim()
-	.min(1, { message: 'URL cannot be empty' })
-	.url({ message: 'Invalid URL format' })
+	.min(1, { error: 'URL cannot be empty' })
+	.check(z.url({ error: 'Invalid URL format' }))
 	.refine(
 		(url) => linkedInDomainSchema.safeParse(url).success,
 		{
-			message: 'URL must be from a valid LinkedIn domain',
+			error: 'URL must be from a valid LinkedIn domain',
 		}
 	)
 	.refine(
@@ -118,7 +118,7 @@ export const LinkedInURLSchema = z
 			return patterns.some((schema) => schema.safeParse(url).success);
 		},
 		{
-			message: 'URL must be a valid LinkedIn post, activity, article, video, event, or newsletter URL',
+			error: 'URL must be a valid LinkedIn post, activity, article, video, event, or newsletter URL',
 		}
 	);
 
@@ -152,7 +152,7 @@ export const LinkedInURLWithParamsSchema = LinkedInURLSchema.refine(
 		}
 	},
 	{
-		message: 'LinkedIn URL must contain valid content identifiers',
+		error: 'LinkedIn URL must contain valid content identifiers',
 	}
 );
 

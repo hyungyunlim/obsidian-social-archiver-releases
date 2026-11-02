@@ -10,7 +10,7 @@ import { z } from 'zod';
  */
 export const TumblrURLSchema = z.string()
   .trim()
-  .url({ message: 'Invalid URL format' })
+  .check(z.url({ error: 'Invalid URL format' }))
   .refine(value => {
     try {
       const url = new URL(value);
@@ -28,11 +28,11 @@ export const TumblrURLSchema = z.string()
     } catch {
       return false;
     }
-  }, { message: 'URL must be a Tumblr post' });
+  }, { error: 'URL must be a Tumblr post' });
 
 /**
  * Tumblr post ID (numeric)
  */
 export const TumblrPostIdSchema = z.string()
   .trim()
-  .regex(/^\d+$/, { message: 'Tumblr post ID must be numeric' });
+  .regex(/^\d+$/, { error: 'Tumblr post ID must be numeric' });

@@ -7,7 +7,7 @@ import { z } from 'zod';
 export const GoogleMapsPlaceIdSchema = z
   .string()
   .regex(/^[A-Za-z0-9_-]{10,}$/, {
-    message: 'Invalid Google Maps place ID format',
+    error: 'Invalid Google Maps place ID format',
   })
   .describe('Google Maps place ID');
 
@@ -30,8 +30,8 @@ export const GoogleMapsPlaceIdSchema = z
 export const GoogleMapsURLSchema = z
   .string()
   .trim()
-  .min(1, { message: 'URL cannot be empty' })
-  .url({ message: 'Invalid URL format' })
+  .min(1, { error: 'URL cannot be empty' })
+  .check(z.url({ error: 'Invalid URL format' }))
   .refine(
     (url) => {
       try {
@@ -79,7 +79,7 @@ export const GoogleMapsURLSchema = z
       }
     },
     {
-      message:
+      error:
         'Invalid Google Maps URL format. Supported: google.com/maps/place/..., goo.gl/maps/..., maps.app.goo.gl/...',
     }
   )

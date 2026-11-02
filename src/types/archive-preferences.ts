@@ -29,20 +29,20 @@ const ArchivePreferencesSchema = z.object({
 const DirectArchivePreferencesEnvelopeSchema = z.object({
   success: z.literal(true),
   preferences: ArchivePreferencesSchema,
-}).passthrough();
+}).loose();
 
 const NestedArchivePreferencesEnvelopeSchema = z.object({
   success: z.literal(true),
-  data: z.object({ preferences: ArchivePreferencesSchema }).passthrough(),
-}).passthrough();
+  data: z.object({ preferences: ArchivePreferencesSchema }).loose(),
+}).loose();
 
 const ArchivePreferencesErrorEnvelopeSchema = z.object({
   error: z.object({
     code: z.string().optional(),
     message: z.string().optional(),
     details: z.unknown().optional(),
-  }).passthrough().optional(),
-}).passthrough();
+  }).loose().optional(),
+}).loose();
 
 export type AutoArchiveInboxDays = z.infer<typeof AutoArchiveInboxDaysSchema>;
 export type MapSearchProviderPreference = z.infer<typeof MapSearchProviderPreferenceSchema>;

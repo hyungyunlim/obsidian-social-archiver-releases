@@ -39,11 +39,11 @@ function isVelogPostUrl(url: string): boolean {
 export const VelogURLSchema = z
   .string()
   .trim()
-  .min(1, { message: 'URL cannot be empty' })
-  .url({ message: 'Invalid URL format' })
+  .min(1, { error: 'URL cannot be empty' })
+  .check(z.url({ error: 'Invalid URL format' }))
   .transform((url) => canonicalizeUrl(url))
   .refine((url) => isVelogRssUrl(url) || isVelogPostUrl(url), {
-    message:
+    error:
       'URL must be a Velog single-post URL (velog.io/@username/post-slug) or RSS feed (v2.velog.io/rss/@username)',
   });
 

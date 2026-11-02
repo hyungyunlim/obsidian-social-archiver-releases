@@ -11,7 +11,7 @@ const xDomainSchema = z
 	.regex(
 		/^(https?:\/\/)?(www\.)?(x\.com|twitter\.com|t\.co|mobile\.x\.com|mobile\.twitter\.com)/i,
 		{
-			message: 'URL must be from a valid X/Twitter domain (x.com, twitter.com, t.co, mobile versions)',
+			error: 'URL must be from a valid X/Twitter domain (x.com, twitter.com, t.co, mobile versions)',
 		}
 	);
 
@@ -19,73 +19,73 @@ const xDomainSchema = z
 export const XTweetIdSchema = z
 	.string()
 	.regex(/^\d+$/, {
-		message: 'X/Twitter tweet ID must be numeric',
+		error: 'X/Twitter tweet ID must be numeric',
 	})
-	.min(1, { message: 'Tweet ID cannot be empty' });
+	.min(1, { error: 'Tweet ID cannot be empty' });
 
 // Moment ID validation
 export const XMomentIdSchema = z
 	.string()
 	.regex(/^\d+$/, {
-		message: 'X/Twitter moment ID must be numeric',
+		error: 'X/Twitter moment ID must be numeric',
 	})
-	.min(1, { message: 'Moment ID cannot be empty' });
+	.min(1, { error: 'Moment ID cannot be empty' });
 
 // Space ID validation
 export const XSpaceIdSchema = z
 	.string()
 	.regex(/^[A-Za-z0-9]+$/, {
-		message: 'X/Twitter space ID must contain only alphanumeric characters',
+		error: 'X/Twitter space ID must contain only alphanumeric characters',
 	})
-	.min(1, { message: 'Space ID cannot be empty' });
+	.min(1, { error: 'Space ID cannot be empty' });
 
 // Standard tweet URL: x.com/{username}/status/{tweetId} or twitter.com/{username}/status/{tweetId}
 const xTweetUrlSchema = z
 	.string()
 	.regex(/(?:x\.com|twitter\.com)\/[^/]+\/status\/\d+/i, {
-		message: 'Invalid X/Twitter tweet URL format (expected: /{username}/status/{tweetId})',
+		error: 'Invalid X/Twitter tweet URL format (expected: /{username}/status/{tweetId})',
 	});
 
 // Tweet with photo: x.com/{username}/status/{tweetId}/photo/{photoNum}
 const xTweetPhotoUrlSchema = z
 	.string()
 	.regex(/(?:x\.com|twitter\.com)\/[^/]+\/status\/\d+\/photo\/\d+/i, {
-		message: 'Invalid X/Twitter tweet photo URL format',
+		error: 'Invalid X/Twitter tweet photo URL format',
 	});
 
 // Tweet with video: x.com/{username}/status/{tweetId}/video/{videoNum}
 const xTweetVideoUrlSchema = z
 	.string()
 	.regex(/(?:x\.com|twitter\.com)\/[^/]+\/status\/\d+\/video\/\d+/i, {
-		message: 'Invalid X/Twitter tweet video URL format',
+		error: 'Invalid X/Twitter tweet video URL format',
 	});
 
 // Mobile URLs: mobile.x.com/{username}/status/{tweetId}
 const xMobileTweetUrlSchema = z
 	.string()
 	.regex(/mobile\.(?:x\.com|twitter\.com)\/[^/]+\/status\/\d+/i, {
-		message: 'Invalid X/Twitter mobile tweet URL format',
+		error: 'Invalid X/Twitter mobile tweet URL format',
 	});
 
 // Shortened URL: t.co/{shortCode}
 const xShortenedUrlSchema = z
 	.string()
 	.regex(/t\.co\/[A-Za-z0-9]+/i, {
-		message: 'Invalid X/Twitter shortened URL format (t.co)',
+		error: 'Invalid X/Twitter shortened URL format (t.co)',
 	});
 
 // Moments: x.com/i/moments/{momentId}
 const xMomentUrlSchema = z
 	.string()
 	.regex(/(?:x\.com|twitter\.com)\/i\/moments\/\d+/i, {
-		message: 'Invalid X/Twitter moment URL format (expected: /i/moments/{momentId})',
+		error: 'Invalid X/Twitter moment URL format (expected: /i/moments/{momentId})',
 	});
 
 // Spaces (audio rooms): x.com/i/spaces/{spaceId}
 const xSpaceUrlSchema = z
 	.string()
 	.regex(/(?:x\.com|twitter\.com)\/i\/spaces\/[A-Za-z0-9]+/i, {
-		message: 'Invalid X/Twitter space URL format (expected: /i/spaces/{spaceId})',
+		error: 'Invalid X/Twitter space URL format (expected: /i/spaces/{spaceId})',
 	});
 
 /**
@@ -95,12 +95,12 @@ const xSpaceUrlSchema = z
 export const XURLSchema = z
 	.string()
 	.trim()
-	.min(1, { message: 'URL cannot be empty' })
-	.url({ message: 'Invalid URL format' })
+	.min(1, { error: 'URL cannot be empty' })
+	.check(z.url({ error: 'Invalid URL format' }))
 	.refine(
 		(url) => xDomainSchema.safeParse(url).success,
 		{
-			message: 'URL must be from a valid X/Twitter domain',
+			error: 'URL must be from a valid X/Twitter domain',
 		}
 	)
 	.refine(
@@ -119,7 +119,7 @@ export const XURLSchema = z
 			return patterns.some((schema) => schema.safeParse(url).success);
 		},
 		{
-			message: 'URL must be a valid X/Twitter tweet, moment, or space URL',
+			error: 'URL must be a valid X/Twitter tweet, moment, or space URL',
 		}
 	);
 
@@ -151,7 +151,7 @@ export const XURLWithTweetIdSchema = XURLSchema.refine(
 		}
 	},
 	{
-		message: 'X/Twitter URL must contain extractable tweet ID or be a valid shortened/special URL',
+		error: 'X/Twitter URL must contain extractable tweet ID or be a valid shortened/special URL',
 	}
 );
 
@@ -175,7 +175,7 @@ export const XURLNormalizedSchema = XURLSchema.refine(
 		}
 	},
 	{
-		message: 'URL must be from x.com, twitter.com, or t.co domains',
+		error: 'URL must be from x.com, twitter.com, or t.co domains',
 	}
 );
 

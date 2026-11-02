@@ -2,7 +2,6 @@ import { Menu, Notice, setIcon } from 'obsidian';
 import type { TranscriptionSegment } from '../../../types/transcription';
 import type { TranscriptTabSource } from '../../../types/post';
 import type { PlaybackAdapter } from '../controllers/PlaybackAdapter';
-import { HtmlMediaPlaybackAdapter } from '../controllers/PlaybackAdapter';
 import { transcriptLanguageDisplayName } from '../../../constants/languages';
 import { t } from '../../../i18n';
 
@@ -37,8 +36,6 @@ export interface TranscriptRendererOptions {
   language?: string;
   /** Unified playback adapter for audio/video/iframe sync */
   adapter?: PlaybackAdapter | null;
-  /** @deprecated Use adapter instead. Kept for backward compatibility with podcast flow. */
-  audioElement?: HTMLAudioElement | null;
   /** Callback when a timestamp is clicked */
   onTimestampClick?: (time: number) => void;
   /** Start collapsed (default: true) */
@@ -79,7 +76,6 @@ export interface TranscriptRendererOptions {
 export class TranscriptRenderer {
   private container: HTMLElement | null = null;
   private segments: TranscriptionSegment[] = [];
-  private audioElement: HTMLAudioElement | null = null;
   private adapter: PlaybackAdapter | null = null;
   private unsubscribeAdapter: (() => void) | null = null;
   private segmentElements: Map<number, HTMLElement> = new Map();
@@ -109,9 +105,6 @@ export class TranscriptRenderer {
   private speakerSegmentIndices: number[] = []; // Indices of segments with speaker markers
   private currentSpeakerJumpIndex: number = -1; // Current position in speaker jump sequence
 
-  // Bound event handler references for cleanup (legacy audio path)
-  private boundTimeUpdateHandler: (() => void) | null = null;
-
   /**
    * Render transcript component
    */
@@ -134,17 +127,7 @@ export class TranscriptRenderer {
     this.captionActions = options.captionActions;
     this.languageMenuBtn = null;
 
-    const legacyAudioEl = options.audioElement;
-    if (options.adapter) {
-      this.adapter = options.adapter;
-      this.audioElement = null;
-    } else if (legacyAudioEl) {
-      this.audioElement = legacyAudioEl;
-      this.adapter = new HtmlMediaPlaybackAdapter(legacyAudioEl);
-    } else {
-      this.adapter = null;
-      this.audioElement = null;
-    }
+    this.adapter = options.adapter ?? null;
 
     if (this.segments.length === 0) {
       return; // Nothing to render
@@ -201,11 +184,7 @@ export class TranscriptRenderer {
     this.renderContentBody();
 
     // Bind playback events for sync
-    if (this.adapter) {
-      this.bindAdapterEvents();
-    } else if (this.audioElement) {
-      this.bindAudioEvents();
-    }
+    this.bindAdapterEvents();
   }
 
   /**
@@ -815,8 +794,7 @@ export class TranscriptRenderer {
   private jumpToNextSpeaker(): void {
     if (this.speakerSegmentIndices.length === 0) return;
 
-    // Get current playback time (prefer adapter, fall back to audioElement)
-    const currentTime = this.adapter?.getCurrentTime() ?? this.audioElement?.currentTime ?? 0;
+    const currentTime = this.adapter?.getCurrentTime() ?? 0;
 
     // Find the first speaker segment after current playback time
     let foundIndex = -1;
@@ -1064,20 +1042,6 @@ export class TranscriptRenderer {
   }
 
   /**
-   * @deprecated Legacy audio binding. Use bindAdapterEvents() for new code.
-   */
-  private bindAudioEvents(): void {
-    if (!this.audioElement) return;
-
-    this.boundTimeUpdateHandler = () => {
-      const currentTime = this.audioElement?.currentTime ?? 0;
-      this.updateHighlight(currentTime);
-    };
-
-    this.audioElement.addEventListener('timeupdate', this.boundTimeUpdateHandler);
-  }
-
-  /**
    * Render a visual divider between speaker turns
    */
   private renderSpeakerDivider(parent: HTMLElement): void {
@@ -1213,17 +1177,12 @@ export class TranscriptRenderer {
   }
 
   /**
-   * Seek media to specific time (works with adapter or legacy audioElement)
+   * Seek media to specific time
    */
   private seekToTime(seconds: number): void {
     if (this.adapter) {
       this.adapter.seekTo(seconds);
       void this.adapter.play();
-    } else if (this.audioElement) {
-      this.audioElement.currentTime = seconds;
-      this.audioElement.play().catch(() => {
-        // Ignore autoplay errors
-      });
     }
     this.onTimestampClick?.(seconds);
   }
@@ -1303,26 +1262,8 @@ export class TranscriptRenderer {
     this.unsubscribeAdapter?.();
     this.unsubscribeAdapter = null;
 
-    // Cleanup legacy audio listener
-    if (this.audioElement && this.boundTimeUpdateHandler) {
-      this.audioElement.removeEventListener('timeupdate', this.boundTimeUpdateHandler);
-      this.boundTimeUpdateHandler = null;
-    }
-
     this.adapter = adapter;
-    this.audioElement = null;
-
-    if (adapter) {
-      this.bindAdapterEvents();
-    }
-  }
-
-  /**
-   * @deprecated Use setAdapter() instead. Kept for backward compatibility.
-   * Set audio element after render (useful when audio loads async)
-   */
-  setAudioElement(audioElement: HTMLAudioElement): void {
-    this.setAdapter(new HtmlMediaPlaybackAdapter(audioElement));
+    this.bindAdapterEvents();
   }
 
   /**
@@ -1371,7 +1312,7 @@ export class TranscriptRenderer {
     this.syncLanguageMenuButton();
 
     // Re-evaluate highlight based on current playback time
-    const currentTime = this.adapter?.getCurrentTime() ?? this.audioElement?.currentTime ?? 0;
+    const currentTime = this.adapter?.getCurrentTime() ?? 0;
     if (currentTime > 0) {
       this.updateHighlight(currentTime);
     }
@@ -1388,13 +1329,6 @@ export class TranscriptRenderer {
     this.unsubscribeAdapter?.();
     this.unsubscribeAdapter = null;
     this.adapter = null;
-
-    // Cleanup legacy audio listener
-    if (this.audioElement && this.boundTimeUpdateHandler) {
-      this.audioElement.removeEventListener('timeupdate', this.boundTimeUpdateHandler);
-    }
-    this.boundTimeUpdateHandler = null;
-    this.audioElement = null;
 
     this.segmentElements.clear();
     this.container = null;

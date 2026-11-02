@@ -2,6 +2,7 @@ import { setIcon } from 'obsidian';
 import type { Media, PostData } from '../../../types/post';
 import { isVideoUrl, isAudioUrl } from '../../../utils/mediaType';
 import { TranscriptRenderer } from './TranscriptRenderer';
+import { HtmlMediaPlaybackAdapter } from '../controllers/PlaybackAdapter';
 import { maybeProxyCdnUrl } from '../../../utils/cdnProxy';
 
 /**
@@ -956,9 +957,9 @@ export class MediaGalleryRenderer {
       transcriptRenderer.render(transcriptContainer, {
         segments: whisperTranscript.segments,
         language: whisperTranscript.language,
-        audioElement: audioElement,
+        adapter: audioElement ? new HtmlMediaPlaybackAdapter(audioElement) : null,
         startCollapsed: true,
-        // Note: TranscriptRenderer handles seek/play via audioElement directly
+        // Note: TranscriptRenderer handles seek/play via the adapter directly
         // No need for onTimestampClick callback to avoid duplicate play()
       });
     }

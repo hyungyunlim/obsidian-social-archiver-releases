@@ -6,7 +6,7 @@ import { z } from 'zod';
  */
 export const RedditPostIdSchema = z
 	.string()
-	.regex(/^[a-z0-9]{6,7}$/i, { message: 'Invalid Reddit post ID format' })
+	.regex(/^[a-z0-9]{6,7}$/i, { error: 'Invalid Reddit post ID format' })
 	.describe('Reddit post ID (base36 alphanumeric)');
 
 /**
@@ -21,8 +21,8 @@ export const RedditPostIdSchema = z
 export const RedditURLSchema = z
 	.string()
 	.trim()
-	.min(1, { message: 'URL cannot be empty' })
-	.url({ message: 'Invalid URL format' })
+	.min(1, { error: 'URL cannot be empty' })
+	.check(z.url({ error: 'Invalid URL format' }))
 	.refine(
 		(url) => {
 			let urlObj: URL;
@@ -61,7 +61,7 @@ export const RedditURLSchema = z
 			const commentsPattern = /^\/r\/[^/]+\/comments\/[a-z0-9]{6,7}(?:\/|$)/i;
 			return commentsPattern.test(pathname);
 		},
-		{ message: 'Invalid Reddit post URL format' }
+		{ error: 'Invalid Reddit post URL format' }
 	)
 	.describe('Reddit post URL');
 

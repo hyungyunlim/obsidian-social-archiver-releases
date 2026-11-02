@@ -61,14 +61,14 @@ function isValidXiaohongshuPath(url: string): boolean {
 export const XiaohongshuURLSchema = z
   .string()
   .trim()
-  .min(1, { message: 'URL cannot be empty' })
-  .url({ message: 'Invalid URL format' })
+  .min(1, { error: 'URL cannot be empty' })
+  .check(z.url({ error: 'Invalid URL format' }))
   .transform((url) => canonicalizeUrl(url))
   .refine((url) => isXiaohongshuDomain(url), {
-    message: 'URL must be from Xiaohongshu (xiaohongshu.com, rednote.com, xhslink.com/.cn, xhs.cn)',
+    error: 'URL must be from Xiaohongshu (xiaohongshu.com, rednote.com, xhslink.com/.cn, xhs.cn)',
   })
   .refine((url) => isValidXiaohongshuPath(url), {
-    message: 'URL must be a valid Xiaohongshu note, profile, or share link',
+    error: 'URL must be a valid Xiaohongshu note, profile, or share link',
   });
 
 /**

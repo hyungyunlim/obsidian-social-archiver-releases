@@ -8,15 +8,15 @@ import {
 
 export const NaverMapPlaceIdSchema = z
   .string()
-  .regex(/^\d{1,30}$/, { message: 'Invalid Naver Map place ID' });
+  .regex(/^\d{1,30}$/, { error: 'Invalid Naver Map place ID' });
 
 export const NaverMapURLSchema = z
   .string()
   .trim()
-  .min(1, { message: 'URL cannot be empty' })
-  .url({ message: 'Invalid URL format' })
+  .min(1, { error: 'URL cannot be empty' })
+  .check(z.url({ error: 'Invalid URL format' }))
   .refine((value) => isKoreanMapUrlCandidate('navermap', value), {
-    message: 'Invalid Naver Map place URL',
+    error: 'Invalid Naver Map place URL',
   });
 
 export function extractNaverMapPlaceId(value: string): string | null {

@@ -127,8 +127,8 @@ export class SubscriptionsCliService {
 
   /** Drive the `social-archiver:subscriptions` command. */
   async run(params: CliParams): Promise<SubscriptionsCliResult> {
-    const action = (parseEnum(params, 'action', SUBSCRIPTIONS_ACTIONS) ??
-      'list') as SubscriptionsCliAction;
+    const action: SubscriptionsCliAction =
+      parseEnum(params, 'action', SUBSCRIPTIONS_ACTIONS) ?? 'list';
 
     if (action === 'list') return this.list();
 

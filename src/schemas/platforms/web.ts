@@ -9,8 +9,8 @@ import { z } from 'zod';
 export const WebURLSchema = z
   .string()
   .trim()
-  .min(1, { message: 'URL is required' })
-  .url({ message: 'Must be a valid URL' })
+  .min(1, { error: 'URL is required' })
+  .check(z.url({ error: 'Must be a valid URL' }))
   .refine(
     (url) => {
       try {
@@ -20,7 +20,7 @@ export const WebURLSchema = z
         return false;
       }
     },
-    { message: 'Must be an HTTP or HTTPS URL' }
+    { error: 'Must be an HTTP or HTTPS URL' }
   );
 
 export type WebURL = z.infer<typeof WebURLSchema>;

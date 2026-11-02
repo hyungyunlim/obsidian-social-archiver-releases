@@ -125,7 +125,7 @@ vi.mock('../../settings/SyncSettingsTab.svelte', () => ({ default: 'SyncSettings
 vi.mock('../../settings/CrossPostSettingsTab.svelte', () => ({ default: 'CrossPostSettingsTab' }));
 vi.mock('../../settings/DangerZone.svelte', () => ({ default: 'DangerZone' }));
 
-import { Setting } from 'obsidian';
+import { __setApiVersion, Setting } from 'obsidian';
 import { SocialArchiverSettingTab } from '../../settings/SettingTab';
 import { DEFAULT_SETTINGS, DEFAULT_TTS_SETTINGS } from '../../types/settings';
 
@@ -271,9 +271,27 @@ describe("Today's review toggles after sign-in", () => {
     renderLikeObsidian113(reopened, tree);
     expect(await reviewToggles(reopened)).toEqual([false, false]);
 
-    // The pass main.ts runs right after sign-in.
-    tab.display();
+    // The pass main.ts runs right after sign-in (pre-1.13: an imperative rebuild).
+    tab.refresh();
     expect(await reviewToggles(tab.containerEl)).toEqual([false, false]);
+  });
+
+  it('refreshes through update() on 1.13+, never the deprecated display()', () => {
+    __setApiVersion('1.13.0');
+    try {
+      const tab = mobileTab(false, reviewFeature);
+      const update = vi.fn();
+      const display = vi.spyOn(tab, 'display');
+      Object.assign(tab, { update });
+
+      tab.refresh();
+
+      expect(update).toHaveBeenCalledOnce();
+      expect(display).not.toHaveBeenCalled();
+      expect(tab.containerEl.childElementCount).toBe(0);
+    } finally {
+      __setApiVersion('1.10.0');
+    }
   });
 
   // Showing the server's value must not save it back: every open of the tab

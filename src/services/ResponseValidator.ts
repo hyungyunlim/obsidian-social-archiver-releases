@@ -22,10 +22,10 @@ import {
  * Validation error with details
  */
 export class ValidationError extends Error {
-	public readonly issues: z.ZodIssue[];
+	public readonly issues: z.core.$ZodIssue[];
 	public readonly platform?: Platform;
 
-	constructor(message: string, issues: z.ZodIssue[], platform?: Platform) {
+	constructor(message: string, issues: z.core.$ZodIssue[], platform?: Platform) {
 		super(message);
 		this.name = 'ValidationError';
 		this.issues = issues;
@@ -204,7 +204,7 @@ export class ResponseValidator implements IService {
 	/**
 	 * Get validation errors without throwing
 	 */
-	getValidationErrors(data: unknown, platform?: Platform): z.ZodIssue[] | null {
+	getValidationErrors(data: unknown, platform?: Platform): z.core.$ZodIssue[] | null {
 		const result = this.safeValidate(data, platform);
 		if (!result.success) {
 			return result.error.issues;

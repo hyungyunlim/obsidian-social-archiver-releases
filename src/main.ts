@@ -4026,9 +4026,7 @@ export default class SocialArchiverPlugin extends Plugin {
 
       showAuthSuccess(result.username || 'User');
 
-      if (this.settingTab) {
-        this.settingTab.display();
-      }
+      this.settingTab?.refresh();
 
       await this.refreshAllTimelines();
 

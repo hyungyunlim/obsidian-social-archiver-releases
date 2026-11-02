@@ -96,7 +96,7 @@ export class PlacesCliService {
 
   /** Drive the `social-archiver:places` command. */
   async run(params: CliParams): Promise<PlacesCliResult> {
-    const action = (parseEnum(params, 'action', PLACES_ACTIONS) ?? 'list') as PlacesCliAction;
+    const action: PlacesCliAction = parseEnum(params, 'action', PLACES_ACTIONS) ?? 'list';
     if (action === 'list') return this.list(params);
     if (action === 'attach') return this.attach(params);
     return this.detach(params);

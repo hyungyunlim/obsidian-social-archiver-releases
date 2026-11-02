@@ -53,12 +53,12 @@ function isMediumUrl(url: string): boolean {
 export const MediumURLSchema = z
   .string()
   .trim()
-  .min(1, { message: 'URL cannot be empty' })
-  .url({ message: 'Invalid URL format' })
+  .min(1, { error: 'URL cannot be empty' })
+  .check(z.url({ error: 'Invalid URL format' }))
   .transform((url) => canonicalizeUrl(url))
   .refine(
     (url) => isMediumUrl(url),
-    { message: 'URL must be a valid Medium post URL' }
+    { error: 'URL must be a valid Medium post URL' }
   );
 
 /**

@@ -43,7 +43,7 @@ export function isPinterestBoardUrl(url: string): boolean {
  */
 export const PinterestPinIdSchema = z
 	.string()
-	.regex(/^[A-Za-z0-9_-]{6,30}$/, { message: 'Invalid Pinterest pin ID format' })
+	.regex(/^[A-Za-z0-9_-]{6,30}$/, { error: 'Invalid Pinterest pin ID format' })
 	.describe('Pinterest pin ID');
 
 /**
@@ -53,8 +53,8 @@ export const PinterestPinIdSchema = z
 export const PinterestURLSchema = z
 	.string()
 	.trim()
-	.min(1, { message: 'URL cannot be empty' })
-	.url({ message: 'Invalid URL format' })
+	.min(1, { error: 'URL cannot be empty' })
+	.check(z.url({ error: 'Invalid URL format' }))
 	.refine(
 		(url) => {
 			try {
@@ -83,7 +83,7 @@ export const PinterestURLSchema = z
 				return false;
 			}
 		},
-		{ message: 'Invalid Pinterest post URL format' }
+		{ error: 'Invalid Pinterest post URL format' }
 	)
 	.describe('Pinterest pin or board URL');
 

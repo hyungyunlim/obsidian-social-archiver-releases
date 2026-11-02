@@ -64,14 +64,14 @@ function isValidBrunchPath(url: string): boolean {
 export const BrunchURLSchema = z
   .string()
   .trim()
-  .min(1, { message: 'URL cannot be empty' })
-  .url({ message: 'Invalid URL format' })
+  .min(1, { error: 'URL cannot be empty' })
+  .check(z.url({ error: 'Invalid URL format' }))
   .transform((url) => canonicalizeUrl(url))
   .refine((url) => isBrunchDomain(url), {
-    message: 'URL must be from Brunch (brunch.co.kr)'
+    error: 'URL must be from Brunch (brunch.co.kr)'
   })
   .refine((url) => isValidBrunchPath(url), {
-    message: 'URL must be a valid Brunch post, profile, RSS, book, or keyword URL'
+    error: 'URL must be a valid Brunch post, profile, RSS, book, or keyword URL'
   });
 
 /**

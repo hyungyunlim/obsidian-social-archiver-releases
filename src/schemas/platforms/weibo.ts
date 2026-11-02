@@ -24,12 +24,12 @@ function isWeiboDomain(url: string): boolean {
 export const WeiboURLSchema = z
   .string()
   .trim()
-  .min(1, { message: 'URL cannot be empty' })
-  .url({ message: 'Invalid URL format' })
+  .min(1, { error: 'URL cannot be empty' })
+  .check(z.url({ error: 'Invalid URL format' }))
   .transform((url) => canonicalizeUrl(url))
   .refine((url) => isWeiboDomain(url), {
-    message: 'URL must be from Weibo (weibo.com, m.weibo.cn)',
+    error: 'URL must be from Weibo (weibo.com, m.weibo.cn)',
   })
   .refine((url) => extractWeiboPostId(url) !== null, {
-    message: 'URL must be a single Weibo post (not a profile or video page)',
+    error: 'URL must be a single Weibo post (not a profile or video page)',
   });

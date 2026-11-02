@@ -18,8 +18,8 @@ export const ArchiveLocationSchema = z.object({
   placeKey: z.string().min(1).max(600),
   name: z.string().trim().min(1).max(300),
   address: z.string().max(500).nullable(),
-  latitude: z.number().finite().min(-90).max(90).nullable(),
-  longitude: z.number().finite().min(-180).max(180).nullable(),
+  latitude: z.number().min(-90).max(90).nullable(),
+  longitude: z.number().min(-180).max(180).nullable(),
   source: z.string().max(64).nullable(),
   externalId: z.string().max(255).nullable(),
   url: z.string().max(2_048).nullable(),
@@ -36,14 +36,14 @@ export const ArchiveLocationSchema = z.object({
 }).strict().superRefine((location, context) => {
   if ((location.latitude === null) !== (location.longitude === null)) {
     context.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: 'custom',
       path: ['latitude'],
       message: 'Latitude and longitude must both be present or both be null',
     });
   }
   if ((location.source === null) !== (location.externalId === null)) {
     context.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: 'custom',
       path: ['source'],
       message: 'Provider source and external ID must both be present or both be null',
     });

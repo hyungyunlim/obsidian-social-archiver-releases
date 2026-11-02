@@ -33,8 +33,8 @@ export const AuthorSchema = z.object({
 	id: z.string(),
 	name: z.string(),
 	username: z.string().optional(),
-	url: z.string().url(),
-	avatarUrl: z.string().url().optional(),
+	url: z.url(),
+	avatarUrl: z.url().optional(),
 	verified: z.boolean().optional().default(false),
 	followerCount: numberTransform.optional(),
 	bio: z.string().optional(),
@@ -45,8 +45,8 @@ export const AuthorSchema = z.object({
  */
 export const MediaSchema = z.object({
 	type: z.enum(['photo', 'video', 'carousel', 'audio']),
-	url: z.string().url(),
-	thumbnailUrl: z.string().url().optional(),
+	url: z.url(),
+	thumbnailUrl: z.url().optional(),
 	width: z.number().positive().optional(),
 	height: z.number().positive().optional(),
 	duration: z.number().positive().optional(),
@@ -82,7 +82,7 @@ export const LocationSchema = z.object({
 export const BaseScrapedPostDataSchema = z.object({
 	platform: platformEnum,
 	id: z.string(),
-	url: z.string().url(),
+	url: z.url(),
 	author: AuthorSchema,
 	text: z.string(),
 	timestamp: dateTransform,
@@ -154,7 +154,7 @@ export const PostInsightsSchema = z.object({
 export const LinkedInPostDataSchema = BaseScrapedPostDataSchema.extend({
 	platform: z.literal('linkedin'),
 	insights: PostInsightsSchema.optional(),
-	articleUrl: z.string().url().optional(),
+	articleUrl: z.url().optional(),
 	articleTitle: z.string().optional(),
 	companyId: z.string().optional(),
 	companyName: z.string().optional(),
@@ -166,7 +166,7 @@ export const LinkedInPostDataSchema = BaseScrapedPostDataSchema.extend({
 export const TikTokPostDataSchema = BaseScrapedPostDataSchema.extend({
 	platform: z.literal('tiktok'),
 	soundName: z.string().optional(),
-	soundUrl: z.string().url().optional(),
+	soundUrl: z.url().optional(),
 	soundAuthor: z.string().optional(),
 	duetEnabled: z.boolean().optional().default(false),
 	stitchEnabled: z.boolean().optional().default(false),

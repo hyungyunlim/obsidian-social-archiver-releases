@@ -186,10 +186,10 @@ export {
  */
 type ExternalPlatform = Exclude<Platform, 'post' | 'kidsnote'>;
 
-function aiChatUrlSchema(platform: WebLaneBrandPlatform): z.ZodType {
+function aiChatUrlSchema(platform: WebLaneBrandPlatform): z.ZodType<string> {
 	const { urlPattern, displayName } = PLATFORM_DEFINITIONS[platform];
 	return WebURLSchema.refine((url) => urlPattern.test(url), {
-		message: `URL must be a ${displayName} share link`,
+		error: `URL must be a ${displayName} share link`,
 	});
 }
 
@@ -220,7 +220,7 @@ export const NaverWebtoonURLSchema = z
 				return false;
 			}
 		},
-		{ message: 'Invalid Naver Webtoon URL' }
+		{ error: 'Invalid Naver Webtoon URL' }
 	);
 
 /**
@@ -285,7 +285,7 @@ export const WebtoonsURLSchema = z
 				return false;
 			}
 		},
-		{ message: 'Invalid WEBTOON URL' }
+		{ error: 'Invalid WEBTOON URL' }
 	);
 
 /**
@@ -377,7 +377,7 @@ const PLATFORM_SCHEMA_MAP = {
 	spotify: aiChatUrlSchema('spotify'),
 	applemusic: aiChatUrlSchema('applemusic'),
 	web: WebURLSchema,
-} as const satisfies Record<ExternalPlatform, z.ZodType>;
+} as const satisfies Record<ExternalPlatform, z.ZodType<string>>;
 
 /**
  * Get platform-specific URL validation schema
@@ -394,7 +394,7 @@ const PLATFORM_SCHEMA_MAP = {
  * }
  * ```
  */
-export function getPlatformSchema(platform: ExternalPlatform): z.ZodType {
+export function getPlatformSchema(platform: ExternalPlatform): z.ZodType<string> {
 	return PLATFORM_SCHEMA_MAP[platform];
 }
 
@@ -412,15 +412,15 @@ export function getPlatformSchema(platform: ExternalPlatform): z.ZodType {
 export const AnySocialMediaURLSchema = z
 	.string()
 	.trim()
-	.min(1, { message: 'URL cannot be empty' })
-	.url({ message: 'Invalid URL format' })
+	.min(1, { error: 'URL cannot be empty' })
+	.check(z.url({ error: 'Invalid URL format' }))
 	.refine(
 		(url) => {
 			const schemas = Object.values(PLATFORM_SCHEMA_MAP);
 			return schemas.some((schema) => schema.safeParse(url).success);
 		},
 		{
-			message: 'URL must be from a supported platform (Facebook, LinkedIn, Instagram, TikTok, X/Twitter, Threads, YouTube, Reddit, Pinterest, Substack, Tumblr, Mastodon, Bluesky, Google Maps, Naver Map, Kakao Map, Velog, Naver, Naver Webtoon, Brunch, Blog)',
+			error: 'URL must be from a supported platform (Facebook, LinkedIn, Instagram, TikTok, X/Twitter, Threads, YouTube, Reddit, Pinterest, Substack, Tumblr, Mastodon, Bluesky, Google Maps, Naver Map, Kakao Map, Velog, Naver, Naver Webtoon, Brunch, Blog)',
 		}
 	);
 
@@ -464,14 +464,14 @@ export function validateAndDetectPlatform(url: string): PlatformSchemaValidation
 			return {
 				valid: true,
 				platform,
-				url: result.data as string,
+				url: result.data,
 				errors: [],
 			};
 		}
 
 		// Collect errors from each platform attempt
 		if (result.error) {
-			errors.push(`${platform}: ${result.error.errors.map((e) => e.message).join(', ')}`);
+			errors.push(`${platform}: ${result.error.issues.map((e) => e.message).join(', ')}`);
 		}
 	}
 
@@ -500,7 +500,7 @@ export function validateAndDetectPlatform(url: string): PlatformSchemaValidation
  * }
  * ```
  */
-export function validatePlatformUrl(url: string, platform: ExternalPlatform): z.SafeParseReturnType<string, string> {
+export function validatePlatformUrl(url: string, platform: ExternalPlatform): z.ZodSafeParseResult<string> {
 	const schema = getPlatformSchema(platform);
 	return schema.safeParse(url);
 }

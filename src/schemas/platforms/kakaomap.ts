@@ -8,15 +8,15 @@ import {
 
 export const KakaoMapPlaceIdSchema = z
   .string()
-  .regex(/^\d{1,30}$/, { message: 'Invalid Kakao Map place ID' });
+  .regex(/^\d{1,30}$/, { error: 'Invalid Kakao Map place ID' });
 
 export const KakaoMapURLSchema = z
   .string()
   .trim()
-  .min(1, { message: 'URL cannot be empty' })
-  .url({ message: 'Invalid URL format' })
+  .min(1, { error: 'URL cannot be empty' })
+  .check(z.url({ error: 'Invalid URL format' }))
   .refine((value) => isKoreanMapUrlCandidate('kakaomap', value), {
-    message: 'Invalid Kakao Map place URL',
+    error: 'Invalid Kakao Map place URL',
   });
 
 export function extractKakaoMapPlaceId(value: string): string | null {

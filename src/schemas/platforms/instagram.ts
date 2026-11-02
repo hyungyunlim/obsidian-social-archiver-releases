@@ -11,7 +11,7 @@ const instagramDomainSchema = z
 	.regex(
 		/^(https?:\/\/)?(www\.)?(instagram\.com|instagr\.am)/i,
 		{
-			message: 'URL must be from a valid Instagram domain (instagram.com, instagr.am)',
+			error: 'URL must be from a valid Instagram domain (instagram.com, instagr.am)',
 		}
 	);
 
@@ -19,44 +19,44 @@ const instagramDomainSchema = z
 export const InstagramPostIdSchema = z
 	.string()
 	.regex(/^[A-Za-z0-9_-]+$/, {
-		message: 'Instagram post ID (shortcode) must contain only alphanumeric characters, underscores, and hyphens',
+		error: 'Instagram post ID (shortcode) must contain only alphanumeric characters, underscores, and hyphens',
 	})
-	.min(1, { message: 'Post ID cannot be empty' })
-	.max(20, { message: 'Post ID is too long' });
+	.min(1, { error: 'Post ID cannot be empty' })
+	.max(20, { error: 'Post ID is too long' });
 
 // Post URL: instagram.com/p/{shortcode}
 const instagramPostUrlSchema = z
 	.string()
 	.regex(/instagram\.com\/p\/[A-Za-z0-9_-]+/i, {
-		message: 'Invalid Instagram post URL format (expected: /p/{shortcode})',
+		error: 'Invalid Instagram post URL format (expected: /p/{shortcode})',
 	});
 
 // Reel URL: instagram.com/reel/{shortcode} or instagram.com/reels/{shortcode}
 const instagramReelUrlSchema = z
 	.string()
 	.regex(/instagram\.com\/reels?\/[A-Za-z0-9_-]+/i, {
-		message: 'Invalid Instagram reel URL format (expected: /reel/{shortcode} or /reels/{shortcode})',
+		error: 'Invalid Instagram reel URL format (expected: /reel/{shortcode} or /reels/{shortcode})',
 	});
 
 // TV/IGTV URL: instagram.com/tv/{shortcode}
 const instagramTvUrlSchema = z
 	.string()
 	.regex(/instagram\.com\/tv\/[A-Za-z0-9_-]+/i, {
-		message: 'Invalid Instagram TV URL format (expected: /tv/{shortcode})',
+		error: 'Invalid Instagram TV URL format (expected: /tv/{shortcode})',
 	});
 
 // Story URL: instagram.com/stories/{username}/{storyId}
 const instagramStoryUrlSchema = z
 	.string()
 	.regex(/instagram\.com\/stories\/[^/]+\/\d+/i, {
-		message: 'Invalid Instagram story URL format (expected: /stories/{username}/{storyId})',
+		error: 'Invalid Instagram story URL format (expected: /stories/{username}/{storyId})',
 	});
 
 // Shortened URL: instagr.am/p/{shortcode}
 const instagramShortenedUrlSchema = z
 	.string()
 	.regex(/instagr\.am\/p\/[A-Za-z0-9_-]+/i, {
-		message: 'Invalid Instagram shortened URL format',
+		error: 'Invalid Instagram shortened URL format',
 	});
 
 /**
@@ -66,12 +66,12 @@ const instagramShortenedUrlSchema = z
 export const InstagramURLSchema = z
 	.string()
 	.trim()
-	.min(1, { message: 'URL cannot be empty' })
-	.url({ message: 'Invalid URL format' })
+	.min(1, { error: 'URL cannot be empty' })
+	.check(z.url({ error: 'Invalid URL format' }))
 	.refine(
 		(url) => instagramDomainSchema.safeParse(url).success,
 		{
-			message: 'URL must be from a valid Instagram domain',
+			error: 'URL must be from a valid Instagram domain',
 		}
 	)
 	.refine(
@@ -88,7 +88,7 @@ export const InstagramURLSchema = z
 			return patterns.some((schema) => schema.safeParse(url).success);
 		},
 		{
-			message: 'URL must be a valid Instagram post, reel, TV, or story URL',
+			error: 'URL must be a valid Instagram post, reel, TV, or story URL',
 		}
 	);
 
@@ -111,7 +111,7 @@ export const InstagramURLWithShortcodeSchema = InstagramURLSchema.refine(
 		}
 	},
 	{
-		message: 'Instagram URL must contain extractable shortcode',
+		error: 'Instagram URL must contain extractable shortcode',
 	}
 );
 
