@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { TFile } from 'obsidian';
 import { RemoteArchiveIngestService } from '../../../plugin/sync/RemoteArchiveIngestService';
-import type { UserArchive } from '../../../services/WorkersAPIClient';
+import type { UserArchive, WorkersAPIClient } from '../../../services/WorkersAPIClient';
+import type { ArchiveLookupService } from '../../../services/ArchiveLookupService';
+import type { PostData } from '../../../types/post';
 
 function makeArchive(overrides: Partial<UserArchive> = {}): UserArchive {
   return {
@@ -251,6 +253,91 @@ describe('RemoteArchiveIngestService', () => {
     expect(archiveLookupService.indexSavedFile).toHaveBeenCalledWith(file, {
       sourceArchiveId: archive.id,
       originalUrl: archive.originalUrl,
+    });
+  });
+
+  describe('inline body image reconcile (inline image PRD §6.3)', () => {
+    const record = {
+      originalUrl: 'https://cdn.example.com/chart.png',
+      r2Url: 'https://social-archiver-api.social-archive.org/media/archives/u/a/inline/i-0123456789abcdef.png',
+      r2Key: 'archives/u/a/inline/i-0123456789abcdef.png',
+      type: 'image' as const,
+      size: 10,
+      contentType: 'image/png',
+      preservedAt: '2026-11-03T00:00:00.000Z',
+    };
+
+    function makeIngest(archive: UserArchive, overrides: Partial<ConstructorParameters<typeof RemoteArchiveIngestService>[0]>) {
+      const reconcileInlineImageState = vi.fn().mockResolvedValue(undefined);
+      const service = new RemoteArchiveIngestService({
+        apiClient: () => ({ getUserArchive: vi.fn().mockResolvedValue({ archive }) }) as unknown as WorkersAPIClient,
+        settings: () => ({ archivePath: 'Social Archives' }),
+        hasRecentlyArchivedUrl: vi.fn().mockReturnValue(false),
+        archiveLookupService: {
+          findBySourceArchiveId: vi.fn().mockReturnValue(null),
+          findByOriginalUrl: vi.fn().mockReturnValue([]),
+          backfillFileIdentity: vi.fn().mockResolvedValue(undefined),
+          indexSavedFile: vi.fn(),
+        } as unknown as ArchiveLookupService,
+        convertUserArchiveToPostData: vi.fn().mockReturnValue({
+          platform: 'web',
+          id: archive.postId,
+          url: archive.originalUrl,
+          author: { name: 'Writer' },
+          content: { text: 'body' },
+          media: [],
+        } as unknown as PostData),
+        saveSubscriptionPost: vi.fn(),
+        refreshTimelineView: vi.fn(),
+        reconcileInlineImageState,
+        ...overrides,
+      });
+      return { service, reconcileInlineImageState };
+    }
+
+    it('reconciles a freshly saved note', async () => {
+      const archive = makeArchive({ platform: 'web', inlineMediaPreserved: [record] });
+      const file = makeFile('Social Archives/web/story.md');
+      const { service, reconcileInlineImageState } = makeIngest(archive, {
+        saveSubscriptionPostDetailed: vi.fn().mockResolvedValue({ status: 'created', file, path: file.path }),
+      });
+
+      await expect(service.ingestArchiveById(archive.id, 'archive_complete')).resolves.toBe('created');
+
+      expect(reconcileInlineImageState).toHaveBeenCalledWith(file, archive);
+    });
+
+    it('reconciles a note replaced through the limited-archive path', async () => {
+      const archive = makeArchive({ platform: 'web', inlineMediaPreserved: [record] });
+      const file = makeFile('Social Archives/web/story.md');
+      const { service, reconcileInlineImageState } = makeIngest(archive, {
+        archiveLookupService: {
+          findBySourceArchiveId: vi.fn().mockReturnValue(file),
+          findByOriginalUrl: vi.fn().mockReturnValue([]),
+          backfillFileIdentity: vi.fn().mockResolvedValue(undefined),
+          indexSavedFile: vi.fn(),
+        } as unknown as ArchiveLookupService,
+        replaceExistingLimitedArchive: vi.fn().mockResolvedValue({ status: 'updated', file, path: file.path }),
+      });
+
+      await expect(service.ingestArchiveById(archive.id, 'archive_complete')).resolves.toBe('created');
+
+      expect(reconcileInlineImageState).toHaveBeenCalledWith(file, archive);
+    });
+
+    it('does not reconcile an existing note or an archive without records', async () => {
+      const file = makeFile('Social Archives/web/story.md');
+      const existing = makeIngest(makeArchive({ platform: 'web', inlineMediaPreserved: [record] }), {
+        saveSubscriptionPostDetailed: vi.fn().mockResolvedValue({ status: 'existing', file, path: file.path }),
+      });
+      await existing.service.ingestArchiveById('archive-1', 'archive_complete');
+      expect(existing.reconcileInlineImageState).not.toHaveBeenCalled();
+
+      const withoutRecords = makeIngest(makeArchive({ platform: 'web' }), {
+        saveSubscriptionPostDetailed: vi.fn().mockResolvedValue({ status: 'created', file, path: file.path }),
+      });
+      await withoutRecords.service.ingestArchiveById('archive-1', 'archive_complete');
+      expect(withoutRecords.reconcileInlineImageState).not.toHaveBeenCalled();
     });
   });
 });

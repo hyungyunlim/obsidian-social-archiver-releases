@@ -558,6 +558,48 @@ describe('DetachedMediaService.detach', () => {
     // Out-of-bounds embed preserved; neither URL substituted into its slot.
     expect(newBody).toContain(`![[${outOfBoundsEmbed}]]`);
   });
+
+  it('trashes only the attachments it rewrote, keeping other local embeds working', async () => {
+    // Inline article images (inline image PRD §6.3) live in the same media
+    // folder but are not in mediaSourceUrls. Detach must leave their files in
+    // place, or the embeds it did not rewrite turn into broken links.
+    const ctx = makeContext();
+    const inlineImage = 'attachments/social-archives/x/post123/i-0123456789abcdef.webp';
+    const legacyEmbed = 'attachments/social-archives/x/testuser/custom_name_no_index.mp4';
+    const body = [
+      '---',
+      '---',
+      '',
+      `![[${localEmbed1}]]`,
+      '',
+      `![Chart](${inlineImage})`,
+      '',
+      `![[${legacyEmbed}]]`,
+    ].join('\n');
+    const file = installFile(ctx.fs, notePath, body, {
+      mediaSourceUrls: [video1],
+      downloadedUrls: [`downloaded:${video1}`],
+      platform: 'x',
+      author: 'testuser',
+    });
+    installFile(ctx.fs, localEmbed1, '', {});
+    installFile(ctx.fs, inlineImage, '', {});
+    installFile(ctx.fs, legacyEmbed, '', {});
+
+    const service = new DetachedMediaService({
+      app: ctx.app,
+      mediaHandler: ctx.mediaHandler,
+      logger: makeLogger(),
+    });
+    const result = await service.detach(file);
+
+    expect(result.rewrittenCount).toBe(1);
+    expect(result.deletedCount).toBe(1);
+    expect(ctx.fs.trashed).toEqual([localEmbed1]);
+    const newBody = ctx.fs.fileContent.get(notePath) ?? '';
+    expect(newBody).toContain(`![Chart](${inlineImage})`);
+    expect(newBody).toContain(`![[${legacyEmbed}]]`);
+  });
 });
 
 // ---------------------------------------------------------------------------

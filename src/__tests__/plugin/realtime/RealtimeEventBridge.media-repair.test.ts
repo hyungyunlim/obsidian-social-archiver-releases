@@ -268,3 +268,103 @@ describe('RealtimeEventBridge — media repair (Ship 3)', () => {
     expect(ingestRemoteArchive).toHaveBeenCalledWith(ARCHIVE_ID, 'client_sync');
   });
 });
+
+describe('RealtimeEventBridge — inline body images (scope: inline)', () => {
+  type ApiClient = ReturnType<RealtimeEventBridgeDeps['apiClient']>;
+  type Reconcile = NonNullable<RealtimeEventBridgeDeps['reconcileInlineImageState']>;
+
+  const inlineArchive = {
+    id: ARCHIVE_ID,
+    platform: 'web',
+    inlineMediaPreserved: [{
+      originalUrl: 'https://cdn.example.com/chart.png',
+      r2Url: 'https://social-archiver-api.social-archive.org/media/archives/u/a/inline/i-0123456789abcdef.png',
+      r2Key: 'archives/u/a/inline/i-0123456789abcdef.png',
+      type: 'image',
+      size: 10,
+      contentType: 'image/png',
+      preservedAt: '2026-11-03T00:00:00.000Z',
+    }],
+  };
+
+  async function fireInline(events: ReturnType<typeof makeEvents>, status = 'partial'): Promise<void> {
+    const trigger = events.trigger('ws:media_preserved', {
+      type: 'media_preserved',
+      data: { archiveId: ARCHIVE_ID, status, scope: 'inline' },
+    });
+    await vi.advanceTimersByTimeAsync(3500);
+    await trigger;
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('fetches the archive and reconciles its note, skipping the top-level repair', async () => {
+    const note = '# Title\n![](localpath:media/x.jpg)';
+    const { state, file } = makeVaultFile(note);
+    const events = makeEvents();
+    const app = makeApp(state, file);
+    const getUserArchive = vi.fn().mockResolvedValue({ archive: inlineArchive });
+    const reconcileInlineImageState = vi.fn<Parameters<Reconcile>, ReturnType<Reconcile>>().mockResolvedValue(undefined);
+    const deps = makeDeps({
+      events: events as unknown as RealtimeEventBridgeDeps['events'],
+      app: app as unknown as RealtimeEventBridgeDeps['app'],
+      apiClient: () => ({ getUserArchive }) as unknown as ApiClient,
+      archiveLookupService: { findBySourceArchiveId: vi.fn().mockReturnValue(file) } as unknown as RealtimeEventBridgeDeps['archiveLookupService'],
+      reconcileInlineImageState,
+    });
+    new RealtimeEventBridge(deps).setup();
+
+    await fireInline(events);
+
+    expect(getUserArchive).toHaveBeenCalledWith(ARCHIVE_ID);
+    expect(reconcileInlineImageState).toHaveBeenCalledWith(file, inlineArchive);
+    // The sentinel repair belongs to top-level media events only.
+    expect(app.vault.read).not.toHaveBeenCalled();
+    expect(state.content).toBe(note);
+  });
+
+  it('does nothing without a vault note (no fetch, no recreation)', async () => {
+    const events = makeEvents();
+    const getUserArchive = vi.fn();
+    const ingestRemoteArchive = vi.fn();
+    const reconcileInlineImageState = vi.fn<Parameters<Reconcile>, ReturnType<Reconcile>>();
+    const deps = makeDeps({
+      events: events as unknown as RealtimeEventBridgeDeps['events'],
+      apiClient: () => ({ getUserArchive }) as unknown as ApiClient,
+      settings: () => ({ recreateLocallyDeletedNotesOnRepair: true }) as unknown as ReturnType<RealtimeEventBridgeDeps['settings']>,
+      ingestRemoteArchive,
+      reconcileInlineImageState,
+    });
+    new RealtimeEventBridge(deps).setup();
+
+    await fireInline(events, 'failed');
+
+    expect(getUserArchive).not.toHaveBeenCalled();
+    expect(ingestRemoteArchive).not.toHaveBeenCalled();
+    expect(reconcileInlineImageState).not.toHaveBeenCalled();
+  });
+
+  it('swallows a failed fetch', async () => {
+    const { state, file } = makeVaultFile('# Title');
+    const events = makeEvents();
+    const reconcileInlineImageState = vi.fn<Parameters<Reconcile>, ReturnType<Reconcile>>();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const deps = makeDeps({
+      events: events as unknown as RealtimeEventBridgeDeps['events'],
+      app: makeApp(state, file) as unknown as RealtimeEventBridgeDeps['app'],
+      apiClient: () => ({ getUserArchive: vi.fn().mockRejectedValue(new Error('500')) }) as unknown as ApiClient,
+      archiveLookupService: { findBySourceArchiveId: vi.fn().mockReturnValue(file) } as unknown as RealtimeEventBridgeDeps['archiveLookupService'],
+      reconcileInlineImageState,
+    });
+    new RealtimeEventBridge(deps).setup();
+
+    await expect(fireInline(events)).resolves.toBeUndefined();
+    expect(reconcileInlineImageState).not.toHaveBeenCalled();
+  });
+});

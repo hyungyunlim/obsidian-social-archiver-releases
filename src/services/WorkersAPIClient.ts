@@ -721,6 +721,19 @@ export interface UserArchiveComment {
   replies?: UserArchiveComment[];
 }
 
+/** One `UserArchive.inlineMediaPreserved` record (`PreservedMedia` without `sourceIndex`/`variant`). */
+export interface InlinePreservedImage {
+  originalUrl: string;
+  r2Url: string;
+  r2Key: string;
+  type: 'image' | 'video' | 'audio';
+  size: number;
+  contentType: string;
+  preservedAt: string;
+  width?: number;
+  height?: number;
+}
+
 export interface UserArchive {
   id: string;
   userId: string;
@@ -759,6 +772,12 @@ export interface UserArchive {
     variant?: 'primary' | 'thumbnail';
   }> | null;
   mediaPreservationStatus?: 'pending' | 'processing' | 'completed' | 'partial' | 'failed' | 'skipped';
+  /**
+   * R2 copies of article body images (workers migration 0204, inline image
+   * PRD §2.3). `originalUrl` is the URL text exactly as it appears in
+   * `fullContent`; present only once the server preserved at least one image.
+   */
+  inlineMediaPreserved?: InlinePreservedImage[] | null;
   postedAt: string | null;
   archivedAt: string;
   likesCount: number | null;

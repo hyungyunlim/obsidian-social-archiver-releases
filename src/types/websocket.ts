@@ -356,6 +356,11 @@ export interface MediaPreservedEventData {
    * - `failed`: preservation failed (no plugin action).
    */
   status: 'completed' | 'partial' | 'repairable' | 'failed';
+  /**
+   * `'inline'` when the event reports article body images
+   * (`UserArchive.inlineMediaPreserved`); absent for top-level media.
+   */
+  scope?: 'inline';
 }
 
 export interface MediaPreservedEvent {

@@ -26,6 +26,19 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.10.13': {
+    title: 'Images inside saved articles come into your vault',
+    date: '2026-11-03',
+    notes: `## New
+
+- **Article images are saved into your vault.** Our server now keeps a copy of the images inside the body of web articles you save (articles saved from November 3 on). On the next sync the plugin downloads those copies into the note's media folder, next to the lead image, and points the note's image links at the local files, so the images stay viewable after the publisher changes or removes them. If a download fails, the note keeps the original link. Nothing is downloaded when **Download media** is set to **Text only**.
+- **Longblack (롱블랙)** articles show the publisher's icon in the timeline.
+
+## Fixed
+
+- **Detaching media keeps the images it did not detach.** "Detach local media in active note" now moves to the trash only the files whose links it switched to the online copy. Before, it could also trash other local images in the note, leaving broken links.
+`,
+  },
   '4.10.12': {
     title: 'Paywalled articles fill in with the full text',
     date: '2026-11-03',

@@ -76,6 +76,32 @@ const ARTICLE_BODY_SELECTORS: Record<string, string> = {
   'thelec.kr': '#article-view-content-div',
   'zdnet.co.kr': '#articleBody',
 
+  // ── Paywalled publishers (a subscriber's page) ──────────────────────────
+  // Measured 2026-11-03 on a signed-in page. Bloomberg appends the next story
+  // under the article as the reader scrolls (infinite scroll), and auto-
+  // detection takes the whole <main>, next story included: 735 words where
+  // .body-content gives 355. The first .body-content is the story's own body
+  // (news and opinion alike); on an opinion piece Defuddle's count through it
+  // equals the story's own (872).
+  'bloomberg.com': '.body-content',
+  // Measured 2026-11-03 on two signed-in pages (standard and cover-leader
+  // templates). The body section has no id and only hashed classes; its
+  // paragraphs are the page's only p[data-component="paragraph"]. On a
+  // replica of that DOM, auto-detection also kept the rubric, the hero and
+  // the edition footer. The registry's contentSelector is the same string.
+  'economist.com': 'section:has(p[data-component="paragraph"])',
+  // Measured 2026-11-03 on two signed-in pages (news and opinion templates).
+  // The page's only <section> holds the two preview paragraphs directly and
+  // the rest in its `.paywall` child; classes are hashed. Its text is 804
+  // words where the meta word count says 725 (captions, one "Advertisement").
+  // The registry's contentSelector is the same string.
+  'wsj.com': 'section:has(p[data-type="paragraph"])',
+  // Measured 2026-11-03 on a member's page. The JSON-LD marks `.article` as
+  // the paywalled part; the reader comments (#coffeechat) and the "함께 읽기
+  // 좋은 노트" rail sit outside it. The registry's contentSelector is the
+  // same string.
+  'longblack.co': 'article.article',
+
   // ── Community boards (measured 2026-08-20, one live post each) ──────────
   // arca.live sits behind a Cloudflare challenge, so the Worker only ever
   // reaches it through a Tier 2 render; the selector serves that and the

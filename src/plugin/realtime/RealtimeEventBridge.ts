@@ -18,7 +18,7 @@ import type { ArchiveJobTracker } from '../../services/ArchiveJobTracker';
 import type { ArchiveLookupService } from '../../services/ArchiveLookupService';
 import type { AnnotationSyncService } from '../../services/AnnotationSyncService';
 import type { TagStore } from '../../services/TagStore';
-import type { WorkersAPIClient } from '../../services/WorkersAPIClient';
+import type { UserArchive, WorkersAPIClient } from '../../services/WorkersAPIClient';
 import type { LinkRelationSyncService } from '../sync/LinkRelationSyncService';
 import type { ArchiveDeleteSyncService } from '../sync/ArchiveDeleteSyncService';
 import type { ArchiveTagOutboundService } from '../sync/ArchiveTagOutboundService';
@@ -190,6 +190,7 @@ function isDirectProfileCrawlPayload(message: WsProfileCrawlCompleteMessage): bo
 
 interface RealtimeApiClient {
   deletePendingJob(jobId: string): Promise<unknown>;
+  getUserArchive(...args: Parameters<WorkersAPIClient['getUserArchive']>): ReturnType<WorkersAPIClient['getUserArchive']>;
   getUserTags(...args: Parameters<WorkersAPIClient['getUserTags']>): ReturnType<WorkersAPIClient['getUserTags']>;
   deleteUserTag(...args: Parameters<WorkersAPIClient['deleteUserTag']>): ReturnType<WorkersAPIClient['deleteUserTag']>;
 }
@@ -334,6 +335,12 @@ export interface RealtimeEventBridgeDeps {
   notify: (message: string, timeout?: number) => void;
   schedule: (callback: () => void, delay: number) => number;
   localLockRegistry?: LocalLockRegistry;
+  /**
+   * Localize preserved article body images on `media_preserved` events with
+   * `scope: 'inline'` (inline image PRD §6.3). Wired to
+   * InlineImageLocalizer.reconcile() in main.ts.
+   */
+  reconcileInlineImageState?: (file: TFile, archive: UserArchive) => Promise<void>;
   currentCrawlWorkerJobId: { value: string | undefined };
   wsPostBatchCount: { value: number };
   wsPostBatchTimer: { value: number | undefined };
@@ -1778,18 +1785,29 @@ export class RealtimeEventBridge {
 
         const { archiveId, status } = msg.data;
 
+        // Body images have their own lifecycle: the server broadcasts only
+        // when it wrote new records, so any status means "fetch and localize".
+        const isInline = msg.data.scope === 'inline';
+
         // Only process when the server preserved media items or signalled a
         // repairable outcome. `repairable`/`partial` also drive the sentinel
         // media-region repair pass below (Ship 3).
-        if (status !== 'completed' && status !== 'partial' && status !== 'repairable') {
+        if (!isInline && status !== 'completed' && status !== 'partial' && status !== 'repairable') {
           console.debug('[Social Archiver] media_preserved: skipping status', status, archiveId);
           return;
         }
 
-        console.debug('[Social Archiver] media_preserved received:', archiveId, status);
+        console.debug('[Social Archiver] media_preserved received:', archiveId, status, isInline ? 'inline' : '');
 
         // Small delay to let any in-flight sync or vault writes complete
         await new Promise(resolve => window.setTimeout(resolve, 3000));
+
+        // The top-level sentinel/placeholder repair below has nothing to do
+        // with body images.
+        if (isInline) {
+          await this.localizeInlineImages(archiveId);
+          return;
+        }
 
         try {
           await this.withArchiveMaterializationLock(archiveId, async () => {
@@ -1919,6 +1937,33 @@ export class RealtimeEventBridge {
         }
       }),
     );
+  }
+
+  /**
+   * Fetch the archive's inline records and localize them into its note.
+   * Missing note, unwired dep or a failed fetch: nothing to do (library sync
+   * catches up later). Never throws.
+   */
+  private async localizeInlineImages(archiveId: string): Promise<void> {
+    const reconcile = this.deps.reconcileInlineImageState;
+    const apiClient = this.deps.apiClient();
+    if (!reconcile || !apiClient) return;
+
+    try {
+      await this.withArchiveMaterializationLock(archiveId, async () => {
+        const file = this.deps.archiveLookupService?.findBySourceArchiveId(archiveId) ?? null;
+        if (!file) return;
+        const { archive } = await apiClient.getUserArchive(archiveId);
+        if (!archive?.inlineMediaPreserved?.length) return;
+        await this.withMarkdownWriteLock(archiveId, () => reconcile(file, archive));
+      });
+    } catch (error) {
+      console.error(
+        '[Social Archiver] media_preserved (inline) handler failed for',
+        archiveId,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
   }
 
   /**

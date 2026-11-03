@@ -83,6 +83,15 @@ export interface RemoteArchiveIngestDeps {
    */
   onArchiveIngested?: (file: TFile, archiveId: string) => void;
 
+  /**
+   * Localize preserved article body images after a note is written or
+   * replaced (inline image PRD §6.3). Idempotent, fail-soft; runs under this
+   * service's archive write locks.
+   *
+   * Wired to InlineImageLocalizer.reconcile() in main.ts.
+   */
+  reconcileInlineImageState?: (file: TFile, archive: UserArchive) => Promise<void>;
+
   /** Shared local write lock registry used by plugin archive/materialization writers. */
   localLockRegistry?: LocalLockRegistry;
 }
@@ -204,6 +213,7 @@ export class RemoteArchiveIngestService {
       // any source note already pointing at it. Fire-and-forget, non-fatal.
       if (saveResult.status === 'created' || saveResult.status === 'updated') {
         this.deps.onArchiveIngested?.(saveResult.file, archive.id);
+        await this.reconcileInlineImages(saveResult.file, archive);
       }
       this.deps.refreshTimelineView();
       return saveResult.status === 'updated' ? 'created' : saveResult.status;
@@ -318,8 +328,18 @@ export class RemoteArchiveIngestService {
     if (result.status !== 'updated') return false;
 
     await this.bindFileIdentity(result.file ?? file, archive);
+    await this.reconcileInlineImages(result.file ?? file, archive);
     this.deps.refreshTimelineView();
     return true;
+  }
+
+  private async reconcileInlineImages(file: TFile, archive: UserArchive): Promise<void> {
+    if (!this.deps.reconcileInlineImageState || !archive.inlineMediaPreserved?.length) return;
+    try {
+      await this.deps.reconcileInlineImageState(file, archive);
+    } catch (error) {
+      console.warn('[RemoteArchiveIngest] inline image reconcile failed', { archiveId: archive.id, error });
+    }
   }
 
   private buildPendingPost(

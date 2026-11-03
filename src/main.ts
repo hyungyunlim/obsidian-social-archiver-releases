@@ -103,6 +103,7 @@ import { LocalArchiveCoordinator } from './plugin/local-archive/LocalArchiveCoor
 import { MediaPathResolver } from './plugin/media/MediaPathResolver';
 import { LargeMediaGuardService } from './plugin/media/LargeMediaGuardService';
 import { DetachedMediaService } from './plugin/media/DetachedMediaService';
+import { InlineImageLocalizer } from './plugin/media/InlineImageLocalizer';
 import { createLogger } from './services/Logger';
 import { LogLevel } from './types/logger';
 import { PendingJobOrchestrator } from './plugin/jobs/PendingJobOrchestrator';
@@ -386,6 +387,7 @@ export default class SocialArchiverPlugin extends Plugin {
   private mediaPathResolver!: MediaPathResolver;
   public largeMediaGuardService?: LargeMediaGuardService; // Large Media Guard prevention prompt (prd-large-media-guard.md)
   public detachedMediaService?: DetachedMediaService; // Large Media Guard remediation (detach/re-download)
+  private inlineImageLocalizer?: InlineImageLocalizer; // Article body images → vault (prd-inline-image-preservation.md)
   private pendingJobOrchestrator?: PendingJobOrchestrator;
   private archiveCompletionService?: ArchiveCompletionService;
   private subscriptionSyncService?: SubscriptionSyncService;
@@ -2434,6 +2436,7 @@ export default class SocialArchiverPlugin extends Plugin {
           // upgrade any source note already linking to it. Fire-and-forget.
           void this.linkRelationSyncService?.applyForArchive(archiveId);
         },
+        reconcileInlineImageState: (file, archive): Promise<void> => this.reconcileInlineImages(file, archive),
         localLockRegistry: this.localLockRegistry,
       });
 
@@ -2539,6 +2542,8 @@ export default class SocialArchiverPlugin extends Plugin {
         reconcileProductState: (file, archive) =>
           this.productFrontmatterSyncService?.reconcileFromLibrarySync(file, archive) ??
           Promise.resolve(),
+        // Article body images: downloads R2 copies into the note's media folder.
+        reconcileInlineImageState: (file, archive): Promise<void> => this.reconcileInlineImages(file, archive),
         // Library sweeps go through the sweep-index gate: archives with no
         // relations cost zero per-archive GETs (2,500-archive vaults used to
         // flood the shared rate-limit bucket with one GET per archive).
@@ -2876,6 +2881,7 @@ export default class SocialArchiverPlugin extends Plugin {
           notify: (msg, timeout) => new Notice(msg, timeout),
           schedule: (cb, delay) => this.scheduleTrackedTimeout(cb, delay),
           localLockRegistry: this.localLockRegistry,
+          reconcileInlineImageState: (file, archive): Promise<void> => this.reconcileInlineImages(file, archive),
           currentCrawlWorkerJobId: {
             get value() { return self.currentCrawlWorkerJobId; },
             set value(v) { self.currentCrawlWorkerJobId = v; },
@@ -3438,6 +3444,12 @@ export default class SocialArchiverPlugin extends Plugin {
 
     const normalizedContent = content.replace(/\s+$/, '');
     return `${normalizedContent}\n\n---\n\n## Transcript\n\n${body}\n`;
+  }
+
+  /** Localize a note's preserved article body images (callers hold the archive write locks). */
+  private async reconcileInlineImages(file: TFile, archive: UserArchive): Promise<void> {
+    this.inlineImageLocalizer ??= new InlineImageLocalizer({ app: this.app, settings: (): SocialArchiverSettings => this.settings });
+    await this.inlineImageLocalizer.reconcile(file, archive);
   }
 
   private async reconcileTranscriptFromLibrarySync(file: TFile, archive: UserArchive): Promise<void> {

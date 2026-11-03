@@ -139,7 +139,7 @@ export class DetachedMediaService {
     }
 
     const originalBody = await this.app.vault.read(file);
-    const { rewritten, rewrittenCount } = this.rewriteBodyForDetach(
+    const { rewritten, rewrittenCount, rewrittenPaths } = this.rewriteBodyForDetach(
       originalBody,
       sourceUrls,
       file.path,
@@ -150,8 +150,11 @@ export class DetachedMediaService {
       await this.app.vault.modify(file, rewritten);
     }
 
-    // Step 2: delete local attachments (best-effort)
-    const { deletedCount, failedCount } = await this.deleteLocalAttachments(originalBody, file.path);
+    // Step 2: delete local attachments (best-effort). Only the files whose
+    // embeds were just swapped to a remote URL go: any other local embed under
+    // the media root (inline article images, renamed legacy files) still
+    // renders from its file and would otherwise become a broken link.
+    const { deletedCount, failedCount } = await this.deleteLocalAttachments(rewrittenPaths, file.path);
 
     // Step 3: update frontmatter markers
     await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
@@ -358,8 +361,9 @@ export class DetachedMediaService {
     body: string,
     sourceUrls: string[],
     notePath: string,
-  ): { rewritten: string; rewrittenCount: number } {
+  ): { rewritten: string; rewrittenCount: number; rewrittenPaths: string[] } {
     let count = 0;
+    const rewrittenPaths = new Set<string>();
 
     // Single combined regex: either ![[...]] or ![alt](...)
     const pattern = /(!\[\[([^\]]+)\]\])|(!\[([^\]]*)\]\(([^)]+)\))/g;
@@ -405,10 +409,11 @@ export class DetachedMediaService {
       }
 
       count++;
+      rewrittenPaths.add(cleanPath);
       return this.renderRemotePlaceholder(url, typeof mdAlt === 'string' ? mdAlt : undefined);
     });
 
-    return { rewritten, rewrittenCount: count };
+    return { rewritten, rewrittenCount: count, rewrittenPaths: [...rewrittenPaths] };
   }
 
   /**
@@ -481,15 +486,15 @@ export class DetachedMediaService {
   // ─── Attachment deletion ─────────────────────────────────────────────
 
   /**
-   * Delete local attachments referenced in the body that live under the
-   * archive media root. Prefers `app.fileManager.trashFile()` for
-   * reversibility. Never throws — returns counts.
+   * Delete the given local attachment paths (as written in the body, so
+   * possibly note-relative or percent-encoded). Prefers
+   * `app.fileManager.trashFile()` for reversibility. Never throws — returns
+   * counts.
    */
   private async deleteLocalAttachments(
-    body: string,
+    candidates: readonly string[],
     notePath: string,
   ): Promise<{ deletedCount: number; failedCount: number }> {
-    const candidates = this.extractLocalMediaPaths(body);
     let deletedCount = 0;
     let failedCount = 0;
 
@@ -513,22 +518,6 @@ export class DetachedMediaService {
     }
 
     return { deletedCount, failedCount };
-  }
-
-  private extractLocalMediaPaths(body: string): string[] {
-    const paths = new Set<string>();
-    const pattern = /(!\[\[([^\]]+)\]\])|(!\[[^\]]*\]\(([^)]+)\))/g;
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(body)) !== null) {
-      const raw = match[2] ?? match[4];
-      if (!raw) continue;
-      const clean = raw.split('|')[0]?.trim() ?? '';
-      if (!clean) continue;
-      if (clean.startsWith('http://') || clean.startsWith('https://')) continue;
-      if (!clean.includes(MEDIA_ROOT_FRAGMENT)) continue;
-      paths.add(clean);
-    }
-    return [...paths];
   }
 
   private resolveVaultPath(mediaPath: string, notePath: string): string | null {

@@ -321,6 +321,16 @@ export interface ArchiveLibrarySyncDeps {
   reconcileProductState?: (file: TFile, archive: UserArchive) => Promise<void>;
 
   /**
+   * Localize the note's preserved article body images
+   * (`archive.inlineMediaPreserved`, inline image PRD §6.3). Runs after any
+   * server-gate body rewrite, so a replaced note is re-localized immediately.
+   * Must be idempotent and a strict no-op when nothing is left to localize.
+   *
+   * Wired to InlineImageLocalizer.reconcile() in main.ts.
+   */
+  reconcileInlineImageState?: (file: TFile, archive: UserArchive) => Promise<void>;
+
+  /**
    * Reconcile the managed `## Linked archives` section on a vault file against
    * the server's archive_link_relations for `archiveId`. Idempotent + fail-soft.
    *
@@ -828,6 +838,7 @@ export class ArchiveLibrarySyncService {
         await this.reconcileExistingCommentState(existingById, archive);
         await this.reconcileExistingLocationState(existingById, archive);
         await this.reconcileExistingProductState(existingById, archive);
+        await this.reconcileInlineImageState(existingById, archive);
         await this.reconcileLinkRelationState(existingById, archive);
         if (!updated) {
           this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
@@ -908,6 +919,7 @@ export class ArchiveLibrarySyncService {
         await this.reconcileExistingCommentState(matched, archive);
         await this.reconcileExistingLocationState(matched, archive);
         await this.reconcileExistingProductState(matched, archive);
+        await this.reconcileInlineImageState(matched, archive);
         await this.reconcileLinkRelationState(matched, archive);
         if (!updated) {
           this.updateState({ skippedCount: this.runtimeState.skippedCount + 1 });
@@ -1152,6 +1164,22 @@ export class ArchiveLibrarySyncService {
     }
   }
 
+  /** Localize preserved body images. Non-fatal, same as the passes above. */
+  private async reconcileInlineImageState(file: TFile, archive: UserArchive): Promise<void> {
+    if (!this.deps.reconcileInlineImageState) return;
+    if (!archive.inlineMediaPreserved?.length) return;
+
+    try {
+      await this.deps.reconcileInlineImageState(file, archive);
+    } catch (error) {
+      console.warn('[Social Archiver] [LibrarySync] reconcileInlineImageState failed', {
+        archiveId: archive.id,
+        path: file.path,
+        error,
+      });
+    }
+  }
+
   /**
    * Reconcile the managed `## Linked archives` section on a vault file. Non-fatal
    * — errors are logged and swallowed so the main sweep keeps progressing.
@@ -1244,6 +1272,8 @@ export class ArchiveLibrarySyncService {
       // upgrade any source note that already links to it (the relation list for
       // this archive includes the incoming side). Fire-and-forget non-fatal.
       await this.reconcileLinkRelationState(result.file, archive);
+      // A fresh note is written with the original body image URLs.
+      await this.reconcileInlineImageState(result.file, archive);
       // A fresh note carries only the primary caption section; add the rest.
       // The summary primary is server-resolved; the raw transcript language
       // can be a legacy 'unknown' / display name.

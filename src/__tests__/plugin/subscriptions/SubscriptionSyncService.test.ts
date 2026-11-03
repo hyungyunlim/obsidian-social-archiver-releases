@@ -259,6 +259,39 @@ describe('SubscriptionSyncService', () => {
       );
     });
 
+    describe('inline body images localized into the vault (inline image PRD §6.3)', () => {
+      const heroUrl = 'https://cdn.example.com/hero.jpg';
+      const heroEmbed = '![](attachments/social-archives/web/post-1/20261103-writer-post-1-1.jpg)';
+      const webPost = () => makePendingPost({
+        platform: 'web',
+        id: 'post-1',
+        url: 'https://example.com/story',
+        title: 'Story',
+        author: { name: 'Writer', url: 'https://example.com' },
+        content: { text: 'Body', markdown: 'Body' },
+        media: [{ type: 'image', url: heroUrl, r2Url: 'https://r2.example.com/media/0.jpg' }],
+        quotedPost: undefined,
+        metadata: { timestamp: '2026-11-03T00:00:00.000Z' },
+      });
+
+      it.each([
+        ['before localization', '![Chart](https://cdn.example.com/chart.png)\n\n![Photo](https://cdn.example.com/p.jpg?a=1&amp;b=2)'],
+        ['after localization', '![Chart](attachments/social-archives/web/post-1/i-0123456789abcdef.png)\n\n![Photo](My%20Media%20%28old%29/web/post-1/i-fedcba9876543210.webp)'],
+      ])('does not count the note as media-poorer %s', async (_label, bodyImages) => {
+        const deps = makeDeps();
+        vi.mocked(deps.app.vault.read).mockResolvedValue(
+          `---\nplatform: web\n---\n\n${heroEmbed}\n\nBody\n\n${bodyImages}\n`,
+        );
+
+        const service = new SubscriptionSyncService(deps);
+        const file = { path: 'Social Archives/Web/story.md' } as TFile;
+        const result = await service.replaceExistingLimitedArchiveFile(file, webPost());
+
+        expect(result.status).toBe('existing');
+        expect(serviceMocks.vaultStorageSavePost).not.toHaveBeenCalled();
+      });
+    });
+
     describe('publisher API outlink notes', () => {
       const nytUrl = 'https://www.nytimes.com/2026/11/02/world/asia/chinas-message.html';
       // What the server writes when a paywalled article could not be read.

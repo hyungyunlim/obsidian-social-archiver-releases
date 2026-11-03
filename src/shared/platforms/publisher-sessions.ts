@@ -37,16 +37,27 @@ export interface PublisherSession {
   readonly contentSelector?: string;
   /** Query parameters that turn a URL into a gift link (full article without a session). */
   readonly giftLinkParams?: readonly string[];
+  /**
+   * App languages whose Settings list this publisher (`['ko']` for a Korean
+   * outlet). Absent: every language. Only the Settings row is gated; capture
+   * and the sign-in sheet work in every language.
+   */
+  readonly locales?: readonly string[];
 }
 
 export const PUBLISHER_SESSIONS: readonly PublisherSession[] = [
+  // The second selector of each pair is The Athletic (www.nytimes.com/athletic/…),
+  // measured 2026-11-03 (.taskmaster/docs/paywalled-publisher-athletic-notes.md).
+  // Its body is the element the page's JSON-LD marks as the paywalled part.
+  // Its wall is an onsite-messaging unit drawn by script, like NYT's, so it
+  // gets the same wait; read from the page's code, not seen on a signed-out page.
   {
     slug: 'nytimes',
     domain: 'nytimes.com',
     loginUrl: 'https://myaccount.nytimes.com/auth/login',
     sessionCookie: 'NYT-S',
-    gatewaySelector: '#gateway-content',
-    contentSelector: 'section[name="articleBody"]',
+    gatewaySelector: '#gateway-content, #athletic-gateway-container',
+    contentSelector: 'section[name="articleBody"], .article-content-container',
     giftLinkParams: ['unlocked_article_code'],
   },
   // Measured 2026-11-02 (.taskmaster/docs/paywalled-publisher-ft-notes.md).
@@ -64,6 +75,89 @@ export const PUBLISHER_SESSIONS: readonly PublisherSession[] = [
     sessionCookie: 'FTSession_s',
     gatewaySelector: '#barrier-page',
     contentSelector: '#article-body',
+  },
+  // Measured 2026-11-03 (.taskmaster/docs/paywalled-publisher-wsj-notes.md).
+  // A signed-out page holds the first two paragraphs and the server says so in
+  // a meta tag (`full` on a subscriber's page), so the gateway check needs no
+  // wait. DataDome guards the site. Gift links exist but making one spends
+  // one, so none listed yet.
+  {
+    slug: 'wsj',
+    domain: 'wsj.com',
+    // The site's own sign-in link; it hands off to sso.accounts.dowjones.com
+    // and comes back with the session cookies on .wsj.com.
+    loginUrl: 'https://www.wsj.com/client/login?target=https%3A%2F%2Fwww.wsj.com%2F',
+    // A signed-in ID token, visible to page scripts; the site's cookie budget
+    // keeps it with its sign-in cookies.
+    // ponytail: not checked in a signed-out browser (the owner was signed in).
+    // It lives two days, so a reader who has not opened WSJ in the app for two
+    // days reads as signed out until the next sign-in. Its httpOnly refresh
+    // token `ca_rt` should outlive it; switch once a device confirms it.
+    sessionCookie: 'ca_id',
+    gatewaySelector: 'meta[name="article.template"][content="preview"]',
+    // The page's only section. The preview paragraphs sit in it directly and
+    // the rest inside its `.paywall` child, so `.paywall` alone drops the first two.
+    contentSelector: 'section:has(p[data-type="paragraph"])',
+  },
+  // Measured 2026-11-03 (.taskmaster/docs/paywalled-publisher-bloomberg-notes.md).
+  // A signed-out page holds the first two paragraphs, and a script fills the
+  // wall root in after load (it sits empty on a subscriber's page), so the
+  // gateway check relies on the extractor's wait, as for NYT. Bloomberg's bot
+  // check (PerimeterX "Press & Hold") showed on a signed-out sign-in attempt.
+  {
+    slug: 'bloomberg',
+    domain: 'bloomberg.com',
+    // The sign-in page the site's own scripts link to.
+    loginUrl: 'https://www.bloomberg.com/account/signin',
+    // Signed in only, one year. session_key, session_id and _user-data are set
+    // for anonymous readers too; _user-role is a browser-session cookie.
+    sessionCookie: '_breg-uid',
+    gatewaySelector: '#fortress-container-root > *',
+    // The first one is the story's; the infinite scroll appends the next
+    // story's below it.
+    contentSelector: '.body-content',
+    // The site's gift-link reader takes it from the query (a JWT).
+    giftLinkParams: ['accessToken'],
+  },
+  // Measured 2026-11-03 (.taskmaster/docs/paywalled-publisher-economist-notes.md).
+  // The wall is a custom element the article page draws after hydration, so the
+  // gateway check relies on the extractor's wait, as for NYT. Gift links exist
+  // (5 a month) but making one spends one, so none listed yet.
+  {
+    slug: 'theeconomist',
+    domain: 'economist.com',
+    // Hands off to myaccount.economist.com and comes back; the session cookies
+    // are set on www.economist.com.
+    loginUrl: 'https://www.economist.com/api/auth/login',
+    // httpOnly, three months. Its fcx_access_token sibling lives one day.
+    sessionCookie: 'fcx_refresh_token',
+    gatewaySelector: 'teg-page-wall, teg-inline-wall',
+    // The body section has no id and only hashed classes; its paragraphs are
+    // the only `data-component="paragraph"` on the page. Header and hero
+    // caption are sibling sections.
+    contentSelector: 'section:has(p[data-component="paragraph"])',
+    // No giftLinkParams: a gift link (`?giftId=…`) opened signed out shows two
+    // paragraphs and "You've been gifted this story, create a free account"
+    // (2026-11-03), so it needs a session like any other article.
+  },
+  // Measured 2026-11-03 (.taskmaster/docs/paywalled-publisher-longblack-notes.md).
+  // A signed-out page holds the note's first ~10% and the server draws a fade
+  // and a sign-up block under it, so the gateway check needs no wait.
+  {
+    slug: 'longblack',
+    domain: 'longblack.co',
+    loginUrl: 'https://longblack.co/login',
+    // Set at sign-in, one year, readable by page scripts: the site's own
+    // "signed in" hint. lb_remember_token (httpOnly) lives as long, but its
+    // name suggests it needs "remember me".
+    sessionCookie: 'lb_auth_hint',
+    gatewaySelector: '#note-page > div > [class*="bg-gradient-to-b"]',
+    // The page's JSON-LD marks `.article` as the paywalled part. The reader
+    // comments (#coffeechat) sit outside it.
+    contentSelector: 'article.article',
+    // A member's "24시간 무료 링크": the full note for anyone, for a day.
+    giftLinkParams: ['ticket'],
+    locales: ['ko'],
   },
 ];
 
