@@ -224,7 +224,7 @@ describe('AICommentService Types and Utilities', () => {
 
   describe('DEFAULT_PROMPTS', () => {
     it('should have prompts for all non-custom types', () => {
-      const types: Exclude<AICommentType, 'custom'>[] = [
+      const types: Exclude<AICommentType, 'custom' | 'chat' | 'research'>[] = [
         'summary',
         'factcheck',
         'critique',

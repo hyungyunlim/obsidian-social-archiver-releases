@@ -432,6 +432,10 @@ export class ShareAPIClient implements IService {
       'X-Client': 'obsidian-plugin',
       'X-Client-Version': this.config.pluginVersion || '0.0.0',
       'X-Platform': getPlatformIdentifier(),
+      // This plugin parses chat/research comments: without it the server
+      // treats a share update as an older plugin's and re-appends ones the
+      // user deleted.
+      'X-Client-Capabilities': 'ai-comment-types-v2',
     };
   }
 

@@ -27,6 +27,7 @@ import { stripContentVariantMetadataFooter } from '../../utils/contentVariantMar
 import { buildAIActionInputContent, buildAICommentInputContent } from './AICommentInputContext';
 import type { LocalLockRegistry } from '../locks/LocalLockRegistry';
 import { isPlaceKind, type PlaceKind } from '../../shared/platforms/place-kinds';
+import { byokCommentLabel, byokErrorToJobErrorCode, isByokStoredProviderId } from '../../vendor/byok-ai-core';
 
 type IngestResult = 'created' | 'existing' | 'skipped';
 
@@ -402,9 +403,19 @@ export class AICommentJobProcessor {
 
       await this.failAction(context, 'UNKNOWN', false);
     } catch (error) {
+      if (isCommentsTooLarge(error)) {
+        // The server already failed the job for good: no /fail, no rerun.
+        this.applyCommentsTooLargeToBanner(context.job.jobId, error);
+        return;
+      }
       if (error instanceof AICommentError) {
         if (error.code === 'CANCELLED') {
           await this.failAction(context, 'PROCESS_CANCELLED', false);
+          return;
+        }
+        if (error.byokCode) {
+          const { errorCode, retryable } = byokErrorToJobErrorCode(error.byokCode);
+          await this.failAction(context, errorCode, retryable, operatorErrorDetail(error));
           return;
         }
         await this.failAction(context, this.mapAICommentError(error), this.isRetryableAIError(error), operatorErrorDetail(error));
@@ -490,9 +501,12 @@ export class AICommentJobProcessor {
       model: context.job.model ?? undefined,
       type,
       outputLanguage: (context.job.outputLanguage ?? 'auto') as AIOutputLanguage,
-      customPrompt: type === 'custom' && typeof context.job.customPrompt === 'string'
+      // custom: the prompt; research: the requester's focus.
+      customPrompt: (type === 'custom' || type === 'research') && typeof context.job.customPrompt === 'string'
         ? context.job.customPrompt
         : undefined,
+      ...(type === 'research' ? { researchContext: readResearchContext(context.job.archiveSnapshot) } : {}),
+      interactive: false,
       onProgress: (progress) => {
         void this.handleLocalActionProgress(context, progress);
       },
@@ -586,6 +600,7 @@ export class AICommentJobProcessor {
       type: 'custom',
       outputLanguage: (context.job.outputLanguage ?? 'auto') as AIOutputLanguage,
       customPrompt: instruction,
+      interactive: false,
       timeoutMs: context.job.actionType === 'content.translate_variant'
         ? 10 * 60 * 1000
         : context.job.actionType === PLACE_EXTRACTION_ACTION_TYPE
@@ -644,6 +659,8 @@ export class AICommentJobProcessor {
         customPrompt: typeof context.job.customPrompt === 'string' ? context.job.customPrompt : undefined,
         vaultPath: context.job.type === 'connections' ? this.getVaultBasePath() : undefined,
         currentNotePath: context.job.type === 'connections' ? file.path : undefined,
+        ...(context.job.type === 'research' ? { researchContext: readResearchContext(context.job.archiveSnapshot) } : {}),
+        interactive: false,
         onProgress: (progress) => {
           void this.handleLocalProgress(context, progress);
         },
@@ -664,6 +681,11 @@ export class AICommentJobProcessor {
         if (error.code === 'CANCELLED') {
           const cancelled = await this.confirmCancel(context);
           if (cancelled) return;
+        }
+        if (error.byokCode) {
+          const { errorCode, retryable } = byokErrorToJobErrorCode(error.byokCode);
+          await this.fail(context, errorCode as AICommentPublicJobErrorCode, retryable, operatorErrorDetail(error));
+          return;
         }
         await this.fail(context, this.mapAICommentError(error), this.isRetryableAIError(error), operatorErrorDetail(error));
         return;
@@ -796,9 +818,33 @@ export class AICommentJobProcessor {
       await this.deps.saveSettings();
       this.deps.refreshTimelineView();
     } catch (error) {
+      if (isCommentsTooLarge(error)) {
+        // The server already failed the job for good: drop the pending
+        // upload instead of retrying it. The next library sync replaces the
+        // note's comments with the server's.
+        await this.dropPendingUpload(context.job.jobId);
+        this.applyCommentsTooLargeToBanner(context.job.jobId, error);
+        return;
+      }
       console.warn('[AICommentJobProcessor] Upload failed:', safeError(error));
       await this.fail(context, 'UPLOAD_FAILED', true);
     }
+  }
+
+  private async dropPendingUpload(jobId: string): Promise<void> {
+    const pendingUploads = { ...this.deps.settings().aiCommentPendingUploads };
+    delete pendingUploads[jobId];
+    this.deps.settings().aiCommentPendingUploads = pendingUploads;
+    await this.deps.saveSettings();
+  }
+
+  private applyCommentsTooLargeToBanner(jobId: string, error: unknown): void {
+    this.applySummaryToBanner({
+      jobId,
+      status: 'failed',
+      errorCode: 'AI_COMMENTS_TOO_LARGE',
+      errorMessagePublic: error instanceof Error ? error.message : undefined,
+    });
   }
 
   private async persistPendingUpload(context: ProcessingContext, meta: AICommentMeta, content: string): Promise<void> {
@@ -1191,6 +1237,31 @@ function readArchiveSnapshot(snapshot: unknown): { title?: string | null; previe
   return archive;
 }
 
+/** Title, author and platform around a research job's body (archive snapshot). */
+function readResearchContext(snapshot: unknown): { title?: string; authorName?: string; platform?: string } {
+  if (!snapshot || typeof snapshot !== 'object') return {};
+  const archive = (snapshot as { archive?: unknown }).archive;
+  if (!archive || typeof archive !== 'object') return {};
+  const record = archive as Record<string, unknown>;
+  const text = (key: string): string | undefined => {
+    const value = record[key];
+    return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+  };
+  const title = text('title');
+  const authorName = text('authorName');
+  const platform = text('platform');
+  return {
+    ...(title ? { title } : {}),
+    ...(authorName ? { authorName } : {}),
+    ...(platform ? { platform } : {}),
+  };
+}
+
+/** 409 AI_COMMENTS_TOO_LARGE on a result upload. */
+function isCommentsTooLarge(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'AI_COMMENTS_TOO_LARGE';
+}
+
 function readActionParamString(params: Record<string, unknown> | null | undefined, key: string): string | null {
   const value = params?.[key];
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -1355,6 +1426,8 @@ function normalizeExtractedPlaceCandidates(
 
 function commentTypeForAIAction(actionType: string): AICommentType | null {
   switch (actionType) {
+    case 'comment.research':
+      return 'research';
     case 'comment.summary':
       return 'summary';
     case 'comment.factcheck':
@@ -1497,6 +1570,7 @@ function stripMarkdown(markdown: string): string {
 }
 
 function providerLabelForMarkdown(provider: string): string {
+  if (isByokStoredProviderId(provider)) return byokCommentLabel(provider);
   if (provider === 'claude') return 'Claude';
   if (provider === 'codex') return 'Codex';
   if (provider === 'gemini') return 'Gemini';

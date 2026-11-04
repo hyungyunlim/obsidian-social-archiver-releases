@@ -4,7 +4,7 @@ import { toPostShareDisplayMode } from '../../../services/collections/collection
 import { NewPostShareModal } from '../collections/PostShareSettingsModal';
 import type { PostShareSettings } from '../../../types/collections';
 import { addBasemap, observeMapSize, renderBasemapAttribution } from '../places/basemap';
-import type { PostData, Comment, PostMetadata, Platform } from '../../../types/post';
+import type { PostData, Platform } from '../../../types/post';
 import type SocialArchiverPlugin from '../../../main';
 import * as L from 'leaflet';
 import {
@@ -24,7 +24,7 @@ import { buildCaptionActions } from './CaptionLanguageActions';
 import { resolvePostArchiveId } from './postArchiveId';
 import type { TranscriptCaptionActions } from './TranscriptRenderer';
 import { ShareAPIClient } from '../../../services/ShareAPIClient';
-import type { AIActionType, AICommentPayload, ContentVariant, ExtractPlaceCandidatesResult, PlaceCandidate, PlaceCandidateAttachmentResult, TranscriptionJobMode, TranscriptionMediaRef, WorkersAPIClient } from '../../../services/WorkersAPIClient';
+import type { AIActionType, ContentVariant, ExtractPlaceCandidatesResult, PlaceCandidate, PlaceCandidateAttachmentResult, TranscriptionJobMode, TranscriptionMediaRef, WorkersAPIClient } from '../../../services/WorkersAPIClient';
 import type { SavedPrompt } from '../../../types/prompt-library';
 import { TextFormatter } from '../../../services/markdown/formatters/TextFormatter';
 import { TranscriptFormatter } from '../../../services/markdown/formatters/TranscriptFormatter';
@@ -74,7 +74,13 @@ import { ArchivePlacePickerModal } from '../modals/ArchivePlacePickerModal';
 import { AICommentRenderer, type AICommentRendererOptions } from './AICommentRenderer';
 import { AICliDetector, type AICli, type AICliDetectionResult } from '../../../utils/ai-cli';
 import { parseAIComments, appendAIComment, removeAIComment, updateFrontmatterAIComments } from '../../../services/ai-comment/markdown-handler';
-import type { AICommentMeta, AICommentType, AICommentProgress, AICommentResult, AIOutputLanguage } from '../../../types/ai-comment';
+import { AICommentError, type AICommentEngineId, type AICommentMeta, type AICommentType, type AICommentProgress, type AICommentResult, type AIOutputLanguage } from '../../../types/ai-comment';
+import { fromStoredProviderId, isByokStoredProviderId, toStoredProviderId, type ByokStoredProviderId } from '../../../vendor/byok-ai-core';
+import { pluginAICommentSaver, type AICommentSaver, type AICommentTarget } from '../../../services/ai-comment/AICommentSaver';
+import { serializePostForShare } from '../../../utils/serializePostForShare';
+import { aiConversationEntries, type AIConversationEntry } from '../aiConversationEntries';
+import type { ReaderOpenOptions } from '../reader/ReaderModeOverlay';
+import { getByokService } from '../../../services/byok/ByokService';
 import { insertTranscriptSection, extractTranscriptLanguages, parseTranscriptSections, resolveNoteTranscriptLanguages } from '../../../services/markdown/TranscriptSectionManager';
 import { languageCodeToName } from '../../../constants/languages';
 import { getPlatformCategory } from '../../../shared/platforms/types';
@@ -191,7 +197,7 @@ export class PostCardRenderer extends Component {
   private onTagsChangedCallback?: () => void;
 
   // Callback for reader mode
-  private onReaderModeCallback?: (post: PostData) => void;
+  private onReaderModeCallback?: (post: PostData, options?: ReaderOpenOptions) => void;
 
   // Callback for dismissing a synthetic failed archive attempt card
   private onFailedArchiveDismissCallback?: (post: PostData, rootElement: HTMLElement) => void | Promise<void>;
@@ -267,6 +273,8 @@ export class PostCardRenderer extends Component {
   // for a single PR with 1,200 active users on the timeline.
   // ---------------------------------------------------------------------------
   private previewable!: PreviewableCardRenderer;
+  /** Note → frontmatter → server archive → live share, for every AI comment saved here. */
+  private readonly aiCommentSaver: AICommentSaver;
 
   constructor(
     vault: Vault,
@@ -291,6 +299,7 @@ export class PostCardRenderer extends Component {
     this.compactPostCardRenderer.setLinkPreviewRenderer(linkPreviewRenderer); // Set LinkPreviewRenderer for external links
     this.youtubeControllers = youtubeControllers;
     this.textFormatter = new TextFormatter();
+    this.aiCommentSaver = pluginAICommentSaver(plugin);
 
     // Shared batched fetcher for pending place candidates (Places P3c).
     // The workersApiClient getter throws while unconfigured — treat as absent.
@@ -467,7 +476,7 @@ export class PostCardRenderer extends Component {
   /**
    * Set callback for reader mode activation
    */
-  public onReaderMode(callback: (post: PostData) => void): void {
+  public onReaderMode(callback: (post: PostData, options?: ReaderOpenOptions) => void): void {
     this.onReaderModeCallback = callback;
   }
 
@@ -1176,7 +1185,7 @@ export class PostCardRenderer extends Component {
         this.renderArchiveButton(actionsBar, post, rootElement);
         this.renderShareButton(actionsBar, post);
         if (this.shouldShowMobileAIActionButton(post, isEmbedded)) {
-          this.renderMobileAIActionButton(actionsBar, post);
+          this.renderMobileAIActionButton(actionsBar, post, rootElement);
         }
         if (!isEmbedded) this.renderPlaceButton(actionsBar, post);
         this.renderOverflowMenuButton(actionsBar, post, rootElement, isEmbedded);
@@ -1196,6 +1205,11 @@ export class PostCardRenderer extends Component {
 
         // Archive button
         this.renderArchiveButton(actionsBar, post, rootElement);
+
+        // Chat / research (the mobile AI button's desktop twin)
+        if (this.shouldShowAIConversationButton(post, isEmbedded)) {
+          this.renderAIConversationButton(actionsBar, post, rootElement);
+        }
 
         // Reader mode button
         this.renderReaderModeButton(actionsBar, post);
@@ -3669,7 +3683,7 @@ export class PostCardRenderer extends Component {
       this.renderArchiveButton(interactions, post, rootElement);
       this.renderShareButton(interactions, post);
       if (this.shouldShowMobileAIActionButton(post, isEmbedded)) {
-        this.renderMobileAIActionButton(interactions, post);
+        this.renderMobileAIActionButton(interactions, post, rootElement);
       }
       if (!isEmbedded) this.renderPlaceButton(interactions, post);
       this.renderOverflowMenuButton(interactions, post, rootElement, isEmbedded);
@@ -3683,6 +3697,9 @@ export class PostCardRenderer extends Component {
         this.renderPlaceButton(interactions, post);
       }
       this.renderArchiveButton(interactions, post, rootElement);
+      if (this.shouldShowAIConversationButton(post, isEmbedded)) {
+        this.renderAIConversationButton(interactions, post, rootElement);
+      }
       this.renderReaderModeButton(interactions, post);
       this.renderOpenNoteButton(interactions, post);
       if (post.platform === 'post') {
@@ -4015,6 +4032,44 @@ export class PostCardRenderer extends Component {
     });
   }
 
+  /** Desktop: the same gate as the mobile AI button (AI on, platform shown, a note to save to). */
+  private shouldShowAIConversationButton(post: PostData, isEmbedded: boolean): boolean {
+    if (isEmbedded || !post.filePath || !this.plugin.settings.aiComment?.enabled) return false;
+    return this.isAICommentEnabledForPlatform(post.platform);
+  }
+
+  private renderAIConversationButton(parent: HTMLElement, post: PostData, rootElement: HTMLElement): void {
+    const button = parent.createEl('button', { cls: 'pcr-action-btn' });
+    button.type = 'button';
+    button.setAttribute('title', t('byok.menu.button'));
+    button.setAttribute('aria-label', t('byok.menu.button'));
+    setIcon(button.createDiv({ cls: 'pcr-action-icon' }), 'sparkles');
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const menu = new Menu();
+      this.addAIConversationItems(menu, post, rootElement);
+      menu.showAtMouseEvent(event);
+    });
+  }
+
+  /** "Chat about this post" / "Research this post" (or the add-a-key hint). True when any was added. */
+  private addAIConversationItems(menu: Menu, post: PostData, rootElement: HTMLElement): boolean {
+    const openReader = this.onReaderModeCallback;
+    const entries: AIConversationEntry[] = aiConversationEntries({
+      plugin: this.plugin,
+      post,
+      target: () => this.aiCommentTarget(post, rootElement),
+      // Chat beside the article in reader mode, so the post stays readable.
+      ...(openReader ? { openChat: () => openReader(post, { chat: true }) } : {}),
+    });
+    for (const entry of entries) {
+      menu.addItem((item) => {
+        item.setIcon(entry.icon).setTitle(entry.title).onClick(entry.onSelect);
+      });
+    }
+    return entries.length > 0;
+  }
+
   private shouldShowMobileAIActionButton(post: PostData, isEmbedded: boolean): boolean {
     if (!ObsidianPlatform.isMobile || isEmbedded) return false;
     if (!this.plugin.settings.aiComment?.enabled) return false;
@@ -4122,7 +4177,7 @@ export class PostCardRenderer extends Component {
     }
   }
 
-  private renderMobileAIActionButton(parent: HTMLElement, post: PostData): void {
+  private renderMobileAIActionButton(parent: HTMLElement, post: PostData, rootElement: HTMLElement): void {
     const aiBtn = parent.createDiv({ cls: 'pcr-action-btn' });
     aiBtn.setAttribute('title', 'AI actions');
 
@@ -4133,38 +4188,48 @@ export class PostCardRenderer extends Component {
       e.stopPropagation();
       const menu = new Menu();
       const cli = this.plugin.settings.aiComment.defaultCli ?? 'claude';
+      if (this.addAIConversationItems(menu, post, rootElement)) menu.addSeparator();
+      // With a provider key on this phone, comments run here with it instead
+      // of being queued for a desktop. Tags and translation still queue.
+      const byokEngine = this.readyByokEngines()[0];
+      const engineSuffix = byokEngine ? ` · ${providerDisplayName(byokEngine)}` : '';
+      const requestComment = (type: 'summary' | 'factcheck' | 'glossary', language?: string): void => {
+        if (byokEngine) {
+          this.runMobileByokComment(post, byokEngine, type, rootElement, language);
+          return;
+        }
+        void this.handleTimelineAIActionRequest(post, `comment.${type}`, cli, language);
+      };
 
       menu.addItem((item) => {
         item
           .setIcon('list')
-          .setTitle('Summary')
-          .onClick(() => {
-            void this.handleTimelineAIActionRequest(post, 'comment.summary', cli);
-          });
+          .setTitle(`Summary${engineSuffix}`)
+          .onClick(() => requestComment('summary'));
       });
       menu.addItem((item) => {
         item
           .setIcon('chevron-right')
           .setTitle('Summary language')
           .onClick(() => {
+            if (byokEngine) {
+              this.openOutputLanguageMenu(aiBtn, (language) => requestComment('summary', language));
+              return;
+            }
             this.openTimelineOutputLanguageMenu(post, cli, 'comment.summary', aiBtn);
           });
       });
       menu.addItem((item) => {
         item
           .setIcon('shield-check')
-          .setTitle('Fact check')
-          .onClick(() => {
-            void this.handleTimelineAIActionRequest(post, 'comment.factcheck', cli);
-          });
+          .setTitle(`Fact check${engineSuffix}`)
+          .onClick(() => requestComment('factcheck'));
       });
       menu.addItem((item) => {
         item
           .setIcon('book-open')
-          .setTitle('Glossary')
-          .onClick(() => {
-            void this.handleTimelineAIActionRequest(post, 'comment.glossary', cli);
-          });
+          .setTitle(`Glossary${engineSuffix}`)
+          .onClick(() => requestComment('glossary'));
       });
       menu.addSeparator();
       menu.addItem((item) => {
@@ -4246,20 +4311,47 @@ export class PostCardRenderer extends Component {
     actionType: AIActionType,
     anchorEl: HTMLElement,
   ): void {
+    this.openOutputLanguageMenu(anchorEl, (language) => {
+      void this.handleTimelineAIActionRequest(post, actionType, cli, language);
+    });
+  }
+
+  private openOutputLanguageMenu(anchorEl: HTMLElement, choose: (language: string) => void): void {
     const menu = new Menu();
     for (const language of OUTPUT_LANGUAGE_OPTIONS) {
       menu.addItem((item) => {
         item
           .setIcon('languages')
           .setTitle(language.menuLabel)
-          .onClick(() => {
-            void this.handleTimelineAIActionRequest(post, actionType, cli, language.code);
-          });
+          .onClick(() => choose(language.code));
       });
     }
 
     const rect = anchorEl.getBoundingClientRect();
     menu.showAtPosition({ x: rect.left, y: rect.bottom });
+  }
+
+  /**
+   * A comment from the phone's own provider key, saved like a banner run
+   * (note, server snapshot, share). No banner on mobile: Notices report it.
+   */
+  private runMobileByokComment(
+    post: PostData,
+    engine: ByokStoredProviderId,
+    type: AICommentType,
+    rootElement: HTMLElement,
+    language?: string,
+  ): void {
+    if (this.activeAIBannerRuns.has(post.id)) {
+      new Notice('An AI comment is already running for this post.');
+      return;
+    }
+    const label = COMMENT_TYPE_DISPLAY_NAMES[type];
+    new Notice(`Generating ${label} with ${providerDisplayName(engine)}…`);
+    // handleAICommentGenerate reports failures itself.
+    void this.trackBannerRun(post, null, `Generating ${label}`, (signal) =>
+      this.handleAICommentGenerate(post, engine, type, null, rootElement, undefined, language as AIOutputLanguage | undefined, signal),
+    ).catch(() => undefined);
   }
 
   /**
@@ -4903,7 +4995,7 @@ export class PostCardRenderer extends Component {
       const isAdmin = this.plugin.settings.tier === 'admin';
 
       // Prepare PostData WITHOUT media for instant share creation
-      const postData = this.serializePostForShare(post, { stripMedia: true });
+      const postData = serializePostForShare(post, { stripMedia: true });
       postData.shareMode = this.plugin.settings.shareMode;
 
       // Parse AI comments from markdown content and include in share data
@@ -5031,7 +5123,7 @@ export class PostCardRenderer extends Component {
       ...post,
       media: post.media.filter(m => m.type !== 'video')
     };
-    const sanitizedImagePost = this.serializePostForShare(filteredPost);
+    const sanitizedImagePost = serializePostForShare(filteredPost);
 
     // Progress tracking with Notice
     let progressNotice: Notice | undefined;
@@ -9065,56 +9157,6 @@ export class PostCardRenderer extends Component {
     return wrapper;
   }
 
-  /**
-   * Prepare PostData for sharing by cloning values, normalizing timestamps, and optionally stripping media
-   */
-  private serializePostForShare(post: PostData, options: { stripMedia?: boolean } = {}): PostData {
-    const stripMedia = options.stripMedia ?? false;
-
-    const clonedPost: PostData = {
-      ...post,
-      author: { ...post.author },
-      content: { ...post.content },
-      media: stripMedia ? [] : (post.media?.map(media => ({ ...media })) ?? []),
-      metadata: this.serializePostMetadata(post.metadata),
-      comments: this.cloneComments(post.comments),
-      embeddedArchives: post.embeddedArchives?.map(archive => this.serializePostForShare(archive)),
-      quotedPost: post.quotedPost
-        ? this.serializePostForShare(post.quotedPost)
-        : undefined
-    };
-
-    return clonedPost;
-  }
-
-  private serializePostMetadata(metadata: PostMetadata): PostMetadata {
-    const timestamp = typeof metadata.timestamp === 'string'
-      ? metadata.timestamp
-      : metadata.timestamp.toISOString();
-
-    const editedAt = metadata.editedAt
-      ? (typeof metadata.editedAt === 'string' ? metadata.editedAt : metadata.editedAt.toISOString())
-      : undefined;
-
-    return {
-      ...metadata,
-      timestamp,
-      editedAt
-    };
-  }
-
-  private cloneComments(comments?: Comment[]): Comment[] | undefined {
-    if (!comments) {
-      return undefined;
-    }
-
-    return comments.map(comment => ({
-      ...comment,
-      author: { ...comment.author },
-      replies: this.cloneComments(comment.replies)
-    }));
-  }
-
   // Track if Leaflet CSS is injected
   private static leafletCssInjected = false;
 
@@ -9937,7 +9979,7 @@ export class PostCardRenderer extends Component {
       onCancelRun: () => {
         this.activeAIBannerRuns.get(post.id)?.controller.abort();
       },
-      onGenerate: async (cli: AIBannerProvider, type: AICommentType, customPrompt?: string, language?: AIOutputLanguage) => {
+      onGenerate: async (cli: AIBannerProvider, type: AICommentType, customPrompt?: string, language?: AIOutputLanguage, web?: boolean) => {
         // The plugin never runs Apple Intelligence itself: queue the comment
         // for this vault's CLI executor, like the actions below.
         if (cli === 'apple') {
@@ -9947,7 +9989,7 @@ export class PostCardRenderer extends Component {
           return;
         }
         await this.trackBannerRun(post, null, `Generating ${COMMENT_TYPE_DISPLAY_NAMES[type]}`, (signal) =>
-          this.handleAICommentGenerate(post, cli, type, banner, rootElement, customPrompt, language, signal));
+          this.handleAICommentGenerate(post, cli, type, banner, rootElement, customPrompt, language, signal, web));
       },
       onGenerateMulti: async (clis: AICli[], type: AICommentType, customPrompt?: string, language?: AIOutputLanguage) => {
         await this.trackBannerRun(post, null, `Generating ${COMMENT_TYPE_DISPLAY_NAMES[type]} (${clis.length} AIs)`, (signal) =>
@@ -9987,6 +10029,8 @@ export class PostCardRenderer extends Component {
       },
       // Transcript availability (enables translate-transcript type)
       hasTranscript,
+      modelWithoutWebSearch: (provider) =>
+        getByokService()?.modelWithoutWebSearch(fromStoredProviderId(provider), 'comment') ?? Promise.resolve(null),
     };
 
     banner.render(bannerContainer, options);
@@ -10034,13 +10078,21 @@ export class PostCardRenderer extends Component {
   }
 
   private async getAvailableClisForAICommentBanner(): Promise<AIBannerProvider[]> {
+    const byok = this.readyByokEngines();
     if (ObsidianPlatform.isMobile) {
-      return [this.plugin.settings.aiComment.defaultCli ?? 'claude'];
+      return byok.length > 0 ? byok : [this.plugin.settings.aiComment.defaultCli ?? 'claude'];
     }
     const providers: AIBannerProvider[] = await this.getAvailableClis();
     // On a Mac whose CLI executor reports Apple Intelligence ready.
     if (appleExecutorClientId(this.plugin.getCliExecutorSnapshot())) providers.push('apple');
+    // The user's own provider keys run right here, no CLI needed.
+    providers.push(...byok);
     return providers;
+  }
+
+  /** Enabled BYOK providers holding a key on this device, as engine ids. */
+  private readyByokEngines(): ByokStoredProviderId[] {
+    return getByokService()?.readyProviders().map(toStoredProviderId) ?? [];
   }
 
   // ============================================================================
@@ -10572,6 +10624,11 @@ export class PostCardRenderer extends Component {
       const appleClientId = appleExecutorClientId(this.plugin.getCliExecutorSnapshot());
       targetClientId = appleClientId && availability.capableClientIds.includes(appleClientId) ? appleClientId : undefined;
     }
+    const byokProvider = isByokStoredProviderId(provider);
+    if (byokProvider) {
+      // The key lives on this device only.
+      targetClientId = availability.capableClientIds.includes(clientId) ? clientId : undefined;
+    }
     if (availability.reason === 'unsupported_archive') {
       new Notice('There is little or no text in this post to analyze.');
       throw new Error('AI action unsupported archive');
@@ -10579,7 +10636,9 @@ export class PostCardRenderer extends Component {
     if (!availability.available || !targetClientId) {
       new Notice(provider === 'apple'
         ? 'Apple Intelligence is not ready on this Mac right now.'
-        : 'No capable Obsidian client is available for this AI action.');
+        : byokProvider
+          ? `${providerDisplayName(provider)} cannot run AI actions here right now. Check that AI comments are on and you are signed in.`
+          : 'No capable Obsidian client is available for this AI action.');
       throw new Error('No capable AI action client');
     }
 
@@ -10587,8 +10646,8 @@ export class PostCardRenderer extends Component {
       archiveId,
       actionType,
       targetClientId,
-      // On-device stays on-device: a "Cloud first" account must not reroute it.
-      ...(provider === 'apple' ? { executionProvider: 'local-executor' as const } : {}),
+      // On-device and own-key runs stay put: a "Cloud first" account must not reroute them.
+      ...(provider === 'apple' || byokProvider ? { executionProvider: 'local-executor' as const } : {}),
       provider,
       ...(customPrompt ? { customPrompt } : {}),
       outputLanguage: this.resolveTimelineAIActionLanguage(actionType, language),
@@ -10788,13 +10847,14 @@ export class PostCardRenderer extends Component {
    */
   private async handleAICommentGenerate(
     post: PostData,
-    cli: AICli,
+    cli: AICommentEngineId,
     type: AICommentType,
-    banner: AICommentBanner,
+    banner: AICommentBanner | null,
     rootElement: HTMLElement,
     customPrompt?: string,
     language?: AIOutputLanguage,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    web?: boolean,
   ): Promise<void> {
     const filePath = post.filePath;
     if (!filePath) {
@@ -10808,7 +10868,7 @@ export class PostCardRenderer extends Component {
     const updateProgress = (progress: AICommentProgress): void => {
       const entry = this.activeAIBannerRuns.get(post.id);
       if (entry && progress.status) entry.status = progress.status;
-      (this.aiCommentBanners.get(post.id) ?? banner).updateProgress(progress);
+      (this.aiCommentBanners.get(post.id) ?? banner)?.updateProgress(progress);
     };
 
     try {
@@ -10872,7 +10932,7 @@ export class PostCardRenderer extends Component {
       // Update banner progress
       updateProgress({
         percentage: 10,
-        status: `Starting ${cli} analysis...`,
+        status: `Starting ${providerDisplayName(cli)} analysis...`,
         cli,
         phase: 'preparing',
       });
@@ -10894,12 +10954,13 @@ export class PostCardRenderer extends Component {
         cli,
         type,
         customPrompt,
+        web,
         vaultPath,
         currentNotePath,
         targetLanguage: targetLang,
         outputLanguage: language || this.plugin.settings.aiComment.outputLanguage || 'auto',
         onProgress: updateProgress,
-        signal: signal ?? banner.getAbortSignal(),
+        signal: signal ?? banner?.getAbortSignal(),
       });
 
       // Mark as UI modification to prevent refresh
@@ -10936,30 +10997,8 @@ export class PostCardRenderer extends Component {
             fm.transcriptLanguages = languages;
           });
         } else {
-          // Standard AI comment save
-          let newContent = '';
-          await this.vault.process(file, (existingContent) => {
-            newContent = appendAIComment(existingContent, result.meta, result.content);
-            return newContent;
-          });
-
-          // Update frontmatter
-          const { comments, commentTexts } = parseAIComments(newContent);
-          await updateFrontmatterAIComments(this.app, file, comments);
-          await this.updateArchiveAICommentsSnapshot(post, file, comments, commentTexts);
-
-          // Update shared post if already shared
-          let shareUrl = post.shareUrl;
-          if (!shareUrl) {
-            const cache = this.app.metadataCache.getFileCache(file);
-            shareUrl = cache?.frontmatter?.shareUrl as string | undefined;
-          }
-          if (shareUrl) {
-            this.updateSharedPostAIComments(post, shareUrl, comments, commentTexts)
-              .catch(err => {
-                console.error('[PostCardRenderer] Failed to update shared post with AI comments:', err);
-              });
-          }
+          // Standard AI comment save: note, frontmatter, server archive, live share.
+          await this.aiCommentSaver.append(post, file, result.meta, result.content);
         }
       }
 
@@ -10979,8 +11018,15 @@ export class PostCardRenderer extends Component {
       }, 500);
 
     } catch (error) {
-      if (error instanceof Error && error.message === 'Cancelled') {
+      if (
+        (error instanceof Error && error.message === 'Cancelled') ||
+        (error instanceof AICommentError && error.code === 'CANCELLED')
+      ) {
         new Notice('AI comment generation cancelled');
+      } else if (error instanceof AICommentError && error.byokCode) {
+        // Provider failures carry a localized sentence; the raw message stays out of the UI.
+        console.warn('[PostCardRenderer] BYOK AI comment failed:', error.byokCode);
+        new Notice(error.userMessage, 8000);
       } else {
         console.error('[PostCardRenderer] AI comment generation failed:', error);
         new Notice(`Failed to generate AI comment: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -11134,7 +11180,7 @@ export class PostCardRenderer extends Component {
         // Update frontmatter
         const { comments, commentTexts } = parseAIComments(finalContent);
         await updateFrontmatterAIComments(this.app, file, comments);
-        await this.updateArchiveAICommentsSnapshot(post, file, comments, commentTexts);
+        await this.aiCommentSaver.syncArchive(post, file, comments, commentTexts);
 
         // Update shared post if already shared
         // Check both post object and frontmatter for shareUrl
@@ -11145,10 +11191,7 @@ export class PostCardRenderer extends Component {
           shareUrl = cache?.frontmatter?.shareUrl as string | undefined;
         }
         if (shareUrl) {
-          this.updateSharedPostAIComments(post, shareUrl, comments, commentTexts)
-            .catch(err => {
-              console.error('[PostCardRenderer] Failed to update shared post with AI comments:', err);
-            });
+          void this.aiCommentSaver.syncShare(post, shareUrl, comments, commentTexts);
         }
       }
 
@@ -11324,6 +11367,39 @@ export class PostCardRenderer extends Component {
   }
 
   /**
+   * Saves an AI comment made outside the banner (chat, research) through the
+   * standard save path: the note's `## AI Comments`, frontmatter, server
+   * snapshot, live share. Refreshes the card when it is on screen.
+   */
+  async saveExternalAIComment(
+    post: PostData,
+    meta: AICommentMeta,
+    content: string,
+    rootElement?: HTMLElement,
+    replaceId?: string,
+  ): Promise<void> {
+    const file = post.filePath ? this.vault.getAbstractFileByPath(post.filePath) : null;
+    if (!(file instanceof TFile)) throw new Error('This post has no note to save to.');
+    // Our own write: the card refreshes below instead of the whole timeline.
+    this.onUIModifyCallback?.(file.path);
+    await this.aiCommentSaver.append(post, file, meta, content, replaceId);
+    const root = rootElement ?? activeDocument.querySelector<HTMLElement>(`[data-post-id="${CSS.escape(post.id)}"]`);
+    if (root) window.setTimeout(() => void this.refreshPostCard(post, root), 500);
+  }
+
+  /** The note a chat or research modal opened from this card saves to; null without one. */
+  aiCommentTarget(post: PostData, rootElement: HTMLElement): AICommentTarget | null {
+    const file = post.filePath ? this.vault.getAbstractFileByPath(post.filePath) : null;
+    if (!(file instanceof TFile)) return null;
+    return {
+      post,
+      budget: (type, replaceId) => this.aiCommentSaver.budget(file, type, replaceId),
+      savedChat: () => this.aiCommentSaver.savedChat(file),
+      save: (meta, content, replaceId) => this.saveExternalAIComment(post, meta, content, rootElement, replaceId),
+    };
+  }
+
+  /**
    * Handle AI comment deletion
    */
   private async handleAICommentDelete(post: PostData, commentId: string, rootElement: HTMLElement): Promise<void> {
@@ -11347,7 +11423,7 @@ export class PostCardRenderer extends Component {
       // Update frontmatter
       const { comments, commentTexts } = parseAIComments(newContent);
       await updateFrontmatterAIComments(this.app, file, comments);
-      await this.updateArchiveAICommentsSnapshot(post, file, comments, commentTexts);
+      await this.aiCommentSaver.syncArchive(post, file, comments, commentTexts);
 
       // Update shared post if already shared
       // Check both post object and frontmatter for shareUrl
@@ -11362,10 +11438,7 @@ export class PostCardRenderer extends Component {
         // Delay aiComments update to ensure it executes AFTER other concurrent share updates
         // This prevents server-side race conditions where other updates overwrite aiComments
         window.setTimeout(() => {
-          void this.updateSharedPostAIComments(post, shareUrl, comments, commentTexts)
-            .catch(err => {
-              console.error('[PostCardRenderer] Failed to update shared post after AI comment deletion:', err);
-            });
+          void this.aiCommentSaver.syncShare(post, shareUrl, comments, commentTexts);
         }, 1500); // 1.5 second delay to let other updates complete
       }
 
@@ -11460,104 +11533,6 @@ export class PostCardRenderer extends Component {
     }
   }
 
-  /**
-   * Update shared post with new AI comments
-   * Called after AI comment is generated for an already-shared post
-   */
-  private async updateSharedPostAIComments(
-    post: PostData,
-    shareUrl: string,
-    comments: AICommentMeta[],
-    commentTexts: Map<string, string>
-  ): Promise<void> {
-    try {
-      // Extract shareId from shareUrl
-      // URL formats: https://social-archive.org/{shareId} or https://social-archive.org/{username}/{shareId}
-      const urlParts = shareUrl.split('/').filter(Boolean);
-      const shareId = urlParts[urlParts.length - 1];
-
-      if (!shareId) {
-        console.warn('[PostCardRenderer] Could not extract shareId from shareUrl:', shareUrl);
-        return;
-      }
-
-      // Get worker URL
-      const workerUrl = this.getWorkerUrl();
-      const username = this.plugin.settings.username;
-
-      // Prepare aiComments data in the same format as share creation
-      const aiComments = this.buildAICommentPayload(comments, commentTexts);
-
-      // Create ShareAPIClient and update share
-      const shareClient = new ShareAPIClient({
-        baseURL: workerUrl,
-        apiKey: this.plugin.settings.authToken,
-        vault: this.vault,
-        debug: false
-      });
-
-      // Prepare updated postData with aiComments
-      const postData = this.serializePostForShare(post, { stripMedia: true });
-      postData.aiComments = aiComments;
-
-      const updateRequest = {
-        postData,
-        options: {
-          shareId,
-          username
-        }
-      };
-
-      // Update share with new aiComments
-      await shareClient.updateShare(shareId, updateRequest);
-
-    } catch (error) {
-      console.error('[PostCardRenderer] Failed to update shared post AI comments:', error);
-      // Don't throw - this is a background operation, don't block the main flow
-    }
-  }
-
-  private async updateArchiveAICommentsSnapshot(
-    post: PostData,
-    file: TFile,
-    comments: AICommentMeta[],
-    commentTexts: Map<string, string>
-  ): Promise<void> {
-    const archiveId = this.resolveSourceArchiveId(post, file)
-      ?? await this.resolveSourceArchiveIdByOriginalUrl(post, file);
-    if (!archiveId) return;
-
-    try {
-      await this.plugin.workersApiClient.updateArchiveActions(archiveId, {
-        aiComments: this.buildAICommentPayload(comments, commentTexts),
-      });
-    } catch (error) {
-      console.error('[PostCardRenderer] Failed to sync AI comments to archive:', error);
-    }
-  }
-
-  private buildAICommentPayload(
-    comments: AICommentMeta[],
-    commentTexts: Map<string, string>
-  ): AICommentPayload[] {
-    return comments.map(meta => ({
-      meta: {
-        id: meta.id,
-        cli: meta.cli,
-        ...(meta.model ? { model: meta.model } : {}),
-        ...(meta.executedModel ? { executedModel: meta.executedModel } : {}),
-        type: meta.type,
-        generatedAt: meta.generatedAt,
-        ...(typeof meta.processingTime === 'number' ? { processingTime: meta.processingTime } : {}),
-        ...(meta.contentHash ? { contentHash: meta.contentHash } : {}),
-        ...(meta.customPrompt ? { customPrompt: meta.customPrompt } : {}),
-        ...(meta.sourceLanguage ? { sourceLanguage: meta.sourceLanguage } : {}),
-        ...(meta.targetLanguage ? { targetLanguage: meta.targetLanguage } : {}),
-      },
-      content: commentTexts.get(meta.id) || '',
-    }));
-  }
-
   private resolveSourceArchiveId(post: PostData, file: TFile): string | undefined {
     if (typeof post.sourceArchiveId === 'string' && post.sourceArchiveId.length > 0) {
       return post.sourceArchiveId;
@@ -11569,50 +11544,6 @@ export class PostCardRenderer extends Component {
     return typeof sourceArchiveId === 'string' && sourceArchiveId.length > 0
       ? sourceArchiveId
       : undefined;
-  }
-
-  private async resolveSourceArchiveIdByOriginalUrl(post: PostData, file: TFile): Promise<string | undefined> {
-    const originalUrl = this.resolveOriginalUrl(post, file);
-    if (!originalUrl) return undefined;
-
-    try {
-      const response = await this.plugin.workersApiClient.getUserArchives({ originalUrl, limit: 2 });
-      if (response.archives.length !== 1) return undefined;
-
-      const archive = response.archives[0];
-      if (!archive) return undefined;
-
-      const archiveId = archive.id;
-      await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-        if (!fm.sourceArchiveId) {
-          fm.sourceArchiveId = archiveId;
-        }
-      });
-      return archiveId;
-    } catch (error) {
-      console.warn('[PostCardRenderer] Failed to resolve archive by original URL:', error);
-      return undefined;
-    }
-  }
-
-  private resolveOriginalUrl(post: PostData, file: TFile): string | undefined {
-    if (typeof post.originalUrl === 'string' && post.originalUrl.length > 0) {
-      return post.originalUrl;
-    }
-    if (typeof post.url === 'string' && post.url.length > 0) {
-      return post.url;
-    }
-
-    const cache = this.app.metadataCache.getFileCache(file);
-    const rawFrontmatter: unknown = cache?.frontmatter;
-    const frontmatter = isRecord(rawFrontmatter) ? rawFrontmatter : undefined;
-    for (const key of ['originalUrl', 'url']) {
-      const value = frontmatter?.[key];
-      if (typeof value === 'string' && value.length > 0) {
-        return value;
-      }
-    }
-    return undefined;
   }
 
   /**

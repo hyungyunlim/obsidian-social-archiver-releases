@@ -25,27 +25,22 @@ import type {
   AICommentMeta,
   AICommentType,
   MultiAIGenerationResult,
-  AIOutputLanguage,
 } from '../types/ai-comment';
 import type { AICli } from '../utils/ai-cli';
 import nodeRequire from '../utils/nodeRequire';
-import {
-  AICommentError,
-  DEFAULT_PROMPTS,
-  generateCommentId,
-  createContentHash,
-  getLanguageInstruction,
-  getFactCheckFormatSection,
-  getGlossaryFormatSection,
-  getCritiqueFormatSection,
-  getKeyPointsFormatSection,
-  getSentimentFormatSection,
-  getSummaryFormatSection,
-  getConnectionsFormatSection,
-  getTimestampInstruction,
-} from '../types/ai-comment';
+import { AICommentError, generateCommentId, createContentHash } from '../types/ai-comment';
 import { AICliDetector } from '../utils/ai-cli';
 import { ProcessManager } from './ProcessManager';
+import { buildAICommentPrompt } from './ai-comment/prompt-builder';
+import { generateByokComment } from './byok/ByokCommentGenerator';
+import { getByokService } from './byok/ByokService';
+import { formatResearchReport, isByokStoredProviderId, type ByokStoredProviderId } from '../vendor/byok-ai-core';
+import { t } from '../i18n';
+
+export { buildAICommentPrompt } from './ai-comment/prompt-builder';
+
+/** Options for a run on a local CLI (the BYOK branch leaves before these). */
+type CliCommentOptions = AICommentOptions & { cli: AICli };
 
 // ============================================================================
 // Types for Claude Stream-JSON
@@ -99,6 +94,8 @@ export class AICommentService {
   private lastReportedPercentage = 0;
   /** Resolved model id reported by the CLI stream for the current run. */
   private lastExecutedModel: string | null = null;
+  /** Aborts the current BYOK request (cancel()). */
+  private byokAbort: AbortController | null = null;
   private static shellPath: string | null = null;
   private static shellPathPromise: Promise<string | null> | null = null;
 
@@ -228,6 +225,39 @@ export class AICommentService {
     this.lastReportedPercentage = 0;
     this.lastExecutedModel = null;
 
+    const engine = options.cli;
+    if (isByokStoredProviderId(engine)) {
+      return this.generateWithByok(content, { ...options, cli: engine });
+    }
+    return this.generateWithCli(content, { ...options, cli: engine });
+  }
+
+  /** The user's own provider key: no process, works on mobile too. */
+  private async generateWithByok(
+    content: string,
+    options: AICommentOptions & { cli: ByokStoredProviderId },
+  ): Promise<AICommentResult> {
+    this.validateContent(content);
+    const byok = getByokService();
+    if (!byok?.isSupported()) {
+      throw new AICommentError('CLI_NOT_INSTALLED', 'BYOK is not available', {
+        userMessage: t('byok.unsupported'),
+      });
+    }
+    const abort = new AbortController();
+    this.byokAbort = abort;
+    try {
+      const result = await generateByokComment(byok, content, options, {
+        signal: anySignal(options.signal, abort.signal),
+        timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT,
+      });
+      return { ...result, content: this.cleanCommentContent(result.content, options) };
+    } finally {
+      if (this.byokAbort === abort) this.byokAbort = null;
+    }
+  }
+
+  private async generateWithCli(content: string, options: CliCommentOptions): Promise<AICommentResult> {
     const startTime = Date.now();
 
     // 1. Validate content
@@ -252,12 +282,13 @@ export class AICommentService {
       phase: 'preparing',
     });
 
-    // 5. Prepare content file (for large content)
-    const tempFile = await this.prepareContentFile(content);
+    // 5. Prepare content file (for large content). Research inlines a
+    //    budgeted excerpt of the article instead.
+    const tempFile = options.type === 'research' ? null : await this.prepareContentFile(content);
 
     try {
       // 6. Build prompt and command
-      const prompt = this.buildPrompt(content, options, tempFile);
+      const prompt = buildAICommentPrompt(content, options, tempFile);
       const { command, args, stdinPrompt } = this.buildCommand(options.cli, cliResult.path, prompt, options);
 
       // 7. Execute command
@@ -289,8 +320,10 @@ export class AICommentService {
         phase: 'complete',
       });
 
+      const cleaned = this.cleanCommentContent(output, options);
       return {
-        content: this.cleanCommentContent(output, options),
+        // Stored reports never carry #/##/### headings (the note's comment parser splits on ###).
+        content: options.type === 'research' ? formatResearchReport({ text: cleaned }) : cleaned,
         meta,
         rawResponse: output,
       };
@@ -305,6 +338,7 @@ export class AICommentService {
    */
   cancel(): void {
     this.isCancelled = true;
+    this.byokAbort?.abort();
     if (this.currentProcess) {
       this.currentProcess.kill('SIGTERM');
       this.currentProcess = null;
@@ -315,7 +349,7 @@ export class AICommentService {
    * Check if generation is in progress
    */
   isRunning(): boolean {
-    return this.currentProcess !== null;
+    return this.currentProcess !== null || this.byokAbort !== null;
   }
 
   // ============================================================================
@@ -412,140 +446,6 @@ export class AICommentService {
   }
 
   // ============================================================================
-  // Private Methods - Prompt Building
-  // ============================================================================
-
-  /**
-   * Build the prompt for the AI CLI
-   */
-  private buildPrompt(content: string, options: AICommentOptions, contentFile?: string | null): string {
-    let template: string;
-
-    if (options.type === 'custom' && options.customPrompt) {
-      // For custom prompts, wrap with content if {{content}} placeholder is not present
-      // This ensures the AI always has the content to analyze
-      if (options.customPrompt.includes('{{content}}')) {
-        template = options.customPrompt;
-      } else {
-        // Append content automatically if user didn't include placeholder
-        template = `${options.customPrompt}
-
-Content:
-{{content}}`;
-      }
-    } else if (options.type === 'custom') {
-      throw new AICommentError('INVALID_PROMPT', 'Custom prompt required for custom type');
-    } else {
-      template = DEFAULT_PROMPTS[options.type];
-    }
-
-    const contentReference = contentFile
-      ? `Read the full content from this local file: ${contentFile}`
-      : content;
-
-    // Replace placeholders
-    let prompt = template.replace(/\{\{content\}\}/g, contentReference);
-
-    if ((options.type === 'translation' || options.type === 'translate-transcript') && options.targetLanguage) {
-      prompt = prompt.replace(/\{\{targetLanguage\}\}/g, options.targetLanguage);
-    }
-
-    // Get output language setting
-    const outputLanguage: AIOutputLanguage = options.outputLanguage || 'auto';
-
-    // Handle language instruction (skip for translation/translate-transcript - they have own language handling)
-    if (options.type !== 'translation' && options.type !== 'translate-transcript') {
-      const languageInstruction = getLanguageInstruction(outputLanguage);
-      prompt = prompt.replace(/\{\{languageInstruction\}\}/g, languageInstruction);
-    } else {
-      // Remove the placeholder for translation types
-      prompt = prompt.replace(/\{\{languageInstruction\}\}/g, '');
-    }
-
-    // Handle localized format sections based on output language
-    // Fact check format section
-    if (options.type === 'factcheck') {
-      const factCheckFormat = getFactCheckFormatSection(outputLanguage);
-      prompt = prompt.replace(/\{\{factCheckFormat\}\}/g, factCheckFormat);
-    } else {
-      prompt = prompt.replace(/\{\{factCheckFormat\}\}/g, '');
-    }
-
-    // Glossary format section
-    if (options.type === 'glossary') {
-      const glossaryFormat = getGlossaryFormatSection(outputLanguage);
-      prompt = prompt.replace(/\{\{glossaryFormat\}\}/g, glossaryFormat);
-    } else {
-      prompt = prompt.replace(/\{\{glossaryFormat\}\}/g, '');
-    }
-
-    // Critique format section
-    if (options.type === 'critique') {
-      const critiqueFormat = getCritiqueFormatSection(outputLanguage);
-      prompt = prompt.replace(/\{\{critiqueFormat\}\}/g, critiqueFormat);
-    } else {
-      prompt = prompt.replace(/\{\{critiqueFormat\}\}/g, '');
-    }
-
-    // Key points format section
-    if (options.type === 'keypoints') {
-      const keyPointsFormat = getKeyPointsFormatSection(outputLanguage);
-      prompt = prompt.replace(/\{\{keyPointsFormat\}\}/g, keyPointsFormat);
-    } else {
-      prompt = prompt.replace(/\{\{keyPointsFormat\}\}/g, '');
-    }
-
-    // Sentiment format section
-    if (options.type === 'sentiment') {
-      const sentimentFormat = getSentimentFormatSection(outputLanguage);
-      prompt = prompt.replace(/\{\{sentimentFormat\}\}/g, sentimentFormat);
-    } else {
-      prompt = prompt.replace(/\{\{sentimentFormat\}\}/g, '');
-    }
-
-    // Summary format section (with dynamic length based on content)
-    if (options.type === 'summary') {
-      const summaryFormat = getSummaryFormatSection(outputLanguage, content.length);
-      prompt = prompt.replace(/\{\{summaryFormat\}\}/g, summaryFormat);
-    } else {
-      prompt = prompt.replace(/\{\{summaryFormat\}\}/g, '');
-    }
-
-    // Connections format section
-    if (options.type === 'connections') {
-      const connectionsFormat = getConnectionsFormatSection(outputLanguage);
-      prompt = prompt.replace(/\{\{connectionsFormat\}\}/g, connectionsFormat);
-    } else {
-      prompt = prompt.replace(/\{\{connectionsFormat\}\}/g, '');
-    }
-
-    // Timestamp instruction (for podcast/video transcripts with timestamps)
-    // Only added if content contains timestamps like [12:34] or [1:23:45]
-    const timestampInstruction = getTimestampInstruction(content);
-    prompt = prompt.replace(/\{\{timestampInstruction\}\}/g, timestampInstruction);
-
-    // Handle vault path for connections type
-    if (options.type === 'connections' && options.vaultPath) {
-      prompt = prompt.replace(/\{\{vaultPath\}\}/g, options.vaultPath);
-    } else {
-      prompt = prompt.replace(/\{\{vaultPath\}\}/g, '');
-    }
-
-    // Handle current note path for connections type (to exclude self-reference)
-    if (options.type === 'connections' && options.currentNotePath) {
-      const path = nodeRequire('path') as typeof import('path');
-      const noteName = path.basename(options.currentNotePath, '.md');
-      prompt = prompt.replace(/\{\{currentNote\}\}/g, options.currentNotePath);
-      prompt = prompt.replace(/\{\{currentNoteName\}\}/g, noteName);
-    } else {
-      prompt = prompt.replace(/\{\{currentNote\}\}/g, 'this note');
-      prompt = prompt.replace(/\{\{currentNoteName\}\}/g, '');
-    }
-
-    return prompt;
-  }
-
-  // ============================================================================
   // Private Methods - Content File Management
   // ============================================================================
 
@@ -601,7 +501,7 @@ Content:
     cli: AICli,
     cliPath: string,
     prompt: string,
-    options: AICommentOptions,
+    options: CliCommentOptions,
   ): { command: string; args: string[]; stdinPrompt?: string } {
     const finalPrompt = prompt;
 
@@ -648,7 +548,8 @@ Content:
     let maxTurns: string;
     if (commentType === 'connections') {
       maxTurns = '20';
-    } else if (commentType === 'glossary') {
+    } else if (commentType === 'glossary' || commentType === 'research') {
+      // research: several web searches and page reads before the report
       maxTurns = '20';
     } else if (commentType === 'factcheck') {
       maxTurns = '10';
@@ -748,7 +649,9 @@ Content:
   ): { command: string; args: string[]; stdinPrompt?: string } {
     // factcheck and glossary need network access for curl-based web searches
     // danger-full-access allows shell commands including network requests
-    const sandboxMode = commentType === 'factcheck' || commentType === 'glossary' ? 'danger-full-access' : 'read-only';
+    const sandboxMode = commentType === 'factcheck' || commentType === 'glossary' || commentType === 'research'
+      ? 'danger-full-access'
+      : 'read-only';
     const selectedModel = this.normalizeModel(model);
     const modelArgs = selectedModel ? ['-m', selectedModel] : [];
 
@@ -799,7 +702,7 @@ Content:
   private async executeCommand(
     command: string,
     args: string[],
-    options: AICommentOptions,
+    options: CliCommentOptions,
     timeout: number,
     stdinPrompt?: string,
   ): Promise<string> {
@@ -1221,7 +1124,7 @@ Content:
    * Parse Claude stream-json event and extract progress/result/text
    * Returns { result, text } if found, empty object otherwise
    */
-  private parseStreamJsonEvent(jsonLine: string, options: AICommentOptions): { result?: string; text?: string } {
+  private parseStreamJsonEvent(jsonLine: string, options: CliCommentOptions): { result?: string; text?: string } {
     try {
       const event = JSON.parse(jsonLine) as ClaudeStreamEvent;
 
@@ -1291,7 +1194,7 @@ Content:
    * Event types: init, message, tool_use, tool_result, error, result
    * Returns { text, eventType } - eventType used for thinking timer control
    */
-  private parseGeminiStreamJsonEvent(jsonLine: string, options: AICommentOptions): { text?: string; eventType?: string } {
+  private parseGeminiStreamJsonEvent(jsonLine: string, options: CliCommentOptions): { text?: string; eventType?: string } {
     try {
       const event = JSON.parse(jsonLine) as Record<string, unknown>;
 
@@ -1415,7 +1318,7 @@ Content:
    * item.completed contains: { item: { type: "agent_message", text: "..." } }
    * Returns { text } if message content found
    */
-  private parseCodexJsonEvent(jsonLine: string, options: AICommentOptions): { text?: string; error?: string } {
+  private parseCodexJsonEvent(jsonLine: string, options: CliCommentOptions): { text?: string; error?: string } {
     try {
       const event = JSON.parse(jsonLine) as Record<string, unknown>;
 
@@ -1717,7 +1620,7 @@ Content:
    * Parse Codex stderr progress output
    * Codex exec mode outputs progress info to stderr
    */
-  private parseCodexStderrProgress(output: string, options: AICommentOptions): void {
+  private parseCodexStderrProgress(output: string, options: CliCommentOptions): void {
     if (!options.onProgress) return;
 
     const lowerOutput = output.toLowerCase();
@@ -1769,7 +1672,7 @@ Content:
   /**
    * Parse progress from CLI output
    */
-  private parseProgress(output: string, options: AICommentOptions): void {
+  private parseProgress(output: string, options: CliCommentOptions): void {
     if (!options.onProgress) return;
 
     // Helper to report progress (allow same percentage with different status)
@@ -2023,4 +1926,18 @@ Content:
     // Generic error
     return new AICommentError('UNKNOWN', `${cli} failed with exit code ${exitCode}: ${stderr.slice(0, 200)}`, { cli });
   }
+}
+
+/** One signal that aborts with any of the given ones (AbortSignal.any is too new for older mobile WebViews). */
+function anySignal(...signals: Array<AbortSignal | undefined>): AbortSignal {
+  const controller = new AbortController();
+  for (const signal of signals) {
+    if (!signal) continue;
+    if (signal.aborted) {
+      controller.abort();
+      break;
+    }
+    signal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
+  return controller.signal;
 }

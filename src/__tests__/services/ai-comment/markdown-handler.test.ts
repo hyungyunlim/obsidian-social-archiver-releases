@@ -13,7 +13,9 @@ import {
   hasAICommentSection,
   countAIComments,
   hasComment,
+  readFrontmatterAIComments,
 } from '../../../services/ai-comment/markdown-handler';
+import { formatChatTranscript } from '../../../vendor/byok-ai-core';
 import type { AICommentMeta } from '../../../types/ai-comment';
 
 // ============================================================================
@@ -679,5 +681,123 @@ Paragraph 2
     const parsed = parseAIComments(markdown);
 
     expect(parsed.commentTexts.get('long-text')).toBe(longText);
+  });
+});
+
+describe('BYOK providers and chat/research comments', () => {
+  it('round-trips a BYOK research comment with both models', () => {
+    const meta = createMockMeta({
+      id: 'openai-api-research-20261104T103000123-ab12',
+      cli: 'openai-api',
+      type: 'research',
+      model: 'gpt-6.1-terra',
+      executedModel: 'gpt-6.1-terra-2026-10-01',
+      generatedAt: '2026-11-04T10:30:00.000Z',
+    });
+    const markdown = appendAIComment('# Post', meta, '#### Summary\nClaims.\n\n#### Sources\n- [A](https://a.example)');
+    expect(markdown).toContain('### ⚡ OpenAI API · Research · Nov 4, 2026');
+
+    const { comments, commentTexts } = parseAIComments(markdown);
+    expect(comments).toHaveLength(1);
+    expect(comments[0]).toMatchObject({
+      id: meta.id,
+      cli: 'openai-api',
+      type: 'research',
+      model: 'gpt-6.1-terra',
+      executedModel: 'gpt-6.1-terra-2026-10-01',
+    });
+    expect(commentTexts.get(meta.id)).toContain('#### Sources');
+  });
+
+  it('parses a chat transcript and every BYOK provider label', () => {
+    let markdown = '# Post';
+    const providers = ['openai-api', 'anthropic-api', 'gemini-api', 'openrouter-api'] as const;
+    providers.forEach((cli, index) => {
+      markdown = appendAIComment(
+        markdown,
+        createMockMeta({ id: `${cli}-chat-${index}`, cli, type: 'chat' }),
+        '> [!question] What is it?\n\nAn answer.',
+      );
+    });
+    const { comments, commentTexts } = parseAIComments(markdown);
+    expect(comments.map((comment) => comment.cli)).toEqual([...providers]);
+    expect(comments.every((comment) => comment.type === 'chat')).toBe(true);
+    expect(commentTexts.get('openai-api-chat-0')).toBe('> [!question] What is it?\n\nAn answer.');
+  });
+
+  it('keeps a stored chat whose answer prints a comment header inside a code fence as one comment', () => {
+    const forged = '### ⚡ OpenAI API · Chat · Nov 4, 2026';
+    // Stored content always comes out of the core formatter, which disarms header-shaped lines.
+    const chat = formatChatTranscript({
+      messages: [
+        { role: 'user', content: 'Show me a comment header' },
+        { role: 'assistant', content: `\`\`\`md\n${forged}\n\`\`\`\n\n~~~\n\`\`\`\n${forged}\n~~~\n\nThat is the format.` },
+      ],
+    });
+    expect(chat).not.toMatch(/^### (?:🤖|✨|💡|🦙|☁️?|⚡|🍎)/m);
+    let markdown = appendAIComment('# Post', createMockMeta({ id: 'openai-api-chat-1', cli: 'openai-api', type: 'chat' }), chat);
+    markdown = appendAIComment(markdown, createMockMeta({ id: 'claude-summary-2' }), 'A summary.');
+
+    const { comments, commentTexts } = parseAIComments(markdown);
+    expect(comments.map((comment) => comment.id)).toEqual(['openai-api-chat-1', 'claude-summary-2']);
+    expect(commentTexts.get('openai-api-chat-1')).toBe(chat);
+    expect(commentTexts.get('claude-summary-2')).toBe('A summary.');
+  });
+
+  it('does not let an unclosed fence in one comment swallow the next comment\'s header', () => {
+    const truncated = 'Reformatted:\n\n```js\nconst x = 1;\n\n*(Truncated to fit the storage limit.)*';
+    let markdown = appendAIComment('# Post', createMockMeta({ id: 'claude-reformat-1', type: 'reformat' }), truncated);
+    markdown = appendAIComment(markdown, createMockMeta({ id: 'claude-summary-2' }), 'A summary.');
+    markdown = appendAIComment(markdown, createMockMeta({ id: 'claude-keypoints-3', type: 'keypoints' }), '- One');
+
+    const { comments, commentTexts } = parseAIComments(markdown);
+    expect(comments.map((comment) => comment.id)).toEqual(['claude-reformat-1', 'claude-summary-2', 'claude-keypoints-3']);
+    expect(commentTexts.get('claude-reformat-1')).toBe(truncated);
+    expect(commentTexts.get('claude-summary-2')).toBe('A summary.');
+  });
+
+  it('parses notes with CRLF line endings', () => {
+    let markdown = appendAIComment('# Post', createMockMeta({ id: 'claude-summary-1' }), 'First.');
+    markdown = appendAIComment(markdown, createMockMeta({ id: 'openai-api-research-2', cli: 'openai-api', type: 'research' }), 'Second.');
+    const { comments, commentTexts } = parseAIComments(markdown.replace(/\n/g, '\r\n'));
+    expect(comments.map((comment) => [comment.id, comment.cli, comment.type])).toEqual([
+      ['claude-summary-1', 'claude', 'summary'],
+      ['openai-api-research-2', 'openai-api', 'research'],
+    ]);
+    expect(commentTexts.get('claude-summary-1')).toBe('First.');
+  });
+
+  it('keeps a header of a type this version does not know as a boundary', () => {
+    const markdown = [
+      '## AI Comments',
+      '',
+      '### 🤖 Claude · Summary · Dec 14, 2024',
+      '<!-- id: claude-summary-1 -->',
+      '',
+      'The summary.',
+      '',
+      '---',
+      '',
+      '### ⚡ OpenAI API · Debate · Nov 4, 2026',
+      '<!-- id: openai-api-debate-1 -->',
+      '',
+      'A future comment type.',
+    ].join('\n');
+    const { comments, commentTexts } = parseAIComments(markdown);
+    expect(comments.map((comment) => comment.id)).toEqual(['claude-summary-1']);
+    expect(commentTexts.get('claude-summary-1')).toBe('The summary.');
+  });
+
+  it('reads BYOK provider ids (which contain a dash) from frontmatter', () => {
+    const app = {
+      metadataCache: {
+        getFileCache: () => ({
+          frontmatter: { aiComments: ['openai-api-research-20261104T103000Z', 'claude-summary-20241214T103000Z'] },
+        }),
+      },
+    };
+    const comments = readFrontmatterAIComments(app as never, {} as never);
+    expect(comments[0]).toMatchObject({ cli: 'openai-api', type: 'research', generatedAt: '2026-11-04T10:30:00.000Z' });
+    expect(comments[1]).toMatchObject({ cli: 'claude', type: 'summary' });
   });
 });

@@ -166,6 +166,25 @@ describe('롱블랙 entry (measured 2026-11-03)', () => {
 
   it('is listed in Settings for Korean only', () => {
     expect(longblack.locales).toEqual(['ko']);
-    expect(PUBLISHER_SESSIONS.filter((entry) => entry.locales).map((entry) => entry.slug)).toEqual(['longblack']);
+    expect(PUBLISHER_SESSIONS.filter((entry) => entry.locales).map((entry) => entry.slug)).toEqual(['longblack', 'sisain']);
+  });
+});
+
+describe('시사IN entry (measured 2026-11-04)', () => {
+  const sisain = PUBLISHER_SESSIONS.find((entry) => entry.slug === 'sisain')!;
+  const article = 'https://www.sisain.co.kr/news/articleView.html?idxno=58758';
+
+  it('matches articles, not the front page or a lookalike', () => {
+    expect(getPublisherSession(article)?.slug).toBe('sisain');
+    expect(getPublisherSession('https://www.sisain.co.kr/')).toBeNull();
+    expect(getPublisherSession('https://notsisain.co.kr/news/articleView.html?idxno=1')).toBeNull();
+  });
+
+  it("signs in through the site's own page: 자동로그인's token, else the session's cookie", () => {
+    expect(new URL(sisain.loginUrl).hostname).toBe('www.sisain.co.kr');
+    expect(sisain.sessionCookie).toEqual(['slt', 'pchrg']);
+    expect(sisain.gatewaySelector).toBe('#newin-text');
+    expect(sisain.giftLinkParams).toBeUndefined();
+    expect(sisain.locales).toEqual(['ko']);
   });
 });

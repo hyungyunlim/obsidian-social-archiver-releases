@@ -1,0 +1,526 @@
+/*
+ * "Chat about this post" and "Research this post" modals (own API key or
+ * Cloud AI). Touch targets reach 44px on coarse pointers (Obsidian mobile).
+ */
+
+.sa-ai-chat-modal,
+.sa-ai-research-modal {
+  width: min(680px, 92vw);
+}
+
+.sa-ai-chat-modal .modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-block-size: min(78vh, 760px);
+  overflow: hidden;
+}
+
+.sa-ai-chat-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sa-ai-chat-engine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.sa-ai-chat-note,
+.sa-ai-chat-web-note,
+.sa-ai-research-note {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.sa-ai-chat-list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  min-block-size: 160px;
+  padding: 4px 2px;
+  overflow-y: auto;
+}
+
+.sa-ai-chat-empty {
+  margin: auto 0;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  text-align: center;
+}
+
+.sa-ai-chat-message {
+  max-width: 92%;
+  padding: 8px 12px;
+  border-radius: var(--radius-m);
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.sa-ai-chat-message-user {
+  align-self: flex-end;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  white-space: pre-wrap;
+}
+
+.sa-ai-chat-message-ai {
+  align-self: flex-start;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.sa-ai-chat-message-ai.is-pending {
+  color: var(--text-muted);
+  white-space: pre-wrap;
+}
+
+.sa-ai-chat-message-ai > :first-child {
+  margin-top: 0;
+}
+
+.sa-ai-chat-message-ai > :last-child {
+  margin-bottom: 0;
+}
+
+.sa-ai-chat-error {
+  color: var(--text-error);
+  font-size: var(--font-ui-small);
+}
+
+.sa-ai-chat-error.is-hidden,
+.sa-ai-chat-empty.is-hidden,
+.sa-ai-chat-footer.is-hidden,
+.sa-ai-chat-web-note.is-hidden,
+.sa-ai-chat-composer .sa-ai-chat-web.is-hidden,
+.sa-ai-research-status.is-hidden {
+  display: none;
+}
+
+/*
+ * The composer: one box holding the question and, under it, the web search
+ * chip (own key) and send. The box, not the textarea, wears Obsidian's input
+ * border and focus colour; the ring is drawn inside, since the modal's
+ * content box clips anything outside it.
+ */
+.sa-ai-chat-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border: var(--input-border-width, 1px) solid var(--background-modifier-border);
+  border-radius: var(--radius-l);
+  background: var(--background-modifier-form-field);
+}
+
+@media (hover: hover) {
+  .sa-ai-chat-composer:hover {
+    border-color: var(--background-modifier-border-hover);
+  }
+}
+
+.sa-ai-chat-composer:focus-within {
+  border-color: var(--background-modifier-border-focus);
+  box-shadow: inset 0 0 0 1px var(--background-modifier-border-focus);
+}
+
+/* Grows from one line to about six, then scrolls. */
+.sa-ai-chat-composer .sa-ai-chat-input {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: calc(6lh + 12px);
+  padding: 6px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  line-height: var(--line-height-normal);
+  resize: none;
+  field-sizing: content;
+}
+
+.sa-ai-chat-composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/*
+ * The web search chip: muted while off, accent-tinted while on. Chip and send
+ * keep `corner-shape: round`, as Obsidian's pills do (its buttons are squircles).
+ */
+.sa-ai-chat-composer .sa-ai-chat-web {
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px 0 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  corner-shape: round;
+  background-color: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.sa-ai-chat-web-icon {
+  display: inline-flex;
+  --icon-size: var(--icon-xs);
+  --icon-stroke: var(--icon-xs-stroke-width);
+}
+
+@media (hover: hover) {
+  .sa-ai-chat-composer .sa-ai-chat-web:not(.is-active):not(:disabled):hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+  }
+}
+
+.sa-ai-chat-composer .sa-ai-chat-web.is-active {
+  border-color: color-mix(in srgb, var(--interactive-accent) 45%, transparent);
+  background-color: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+  color: var(--text-accent);
+}
+
+.sa-ai-chat-composer .sa-ai-chat-web:disabled {
+  opacity: 0.5;
+}
+
+/* Obsidian's keyboard focus ring, which the flat chip's `box-shadow: none` would hide. */
+.sa-ai-chat-composer .sa-ai-chat-web:focus-visible {
+  box-shadow: 0 0 0 3px var(--background-modifier-border-focus);
+}
+
+/* Send, or stop while an answer comes in: small and round, bottom right. */
+.sa-ai-chat-composer .sa-ai-chat-send {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  margin-inline-start: auto;
+  padding: 0;
+  border-radius: 50%;
+  corner-shape: round;
+  --icon-size: var(--icon-s);
+  --icon-stroke: var(--icon-s-stroke-width);
+}
+
+.sa-ai-chat-composer .sa-ai-chat-send:disabled {
+  background-color: var(--background-modifier-border);
+  box-shadow: none;
+  color: var(--text-faint);
+  opacity: 1;
+}
+
+.sa-ai-chat-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.sa-ai-chat-no-engine {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  color: var(--text-muted);
+}
+
+.sa-ai-research-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sa-ai-research-intro {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.sa-ai-research-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.sa-ai-research-depth {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.sa-ai-research-depth legend {
+  margin-bottom: 6px;
+  padding: 0;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.sa-ai-research-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.sa-ai-research-focus {
+  min-height: 60px;
+  resize: vertical;
+}
+
+.sa-ai-research-status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+
+.sa-ai-research-status-line {
+  font-weight: var(--font-semibold);
+}
+
+.sa-ai-research-status-detail,
+.sa-ai-research-elapsed {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.sa-notice-action {
+  margin-inline-start: 8px;
+}
+
+@media (pointer: coarse) {
+  .sa-ai-chat-new,
+  .sa-ai-chat-footer button,
+  .sa-ai-chat-no-engine button,
+  .sa-ai-chat-engine select,
+  .sa-ai-research-field select,
+  .sa-ai-research-choice,
+  .sa-notice-action,
+  .sa-ai-chat-composer .sa-ai-chat-web {
+    min-height: 44px;
+  }
+
+  .sa-ai-chat-composer .sa-ai-chat-send {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/*
+ * "Chat about this post" docked in reader mode (ReaderChatDock): a pane right
+ * of the article on wide screens, a bottom sheet over it on narrow ones, so
+ * the post stays readable. The article column gives up the pane's width.
+ */
+.sa-reader-mode-container.has-chat-dock {
+  --sa-reader-chat-pane-width: clamp(320px, var(--sa-reader-chat-width, 400px), 60vw);
+  padding-right: var(--sa-reader-chat-pane-width);
+}
+
+.sa-reader-chat-dock {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: var(--sa-reader-chat-pane-width);
+  padding-top: max(env(safe-area-inset-top, 0px), var(--reader-safe-area-top-fallback, 0px));
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--reader-safe-area-bottom-fallback, 0px));
+  border-left: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  touch-action: auto;
+}
+
+.sa-reader-chat-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  width: 8px;
+  cursor: col-resize;
+}
+
+.sa-reader-chat-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 8px 10px 14px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.sa-reader-chat-heading {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sa-reader-chat-title {
+  font-weight: var(--font-semibold);
+}
+
+.sa-reader-chat-subtitle {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-reader-chat-sheet-handle {
+  display: none;
+}
+
+.sa-reader-chat-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  padding: 10px 12px 12px;
+}
+
+.sa-reader-chat-body > .sa-ai-chat-panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+/* A short sheet keeps the composer and Save on screen: the messages scroll in what is left. */
+.sa-reader-chat-body .sa-ai-chat-list {
+  min-block-size: 0;
+}
+
+/*
+ * The way back to a chat put down on the post on screen
+ * (ReaderChatResumeButton): bottom-right while the dock is closed. Scoped
+ * under the container to outrank Obsidian's `button:not(.clickable-icon)`.
+ * While the read-aloud mini player is up (fixed, bottom-centre) the button
+ * moves above it (ReaderTTSController toggles `has-tts-player`).
+ */
+.sa-reader-mode-container .sa-reader-chat-resume {
+  position: absolute;
+  right: 16px;
+  bottom: calc(24px + max(env(safe-area-inset-bottom, 0px), var(--reader-safe-area-bottom-fallback, 0px)));
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: auto;
+  padding: 8px 14px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  background: var(--background-primary);
+  box-shadow: var(--shadow-s);
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-semibold);
+}
+
+.sa-reader-mode-container.has-tts-player .sa-reader-chat-resume {
+  bottom: calc(112px + max(env(safe-area-inset-bottom, 0px), var(--reader-safe-area-bottom-fallback, 0px)));
+}
+
+.sa-reader-mode-container .sa-reader-chat-resume.is-hidden {
+  display: none;
+}
+
+.sa-reader-chat-resume-icon {
+  display: inline-flex;
+}
+
+.sa-reader-chat-resume-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.sa-reader-chat-resume.is-busy .sa-reader-chat-resume-icon svg {
+  animation: spin 1s linear infinite;
+}
+
+@media (pointer: coarse) {
+  .sa-reader-mode-container .sa-reader-chat-resume {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sa-reader-chat-resume.is-busy .sa-reader-chat-resume-icon svg {
+    animation: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .sa-reader-mode-container.has-chat-dock {
+    padding-right: 0;
+  }
+
+  /* The article end can still scroll up above the sheet. */
+  .sa-reader-mode-container.has-chat-dock .sa-reader-mode-scroll {
+    padding-bottom: 55dvh;
+  }
+
+  .sa-reader-chat-dock {
+    top: auto;
+    left: 0;
+    width: auto;
+    height: 55dvh;
+    padding-top: 0;
+    border-top: 1px solid var(--background-modifier-border);
+    border-left: none;
+    border-radius: 14px 14px 0 0;
+    box-shadow: var(--shadow-l);
+  }
+
+  .sa-reader-chat-dock.is-expanded {
+    height: 88dvh;
+  }
+
+  .sa-reader-chat-resize {
+    display: none;
+  }
+
+  .sa-reader-chat-header {
+    padding-left: 6px;
+  }
+
+  .sa-reader-chat-sheet-handle {
+    position: relative;
+    display: block;
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .sa-reader-chat-sheet-handle::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 28px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--background-modifier-border-hover);
+    content: "";
+    transform: translate(-50%, -50%);
+  }
+}

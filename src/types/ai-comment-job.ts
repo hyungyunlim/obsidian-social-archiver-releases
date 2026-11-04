@@ -1,4 +1,4 @@
-import type { AICli, AICommentMeta, AICommentType, AIOutputLanguage } from './ai-comment';
+import type { AICommentEngineId, AICommentMeta, AICommentType, AIOutputLanguage } from './ai-comment';
 
 export type AICommentJobStatus =
   | 'queued'
@@ -26,6 +26,12 @@ export type AICommentPublicJobErrorCode =
   | 'PROCESS_CANCELLED'
   | 'UPLOAD_FAILED'
   | 'STALE_CONTENT_HASH'
+  // BYOK provider failures (byok-ai-core byokErrorToJobErrorCode)
+  | 'PROVIDER_QUOTA_EXCEEDED'
+  | 'PROVIDER_RATE_LIMITED'
+  | 'PROVIDER_REFUSED'
+  | 'PROVIDER_UNAVAILABLE'
+  | 'AI_COMMENTS_TOO_LARGE'
   | 'UNKNOWN';
 
 export interface LocalAICommentPendingUpload {
@@ -34,7 +40,7 @@ export interface LocalAICommentPendingUpload {
   resultCommentId?: string;
   meta: AICommentMeta;
   content: string;
-  provider: AICli;
+  provider: AICommentEngineId;
   model?: string | null;
   type: AICommentType;
   outputLanguage: AIOutputLanguage;

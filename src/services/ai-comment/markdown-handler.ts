@@ -9,6 +9,7 @@ import type { App, TFile } from 'obsidian';
 import type { AICommentMeta, AICommentType, AICommentProviderId } from '../../types/ai-comment';
 import { COMMENT_TYPE_DISPLAY_NAMES } from '../../types/ai-comment';
 import { getAICommentDisplay } from '../../utils/ai-comment-display';
+import { BYOK_STORED_PROVIDER_IDS, isByokStoredProviderId } from '../../vendor/byok-ai-core';
 
 // ============================================================================
 // Constants
@@ -227,7 +228,7 @@ function parseCommentHeader(header: string, model?: string): ParsedHeader | null
  * Note: 🦙 (Ollama) kept in regex patterns for backwards compatibility with existing comments.
  */
 function isValidCommentProvider(value: string): value is AICommentProviderId {
-  return ['claude', 'gemini', 'codex', 'apple', 'workers-ai'].includes(value);
+  return ['claude', 'gemini', 'codex', 'apple', 'workers-ai'].includes(value) || isByokStoredProviderId(value);
 }
 
 function parseHeaderProvider(providerPart: string, model?: string): AICommentProviderId | null {
@@ -261,7 +262,7 @@ function findCommentType(displayName: string): AICommentType | null {
   const types: AICommentType[] = [
     'summary', 'factcheck', 'critique', 'keypoints',
     'sentiment', 'connections', 'translation', 'translate-transcript',
-    'glossary', 'reformat', 'custom'
+    'glossary', 'reformat', 'custom', 'chat', 'research'
   ];
 
   if (types.includes(normalizedInput as AICommentType)) {
@@ -653,7 +654,7 @@ export function readFrontmatterAIComments(
     if (typeof item === 'object' && item !== null) {
       return {
         id: (item.id as string | undefined) || '',
-        cli: isValidCommentProvider(String(item.cli ?? '')) ? String(item.cli) as AICommentProviderId : 'claude',
+        cli: typeof item.cli === 'string' && isValidCommentProvider(item.cli) ? item.cli : 'claude',
         type: (item.type as AICommentType) || 'summary',
         generatedAt: (item.generatedAt as string | undefined) || new Date().toISOString(),
         processingTime: 0,
@@ -661,9 +662,11 @@ export function readFrontmatterAIComments(
       };
     }
 
-    // Handle new string ID format: {cli}-{type}-{timestamp}
+    // Handle new string ID format: {cli}-{type}-{timestamp}. BYOK ids contain
+    // a dash themselves ("openai-api-summary-…"): match them as a prefix first.
     const id = String(item);
-    const parts = id.split('-');
+    const byokId = BYOK_STORED_PROVIDER_IDS.find((stored) => id.startsWith(`${stored}-`));
+    const parts = byokId ? [byokId, ...id.slice(byokId.length + 1).split('-')] : id.split('-');
     const cli = isValidCommentProvider(parts[0] ?? '')
       ? parts[0] as AICommentProviderId
       : (id.startsWith('server-ai-') || id.startsWith('ai-action-comment-') ? 'workers-ai' : 'claude');

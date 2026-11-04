@@ -7,6 +7,7 @@ import { crossPostStrings } from '../../i18n/strings/crossPost';
 import { dangerZoneStrings } from '../../i18n/strings/dangerZone';
 import { newsletterStrings } from '../../i18n/strings/newsletter';
 import { transcriptLanguageStrings } from '../../i18n/strings/transcriptLanguages';
+import { byokStrings } from '../../i18n/strings/byok';
 
 const ALL_MODULES = {
   settingTabStrings,
@@ -16,6 +17,7 @@ const ALL_MODULES = {
   dangerZoneStrings,
   newsletterStrings,
   transcriptLanguageStrings,
+  byokStrings,
 };
 
 describe('settings i18n', () => {

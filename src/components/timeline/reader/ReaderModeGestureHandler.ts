@@ -16,6 +16,8 @@ export interface GestureCallbacks {
   onSwipeCancel: () => void;
   isAtStart: () => boolean;
   isAtEnd: () => boolean;
+  /** Touches that start here never swipe (e.g. the docked chat sheet). */
+  shouldIgnore?: (target: EventTarget | null) => boolean;
 }
 
 export class ReaderModeGestureHandler {
@@ -67,6 +69,8 @@ export class ReaderModeGestureHandler {
     // Desktop: skip mouse events — text selection via drag takes priority.
     // Keyboard arrows handle navigation on desktop.
     if (e.pointerType === 'mouse') return;
+
+    if (this.callbacks.shouldIgnore?.(e.target)) return;
 
     // Don't interfere with an active text selection (e.g. long-press handles)
     const sel = window.getSelection();

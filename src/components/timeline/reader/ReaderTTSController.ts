@@ -157,6 +157,8 @@ export class ReaderTTSController {
   renderMiniController(parent: HTMLElement): void {
     this.miniController = parent.createDiv({ cls: 'sa-reader-tts-mini-controller' });
     this.miniController.setCssStyles({ display: 'none' });
+    // A re-render starts hidden: the reader's floating buttons drop back down until it shows.
+    parent.closest('.sa-reader-mode-container')?.removeClass('has-tts-player');
 
     // Previous sentence
     this.prevBtn = this.miniController.createDiv({ cls: 'sa-reader-tts-ctrl-btn' });
@@ -579,12 +581,15 @@ export class ReaderTTSController {
   private showMiniController(): void {
     if (this.miniController) {
       this.miniController.setCssStyles({ display: 'flex' });
+      // The reader's floating buttons (AI chat) move up clear of the bar.
+      this.miniController.closest('.sa-reader-mode-container')?.addClass('has-tts-player');
     }
   }
 
   private hideMiniController(): void {
     if (this.miniController) {
       this.miniController.setCssStyles({ display: 'none' });
+      this.miniController.closest('.sa-reader-mode-container')?.removeClass('has-tts-player');
     }
   }
 

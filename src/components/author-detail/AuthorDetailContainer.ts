@@ -41,7 +41,7 @@ import { FilterSortManager } from '../timeline/filters/FilterSortManager';
 import { FilterPanel } from '../timeline/filters/FilterPanel';
 import { SortDropdown } from '../timeline/filters/SortDropdown';
 import { TagChipBar } from '../timeline/filters/TagChipBar';
-import { ReaderModeOverlay, type ReaderModeContext } from '../timeline/reader/ReaderModeOverlay';
+import { ReaderModeOverlay, type ReaderModeContext, type ReaderOpenOptions } from '../timeline/reader/ReaderModeOverlay';
 import {
   getPlatformSimpleIcon as getIconServiceSimpleIcon,
   getPlatformLucideIcon as getIconServiceLucideIcon
@@ -1456,8 +1456,8 @@ export class AuthorDetailContainer {
     });
 
     // Reader mode: open ReaderModeOverlay with author's filtered posts
-    this.postCardRenderer.onReaderMode((post) => {
-      this.openReaderMode(post);
+    this.postCardRenderer.onReaderMode((post, options) => {
+      this.openReaderMode(post, options);
     });
   }
 
@@ -1618,7 +1618,7 @@ export class AuthorDetailContainer {
    * Open reader mode for a post — cycles through the author's filtered posts.
    * Uses the same ReaderModeOverlay as the main timeline.
    */
-  private openReaderMode(post: PostData): void {
+  private openReaderMode(post: PostData, options?: ReaderOpenOptions): void {
     if (this.readerModeOverlay?.isActive) {
       this.readerModeOverlay.close();
     }
@@ -1673,8 +1673,9 @@ export class AuthorDetailContainer {
       },
     };
 
-    this.readerModeOverlay = new ReaderModeOverlay(context);
-    void this.readerModeOverlay.open();
+    const overlay = new ReaderModeOverlay(context);
+    this.readerModeOverlay = overlay;
+    void overlay.open(options);
   }
 
   // --------------------------------------------------------------------------

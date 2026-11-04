@@ -192,6 +192,22 @@ const BOARD_COMMENT_SELECTORS: Record<string, BoardCommentSelectors> = {
     timestamp: '.date',
     likes: '.bttn_good span',
   },
+  'sisain.co.kr': {
+    // A news site, not a board: ndsoft's comment module paints these from
+    // /comment/commentList.ajax.php into the article page (2026-11-04). The
+    // Worker asks that endpoint itself (SisainCommentService). Newin pages
+    // have no comment section. BEST rows and the rest render in two sections;
+    // the dedup collapses repeats. Direct children only: replies load into
+    // each row's sub-body.
+    // ponytail: replies are left out; thread them once a reply's markup has
+    // been seen.
+    item: '#comment-list section > article.comment-item',
+    content: '.comment-content-view',
+    // "윤성○ (yo**)": the site masks names itself.
+    author: '.textbox-info .name',
+    timestamp: '.textbox-info .datetime',
+    likes: '.vote-up-off .text-vote',
+  },
 };
 
 /** Selectors for `hostname`, matching the host and any subdomain of it. */

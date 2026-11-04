@@ -5,6 +5,7 @@ export type { Platform } from '@shared/platforms/types';
 import type { Platform } from '@shared/platforms/types';
 import { PLATFORMS } from '@shared/platforms/types';
 import type { ArchiveLocation } from './archive-location';
+import type { AICommentProviderId, AICommentType } from './ai-comment';
 import type { ProductSnapshot } from '../shared/platforms/products';
 
 type ExtensibleString = string & Record<never, never>;
@@ -398,9 +399,10 @@ export interface PostData {
   aiComments?: Array<{
     meta: {
       id: string;
-      cli: 'claude' | 'gemini' | 'codex' | 'apple' | 'workers-ai';
+      cli: AICommentProviderId;
       model?: string;
-      type: 'summary' | 'factcheck' | 'critique' | 'keypoints' | 'sentiment' | 'connections' | 'translation' | 'translate-transcript' | 'glossary' | 'reformat' | 'custom';
+      executedModel?: string;
+      type: AICommentType;
       generatedAt: string;
       processingTime?: number;
       contentHash?: string;

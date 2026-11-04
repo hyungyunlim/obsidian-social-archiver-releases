@@ -13,6 +13,10 @@ import type {
 } from '@/types/logger';
 import { LOG_LEVEL_VALUES, SENSITIVE_HEADERS, SENSITIVE_PATTERNS } from '@/types/logger';
 import type { IService } from './base/IService';
+import { redactSecrets } from '../vendor/byok-ai-core/errors';
+
+/** Metadata nesting masked before the rest is cut ("[Truncated]"). */
+const MAX_MASK_DEPTH = 10;
 
 /**
  * Logger class for structured logging with performance tracking
@@ -252,7 +256,7 @@ export class Logger implements IService {
 		const entry: LogEntry = {
 			timestamp: new Date().toISOString(),
 			level,
-			message,
+			message: this.config.maskSensitiveData ? redactSecrets(message) : message,
 			...sanitizedMetadata,
 		};
 
@@ -318,25 +322,38 @@ export class Logger implements IService {
 	}
 
 	/**
-	 * Mask sensitive data in metadata
+	 * Mask sensitive data in metadata: sensitive keys and key-shaped text at
+	 * any depth, inside arrays too. A cycle or a very deep structure is cut
+	 * short instead of recursing forever.
 	 */
 	private maskSensitiveData(metadata?: Record<string, unknown>): Record<string, unknown> | undefined {
 		if (!metadata) {
 			return metadata;
 		}
+		return this.maskObject(metadata, new WeakSet<object>(), 0);
+	}
 
+	private maskObject(value: object, path: WeakSet<object>, depth: number): Record<string, unknown> {
+		path.add(value);
 		const masked: Record<string, unknown> = {};
-
-		for (const [key, value] of Object.entries(metadata)) {
-			if (this.isSensitiveKey(key)) {
-				masked[key] = typeof value === 'string' ? this.maskValue(value) : '[REDACTED]';
-			} else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-				masked[key] = this.maskSensitiveData(value as Record<string, unknown>);
-			} else {
-				masked[key] = value;
-			}
+		for (const [key, entry] of Object.entries(value)) {
+			if (!this.isSensitiveKey(key)) masked[key] = this.maskEntry(entry, path, depth + 1);
+			else masked[key] = typeof entry === 'string' ? this.maskValue(entry) : '[REDACTED]';
 		}
+		path.delete(value);
+		return masked;
+	}
 
+	private maskEntry(entry: unknown, path: WeakSet<object>, depth: number): unknown {
+		// Provider keys pasted into free text (error messages, URLs) never reach a transport.
+		if (typeof entry === 'string') return redactSecrets(entry);
+		if (typeof entry !== 'object' || entry === null) return entry;
+		if (path.has(entry)) return '[Circular]';
+		if (depth > MAX_MASK_DEPTH) return '[Truncated]';
+		if (!Array.isArray(entry)) return this.maskObject(entry, path, depth);
+		path.add(entry);
+		const masked = entry.map((item: unknown) => this.maskEntry(item, path, depth + 1));
+		path.delete(entry);
 		return masked;
 	}
 

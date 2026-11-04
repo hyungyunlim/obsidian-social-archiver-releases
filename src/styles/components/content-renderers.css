@@ -905,6 +905,34 @@
   border-color: var(--interactive-accent);
 }
 
+/* "Search the web" for a custom run with the user's own key */
+.acb-web-option {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.acb-web-option.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.acb-web-note {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+@media (pointer: coarse) {
+  .acb-web-option {
+    min-height: 44px;
+  }
+}
+
 /* Setup link */
 .acb-setup-link {
   text-decoration: none;

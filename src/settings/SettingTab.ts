@@ -68,6 +68,8 @@ import {
   DEFAULT_AUTHOR_NOTE_LINK_ALIAS_FORMAT,
   renderAuthorNoteLinkAlias,
 } from '../utils/author-note-links';
+import { byokSettingDefinitions } from './ByokSettingsSection';
+import { getByokService } from '../services/byok/ByokService';
 
 const PERSONAL_GITHUB_URL = 'https://github.com/hyungyunlim';
 const RELEASE_NOTES_URL = 'https://social-archive.org/release-notes?platform=obsidian&utm_source=obsidian-plugin&utm_medium=settings';
@@ -185,7 +187,7 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
    * The whole settings tab, declaratively.
    *
    * Obsidian 1.13+ renders and search-indexes this directly and does not call
-   * {@link display}. Older versions — minAppVersion is 1.10.0 — go through
+   * {@link display}. Older versions — minAppVersion is 1.11.4 — go through
    * display() below, which walks the same tree. One source of truth either way.
    */
   getSettingDefinitions(): SettingDefinitionItem[] {
@@ -208,6 +210,13 @@ export class SocialArchiverSettingTab extends PluginSettingTab {
       ...this.transcriptionSettingDefinitions(),
       ...this.ttsSettingDefinitions(),
       ...this.aiCommentSettingDefinitions(),
+      // Device settings, not account-bound: desktop and mobile alike.
+      ...byokSettingDefinitions({
+        app: this.app,
+        byok: getByokService,
+        refresh: () => this.refresh(),
+        cliDelegated: () => !Platform.isMobile && this.plugin.isCliDelegationActive?.() === true,
+      }),
       ...this.naverSettingDefinitions(),
       // Reddit sync is parked until API approval.
       ...this.webtoonStreamingSettingDefinitions(),

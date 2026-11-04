@@ -1,17 +1,17 @@
 import { Notice, Platform } from 'obsidian';
 import type { SocialArchiverSettings } from '../../types/settings';
-import type {
-  AIActionExecutorCapabilityPayload,
-  AICommentExecutorCapabilityPayload,
-  AICommentProviderCapability,
-  WorkersAPIClient,
+import {
+  AI_ACTION_EXECUTOR_CAPABILITIES,
+  type AIActionExecutorCapabilityPayload,
+  type AICommentExecutorCapabilityPayload,
+  type AICommentProviderCapability,
+  type AICommentProviderId,
+  type WorkersAPIClient,
 } from '../../services/WorkersAPIClient';
 import type { AICli, AICommentType } from '../../types/ai-comment';
 import { AICliDetector } from '../../utils/ai-cli';
-import {
-  PLACE_EXTRACT_CAPABILITY,
-  PLACE_KIND_SUGGESTION_CAPABILITY,
-} from '../../types/place-candidate-attachment';
+import type { ByokService } from '../../services/byok/ByokService';
+import { isByokStoredProviderId } from '../../vendor/byok-ai-core';
 
 const SUPPORTED_TYPES: AICommentType[] = [
   'summary',
@@ -25,6 +25,7 @@ const SUPPORTED_TYPES: AICommentType[] = [
   'glossary',
   'reformat',
   'custom',
+  'research',
 ];
 const PROVIDERS: AICli[] = ['claude', 'gemini', 'codex'];
 const DEBOUNCE_MS = 1500;
@@ -41,6 +42,8 @@ export interface DesktopCapabilityReporterDeps {
    * AI jobs to the CLI's client instead of this one.
    */
   delegatedToCli?: () => boolean;
+  /** The user's own provider keys on this device (absent: none advertised). */
+  byok?: () => ByokService | null;
 }
 
 export class DesktopCapabilityReporter {
@@ -82,7 +85,13 @@ export class DesktopCapabilityReporter {
       return null;
     }
 
-    const providers = await this.detectProviders();
+    const providers = [
+      ...(await this.detectProviders()),
+      ...((await this.deps.byok?.()?.buildProviderCapabilities().catch((error) => {
+        console.warn('[Social Archiver] BYOK capability unavailable', error instanceof Error ? error.message : error);
+        return [];
+      })) ?? []),
+    ];
     const readyProviders = providers.filter((provider) => provider.available && provider.authenticated);
     const defaultProvider = readyProviders.some((provider) => provider.id === settings.aiComment.defaultCli)
       ? settings.aiComment.defaultCli
@@ -111,14 +120,7 @@ export class DesktopCapabilityReporter {
     if (!commentCapability) return null;
     return {
       enabled: commentCapability.enabled,
-      capabilities: [
-        'ai-actions-v1',
-        'tag-patch-v1',
-        'content-variants-v1',
-        'content-translate-v1',
-        PLACE_EXTRACT_CAPABILITY,
-        PLACE_KIND_SUGGESTION_CAPABILITY,
-      ],
+      capabilities: [...AI_ACTION_EXECUTOR_CAPABILITIES],
       pluginVersion: this.deps.pluginVersion,
       updatedAt: commentCapability.updatedAt,
     };
@@ -163,7 +165,15 @@ export class DesktopCapabilityReporter {
     // Only meaningful while a provider is actually advertised as the executor
     // default (some other provider IS ready). "No provider ready at all" is a
     // different state handled by the settings UI, not this notice.
-    if (!settings.aiComment.enabled || !capability?.enabled || !advertised || advertised === chosen) {
+    // No CLI ready but the user's own key is: they run on their key by
+    // choice, nothing degraded (and the default-tool list is CLIs only).
+    if (
+      !settings.aiComment.enabled ||
+      !capability?.enabled ||
+      !advertised ||
+      advertised === chosen ||
+      isByokStoredProviderId(advertised)
+    ) {
       this.lastDegradeKey = null;
       return;
     }
@@ -195,7 +205,7 @@ export class DesktopCapabilityReporter {
   }
 }
 
-function providerLabel(provider: AICli): string {
+function providerLabel(provider: AICommentProviderId): string {
   return provider.charAt(0).toUpperCase() + provider.slice(1);
 }
 

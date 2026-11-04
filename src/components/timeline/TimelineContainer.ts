@@ -53,7 +53,7 @@ import { PlaceListRenderer } from './places/PlaceListRenderer';
 import { PlaceMapRenderer } from './places/PlaceMapRenderer';
 import { aggregatePlaces, type PlaceSummary } from '../../utils/placeAggregation';
 import { UNTAGGED_FILTER_ID } from '../../types/tag';
-import { ReaderModeOverlay, type ReaderModeContext } from './reader/ReaderModeOverlay';
+import { ReaderModeOverlay, type ReaderModeContext, type ReaderOpenOptions } from './reader/ReaderModeOverlay';
 import { SeriesGroupingService, type TimelineItem, isSeriesGroup } from '../../services/SeriesGroupingService';
 // SeriesGroup imported for type use only if needed in future
 // import type { SeriesGroup } from '../../types/series';
@@ -1141,8 +1141,8 @@ export class TimelineContainer {
       await this.unsubscribeFromAuthor(subscriptionId, authorName, authorUrl, platform);
     });
 
-    this.postCardRenderer.onReaderMode((post) => {
-      this.openReaderMode(post);
+    this.postCardRenderer.onReaderMode((post, options) => {
+      this.openReaderMode(post, options);
     });
 
     this.postCardRenderer.onFailedArchiveDismiss((post, rootElement) => {
@@ -8433,7 +8433,7 @@ export class TimelineContainer {
    * Open reader mode for a specific post
    * Creates a fullscreen overlay with the current filtered posts list
    */
-  private openReaderMode(post: PostData): void {
+  private openReaderMode(post: PostData, options?: ReaderOpenOptions): void {
     if (isFailedArchiveAttemptPost(post)) {
       window.open(post.url, '_blank');
       return;
@@ -8515,8 +8515,9 @@ export class TimelineContainer {
       },
     };
 
-    this.readerModeOverlay = new ReaderModeOverlay(context);
-    void this.readerModeOverlay.open();
+    const overlay = new ReaderModeOverlay(context);
+    this.readerModeOverlay = overlay;
+    void overlay.open(options);
   }
 
   /**

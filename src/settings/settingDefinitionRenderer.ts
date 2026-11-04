@@ -10,7 +10,7 @@ const FIRST_SECTION_HEADER_CLS = 'sa-settings-section-header-first';
  *
  * This exists so the definition tree is the SINGLE source of truth for the
  * settings UI: 1.13+ renders it natively (and indexes it for settings search),
- * everything back to `minAppVersion` 1.10.0 renders it through here. Without
+ * everything back to `minAppVersion` 1.11.4 renders it through here. Without
  * this the tab would have to carry two parallel copies of every row.
  *
  * Only the subset of the definition schema this plugin actually emits is

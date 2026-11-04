@@ -548,6 +548,7 @@ function toAICommentMarkdownEntries(
         id: comment.meta.id,
         cli: comment.meta.cli,
         ...(comment.meta.model ? { model: comment.meta.model } : {}),
+        ...(comment.meta.executedModel ? { executedModel: comment.meta.executedModel } : {}),
         type: comment.meta.type,
         generatedAt: comment.meta.generatedAt,
         processingTime: comment.meta.processingTime ?? 0,

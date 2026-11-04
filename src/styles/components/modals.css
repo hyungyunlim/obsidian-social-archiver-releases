@@ -1536,3 +1536,8 @@ button.sa-ig-import-modal__maximize.sa-ig-import-modal__maximize svg {
   max-height: 100dvh;
   border-radius: 0;
 }
+
+/* BYOK: paste-one-API-key modal (src/modals/ByokKeyModal.ts). */
+.sa-byok-key-modal input[type="password"] {
+  width: 100%;
+}

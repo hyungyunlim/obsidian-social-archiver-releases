@@ -34,6 +34,9 @@
 
 @import './components/reader-chat-section.css';
 
+/* Chat about / research this post modals (own API key, Cloud AI) */
+@import './components/ai-conversation.css';
+
 /* Editor TTS highlight and status bar player */
 @import './components/editor-tts.css';
 

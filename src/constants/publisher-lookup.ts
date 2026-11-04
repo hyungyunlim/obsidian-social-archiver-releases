@@ -283,8 +283,9 @@ const PUBLISHER_REGISTRY_RAW: RegistryEntry[] = [
   { slug: 'rollingstone', name: 'Rolling Stone', domain: 'rollingstone.com', source: { kind: 'google-cdn' } },
   { slug: 'variety', name: 'Variety', domain: 'variety.com', source: { kind: 'google-cdn' } },
   { slug: 'politico', name: 'Politico', domain: 'politico.com', source: { kind: 'google-cdn' } },
-  // Korean paywalled publication (shared/platforms/publisher-sessions.ts).
+  // Korean paywalled publications (shared/platforms/publisher-sessions.ts).
   { slug: 'longblack', name: '롱블랙', domain: 'longblack.co', source: { kind: 'google-cdn' } },
+  { slug: 'sisain', name: '시사IN', domain: 'sisain.co.kr', source: { kind: 'google-cdn' } },
 ];
 
 // ============================================================================

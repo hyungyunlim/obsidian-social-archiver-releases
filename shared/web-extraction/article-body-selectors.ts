@@ -73,6 +73,9 @@ const ARTICLE_BODY_SELECTORS: Record<string, string> = {
   'ohmynews.com': '.atc_view2025 .at_contents, .article_view .at_contents, .atc-text',
   'sedaily.com': '#article-body',
   'segye.com': '#article_txt',
+  // 시사IN (measured 2026-11-04): the same ndsoft CMS as mediatoday and thelec.
+  // Its "함께 볼 기사" box sits inside this container (strip table below).
+  'sisain.co.kr': '#article-view-content-div',
   'thelec.kr': '#article-view-content-div',
   'zdnet.co.kr': '#articleBody',
 
@@ -142,6 +145,8 @@ const ARTICLE_STRIP_SELECTORS: Record<string, string> = {
   'mediatoday.co.kr': 'article.relation',
   // The star vertical nests its donation box + tag row inside the body.
   'ohmynews.com': '.arc-bottom-wrap',
+  // 시사IN nests its "함께 볼 기사" box mid-body.
+  'sisain.co.kr': '#innerRelate',
   'zdnet.co.kr': '.news_box',
 };
 

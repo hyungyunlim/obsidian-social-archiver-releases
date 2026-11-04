@@ -102,6 +102,8 @@ const TYPE_ESTIMATES_SEC: Record<AICommentType, number> = {
   glossary: 25,
   reformat: 30,
   custom: 30,
+  chat: 0, // interactive only, never generated here
+  research: 120,
 };
 
 export class AICommentCliService {

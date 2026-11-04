@@ -125,6 +125,8 @@ export const SENSITIVE_PATTERNS = {
 export const SENSITIVE_HEADERS = [
 	'authorization',
 	'x-api-key',
+	// Gemini's key header (BYOK)
+	'x-goog-api-key',
 	'api-key',
 	'x-auth-token',
 	'cookie',

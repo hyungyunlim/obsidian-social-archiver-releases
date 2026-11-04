@@ -19,4 +19,14 @@ describe('getAICommentDisplay', () => {
     // A Cloudflare model id wins over a stale local provider tag.
     expect(getAICommentDisplay({ id: 'x', cli: 'claude', model: '@cf/meta/llama-3.3-70b' }).icon).toBe('☁️');
   });
+
+  it('labels comments made with the user\'s own key by provider, even with an executor id', () => {
+    expect(getAICommentDisplay({ id: 'openai-api-summary-1', cli: 'openai-api', model: 'gpt-6-luna', executedModel: 'gpt-6-luna-2026-10-01' }))
+      .toEqual({ icon: '⚡', providerLabel: 'OpenAI API', modelLabel: 'GPT 6 Luna 2026 10 01', headerLabel: 'OpenAI API' });
+    // An executor ran it with the desktop's key: still not Cloud AI.
+    expect(getAICommentDisplay({ id: 'ai-action-comment-45', cli: 'anthropic-api', model: 'claude-haiku-5-5' }))
+      .toMatchObject({ icon: '⚡', providerLabel: 'Anthropic API', modelLabel: 'Haiku 5.5' });
+    expect(getAICommentDisplay({ id: 'x', cli: 'gemini-api' }).headerLabel).toBe('Gemini API');
+    expect(getAICommentDisplay({ id: 'x', cli: 'openrouter-api', model: 'google/gemma-3' }).icon).toBe('⚡');
+  });
 });

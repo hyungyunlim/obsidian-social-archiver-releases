@@ -26,6 +26,22 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.11.0': {
+    title: 'Chat and research with your own AI API key',
+    date: '2026-11-04',
+    notes: `## New
+
+- **Use your own AI API key.** Add an OpenAI, Anthropic, Gemini or OpenRouter key in Settings → AI API keys, and AI comments, chat and research run straight on your provider account. Keys stay in Obsidian's secret storage on this device and are never sent to Social Archiver. When a provider retires a model, the plugin moves to its replacement and tells you.
+- **Chat about a post next to the article.** "Chat about this post" opens beside the article in reader mode (a bottom sheet on narrow screens), so you can keep reading while you ask. Closing it keeps the conversation with the post, and the **AI chat** button in reader mode brings it back. A chat saved to the note continues where it left off, and saving again updates that saved chat instead of adding another. Works with Cloud AI or your own key.
+- **Research a post.** "Research this post" saves a web-checked report — background, claim checks and sources — to the note, on your own key or, on desktop, with an AI CLI installed on your computer.
+- **Web search only when you ask.** With your own key, turn on **Search the web** in the chat box (or on a custom AI comment) and that one request searches the web and lists its sources. Web searches may cost extra on your provider account.
+- **시사IN (Sisain)** articles show the publisher's icon, and with your 시사IN account connected they are saved in full.
+
+## Requirements
+
+- **Obsidian 1.11.4 or later** (secure key storage). Older Obsidian versions stay on 4.10.13.
+`,
+  },
   '4.10.13': {
     title: 'Images inside saved articles come into your vault',
     date: '2026-11-03',

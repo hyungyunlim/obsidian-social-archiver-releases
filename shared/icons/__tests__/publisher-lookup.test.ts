@@ -135,9 +135,10 @@ describe('publisher-lookup: PublisherIcon discriminated union', () => {
 });
 
 describe('publisher-lookup: registry health', () => {
-  it('contains the v1 starter set (35 publishers) plus 롱블랙', () => {
-    expect(PUBLISHER_REGISTRY.length).toBe(36);
+  it('contains the v1 starter set (35 publishers) plus 롱블랙 and 시사IN', () => {
+    expect(PUBLISHER_REGISTRY.length).toBe(37);
     expect(getPublisherFromUrl('https://longblack.co/note/2164')?.name).toBe('롱블랙');
+    expect(getPublisherFromUrl('https://www.sisain.co.kr/news/articleView.html?idxno=58758')?.name).toBe('시사IN');
   });
 
   it('has unique slugs', () => {

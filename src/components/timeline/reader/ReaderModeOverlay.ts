@@ -51,6 +51,16 @@ import type { PluginTTSProvider } from '../../../services/tts/types';
 import type { TextHighlight, HighlightRenderProfile } from '../../../types/annotations';
 import { getRenderProfileForArchive, RENDER_PROFILE_CONFIG } from '../../../vendor/highlight-core';
 import { isWebLanePlatform } from '@/shared/platforms';
+import { aiConversationEntries, chatPanelOptionsFor, type AIConversationEntry } from '../aiConversationEntries';
+import { pluginAICommentSaver, type AICommentTarget } from '../../../services/ai-comment/AICommentSaver';
+import { ReaderChatDock, type ReaderChatPanelOptions } from './ReaderChatDock';
+import { ReaderChatResumeButton } from './ReaderChatResumeButton';
+import { findPostChatSession } from '../../../services/byok/postChatSessions';
+
+/** How a host opens reader mode: `chat` docks "Chat about this post" beside the article. */
+export interface ReaderOpenOptions {
+  chat?: boolean;
+}
 
 interface ReaderActionSheetItem {
   icon: string;
@@ -120,6 +130,11 @@ export class ReaderModeOverlay {
   // Track whether a child modal (e.g. TagModal) is open — suppress keys while true
   private modalOpen = false;
 
+  /** "Chat about this post" docked beside (desktop) or under (phone) the article. */
+  private chatDock: ReaderChatDock | null = null;
+  /** While the dock is closed: back to a chat put down on the post on screen. */
+  private chatResume: ReaderChatResumeButton | null = null;
+
   // Typography state (replaces old fontSize-only state)
   private static readonly FONT_SIZE_KEY = 'social-archiver-reader-font-size';
   private static readonly CONTENT_WIDTH_KEY = 'social-archiver-reader-content-width';
@@ -162,7 +177,7 @@ export class ReaderModeOverlay {
 
   // ---------- Public API ----------
 
-  async open(): Promise<void> {
+  async open(options: ReaderOpenOptions = {}): Promise<void> {
     if (this._isActive) return;
     this._isActive = true;
     this.activeContentVariantArchiveId = null;
@@ -215,41 +230,7 @@ export class ReaderModeOverlay {
     }
 
     // Keyboard handler (register early so ESC always works)
-    this.keyHandler = (e: KeyboardEvent) => {
-      // Skip when a child modal (e.g. TagModal) is open so ESC only closes the modal
-      if (this.modalOpen) return;
-
-      // TTS keyboard shortcuts take priority
-      if (this.ttsController?.handleKeyDown(e)) return;
-
-      if (e.key === 'Escape') {
-        // Typography panel Escape is handled by the panel's own keydown listener
-        // (capture phase, stopPropagation). If we reach here, the panel is closed.
-        e.preventDefault();
-        this.close();
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        void this.navigate(-1);
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        void this.navigate(1);
-      } else if (e.code === 'KeyA') {
-        e.preventDefault();
-        void this.archiveAndAdvance();
-      } else if (e.code === 'KeyT') {
-        e.preventDefault();
-        const post = this.context.posts[this.currentIndex];
-        if (post) this.tagPost(post);
-      } else if (e.code === 'KeyC') {
-        e.preventDefault();
-        const post = this.context.posts[this.currentIndex];
-        if (post) this.openCommentModal(post);
-      } else if (e.key === 'Delete' || e.key === 'Backspace') {
-        e.preventDefault();
-        const post = this.context.posts[this.currentIndex];
-        if (post) void this.deletePost(post);
-      }
-    };
+    this.keyHandler = (e: KeyboardEvent) => this.handleKeyDown(e);
     activeDocument.addEventListener('keydown', this.keyHandler);
     this.contentVariantEventRef = this.context.plugin.events.on('ws:content_variant_updated', (payload: unknown) => {
       void this.handleContentVariantUpdated(payload);
@@ -261,12 +242,17 @@ export class ReaderModeOverlay {
       this.container?.addClass('sa-reader-mode-container-visible');
     });
 
+    // Dock the chat now: rendering the post can wait on the network.
+    if (options.chat) this.openChat();
+
     // Render content (errors won't prevent overlay from showing)
     try {
       await this.renderCurrentPost();
     } catch (err) {
       console.error('[Social Archiver] Reader mode render error:', err);
     }
+    // Rendering may have moved focus away from the chat box.
+    if (options.chat) this.chatDock?.focus();
 
     // Gesture handler
     if (this.container) {
@@ -277,6 +263,8 @@ export class ReaderModeOverlay {
         onSwipeCancel: () => this.onSwipeCancel(),
         isAtStart: () => this.currentIndex === 0,
         isAtEnd: () => this.currentIndex === this.context.posts.length - 1,
+        // Scrolling the docked chat sheet must not turn the page.
+        shouldIgnore: (target): boolean => this.chatDock?.contains(target as Node | null) ?? false,
       });
     }
 
@@ -297,6 +285,54 @@ export class ReaderModeOverlay {
         if (!href) return;
         void this.openInternalLink(href);
       });
+    }
+  }
+
+  /** Reader shortcuts (registered on the document while reader mode is open). */
+  private handleKeyDown(e: KeyboardEvent): void {
+    // Skip when a child modal (e.g. TagModal) is open so ESC only closes the modal
+    if (this.modalOpen) return;
+
+    // Typing in the docked chat is not a reader shortcut (Backspace must not
+    // delete the post); Esc there closes the chat (put down, not ended), not the reader.
+    const chatDock = this.chatDock;
+    if (chatDock?.contains(e.target as Node | null)) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        chatDock.destroy();
+      }
+      return;
+    }
+
+    // TTS keyboard shortcuts take priority
+    if (this.ttsController?.handleKeyDown(e)) return;
+
+    if (e.key === 'Escape') {
+      // Typography panel Escape is handled by the panel's own keydown listener
+      // (capture phase, stopPropagation). If we reach here, the panel is closed.
+      e.preventDefault();
+      this.close();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      void this.navigate(-1);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      void this.navigate(1);
+    } else if (e.code === 'KeyA') {
+      e.preventDefault();
+      void this.archiveAndAdvance();
+    } else if (e.code === 'KeyT') {
+      e.preventDefault();
+      const post = this.context.posts[this.currentIndex];
+      if (post) this.tagPost(post);
+    } else if (e.code === 'KeyC') {
+      e.preventDefault();
+      const post = this.context.posts[this.currentIndex];
+      if (post) this.openCommentModal(post);
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault();
+      const post = this.context.posts[this.currentIndex];
+      if (post) void this.deletePost(post);
     }
   }
 
@@ -323,6 +359,54 @@ export class ReaderModeOverlay {
     // Not a post in the current list (filtered out, or a non-archive note).
     this.close();
     await this.context.app.workspace.openLinkText(linktext, sourcePath, false);
+  }
+
+  /**
+   * Dock "Chat about this post" beside the article (a bottom sheet on narrow
+   * screens), so the reader can keep reading while chatting. Again while open:
+   * focuses the chat.
+   */
+  openChat(): void {
+    const post = this.context.posts[this.currentIndex];
+    if (!post || !this.container || !this._isActive) return;
+    if (this.chatDock) {
+      this.chatDock.focus();
+      return;
+    }
+    this.chatDock = new ReaderChatDock({
+      app: this.context.app,
+      container: this.container,
+      panelOptions: (chatPost): ReaderChatPanelOptions | null => {
+        const target = this.commentTarget(chatPost);
+        return target ? chatPanelOptionsFor(this.context.plugin, target) : null;
+      },
+      onDialog: (open): void => this.holdKeys(open),
+      onClosed: (): void => {
+        this.chatDock = null;
+        this.syncChatResume();
+      },
+    }, post);
+    this.syncChatResume();
+    this.chatDock.focus();
+  }
+
+  /** The way back to a chat put down on the post on screen: shown while the dock is closed and that post has one. */
+  private syncChatResume(): void {
+    const post = this.context.posts[this.currentIndex];
+    if (!this.container || !this._isActive) return;
+    this.chatResume ??= new ReaderChatResumeButton(this.container, () => this.openChat());
+    this.chatResume.show(!this.chatDock && post ? findPostChatSession(post) ?? null : null);
+  }
+
+  /** A dialog over the reader holds its shortcuts; released a tick later so the closing key never reaches the reader. */
+  private holdKeys(held: boolean): void {
+    if (held) {
+      this.modalOpen = true;
+      return;
+    }
+    window.setTimeout(() => {
+      this.modalOpen = false;
+    }, 0);
   }
 
   /**
@@ -382,6 +466,11 @@ export class ReaderModeOverlay {
 
     const wasDirty = this.dirty;
     const dirtyPathsSnapshot = [...this.dirtyPaths];
+
+    this.chatDock?.destroy();
+    this.chatDock = null;
+    this.chatResume?.destroy();
+    this.chatResume = null;
 
     // Cleanup keyboard
     if (this.keyHandler) {
@@ -861,8 +950,10 @@ export class ReaderModeOverlay {
   }
 
   private openAIActionMenu(post: PostData, anchorEl: HTMLElement): void {
+    const conversation = this.aiConversationEntries(post);
     if (this.shouldUseReaderActionSheet()) {
       this.openReaderActionSheet('AI', [
+        ...conversation,
         {
           icon: 'list',
           title: 'Summary',
@@ -911,6 +1002,12 @@ export class ReaderModeOverlay {
     }
 
     const menu = new Menu();
+    for (const entry of conversation) {
+      menu.addItem((item) => {
+        item.setIcon(entry.icon).setTitle(entry.title).onClick(entry.onSelect);
+      });
+    }
+    if (conversation.length > 0) menu.addSeparator();
     menu.addItem((item) => {
       item
         .setIcon('list')
@@ -965,6 +1062,45 @@ export class ReaderModeOverlay {
 
     const rect = anchorEl.getBoundingClientRect();
     menu.showAtPosition({ x: rect.left, y: rect.bottom });
+  }
+
+  /**
+   * Chat / research for the current post. The chat docks beside the article;
+   * research opens a modal that holds the reader's keys while open (Backspace
+   * in a text box must not delete the post). Both save to the note as our own
+   * write (the timeline re-reads it when reader mode closes).
+   */
+  private aiConversationEntries(post: PostData): AIConversationEntry[] {
+    const { plugin } = this.context;
+    return aiConversationEntries({
+      plugin,
+      post,
+      target: () => this.commentTarget(post),
+      openChat: () => this.openChat(),
+      onModalOpen: () => {
+        this.modalOpen = true;
+      },
+      onModalClosed: () => {
+        // Next tick: the closing key event must not reach the reader.
+        window.setTimeout(() => {
+          this.modalOpen = false;
+        }, 0);
+      },
+    });
+  }
+
+  /** Where chat and research save for `post`: its note, marked dirty for the timeline. Null without a note. */
+  private commentTarget(post: PostData): AICommentTarget | null {
+    const { app, plugin } = this.context;
+    const file = post.filePath ? app.vault.getAbstractFileByPath(post.filePath) : null;
+    if (!(file instanceof TFile)) return null;
+    return pluginAICommentSaver(plugin).target(post, file, {
+      beforeWrite: () => this.context.onUIModify?.(file.path),
+      afterSave: () => {
+        this.dirty = true;
+        this.dirtyPaths.add(file.path);
+      },
+    });
   }
 
   private buildReaderTranslationActionSheetItems(post: PostData): ReaderActionSheetItem[] {
@@ -2336,6 +2472,8 @@ export class ReaderModeOverlay {
         },
       },
     );
+    this.chatDock?.followPost(post);
+    this.syncChatResume();
   }
 
   private cleanupRenderer(): void {

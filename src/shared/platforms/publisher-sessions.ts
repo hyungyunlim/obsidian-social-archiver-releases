@@ -29,8 +29,11 @@ export interface PublisherSession {
   readonly domain: string;
   /** Page the login sheet opens. */
   readonly loginUrl: string;
-  /** Cookie whose presence means signed in. Only presence is checked; the value is never read. */
-  readonly sessionCookie?: string;
+  /**
+   * Cookie whose presence means signed in; with several, any one counts. Only
+   * presence is checked; the value is never read.
+   */
+  readonly sessionCookie?: string | readonly string[];
   /** Present when the page cut the article off behind a subscribe wall. May render late (NYT), so callers wait. */
   readonly gatewaySelector?: string;
   /** Article body container: Defuddle's `contentSelector`, and the "this page is an article" check. */
@@ -157,6 +160,24 @@ export const PUBLISHER_SESSIONS: readonly PublisherSession[] = [
     contentSelector: 'article.article',
     // A member's "24시간 무료 링크": the full note for anyone, for a day.
     giftLinkParams: ['ticket'],
+    locales: ['ko'],
+  },
+  // Measured 2026-11-04 (.taskmaster/docs/paywalled-publisher-sisain-notes.md).
+  // Only 뉴인 (newin), the latest issue, is for paying readers; older articles
+  // are open to anyone. A newin page for anyone else is cut on the server: the
+  // opening paragraph, then the subscribe box inside the body, so no wait.
+  {
+    slug: 'sisain',
+    domain: 'sisain.co.kr',
+    // Redirects to member.sisain.co.kr's form, which signs in back here.
+    loginUrl: 'https://www.sisain.co.kr/member/login.html',
+    // `slt` (httpOnly, 30 days) is 자동로그인's token: with only it left, the
+    // next page load signs the reader back in on the server. Without
+    // 자동로그인 there is only `pchrg`, set on www at sign-in for a paying
+    // reader and gone with the browser session.
+    sessionCookie: ['slt', 'pchrg'],
+    gatewaySelector: '#newin-text',
+    contentSelector: '#article-view-content-div',
     locales: ['ko'],
   },
 ];

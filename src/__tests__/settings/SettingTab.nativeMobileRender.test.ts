@@ -128,6 +128,8 @@ vi.mock('../../settings/DangerZone.svelte', () => ({ default: 'DangerZone' }));
 import { __setApiVersion, Setting } from 'obsidian';
 import { SocialArchiverSettingTab } from '../../settings/SettingTab';
 import { DEFAULT_SETTINGS, DEFAULT_TTS_SETTINGS } from '../../types/settings';
+import { setByokService } from '../../services/byok/ByokService';
+import { byokFixture, openaiModels, readyOpenAI } from '../services/byok/byokTestKit';
 
 // Obsidian DOM helpers the settings rows use that test/setup.ts lacks.
 const helpers: Array<[object, string, (this: never, ...args: never[]) => unknown]> = [
@@ -222,6 +224,28 @@ describe('settings tab on Obsidian 1.13+ mobile (feedback #199)', () => {
     renderLikeObsidian113(document.createElement('div'), mobileTab(true).getSettingDefinitions());
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(thenCalls.count).toBe(0);
+  });
+
+  // BYOK keys are device settings: their rows render on a phone, signed out
+  // too, without touching the Social Archiver API.
+  it('renders the AI API keys rows on mobile while signed out, with no API call', async () => {
+    const fixture = byokFixture({ answer: () => openaiModels('gpt-6-luna') });
+    await readyOpenAI(fixture);
+    setByokService(fixture.service);
+    try {
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const apiCalls: string[] = [];
+      const container = document.createElement('div');
+      renderLikeObsidian113(container, mobileTab(false, undefined, apiCalls).getSettingDefinitions());
+      expect(rowNamed(container, 'OpenAI')).toBeDefined();
+      expect(rowNamed(container, 'OpenAI model')).toBeDefined();
+      expect(rowNamed(container, 'Gemini')).toBeDefined();
+      expect(apiCalls).toEqual([]);
+      expect(errors).not.toHaveBeenCalled();
+      errors.mockRestore();
+    } finally {
+      setByokService(null);
+    }
   });
 
   // GitHub releases#50: signed out on 1.14.4 desktop, the hidden Collection

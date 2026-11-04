@@ -10,16 +10,24 @@ import type { AICli, AICommentType, AICommentProgress, AIOutputLanguage } from '
 import { COMMENT_TYPE_DISPLAY_NAMES } from '../../../types/ai-comment';
 import { AI_CLI_INFO } from '../../../utils/ai-cli';
 import type { AIActionType } from '../../../services/WorkersAPIClient';
+import {
+  BYOK_PROVIDERS,
+  fromStoredProviderId,
+  isByokStoredProviderId,
+  type ByokStoredProviderId,
+} from '../../../vendor/byok-ai-core';
+import { t } from '../../../i18n';
 
 // ============================================================================
 // Types
 // ============================================================================
 
 /**
- * The plugin's own AI CLIs, plus Apple's on-device model — which only this
- * vault's `social-archiver` executor runs, so it goes out as a queued job.
+ * The plugin's own AI CLIs and the user's own provider keys (BYOK, run
+ * directly), plus Apple's on-device model — which only this vault's
+ * `social-archiver` executor runs, so it goes out as a queued job.
  */
-export type AIBannerProvider = AICli | 'apple';
+export type AIBannerProvider = AICli | 'apple' | ByokStoredProviderId;
 
 /**
  * Comment types Apple Intelligence can run, and the job each one queues. No
@@ -34,11 +42,16 @@ export const APPLE_COMMENT_ACTIONS: Partial<Record<AICommentType, AIActionType>>
 };
 
 export function isCommentTypeSupported(provider: AIBannerProvider | null, type: AICommentType): boolean {
+  // A provider key cannot read the vault: connections stay CLI-only.
+  if (isByokStoredProviderId(provider)) return type !== 'connections';
   return provider !== 'apple' || type in APPLE_COMMENT_ACTIONS;
 }
 
+/** English like the rest of the banner; BYOK is named by provider ("OpenAI (my key)"). */
 export function providerDisplayName(provider: AIBannerProvider): string {
-  return provider === 'apple' ? 'Apple Intelligence' : AI_CLI_INFO[provider].displayName;
+  if (provider === 'apple') return 'Apple Intelligence';
+  if (isByokStoredProviderId(provider)) return `${BYOK_PROVIDERS[fromStoredProviderId(provider)].label} (my key)`;
+  return AI_CLI_INFO[provider].displayName;
 }
 
 export type AICommentBannerState =
@@ -78,7 +91,8 @@ export interface AICommentBannerOptions {
    * The banner has no plugin access, so the caller wires this to the API.
    */
   loadSavedPrompts?: () => Promise<readonly SavedPromptOption[]>;
-  onGenerate: (cli: AIBannerProvider, type: AICommentType, customPrompt?: string, language?: AIOutputLanguage) => Promise<void>;
+  /** `web`: the user asked this custom run with their own key to search the web. */
+  onGenerate: (cli: AIBannerProvider, type: AICommentType, customPrompt?: string, language?: AIOutputLanguage, web?: boolean) => Promise<void>;
   onGenerateMulti?: (clis: AICli[], type: AICommentType, customPrompt?: string, language?: AIOutputLanguage) => Promise<void>;
   onRunAction?: (actionId: AICommentBannerActionId, cli: AIBannerProvider, language?: AIOutputLanguage) => Promise<void>;
   onDecline: () => void;
@@ -106,6 +120,12 @@ export interface AICommentBannerOptions {
   onTagLanguageChange?: (language: AIOutputLanguage) => void;
   /** Whether the post has a transcript (enables translate-transcript type) */
   hasTranscript?: boolean;
+  /**
+   * The name of the model a comment with this key would use when its
+   * provider says it cannot search the web, else null. Greys out "Search
+   * the web"; the caller wires it to ByokService.
+   */
+  modelWithoutWebSearch?: (provider: ByokStoredProviderId) => Promise<string | null>;
   /**
    * Resume the generating UI for a run that outlived a card re-render. The
    * run itself is owned by the caller (it survives banner destruction);
@@ -187,6 +207,12 @@ export class AICommentBanner {
   private selectedLanguage: AIOutputLanguage = 'auto';
   private customPrompt: string = '';
   private customPromptInput: HTMLInputElement | null = null;
+  /** "Search the web" for the next custom run with the user's own key; off by default. */
+  private customWeb = false;
+  /** Per key: the model that cannot search the web, null when it can (or nobody knows); absent until asked. */
+  private readonly noWebModels = new Map<ByokStoredProviderId, string | null>();
+  /** Brings the rendered "Search the web" option up to date. */
+  private syncWebOption: (() => void) | null = null;
   private promptPresetSelect: HTMLSelectElement | null = null;
   private promptPresetsRequested = false;
   private savedPromptOptions: readonly SavedPromptOption[] = [];
@@ -396,6 +422,7 @@ export class AICommentBanner {
           customPromptRow.addClass('sa-hidden');
         }
       }
+      this.syncWebOption?.();
       if (wasAction !== !!this.selectedActionId) {
         this.renderCurrentState();
       }
@@ -439,6 +466,7 @@ export class AICommentBanner {
         adjustWidth(cliSelect);
         syncTypeAvailability();
         adjustWidth(typeSelect);
+        this.syncWebOption?.();
       });
     }
     // Single AI mode with only one CLI: show CLI name as text
@@ -579,6 +607,57 @@ export class AICommentBanner {
     });
 
     // Focus styling handled by CSS .acb-prompt-input:focus
+
+    // The user's own key: web access for this one custom run, off by default.
+    const webOption = customPromptRow.createEl('label', { cls: 'acb-web-option' });
+    const webCheckbox = webOption.createEl('input', { type: 'checkbox' });
+    webOption.createSpan({ text: t('byok.web.comment') });
+    const webNote = parent.createDiv({ cls: 'acb-web-note' });
+    webCheckbox.addEventListener('change', () => {
+      this.customWeb = webCheckbox.checked;
+      this.syncWebOption?.();
+    });
+    this.syncWebOption = (): void => {
+      const provider = this.customWebProvider();
+      if (provider && !this.noWebModels.has(provider)) this.checkWebSearch(provider);
+      const noWebModel = provider ? this.noWebModels.get(provider) ?? null : null;
+      const reason = noWebModel ? t('byok.web.unsupported', { model: noWebModel }) : '';
+      webOption.toggleClass('sa-hidden', !provider);
+      webOption.toggleClass('is-disabled', noWebModel !== null);
+      webOption.setAttribute('title', reason);
+      webCheckbox.disabled = noWebModel !== null;
+      webCheckbox.checked = this.customWeb && !noWebModel;
+      const note = !provider
+        ? ''
+        : reason || (this.customWeb ? t('byok.web.cost', { provider: BYOK_PROVIDERS[fromStoredProviderId(provider)].label }) : '');
+      webNote.textContent = note;
+      webNote.toggleClass('sa-hidden', !note);
+    };
+    this.syncWebOption();
+  }
+
+  /** The user's own key a custom run would use (one engine, custom type), else null: only that run can search the web. */
+  private customWebProvider(): ByokStoredProviderId | null {
+    const multiAi = this.options?.multiAiEnabled && (this.options.multiAiSelection?.length ?? 0) > 1;
+    return !this.selectedActionId && this.selectedType === 'custom' && !multiAi && isByokStoredProviderId(this.selectedCli)
+      ? this.selectedCli
+      : null;
+  }
+
+  /** Asks once per key whether its comment model can search the web; until it says no, the option works. */
+  private checkWebSearch(provider: ByokStoredProviderId): void {
+    const ask = this.options?.modelWithoutWebSearch;
+    if (!ask) return;
+    this.noWebModels.set(provider, null);
+    ask(provider).then(
+      (model) => {
+        if (!model) return;
+        this.noWebModels.set(provider, model);
+        this.syncWebOption?.();
+      },
+      // No model list to ask: unknown, so the request just tries.
+      () => undefined,
+    );
   }
 
   /**
@@ -613,6 +692,8 @@ export class AICommentBanner {
       glossary: 'Identifying terms & definitions',
       reformat: 'Reformatting content',
       custom: 'Processing',
+      chat: 'Chatting',
+      research: 'Researching',
     };
     const actionLabel = this.getSelectedActionLabel();
     let currentStatus = actionLabel
@@ -721,8 +802,9 @@ export class AICommentBanner {
    * Auth required state
    */
   private renderAuthRequiredState(parent: HTMLElement): void {
-    // Apple Intelligence has no sign-in; handleGenerate never lands here for it.
-    if (!this.options || !this.selectedCli || this.selectedCli === 'apple') return;
+    // Apple Intelligence has no sign-in and a provider key is set up in
+    // settings; handleGenerate never lands here for either.
+    if (!this.options || !this.selectedCli || this.selectedCli === 'apple' || isByokStoredProviderId(this.selectedCli)) return;
 
     // Reset parent to row layout
     parent.removeClass('sa-flex-col');
@@ -859,6 +941,8 @@ export class AICommentBanner {
 
     // Get custom prompt if type is custom
     const customPrompt = !isAction && this.selectedType === 'custom' ? this.customPrompt.trim() : undefined;
+    const webProvider = this.customWebProvider();
+    const web = webProvider !== null && this.customWeb && !this.noWebModels.get(webProvider);
 
     this.state = 'generating';
     this.abortController = new AbortController();
@@ -876,12 +960,19 @@ export class AICommentBanner {
         await this.options.onGenerateMulti(this.options.multiAiSelection, this.selectedType, customPrompt, this.selectedLanguage);
       } else if (this.selectedCli) {
         // Single AI generation
-        await this.options.onGenerate(this.selectedCli, this.selectedType, customPrompt, this.selectedLanguage);
+        await this.options.onGenerate(this.selectedCli, this.selectedType, customPrompt, this.selectedLanguage, web);
       }
       // A cancel mid-run already reset the state to 'default' — keep it.
       if (this.state === 'generating') this.state = 'complete';
+      // Web access was for that run; one that failed keeps it, like its prompt.
+      this.customWeb = false;
     } catch (error) {
-      if (this.selectedCli !== 'apple' && error instanceof Error && error.message.includes('not authenticated')) {
+      if (
+        this.selectedCli !== 'apple' &&
+        !isByokStoredProviderId(this.selectedCli) &&
+        error instanceof Error &&
+        error.message.includes('not authenticated')
+      ) {
         this.state = 'authRequired';
       } else {
         this.state = 'default';
@@ -955,6 +1046,7 @@ export class AICommentBanner {
   destroy(): void {
     this.stopElapsedTimer();
     this.abortController?.abort();
+    this.syncWebOption = null;
     this.contentEl?.remove();
     this.container = null;
     this.contentEl = null;

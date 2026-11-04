@@ -23,6 +23,7 @@ import type { TextHighlight, UserNote } from '@/types/annotations';
 import type { AuthorProfileSystemUpsertInput, AuthorProfileUpsertInput, UserAuthorProfile } from '@/types/author-profile';
 import type { BillingEventApiPayload, BillingEventsResponse } from '@/types/billing-events';
 import type { AICommentType } from '@/types/ai-comment';
+import type { ByokStoredProviderId } from '@/vendor/byok-ai-core';
 import type { RelationWithSummary, RelationPullResponse } from '@/types/link-relations';
 import type { ArchiveAttempt, ArchiveAttemptStatus } from '@/types/post';
 import type {
@@ -108,6 +109,25 @@ import {
   type PlaceCandidatesResponse,
 } from '@/types/place-candidate-attachment';
 
+/**
+ * Capabilities on every request. `ai-comment-types-v2`: this plugin parses
+ * `chat`/`research` comments, so the server must not re-append them to a full
+ * aiComments PATCH as it does for older plugins. `byok-providers-v1`: provider
+ * pickers may list BYOK provider ids (`openai-api`, …).
+ */
+const DEFAULT_REQUEST_CAPABILITIES = `${PLACE_CONTEXT_NOTE_CAPABILITY},archive-note-ops-v1,ai-comment-types-v2,byok-providers-v1`;
+
+/** What this executor runs: the AI-action list/claim header and the advertised payload share it. */
+export const AI_ACTION_EXECUTOR_CAPABILITIES: readonly string[] = [
+  'ai-actions-v1',
+  'tag-patch-v1',
+  'content-variants-v1',
+  'content-translate-v1',
+  PLACE_EXTRACT_CAPABILITY,
+  PLACE_KIND_SUGGESTION_CAPABILITY,
+  'comment-research-v1',
+];
+
 export type {
   ProviderPlaceSelectionResponse,
   ProviderPlaceSelectionRequest,
@@ -192,8 +212,9 @@ export interface UpdateSyncClientRequest {
 // AI Comment Job Types
 // ============================================================================
 
-export type AICommentProviderId = 'claude' | 'gemini' | 'codex';
-/** Where a stored comment came from: this executor's CLIs, the desktop app's on-device model, or Cloud AI. */
+/** What an executor runs a job on: a local CLI, or the executor's own BYOK provider key. */
+export type AICommentProviderId = 'claude' | 'gemini' | 'codex' | ByokStoredProviderId;
+/** Where a stored comment came from: an executor's CLI or BYOK key, the desktop app's on-device model, or Cloud AI. */
 export type AICommentSourceId = AICommentProviderId | 'apple' | 'workers-ai';
 export type AICommentJobStatus =
   | 'queued'
@@ -273,6 +294,8 @@ export interface AICommentProviderCapability {
   errorCode?: string;
   models?: AICommentModelOption[];
   defaultModel?: string;
+  /** Narrows the executor-level list for this provider (BYOK: no vault `connections`). */
+  supportedTypes?: string[];
 }
 
 export interface AICommentModelOption {
@@ -300,6 +323,7 @@ export type AIActionType =
   | 'comment.glossary'
   | 'comment.reformat'
   | 'comment.custom'
+  | 'comment.research'
   | 'tags.suggest_apply'
   | 'content.translate_variant'
   | 'content.reformat_variant'
@@ -367,6 +391,34 @@ export interface AIActionJobSummary {
   updatedAt: string;
   errorCode?: string;
   errorMessage?: string;
+}
+
+// Cloud AI chat about one archived post (POST /api/ai-actions/chat/ask).
+// Restated from packages/social-archiver-api contracts/ai.ts (no package dep).
+
+export interface ChatAIMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+/** The server reads the post from the archive itself; the client sends only the conversation. */
+export interface ChatAIAskRequest {
+  archiveId: string;
+  history?: ChatAIMessage[];
+  question: string;
+  /** 'auto' | ISO code. */
+  outputLanguage?: string;
+}
+
+export interface ChatAIAnswer {
+  text: string;
+  provider: 'workers-ai';
+  /** The model that answered (primary or fallback). */
+  model: string;
+}
+
+export interface ChatAIAvailability {
+  cloud: { available: boolean; consentRequired: boolean; credits?: number };
 }
 
 export interface AIActionAvailability {
@@ -2088,7 +2140,7 @@ export class WorkersAPIClient implements IService {
       'X-Client': 'obsidian-plugin',
       'X-Client-Version': this.config.pluginVersion || '0.0.0',
       'X-Platform': this.getPlatformIdentifier(),
-      'X-Client-Capabilities': `${PLACE_CONTEXT_NOTE_CAPABILITY},archive-note-ops-v1`,
+      'X-Client-Capabilities': DEFAULT_REQUEST_CAPABILITIES,
       ...options.headers,
     };
     if (this.config.clientId && !headers['X-Client-Id']) {
@@ -3301,14 +3353,7 @@ export class WorkersAPIClient implements IService {
   }
 
   private aiActionExecutorCapabilities(): string {
-    return [
-      'ai-actions-v1',
-      'tag-patch-v1',
-      'content-variants-v1',
-      'content-translate-v1',
-      PLACE_EXTRACT_CAPABILITY,
-      PLACE_KIND_SUGGESTION_CAPABILITY,
-    ].join(',');
+    return AI_ACTION_EXECUTOR_CAPABILITIES.join(',');
   }
 
   async getAvailableAIActionJobs(targetClientId: string): Promise<{ jobs: AIActionExecutorJob[] }> {
@@ -3328,6 +3373,24 @@ export class WorkersAPIClient implements IService {
     return this.request<AIActionAvailability>(`/api/ai-actions/jobs/availability?${params.toString()}`, {
       method: 'GET',
     });
+  }
+
+  /**
+   * One Cloud AI chat turn about an archived post (synchronous, 0.5 credit).
+   * Failures throw with `.code`: SERVER_AI_CONSENT_REQUIRED, SERVER_AI_LOCAL_ONLY,
+   * PAYWALL_REQUIRED, CHAT_AI_RATE_LIMITED, UNSUPPORTED_ARCHIVE, ARCHIVE_NOT_FOUND, …
+   */
+  async askChatAI(request: ChatAIAskRequest): Promise<ChatAIAnswer> {
+    this.ensureInitialized();
+    return this.request<ChatAIAnswer>('/api/ai-actions/chat/ask', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async getChatAIAvailability(): Promise<ChatAIAvailability> {
+    this.ensureInitialized();
+    return this.request<ChatAIAvailability>('/api/ai-actions/chat/availability', { method: 'GET' });
   }
 
   async createAIActionJob(request: CreateAIActionJobRequest): Promise<CreateAIActionJobResponse> {

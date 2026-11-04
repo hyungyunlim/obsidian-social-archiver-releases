@@ -3,6 +3,7 @@ import { TIMELINE_PLATFORM_IDS } from '../constants/timelinePlatforms';
 import type { AICommentSettings } from './ai-comment';
 import type { LocalAICommentPendingUpload } from './ai-comment-job';
 import { DEFAULT_AI_COMMENT_SETTINGS } from './ai-comment';
+import { DEFAULT_BYOK_SETTINGS, normalizeByokSettings, type ByokSettings } from './byok-settings';
 import type { PluginTTSProviderId } from '../services/tts/types';
 import type { SeriesCurrentEpisodeState } from './series';
 import type { TagDefinition } from './tag';
@@ -707,6 +708,9 @@ export interface SocialArchiverSettings {
   aiComment: AICommentSettings;
   aiCommentPendingUploads: Record<string, LocalAICommentPendingUpload>;
 
+  /** AI with the user's own API keys. Secret names only — keys live in SecretStorage. */
+  byok: ByokSettings;
+
   // Text-to-Speech Settings
   tts: PluginTTSSettings;
 
@@ -998,6 +1002,8 @@ export const DEFAULT_SETTINGS: SocialArchiverSettings = {
   aiComment: DEFAULT_AI_COMMENT_SETTINGS,
   aiCommentPendingUploads: {},
 
+  byok: DEFAULT_BYOK_SETTINGS,
+
   // Text-to-Speech Settings
   tts: DEFAULT_TTS_SETTINGS,
 
@@ -1228,6 +1234,8 @@ export function migrateSettings(settings: Partial<SocialArchiverSettings>): Soci
       },
     };
   }
+
+  migrated.byok = normalizeByokSettings(migrated.byok);
 
   // Initialize release notes settings if missing (migration)
   if (migrated.lastSeenVersion === undefined) {

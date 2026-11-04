@@ -1,4 +1,5 @@
 import type { AICommentMeta } from '../types/ai-comment';
+import { BYOK_STORED_PROVIDER_IDS, byokCommentLabel } from '../vendor/byok-ai-core';
 
 interface ProviderDisplay {
   icon: string;
@@ -14,6 +15,12 @@ const LOCAL_PROVIDER_DISPLAY: Record<string, Pick<ProviderDisplay, 'icon' | 'pro
   // Desktop app's on-device executor; the label round-trips through the
   // markdown header parser as "apple-intelligence" → 'apple'.
   apple: { icon: '🍎', providerLabel: 'Apple Intelligence' },
+  // The user's own provider keys: "OpenAI API" round-trips as "openai-api".
+  // ⚡ is already a header icon older plugins recognise, so they keep the
+  // header as a comment boundary.
+  ...Object.fromEntries(
+    BYOK_STORED_PROVIDER_IDS.map((id) => [id, { icon: '⚡', providerLabel: byokCommentLabel(id) }]),
+  ),
 };
 
 export function getAICommentDisplay(meta: Pick<AICommentMeta, 'cli' | 'model' | 'executedModel' | 'id'>): ProviderDisplay {

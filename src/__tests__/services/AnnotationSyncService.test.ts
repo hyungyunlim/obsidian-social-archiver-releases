@@ -561,6 +561,44 @@ AI summary`;
     });
   });
 
+  describe('AI comment snapshot', () => {
+    it('keeps the model that actually ran (executedModel) and BYOK providers when writing the server snapshot', async () => {
+      const file = makeFile('Social Archives/test.md');
+      const app = makeApp({ fileContent: '# Test Post\n\nContent here.' });
+      const service = new AnnotationSyncService(
+        app as any,
+        makeWorkersApiClient() as any,
+        makeArchiveLookup({ byId: file }) as any,
+        makeAnnotationRenderer('') as any,
+        makeSectionManager('# Test Post\n\nContent here.') as any,
+        makeSettings(),
+        makeBodyMarker() as any,
+      );
+
+      await service.applyAnnotationState(file, {
+        id: 'archive-123',
+        originalUrl: 'https://example.com/post/123',
+        userNotes: [],
+        userHighlights: [],
+        aiComments: [{
+          meta: {
+            id: 'ai-action-comment-job-1',
+            cli: 'openai-api',
+            model: 'gpt-6.1-terra',
+            executedModel: 'gpt-6.1-terra-2026-10-01',
+            type: 'research',
+            generatedAt: '2026-11-04T10:30:00.000Z',
+          },
+          content: '#### Summary\nClaims.',
+        }],
+      } as any);
+
+      const written = (app.vault.modify as Mock).mock.calls[0]?.[1] as string;
+      expect(written).toContain('### ⚡ OpenAI API · Research · Nov 4, 2026');
+      expect(decodeURIComponent(written)).toContain('"executedModel":"gpt-6.1-terra-2026-10-01"');
+    });
+  });
+
   describe('transcription clear', () => {
     it('removes transcription frontmatter and managed transcript blocks on explicit clear event', async () => {
       const file = makeFile('Social Archives/test.md');

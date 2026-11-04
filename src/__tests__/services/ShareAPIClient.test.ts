@@ -479,6 +479,9 @@ describe('ShareAPIClient', () => {
       expect(headers).toHaveProperty('X-Client', 'obsidian-plugin');
       expect(headers).toHaveProperty('X-Request-Id');
       expect(headers['X-Request-Id']).toMatch(/^req_\d+_[a-z0-9]+$/);
+      // Share updates carry aiComments: this plugin parses chat/research
+      // comments, so the server must not treat it as a legacy plugin.
+      expect(headers['X-Client-Capabilities']).toContain('ai-comment-types-v2');
     });
 
     it('should work without API key', async () => {

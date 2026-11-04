@@ -150,6 +150,16 @@ import {
 } from './plugin/billing/billingEventNoticer';
 import { DesktopCapabilityReporter } from './plugin/ai-comment/DesktopCapabilityReporter';
 import { AICommentJobProcessor } from './plugin/ai-comment/AICommentJobProcessor';
+import { ByokService, setByokService } from './services/byok/ByokService';
+import { clearPostChatSessions } from './services/byok/postChatSessions';
+import { ByokKeyStore } from './services/byok/ByokKeyStore';
+import { createObsidianByokStore } from './services/byok/ObsidianByokStore';
+import { createObsidianByokTransport, fetchByokModelCatalog } from './services/byok/ObsidianByokTransport';
+import { openByokConsentModal } from './modals/ByokConsentModal';
+import { ByokResearchRunner, type DeepResearchRecord, type ResearchNoticeAction } from './services/byok/ByokResearchRunner';
+import { pluginAICommentSaver, type AICommentTarget } from './services/ai-comment/AICommentSaver';
+import { AICommentService } from './services/AICommentService';
+import { PostDataParser } from './components/timeline/parsers/PostDataParser';
 import { TranscriptionCapabilityReporter } from './plugin/transcription/TranscriptionCapabilityReporter';
 import { TranscriptionJobProcessor, type PendingTranscriptUploadRecord } from './plugin/transcription/TranscriptionJobProcessor';
 import { CaptionVariantSyncService } from './plugin/transcription/CaptionVariantSyncService';
@@ -398,6 +408,10 @@ export default class SocialArchiverPlugin extends Plugin {
   public composedPostSync?: ComposedPostSyncService;
   private aiCommentCapabilityReporter?: DesktopCapabilityReporter;
   public aiCommentJobProcessor?: AICommentJobProcessor;
+  /** AI with the user's own provider keys (also reachable via getByokService()). */
+  public byokService?: ByokService;
+  /** Quick and deep research saved as `research` AI comments; polls deep jobs this device started. */
+  public byokResearchRunner?: ByokResearchRunner;
   /** `social-archiver executor` child that serves this vault instead of the built-in processor. */
   private cliExecutorSupervisor?: StandaloneCliExecutorSupervisor;
   private cliDelegationActive = false;
@@ -1296,6 +1310,16 @@ export default class SocialArchiverPlugin extends Plugin {
   async onload(): Promise<void> {
     await this.loadSettings();
 
+    // Before services: the executor advertises BYOK providers and the
+    // settings tab and timeline run comments through it.
+    this.byokService = this.createByokService();
+    setByokService(this.byokService);
+    this.byokResearchRunner = this.createByokResearchRunner();
+    // Deep research started before a restart: keep polling once the vault is indexed.
+    this.app.workspace.onLayoutReady(() => {
+      void this.byokResearchRunner?.resume();
+    });
+
     // Phase B+C — instantiate the plugin-owned billing-events store and
     // session Notice dedupe BEFORE settings UI / WS bridge wiring so that
     // `BillingEventsSection.svelte` (Phase D) and `RealtimeEventBridge` can
@@ -1492,6 +1516,11 @@ export default class SocialArchiverPlugin extends Plugin {
           void this.refreshDesktopAICommentExecutor('settings-changed', { reconnectRealtime: true });
           return;
         }
+        // A BYOK provider switched on/off, its key or model changed: re-advertise.
+        if (changedKeys?.includes('byok')) {
+          this.aiCommentCapabilityReporter?.refreshSoon();
+          return;
+        }
         if (!changedKeys || changedKeys.length === 0) {
           this.aiCommentCapabilityReporter?.refreshSoon();
           this.transcriptionCapabilityReporter?.refreshSoon();
@@ -1659,6 +1688,11 @@ export default class SocialArchiverPlugin extends Plugin {
   }
 
   onunload(): void {
+    setByokService(null);
+    this.byokResearchRunner?.dispose();
+    // Chats live in memory only: answers on their way stop with the plugin.
+    clearPostChatSessions();
+
     // Kill all spawned child processes (yt-dlp, whisper, etc.)
     const killedCount = ProcessManager.killAll();
     if (killedCount > 0) {
@@ -1802,6 +1836,65 @@ export default class SocialArchiverPlugin extends Plugin {
     this.pendingJobsManager?.dispose();
     void this.orchestrator?.dispose();
     void this.apiClient?.dispose();
+  }
+
+  private createByokService(): ByokService {
+    return new ByokService({
+      settings: () => this.settings,
+      saveSettings: (partial) => this.saveSettingsPartial(partial, { reinitialize: false, notify: true }),
+      keyStore: new ByokKeyStore(this.app, () => this.settings),
+      store: createObsidianByokStore(this.app),
+      transport: createObsidianByokTransport(),
+      fetchRemoteCatalog: () => fetchByokModelCatalog(API_ENDPOINT),
+      requestConsent: (provider) => openByokConsentModal(this.app, provider),
+      notify: (message) => {
+        new Notice(message, 8000);
+      },
+      onChange: () => this.aiCommentCapabilityReporter?.refreshSoon(),
+    });
+  }
+
+  private createByokResearchRunner(): ByokResearchRunner {
+    return new ByokResearchRunner({
+      byok: () => this.byokService ?? null,
+      store: createObsidianByokStore(this.app),
+      generateComment: (content, options) => new AICommentService().generateComment(content, options),
+      resolveTarget: (record) => this.resolveResearchTarget(record),
+      notify: (message, action) => this.showResearchNotice(message, action),
+      schedule: (cb, delay) => this.scheduleTrackedTimeout(cb, delay),
+      clearSchedule: (id): void => {
+        window.clearTimeout(id);
+        this.pendingTimeouts.delete(id);
+      },
+    });
+  }
+
+  /** The note a deep research saves to: its path, else (renamed) its archive id. */
+  private async resolveResearchTarget(record: DeepResearchRecord): Promise<AICommentTarget | null> {
+    const file = this.app.vault.getFileByPath(record.filePath)
+      ?? (record.archiveId ? this.archiveLookupService?.findBySourceArchiveId(record.archiveId) ?? null : null);
+    if (!file) return null;
+    const post = await new PostDataParser(this.app.vault, this.app).parseFile(file);
+    return post ? pluginAICommentSaver(this).target(post, file) : null;
+  }
+
+  /** A notice that stays until dismissed when it offers an action ("Run again"). */
+  private showResearchNotice(message: string, action?: ResearchNoticeAction): void {
+    if (!action) {
+      new Notice(message, 10_000);
+      return;
+    }
+    let notice: Notice | null = null;
+    const fragment = createFragment((root) => {
+      root.createSpan({ text: message });
+      const button = root.createEl('button', { text: action.label, cls: 'sa-notice-action' });
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        notice?.hide();
+        action.run();
+      });
+    });
+    notice = new Notice(fragment, 0);
   }
 
   async loadSettings(): Promise<void> {
@@ -2559,6 +2652,7 @@ export default class SocialArchiverPlugin extends Plugin {
         apiClient: () => this.apiClient,
         settings: () => this.settings,
         delegatedToCli: () => this.cliDelegationActive,
+        byok: () => this.byokService ?? null,
         pluginVersion: this.manifest.version,
         schedule: (cb, delay) => this.scheduleTrackedTimeout(cb, delay),
         clearSchedule: (id) => {
