@@ -1,5 +1,6 @@
 import { setIcon, getLanguage, Notice, Scope, TFile, TFolder, MarkdownRenderer, Component, Modal, Menu, Platform as ObsidianPlatform, requestUrl, type Vault, type App } from 'obsidian';
 import { t } from '../../../i18n';
+import { paintAIMentions } from '../../../utils/paintAIMentions';
 import { toPostShareDisplayMode } from '../../../services/collections/collectionDisplayMode';
 import { NewPostShareModal } from '../collections/PostShareSettingsModal';
 import type { PostShareSettings } from '../../../types/collections';
@@ -76,9 +77,12 @@ import { AICliDetector, type AICli, type AICliDetectionResult } from '../../../u
 import { parseAIComments, appendAIComment, removeAIComment, updateFrontmatterAIComments } from '../../../services/ai-comment/markdown-handler';
 import { AICommentError, type AICommentEngineId, type AICommentMeta, type AICommentType, type AICommentProgress, type AICommentResult, type AIOutputLanguage } from '../../../types/ai-comment';
 import { fromStoredProviderId, isByokStoredProviderId, toStoredProviderId, type ByokStoredProviderId } from '../../../vendor/byok-ai-core';
-import { pluginAICommentSaver, type AICommentSaver, type AICommentTarget } from '../../../services/ai-comment/AICommentSaver';
+import { pluginAICommentSaver, type AICommentSaver, type AICommentTarget, type StoredAIComment } from '../../../services/ai-comment/AICommentSaver';
 import { serializePostForShare } from '../../../utils/serializePostForShare';
-import { aiConversationEntries, type AIConversationEntry } from '../aiConversationEntries';
+import { aiConversationEntries, chatAvailableFor, chatEnginesFor, continueSavedChatConfirmed, type AIConversationEntry } from '../aiConversationEntries';
+import { pluginNoteId } from '../../../services/byok/NoteMentionAsker';
+import { AIMentionPicker } from '../../ai-chat/AIMentionPicker';
+import { renderNoteReplies, splitPluginNoteReplies } from './NoteReplies';
 import type { ReaderOpenOptions } from '../reader/ReaderModeOverlay';
 import { getByokService } from '../../../services/byok/ByokService';
 import { insertTranscriptSection, extractTranscriptLanguages, parseTranscriptSections, resolveNoteTranscriptLanguages } from '../../../services/markdown/TranscriptSectionManager';
@@ -719,6 +723,8 @@ export class PostCardRenderer extends Component {
         }
         this.editCommentInline(post, commentSection);
       });
+
+      this.renderMyNoteReplies(commentSection, post);
     } else if (!isFailedAttempt && post.platform !== 'post') {
       // Saved header: "Jun saved this post/user · 2h ago" (clickable to add note inline)
       // Only show for archived social media posts, not user posts
@@ -5736,6 +5742,7 @@ export class PostCardRenderer extends Component {
     if (!file || !(file instanceof TFile)) return;
 
     try {
+      const before = post.comment ?? '';
       // Pre-register the current comment in the outbound service so that
       // the deletion is detected as a real diff (not a first-observation no-op).
       this.plugin.annotationOutboundService?.recordCommentBaseline(filePath, post.comment);
@@ -5759,6 +5766,8 @@ export class PostCardRenderer extends Component {
       savedSection.addClass('sa-relative');
       savedSection.addClass('sa-clickable');
       commentSection.replaceWith(savedSection);
+      // Its replies go back among the AI comments.
+      this.afterNoteSaved(post, savedSection, before);
 
       const userName = this.plugin.settings.username || 'You';
       const archivedTime = this.getRelativeTime(post.archivedDate);
@@ -5867,6 +5876,7 @@ export class PostCardRenderer extends Component {
 
           const commentTextDiv = commentTextContainer.createSpan({ cls: 'pcr-comment-text' });
           this.renderMarkdownLinks(commentTextDiv, currentComment, undefined, post.platform);
+          paintAIMentions(commentTextDiv);
 
           // Edit icon (hover handled by parent .pcr-comment-section:hover via pcr-edit-icon-inline)
           const editIcon = commentTextContainer.createSpan({ cls: 'pcr-edit-icon-inline' });
@@ -5922,6 +5932,8 @@ export class PostCardRenderer extends Component {
       const textarea = commentSection.createEl('textarea', { cls: 'pcr-comment-textarea' });
       textarea.value = post.comment || '';
       const detachTextareaAutosize = attachAutosizingTextarea(textarea);
+      // "@" offers the AIs this vault can ask; saving asks the ones the note newly mentions.
+      const mentionPicker = new AIMentionPicker({ app: this.app, textarea, engines: chatEnginesFor(this.plugin, post), scope: editScope });
       textarea.addEventListener('click', (e) => e.stopPropagation());
       textarea.addEventListener('mousedown', (e) => e.stopPropagation());
 
@@ -5946,6 +5958,7 @@ export class PostCardRenderer extends Component {
       // Save handler
       const handleSave = async () => {
         const newComment = textarea.value.trim();
+        const before = post.comment ?? '';
 
         try {
           // Register UI modify to prevent double refresh
@@ -5966,14 +5979,17 @@ export class PostCardRenderer extends Component {
 
           // Unregister scope
           this.app.keymap.popScope(editScope);
+          mentionPicker.destroy();
           detachTextareaAutosize();
 
           // Restore UI manually (since we skip auto-refresh for UI-initiated changes)
           restoreOriginalUI();
+          this.afterNoteSaved(post, commentSection, before);
         } catch {
           new Notice('Failed to save note');
           // Restore original on error
           this.app.keymap.popScope(editScope);
+          mentionPicker.destroy();
           detachTextareaAutosize();
           restoreOriginalUI();
         }
@@ -5981,6 +5997,7 @@ export class PostCardRenderer extends Component {
 
       const handleCancel = () => {
         this.app.keymap.popScope(editScope);
+        mentionPicker.destroy();
         detachTextareaAutosize();
         restoreOriginalUI();
       };
@@ -6190,6 +6207,7 @@ export class PostCardRenderer extends Component {
 
       const body = card.createDiv({ cls: 'pcr-mobile-note-body' });
       this.renderMarkdownLinks(body, note.content, undefined, post.platform);
+      paintAIMentions(body);
     }
   }
 
@@ -10535,7 +10553,11 @@ export class PostCardRenderer extends Component {
       if (!(file instanceof TFile)) return;
 
       const content = await this.vault.read(file);
-      const { comments, commentTexts } = parseAIComments(content);
+      const parsed = parseAIComments(content);
+      const { commentTexts } = parsed;
+      // Replies to "My Note" show under it, not here.
+      const noteId = pluginNoteId(this.plugin.settings.syncClientId);
+      const comments = splitPluginNoteReplies(parsed.comments.map((meta) => ({ meta })), post, noteId).others.map(({ meta }) => meta);
 
       if (comments.length === 0) return;
 
@@ -10587,12 +10609,52 @@ export class PostCardRenderer extends Component {
         onApplyReformat: async (commentId: string, newContent: string) => {
           await this.handleApplyReformat(post, commentId, newContent, rootElement);
         },
+        ...(this.onReaderModeCallback && chatAvailableFor(this.plugin, post)
+          ? { onContinueChat: (commentId: string) => void this.continueSavedChat(post, commentId, commentTexts.get(commentId) ?? '') }
+          : {}),
       };
 
       renderer.render(commentsContainer, options);
     } catch (error) {
       console.error('[PostCardRenderer] Failed to render AI comments:', error);
     }
+  }
+
+  /**
+   * "Continue chat" on a saved chat: that chat becomes the post's conversation,
+   * docked beside the article in reader mode. A chat holding turns the note
+   * does not have is thrown away only after the user says so.
+   */
+  private async continueSavedChat(post: PostData, commentId: string, content: string): Promise<void> {
+    const openReader = this.onReaderModeCallback;
+    if (openReader && (await continueSavedChatConfirmed(this.app, post, { id: commentId, content }))) openReader(post, { chat: true });
+  }
+
+  /** "My Note"'s replies under it: the AI answers to its mentions, and who is still replying. */
+  private renderMyNoteReplies(noteEl: HTMLElement, post: PostData): void {
+    renderNoteReplies(noteEl, {
+      app: this.app,
+      component: this,
+      post,
+      noteId: pluginNoteId(this.plugin.settings.syncClientId),
+      asker: this.plugin.noteMentionAsker,
+      ...(this.onReaderModeCallback && chatAvailableFor(this.plugin, post)
+        ? { onContinue: (reply: StoredAIComment): void => void this.continueSavedChat(post, reply.id, reply.content) }
+        : {}),
+    });
+  }
+
+  /**
+   * The note under `noteEl` was saved (it was `before`): the AIs it newly
+   * mentions are asked, its replies drawn again, and when the note came or
+   * went its replies move between it and the AI comments.
+   */
+  private afterNoteSaved(post: PostData, noteEl: HTMLElement, before: string): void {
+    const root = noteEl.parentElement;
+    const target = root ? this.aiCommentTarget(post, root) : null;
+    if (target) void this.plugin.noteMentionAsker?.askNoteMentions(target, before, post.comment ?? '');
+    this.renderMyNoteReplies(noteEl, post);
+    if (root && !before.trim() !== !post.comment?.trim()) void this.refreshPostCard(post, root);
   }
 
   private async handleTimelineAIActionRequest(

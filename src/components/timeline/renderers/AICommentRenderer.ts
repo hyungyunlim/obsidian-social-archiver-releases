@@ -4,6 +4,7 @@ import type { AICommentMeta } from '../../../types/ai-comment';
 import { COMMENT_TYPE_DISPLAY_NAMES } from '../../../types/ai-comment';
 import { getAICommentDisplay } from '../../../utils/ai-comment-display';
 import { showConfirmModal } from '../../../utils/confirm-modal';
+import { t } from '../../../i18n';
 
 /**
  * Options for AICommentRenderer
@@ -29,6 +30,26 @@ export interface AICommentRendererOptions {
   onTimestampClick?: (seconds: number) => void;
   /** Callback when apply reformat button is clicked (for reformat type only) */
   onApplyReformat?: (id: string, newContent: string) => Promise<void>;
+  /** "Continue chat" under a saved chat; omitted where chat cannot open on the post */
+  onContinueChat?: (id: string) => void;
+}
+
+/** "Continue chat" on its own line under a saved chat (and under "Show more"), styled like that toggle. */
+export function renderContinueChatLink(parent: HTMLElement, onContinue: () => void): HTMLElement {
+  const link = parent.createDiv({ cls: 'ai-comment-continue-chat acr-toggle sa-text-accent sa-clickable sa-text-sm sa-mt-4' });
+  link.setAttribute('role', 'button');
+  link.setAttribute('tabindex', '0');
+  link.textContent = t('byok.chat.continueSaved');
+  link.addEventListener('click', (e) => {
+    e.stopPropagation();
+    onContinue();
+  });
+  link.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    onContinue();
+  });
+  return link;
 }
 
 /**
@@ -55,6 +76,7 @@ export class AICommentRenderer {
   private sourcePath: string = '';
   private onTimestampClick: ((seconds: number) => void) | null = null;
   private onApplyReformat: ((id: string, newContent: string) => Promise<void>) | null = null;
+  private onContinueChat: ((id: string) => void) | null = null;
 
   /**
    * Render AI comments component (Instagram style, same as regular comments)
@@ -70,6 +92,7 @@ export class AICommentRenderer {
     this.sourcePath = options.sourcePath ?? '';
     this.onTimestampClick = options.onTimestampClick ?? null;
     this.onApplyReformat = options.onApplyReformat ?? null;
+    this.onContinueChat = options.onContinueChat ?? null;
 
     if (this.comments.length === 0) {
       return;
@@ -131,7 +154,8 @@ export class AICommentRenderer {
     const headerLine = commentDiv.createDiv({ cls: 'ai-comment-header' });
     headerLine.addClass('sa-flex-row');
     headerLine.addClass('sa-gap-6');
-    headerLine.addClass('sa-mb-4');
+    // A chat opens with a question callout: it needs air under the header, text runs closer.
+    headerLine.addClass(meta.type === 'chat' ? 'sa-mb-8' : 'sa-mb-4');
 
     // Sparkles icon (Lucide)
     const aiIcon = headerLine.createSpan({ cls: 'ai-comment-icon' });
@@ -413,6 +437,11 @@ export class AICommentRenderer {
 
       // Hover underline handled by CSS .acr-toggle:hover
       toggleBtn.addClass('acr-toggle');
+    }
+
+    if (meta.type === 'chat' && this.onContinueChat) {
+      const onContinueChat = this.onContinueChat;
+      renderContinueChatLink(textContainer, () => onContinueChat(meta.id));
     }
 
     return commentDiv;

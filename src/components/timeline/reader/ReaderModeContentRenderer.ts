@@ -37,6 +37,10 @@ import {
 } from './ReaderAIChatPanelRenderer';
 import { createReaderCollapsibleSection } from './ReaderCollapsibleSection';
 import type { ReaderTTSController } from './ReaderTTSController';
+import { renderNoteReplies, splitPluginNoteReplies } from '../renderers/NoteReplies';
+import { pluginNoteId } from '../../../services/byok/NoteMentionAsker';
+import type { StoredAIComment } from '../../../services/ai-comment/AICommentSaver';
+import { paintAIMentions } from '../../../utils/paintAIMentions';
 
 export interface ReaderContentVariantOption {
   id: string | null;
@@ -97,6 +101,8 @@ export interface ReaderContentCallbacks {
   /** Comment/note on the post */
   hasComment: boolean;
   onComment: () => void;
+  /** "Continue chat" on a reply under the note; absent where chat cannot open on the post. */
+  onContinueChat?: (saved: StoredAIComment) => void;
   /** TTS controller instance (optional, feature-flagged). */
   ttsController?: ReaderTTSController;
   /** Highlight state */
@@ -162,7 +168,7 @@ export class ReaderModeContentRenderer extends Component {
         cls: 'sa-reader-mode-comments-panel',
         attr: { 'aria-label': 'Reader comments' },
       });
-      await this.renderReaderComments(commentsPanel, post);
+      await this.renderReaderComments(commentsPanel, post, callbacks.onContinueChat);
       if (typeof window !== 'undefined' && window.matchMedia?.('(max-width: 960px)').matches) {
         commentsPanel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
@@ -900,7 +906,12 @@ export class ReaderModeContentRenderer extends Component {
     return count;
   }
 
-  private async renderReaderComments(parent: HTMLElement, post: PostData): Promise<void> {
+  private async renderReaderComments(
+    parent: HTMLElement,
+    post: PostData,
+    onContinueChat?: (saved: StoredAIComment) => void,
+  ): Promise<void> {
+    const noteId = pluginNoteId(this.plugin.settings.syncClientId);
     const readerChatCount = countReaderAIChatTurns(post);
     const aiCount = post.aiComments?.length ?? 0;
     const noteCount = post.comment?.trim() ? 1 : 0;
@@ -918,9 +929,11 @@ export class ReaderModeContentRenderer extends Component {
       await renderReaderAIChatSection(parent, post, { app: this.app, component: this });
     }
 
-    if (post.aiComments && post.aiComments.length > 0) {
+    // Replies to the note show under it.
+    const aiComments = splitPluginNoteReplies(post.aiComments ?? [], post, noteId).others;
+    if (aiComments.length > 0) {
       const section = this.createReaderCommentsSection(parent, 'AI Comments');
-      for (const comment of post.aiComments) {
+      for (const comment of aiComments) {
         const item = section.createDiv({ cls: 'sa-reader-mode-ai-comment' });
         const meta = item.createDiv({ cls: 'sa-reader-mode-ai-comment-meta' });
         const display = getAICommentDisplay(comment.meta);
@@ -951,6 +964,15 @@ export class ReaderModeContentRenderer extends Component {
       const section = this.createReaderCommentsSection(parent, 'Note');
       const note = section.createDiv({ cls: 'sa-reader-mode-user-note' });
       note.setText(post.comment.trim());
+      paintAIMentions(note);
+      renderNoteReplies(note, {
+        app: this.app,
+        component: this,
+        post,
+        noteId,
+        asker: this.plugin.noteMentionAsker,
+        ...(onContinueChat ? { onContinue: onContinueChat } : {}),
+      });
     }
 
     if (post.comments && post.comments.length > 0) {

@@ -10,10 +10,15 @@ vi.mock('obsidian', async (importOriginal) => {
     unload(): void {}
   }
   class Notice {}
+  class Scope {
+    constructor(readonly parent?: Scope) {}
+    register(): void {}
+  }
   return {
     ...actual,
     Component,
     Notice,
+    Scope,
     setIcon: (): void => undefined,
     MarkdownRenderer: {
       render: async (_app: unknown, markdown: string, el: HTMLElement): Promise<void> => {
@@ -48,6 +53,7 @@ function makeOverlay() {
     metadataCache: { getFileCache: () => ({ frontmatter }) },
     fileManager: { processFrontMatter: vi.fn(async (_f: TFile, fn: (fm: Record<string, unknown>) => void) => fn(frontmatter)) },
     loadLocalStorage: () => null,
+    keymap: { pushScope: vi.fn(), popScope: vi.fn() },
   } as unknown as App;
   const plugin = {
     app,
@@ -78,6 +84,7 @@ function makeOverlay() {
   });
   const internals = overlay as unknown as {
     openAIActionMenu(post: PostData, anchor: HTMLElement): void;
+    openCommentModal(post: PostData): void;
     handleKeyDown(e: KeyboardEvent): void;
     deletePost(post: PostData): Promise<void>;
     syncChatResume(): void;
@@ -88,7 +95,7 @@ function makeOverlay() {
     _isActive: boolean;
     chatDock: ReaderChatDock | null;
   };
-  return { overlay, internals, post, note, onUIModify };
+  return { overlay, internals, post, note, onUIModify, plugin };
 }
 
 /** Reader mode as open() leaves it, without rendering a post. */
@@ -244,5 +251,29 @@ describe('Reader mode chat and research', () => {
     expect(internals.chatDock).not.toBeNull();
     expect(dockMessages(container)).toEqual(['Why?', 'It schedules containers.']);
     expect(resumeShown()).toBe(false);
+  });
+
+  it('offers the AIs it can ask on "@" in the note, and asks the ones a save newly mentions', async () => {
+    setByokService({ readyProviders: () => ['openai'] } as unknown as ByokService);
+    const { internals, post, plugin } = makeOverlay();
+    const askNoteMentions = vi.fn(async () => undefined);
+    plugin.noteMentionAsker = { askNoteMentions } as unknown as NonNullable<SocialArchiverPlugin['noteMentionAsker']>;
+    internals.openCommentModal(post);
+
+    const textarea = document.querySelector('.rmo-note-textarea') as HTMLTextAreaElement;
+    textarea.value = 'Hi @';
+    textarea.setSelectionRange(4, 4);
+    textarea.dispatchEvent(new Event('input'));
+    expect([...document.querySelectorAll('.sa-ai-mention-option')].map((row) => row.textContent)).toEqual([
+      '@GPTOpenAI (my key)',
+      '@CloudAICloud AI',
+    ]);
+
+    textarea.value = 'Hi @GPT why?';
+    textarea.dispatchEvent(new Event('input'));
+    (document.querySelector('.rmo-note-save-btn') as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(askNoteMentions).toHaveBeenCalledWith(expect.objectContaining({ post }), '', 'Hi @GPT why?'));
+    expect(post.comment).toBe('Hi @GPT why?');
+    expect(document.querySelector('.rmo-note-textarea')).toBeNull();
   });
 });

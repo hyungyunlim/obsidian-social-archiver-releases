@@ -16,6 +16,7 @@ import {
   buildArticleContext,
   buildChatMessages,
   fitChatTranscript,
+  noteReplySuffix,
   parseChatTranscript,
   toStoredProviderId,
   withSourceLinks,
@@ -322,7 +323,8 @@ export class PostChatSession {
     const cli: AICommentProviderId = engine.kind === 'byok' ? toStoredProviderId(engine.provider) : 'workers-ai';
     return {
       meta: {
-        id: generateCommentId(cli, 'chat'),
+        // A continued reply to a note keeps its link to the note.
+        id: `${generateCommentId(cli, 'chat')}${noteReplySuffix(this.savedId)}`,
         cli,
         model: this.last.model,
         ...(this.last.executedModel ? { executedModel: this.last.executedModel } : {}),

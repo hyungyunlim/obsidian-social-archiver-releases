@@ -57,6 +57,26 @@ export {
 export { demoteHeadings, fitChatTranscript, formatChatTranscript, parseChatTranscript } from './transcript';
 export { WEB_ACCESS_REQUEST, withSourceLinks, withWebAccessRequest } from './web';
 export {
+  AI_MENTIONS_PER_NOTE,
+  AI_MENTION_HANDLES,
+  aiMentionQueryAt,
+  aiMentionSuggestions,
+  findAIMentions,
+  hasMentionQuestion,
+  insertAIMention,
+  isAnyNoteReply,
+  isNoteReply,
+  newAIMentions,
+  noteQuestionText,
+  noteReplyCommentId,
+  noteReplySuffix,
+  noteReplyTranscript,
+  splitNoteReplies,
+  type AIMention,
+  type AIMentionHandle,
+  type AIMentionTarget,
+} from './mentions';
+export {
   ARTICLE_CONTEXT_MAX_CHARS,
   COMMENTS_DIGEST_MAX_CHARS,
   buildArticleContext,

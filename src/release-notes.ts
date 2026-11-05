@@ -26,6 +26,20 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.11.1': {
+    title: 'Mention an AI in My Note, and continue a saved chat',
+    date: '2026-11-05',
+    notes: `## New
+
+- **Mention an AI in My Note.** Type \`@\` in My Note, on a card or in reader mode, to pick an AI you can ask: Claude, GPT, Gemini or OpenRouter on your own key, or Cloud AI when you're signed in. Save, and the AI reads the post and replies under My Note; while it works, My Note says it is replying. Continue the conversation from the reply with **Continue chat**.
+- **AI mentions stand out.** They show in the accent color in My Note and in notes synced from the mobile app.
+- **Continue chat under a saved chat** in the timeline reopens that conversation beside the article, so an older chat can be picked up, not only the newest.
+
+## Requirements
+
+- **Obsidian 1.11.4 or later** (secure key storage).
+`,
+  },
   '4.11.0': {
     title: 'Chat and research with your own AI API key',
     date: '2026-11-04',

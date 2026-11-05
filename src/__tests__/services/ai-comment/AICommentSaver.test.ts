@@ -3,7 +3,7 @@ import { TFile, type App } from 'obsidian';
 import { AICommentSaver } from '@/services/ai-comment/AICommentSaver';
 import { parseAIComments } from '@/services/ai-comment/markdown-handler';
 import { ShareAPIClient } from '@/services/ShareAPIClient';
-import { AI_COMMENTS_MAX_COUNT } from '@/vendor/byok-ai-core';
+import { AI_COMMENTS_MAX_COUNT, noteReplyCommentId } from '@/vendor/byok-ai-core';
 import type { AICommentMeta } from '@/types/ai-comment';
 import type { PostData } from '@/types/post';
 
@@ -171,6 +171,17 @@ describe('AICommentSaver', () => {
       'openai-api-chat-2',
       'openai-api-chat-3',
     ]);
+  });
+
+  it('never hands chat a reply to a note as the saved chat: a reply continues from its note', async () => {
+    const fixture = noteFixture('Body', { sourceArchiveId: 'archive-1' });
+    await fixture.saver.append(post(), fixture.file, chatMeta('openai-api-chat-1'), 'Chat.');
+    await fixture.saver.append(post(), fixture.file, chatMeta(noteReplyCommentId('openai-api-chat-2', 'obsidian:client-1:primary')), 'Reply.');
+    await expect(fixture.saver.savedChat(fixture.file)).resolves.toEqual({ id: 'openai-api-chat-1', content: 'Chat.' });
+
+    const onlyReplies = noteFixture('Body', { sourceArchiveId: 'archive-1' });
+    await onlyReplies.saver.append(post(), onlyReplies.file, chatMeta(noteReplyCommentId('openai-api-chat-3', 'mobile-note-1')), 'Reply.');
+    await expect(onlyReplies.saver.savedChat(onlyReplies.file)).resolves.toBeNull();
   });
 
   it('gives modals a target that brackets its write with the opener hooks', async () => {

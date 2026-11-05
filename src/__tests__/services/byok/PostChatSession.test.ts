@@ -6,6 +6,7 @@ import {
   CHAT_MAX_USER_TURNS,
   ByokError,
   WEB_ACCESS_REQUEST,
+  noteReplySuffix,
   utf8ByteLength,
   type ByokArticleInput,
 } from '../../../vendor/byok-ai-core';
@@ -250,6 +251,23 @@ describe('PostChatSession save payload', () => {
   it('has nothing to save before an answer', () => {
     const session = cloudSession(async () => ({ text: 'x', provider: 'workers-ai', model: 'm' }));
     expect(session.buildComment({ maxChars: 40_000, maxJsonBytes: 600_000 })).toBeNull();
+  });
+
+  it('keeps a reply\'s link to its note when the continued reply replaces it', async () => {
+    const reply = { id: 'workers-ai-chat-20261105T010203004-abcd-re-obsidian_client-1_primary', content: '> [!question] @CloudAI why?\n\nBecause.' };
+    const session = cloudSession(async () => ({ text: 'More.', provider: 'workers-ai', model: 'm' }));
+    session.seed(Promise.resolve(reply));
+    await session.ask('And then?');
+    const id = session.buildComment({ maxChars: 40_000, maxJsonBytes: 600_000 })?.meta.id ?? '';
+    expect(id).not.toBe(reply.id);
+    expect(id).toMatch(/^workers-ai-chat-.+-re-obsidian_client-1_primary$/);
+    expect(noteReplySuffix(id)).toBe(noteReplySuffix(reply.id));
+
+    // An ordinary saved chat continued stays ordinary.
+    const chat = cloudSession(async () => ({ text: 'More.', provider: 'workers-ai', model: 'm' }));
+    chat.seed(Promise.resolve(SAVED_CHAT));
+    await chat.ask('And then?');
+    expect(noteReplySuffix(chat.buildComment({ maxChars: 40_000, maxJsonBytes: 600_000 })?.meta.id)).toBe('');
   });
 });
 

@@ -51,8 +51,16 @@ import type { PluginTTSProvider } from '../../../services/tts/types';
 import type { TextHighlight, HighlightRenderProfile } from '../../../types/annotations';
 import { getRenderProfileForArchive, RENDER_PROFILE_CONFIG } from '../../../vendor/highlight-core';
 import { isWebLanePlatform } from '@/shared/platforms';
-import { aiConversationEntries, chatPanelOptionsFor, type AIConversationEntry } from '../aiConversationEntries';
-import { pluginAICommentSaver, type AICommentTarget } from '../../../services/ai-comment/AICommentSaver';
+import {
+  aiConversationEntries,
+  chatAvailableFor,
+  chatEnginesFor,
+  chatPanelOptionsFor,
+  continueSavedChatConfirmed,
+  type AIConversationEntry,
+} from '../aiConversationEntries';
+import { pluginAICommentSaver, type AICommentTarget, type StoredAIComment } from '../../../services/ai-comment/AICommentSaver';
+import { AIMentionPicker } from '../../ai-chat/AIMentionPicker';
 import { ReaderChatDock, type ReaderChatPanelOptions } from './ReaderChatDock';
 import { ReaderChatResumeButton } from './ReaderChatResumeButton';
 import { findPostChatSession } from '../../../services/byok/postChatSessions';
@@ -388,6 +396,13 @@ export class ReaderModeOverlay {
     }, post);
     this.syncChatResume();
     this.chatDock.focus();
+  }
+
+  /** "Continue chat" on a reply under the note: that saved chat becomes the post's conversation, docked beside the article. */
+  private async continueSavedChat(post: PostData, saved: StoredAIComment): Promise<void> {
+    this.holdKeys(true);
+    const continued = await continueSavedChatConfirmed(this.context.app, post, saved).finally(() => this.holdKeys(false));
+    if (continued) this.openChat();
   }
 
   /** The way back to a chat put down on the post on screen: shown while the dock is closed and that post has one. */
@@ -1632,6 +1647,8 @@ export class ReaderModeOverlay {
     textarea.addClass('rmo-note-textarea');
     body.appendChild(textarea);
     const detachTextareaAutosize = attachAutosizingTextarea(textarea);
+    // "@" offers the AIs this vault can ask; saving asks the ones the note newly mentions.
+    const mentionPicker = new AIMentionPicker({ app: this.context.app, textarea, engines: chatEnginesFor(this.context.plugin, post) });
 
     // Footer
     const footer = activeWindow.createDiv();
@@ -1709,13 +1726,17 @@ export class ReaderModeOverlay {
     // --- Handlers ---
 
     const closeModal = () => {
+      mentionPicker.destroy();
       detachTextareaAutosize();
+      // However it closes: a later Escape or Cmd/Ctrl+Enter belongs to the reader again.
+      activeDocument.removeEventListener('keydown', modalKeyHandler, true);
       overlay.remove();
       window.setTimeout(() => { this.modalOpen = false; }, 0);
     };
 
     const handleSave = async (overrideValue?: string) => {
       const newComment = overrideValue !== undefined ? overrideValue : textarea.value.trim();
+      const before = post.comment ?? '';
       const vault = this.context.app.vault;
       const tfile = vault.getAbstractFileByPath(filePath);
       if (!(tfile instanceof TFile)) {
@@ -1737,6 +1758,8 @@ export class ReaderModeOverlay {
         this.dirty = true;
 
         closeModal();
+        const target = this.commentTarget(post);
+        if (target) void this.context.plugin.noteMentionAsker?.askNoteMentions(target, before, newComment);
         await this.reRenderPreservingScroll();
       } catch (err) {
         console.error('[Social Archiver] Failed to save comment:', err);
@@ -1757,7 +1780,6 @@ export class ReaderModeOverlay {
         e.preventDefault();
         e.stopPropagation();
         closeModal();
-        activeDocument.removeEventListener('keydown', modalKeyHandler, true);
       } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         e.stopPropagation();
@@ -2437,6 +2459,9 @@ export class ReaderModeOverlay {
         showEdit: post.platform === 'post',
         hasComment: !!post.comment,
         onComment: () => this.openCommentModal(post),
+        ...(chatAvailableFor(this.context.plugin, post)
+          ? { onContinueChat: (saved: StoredAIComment): void => void this.continueSavedChat(post, saved) }
+          : {}),
         subscriptionStatus,
         onSubscribe: () => void this.subscribeAuthor(post),
         onUnsubscribe: () => void this.unsubscribeAuthor(post),

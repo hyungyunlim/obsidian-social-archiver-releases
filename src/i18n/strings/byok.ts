@@ -220,9 +220,27 @@ export const byokStrings = {
   'byok.chat.discardTitle': { en: 'Discard this chat?', ko: '이 채팅을 버릴까요?' },
   'byok.chat.discardMessage': { en: 'It is not saved to the note yet.', ko: '아직 노트에 저장하지 않았어요.' },
   'byok.chat.discard': { en: 'Discard', ko: '버리기' },
+  'byok.chat.continueSaved': { en: 'Continue chat', ko: '이어서 채팅하기' },
+  'byok.chat.continueDiscardTitle': { en: 'Continue this saved chat?', ko: '저장된 채팅을 이어갈까요?' },
+  'byok.chat.continueDiscardMessage': {
+    en: "The chat you haven't saved to the note will be discarded.",
+    ko: '노트에 저장하지 않은 채팅은 사라져요.',
+  },
   'byok.chat.keep': { en: 'Keep chatting', ko: '계속하기' },
   // The reader's floating button back to a chat put down on the post.
   'byok.chat.resume': { en: 'AI chat', ko: 'AI 채팅' },
+
+  // "@Claude …" in the note: the picker, why an AI cannot answer, who is answering
+  'byok.mention.picker': { en: 'Ask an AI', ko: 'AI에게 묻기' },
+  'byok.mention.noKey': {
+    en: 'Add your {provider} key in Social Archiver settings to ask @{handle}.',
+    ko: '@{handle}에게 물어보려면 Social Archiver 설정에서 {provider} 키를 추가하세요.',
+  },
+  'byok.mention.signIn': {
+    en: 'Sign in to Social Archiver to ask @{handle}.',
+    ko: '@{handle}에게 물어보려면 Social Archiver에 로그인하세요.',
+  },
+  'byok.mention.replying': { en: '{name} is replying…', ko: '{name} 답변 작성 중…' },
 
   // Web access the user turns on for one request (chat question, custom AI comment)
   'byok.web.comment': { en: 'Search the web', ko: '웹 검색' },

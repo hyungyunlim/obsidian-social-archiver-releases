@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { clearPostChatSessions, findPostChatSession, openPostChatSession } from '../../../services/byok/postChatSessions';
+import {
+  clearPostChatSessions,
+  continueSavedPostChat,
+  continuingSavedPostChatDropsTurns,
+  findPostChatSession,
+  openPostChatSession,
+} from '../../../services/byok/postChatSessions';
 import type { PostChatSessionDeps } from '../../../services/byok/PostChatSession';
 import type { PostData } from '../../../types/post';
 import type { ByokArticleInput } from '../../../vendor/byok-ai-core';
@@ -43,5 +49,53 @@ describe('postChatSessions', () => {
     expect(turn.abort.signal.aborted).toBe(true);
     expect(session.pending).toBeNull();
     expect(findPostChatSession(post('a.md'))).toBeUndefined();
+  });
+  describe('Continue chat on a saved chat', () => {
+    const OLD = { id: 'chat-old', content: '> [!question] Old?\n\nOld answer.' };
+    const NEW = { id: 'chat-new', content: '> [!question] New?\n\nNew answer.' };
+
+    it('starts the chat from the picked one when chat has not opened on the post yet', async () => {
+      continueSavedPostChat(post('a.md'), OLD);
+      const session = openPostChatSession({ post: post('a.md'), savedChat: async () => NEW }, deps(null));
+      await vi.waitFor(() => expect(session.savedCommentId).toBe('chat-old'));
+      expect(session.messages).toEqual([
+        { role: 'user', content: 'Old?' },
+        { role: 'assistant', content: 'Old answer.' },
+      ]);
+    });
+
+    it('turns an open chat into the picked one, and keeps the one it already continues', async () => {
+      const session = openPostChatSession({ post: post('a.md'), savedChat: async () => NEW }, deps(null));
+      await vi.waitFor(() => expect(session.savedCommentId).toBe('chat-new'));
+
+      continueSavedPostChat(post('a.md'), NEW);
+      expect(session.savedCommentId).toBe('chat-new');
+
+      continueSavedPostChat(post('a.md'), OLD);
+      await vi.waitFor(() => expect(session.savedCommentId).toBe('chat-old'));
+      expect(session.messages[0]).toEqual({ role: 'user', content: 'Old?' });
+      expect(session.hasUnsaved).toBe(false);
+    });
+
+    it('reports turns that would be dropped: unsaved ones, or an answer on its way', async () => {
+      expect(continuingSavedPostChatDropsTurns(post('a.md'), 'chat-old')).toBe(false);
+      const askChatAI = vi.fn(() => new Promise<never>(() => undefined));
+      const session = openPostChatSession({ post: post('a.md'), savedChat: async () => NEW }, deps('archive-1', askChatAI));
+      await vi.waitFor(() => expect(session.savedCommentId).toBe('chat-new'));
+      expect(continuingSavedPostChatDropsTurns(post('a.md'), 'chat-old')).toBe(false);
+
+      session.setEngine({ kind: 'cloud' });
+      void session.send('Why?');
+      expect(continuingSavedPostChatDropsTurns(post('a.md'), 'chat-old')).toBe(true);
+      // The chat being continued keeps its turn.
+      expect(continuingSavedPostChatDropsTurns(post('a.md'), 'chat-new')).toBe(false);
+    });
+
+    it('forgets a picked chat on unload', async () => {
+      continueSavedPostChat(post('a.md'), OLD);
+      clearPostChatSessions();
+      const session = openPostChatSession({ post: post('a.md'), savedChat: async () => NEW }, deps(null));
+      await vi.waitFor(() => expect(session.savedCommentId).toBe('chat-new'));
+    });
   });
 });

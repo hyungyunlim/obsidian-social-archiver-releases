@@ -7,7 +7,7 @@
  * here, so the note stays the source the server copy is rebuilt from.
  */
 import { Platform, type App, type TFile } from 'obsidian';
-import { aiCommentBudget, clipAICommentContent, type AICommentBudget } from '../../vendor/byok-ai-core';
+import { aiCommentBudget, clipAICommentContent, isAnyNoteReply, type AICommentBudget } from '../../vendor/byok-ai-core';
 import type { AICommentMeta, AICommentType } from '../../types/ai-comment';
 import type { PostData } from '../../types/post';
 import type { SocialArchiverSettings } from '../../types/settings';
@@ -55,10 +55,13 @@ export class AICommentSaver {
     return aiCommentBudget(buildAICommentPayload(kept, commentTexts), type);
   }
 
-  /** The note's latest `chat` comment (comments are appended, so the last is the newest). */
+  /**
+   * The note's latest `chat` comment (comments are appended, so the last is
+   * the newest) that is not a reply to a note: a reply continues from its note.
+   */
   async savedChat(file: TFile): Promise<StoredAIComment | null> {
     const { comments, commentTexts } = parseAIComments(await this.deps.app.vault.read(file));
-    const chat = [...comments].reverse().find((comment) => comment.type === 'chat');
+    const chat = [...comments].reverse().find((comment) => comment.type === 'chat' && !isAnyNoteReply(comment.id));
     return chat ? { id: chat.id, content: commentTexts.get(chat.id) ?? '' } : null;
   }
 

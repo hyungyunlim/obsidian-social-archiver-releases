@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Modal, type App } from 'obsidian';
+import { Modal, TFile, type App } from 'obsidian';
 import { LinkPreviewRenderer } from '@/components/timeline/renderers/LinkPreviewRenderer';
 import { MediaGalleryRenderer } from '@/components/timeline/renderers/MediaGalleryRenderer';
 import { ReaderModeContentRenderer } from '@/components/timeline/reader/ReaderModeContentRenderer';
 import type { ReaderContentCallbacks } from '@/components/timeline/reader/ReaderModeContentRenderer';
 import type SocialArchiverPlugin from '@/main';
 import type { PostData } from '@/types/post';
+import type { AICommentMeta } from '@/types/ai-comment';
+import { appendAIComment } from '@/services/ai-comment/markdown-handler';
+import { noteReplyCommentId } from '@/vendor/byok-ai-core';
 
 const markdownRenderSpy = vi.hoisted(() =>
   vi.fn(async (
@@ -235,5 +238,61 @@ describe('ReaderModeContentRenderer social post body', () => {
       .map((call) => call[1])
       .find((markdown) => markdown.includes('kept'));
     expect(bodyMarkdown).toBe('\\<kept&gt; and &lt;raw&gt;');
+  });
+});
+
+describe('ReaderModeContentRenderer replies to the note', () => {
+  it('shows a reply under the note with Continue chat, and leaves it out of the AI comments', async () => {
+    const path = 'Social Archives/X/2026/11/replied.md';
+    const chatMeta = (id: string, cli: AICommentMeta['cli']): AICommentMeta => ({
+      id,
+      cli,
+      type: 'chat',
+      generatedAt: '2026-11-05T00:00:00.000Z',
+      processingTime: 1000,
+      contentHash: 'abcd1234',
+    });
+    const reply = { meta: chatMeta(noteReplyCommentId('anthropic-api-chat-1', 'obsidian:client-1:primary'), 'anthropic-api'), content: '> [!question] Why? @Claude\n\nBecause of the survey.' };
+    const chat = { meta: chatMeta('openai-api-chat-2', 'openai-api'), content: '> [!question] Ordinary?\n\nOrdinary answer.' };
+    const note = appendAIComment(appendAIComment('Body', reply.meta, reply.content), chat.meta, chat.content);
+    const file = new (TFile as unknown as new (p: string) => TFile)(path);
+    const app = {
+      vault: {
+        adapter: { getResourcePath: (resource: string) => resource },
+        getAbstractFileByPath: (candidate: string) => (candidate === path ? file : null),
+        read: async () => note,
+      },
+    } as unknown as App;
+    const plugin = { app, settings: { syncClientId: 'client-1' } } as unknown as SocialArchiverPlugin;
+    const modal = new Modal(app);
+    document.body.appendChild(modal.contentEl);
+    const renderer = new ReaderModeContentRenderer(app, plugin, new MediaGalleryRenderer((resource) => resource), new LinkPreviewRenderer());
+    const post: PostData = {
+      platform: 'x',
+      id: 'replied',
+      url: 'https://x.com/a/status/2',
+      filePath: path,
+      author: { name: 'Ada', url: 'https://x.com/a' },
+      content: { text: 'Article body.' },
+      comment: 'Why? @Claude',
+      aiComments: [reply, chat],
+      media: [],
+      metadata: { timestamp: '2026-11-05T00:00:00.000Z' },
+    };
+    const onContinueChat = vi.fn();
+
+    await renderer.render(modal.contentEl, post, 0, 1, { ...createCallbacks(), onContinueChat });
+    modal.contentEl.querySelector<HTMLElement>('.sa-reader-mode-comments-toggle')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushRenderQueue();
+
+    const sections = [...modal.contentEl.querySelectorAll<HTMLElement>('details.sa-reader-mode-comments-section')];
+    const section = (title: string) => sections.find((candidate) => candidate.querySelector('summary')?.textContent?.includes(title));
+    const aiItems = [...(section('AI Comments')?.querySelectorAll('.sa-reader-mode-ai-comment') ?? [])];
+    expect(aiItems.map((item) => item.textContent)).toEqual([expect.stringContaining('Ordinary answer.')]);
+
+    const noteSection = section('Note');
+    await vi.waitFor(() => expect(noteSection?.querySelector('.sa-note-reply-body')?.textContent).toBe('Because of the survey.'));
+    noteSection?.querySelector<HTMLElement>('.ai-comment-continue-chat')?.click();
+    expect(onContinueChat).toHaveBeenCalledWith({ id: reply.meta.id, content: reply.content });
   });
 });

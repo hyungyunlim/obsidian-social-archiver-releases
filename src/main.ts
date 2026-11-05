@@ -152,6 +152,8 @@ import { DesktopCapabilityReporter } from './plugin/ai-comment/DesktopCapability
 import { AICommentJobProcessor } from './plugin/ai-comment/AICommentJobProcessor';
 import { ByokService, setByokService } from './services/byok/ByokService';
 import { clearPostChatSessions } from './services/byok/postChatSessions';
+import { NoteMentionAsker, pluginNoteId, type NoteMentionChat } from './services/byok/NoteMentionAsker';
+import { chatPanelOptionsFor } from './components/timeline/aiConversationEntries';
 import { ByokKeyStore } from './services/byok/ByokKeyStore';
 import { createObsidianByokStore } from './services/byok/ObsidianByokStore';
 import { createObsidianByokTransport, fetchByokModelCatalog } from './services/byok/ObsidianByokTransport';
@@ -412,6 +414,8 @@ export default class SocialArchiverPlugin extends Plugin {
   public byokService?: ByokService;
   /** Quick and deep research saved as `research` AI comments; polls deep jobs this device started. */
   public byokResearchRunner?: ByokResearchRunner;
+  /** "@Claude …" in a note: asks the AIs a saved note newly mentions; the answers reply under the note. */
+  public noteMentionAsker?: NoteMentionAsker;
   /** `social-archiver executor` child that serves this vault instead of the built-in processor. */
   private cliExecutorSupervisor?: StandaloneCliExecutorSupervisor;
   private cliDelegationActive = false;
@@ -1315,6 +1319,13 @@ export default class SocialArchiverPlugin extends Plugin {
     this.byokService = this.createByokService();
     setByokService(this.byokService);
     this.byokResearchRunner = this.createByokResearchRunner();
+    this.noteMentionAsker = new NoteMentionAsker({
+      chat: (target): NoteMentionChat => chatPanelOptionsFor(this, target),
+      noteId: (): string => pluginNoteId(this.settings.syncClientId),
+      notify: (message): void => {
+        new Notice(message, 8000);
+      },
+    });
     // Deep research started before a restart: keep polling once the vault is indexed.
     this.app.workspace.onLayoutReady(() => {
       void this.byokResearchRunner?.resume();
@@ -1692,6 +1703,7 @@ export default class SocialArchiverPlugin extends Plugin {
     this.byokResearchRunner?.dispose();
     // Chats live in memory only: answers on their way stop with the plugin.
     clearPostChatSessions();
+    this.noteMentionAsker?.dispose();
 
     // Kill all spawned child processes (yt-dlp, whisper, etc.)
     const killedCount = ProcessManager.killAll();

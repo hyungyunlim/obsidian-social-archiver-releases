@@ -322,6 +322,77 @@
 }
 
 /*
+ * "@Claude …" in the note (AIMentionPicker, NoteReplies): the suggestion list
+ * right under the note's textarea, and the AI answers under the note.
+ */
+.sa-ai-mention-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 8px;
+  padding: 4px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-primary);
+  box-shadow: var(--shadow-s);
+}
+
+.sa-ai-mention-option {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: var(--radius-s);
+  cursor: var(--cursor);
+}
+
+.sa-ai-mention-option.is-selected {
+  background: var(--background-modifier-hover);
+}
+
+.sa-ai-mention-handle {
+  color: var(--text-normal);
+  font-weight: var(--font-semibold);
+}
+
+.sa-ai-mention-engine {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+@media (pointer: coarse) {
+  .sa-ai-mention-option {
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
+.sa-note-replies {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 4px 0 12px;
+  padding-left: 12px;
+  border-left: 2px solid var(--background-modifier-border);
+}
+
+.sa-note-replies:empty {
+  display: none;
+}
+
+.sa-note-reply-body {
+  overflow-wrap: anywhere;
+}
+
+.sa-note-reply-body > :first-child {
+  margin-top: 0;
+}
+
+.sa-note-reply-body > :last-child {
+  margin-bottom: 0;
+}
+
+/*
  * "Chat about this post" docked in reader mode (ReaderChatDock): a pane right
  * of the article on wide screens, a bottom sheet over it on narrow ones, so
  * the post stays readable. The article column gives up the pane's width.
@@ -523,4 +594,10 @@
     content: "";
     transform: translate(-50%, -50%);
   }
+}
+
+/* An AI mention in a rendered note (paintAIMentions): the apps' composer look, not a link. */
+.sa-ai-mention {
+  color: var(--text-accent);
+  font-weight: var(--font-semibold);
 }

@@ -3,13 +3,15 @@
  * reader AI menus. What can run decides what shows: with no engine for an
  * entry, one item opens settings to add a key instead of a dead button.
  */
-import { Platform } from 'obsidian';
+import { Platform, type App } from 'obsidian';
 import type SocialArchiverPlugin from '../../main';
 import type { PostData } from '../../types/post';
-import type { AICommentTarget } from '../../services/ai-comment/AICommentSaver';
+import type { AICommentTarget, StoredAIComment } from '../../services/ai-comment/AICommentSaver';
 import type { WorkersAPIClient } from '../../services/WorkersAPIClient';
 import { getByokService } from '../../services/byok/ByokService';
-import { AIChatModal, chatEngineOptions, type AIChatModalOptions } from '../../modals/AIChatModal';
+import { continueSavedPostChat, continuingSavedPostChatDropsTurns } from '../../services/byok/postChatSessions';
+import { AIChatModal, chatEngineOptions, type AIChatModalOptions, type ChatEngineOption } from '../../modals/AIChatModal';
+import { showConfirmModal } from '../../utils/confirm-modal';
 import { AIResearchModal } from '../../modals/AIResearchModal';
 import { AICliDetector, type AICli } from '../../utils/ai-cli';
 import { isAuthenticated } from '../../utils/auth';
@@ -59,12 +61,42 @@ export function chatPanelOptionsFor(
   };
 }
 
+/** The engines chat on `post` can use: the user's keys, then Cloud AI on a synced post while signed in. */
+export function chatEnginesFor(plugin: SocialArchiverPlugin, post: PostData): ChatEngineOption[] {
+  const archiveId = resolvePostArchiveId(plugin.app, post);
+  return chatEngineOptions({ byok: getByokService(), archiveId, signedIn: isAuthenticated(plugin) });
+}
+
+/** Whether chat can run on `post`: one of the user's keys, or Cloud AI on a synced post while signed in. */
+export function chatAvailableFor(plugin: SocialArchiverPlugin, post: PostData): boolean {
+  return chatEnginesFor(plugin, post).length > 0;
+}
+
+/**
+ * "Continue chat" on a saved chat: it becomes the post's conversation. A chat
+ * holding turns the note does not have is dropped only after the user says
+ * so; false when they keep it.
+ */
+export async function continueSavedChatConfirmed(app: App, post: PostData, saved: StoredAIComment): Promise<boolean> {
+  if (continuingSavedPostChatDropsTurns(post, saved.id)) {
+    const confirmed = await showConfirmModal(app, {
+      title: t('byok.chat.continueDiscardTitle'),
+      message: t('byok.chat.continueDiscardMessage'),
+      confirmText: t('byok.chat.continueSaved'),
+      confirmClass: 'danger',
+    });
+    if (!confirmed) return false;
+  }
+  continueSavedPostChat(post, saved);
+  return true;
+}
+
 export function aiConversationEntries(context: AIConversationContext): AIConversationEntry[] {
   const { plugin, post } = context;
   if (!post.filePath) return [];
   const byok = getByokService();
   const archiveId = resolvePostArchiveId(plugin.app, post);
-  const chatOk = chatEngineOptions({ byok, archiveId, signedIn: isAuthenticated(plugin) }).length > 0;
+  const chatOk = chatAvailableFor(plugin, post);
   const researchOk = (byok?.readyProviders().length ?? 0) > 0 || mayHaveCli();
   const entries: AIConversationEntry[] = [];
   if (chatOk) {
