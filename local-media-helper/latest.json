@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "name": "Social Archiver Local Media Helper",
-  "version": "0.2.2",
-  "tagName": "local-helper-v0.2.2",
+  "version": "0.3.0",
+  "tagName": "local-helper-v0.3.0",
   "platform": "macos-arm64",
-  "releaseUrl": "https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases/tag/local-helper-v0.2.2",
-  "packageUrl": "https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases/download/local-helper-v0.2.2/social-archiver-local-media-helper-0.2.2-macos-arm64.pkg",
-  "checksumUrl": "https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases/download/local-helper-v0.2.2/SHA256SUMS",
-  "publishedAt": "2026-11-01T07:00:34.980Z"
+  "releaseUrl": "https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases/tag/local-helper-v0.3.0",
+  "packageUrl": "https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases/download/local-helper-v0.3.0/social-archiver-local-media-helper-0.3.0-macos-arm64.pkg",
+  "checksumUrl": "https://github.com/hyungyunlim/obsidian-social-archiver-releases/releases/download/local-helper-v0.3.0/SHA256SUMS",
+  "publishedAt": "2026-11-06T04:06:07.270Z"
 }
