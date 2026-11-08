@@ -37,6 +37,17 @@ describe('MediaFormatter — local-sentinel guard', () => {
     expect(out).not.toContain('media/clip.mp4');
   });
 
+  it('does not embed a video poster that is still a localpath: placeholder', () => {
+    const out = formatter.renderVideo(
+      { type: 'video', url: 'https://cdn.example.com/v.mp4', thumbnail: 'localpath:media/p/00-video-thumb.jpg' },
+      undefined,
+      '',
+      POST_URL,
+    );
+
+    expect(out).toBe('[🎥 Video](https://cdn.example.com/v.mp4)');
+  });
+
   it('renders a real https image normally', () => {
     const media: PostData['media'] = [
       { type: 'image', url: 'https://cdn.example.com/a.jpg', altText: 'A' },

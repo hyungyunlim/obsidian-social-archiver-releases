@@ -2101,8 +2101,14 @@ body.is-mobile .tc-selection-pill {
  * The tag bar is pulled up into the (empty, transparent) tail to leave 8px —
  * a sibling selector instead of `:has()`, which invalidates styles broadly.
  */
-.store-chip-bar + .tag-chip-bar {
+.store-chip-bar + .tag-chip-bar,
+.post-author-chip-bar + .tag-chip-bar {
   margin-top: -20px;
+}
+
+/* My Posts author chips: full touch targets on phones */
+body.is-mobile .post-author-chip-bar .tcb-chip {
+  min-height: 44px;
 }
 
 
@@ -3024,4 +3030,35 @@ body.is-mobile .sa-flex-between .sa-dynamic-width {
 .sa-notice-action:hover {
   background: rgba(255, 255, 255, 0.12);
   box-shadow: none;
+}
+
+
+/* ========================================
+ * New-post composer: task lists (MarkdownEditor, @tiptap/extension-list)
+ * ======================================== */
+
+.markdown-editor-content ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0.25em;
+}
+
+.markdown-editor-content ul[data-type='taskList'] > li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+}
+
+.markdown-editor-content ul[data-type='taskList'] > li > label {
+  flex-shrink: 0;
+  margin-top: 0.2em;
+}
+
+.markdown-editor-content ul[data-type='taskList'] > li > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.markdown-editor-content ul[data-type='taskList'] > li[data-checked='true'] > div {
+  color: var(--text-muted);
+  text-decoration: line-through;
 }

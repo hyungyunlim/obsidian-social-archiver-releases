@@ -1587,6 +1587,14 @@ const DEFAULT_TEMPLATES: Record<Platform, string> = {
 // AI chat and music links render exactly like a web article.
 for (const platform of WEB_LANE_BRAND_PLATFORMS) DEFAULT_TEMPLATES[platform] = DEFAULT_TEMPLATES.web;
 
+/** Where a composed post's body goes once the template ran; never valid post text. */
+const COMPOSED_BODY_SLOT = '\u0000sa-composed-body\u0000';
+
+/** A post the user wrote (platform `post`, not a meeting/audio note): its body is written verbatim. */
+function isComposedVerbatimPost(postData: Pick<PostData, 'platform' | 'contentType'>): boolean {
+  return postData.platform === 'post' && postData.contentType !== 'meeting-note' && postData.contentType !== 'audio-note';
+}
+
 /**
  * Markdown conversion result
  */
@@ -1738,8 +1746,21 @@ export class MarkdownConverter implements IService {
     // Prepare template data
     const templateData = this.prepareTemplateData(normalizedPostData, mediaResults, outputFilePath);
 
+    // A composed post's body skips the template's blank-line collapse: the
+    // template gets a slot, and the body goes in after it ran (§5.5).
+    let composedBody: string | null = null;
+    if (isComposedVerbatimPost(normalizedPostData)) {
+      const templateContent = templateData.content as { text: string };
+      composedBody = templateContent.text;
+      templateData.content = { ...templateContent, text: COMPOSED_BODY_SLOT };
+    }
+
     // Process template
     let content = TemplateEngine.process(template, templateData);
+    if (composedBody !== null) {
+      const body = composedBody;
+      content = content.replace(COMPOSED_BODY_SLOT, () => body);
+    }
     const whisperTranscriptBody = normalizedPostData.whisperTranscript?.segments?.length
       ? this.transcriptFormatter.formatWhisperTranscript(normalizedPostData.whisperTranscript.segments)
       : '';
@@ -2462,8 +2483,10 @@ export class MarkdownConverter implements IService {
       : hashtagsText || '';
 
     // When hashtags-as-tags is OFF, convert inline #hashtags in content text to links
-    // so Obsidian doesn't create native tags from the original post text
-    if (!this.includeHashtagsAsObsidianTags && baseText && !inlineMarkdownBody) {
+    // so Obsidian doesn't create native tags from the original post text.
+    // A composed post is the user's own markdown, written verbatim (§5.5).
+    const composedVerbatim = isComposedVerbatimPost(postData);
+    if (!this.includeHashtagsAsObsidianTags && baseText && !inlineMarkdownBody && !composedVerbatim) {
       baseText = this.textFormatter.linkifyInlineHashtags(baseText, postData.platform);
     }
 
@@ -2549,7 +2572,7 @@ export class MarkdownConverter implements IService {
     // ``` code fences); escaping leading #/N. would corrupt fenced code, so
     // preserve them as-is. Mentions/hashtag linkify still run (those passes
     // are gated on inlineMarkdownBody, which clip bodies deliberately are not).
-    const preserveMarkdown = isBlogLikeRss || isWebArticle || isXArticle || isThreadsInlineArchive || !!clipMarkdownBody;
+    const preserveMarkdown = isBlogLikeRss || isWebArticle || isXArticle || isThreadsInlineArchive || !!clipMarkdownBody || composedVerbatim;
     const sanitizedText = preserveMarkdown
       ? baseText
       : escapeHtmlOpeners(this.escapeOrderedListPatterns(this.escapeLeadingMarkdownHeadings(baseText)));

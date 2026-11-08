@@ -116,6 +116,13 @@ import { PostShareService } from './plugin/session/PostShareService';
 import { ArchiveLibrarySyncService, type ArchiveLibrarySyncMode } from './plugin/sync/ArchiveLibrarySyncService';
 import { ArchiveDeleteSyncService } from './plugin/sync/ArchiveDeleteSyncService';
 import { ComposedPostSyncService } from './plugin/sync/ComposedPostSyncService';
+import { EditorPresence, isFileOpenInEditor } from './plugin/sync/composed/EditorPresence';
+import { ComposedPostPullWriter } from './plugin/sync/composed/ComposedPostPullWriter';
+import { ComposedConflictCopyWriter } from './plugin/sync/composed/ComposedConflictCopyWriter';
+import { ComposedPostReconciler } from './plugin/sync/composed/ComposedPostReconciler';
+import { ComposedPostMigrationService } from './plugin/sync/composed/ComposedPostMigrationService';
+import { AngleBracketNoteRepairService } from './plugin/maintenance/AngleBracketNoteRepairService';
+import { isComposedServerRow } from './plugin/sync/composed/composedNote';
 import { getForegroundSyncDeferral } from './plugin/sync/foregroundSyncDeferral';
 import { AnnotationOutboundService } from './plugin/sync/AnnotationOutboundService';
 import { ArchiveTagOutboundService } from './plugin/sync/ArchiveTagOutboundService';
@@ -408,6 +415,13 @@ export default class SocialArchiverPlugin extends Plugin {
   public archiveDeleteSyncService: ArchiveDeleteSyncService | null = null;
   /** Composer post outbound sync. One per plugin: the composer and the edit watcher share its queue pass, timers and fingerprints. */
   public composedPostSync?: ComposedPostSyncService;
+  /** Which notes are open in an editor: composed-post pulls wait, pushes wait longer. */
+  private composedPresence?: EditorPresence;
+  /** Inbound two-way sync of composed posts (pull / conflict copy / hand to push). */
+  private composedReconciler?: ComposedPostReconciler;
+  /** One-time move of existing composed notes onto two-way sync, and the diverged-post actions. */
+  public composedPostMigration?: ComposedPostMigrationService;
+  private angleBracketNoteRepair?: AngleBracketNoteRepairService;
   private aiCommentCapabilityReporter?: DesktopCapabilityReporter;
   public aiCommentJobProcessor?: AICommentJobProcessor;
   /** AI with the user's own provider keys (also reachable via getByokService()). */
@@ -1807,6 +1821,11 @@ export default class SocialArchiverPlugin extends Plugin {
     // Cleared so a layout-ready callback still pending can't restart it.
     this.composedPostSync?.onPluginUnload();
     this.composedPostSync = undefined;
+    this.composedReconciler?.dispose();
+    this.composedReconciler = undefined;
+    this.composedPresence?.dispose();
+    this.composedPresence = undefined;
+    this.composedPostMigration = undefined;
 
     // Cleanup annotation sync services
     this.annotationOutboundService?.stop();
@@ -2052,6 +2071,71 @@ export default class SocialArchiverPlugin extends Plugin {
     }
   }
 
+  /** The archive write locks every composed-post pull and push serializes on. */
+  private withArchiveWriteLocks<T>(archiveId: string, fn: () => Promise<T>): Promise<T> {
+    return this.localLockRegistry.withLocks(
+      [
+        { kind: 'archiveMaterialization', archiveId },
+        { kind: 'markdownWrite', archiveId },
+      ],
+      fn,
+    );
+  }
+
+  /**
+   * Composed-post two-way sync (prd-plugin-my-posts-two-way-sync): outbound
+   * queue, inbound reconcile, writers and the one-time migration. Kept across
+   * re-inits; everything reads settings and the client through getters.
+   */
+  private initializeComposedPostSync(): void {
+    const withLocks = <T>(archiveId: string, fn: () => Promise<T>): Promise<T> => this.withArchiveWriteLocks(archiveId, fn);
+    const presence = (this.composedPresence ??= new EditorPresence(this.app.workspace));
+    const pullWriter = new ComposedPostPullWriter({
+      app: this.app,
+      settings: () => this.settings,
+      apiClient: () => this.apiClient,
+      convert: (archive) => convertUserArchiveToPostData(archive),
+    });
+    const conflictWriter = new ComposedConflictCopyWriter(this.app);
+    this.composedReconciler ??= new ComposedPostReconciler({
+      app: this.app,
+      presence,
+      pullWriter,
+      conflictWriter,
+      apiClient: () => this.apiClient,
+      withArchiveWriteLocks: withLocks,
+      requestPush: (file) => this.composedPostSync?.notifyNoteChanged(file),
+      afterPull: (file, archive) => this.annotationSyncService?.reconcileFromLibrarySync(file, archive) ?? Promise.resolve(),
+    });
+    this.composedPostMigration ??= new ComposedPostMigrationService({
+      app: this.app,
+      settings: () => this.settings,
+      saveSettings: () => this.saveSettingsPartial({}, { reinitialize: false, notify: false }),
+      apiClient: () => this.apiClient,
+      lookup: () => this.archiveLookupService,
+      waitForLookupIndex: () => this.waitForMetadataCacheResolved(),
+      withArchiveWriteLocks: withLocks,
+      pullWriter,
+      conflictWriter,
+      pushNote: (file, opts) =>
+        this.composedPostSync?.pushNote(file, opts) ?? Promise.reject(new Error('Composed post sync is not running')),
+      isOpen: (path) => presence.isOpen(path),
+      afterPull: (file, archive) => this.annotationSyncService?.reconcileFromLibrarySync(file, archive) ?? Promise.resolve(),
+    });
+    this.composedPostSync ??= new ComposedPostSyncService(
+      this.app,
+      this.app.vault,
+      () => this.settings,
+      () => this.workersApiClient,
+      () => this.saveSettingsPartial({}, { reinitialize: false }),
+      {
+        reconciler: () => this.composedReconciler,
+        presence: () => this.composedPresence,
+        withArchiveWriteLocks: withLocks,
+      },
+    );
+  }
+
   /**
    * Initialize API client and orchestrator
    */
@@ -2061,13 +2145,7 @@ export default class SocialArchiverPlugin extends Plugin {
     this.ensureCollectionServices();
     // Kept across re-inits (its pending debounce timers live on); it reads
     // settings and the client through getters.
-    this.composedPostSync ??= new ComposedPostSyncService(
-      this.app,
-      this.app.vault,
-      () => this.settings,
-      () => this.workersApiClient,
-      () => this.saveSettingsPartial({}, { reinitialize: false }),
-    );
+    this.initializeComposedPostSync();
 
     // Clean up existing services
     this.apiClient?.dispose();
@@ -2472,7 +2550,7 @@ export default class SocialArchiverPlugin extends Plugin {
       this.mobileSyncService = new MobileSyncService({
         apiClient: () => this.apiClient,
         settings: () => ({ syncClientId: this.settings.syncClientId, archivePath: this.settings.archivePath }),
-        saveSubscriptionPost: (post) => this.saveSubscriptionPost(post),
+        saveSubscriptionPost: (post, archive) => this.saveSubscriptionPost(post, archive),
         convertUserArchiveToPostData: (archive) => this.convertUserArchiveToPostData(archive),
         hasRecentlyArchivedUrl: (url) => this.hasRecentlyArchivedUrl(url),
         isArchiveTombstoned: (archive) =>
@@ -2506,7 +2584,7 @@ export default class SocialArchiverPlugin extends Plugin {
         clientId: () => this.settings.syncClientId,
         archivePath: () => this.settings.archivePath,
         localStorage: this.app,
-        saveSubscriptionPost: (post) => this.saveSubscriptionPost(post),
+        saveSubscriptionPost: (post, archive) => this.saveSubscriptionPost(post, archive),
         convertUserArchiveToPostData: (archive) => this.convertUserArchiveToPostData(archive),
         hasRecentlyArchivedUrl: (url) => this.hasRecentlyArchivedUrl(url),
         isArchiveTombstoned: (archive) =>
@@ -2543,6 +2621,10 @@ export default class SocialArchiverPlugin extends Plugin {
         },
         reconcileInlineImageState: (file, archive): Promise<void> => this.reconcileInlineImages(file, archive),
         localLockRegistry: this.localLockRegistry,
+        reconcileComposedPost: (file, archive) =>
+          this.composedReconciler?.reconcile(file, archive) ?? Promise.resolve('not-composed' as const),
+        stampNewComposedPost: (file, archive, downloaded) =>
+          this.composedReconciler?.stampNew(file, archive, downloaded) ?? Promise.resolve(),
       });
 
       // Create SubscriptionSyncService
@@ -2657,6 +2739,11 @@ export default class SocialArchiverPlugin extends Plugin {
           Promise.resolve(),
         localLockRegistry: this.localLockRegistry,
         rateLimiter: syncRateLimitCoordinator,
+        // Composed posts sync both ways (prd-plugin-my-posts-two-way-sync).
+        reconcileComposedPost: (file, archive) =>
+          this.composedReconciler?.reconcile(file, archive) ?? Promise.resolve('not-composed' as const),
+        stampNewComposedPost: (file, archive, downloaded) =>
+          this.composedReconciler?.stampNew(file, archive, downloaded) ?? Promise.resolve(),
       });
 
       this.aiCommentCapabilityReporter?.dispose();
@@ -2810,8 +2897,26 @@ export default class SocialArchiverPlugin extends Plugin {
       // (sign-in and sign-out both re-init). At layout-ready: until then the
       // vault is still loading, and flush() drops entries whose note it can't find.
       this.app.workspace.onLayoutReady(() => {
-        if (isAuthenticated(this)) void this.composedPostSync?.onPluginLoad();
-        else this.composedPostSync?.onPluginUnload();
+        // Signed in or not: local-only vaults hold old notes too.
+        this.angleBracketNoteRepair ??= new AngleBracketNoteRepairService({
+          app: this.app,
+          settings: () => this.settings,
+          saveSettings: () => this.saveSettingsPartial({}, { reinitialize: false, notify: false }),
+          waitForIndex: () => this.waitForMetadataCacheResolved(),
+          isOpen: (path) => isFileOpenInEditor(this.app.workspace, path),
+        });
+        this.scheduleTrackedTimeout(() => void this.angleBracketNoteRepair?.runIfNeeded(), 8000);
+        if (isAuthenticated(this)) {
+          this.composedPresence?.start();
+          this.composedReconciler?.start();
+          void this.composedPostSync?.onPluginLoad();
+          // After the metadata cache resolves (it waits for it), before the
+          // library sync auto-start: existing composed notes get a baseline.
+          this.scheduleTrackedTimeout(() => void this.composedPostMigration?.runIfNeeded(), 5000);
+        } else {
+          this.composedPostSync?.onPluginUnload();
+          this.composedReconciler?.dispose();
+        }
       });
       await this.refreshDesktopAICommentExecutor('startup-before-ws');
 
@@ -3197,9 +3302,21 @@ export default class SocialArchiverPlugin extends Plugin {
   /**
    * Save a single subscription post to vault
    */
-  private async saveSubscriptionPost(pendingPost: PendingPost): Promise<boolean> {
-    if (!this.subscriptionSyncService) return false;
-    return this.subscriptionSyncService.saveSubscriptionPost(pendingPost);
+  /**
+   * Save a pending post. With the server row (client-sync queue paths), a
+   * composed post joins two-way sync: a new note gets its baseline, a note
+   * already here reconciles (pull / conflict / push), under the archive locks.
+   */
+  private async saveSubscriptionPost(pendingPost: PendingPost, archive?: UserArchive): Promise<boolean> {
+    const subscriptionSync = this.subscriptionSyncService;
+    if (!subscriptionSync) return false;
+    const reconciler = this.composedReconciler;
+    if (!archive || !reconciler || !isComposedServerRow(archive)) return subscriptionSync.saveSubscriptionPost(pendingPost);
+    return this.withArchiveWriteLocks(archive.id, async () => {
+      const result = await subscriptionSync.saveSubscriptionPostDetailed(pendingPost);
+      await reconciler.afterQueueSave(result, archive);
+      return result.status !== 'failed';
+    });
   }
 
   // ============================================================================

@@ -10,10 +10,11 @@
  *   author mention:  [@<displayName>](socialarchiver://author?platform=<p>&name=<enc>&handle=<enc?>&url=<enc?>)
  *
  * These utilities are PURE — they only build and parse strings. The plugin
- * needs only the PARSE side of the contract (mobile owns serialization), plus a
- * vault-specific `convertInternalMentions` helper that rewrites the dead tokens
- * into Obsidian `[[wikilinks]]` (or plain text when the target cannot be
- * resolved) for the rendered annotation block.
+ * parses annotation tokens, serializes archive mentions for the trailing ref
+ * lines of composed posts (`serializeArchiveMention`, `splitArchiveRefLines`,
+ * `joinArchiveRefLines`), and has a vault-specific `convertInternalMentions`
+ * helper that rewrites the dead tokens into Obsidian `[[wikilinks]]` (or plain
+ * text when the target cannot be resolved) for the rendered annotation block.
  *
  * Grammar parity is load-bearing for round-trip safety: the token formats here
  * are byte-identical to the mobile serializers so that anything mobile writes is
@@ -26,9 +27,9 @@ import type { Platform } from '@shared/platforms/types';
 export const INTERNAL_LINK_SCHEME = 'socialarchiver';
 
 /**
- * Maximum code points for a mention's display text (mobile contract). Mirrored
- * here only for parity documentation — the plugin never serializes new tokens,
- * so the cap is applied by mobile before the token reaches the vault.
+ * Maximum code points for a mention's display text (mobile contract). Applied
+ * by `serializeArchiveMention` when the plugin writes a composed post's ref
+ * lines; annotation tokens arrive already capped by mobile.
  */
 export const MENTION_DISPLAY_MAX_LENGTH = 24;
 
@@ -173,6 +174,73 @@ function collectArchiveIds(content: string): string[] {
     }
   }
   return archiveIds;
+}
+
+// ---------------------------------------------------------------------------
+// Archive-mention serialization + composed-post ref lines
+// (byte-identical to desktop-app noteMentions.serializeArchiveMention and
+// features/composer/sourceRefs.ts; same split rule as
+// workers/src/utils/composed-post-refs.ts)
+// ---------------------------------------------------------------------------
+
+function normalizeMentionLabel(label: string): string {
+  const collapsed = label.replace(/\s+/g, ' ').trim();
+  if (collapsed.length === 0) return 'Untitled';
+  const points = Array.from(collapsed);
+  if (points.length <= MENTION_DISPLAY_MAX_LENGTH) return collapsed;
+  return `${points.slice(0, MENTION_DISPLAY_MAX_LENGTH).join('').trimEnd()}…`;
+}
+
+/** `[<label>](socialarchiver://archive/<id>)`: brackets escaped, label capped at 24 code points, 'Untitled' when empty. */
+export function serializeArchiveMention(archiveId: string, label: string): string {
+  const anchor = normalizeMentionLabel(label).replace(/([[\]])/g, '\\$1');
+  return `[${anchor}](${INTERNAL_LINK_SCHEME}://archive/${encodeURIComponent(archiveId)})`;
+}
+
+/** One quoted original of a composed post, as a trailing ref line. */
+export interface ArchiveRefLine {
+  archiveId: string;
+  /** The token's text, unescaped. */
+  label: string;
+}
+
+const ARCHIVE_REF_LINE = /^\[((?:\\.|[^\]\\])*)\]\((socialarchiver:\/\/archive\/[^)\s]+)\)$/;
+
+/**
+ * Walks up from the last line, skipping blank lines; each line that is exactly
+ * one archive mention is a ref, and the first other line ends the block. Refs
+ * keep their top-to-bottom order, deduped by id (first wins); the body is
+ * trimEnd'd. Without a block the input comes back unchanged.
+ */
+export function splitArchiveRefLines(markdown: string): { body: string; refs: ArchiveRefLine[] } {
+  const lines = markdown.split('\n');
+  const found: ArchiveRefLine[] = [];
+  let end = lines.length;
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const line = (lines[i] ?? '').trim();
+    if (!line) continue;
+    const match = ARCHIVE_REF_LINE.exec(line);
+    const archiveId = match ? parseArchiveMentionUrl(match[2] ?? '') : null;
+    if (!match || !archiveId) break;
+    found.unshift({ archiveId, label: unescapeAnchorText(match[1] ?? '') });
+    end = i;
+  }
+  if (found.length === 0) return { body: markdown, refs: [] };
+  const seen = new Set<string>();
+  const refs = found.filter((ref) => !seen.has(ref.archiveId) && seen.add(ref.archiveId));
+  return { body: lines.slice(0, end).join('\n').trimEnd(), refs };
+}
+
+/**
+ * The body with the refs appended as the trailing block; the body alone
+ * without refs. Backslashes leave the label: the split rule reads `\]` or a
+ * trailing `\` as escaping the bracket, and would drop the line as a ref.
+ */
+export function joinArchiveRefLines(body: string, refs: readonly ArchiveRefLine[]): string {
+  if (refs.length === 0) return body;
+  const block = refs.map((ref) => serializeArchiveMention(ref.archiveId, ref.label.replace(/\\/g, ''))).join('\n');
+  const text = body.trimEnd();
+  return text ? `${text}\n\n${block}` : block;
 }
 
 // ---------------------------------------------------------------------------

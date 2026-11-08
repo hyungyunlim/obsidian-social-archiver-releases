@@ -3,6 +3,7 @@ import { Notice } from 'obsidian';
 import { t } from '../i18n';
 import type SocialArchiverPlugin from '../main';
 import type { ArchiveLibrarySyncRuntimeState } from '../plugin/sync/ArchiveLibrarySyncService';
+import { DivergedPostsModal } from '../modals/DivergedPostsModal';
 
 interface Props {
   plugin: SocialArchiverPlugin;
@@ -15,6 +16,17 @@ let settings = $state(plugin.settings);
 let registering = $state(false);
 let unregistering = $state(false);
 let syncError = $state<string | null>(null);
+
+// Composed posts that differ from the server (prd-plugin-my-posts-two-way-sync §5.6)
+let divergedCount = $state(plugin.composedPostMigration?.listDivergedNotes().length ?? 0);
+
+function openDivergedPosts(): void {
+  const migration = plugin.composedPostMigration;
+  if (!migration) return;
+  new DivergedPostsModal(plugin.app, migration, () => {
+    divergedCount = migration.listDivergedNotes().length;
+  }).open();
+}
 
 // Archive Library Sync state
 let librarySyncRunning = $state(false);
@@ -417,6 +429,18 @@ async function handleRetryPendingDeletes() {
           {librarySyncRunning ? t('sync.library.button.syncing') : (librarySyncPersistedStatus === 'completed' ? t('sync.library.button.resync') : t('sync.library.button.sync'))}
         </button>
       </div>
+
+      {#if divergedCount > 0}
+        <div class="setting-item">
+          <div class="setting-item-info">
+            <div class="setting-item-name">{t('composed.diverged.row.title', { count: divergedCount })}</div>
+            <div class="setting-item-description">{t('composed.diverged.row.desc')}</div>
+          </div>
+          <div class="setting-item-control">
+            <button class="sa-mobile-compact-btn" onclick={openDivergedPosts}>{t('composed.diverged.row.button')}</button>
+          </div>
+        </div>
+      {/if}
     </div>
   {/if}
 

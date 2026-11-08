@@ -111,6 +111,11 @@ describe('SyncQueueConsumer (v2 drain bootstrap wiring)', () => {
     // Fetched + saved + ACKed through the drain, NOT the v1 catch-up.
     expect(server.fetched).toEqual(['a1']);
     expect(saveSubscriptionPost).toHaveBeenCalledTimes(1);
+    // The server row rides along, so a composed post joins two-way sync.
+    expect(saveSubscriptionPost).toHaveBeenCalledWith(
+      expect.objectContaining({ archiveId: 'a1' }),
+      expect.objectContaining({ originalUrl: 'https://example.com/a1' }),
+    );
     expect(server.acked).toHaveLength(1);
     expect(server.acked[0]).toMatchObject({ queueId: 'q1', versionToken: 'v1' });
     expect(server.acked[0].mutationId).toBeTruthy();

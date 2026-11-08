@@ -556,6 +556,26 @@ describe('LocalArchiveImportService', () => {
     expect(api.createArchivesFromImportBatch.mock.calls[0]![0].items).toHaveLength(1);
   });
 
+  it('sends the note escape `\\<` as the `&lt;` the server keeps, text and comments', async () => {
+    const postDataByPath = new Map<string, PostData | null>([
+      [
+        'Social Archives/X/p1.md',
+        makePostData('p1', {
+          content: { text: '\\<inputs> stays text' },
+          comments: [{ id: 'c1', author: { name: 'A', url: '' }, content: 'see \\<b>', replies: [{ id: 'c2', author: { name: 'B', url: '' }, content: '\\<i>' }] }],
+        }),
+      ],
+    ]);
+    const { service, api } = makeService({ postDataByPath });
+
+    await service.run([makeNote('Social Archives/X/p1.md')]);
+
+    const submitted = api.createArchivesFromImportBatch.mock.calls[0]![0].items[0]!.clientPostData;
+    expect(submitted.content.text).toBe('&lt;inputs> stays text');
+    expect(submitted.comments?.[0]?.content).toBe('see &lt;b>');
+    expect(submitted.comments?.[0]?.replies?.[0]?.content).toBe('&lt;i>');
+  });
+
   it('repairs an invalid metadata timestamp instead of submitting null', async () => {
     const postDataByPath = new Map<string, PostData | null>([
       [

@@ -1,5 +1,6 @@
 import type { Vault, App, TFile } from 'obsidian';
 import type { Platform } from '@shared/platforms/types';
+import { isComposedPostNote, readCoAuthors } from '../utils/composedPostNote';
 
 /**
  * Lightweight metadata entry for a single post in the index.
@@ -49,6 +50,10 @@ export interface PostIndexEntry {
   hasTranscript?: boolean;
   /** Whether the archive is a video (youtube, downloaded video, or video media). */
   hasVideo?: boolean;
+  /** Composed post note (`isComposedPostNote`); the My Posts filter runs on it. */
+  isComposedPost?: boolean;
+  /** Co-author names of a composed post (frontmatter `coAuthors`), for the author bubbles. */
+  coAuthors?: string[];
 
   // Pre-joined search text (fast substring matching)
   searchText: string;
@@ -98,7 +103,9 @@ interface PostIndex {
 // The bump forces a one-time re-parse — a retained v7 cache has neither field
 // on any entry, so both directions of the filter would come up permanently
 // empty for every existing vault with no error anywhere.
-const INDEX_VERSION = 8;
+// v9: `isComposedPost` / `coAuthors` join it for the My Posts filter and its
+// author bubbles; a retained v8 cache would show My Posts empty.
+const INDEX_VERSION = 9;
 const INDEX_FILE_NAME = 'post-index.json';
 const SAVE_DEBOUNCE_MS = 5_000;
 
@@ -307,9 +314,11 @@ export class PostIndexService {
       metadataTimestamp: Date;
     }
   ): PostIndexEntry {
+    const coAuthors = readCoAuthors(frontmatter);
     // Build searchText: join all searchable fields for fast search
     const searchParts = [
       metadata.authorName,
+      ...coAuthors,
       metadata.authorHandle || '',
       contentText,
       metadata.comment || '',
@@ -345,6 +354,9 @@ export class PostIndexService {
       ...(metadata.hasPlace ? { hasPlace: true } : {}),
       ...(metadata.hasTranscript ? { hasTranscript: true } : {}),
       ...(metadata.hasVideo ? { hasVideo: true } : {}),
+      // Off the frontmatter like productSource: no parsing step to thread through.
+      ...(isComposedPostNote(frontmatter) ? { isComposedPost: true } : {}),
+      ...(coAuthors.length > 0 ? { coAuthors } : {}),
       searchText,
       seriesId: metadata.seriesId,
       episodeNumber: metadata.episodeNumber,

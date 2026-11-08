@@ -5,19 +5,22 @@
  * carries a visible label. Defuddle keeps the label because it sits inside the
  * article container. Measured on nytimes.com (2026-11-02): up to 26 lines per
  * article, alternating `Advertisement` and `[SKIP ADVERTISEMENT](#after-story-ad-N)`.
+ * A body that stays HTML inside the markdown keeps it as an element instead:
+ * `<p>ADVERTISEMENT</p>` mid-line on joongang.co.kr (2026-11-06).
  *
- * Only whole lines that are nothing but the label are removed. A sentence that
- * mentions advertising is prose and stays.
+ * Only whole lines, or whole elements, that are nothing but the label are
+ * removed. A sentence that mentions advertising is prose and stays.
  */
 
 const AD_MARKER_LINE = /^[ \t]*\[?[ \t]*(?:skip[ \t]+)?advertisement[ \t]*(?:\]\([^)\n]*\))?[ \t]*$/gim;
+const AD_MARKER_ELEMENT = /<(p|span|div|strong|em)\b[^>]*>\s*(?:skip\s+)?advertisement\s*<\/\1>/gi;
 
 export function stripAdMarkerLines(markdown: string): string {
   if (!/advertisement/i.test(markdown)) return markdown;
   // ponytail: the blank-line collapse is document-wide, so a fenced code block
   // with 3+ blank lines in an article that also has ad labels loses some. Scope
   // the collapse to the removed lines if that ever matters.
-  return markdown.replace(AD_MARKER_LINE, '').replace(/\n{3,}/g, '\n\n');
+  return markdown.replace(AD_MARKER_ELEMENT, '').replace(AD_MARKER_LINE, '').replace(/\n{3,}/g, '\n\n');
 }
 
 /**

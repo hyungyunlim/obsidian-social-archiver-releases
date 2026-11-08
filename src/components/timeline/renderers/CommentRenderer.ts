@@ -150,6 +150,8 @@ export class CommentRenderer {
       return decoded
         .replace(/&amp;/g, '&')
         .replace(/&lt;/g, '<')
+        // The note writer's escape for a plain `<` (escape-html-openers.ts).
+        .replace(/\\</g, '<')
         .replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"')
         .replace(/&apos;/g, "'");

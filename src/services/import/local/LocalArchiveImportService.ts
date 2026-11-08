@@ -26,7 +26,7 @@
 
 import type { App, TFile } from 'obsidian';
 import type SocialArchiverPlugin from '@/main';
-import type { PostData } from '@/types/post';
+import type { Comment, PostData } from '@/types/post';
 import type { LocalImportLastResult } from '@/types/settings';
 import {
   IMPORT_INGEST_BATCH_SIZE,
@@ -37,6 +37,7 @@ import {
 } from '@/types/import';
 import { createImportAPIClientAdapter } from '../ImportAPIClientAdapter';
 import { PostDataParser } from '@/components/timeline/parsers/PostDataParser';
+import { noteTextForServer } from '@/utils/escape-html-openers';
 import { extractPostIdFromUrl } from '@/shared/platforms/detection';
 import { isPlatform } from '@/shared/platforms/types';
 import {
@@ -425,6 +426,13 @@ export class LocalArchiveImportService {
     for (const key of CLIENT_LOCAL_POST_FIELDS) {
       delete clone[key];
     }
+    // The note writes a plain `<` as `\<`; the server keeps it as `&lt;`.
+    clone.content.text = noteTextForServer(clone.content.text);
+    const toServer = (comments: Comment[] | undefined): void => comments?.forEach((comment) => {
+      comment.content = noteTextForServer(comment.content);
+      toServer(comment.replies);
+    });
+    toServer(clone.comments);
 
     const sortKey = this.sortKeyFor(file, postData);
 

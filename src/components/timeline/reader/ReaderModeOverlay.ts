@@ -64,6 +64,7 @@ import { AIMentionPicker } from '../../ai-chat/AIMentionPicker';
 import { ReaderChatDock, type ReaderChatPanelOptions } from './ReaderChatDock';
 import { ReaderChatResumeButton } from './ReaderChatResumeButton';
 import { findPostChatSession } from '../../../services/byok/postChatSessions';
+import { isComposedPostNote } from '../../../utils/composedPostNote';
 
 /** How a host opens reader mode: `chat` docks "Chat about this post" beside the article. */
 export interface ReaderOpenOptions {
@@ -925,6 +926,13 @@ export class ReaderModeOverlay {
   }
 
   // ---------- Edit ----------
+
+  /** Edit post applies to composed post notes only (live frontmatter, never `platform === 'post'`). */
+  private isComposedPostFile(post: PostData): boolean {
+    const { vault, metadataCache } = this.context.app;
+    const file = post.filePath ? vault.getFileByPath(post.filePath) : null;
+    return Boolean(file && isComposedPostNote(metadataCache.getFileCache(file)?.frontmatter));
+  }
 
   private editPost(post: PostData): void {
     if (this.context.onEdit) {
@@ -2456,7 +2464,7 @@ export class ReaderModeOverlay {
         isLiked: !!post.like,
         isShared: !!post.shareUrl,
         hasTags: (post.tags?.length ?? 0) > 0,
-        showEdit: post.platform === 'post',
+        showEdit: this.isComposedPostFile(post),
         hasComment: !!post.comment,
         onComment: () => this.openCommentModal(post),
         ...(chatAvailableFor(this.context.plugin, post)

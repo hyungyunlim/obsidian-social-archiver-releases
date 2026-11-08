@@ -4,7 +4,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
-import { Markdown } from 'tiptap-markdown';
+import { Markdown } from '@tiptap/markdown';
 
 describe('Tiptap Editor Integration', () => {
   let editor: Editor;
@@ -43,13 +43,14 @@ describe('Tiptap Editor Integration', () => {
       element: editorElement,
       extensions: [StarterKit, Markdown],
       content: '**Bold** text',
+      contentType: 'markdown',
     });
 
     expect(editor).toBeDefined();
     expect(editor.storage.markdown).toBeDefined();
 
     // Get markdown output
-    const markdown = editor.storage.markdown.getMarkdown();
+    const markdown = editor.getMarkdown();
     expect(markdown).toContain('**Bold**');
   });
 
@@ -127,9 +128,9 @@ describe('Tiptap Editor Integration', () => {
     expect(editor.storage.markdown).toBeDefined();
 
     // Test basic functionality
-    editor.commands.setContent('# Hello World\n\nThis is **bold** text.');
+    editor.commands.setContent('# Hello World\n\nThis is **bold** text.', { contentType: 'markdown' });
 
-    const markdown = editor.storage.markdown.getMarkdown();
+    const markdown = editor.getMarkdown();
     expect(markdown).toContain('# Hello World');
     expect(markdown).toContain('**bold**');
   });
@@ -160,10 +161,10 @@ describe('Tiptap Editor Integration', () => {
 
     // Set markdown content
     const markdownInput = `# Title\n\nParagraph with **bold** and *italic*.\n\n- List item 1\n- List item 2`;
-    editor.commands.setContent(markdownInput);
+    editor.commands.setContent(markdownInput, { contentType: 'markdown' });
 
     // Get markdown output
-    const markdownOutput = editor.storage.markdown.getMarkdown();
+    const markdownOutput = editor.getMarkdown();
 
     expect(markdownOutput).toContain('# Title');
     expect(markdownOutput).toContain('**bold**');

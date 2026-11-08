@@ -57,6 +57,13 @@ export interface FilterState {
    * `productsOnly` is on; null is "All stores".
    */
   productSource: string | null;
+  /** My Posts mode: keep only composed post notes (never meeting/audio notes). */
+  myPostsOnly: boolean;
+  /**
+   * Narrow My Posts to one author, matched against the main author and the
+   * co-authors. Only meaningful while `myPostsOnly` is on; null is "All".
+   */
+  postAuthorName: string | null;
   includeArchived: boolean;
   activeTab: TimelineArchiveTab;
   dateRange: { start: Date | null; end: Date | null };
@@ -109,6 +116,20 @@ function compareStableKeys(a: string, b: string, order: SortState['order']): num
 
 function getPostStableKey(post: PostData): string {
   return post.shareId || post.id || post.filePath || post.url || '';
+}
+
+/**
+ * My Posts membership, shared by the PostData and index paths so the two lists
+ * agree: a composed post, written by `authorName` (main or co-author) when one is picked.
+ */
+function matchesMyPosts(
+  isComposedPost: boolean | undefined,
+  mainAuthor: string,
+  coAuthors: readonly string[] | undefined,
+  authorName: string | null,
+): boolean {
+  if (isComposedPost !== true) return false;
+  return authorName === null || mainAuthor === authorName || (coAuthors?.includes(authorName) ?? false);
 }
 
 function getIndexStableKey(entry: PostIndexEntry): string {
@@ -258,6 +279,12 @@ export class FilterSortManager {
       }
     }
 
+    if (this.filterState.myPostsOnly) {
+      const authorName = this.filterState.postAuthorName;
+      filtered = filtered.filter(post =>
+        matchesMyPosts(post.isComposedPost, post.author.name, post.coAuthors, authorName));
+    }
+
     // Tri-state transcribed filter. Must agree with the index path below —
     // a card that appears in one and not the other reads as data loss.
     if (this.filterState.transcribed !== null) {
@@ -276,8 +303,9 @@ export class FilterSortManager {
       });
     }
 
-    // Filter by archive status
-    switch (navFilters ? this.filterState.activeTab : 'all') {
+    // Filter by archive status. My Posts lists every post you wrote, archived
+    // or not (desktop/mobile My Posts parity), like a collection.
+    switch (navFilters && !this.filterState.myPostsOnly ? this.filterState.activeTab : 'all') {
       case 'inbox':
         filtered = filtered.filter(post => post.archive !== true);
         break;
@@ -452,6 +480,11 @@ export class FilterSortManager {
       }
     }
 
+    if (this.filterState.myPostsOnly) {
+      const authorName = this.filterState.postAuthorName;
+      filtered = filtered.filter(e => matchesMyPosts(e.isComposedPost, e.authorName, e.coAuthors, authorName));
+    }
+
     // Tri-state transcribed filter (index path — see PostData path above).
     // Entries missing the v8 fields read as false: the INDEX_VERSION bump
     // rebuilds them all, so undefined never lingers past one load.
@@ -462,7 +495,7 @@ export class FilterSortManager {
         filtered = filtered.filter(e => e.hasVideo === true && e.hasTranscript !== true);
       }
     }
-    switch (navFilters ? this.filterState.activeTab : 'all') {
+    switch (navFilters && !this.filterState.myPostsOnly ? this.filterState.activeTab : 'all') {
       case 'inbox':
         filtered = filtered.filter(e => !e.archive);
         break;
@@ -653,6 +686,7 @@ export class FilterSortManager {
       // `productsOnly` / `productSource` are deliberately absent: Shopping has
       // its own lit toolbar button and its own selected chip, so counting it
       // here would light the filter button for a state the user can already see.
+      // `myPostsOnly` / `postAuthorName` likewise (own button, own chips).
     );
     return Boolean(hasActiveFilter);
   }
@@ -677,6 +711,8 @@ export class FilterSortManager {
       transcribed: initialFilterState?.transcribed ?? null,
       productsOnly: initialFilterState?.productsOnly ?? false,
       productSource: initialFilterState?.productSource ?? null,
+      myPostsOnly: initialFilterState?.myPostsOnly ?? false,
+      postAuthorName: initialFilterState?.postAuthorName ?? null,
       includeArchived: initialFilterState?.includeArchived ?? false,
       activeTab: initialFilterState?.activeTab ?? 'inbox' as const,
       dateRange: {

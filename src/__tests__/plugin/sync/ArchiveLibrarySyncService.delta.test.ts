@@ -415,3 +415,75 @@ describe('ArchiveLibrarySyncService caption languages', () => {
     expect(reconcileCaptionVariantState).not.toHaveBeenCalled();
   });
 });
+
+describe('ArchiveLibrarySyncService composed posts (two-way sync)', () => {
+  function composedService(archive: UserArchive, over: Partial<ConstructorParameters<typeof ArchiveLibrarySyncService>[0]>) {
+    const apiClient = {
+      getUserArchives: vi.fn().mockResolvedValue({ archives: [archive], total: 1, hasMore: false, serverTime: '2026-05-09T00:00:00.000Z' }),
+    };
+    return new ArchiveLibrarySyncService({
+      apiClient: () => apiClient as any,
+      settings: () => makeSettings(),
+      saveSettings: vi.fn().mockResolvedValue(undefined),
+      findBySourceArchiveId: vi.fn().mockReturnValue(null),
+      findByOriginalUrl: vi.fn().mockReturnValue([]),
+      findByClientPostId: vi.fn().mockReturnValue(null),
+      indexSavedFile: vi.fn(),
+      backfillFileIdentity: vi.fn().mockResolvedValue(undefined),
+      saveSubscriptionPostDetailed: vi.fn().mockResolvedValue({ status: 'skipped' }),
+      convertUserArchiveToPostData: vi.fn().mockReturnValue({ platform: 'post', author: { name: 'A' }, content: { text: '' } }),
+      notify: vi.fn(),
+      ...over,
+    });
+  }
+  const composed = makeArchive({ platform: 'post', archiveSource: 'composed', contentRevision: 2 });
+
+  it('Tier 1: reconciles a composed note and skips the limited-archive replacement; a pull counts as saved', async () => {
+    const file = { path: 'Social Archives/Post/a.md' } as any;
+    const reconcileComposedPost = vi.fn().mockResolvedValue('pulled');
+    const replaceExistingLimitedArchive = vi.fn();
+    const reconcileAnnotationState = vi.fn().mockResolvedValue(undefined);
+    const service = composedService(composed, {
+      findBySourceArchiveId: vi.fn().mockReturnValue(file),
+      reconcileComposedPost,
+      replaceExistingLimitedArchive,
+      reconcileAnnotationState,
+    });
+
+    await service.startDeltaSync();
+
+    expect(reconcileComposedPost).toHaveBeenCalledWith(file, composed);
+    expect(replaceExistingLimitedArchive).not.toHaveBeenCalled();
+    // The annotation repaint still runs after the rewrite.
+    expect(reconcileAnnotationState).toHaveBeenCalledWith(file, composed);
+    expect(service.getState()).toMatchObject({ savedCount: 1, skippedCount: 0 });
+  });
+
+  it('Tier 1: a non-composed note still goes to the limited-archive replacement', async () => {
+    const file = { path: 'Social Archives/X/a.md' } as any;
+    const replaceExistingLimitedArchive = vi.fn().mockResolvedValue({ status: 'existing' });
+    const service = composedService(makeArchive(), {
+      findBySourceArchiveId: vi.fn().mockReturnValue(file),
+      reconcileComposedPost: vi.fn().mockResolvedValue('not-composed'),
+      replaceExistingLimitedArchive,
+    });
+
+    await service.startDeltaSync();
+
+    expect(replaceExistingLimitedArchive).toHaveBeenCalledOnce();
+  });
+
+  it('Tier 3: stamps the fresh note with the media it downloaded', async () => {
+    const file = { path: 'Social Archives/Post/new.md' } as any;
+    const media = [{ url: 'https://api/media/archives/u/p/0.png', localPath: 'attachments/p/1.png' }];
+    const stampNewComposedPost = vi.fn().mockResolvedValue(undefined);
+    const service = composedService(composed, {
+      saveSubscriptionPostDetailed: vi.fn().mockResolvedValue({ status: 'created', file, media }),
+      stampNewComposedPost,
+    });
+
+    await service.startDeltaSync();
+
+    expect(stampNewComposedPost).toHaveBeenCalledWith(file, composed, media);
+  });
+});

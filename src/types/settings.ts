@@ -817,6 +817,14 @@ export interface SocialArchiverSettings {
 
   // Composed Post Sync Queue
   pendingComposedPostSyncs: PendingComposedPostSyncEntry[];
+  /**
+   * Username whose composed notes were moved onto two-way sync in this vault
+   * (prd-plugin-my-posts-two-way-sync §5.6). Set only after a run with no
+   * failed row; another account runs it again.
+   */
+  composedPostMigrationDoneFor?: string;
+  /** Archived notes' `<` moved to `\<` in this vault (AngleBracketNoteRepairService). */
+  angleBracketRepairDone?: boolean;
 
   // Archive Library Sync Settings
   archiveLibrarySync: ArchiveLibrarySyncSettings;

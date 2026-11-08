@@ -35,7 +35,17 @@ import { get } from 'svelte/store';
 import type { AuthorCatalogEntry } from '../../../types/author-catalog';
 import { isRssBasedPlatform } from '../../../constants/rssPlatforms';
 import { isSubstackNote } from '../../../utils/substack';
-import { INTERNAL_LINK_SCHEME, parseArchiveMentionUrl, parseAuthorMentionUrl, type AuthorMentionUrlParts } from '../../../utils/note-mentions';
+import {
+  INTERNAL_LINK_SCHEME,
+  parseArchiveMentionUrl,
+  parseAuthorMentionUrl,
+  splitArchiveRefLines,
+  type ArchiveRefLine,
+  type AuthorMentionUrlParts,
+} from '../../../utils/note-mentions';
+import { isComposedPostNote } from '../../../utils/composedPostNote';
+import { joinPostAuthorNames } from './postAuthorsLabel';
+import { resolveQuotedPosts } from './composedQuotes';
 import {
   buildExactMapPlaceUrl,
   getMapPlaceProvider,
@@ -1097,9 +1107,12 @@ export class PostCardRenderer extends Component {
       this.compactPostCardRenderer.render(quotedPostContainer, post.quotedPost);
     }
 
+    // A composed post's trailing archive refs render as quote cards (the body hides the ref lines)
+    const quoteRefs = !isEmbedded && post.isComposedPost ? splitArchiveRefLines(post.content.text).refs : [];
+
     // Render embedded archives + downloaded videos together
     // Only render for top-level posts (isEmbedded=false) to prevent nesting
-    if (!isEmbedded && ((post.embeddedArchives && post.embeddedArchives.length > 0) || downloadedVideos.length > 0)) {
+    if (!isEmbedded && ((post.embeddedArchives && post.embeddedArchives.length > 0) || downloadedVideos.length > 0 || quoteRefs.length > 0)) {
       // Container for embedded archives
       const embeddedContainer = contentArea.createDiv();
       embeddedContainer.addClass('sa-mt-8');
@@ -1148,6 +1161,8 @@ export class PostCardRenderer extends Component {
           this.compactPostCardRenderer.render(embeddedContainer, embeddedPost);
         }
       }
+
+      await this.renderQuoteRefs(embeddedContainer, quoteRefs, post);
     }
 
     if (post.platform === 'post' || post.platform === 'youtube' || post.platform === 'tiktok' || usesAudioArchiveSuggestionFlow(post)) {
@@ -1223,8 +1238,8 @@ export class PostCardRenderer extends Component {
         // Open Note button
         this.renderOpenNoteButton(actionsBar, post);
 
-        // Edit button (only for user posts)
-        if (post.platform === 'post') {
+        // Edit button (composed posts only)
+        if (this.isComposedPostFile(post)) {
           this.renderEditButton(actionsBar, post);
         }
 
@@ -1621,7 +1636,10 @@ export class PostCardRenderer extends Component {
     // Author name - for 'post' type, use current username
     // For podcasts: use channelTitle (podcast show name), author.handle contains episode author
     let displayName: string;
-    if (post.platform === 'post') {
+    if (post.isComposedPost) {
+      // Composed posts: the main author (frontmatter `author`) and co-authors, "A, B +n"
+      displayName = joinPostAuthorNames([post.author.name, ...(post.coAuthors ?? [])]);
+    } else if (post.platform === 'post') {
       displayName = this.plugin.settings.username || 'You';
     } else if (post.platform === 'podcast') {
       // Podcast: show channel title (podcast show name)
@@ -2518,11 +2536,17 @@ export class PostCardRenderer extends Component {
       cleanContent = cleanContent.replace(/🔗 \*\*Link:\*\* \[.+?\]\(.+?\)\n?/g, '').trim();
     }
 
-    // Escape Setext heading patterns (lines of - or = that make preceding text a heading)
-    cleanContent = this.escapeMarkdownHeadings(cleanContent);
+    if (post.isComposedPost) {
+      // Composed posts are Markdown as written (every client stores Markdown):
+      // no list/heading escapes, and the trailing archive refs render as quote cards.
+      cleanContent = splitArchiveRefLines(cleanContent).body;
+    } else {
+      // Escape Setext heading patterns (lines of - or = that make preceding text a heading)
+      cleanContent = this.escapeMarkdownHeadings(cleanContent);
 
-    // Escape ordered list patterns (e.g., "2025. 11. 6" -> "2025\. 11\. 6")
-    cleanContent = this.escapeOrderedListPatterns(cleanContent);
+      // Escape ordered list patterns (e.g., "2025. 11. 6" -> "2025\. 11\. 6")
+      cleanContent = this.escapeOrderedListPatterns(cleanContent);
+    }
 
     // Escape angle brackets to prevent HTML interpretation (e.g., <책 제목> → literal text)
     cleanContent = this.escapeAngleBrackets(cleanContent);
@@ -3708,7 +3732,7 @@ export class PostCardRenderer extends Component {
       }
       this.renderReaderModeButton(interactions, post);
       this.renderOpenNoteButton(interactions, post);
-      if (post.platform === 'post') {
+      if (this.isComposedPostFile(post)) {
         this.renderEditButton(interactions, post);
       }
       this.renderDeleteButton(interactions, post, rootElement);
@@ -3999,23 +4023,53 @@ export class PostCardRenderer extends Component {
   }
 
   /**
-   * Render edit button (only for user posts)
+   * A composed post's quoted originals (trailing `socialarchiver://archive/<id>`
+   * ref lines) as quote cards: the vault note found by `sourceArchiveId`
+   * through the embedded-card renderer, or its label when the note is not here.
+   */
+  private async renderQuoteRefs(container: HTMLElement, refs: readonly ArchiveRefLine[], parent: PostData): Promise<void> {
+    const lookup = this.plugin.getArchiveLookupService?.();
+    const quotes = await resolveQuotedPosts(this.app, lookup ? (id) => lookup.findBySourceArchiveId(id) : undefined, refs, parent.filePath);
+    for (const { ref, post } of quotes) {
+      if (post) {
+        this.compactPostCardRenderer.render(container, post);
+      } else {
+        container.createDiv({ cls: 'pcr-quote-missing', text: ref.label, attr: { title: t('myPosts.quote.missing') } });
+      }
+    }
+  }
+
+  /**
+   * Whether Edit post applies: the note is a composed post (`isComposedPostNote`
+   * on its live frontmatter) — never meeting/audio notes or other `post` notes,
+   * whose edits would stay in the vault only.
+   */
+  private isComposedPostFile(post: PostData): boolean {
+    const file = post.filePath ? this.vault.getFileByPath(post.filePath) : null;
+    return Boolean(file && isComposedPostNote(this.app.metadataCache.getFileCache(file)?.frontmatter));
+  }
+
+  /** Edit post: hands the note path to the timeline, which opens it in Obsidian's editor. */
+  private editPost(post: PostData): void {
+    if (this.onEditPostCallback && post.filePath) {
+      this.onEditPostCallback(post, post.filePath);
+    }
+  }
+
+  /**
+   * Render edit button (composed posts only)
    */
   private renderEditButton(parent: HTMLElement, post: PostData): void {
     const editBtn = parent.createDiv({ cls: 'pcr-action-btn' });
-    editBtn.setAttribute('title', 'Edit this post');
+    editBtn.setAttribute('title', t('myPosts.edit'));
+    editBtn.setAttribute('aria-label', t('myPosts.edit'));
 
     const editIcon = editBtn.createDiv({ cls: 'pcr-action-icon' });
     setIcon(editIcon, 'pencil');
 
-    // Edit button click handler - open PostComposer in edit mode
     editBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-
-      if (this.onEditPostCallback && post.url) {
-        // Call edit post callback with post data and file path
-        this.onEditPostCallback(post, post.url);
-      }
+      this.editPost(post);
     });
   }
 
@@ -4510,17 +4564,13 @@ export class PostCardRenderer extends Component {
 
       await this.addContentVariantMenuItems(menu, post, rootElement);
 
-      // Edit button (only for user posts)
-      if (post.platform === 'post') {
+      // Edit post (composed posts only)
+      if (this.isComposedPostFile(post)) {
         menu.addItem((item) => {
           item
             .setIcon('pencil')
-            .setTitle('Edit post')
-            .onClick(() => {
-              if (this.onEditPostCallback && post.url) {
-                this.onEditPostCallback(post, post.url);
-              }
-            });
+            .setTitle(t('myPosts.edit'))
+            .onClick(() => this.editPost(post));
         });
       }
 

@@ -55,7 +55,8 @@ export interface SyncQueueConsumerDeps {
   archivePath: () => string;
   /** Obsidian `App` — per-device localStorage for durable mutation ids. */
   localStorage: DeviceLocalStorage;
-  saveSubscriptionPost: (post: PendingPost) => Promise<boolean>;
+  /** `archive` lets a composed post join two-way sync (baseline on a new note, reconcile on an existing one). */
+  saveSubscriptionPost: (post: PendingPost, archive?: UserArchive) => Promise<boolean>;
   convertUserArchiveToPostData: (archive: UserArchive) => PostData;
   hasRecentlyArchivedUrl: (url: string | null | undefined) => boolean;
   /**
@@ -182,7 +183,7 @@ export class SyncQueueConsumer {
         post,
         destinationFolder: this.deps.archivePath(),
         archivedAt: new Date().toISOString(),
-      });
+      }, archive);
       if (!saved) return 'failed';
       await this.ackItem(api, item);
       this.deps.refreshTimelineView();

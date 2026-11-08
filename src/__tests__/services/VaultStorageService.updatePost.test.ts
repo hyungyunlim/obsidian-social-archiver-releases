@@ -562,7 +562,7 @@ describe('VaultStorageService.updatePost — a section older updates repeated', 
     const saves = ['1', '2', '3', '4'].slice(0, adds).map((id) => ({ add: xPost(id), appended: { '1': 'one', '2': 'two' }[id] }));
     const { h, path, note } = await savedByOlderUpdates(saves, 'tail');
     // From the third add on, archive 1 holds a heading and an escaped header
-    expect(note.includes('## Referenced Social Media Posts\n\n&lt;!-- Embedded:')).toBe(adds >= 3);
+    expect(note.includes('## Referenced Social Media Posts\n\n\\<!-- Embedded:')).toBe(adds >= 3);
 
     expect(await addArchive(h, path, xPost('5'))).toBe(
       await freshBody(composerPost(text, { embeddedArchives: [...saves.map(({ add }) => add), xPost('5')] }))
@@ -628,5 +628,50 @@ describe('VaultStorageService.updatePost — a section older updates repeated', 
     expect(await addArchive(h, path, xPost('4'))).toBe(
       await freshBody(composerPost(text, { embeddedArchives: [...rewritten, xPost('4')] })),
     );
+  });
+});
+
+describe('VaultStorageService.updatePost — two-way sync (prd-plugin-my-posts-two-way-sync)', () => {
+  it('rebuilds the note inside vault.process, from what the note holds at write time', async () => {
+    const h = harness();
+    const { path } = await h.storage.savePost({ ...composerPost('First draft'), id: 'post_1' } as PostData);
+    const vault = (h.storage as unknown as { vault: Vault }).vault;
+    // Another writer appends below the author line between the read and the write.
+    vi.mocked(vault.process).mockImplementationOnce(async (file: TFile, fn: (current: string) => string) => {
+      const current = `${h.files.get(file.path) ?? ''}\nAppended by another writer\n`;
+      h.files.set(file.path, fn(current));
+      return h.files.get(file.path) ?? '';
+    });
+
+    await h.storage.updatePost({ filePath: path, postData: composerPost('Second draft'), existingMedia: [], replaceBody: true });
+
+    expect(h.files.get(path)).toContain('Second draft');
+    expect(h.files.get(path)).toContain('Appended by another writer');
+  });
+
+  it('writes a composed post body verbatim: no escaping, blank lines kept', async () => {
+    const h = harness();
+    const text = '# Heading\n\n\n\n1. one\n<책> and 2025. 11. 6\n#tag';
+    const { path } = await h.storage.savePost({ ...composerPost('x'), id: 'post_1' } as PostData);
+
+    await h.storage.updatePost({ filePath: path, postData: composerPost(text), existingMedia: [], replaceBody: true });
+
+    expect(bodyOf(h.files.get(path)).replace(/^\n+/, "").startsWith(`${text}\n`)).toBe(true);
+  });
+
+  it('keeps syncedContentRevision and coAuthors through the frontmatter rebuild', async () => {
+    const h = harness();
+    const { path, file } = await h.storage.savePost({ ...composerPost('x'), id: 'post_1' } as PostData);
+    await h.storage['app'].fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+      fm['syncedContentRevision'] = 4;
+      fm['coAuthors'] = ['Bo'];
+      fm['syncedMediaNext'] = 3;
+    });
+
+    await h.storage.updatePost({ filePath: path, postData: composerPost('y'), existingMedia: [], replaceBody: true });
+
+    const fm = JSON.parse(/^---\n([\s\S]*?)\n---\n/.exec(h.files.get(path) ?? '')![1]!) as Record<string, unknown>;
+    expect(fm).toMatchObject({ syncedContentRevision: 4, coAuthors: ['Bo'] });
+    expect(fm).not.toHaveProperty('syncedMediaNext');
   });
 });

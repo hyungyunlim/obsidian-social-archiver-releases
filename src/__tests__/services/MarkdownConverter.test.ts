@@ -749,6 +749,24 @@ describe('MarkdownConverter', () => {
   });
 
   describe('markdown escaping', () => {
+    it('writes a composed post body verbatim: no escapes, no hashtag links, blank lines kept', () => {
+      const text = '# Heading\n\n\n\n1. one\n<책> and 2025. 11. 6\n#tag and [[link]]\n{{content.text}}';
+      const post: PostData = { ...mockPostData, platform: 'post', content: { text }, media: [], ai: undefined };
+
+      const result = new MarkdownConverter({ includeHashtagsAsObsidianTags: false }).convert(post);
+
+      expect(result.content.startsWith(`${text}\n`)).toBe(true);
+    });
+
+    it('still escapes a meeting note', () => {
+      const post: PostData = { ...mockPostData, platform: 'post', contentType: 'meeting-note', content: { text: '# Agenda\n1. one' }, media: [] };
+
+      const result = converter.convert(post);
+
+      expect(result.content).toContain('\\# Agenda');
+      expect(result.content).toContain('1\\. one');
+    });
+
     it('should escape markdown special characters in alt text', async () => {
       const postWithSpecialChars = {
         ...mockPostData,
@@ -773,7 +791,7 @@ describe('MarkdownConverter', () => {
 
       const result = converter.convert(post);
 
-      expect(result.content).toContain('&lt;inputs>\nAsk me for a name\n&lt;/inputs>');
+      expect(result.content).toContain('\\<inputs>\nAsk me for a name\n\\</inputs>');
       expect(result.content).toContain('use `<video>` and \\<kept>');
       // Only the note body is escaped; the post data stays plain text.
       expect(post.content.text).toBe(text);
@@ -784,7 +802,7 @@ describe('MarkdownConverter', () => {
 
       const result = converter.convert({ ...mockPostData, content: { text } });
 
-      expect(result.content).toContain('a &lt;b> line');
+      expect(result.content).toContain('a \\<b> line');
       expect(result.content).toContain('```javascript\nconst ok = a < b;\n```');
     });
 
@@ -836,7 +854,7 @@ describe('MarkdownConverter', () => {
         quotedPost: quoted({ text: '', markdown: 'Quoted body with <sup>1</sup>' }),
       });
 
-      expect(plain.content).toContain('steal the prompt\n&lt;inputs>\nAsk me\n&lt;/inputs>\nuse `<video>`');
+      expect(plain.content).toContain('steal the prompt\n\\<inputs>\nAsk me\n\\</inputs>\nuse `<video>`');
       expect(markdown.content).toContain('Quoted body with <sup>1</sup>');
     });
 
@@ -865,9 +883,9 @@ describe('MarkdownConverter', () => {
         ],
       });
 
-      expect(result.content).toContain('steal the prompt\n&lt;inputs>\nAsk me\n&lt;/inputs>\nuse `<video>`');
-      expect(result.content).toContain('**Description:**\nPrompt: &lt;inputs>');
-      expect(result.content).toContain('Board &lt;b>');
+      expect(result.content).toContain('steal the prompt\n\\<inputs>\nAsk me\n\\</inputs>\nuse `<video>`');
+      expect(result.content).toContain('**Description:**\nPrompt: \\<inputs>');
+      expect(result.content).toContain('Board \\<b>');
       expect(result.content).toContain('Article with <sup>1</sup>');
       expect(result.content).toContain('Blog with <img src="a.jpg">');
     });

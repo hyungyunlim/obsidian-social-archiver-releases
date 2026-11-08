@@ -69,7 +69,7 @@ function trimRules(text: string): string {
  * re-save collapses or the `<` it escapes.
  */
 function beyondCopies(text: string, known: readonly string[]): string {
-  const plain = (line: string): string => line.replaceAll('&lt;', '<').trim();
+  const plain = (line: string): string => line.replaceAll('&lt;', '<').replaceAll('\\<', '<').trim();
   const copies = known.map((copy) => copy.split('\n').map(plain).filter(Boolean)).filter((copy) => copy.length > 0);
   const lines = text.split('\n');
   let start = 0;
@@ -593,20 +593,25 @@ export class VaultStorageService {
    * while ensuring media references are properly updated.
    * Preserves existing frontmatter fields (especially share-related fields).
    *
+   * Pure on the note text: `updatePost` runs it inside `vault.process`, so a
+   * write that lands meanwhile is never overwritten with a stale copy.
+   *
+   * @param existingContent - The note as it is now
    * @param postData - Updated post data
    * @param keptMedia - Existing media to preserve
    * @param addedMedia - Newly added media with save results
    * @param existingFile - Existing file to read frontmatter from
    * @param replaceBody - Write the body from `postData` instead of keeping it
-   * @returns Updated markdown content
+   * @returns Updated markdown document
    */
-  private async updateMarkdownContent(
+  private buildUpdatedDocument(
+    existingContent: string,
     postData: PostData,
     keptMedia: Media[],
     addedMedia: MediaSaveResult[],
     existingFile: TFile,
     replaceBody: boolean
-  ): Promise<{ fullDocument: string }> {
+  ): string {
     // Combine kept media with successfully added media
     const allMedia: Media[] = [...keptMedia];
 
@@ -658,10 +663,6 @@ export class VaultStorageService {
     });
 
     const allMediaResults: MediaResult[] = [...keptMediaResults, ...mediaResults];
-
-    // Read existing file content: its body (unless replaced) and whatever
-    // follows the interaction bar are kept
-    const existingContent = await this.vault.read(existingFile);
 
     // Read existing frontmatter to preserve share-related fields
     const fileCache = this.app.metadataCache.getFileCache(existingFile);
@@ -788,9 +789,7 @@ export class VaultStorageService {
     // Generate new frontmatter YAML
     const frontmatterYaml = stringifyYaml(mergedFrontmatter);
 
-    const fullDocument = `---\n${frontmatterYaml}---\n${finalContent}`;
-
-    return { fullDocument };
+    return `---\n${frontmatterYaml}---\n${finalContent}`;
   }
 
   /**
@@ -897,11 +896,11 @@ export class VaultStorageService {
         }
       }
 
-      // Step 5: Update markdown content with new media references
-      const markdown = await this.updateMarkdownContent(postData, changes.toKeep, mediaSaved, existingFile, replaceBody);
-
-      // Step 6: Save updated content to file
-      await this.vault.process(existingFile, () => markdown.fullDocument);
+      // Steps 5-6: Rebuild the note from what it holds at write time (its body
+      // unless replaced, and whatever follows the interaction bar are kept)
+      await this.vault.process(existingFile, (existingContent) =>
+        this.buildUpdatedDocument(existingContent, postData, changes.toKeep, mediaSaved, existingFile, replaceBody)
+      );
 
       // Step 7: Update frontmatter with lastModified timestamp
       await this.updateFrontmatter(existingFile, {

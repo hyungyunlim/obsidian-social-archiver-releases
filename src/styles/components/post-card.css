@@ -527,6 +527,16 @@ body.is-phone .pcr-content-variant-switch {
   word-break: break-word;
 }
 
+/* Mixed RTL/LTR writing (#238): each paragraph, in the card and the reader,
+   takes its direction and alignment from its own first strong character.
+   `start` is spelled out so an inherited `text-align: left` cannot pin it. */
+.pcr-content-text,
+.pcr-content-text :is(p, li, blockquote, h1, h2, h3, h4, h5, h6),
+.sa-reader-mode-body :is(p, li, blockquote, h1, h2, h3, h4, h5, h6) {
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+
 .pcr-title-post {
   font-size: 18px;
   font-weight: 650;
@@ -3618,4 +3628,13 @@ a.pcr-gmaps-map-touch-overlay {
   border-radius: 6px;
   object-fit: cover;
   background: var(--background-secondary);
+}
+
+/* Composed post: a quoted original that is not in the vault (label only) */
+.pcr-quote-missing {
+  padding: 10px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
 }

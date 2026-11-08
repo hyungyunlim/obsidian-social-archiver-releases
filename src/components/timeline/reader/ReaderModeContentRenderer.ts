@@ -41,6 +41,10 @@ import { renderNoteReplies, splitPluginNoteReplies } from '../renderers/NoteRepl
 import { pluginNoteId } from '../../../services/byok/NoteMentionAsker';
 import type { StoredAIComment } from '../../../services/ai-comment/AICommentSaver';
 import { paintAIMentions } from '../../../utils/paintAIMentions';
+import { splitArchiveRefLines } from '../../../utils/note-mentions';
+import { joinPostAuthorNames } from '../renderers/postAuthorsLabel';
+import { resolveQuotedPosts } from '../renderers/composedQuotes';
+import { t } from '../../../i18n';
 
 export interface ReaderContentVariantOption {
   id: string | null;
@@ -240,6 +244,11 @@ export class ReaderModeContentRenderer extends Component {
       await this.renderQuotedPost(content, post.quotedPost, post.filePath || '');
     }
 
+    // 6.1 A composed post's quoted originals (trailing archive ref lines)
+    if (post.isComposedPost) {
+      await this.renderComposedQuotes(content, post);
+    }
+
     // 7. Media gallery
     if (post.media && post.media.length > 0) {
       this.renderMedia(content, post);
@@ -390,7 +399,10 @@ export class ReaderModeContentRenderer extends Component {
     const nameRow = info.createDiv({ cls: 'sa-reader-mode-author-name-row' });
 
     // Author name (clickable if author URL exists)
-    const authorNameEl = nameRow.createSpan({ text: post.author.name, cls: 'sa-reader-mode-author-name' });
+    const authorLabel = post.isComposedPost
+      ? joinPostAuthorNames([post.author.name, ...(post.coAuthors ?? [])])
+      : post.author.name;
+    const authorNameEl = nameRow.createSpan({ text: authorLabel, cls: 'sa-reader-mode-author-name' });
     if (post.author.url) {
       authorNameEl.addClass('sa-clickable');
       authorNameEl.addClass('sa-transition-color');
@@ -645,12 +657,20 @@ export class ReaderModeContentRenderer extends Component {
     source = stripTrailingReaderChatSection(source);
     if (!source.trim()) return null;
 
+    if (post.isComposedPost) {
+      // Composed posts are Markdown as written; the ref lines render as quote cards (6.1).
+      source = splitArchiveRefLines(source).body;
+      if (!source.trim()) return null;
+    }
+
     // For social media text (not rawMarkdown), escape patterns that cause unwanted rendering
     if (!post.content.rawMarkdown) {
-      // Escape Setext headings: standalone lines of - or = that make preceding text h1/h2
-      source = source.replace(/^([-=]+)$/gm, '\\$1');
-      // Escape ordered list patterns (e.g. "2025. 11. 6" parsed as nested lists)
-      source = source.replace(/^(\s*)(\d+)\.(?=\s|$)/gm, '$1$2\\.');
+      if (!post.isComposedPost) {
+        // Escape Setext headings: standalone lines of - or = that make preceding text h1/h2
+        source = source.replace(/^([-=]+)$/gm, '\\$1');
+        // Escape ordered list patterns (e.g. "2025. 11. 6" parsed as nested lists)
+        source = source.replace(/^(\s*)(\d+)\.(?=\s|$)/gm, '$1$2\\.');
+      }
       // Escape angle brackets to prevent HTML interpretation (e.g. <책 제목>);
       // a `\<` the note already carries stays, or it would show as `&lt;`.
       source = source.replace(/(?<!\\)</g, '&lt;').replace(/>/g, '&gt;');
@@ -661,6 +681,22 @@ export class ReaderModeContentRenderer extends Component {
     const sourcePath = post.filePath || '';
     await MarkdownRenderer.render(this.app, source, bodyEl, sourcePath, this);
     return bodyEl;
+  }
+
+  // ---------- Composed post quotes ----------
+
+  /** Quoted originals as quote cards: the vault note when it exists, else its label. */
+  private async renderComposedQuotes(parent: HTMLElement, post: PostData): Promise<void> {
+    const { refs } = splitArchiveRefLines(post.content.text || '');
+    const lookup = this.plugin.getArchiveLookupService?.();
+    const quotes = await resolveQuotedPosts(this.app, lookup ? (id) => lookup.findBySourceArchiveId(id) : undefined, refs, post.filePath);
+    for (const { ref, post: quoted } of quotes) {
+      if (quoted) {
+        await this.renderQuotedPost(parent, quoted, post.filePath || '');
+      } else {
+        parent.createDiv({ cls: 'pcr-quote-missing sa-my-16', text: ref.label, attr: { title: t('myPosts.quote.missing') } });
+      }
+    }
   }
 
   // ---------- Quoted / Shared Post ----------
@@ -1087,7 +1123,7 @@ export class ReaderModeContentRenderer extends Component {
     if (callbacks.showEdit) {
       this.renderActionBtn(actionsGroup, {
         icon: 'pencil',
-        title: 'Edit this post',
+        title: t('myPosts.edit'),
         onClick: callbacks.onEdit,
       });
     }

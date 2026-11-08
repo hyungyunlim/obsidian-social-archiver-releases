@@ -26,6 +26,31 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.12.0': {
+    title: 'My Posts stay in step with your other devices',
+    date: '2026-11-09',
+    notes: `## New
+
+- **My Posts sync both ways.** Posts you write on your phone, on the desktop app or on the web come into your vault, and an edit made anywhere reaches every other device: change the note in Obsidian and the post updates elsewhere; edit it elsewhere and the note follows.
+- **Nothing is lost when both sides changed.** If a post was edited in Obsidian and on another device before they met, your vault's text is saved as a conflict copy next to the note, and a notice opens it.
+- **A note you are editing stays put.** While a post's note is open in the editor, edits from other devices wait until you leave it.
+- **My Posts in the timeline.** The new My Posts button lists the posts you wrote, archived ones included, with author bubbles to narrow them down. Cards name co-authors, show the posts you quoted, and **Edit post** opens the note in Obsidian's editor.
+- **Existing posts join on their own.** The first time 4.12 runs, the post notes already in your vault are matched to their posts. Any whose text differs from the server are listed in Settings → Mobile sync, where you choose which version to keep.
+
+## Fixes
+
+- **Text in angle brackets no longer breaks a note in Live Preview.** A caption like \`<Hang On>\` made every line after it — images, headings, the author line — show as raw markdown, and newer notes showed a literal \`&lt;\`. Notes now keep it as text in both views, and notes already in your vault are repaired once, automatically.
+- **Photos you add to a post never replace one another device saved.** The server now picks each upload's place.
+- **Threads crossposts drop Markdown backslashes**, so \`snake_case\` and \`2025. 11. 6\` post as typed.
+- **No false "Failed to sync" notice** after updating or turning off the plugin while it was catching up on archives from the mobile app.
+- **Instagram and Facebook videos saved through a session import** no longer get a broken poster link in their note.
+- **Arabic and Hebrew posts** read right-to-left on timeline cards.
+
+## Requirements
+
+- **Obsidian 1.11.4 or later.**
+`,
+  },
   '4.11.1': {
     title: 'Mention an AI in My Note, and continue a saved chat',
     date: '2026-11-05',

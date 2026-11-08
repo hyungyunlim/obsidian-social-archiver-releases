@@ -96,13 +96,13 @@ describe('CommentRenderer', () => {
     expect(content?.querySelector('a.cr-link')?.textContent).toBe('https://example.com/link');
   });
 
-  it('shows the `&lt;` a note writes for a `<` as the `<` it stands for', () => {
+  it('shows the `\\<` (or older `&lt;`) a note writes for a `<` as the `<` it stands for', () => {
     const container = document.createElement('div');
     const comments: Comment[] = [
       {
         id: '1',
         author: { name: 'Commenter', url: 'https://x.com/commenter' },
-        content: '&lt;inputs>\nAsk me\n&lt;/inputs>',
+        content: '\\<inputs>\nAsk me\n&lt;/inputs>',
       },
     ];
 

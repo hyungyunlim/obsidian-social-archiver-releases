@@ -139,4 +139,37 @@ describe('MobileSyncService', () => {
     // Legacy ack is queueId + clientId only — no version token, no mutation id.
     expect(apiClient.ackSyncItem).toHaveBeenCalledWith('queue-1', 'client-1');
   });
+
+  // Unload (plugin update/disable) or sign-out mid catch-up: the disposed client
+  // used to fail every remaining item and end on "Failed to sync N archive(s)".
+  it('stops a catch-up in flight once clearState runs', async () => {
+    const apiClient = makeApiClient({
+      getSyncQueue: vi.fn().mockResolvedValue({
+        items: ['q1', 'q2', 'q3'].map((queueId, i) => (
+          { queueId, archiveId: `archive-${i + 1}`, status: 'pending', clientId: 'client-1' }
+        )),
+      }),
+    });
+    const deps = makeDeps(apiClient);
+    const service = new MobileSyncService(deps);
+    let finishSave: (saved: boolean) => void = () => undefined;
+    deps.saveSubscriptionPost = vi.fn(() => new Promise<boolean>((resolve) => { finishSave = resolve; }));
+
+    const drain = service.processPendingSyncQueue();
+    await vi.waitFor(() => expect(deps.saveSubscriptionPost).toHaveBeenCalledTimes(1));
+    service.clearState();
+    finishSave(true);
+    await drain;
+
+    expect(apiClient.getUserArchive).toHaveBeenCalledTimes(1);
+    expect(deps.notify).not.toHaveBeenCalled();
+    expect(deps.resumeTimelineRefresh).toHaveBeenCalledTimes(1);
+
+    // A run started after the reset (sign-in again) goes ahead.
+    deps.saveSubscriptionPost = vi.fn().mockResolvedValue(true);
+    const next = service.processPendingSyncQueue();
+    await vi.runAllTimersAsync();
+    await next;
+    expect(apiClient.getSyncQueue).toHaveBeenCalledTimes(2);
+  });
 });

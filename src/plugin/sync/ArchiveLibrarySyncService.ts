@@ -24,6 +24,8 @@ import type { PendingPost } from '../../services/SubscriptionManager';
 import type { PostData } from '../../types/post';
 import type { SocialArchiverSettings } from '../../types/settings';
 import type { LocalLockRegistry } from '../locks/LocalLockRegistry';
+import type { ComposedReconcileResult } from './composed/ComposedPostReconciler';
+import type { DownloadedComposedMedia } from './composed/ComposedPostPullWriter';
 import { isLocalOnlyNoteByContent } from './localOnlyNoteGuard';
 import {
   isRateLimitError,
@@ -85,6 +87,8 @@ export interface SavePendingPostResult {
   file?: TFile;
   path?: string;
   reason?: string;
+  /** Main media downloaded into the note: server URL → vault path (composed baseline). */
+  media?: DownloadedComposedMedia;
 }
 
 export interface SavePendingPostOptions {
@@ -345,6 +349,16 @@ export interface ArchiveLibrarySyncDeps {
 
   /** Shared local write lock registry used by plugin archive/materialization writers. */
   localLockRegistry?: LocalLockRegistry;
+
+  /**
+   * Two-way sync of a composed post note (Tier 1/2): pull, conflict, or push.
+   * Composed rows never go through the limited-archive replacement. Runs under
+   * this service's archive write locks. Wired to ComposedPostReconciler.reconcile.
+   */
+  reconcileComposedPost?: (file: TFile, archive: UserArchive) => Promise<ComposedReconcileResult>;
+
+  /** A fresh Tier-3 note of a composed row gets its two-way sync baseline. Wired to ComposedPostReconciler.stampNew. */
+  stampNewComposedPost?: (file: TFile, archive: UserArchive, downloaded?: DownloadedComposedMedia) => Promise<void>;
 
   /**
    * Shared background-sync token bucket (SyncRateLimitCoordinator) so page
@@ -830,7 +844,7 @@ export class ArchiveLibrarySyncService {
       const existingById = this.deps.findBySourceArchiveId(archive.id);
       if (existingById) {
         await this.reconcileExistingActionState(existingById, archive);
-        const updated = await this.replaceExistingLimitedArchive(existingById, archive);
+        const updated = await this.reconcileComposedOrReplaceLimited(existingById, archive);
         await this.reconcileExistingActionState(existingById, archive);
         await this.reconcileExistingAnnotationState(existingById, archive);
         await this.reconcileExistingTranscriptState(existingById, archive);
@@ -911,7 +925,7 @@ export class ArchiveLibrarySyncService {
           });
         }
         await this.reconcileExistingActionState(matched, archive);
-        const updated = await this.replaceExistingLimitedArchive(matched, archive);
+        const updated = await this.reconcileComposedOrReplaceLimited(matched, archive);
         await this.reconcileExistingActionState(matched, archive);
         await this.reconcileExistingAnnotationState(matched, archive);
         await this.reconcileExistingTranscriptState(matched, archive);
@@ -1219,6 +1233,35 @@ export class ArchiveLibrarySyncService {
     };
   }
 
+  /**
+   * A composed post's note syncs both ways; any other note may be a limited
+   * archive to replace. True when the note was rewritten. The lanes after it
+   * (annotation repaint included) run either way.
+   */
+  private async reconcileComposedOrReplaceLimited(file: TFile, archive: UserArchive): Promise<boolean> {
+    const composed = await this.reconcileComposedPost(file, archive);
+    if (composed === 'not-composed') return this.replaceExistingLimitedArchive(file, archive);
+    if (composed !== 'pulled' && composed !== 'conflict') return false;
+    this.deps.indexSavedFile(file, { sourceArchiveId: archive.id, originalUrl: archive.originalUrl });
+    this.updateState({ savedCount: this.runtimeState.savedCount + 1 });
+    return true;
+  }
+
+  /** Never fatal. Only a composed row can throw past the first check, so a throw is 'skipped'. */
+  private async reconcileComposedPost(file: TFile, archive: UserArchive): Promise<ComposedReconcileResult> {
+    if (!this.deps.reconcileComposedPost) return 'not-composed';
+    try {
+      return await this.deps.reconcileComposedPost(file, archive);
+    } catch (error) {
+      console.warn('[Social Archiver] [LibrarySync] composed post reconcile failed', {
+        archiveId: archive.id,
+        path: file.path,
+        error,
+      });
+      return 'skipped';
+    }
+  }
+
   private async replaceExistingLimitedArchive(file: TFile, archive: UserArchive): Promise<boolean> {
     if (!this.deps.replaceExistingLimitedArchive) return false;
 
@@ -1268,6 +1311,16 @@ export class ArchiveLibrarySyncService {
         sourceArchiveId: archive.id,
         originalUrl: archive.originalUrl,
       });
+      // Another device's composed post joins two-way sync from its first save.
+      try {
+        await this.deps.stampNewComposedPost?.(result.file, archive, result.media);
+      } catch (error) {
+        console.warn('[Social Archiver] [LibrarySync] composed post baseline failed', {
+          archiveId: archive.id,
+          path: result.file.path,
+          error,
+        });
+      }
       // Late-resolution: render this new note's own linked-archives section AND
       // upgrade any source note that already links to it (the relation list for
       // this archive includes the incoming side). Fire-and-forget non-fatal.

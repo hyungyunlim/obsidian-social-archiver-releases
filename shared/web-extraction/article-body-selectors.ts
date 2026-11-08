@@ -142,7 +142,16 @@ const ARTICLE_BODY_SELECTORS: Record<string, string> = {
 const ARTICLE_STRIP_SELECTORS: Record<string, string> = {
   // GQ nests its 관련기사 block inside the article container.
   'gqkorea.co.kr': '.relate_group',
+  // 중앙일보 drops ad slots between paragraphs (measured 2026-11-06):
+  // `div.ad_wrap#ad_art_content_mid` holds an "ADVERTISEMENT" label and the
+  // ad iframe, and the label landed in every clip as `<p>ADVERTISEMENT</p>`.
+  'joongang.co.kr': '.ad_wrap',
   'mediatoday.co.kr': 'article.relation',
+  // NYT ad slots (measured 2026-11-06): each `div#story-ad-N-wrapper` (and
+  // #top-, #bottom-, #pp_edpick-wrapper) holds an "Advertisement" label, a
+  // "SKIP ADVERTISEMENT" link to `#after-…` and the ad. Defuddle kept the
+  // label and the link, a dozen of each per article in the reader.
+  'nytimes.com': 'div[id$="-wrapper"]:has(> a[href^="#after-"])',
   // The star vertical nests its donation box + tag row inside the body.
   'ohmynews.com': '.arc-bottom-wrap',
   // 시사IN nests its "함께 볼 기사" box mid-body.
@@ -171,15 +180,70 @@ export function articleBodySelectorForHost(hostname: string): string | undefined
   return undefined;
 }
 
+interface ClutterParent {
+  insertBefore(node: unknown, before: unknown): unknown;
+  nextSibling: RemovableNode | null;
+  parentNode: ClutterParent | null;
+}
+
 interface RemovableNode {
-  parentNode: { insertBefore(node: unknown, before: unknown): unknown } | null;
-  nextSibling: unknown;
+  parentNode: ClutterParent | null;
+  nextSibling: RemovableNode | null;
   remove(): void;
 }
 
+interface DigestRule extends RemovableNode {
+  nextElementSibling: { tagName: string; textContent: string | null } | null;
+}
+
+interface DigestBody extends ClutterParent {
+  textContent: string | null;
+  querySelectorAll(selector: string): Iterable<DigestRule>;
+}
+
+interface ClutterDocument {
+  querySelector(selector: string): DigestBody | null;
+  querySelectorAll(selector: string): Iterable<RemovableNode>;
+}
+
 /**
- * Remove this host's strip matches (in-body 관련기사 blocks) from a document
- * and return a function that puts every node back exactly where it was.
+ * A New York Times newsletter issue ("You're reading The World newsletter.")
+ * follows its essay with a digest of other stories: a rule, then an all-caps
+ * label (MORE TOP NEWS, OTHER NEWS, RECIPE, TIME TO PLAY…), mostly links.
+ * The server archive already cuts the markdown there
+ * (workers/src/utils/newsletter-digest.ts); this is the same cut on the live
+ * DOM for the reader and clips: the rule and everything after it, to the end
+ * of the article body. Measured on The World, 2026-11-06.
+ */
+const NYT_HOST = /(?:^|\.)nytimes\.com$/i;
+const NEWSLETTER_LEAD = /You[’']re reading [^\n]{1,80}? newsletter\b/i;
+const DIGEST_LABEL = /^[^a-z]*[A-Z][^a-z]*$/;
+
+function newsletterDigestNodes(document: ClutterDocument, hostname: string): RemovableNode[] {
+  if (!NYT_HOST.test(hostname)) return [];
+  const body = document.querySelector('section[name="articleBody"]');
+  if (!body || !NEWSLETTER_LEAD.test(body.textContent ?? '')) return [];
+  for (const rule of body.querySelectorAll('hr')) {
+    const label = rule.nextElementSibling;
+    if (!label || !/^h[2-4]$/i.test(label.tagName) || !DIGEST_LABEL.test(label.textContent?.trim() ?? '')) continue;
+    // The rule and its later siblings, then each ancestor's later siblings.
+    const tail: RemovableNode[] = [];
+    let sibling: RemovableNode | null = rule;
+    let parent = rule.parentNode;
+    for (;;) {
+      for (; sibling; sibling = sibling.nextSibling) tail.push(sibling);
+      if (!parent || parent === body) return tail;
+      sibling = parent.nextSibling;
+      parent = parent.parentNode;
+    }
+  }
+  return [];
+}
+
+/**
+ * Remove this host's strip matches (in-body 관련기사 blocks, ad slots) and an
+ * NYT newsletter's digest from a document, and return a function that puts
+ * every node back exactly where it was.
  *
  * For the extension, which runs Defuddle against the LIVE page: a clone has no
  * `defaultView`, so parsing a stripped clone would change Defuddle's
@@ -188,15 +252,15 @@ interface RemovableNode {
  * browser never paints mid-task. Restoration runs in reverse so an adjacent
  * removed sibling's anchor is already back in the tree.
  */
-export function removeArticleClutterInPlace(
-  document: { querySelectorAll(selector: string): Iterable<RemovableNode> },
-  hostname: string
-): () => void {
+export function removeArticleClutterInPlace(document: ClutterDocument, hostname: string): () => void {
   const selector = articleStripSelectorForHost(hostname);
-  if (!selector) return () => {};
+  const nodes = [
+    ...(selector ? document.querySelectorAll(selector) : []),
+    ...newsletterDigestNodes(document, hostname),
+  ];
 
-  const removed: Array<{ node: RemovableNode; parent: NonNullable<RemovableNode['parentNode']>; next: unknown }> = [];
-  for (const node of document.querySelectorAll(selector)) {
+  const removed: Array<{ node: RemovableNode; parent: ClutterParent; next: unknown }> = [];
+  for (const node of nodes) {
     if (!node.parentNode) continue;
     removed.push({ node, parent: node.parentNode, next: node.nextSibling });
     node.remove();

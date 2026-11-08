@@ -61,7 +61,10 @@ interface PostComposerProps {
   onCrossPostStatusClear?: () => void;
   onCancel?: () => void;
   onSaveSettings?: (partial?: Partial<SocialArchiverSettings>) => Promise<void>; // Persist settings changes (e.g., toggle state)
-  // Edit mode props
+  // Edit mode props.
+  // ponytail: no caller passes editMode any more — Edit post opens the note in
+  // Obsidian's editor and two-way sync pushes it (prd-plugin-my-posts §6). The
+  // editMode branches below are dead; delete them with the next composer rework.
   editMode?: boolean;
   initialData?: PostData;
   filePath?: string;

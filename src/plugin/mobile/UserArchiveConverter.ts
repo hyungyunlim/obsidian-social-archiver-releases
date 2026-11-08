@@ -12,6 +12,7 @@ import type { UserArchive, UserArchiveComment } from '../../services/WorkersAPIC
 import type { ProductSnapshot } from '../../shared/platforms/products';
 import { isWebLanePlatform } from '@/shared/platforms';
 import { knownTranscriptLanguage } from '../../constants/languages';
+import { isComposedServerRow, serverComposedText } from '../sync/composed/composedNote';
 
 const LEGACY_WEB_CLIP_SEPARATOR = '\n\n---\n\n';
 const LEADING_WEB_CLIP_SEPARATOR = '---\n\n';
@@ -266,6 +267,10 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
     ? extractWebArticleBody(archive)
     : isXArticle
       ? extractXArticleIntro(archive)
+    // A composed post's text is its fullContent plus its quotes as trailing
+    // archive-mention lines (the server keeps those only as embeddedArchives).
+    : isComposedServerRow(archive)
+      ? serverComposedText(archive)
     : archive.fullContent || archive.previewText || '';
   const kidsnoteCenterName = isKidsnote ? normalizeHandle(archive.authorHandle) : undefined;
   const authorUsername = isKidsnote ? undefined : normalizeHandle(archive.authorHandle);
@@ -386,7 +391,9 @@ export function convertUserArchiveToPostData(archive: UserArchive): PostData {
       comments: archive.commentCount ?? undefined,
       shares: archive.sharesCount ?? undefined,
       views: archive.viewsCount ?? undefined,
-      timestamp: archive.postedAt || new Date().toISOString(),
+      // A composed post has no postedAt: it was written when it was archived, so a
+      // pull from another client's edit keeps its date instead of taking the write time.
+      timestamp: archive.postedAt || (isComposedServerRow(archive) ? archive.archivedAt : '') || new Date().toISOString(),
       externalLink: archive.externalLink ?? undefined,
       externalLinkTitle: archive.externalLinkTitle ?? undefined,
       externalLinkImage: archive.externalLinkImage ?? undefined,

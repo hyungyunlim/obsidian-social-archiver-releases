@@ -5,20 +5,25 @@
  *
  * Responsibilities:
  * - Enqueue create/update operations
- * - Flush queue: read vault file, reconstruct payload, upload new media, POST to server
+ * - Flush queue: read vault file, reconstruct payload, upload new media, POST/PUT to server
  * - On success: write sourceArchiveId, syncState='synced', serverSyncedAt,
- *   syncedContentHash and the synced media list to frontmatter
+ *   syncedContentHash, syncedContentRevision and the synced media list to frontmatter
  * - On failure: transient failures wait in the queue; a rejection spends a
- *   retry, and the last one sets syncState='failed'
+ *   retry, and the last one sets syncState='failed'. A 409 (another device
+ *   edited the post) goes to the reconciler: adopt or conflict copy, never a retry.
  * - Persist queue to settings (survives app restart)
  * - Handle file deletion: remove pending queue entries
  * - Handle file rename/move: point pending queue entries at the new path
  *
- * An edit is a change to what the server stores (text, title, which embeds),
+ * An edit is a change to what the server stores (title, text, which embeds),
  * not to the file: frontmatter writes (ours, inbound sync, like/archive
  * toggles) send nothing, and neither do inbound rewrites of the note parts the
  * server doesn't store (annotations, highlight marks, linked archives,
- * comments). `syncedContentHash` keeps that true across restarts and devices.
+ * comments). `syncedContentHash` keeps that true across restarts and devices,
+ * and it is always read from the note as written (prd-plugin-my-posts-two-way-sync §3).
+ *
+ * Only two-way sync participants are pushed: a composed note (not a meeting or
+ * audio note) with a numeric `syncedContentRevision`, not diverged, not CRLF.
  *
  * Single Responsibility: composed post outbound sync orchestration
  */
@@ -34,12 +39,22 @@ import type {
   SocialArchiverSettings,
   PendingComposedPostSyncEntry,
 } from '../../types/settings';
-import type { PostData } from '../../types/post';
-import { PostDataParser } from '../../components/timeline/parsers/PostDataParser';
-import { stripHighlightMarks } from '../../components/timeline/reader/ReaderHighlightManager';
 import { getMimeTypeFromExtension } from '../../utils/media';
 import { isImageUrl, isVideoUrl } from '../../utils/mediaType';
-import { decodePathFromMarkdownLink } from '../../utils/url';
+import { isComposedPostNote, isComposedSyncParticipant } from '../../utils/composedPostNote';
+import { splitArchiveRefLines } from '../../utils/note-mentions';
+import {
+  composedFingerprint,
+  isSyncableComposedNote,
+  readComposedNote,
+  readNoteFrontmatter,
+  readSyncedMedia,
+  sha256Hex,
+  type ComposedAttachmentRef,
+  type ComposedNoteParts,
+} from './composed/composedNote';
+import type { ComposedPostReconciler } from './composed/ComposedPostReconciler';
+import type { EditorPresence } from './composed/EditorPresence';
 
 // ============================================================================
 // Constants
@@ -48,17 +63,11 @@ import { decodePathFromMarkdownLink } from '../../utils/url';
 const MAX_RETRIES = 3;
 const LOG_PREFIX = '[Social Archiver] [ComposedPostSync]';
 
-/** The upload route's last index (MAX_ARCHIVE_MEDIA - 1 in workers/src/types/user-archives.ts). */
-const MAX_MEDIA_INDEX = 24;
-
-/** Debounce delay for update enqueue — avoids rapid re-saves creating many update requests. */
-const UPDATE_DEBOUNCE_MS = 2000;
-
-/**
- * Debounce delay for the background MetadataCache watcher.
- * Longer than the composer path (2s) since background edits are less time-sensitive.
- */
+/** A note in no editor: pushed this long after its last change (§5.2). */
 const BACKGROUND_EDIT_DEBOUNCE_MS = 5000;
+
+/** A note open in an editor: pushed once it has rested this long, or as soon as the user leaves it (§5.2). */
+const OPEN_EDIT_DEBOUNCE_MS = 30_000;
 
 /**
  * Offline, signed out (401), over quota (402), timed out, rate limited or a
@@ -70,50 +79,24 @@ function isTransient(error: unknown): boolean {
   return typeof status !== 'number' || status >= 500 || [401, 402, 408, 429].includes(status);
 }
 
-/**
- * The post's text as the server stores it: the text the timeline card shows.
- * PostDataParser already leaves out the footer, the media gallery, embedded
- * archives and the sections other services keep in the note (annotations,
- * linked archives, comments, AI comments, transcripts, place and product
- * blocks). Two things inbound sync writes into the text go too: the
- * `==marks==` highlights are painted with (highlights sync on their own, with
- * offsets into the unmarked text), and the rule a section written above the
- * footer leaves behind (platform comments).
- */
-function composedPostText(post: PostData): string {
-  return stripHighlightMarks(post.content.text).canonical
-    .replace(/(?:(?:^|\n)\s*---)+$/, '')
-    .trimEnd();
+function errorCode(error: unknown): unknown {
+  return (error as { code?: unknown } | null)?.code;
 }
 
-/** What a sync writes to frontmatter for readSyncedMedia. */
-interface SyncedMediaFields {
-  syncedMedia: string[];
-  syncedMediaNext: number;
-}
-
-/**
- * The media the server last accepted, from frontmatter: `syncedMedia` lists
- * `<sha256>:<r2Url>` in note order, and `syncedMediaNext` is the lowest upload
- * index never used. Keyed by content, not path: an edit trashes a removed
- * image before it saves the added one, so a pasted `image.png` can take the
- * removed one's path.
- */
-function readSyncedMedia(fm: Record<string, unknown> | undefined): { urls: Map<string, string>; next: number } {
-  const urls = new Map<string, string>();
-  const list: unknown = fm?.['syncedMedia'];
-  for (const entry of Array.isArray(list) ? (list as unknown[]) : []) {
-    if (typeof entry !== 'string') continue;
-    const colon = entry.indexOf(':');
-    if (colon > 0) urls.set(entry.slice(0, colon), entry.slice(colon + 1));
+/** This user's composed-post media on R2: a gallery entry left remote (failed download) passes through as is. */
+function isComposedR2MediaUrl(url: string): boolean {
+  try {
+    return new URL(url).pathname.startsWith('/media/archives/');
+  } catch {
+    return false;
   }
-  const next: unknown = fm?.['syncedMediaNext'];
-  return { urls, next: typeof next === 'number' && Number.isInteger(next) && next > 0 ? next : 0 };
 }
 
-async function sha256Hex(data: ArrayBuffer): Promise<string> {
-  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', data));
-  return Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('');
+/** The optional collaborators of two-way sync; absent, pushes still work and a 409 waits for library sync. */
+export interface ComposedPostSyncOptions {
+  reconciler?: () => ComposedPostReconciler | undefined;
+  presence?: () => EditorPresence | undefined;
+  withArchiveWriteLocks?: <T>(archiveId: string, fn: () => Promise<T>) => Promise<T>;
 }
 
 /**
@@ -152,7 +135,9 @@ export class ComposedPostSyncService {
   private getSettings: () => SocialArchiverSettings;
   private getApiClient: () => WorkersAPIClient;
   private saveSettings: () => Promise<void>;
+  private readonly opts: ComposedPostSyncOptions;
   private unregisterVaultListeners?: () => void;
+  private unsubscribeLeave?: () => void;
 
   /** EventRef for the MetadataCache 'changed' listener (for offref cleanup). */
   private metadataCacheRef: EventRef | null = null;
@@ -165,31 +150,16 @@ export class ComposedPostSyncService {
   /** A flush() call arrived mid-pass: run one more for entries queued after its snapshot. */
   private flushAgain = false;
 
-  /**
-   * Debounce timers for update operations keyed by clientPostId.
-   * Cleared when the timer fires or when the file is deleted.
-   */
-  private updateDebounceTimers = new Map<string, number>();
-
-  /**
-   * Debounce timers for the background MetadataCache watcher, keyed by file path.
-   * Separate from updateDebounceTimers so background and composer paths don't collide.
-   */
-  private bgEditDebounceTimers = new Map<string, number>();
-
-  /**
-   * Post fingerprints keyed by clientPostId: the last one enqueued or synced.
-   * Skips an update that would send the same post again; frontmatter
-   * `syncedContentHash` does the same across restarts.
-   */
-  private contentFingerprints = new Map<string, string>();
+  /** Debounced pushes of edited notes, keyed by file path; `run` fires one early (the user left the note). */
+  private bgEditDebounceTimers = new Map<string, { timer: number; run: () => void }>();
 
   constructor(
     app: App,
     vault: Vault,
     settingsOrGetter: SocialArchiverSettings | (() => SocialArchiverSettings),
     apiClientOrGetter: WorkersAPIClient | (() => WorkersAPIClient),
-    saveSettings: () => Promise<void>
+    saveSettings: () => Promise<void>,
+    opts: ComposedPostSyncOptions = {}
   ) {
     this.app = app;
     this.vault = vault;
@@ -200,10 +170,20 @@ export class ComposedPostSyncService {
       ? apiClientOrGetter
       : () => apiClientOrGetter;
     this.saveSettings = saveSettings;
+    this.opts = opts;
   }
 
   private get settings(): SocialArchiverSettings {
     return this.getSettings();
+  }
+
+  private withArchiveWriteLocks<T>(archiveId: string, fn: () => Promise<T>): Promise<T> {
+    return this.opts.withArchiveWriteLocks ? this.opts.withArchiveWriteLocks(archiveId, fn) : fn();
+  }
+
+  /** The note's frontmatter from its text (the snapshot its fingerprint comes from), else MetadataCache. */
+  private noteFrontmatter(file: TFile, raw: string): Record<string, unknown> | undefined {
+    return readNoteFrontmatter(raw) ?? this.app.metadataCache.getFileCache(file)?.frontmatter;
   }
 
   // ============================================================================
@@ -259,38 +239,8 @@ export class ComposedPostSyncService {
   }
 
   /**
-   * Debounced update enqueue for composed posts that have already been synced.
-   *
-   * Reads the vault file, computes a content fingerprint, and schedules an
-   * `enqueueUpdate` only if the content has changed since the last sync.
-   * Multiple rapid saves within UPDATE_DEBOUNCE_MS collapse to a single enqueue.
-   *
-   * @param filePath  - Vault path to the composed post file
-   * @param clientPostId - Stable client-side post ID (from frontmatter.clientPostId)
-   * @param sourceArchiveId - Server-assigned archive ID (from frontmatter.sourceArchiveId)
-   */
-  enqueueUpdateDebounced(
-    filePath: string,
-    clientPostId: string,
-    sourceArchiveId: string
-  ): void {
-    // Cancel any previous debounce timer for this post
-    const existing = this.updateDebounceTimers.get(clientPostId);
-    if (existing !== undefined) {
-      window.clearTimeout(existing);
-    }
-
-    const timer = window.setTimeout(() => {
-      this.updateDebounceTimers.delete(clientPostId);
-      void this.maybeEnqueueUpdate(filePath, clientPostId, sourceArchiveId);
-    }, UPDATE_DEBOUNCE_MS);
-
-    this.updateDebounceTimers.set(clientPostId, timer);
-  }
-
-  /**
-   * Parse the note and enqueue an update only if the post differs from the
-   * one last synced (`syncedContentHash`) or enqueued.
+   * Read the note and enqueue an update only if it is a participant and its
+   * post differs from the one last synced (`syncedContentHash`).
    */
   private async maybeEnqueueUpdate(
     filePath: string,
@@ -301,44 +251,19 @@ export class ComposedPostSyncService {
     if (!file) return;
 
     try {
-      const post = await new PostDataParser(this.vault, this.app).parseFile(file);
-      if (!post) return;
-
-      const fingerprint = this.fingerprint(post);
-      const syncedFingerprint: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter?.['syncedContentHash'];
-      if (fingerprint === syncedFingerprint || fingerprint === this.contentFingerprints.get(clientPostId)) {
+      const raw = await this.vault.read(file);
+      const fm = this.noteFrontmatter(file, raw);
+      const parts = readComposedNote(raw);
+      if (!isComposedSyncParticipant(fm) || !isSyncableComposedNote(parts)) return;
+      if (composedFingerprint(parts) === fm?.['syncedContentHash']) {
         console.debug(`${LOG_PREFIX} Content unchanged, skipping update enqueue: ${clientPostId}`);
         return;
       }
-
-      this.contentFingerprints.set(clientPostId, fingerprint);
       await this.enqueueUpdate(filePath, clientPostId, sourceArchiveId);
       void this.flush();
     } catch (error) {
       console.error(`${LOG_PREFIX} maybeEnqueueUpdate failed:`, error);
     }
-  }
-
-  /**
-   * What buildContent() sends, short of uploading: the R2 URLs are only known
-   * after an upload, so the embeds count by vault path.
-   */
-  private fingerprint(post: PostData): string {
-    return this.computeFingerprint(
-      JSON.stringify([post.title ?? null, composedPostText(post), post.media.map((m) => m.url)])
-    );
-  }
-
-  /**
-   * Simple string fingerprint via djb2 hash — fast, no crypto needed.
-   */
-  private computeFingerprint(content: string): string {
-    let hash = 5381;
-    for (let i = 0; i < content.length; i++) {
-      hash = ((hash << 5) + hash) ^ content.charCodeAt(i);
-      hash = hash >>> 0; // keep 32-bit unsigned
-    }
-    return hash.toString(16);
   }
 
   /**
@@ -416,47 +341,37 @@ export class ComposedPostSyncService {
     }
 
     try {
-      // The post as the timeline card shows it: the template's footer and
-      // the vault-only media embeds are not part of the text.
-      const post = await new PostDataParser(this.vault, this.app).parseFile(file);
-      if (!post) {
-        throw new Error(`Could not read composed post: ${entry.filePath}`);
-      }
-
       if (entry.op === 'create') {
-        await this.handleCreate(entry, file, post);
+        await this.handleCreate(entry, file);
       } else {
-        await this.handleUpdate(entry, file, post);
+        await this.handleUpdate(entry, file);
       }
     } catch (error) {
       await this.recordFailure(entry, error);
     }
   }
 
-  private async handleCreate(
-    entry: PendingComposedPostSyncEntry,
-    file: TFile,
-    post: PostData
-  ): Promise<void> {
-    const { content, syncedMedia, syncedMediaNext } = await this.buildContent(entry.clientPostId, file, post);
+  private async handleCreate(entry: PendingComposedPostSyncEntry, file: TFile): Promise<void> {
+    const raw = await this.vault.read(file);
+    const parts = readComposedNote(raw);
+    const { content, syncedMedia } = await this.buildContent(entry.clientPostId, file, parts, this.noteFrontmatter(file, raw));
     const request: CreateComposedPostRequest = { clientPostId: entry.clientPostId, ...content };
     const result = await this.getApiClient().createComposedPost(request);
-    const syncedContentHash = this.fingerprint(post);
-    this.contentFingerprints.set(entry.clientPostId, syncedContentHash);
 
     // Write success fields to frontmatter. savePost already stamped the
-    // identity pair, except on entries whose id flush() had to mint. The
-    // watcher sees this write and the hash makes it skip it, unless the note
-    // was edited while the request ran: that edit then goes out as an update.
+    // identity pair, except on entries whose id flush() had to mint. The hash
+    // is of what was sent: an edit made while the request ran then goes out as
+    // an update. A new row is at revision 0 (POST returns none, F10).
     await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
       fm['postOrigin'] = 'composer';
       fm['clientPostId'] = entry.clientPostId;
       fm['sourceArchiveId'] = result.archiveId;
       fm['syncState'] = 'synced';
       fm['serverSyncedAt'] = result.createdAt;
-      fm['syncedContentHash'] = syncedContentHash;
+      fm['syncedContentHash'] = composedFingerprint(parts);
+      fm['syncedContentRevision'] = 0;
       fm['syncedMedia'] = syncedMedia;
-      fm['syncedMediaNext'] = syncedMediaNext;
+      delete fm['syncedMediaNext'];
     });
 
     // Remove from queue
@@ -478,34 +393,104 @@ export class ComposedPostSyncService {
     }
   }
 
-  private async handleUpdate(
-    entry: PendingComposedPostSyncEntry,
-    file: TFile,
-    post: PostData
-  ): Promise<void> {
-    if (!entry.sourceArchiveId) {
+  /**
+   * PUT an edited participant note with its base revision, under the archive
+   * write locks so it never races a pull of the same post. A note that is not
+   * a participant (no baseline, diverged, media note, CRLF) leaves the queue:
+   * migration or the diverged list decides what happens to it.
+   */
+  private async handleUpdate(entry: PendingComposedPostSyncEntry, file: TFile): Promise<void> {
+    const archiveId = entry.sourceArchiveId;
+    if (!archiveId) {
       throw new Error('Update entry missing sourceArchiveId');
     }
 
-    const { content, syncedMedia, syncedMediaNext } = await this.buildContent(entry.clientPostId, file, post);
-    const request: UpdateComposedPostRequest = content;
-    const result = await this.getApiClient().updateComposedPost(entry.sourceArchiveId, request);
-    const syncedContentHash = this.fingerprint(post);
-    this.contentFingerprints.set(entry.clientPostId, syncedContentHash);
+    await this.withArchiveWriteLocks(archiveId, async () => {
+      const raw = await this.vault.read(file);
+      const fm = this.noteFrontmatter(file, raw);
+      const parts = readComposedNote(raw);
+      if (!isComposedSyncParticipant(fm) || !isSyncableComposedNote(parts)) {
+        // CRLF or no author line: logged, so a user asking why an edit never synced has an answer.
+        console.warn(`${LOG_PREFIX} Not a two-way sync participant (no baseline, diverged, media note, CRLF or no author line), dropping update: ${entry.filePath}`);
+        await this.removeFromQueue(entry.clientPostId);
+        return;
+      }
+      // A pull already brought the note to what the server has.
+      if (composedFingerprint(parts) === fm?.['syncedContentHash']) {
+        await this.removeFromQueue(entry.clientPostId);
+        return;
+      }
 
-    // Write success fields to frontmatter
-    await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-      fm['syncState'] = 'synced';
-      fm['serverSyncedAt'] = result.updatedAt;
-      fm['syncedContentHash'] = syncedContentHash;
-      fm['syncedMedia'] = syncedMedia;
-      fm['syncedMediaNext'] = syncedMediaNext;
+      try {
+        await this.put(file, parts, fm, archiveId, entry.clientPostId, fm?.['syncedContentRevision'] as number);
+      } catch (error) {
+        if (errorCode(error) !== 'POST_EDIT_CONFLICT') throw error;
+        await this.resolveEditConflict(file, archiveId);
+      }
+      await this.removeFromQueue(entry.clientPostId);
+      console.debug(`${LOG_PREFIX} Update handled: ${entry.clientPostId} (archiveId=${archiveId})`);
     });
+  }
 
-    // Remove from queue
-    await this.removeFromQueue(entry.clientPostId);
+  /** §3: another device edited the post since this note's baseline. Never a retry. */
+  private async resolveEditConflict(file: TFile, archiveId: string): Promise<void> {
+    const reconciler = this.opts.reconciler?.();
+    if (!reconciler) {
+      console.warn(`${LOG_PREFIX} Edit conflict with no reconciler; library sync settles it: ${archiveId}`);
+      return;
+    }
+    const { archive } = await this.getApiClient().getUserArchive(archiveId);
+    const outcome = await reconciler.afterPushConflict(file, archive);
+    console.debug(`${LOG_PREFIX} Edit conflict ${outcome}: ${archiveId}`);
+  }
 
-    console.debug(`${LOG_PREFIX} Update synced: ${entry.clientPostId} (archiveId=${entry.sourceArchiveId})`);
+  /**
+   * "Send vault version": PUT the note as it is with no base revision (last
+   * writer wins), then stamp the baseline. A diverged note is allowed. Takes no
+   * locks: the caller holds them.
+   */
+  async pushNote(file: TFile, opts: { baseContentRevision?: number }): Promise<void> {
+    const raw = await this.vault.read(file);
+    const fm = this.noteFrontmatter(file, raw);
+    const archiveId = fm?.['sourceArchiveId'];
+    const clientPostId = fm?.['clientPostId'];
+    const parts = readComposedNote(raw);
+    if (!isComposedPostNote(fm) || typeof archiveId !== 'string' || !archiveId
+      || typeof clientPostId !== 'string' || !clientPostId) {
+      throw new Error(`Not a synced composed post: ${file.path}`);
+    }
+    if (!isSyncableComposedNote(parts)) {
+      throw new Error(`The note has Windows line endings or no author line, so it cannot sync: ${file.path}`);
+    }
+    await this.put(file, parts, fm, archiveId, clientPostId, opts.baseContentRevision);
+  }
+
+  // ponytail: quoteRefs is always true. Every route into participation
+  // (create, adopt, pull) leaves the note's trailing ref lines equal to the
+  // server's archive refs, so the note always holds the whole list.
+  private async put(
+    file: TFile,
+    parts: ComposedNoteParts,
+    fm: Record<string, unknown> | undefined,
+    archiveId: string,
+    clientPostId: string,
+    baseContentRevision: number | undefined
+  ): Promise<void> {
+    const { content, syncedMedia } = await this.buildContent(clientPostId, file, parts, fm);
+    const request: UpdateComposedPostRequest = {
+      ...content,
+      quoteRefs: true,
+      ...(baseContentRevision !== undefined ? { baseContentRevision } : {}),
+    };
+    const result = await this.getApiClient().updateComposedPost(archiveId, request);
+    await this.app.fileManager.processFrontMatter(file, (target: Record<string, unknown>) => {
+      target['syncState'] = 'synced';
+      target['serverSyncedAt'] = result.updatedAt;
+      target['syncedContentHash'] = composedFingerprint(parts);
+      target['syncedContentRevision'] = result.contentRevision;
+      target['syncedMedia'] = syncedMedia;
+      delete target['syncedMediaNext'];
+    });
   }
 
   private async recordFailure(
@@ -521,9 +506,10 @@ export class ComposedPostSyncService {
 
     const queue = this.settings.pendingComposedPostSyncs ?? [];
     const idx = queue.findIndex((e) => e.clientPostId === entry.clientPostId);
-    if (idx === -1) return;
+    const current = queue[idx];
+    if (!current) return;
 
-    const updated = { ...queue[idx]! };
+    const updated = { ...current };
     if (!transient) updated.retryCount += 1;
     updated.lastAttemptAt = new Date().toISOString();
     updated.lastError = errorMsg;
@@ -565,78 +551,78 @@ export class ComposedPostSyncService {
   private async buildContent(
     clientPostId: string,
     file: TFile,
-    post: PostData
-  ): Promise<{ content: ComposedPostContent } & SyncedMediaFields> {
-    const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
-    const { media, ...synced } = await this.uploadMedia(clientPostId, post.media, readSyncedMedia(fm));
-    const text = composedPostText(post);
+    parts: ComposedNoteParts,
+    fm: Record<string, unknown> | undefined
+  ): Promise<{ content: ComposedPostContent; syncedMedia: string[] }> {
+    const { media, syncedMedia } = await this.uploadMedia(clientPostId, file, parts.attachments, readSyncedMedia(fm));
+    const preview = splitArchiveRefLines(parts.text).body;
     return {
       content: {
-        title: post.title ?? null,
-        previewText: text.slice(0, 500) || post.title || null,
-        fullContent: text,
+        title: parts.title,
+        previewText: preview.slice(0, 500) || parts.title || null,
+        fullContent: parts.text,
         thumbnailUrl: media.find((m) => m.type === 'image')?.url ?? null,
         media,
       },
-      ...synced,
+      syncedMedia,
     };
   }
 
-  // ponytail: an index is spent per upload the server accepted, so a post gets
-  // 25 uploads over its life (indices 0..24). Past that an added embed stays in
-  // the vault only (logged) and the rest still sync. The cap is the upload
-  // route's key space, not the post's media count: raise that route's index
-  // max (UploadMediaRequestSchema) if posts reach it.
   /**
-   * Upload the note's image and video embeds to R2, in note order, except
-   * those the server already has: the same bytes keep the URL they synced
-   * under, so a text edit uploads nothing. A new one takes an index no upload
-   * has used. Reusing one would put new bytes under a URL that mobile, desktop
-   * and share-web cache as immutable, and they would keep showing the old
-   * image. The next index is saved only once the server accepts the post, so
-   * a retry overwrites the same keys.
+   * Upload the note's image and video attachments to R2, in note order,
+   * except those the server already has: the same bytes keep the URL they
+   * synced under, so a text edit uploads nothing. The server picks the index
+   * of a new one (and dedupes identical bytes), so two devices never write
+   * the same key. A gallery entry left remote (a failed download) is this
+   * user's R2 media already and passes through.
    */
   private async uploadMedia(
     clientPostId: string,
-    items: PostData['media'],
-    synced: ReturnType<typeof readSyncedMedia>
-  ): Promise<{ media: NonNullable<ComposedPostContent['media']> } & SyncedMediaFields> {
+    note: TFile,
+    attachments: ComposedAttachmentRef[],
+    synced: Map<string, string>
+  ): Promise<{ media: NonNullable<ComposedPostContent['media']>; syncedMedia: string[] }> {
     const media: NonNullable<ComposedPostContent['media']> = [];
     const syncedMedia: string[] = [];
-    let next = synced.next;
-    for (const item of items) {
-      // PostDataParser's regex fallback leaves `![](…)` paths markdown-encoded.
-      const file = this.vault.getFileByPath(item.url)
-        ?? this.vault.getFileByPath(decodePathFromMarkdownLink(item.url));
+    for (const attachment of attachments) {
+      if (attachment.remote) {
+        if (isComposedR2MediaUrl(attachment.target)) {
+          media.push({ url: attachment.target, type: isVideoUrl(attachment.target) ? 'video' : 'image' });
+        }
+        continue;
+      }
+      const file = this.app.metadataCache.getFirstLinkpathDest(attachment.target, note.path)
+        ?? this.vault.getFileByPath(attachment.target);
       const type = file && (isImageUrl(file.path) ? 'image' : isVideoUrl(file.path) ? 'video' : null);
-      // A deleted attachment, an embedded note or PDF: nothing to show on the server.
+      // A deleted attachment: nothing to show on the server.
       if (!file || !type) continue;
 
       const data = await this.vault.readBinary(file);
       const hash = await sha256Hex(data);
-      let url = synced.urls.get(hash);
+      let url = synced.get(hash);
       if (!url) {
-        if (next > MAX_MEDIA_INDEX) {
-          console.warn(`${LOG_PREFIX} No upload index left for ${clientPostId}, not syncing ${file.path}`);
+        try {
+          const uploaded = await this.getApiClient().uploadComposedMedia({
+            clientPostId,
+            ext: file.extension.toLowerCase(),
+            contentType: getMimeTypeFromExtension(file.extension),
+            type,
+            data,
+          });
+          url = uploaded.r2Url;
+        } catch (error) {
+          if (errorCode(error) !== 'MEDIA_LIMIT_REACHED') throw error;
+          // The post's upload index space is spent: this embed stays in the vault only.
+          console.warn(`${LOG_PREFIX} Upload limit reached for ${clientPostId}, not syncing ${file.path}`);
           continue;
         }
-        const uploaded = await this.getApiClient().uploadComposedMedia({
-          clientPostId,
-          index: next,
-          ext: file.extension.toLowerCase(),
-          contentType: getMimeTypeFromExtension(file.extension),
-          type,
-          data,
-        });
-        url = uploaded.r2Url;
-        next += 1;
         // The same file embedded twice uploads once.
-        synced.urls.set(hash, url);
+        synced.set(hash, url);
       }
       media.push({ url, type });
       syncedMedia.push(`${hash}:${url}`);
     }
-    return { media, syncedMedia, syncedMediaNext: next };
+    return { media, syncedMedia };
   }
 
   // ============================================================================
@@ -644,9 +630,10 @@ export class ComposedPostSyncService {
   // ============================================================================
 
   /**
-   * Start syncing: registers vault delete and rename listeners and the
-   * MetadataCache watcher, then flushes pending queue. The plugin calls this on
-   * every (re)init while signed in, so a repeat call only flushes.
+   * Start syncing: registers vault delete and rename listeners, the
+   * MetadataCache watcher and the editor-leave hook, then flushes pending
+   * queue. The plugin calls this on every (re)init while signed in, so a
+   * repeat call only flushes.
    */
   async onPluginLoad(): Promise<void> {
     this.paused = false;
@@ -668,9 +655,14 @@ export class ComposedPostSyncService {
         this.vault.off('rename', renameHandler as (...data: unknown[]) => unknown);
       };
 
-      // Listen for MetadataCache changes to detect background edits to composed posts
+      // Listen for MetadataCache changes to detect edits to composed posts
       this.metadataCacheRef = this.app.metadataCache.on('changed', (file: TFile) => {
-        this.onMetadataChanged(file);
+        this.notifyNoteChanged(file);
+      });
+
+      // Leaving a note (tab closed, another note opened) sends its edit now.
+      this.unsubscribeLeave = this.opts.presence?.()?.onLeave((path) => {
+        this.bgEditDebounceTimers.get(path)?.run();
       });
     }
 
@@ -690,6 +682,8 @@ export class ComposedPostSyncService {
     this.paused = true;
     this.unregisterVaultListeners?.();
     this.unregisterVaultListeners = undefined;
+    this.unsubscribeLeave?.();
+    this.unsubscribeLeave = undefined;
 
     // Unregister MetadataCache watcher
     if (this.metadataCacheRef) {
@@ -697,84 +691,58 @@ export class ComposedPostSyncService {
       this.metadataCacheRef = null;
     }
 
-    // Cancel all pending debounce timers (composer path)
-    for (const timer of this.updateDebounceTimers.values()) {
-      window.clearTimeout(timer);
-    }
-    this.updateDebounceTimers.clear();
-
-    // Cancel all pending background edit debounce timers
-    for (const timer of this.bgEditDebounceTimers.values()) {
+    // Cancel all pending edit debounce timers
+    for (const { timer } of this.bgEditDebounceTimers.values()) {
       window.clearTimeout(timer);
     }
     this.bgEditDebounceTimers.clear();
   }
 
   // ============================================================================
-  // Background edit detection (MetadataCache watcher)
+  // Edit detection (MetadataCache watcher)
   // ============================================================================
 
   /**
-   * Fires whenever Obsidian's MetadataCache updates a file's parsed metadata.
-   *
-   * We only act on files that:
-   * 1. Have `postOrigin: 'composer'` — so we only touch composed post notes.
-   * 2. Have `sourceArchiveId` present — means the post was already synced to server.
-   * 3. Have `clientPostId` — stable ID for queue dedup.
-   *
-   * Frontmatter-only writes (our sync fields, inbound sync, like/archive)
-   * pass these checks; maybeEnqueueUpdate drops them because the post is unchanged.
+   * A note changed (MetadataCache re-indexed it, or the reconciler found a
+   * local edit). Only two-way sync participants with a server row are pushed
+   * (closes F6: other devices' Tier-3 notes and meeting/audio notes are never
+   * PUT before they have a baseline). Frontmatter-only writes pass this gate;
+   * maybeEnqueueUpdate drops them because the post is unchanged.
    */
-  private onMetadataChanged(file: TFile): void {
-    const cache = this.app.metadataCache.getFileCache(file);
-    if (!cache?.frontmatter) return;
+  notifyNoteChanged(file: TFile): void {
+    const fm: Record<string, unknown> | undefined = this.app.metadataCache.getFileCache(file)?.frontmatter;
+    if (!isComposedSyncParticipant(fm)) return;
 
-    const fm = cache.frontmatter as Record<string, unknown>;
-
-    // Must be a composed post
-    if (fm['postOrigin'] !== 'composer') return;
-
-    // Must already be synced (sourceArchiveId present)
-    const sourceArchiveId = fm['sourceArchiveId'];
+    const sourceArchiveId = fm?.['sourceArchiveId'];
     if (typeof sourceArchiveId !== 'string' || !sourceArchiveId) return;
-
-    // Must have a stable clientPostId
-    const clientPostId = fm['clientPostId'];
+    const clientPostId = fm?.['clientPostId'];
     if (typeof clientPostId !== 'string' || !clientPostId) return;
 
-    // Debounce: cancel any existing background timer for this file
     const existing = this.bgEditDebounceTimers.get(file.path);
-    if (existing !== undefined) {
-      window.clearTimeout(existing);
-    }
+    if (existing) window.clearTimeout(existing.timer);
 
-    const timer = window.setTimeout(() => {
+    // Keyed by path; the TFile's path follows a rename, so the run reads it then.
+    const run = (): void => {
+      const pending = this.bgEditDebounceTimers.get(file.path);
+      if (pending) window.clearTimeout(pending.timer);
       this.bgEditDebounceTimers.delete(file.path);
-      // maybeEnqueueUpdate will re-read file, compute fingerprint, and enqueue only if changed
       void this.maybeEnqueueUpdate(file.path, clientPostId, sourceArchiveId);
-    }, BACKGROUND_EDIT_DEBOUNCE_MS);
-
-    this.bgEditDebounceTimers.set(file.path, timer);
+    };
+    const delay = this.opts.presence?.()?.isOpen(file.path) ? OPEN_EDIT_DEBOUNCE_MS : BACKGROUND_EDIT_DEBOUNCE_MS;
+    this.bgEditDebounceTimers.set(file.path, { timer: window.setTimeout(run, delay), run });
   }
 
   private async onFileDeleted(filePath: string): Promise<void> {
-    // Cancel background edit debounce timer for this path (keyed by filePath)
-    const bgTimer = this.bgEditDebounceTimers.get(filePath);
-    if (bgTimer !== undefined) {
-      window.clearTimeout(bgTimer);
+    // Cancel the edit debounce timer for this path
+    const pending = this.bgEditDebounceTimers.get(filePath);
+    if (pending) {
+      window.clearTimeout(pending.timer);
       this.bgEditDebounceTimers.delete(filePath);
     }
 
     const queue = this.settings.pendingComposedPostSyncs ?? [];
     const match = queue.find((e) => e.filePath === filePath);
     if (match) {
-      // Cancel any pending composer-path debounce timer for this post
-      const timer = this.updateDebounceTimers.get(match.clientPostId);
-      if (timer !== undefined) {
-        window.clearTimeout(timer);
-        this.updateDebounceTimers.delete(match.clientPostId);
-      }
-      this.contentFingerprints.delete(match.clientPostId);
       await this.removeFromQueue(match.clientPostId);
       console.debug(`${LOG_PREFIX} Removed queue entry for deleted file: ${filePath}`);
     }
@@ -783,10 +751,10 @@ export class ComposedPostSyncService {
   private async onFileRenamed(filePath: string, oldPath: string): Promise<void> {
     // Only the key moves: when the timer fires it reads the TFile's path,
     // which Obsidian has already updated in place.
-    const bgTimer = this.bgEditDebounceTimers.get(oldPath);
-    if (bgTimer !== undefined) {
+    const pending = this.bgEditDebounceTimers.get(oldPath);
+    if (pending) {
       this.bgEditDebounceTimers.delete(oldPath);
-      this.bgEditDebounceTimers.set(filePath, bgTimer);
+      this.bgEditDebounceTimers.set(filePath, pending);
     }
 
     // In place: a running flush pass holds these same entry objects, and would

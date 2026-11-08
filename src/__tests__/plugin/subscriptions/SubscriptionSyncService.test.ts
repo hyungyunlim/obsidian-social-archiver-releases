@@ -970,6 +970,30 @@ describe('SubscriptionSyncService', () => {
       });
     });
 
+    it('returns the post\'s own downloaded media (no quoted or link images) for the composed baseline', async () => {
+      const deps = makeDeps({
+        settings: () => ({
+          archivePath: 'Social Archives',
+          mediaPath: 'attachments/social-archives',
+          archiveOrganization: 'platform',
+          fileNameFormat: 'default',
+          downloadMedia: 'images-only',
+          downloadAuthorAvatars: false,
+          overwriteAuthorAvatar: false,
+          includeComments: false,
+        } as any),
+        apiClient: () => ({ proxyMedia: vi.fn() } as any),
+      });
+      serviceMocks.mediaHandlerDownloadMedia.mockImplementation(async (items: Array<{ url: string; type: string }>) =>
+        items.map((item, sourceIndex) => ({
+          originalUrl: item.url, localPath: `attachments/${sourceIndex}.jpg`, type: item.type, size: 1, file: {}, sourceIndex, fallbackKind: 'none',
+        })));
+
+      const result = await new SubscriptionSyncService(deps).saveSubscriptionPostDetailed(makePendingPost());
+
+      expect(result.media).toEqual([{ url: 'https://cdn.example.com/main.jpg', localPath: 'attachments/0.jpg' }]);
+    });
+
     it('downloads images but skips videos when settings are images-only', async () => {
       const deps = makeDeps({
         settings: () => ({

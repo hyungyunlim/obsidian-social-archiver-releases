@@ -38,6 +38,20 @@ vi.mock('obsidian', async (importOriginal) => ({
   // updatePost writes frontmatter with stringifyYaml. JSON is valid YAML and
   // reads back without a YAML parser.
   stringifyYaml: (value: unknown): string => `${JSON.stringify(value)}\n`,
+  // Enough YAML for what these notes hold: JSON (our writes) or savePost's `key: value` lines.
+  parseYaml: (block: string): unknown => {
+    if (block.trim().startsWith('{')) return JSON.parse(block);
+    const fm: Record<string, unknown> = {};
+    for (const [, key, value] of block.matchAll(/^(\w+): (.*)$/gm)) {
+      if (!key || value === undefined) continue;
+      try {
+        fm[key] = JSON.parse(value);
+      } catch {
+        fm[key] = value;
+      }
+    }
+    return fm;
+  },
 }));
 
 // Test-only hook of test/mocks/obsidian.ts; real Obsidian typings lack it.
@@ -80,13 +94,17 @@ function response(status: number, json: unknown): RequestUrlResponse {
 
 /**
  * The routes of workers/src/handlers/user-posts-composed.ts behind requestUrl,
- * signed in as `tester`. Uploads are validated like UploadMediaRequestSchema.
+ * signed in as `tester`. Uploads are validated like UploadMediaRequestSchema;
+ * with no index the server picks the next one and dedupes identical bytes
+ * (utils/composed-media-index.ts), up to MAX_ARCHIVE_MEDIA (25).
  */
 function fakeServer(): FakeServer {
   const uploads: FakeServer['uploads'] = [];
   const creates: FakeServer['creates'] = [];
   const updates: FakeServer['updates'] = [];
   const relations: FakeServer['relations'] = new Map();
+  /** R2 objects per post: base64 bytes → index (the sha256 dedupe, by content). */
+  const objects = new Map<string, Map<string, { index: number; ext: string }>>();
   const isId = (value: unknown): value is string => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,128}$/.test(value);
   const ok = (status: number, data: unknown): RequestUrlResponse => response(status, { success: true, data });
   const invalid = (field: string): RequestUrlResponse =>
@@ -99,15 +117,27 @@ function fakeServer(): FakeServer {
     if (method === 'POST' && path === '/api/user/posts/media') {
       const { clientPostId, index, ext, contentType, data, type } = json;
       if (!isId(clientPostId)) return invalid('clientPostId');
-      if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index > 24) return invalid('index');
+      if (index !== undefined && (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index > 24)) return invalid('index');
       if (typeof ext !== 'string' || !/^[a-zA-Z0-9]{1,10}$/.test(ext)) return invalid('ext');
       if (typeof contentType !== 'string' || !contentType) return invalid('contentType');
       if (typeof data !== 'string' || !data) return invalid('data');
       if (type !== 'image' && type !== 'video') return invalid('type');
       uploads.push(json);
+      const stored = objects.get(clientPostId) ?? new Map<string, { index: number; ext: string }>();
+      objects.set(clientPostId, stored);
+      let object = stored.get(data);
+      if (!object) {
+        const next = typeof index === 'number' ? index : Math.max(-1, ...[...stored.values()].map((o) => o.index)) + 1;
+        if (next > 24) {
+          return response(400, { success: false, error: { code: 'MEDIA_LIMIT_REACHED', message: 'No upload index left' } });
+        }
+        object = { index: next, ext };
+        stored.set(data, object);
+      }
       return ok(201, {
-        r2Url: `${API}/media/archives/tester/${clientPostId}/${index}.${ext}`,
-        r2Key: `archives/tester/${clientPostId}/media/${index}.${ext}`,
+        r2Url: `${API}/media/archives/tester/${clientPostId}/${object.index}.${object.ext}`,
+        r2Key: `archives/tester/${clientPostId}/media/${object.index}.${object.ext}`,
+        index: object.index,
         type,
         contentType,
         size: atob(data).length,
@@ -125,7 +155,7 @@ function fakeServer(): FakeServer {
     const archiveId = /^\/api\/user\/posts\/([^/]+)$/.exec(path)?.[1];
     if (method === 'PUT' && archiveId) {
       updates.push({ archiveId: decodeURIComponent(archiveId), body: json });
-      return ok(200, { success: true, updatedAt: '2026-10-06T09:40:00.000Z' });
+      return ok(200, { success: true, updatedAt: '2026-10-06T09:40:00.000Z', contentRevision: updates.length });
     }
 
     const relationsOf = /^\/api\/user\/archives\/([^/]+)\/link-relations$/.exec(path)?.[1];
@@ -207,6 +237,7 @@ function harness(): {
     vault,
     metadataCache: {
       getFileCache: (file: TFile) => ({ frontmatter: frontmatter.get(file.path) }),
+      getFirstLinkpathDest: () => null,
       on: vi.fn((_name: 'changed', listener: (file: TFile) => void) => {
         changedListeners.add(listener);
         return listener;
@@ -287,9 +318,10 @@ describe('composed post sync — PostComposer to server', () => {
     await h.sync.enqueueCreate(path, post.id);
     await h.sync.flush();
 
+    // The server picks each index: none is sent.
     expect(h.server.uploads).toEqual([
-      { clientPostId: post.id, index: 0, ext: 'png', contentType: 'image/png', type: 'image', data: btoa('\x01\x02\x03') },
-      { clientPostId: post.id, index: 1, ext: 'jpg', contentType: 'image/jpeg', type: 'image', data: btoa('\x04\x05') },
+      { clientPostId: post.id, ext: 'png', contentType: 'image/png', type: 'image', data: btoa('\x01\x02\x03') },
+      { clientPostId: post.id, ext: 'jpg', contentType: 'image/jpeg', type: 'image', data: btoa('\x04\x05') },
     ]);
     const png = `${API}/media/archives/tester/${post.id}/0.png`;
     const jpg = `${API}/media/archives/tester/${post.id}/1.jpg`;
@@ -302,17 +334,22 @@ describe('composed post sync — PostComposer to server', () => {
       media: [{ url: png, type: 'image' }, { url: jpg, type: 'image' }],
     }]);
 
-    // The note keeps what it synced, by content, and the next unused index.
+    // The note keeps what it synced, by content, and its baseline revision.
     const fm = h.frontmatter.get(path) ?? {};
     expect((fm['syncedMedia'] as string[]).map((entry) => entry.replace(/^[0-9a-f]{64}:/, ''))).toEqual([png, jpg]);
-    expect(fm['syncedMediaNext']).toBe(2);
+    expect(fm['syncedMediaNext']).toBeUndefined();
+    expect(fm['syncedContentRevision']).toBe(0);
 
-    // An update sends the same content and uploads nothing: the server has both images.
+    // An edit sends the same images and uploads nothing: the server has both.
+    const file = h.vault.getFileByPath(path) as TFile;
+    await h.vault.process(file, (note) => note.replace('Hello from the composer', 'Hello again'));
     await h.sync.enqueueUpdate(path, post.id, post.id);
     await h.sync.flush();
 
-    const { clientPostId: _id, ...content } = h.server.creates[0] ?? {};
-    expect(h.server.updates).toEqual([{ archiveId: post.id, body: content }]);
+    expect(h.server.updates).toEqual([{
+      archiveId: post.id,
+      body: expect.objectContaining({ fullContent: 'Hello again', media: h.server.creates[0]?.['media'], baseContentRevision: 0, quoteRefs: true }),
+    }]);
     expect(h.server.uploads).toHaveLength(2);
   });
 
@@ -404,6 +441,7 @@ describe('composed post sync — PostComposer to server', () => {
       body: expect.objectContaining({
         previewText: 'Hello again from the composer',
         fullContent: 'Hello again from the composer',
+        baseContentRevision: 0,
       }),
     }]);
   });
@@ -568,7 +606,7 @@ describe('composed post sync — PostComposer to server', () => {
     expect(h.server.uploads).toHaveLength(1);
   });
 
-  it('uploads only the image an edit adds, under an index no upload has used', async () => {
+  it('uploads only the image an edit adds, and the server gives it a new index', async () => {
     // Every embed used to be uploaded again by position. Removing the first
     // image put the second's bytes under the first's URL, which mobile, desktop
     // and share-web cache as immutable: they kept showing the removed image.
@@ -595,8 +633,8 @@ describe('composed post sync — PostComposer to server', () => {
     await h.sync.enqueueUpdate(path, post.id, post.id);
     await h.sync.flush();
 
-    // The dog is not uploaded again, and the bird takes index 2, not the cat's 0.
-    expect(h.server.uploads.slice(2).map((upload) => [upload['index'], upload['data']])).toEqual([[2, btoa('\x05\x06')]]);
+    // The dog is not uploaded again, and the server gives the bird index 2, not the cat's 0.
+    expect(h.server.uploads.slice(2).map((upload) => [upload['index'], upload['data']])).toEqual([[undefined, btoa('\x05\x06')]]);
     const birdUrl = `${API}/media/archives/tester/${post.id}/2.jpg`;
     expect(h.server.updates).toEqual([{
       archiveId: post.id,
@@ -605,7 +643,7 @@ describe('composed post sync — PostComposer to server', () => {
         media: [{ url: dogUrl, type: 'image' }, { url: birdUrl, type: 'image' }],
       }),
     }]);
-    expect(h.frontmatter.get(path)?.['syncedMediaNext']).toBe(3);
+    expect(h.frontmatter.get(path)?.['syncedMediaNext']).toBeUndefined();
   });
 
   it('gives an image saved under a removed image\'s path its own URL', async () => {
@@ -629,20 +667,21 @@ describe('composed post sync — PostComposer to server', () => {
     await h.sync.enqueueUpdate(path, post.id, post.id);
     await h.sync.flush();
 
-    expect(h.server.uploads.map((upload) => upload['index'])).toEqual([0, 1]);
+    expect(h.server.uploads).toHaveLength(2);
     expect(h.server.updates[0]?.body['media']).toEqual([{ url: `${API}/media/archives/tester/${post.id}/1.png`, type: 'image' }]);
   });
 
-  it('leaves an added image in the vault only once every upload index is spent', async () => {
+  it('leaves an added image in the vault only once the server has no upload index left', async () => {
     const h = harness();
     const post = { ...composerPost('Edited a lot'), id: createComposedPostId() } as PostData;
     const { path, mediaSaved: [first] } = await h.storage.savePost(post, [attachment('a.jpg', 'image/jpeg', [1])]);
     await h.sync.enqueueCreate(path, post.id);
     await h.sync.flush();
-    // As if 24 more images had been added and removed since.
-    await h.app.fileManager.processFrontMatter(h.vault.getFileByPath(path) as TFile, (fm: Record<string, unknown>) => {
-      fm['syncedMediaNext'] = 25;
-    });
+    // As if 24 more images had been added and removed since: indexes 1..24 are taken.
+    for (let i = 1; i <= 24; i++) {
+      await h.server.api.uploadComposedMedia({ clientPostId: post.id, ext: 'jpg', contentType: 'image/jpeg', type: 'image', data: new Uint8Array([100 + i]).buffer });
+    }
+    h.server.uploads.length = 1;
 
     await h.storage.updatePost({
       filePath: path,
@@ -654,7 +693,9 @@ describe('composed post sync — PostComposer to server', () => {
     await h.sync.enqueueUpdate(path, post.id, post.id);
     await h.sync.flush();
 
-    expect(h.server.uploads).toHaveLength(1);
+    // Tried once and refused: the edit still goes out, with the image the server has.
+    expect(h.server.uploads).toHaveLength(2);
     expect(h.server.updates[0]?.body['media']).toEqual([{ url: `${API}/media/archives/tester/${post.id}/0.jpg`, type: 'image' }]);
+    expect(h.settings.pendingComposedPostSyncs).toHaveLength(0);
   });
 });

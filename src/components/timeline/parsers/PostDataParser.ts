@@ -29,6 +29,8 @@ import {
 } from '../../../services/import/local/LocalArchiveScanner';
 import { PLATFORM_DEFINITIONS, isWebLanePlatform } from '@/shared/platforms';
 import { decodePathFromMarkdownLink } from '@/utils/url';
+import { isComposedPostNote, readCoAuthors } from '@/utils/composedPostNote';
+import { readComposedNote } from '@/plugin/sync/composed/composedNote';
 
 /**
  * Vault folder node with children (Obsidian internal structure)
@@ -308,7 +310,15 @@ export class PostDataParser {
           return null;
         }
       }
-      const contentText = this.extractContentText(content);
+      // Composed posts show their text as written (headings, remote inline
+      // images, trailing quote refs); extractContentText would drop a leading
+      // heading or image. Non-composed notes keep extractContentText (the
+      // migration's legacy fingerprint depends on it).
+      const isComposedPost = isComposedPostNote(frontmatter);
+      const coAuthors = isComposedPost ? readCoAuthors(frontmatter) : [];
+      const contentText = isComposedPost
+        ? readComposedNote(content, { keepHighlights: true }).text
+        : this.extractContentText(content);
       const snippet = frontmatter.platform === 'threads' ? this.extractSnippet(content) : undefined;
       const metadata = this.extractMetadata(content);
 
@@ -515,8 +525,9 @@ export class PostDataParser {
         // Remove frontmatter for title extraction (avoid matching '---')
         const contentWithoutFrontmatter = content.replace(/^---\n[\s\S]*?\n---\n?/, '');
 
-        if (frontmatter.platform === 'post') {
+        if (frontmatter.platform === 'post' && !isComposedPost) {
           // User-created posts can use a leading H1 as their visible title.
+          // Not composed posts: their heading stays in the text (readComposedNote).
           // extractContentText already drops leading markdown headings from
           // the body, so preserve that title in PostData for the card renderer.
           const titleMatch = contentWithoutFrontmatter.match(/^\s*#\s+([^\n]+)(?:\n|$)/);
@@ -770,6 +781,8 @@ export class PostDataParser {
         quotedPost: quotedPost || undefined,
         isReblog: isReblog || undefined,
         embeddedArchives: embeddedArchives.length > 0 ? embeddedArchives : undefined,
+        isComposedPost: isComposedPost || undefined,
+        coAuthors: coAuthors.length > 0 ? coAuthors : undefined,
         // Series info for Brunch brunchbook, Naver Webtoon, etc.
         series: this.extractSeriesInfo(frontmatter),
         // Thumbnail URL from frontmatter (for webtoon episode covers, YouTube, etc.)
@@ -2286,8 +2299,11 @@ export class PostDataParser {
       );
       const isLocalOnly = isLocalOnlyFrontmatter(frontmatter);
 
-      // Lightweight content extraction for search (just first section)
-      const contentText = this.extractContentText(content);
+      // Lightweight content extraction for search (just first section).
+      // Composed posts: their text as written, like parseFile.
+      const contentText = isComposedPostNote(frontmatter)
+        ? readComposedNote(content).text
+        : this.extractContentText(content);
 
       // Series info
       const seriesId = frontmatter['seriesId'] as string | undefined;

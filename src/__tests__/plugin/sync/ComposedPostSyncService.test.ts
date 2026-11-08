@@ -3,6 +3,8 @@ import { ComposedPostSyncService } from '../../../plugin/sync/ComposedPostSyncSe
 import type { SocialArchiverSettings, PendingComposedPostSyncEntry } from '../../../types/settings';
 import type { WorkersAPIClient } from '../../../services/WorkersAPIClient';
 import type { App, TFile, Vault } from 'obsidian';
+import type { ComposedPostReconciler } from '../../../plugin/sync/composed/ComposedPostReconciler';
+import type { EditorPresence } from '../../../plugin/sync/composed/EditorPresence';
 
 // Minimal obsidian mock
 vi.mock('obsidian', () => ({
@@ -47,6 +49,7 @@ function makeMockMetadataCache(fileFrontmatter?: Record<string, unknown>): MockM
         ? { frontmatter: { ...NOTE_FRONTMATTER, ...fileFrontmatter } }
         : null
     ),
+    getFirstLinkpathDest: vi.fn().mockReturnValue(null),
     trigger: (file: TFile) => {
       cache._handler?.(file);
     },
@@ -82,7 +85,7 @@ function makeMockVault(fileContent = composerNote('Body content'), fileExists = 
 function makeMockApiClient(overrides?: Partial<WorkersAPIClient>) {
   return {
     createComposedPost: vi.fn().mockResolvedValue({ archiveId: 'srv-123', createdAt: '2026-03-26T00:00:00Z' }),
-    updateComposedPost: vi.fn().mockResolvedValue({ success: true, updatedAt: '2026-03-26T00:00:00Z' }),
+    updateComposedPost: vi.fn().mockResolvedValue({ success: true, updatedAt: '2026-03-26T00:00:00Z', contentRevision: 4 }),
     uploadComposedMedia: vi.fn().mockResolvedValue({
       r2Url: 'https://cdn/m1', r2Key: 'k1', type: 'image', contentType: 'image/jpeg', size: 1,
     }),
@@ -101,8 +104,24 @@ function createEntry(clientPostId: string, filePath = 'path/post.md'): PendingCo
 }
 
 /** What WorkersAPIClient.request throws for a non-2xx response. */
-function httpError(message: string, status = 400): Error {
-  return Object.assign(new Error(message), { status });
+function httpError(message: string, status = 400, code?: string): Error {
+  return Object.assign(new Error(message), { status, code });
+}
+
+/** A two-way sync participant: composed, with a server row and a baseline revision. */
+const PARTICIPANT = { postOrigin: 'composer', sourceArchiveId: 'srv-99', clientPostId: 'cid-u1', syncedContentRevision: 3 };
+
+function updateEntry(clientPostId = 'cid-u1', sourceArchiveId = 'srv-99', filePath = 'path/post.md'): PendingComposedPostSyncEntry {
+  return { op: 'update', filePath, clientPostId, sourceArchiveId, queuedAt: '2026-01-01T00:00:00Z', retryCount: 0 };
+}
+
+/** processFrontMatter that writes into the frontmatter MetadataCache reports, like Obsidian. */
+function writingApp(metadataCache: MockMetadataCache, written: Record<string, unknown>[] = []): App {
+  return makeMockApp(async (_file, fn) => {
+    const cached = (metadataCache.getFileCache() as { frontmatter: Record<string, unknown> } | null)?.frontmatter ?? {};
+    fn(cached);
+    written.push({ ...cached });
+  }, metadataCache);
 }
 
 describe('ComposedPostSyncService', () => {
@@ -341,24 +360,10 @@ describe('ComposedPostSyncService', () => {
   // ============================================================================
 
   describe('flush — update', () => {
-    it('calls updateComposedPost and writes syncState=synced', async () => {
-      const entry: PendingComposedPostSyncEntry = {
-        op: 'update',
-        filePath: 'path/post.md',
-        clientPostId: 'cid-u1',
-        sourceArchiveId: 'srv-99',
-        queuedAt: '2026-01-01T00:00:00Z',
-        retryCount: 0,
-      };
-      settings = makeSettings([entry]);
-
+    it('sends the base revision and quoteRefs, and stamps the new revision', async () => {
+      settings = makeSettings([updateEntry()]);
       const writtenFm: Record<string, unknown>[] = [];
-      const app = makeMockApp(async (_file, fn) => {
-        const fm: Record<string, unknown> = {};
-        fn(fm);
-        writtenFm.push(fm);
-      });
-
+      const app = writingApp(makeMockMetadataCache(PARTICIPANT), writtenFm);
       const apiClient = makeMockApiClient();
       const service = new ComposedPostSyncService(app, makeMockVault(), settings, apiClient, saveSettings);
 
@@ -366,9 +371,100 @@ describe('ComposedPostSyncService', () => {
 
       expect(apiClient.updateComposedPost).toHaveBeenCalledWith(
         'srv-99',
-        expect.objectContaining({ fullContent: 'Body content' })
+        expect.objectContaining({ fullContent: 'Body content', baseContentRevision: 3, quoteRefs: true })
       );
-      expect(writtenFm[0]).toMatchObject({ syncState: 'synced' });
+      expect(writtenFm[0]).toMatchObject({ syncState: 'synced', syncedContentRevision: 4 });
+      expect(writtenFm[0]).not.toHaveProperty('syncedMediaNext');
+      expect(settings.pendingComposedPostSyncs).toHaveLength(0);
+    });
+
+    it('drops an update for a note that is not a participant, without a PUT (F6)', async () => {
+      for (const fm of [
+        { postOrigin: 'composer', sourceArchiveId: 'srv-99', clientPostId: 'cid-u1' }, // no baseline yet
+        { ...PARTICIPANT, syncState: 'diverged' },
+        { ...PARTICIPANT, contentType: 'meeting-note' },
+      ]) {
+        settings = makeSettings([updateEntry()]);
+        const apiClient = makeMockApiClient();
+        const service = new ComposedPostSyncService(
+          makeMockApp(undefined, makeMockMetadataCache(fm)), makeMockVault(), settings, apiClient, saveSettings
+        );
+        await service.flush();
+        expect(apiClient.updateComposedPost).not.toHaveBeenCalled();
+        expect(settings.pendingComposedPostSyncs).toHaveLength(0);
+      }
+    });
+
+    it('drops an update a pull already applied', async () => {
+      settings = makeSettings([updateEntry()]);
+      const metadataCache = makeMockMetadataCache(PARTICIPANT);
+      const app = writingApp(metadataCache);
+      const apiClient = makeMockApiClient();
+      const service = new ComposedPostSyncService(app, makeMockVault(), settings, apiClient, saveSettings);
+      await service.flush(); // stamps the hash of 'Body content'
+
+      settings.pendingComposedPostSyncs = [updateEntry()];
+      await service.flush();
+
+      expect(apiClient.updateComposedPost).toHaveBeenCalledTimes(1);
+      expect(settings.pendingComposedPostSyncs).toHaveLength(0);
+    });
+
+    it('hands a 409 to the reconciler and never spends a retry', async () => {
+      settings = makeSettings([updateEntry()]);
+      const archive = { id: 'srv-99', contentRevision: 5 };
+      const afterPushConflict = vi.fn().mockResolvedValue('adopted');
+      const apiClient = makeMockApiClient({
+        updateComposedPost: vi.fn().mockRejectedValue(httpError('edited elsewhere', 409, 'POST_EDIT_CONFLICT')),
+        getUserArchive: vi.fn().mockResolvedValue({ archive }),
+      } as Partial<WorkersAPIClient>);
+      const locks: string[] = [];
+      const service = new ComposedPostSyncService(
+        makeMockApp(undefined, makeMockMetadataCache(PARTICIPANT)), makeMockVault(), settings, apiClient, saveSettings,
+        {
+          reconciler: () => ({ afterPushConflict }) as unknown as ComposedPostReconciler,
+          withArchiveWriteLocks: async (id, fn) => {
+            locks.push(id);
+            return fn();
+          },
+        }
+      );
+
+      await service.flush();
+
+      expect(locks).toEqual(['srv-99']);
+      expect(afterPushConflict).toHaveBeenCalledWith(expect.objectContaining({ path: 'test/path.md' }), archive);
+      expect(settings.pendingComposedPostSyncs).toHaveLength(0);
+    });
+  });
+
+  describe('media upload', () => {
+    function attachmentVault(): Vault {
+      const files = new Map<string, TFile>([
+        ['a.png', { path: 'a.png', extension: 'png' } as TFile],
+        ['b.png', { path: 'b.png', extension: 'png' } as TFile],
+      ]);
+      return {
+        ...makeMockVault(composerNote('Body content\n\n---\n\n![a](a.png)\n\n![b](b.png)')),
+        getFileByPath: vi.fn((path: string) => files.get(path) ?? ({ path: 'test/path.md' } as TFile)),
+        readBinary: vi.fn(async (file: TFile) => new TextEncoder().encode(file.path).buffer),
+      } as unknown as Vault;
+    }
+
+    it('sends no index, and leaves an embed in the vault when the post is out of upload indexes', async () => {
+      settings = makeSettings([createEntry('cid-m')]);
+      const uploadComposedMedia = vi.fn()
+        .mockResolvedValueOnce({ r2Url: 'https://api/media/archives/u/cid-m/0.png', r2Key: 'k', index: 0, type: 'image', contentType: 'image/png', size: 5 })
+        .mockRejectedValueOnce(httpError('No upload index left', 400, 'MEDIA_LIMIT_REACHED'));
+      const apiClient = makeMockApiClient({ uploadComposedMedia });
+      const service = new ComposedPostSyncService(makeMockApp(), attachmentVault(), settings, apiClient, saveSettings);
+
+      await service.flush();
+
+      expect(uploadComposedMedia.mock.calls.map(([upload]) => 'index' in (upload as object))).toEqual([false, false]);
+      expect(apiClient.createComposedPost).toHaveBeenCalledWith(expect.objectContaining({
+        media: [{ url: 'https://api/media/archives/u/cid-m/0.png', type: 'image' }],
+      }));
       expect(settings.pendingComposedPostSyncs).toHaveLength(0);
     });
   });
@@ -517,102 +613,40 @@ describe('ComposedPostSyncService', () => {
   });
 
   // ============================================================================
-  // Update debounce + fingerprint
+  // Editor presence: open notes wait longer, leaving sends at once (§5.2)
   // ============================================================================
 
-  describe('enqueueUpdateDebounced', () => {
-    it('skips enqueue when content fingerprint is unchanged', async () => {
-      const content = composerNote('Same body');
-      const vault = makeMockVault(content);
-      const apiClient = makeMockApiClient();
-      const service = new ComposedPostSyncService(makeMockApp(), vault, settings, apiClient, saveSettings);
-
-      // First call sets the fingerprint; after debounce fires, maybeEnqueueUpdate
-      // calls enqueueUpdate then flush() — the API is called and queue is cleared.
-      service.enqueueUpdateDebounced('path/post.md', 'cid-fp', 'srv-1');
-      await new Promise((r) => setTimeout(r, 2100));
-
-      // Debounce fired → update was enqueued and flushed (API called once)
-      expect((apiClient.updateComposedPost as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1);
-      // Queue was cleared by flush
-      expect(settings.pendingComposedPostSyncs).toHaveLength(0);
-
-      // Second call with same content — fingerprint matches, should skip
-      service.enqueueUpdateDebounced('path/post.md', 'cid-fp', 'srv-1');
-      await new Promise((r) => setTimeout(r, 2100));
-
-      // API still called only once — second call was skipped due to unchanged fingerprint
-      expect((apiClient.updateComposedPost as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1);
-      expect(settings.pendingComposedPostSyncs).toHaveLength(0);
-    }, 10000);
-
-    it('enqueues update when content fingerprint changes', async () => {
-      let readCount = 0;
-      const contents = [composerNote('Body v1'), composerNote('Body v2')];
-      const mockFile = { path: 'path/post.md' } as TFile;
-      const vault = {
-        getFileByPath: vi.fn().mockReturnValue(mockFile),
-        read: vi.fn().mockImplementation(() => Promise.resolve(contents[readCount++ % 2])),
-        cachedRead: vi.fn().mockResolvedValue(composerNote('Body v2')),
-        readBinary: vi.fn().mockResolvedValue(new ArrayBuffer(0)),
-        on: vi.fn(),
-        off: vi.fn(),
-      } as unknown as Vault;
-
-      const apiClient = makeMockApiClient();
-      const service = new ComposedPostSyncService(makeMockApp(), vault, settings, apiClient, saveSettings);
-
-      // First call
-      service.enqueueUpdateDebounced('path/post.md', 'cid-change', 'srv-2');
-      await new Promise((r) => setTimeout(r, 2100));
-      expect(settings.pendingComposedPostSyncs.length + (apiClient.updateComposedPost as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
-
-      // Second call with different content
-      service.enqueueUpdateDebounced('path/post.md', 'cid-change', 'srv-2');
-      await new Promise((r) => setTimeout(r, 2100));
-      // Should have attempted update (either queued or called API)
-      expect((apiClient.updateComposedPost as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
-    }, 10000);
-
-    it('cancels pending debounce timer on file deletion via vault event', async () => {
-      let deleteHandler: ((f: { path: string }) => void) | undefined;
-      const mockFile = { path: 'path/post.md' } as TFile;
-      const vault = {
-        getFileByPath: vi.fn().mockReturnValue(mockFile),
-        read: vi.fn().mockResolvedValue('---\nauthor: Test\n---\nBody'),
-        readBinary: vi.fn().mockResolvedValue(new ArrayBuffer(0)),
-        on: vi.fn().mockImplementation((event: string, fn: (f: { path: string }) => void) => {
-          if (event === 'delete') deleteHandler = fn;
-        }),
-        off: vi.fn(),
-      } as unknown as Vault;
-
-      const apiClient = makeMockApiClient({
-        createComposedPost: vi.fn().mockResolvedValue({ archiveId: 'x', createdAt: 'y' }),
-      });
-      const service = new ComposedPostSyncService(makeMockApp(), vault, settings, apiClient, saveSettings);
-      await service.onPluginLoad();
-
-      // Add an entry and schedule a debounce
-      await service.enqueueCreate('path/post.md', 'cid-cancel');
-      service.enqueueUpdateDebounced('path/post.md', 'cid-cancel', 'srv-3');
-
-      // Simulate file deletion before debounce fires
-      deleteHandler?.({ path: 'path/post.md' });
-      await Promise.resolve();
-
-      // Queue should be empty (entry removed, debounce cancelled)
-      expect(settings.pendingComposedPostSyncs).toHaveLength(0);
+  describe('editor presence', () => {
+    afterEach(() => {
+      vi.useRealTimers();
     });
 
-    it('clears all debounce timers on plugin unload', () => {
-      const service = new ComposedPostSyncService(makeMockApp(), makeMockVault(), settings, makeMockApiClient(), saveSettings);
+    it('waits 30 s while the note is open, and sends at once when the user leaves it', async () => {
+      vi.useFakeTimers();
+      const mockFile = { path: 'test/path.md' } as TFile;
+      const metadataCache = makeMockMetadataCache(PARTICIPANT);
+      let leave: (path: string) => void = () => {};
+      const presence = {
+        isOpen: vi.fn().mockReturnValue(true),
+        onLeave: vi.fn((listener: (path: string) => void) => {
+          leave = listener;
+          return () => {};
+        }),
+      } as unknown as EditorPresence;
+      const apiClient = makeMockApiClient();
+      const service = new ComposedPostSyncService(
+        writingApp(metadataCache), makeMockVault(composerNote('Typed in the editor')), settings, apiClient, saveSettings,
+        { presence: () => presence }
+      );
+      await service.onPluginLoad();
 
-      service.enqueueUpdateDebounced('path/a.md', 'cid-a', 'srv-a');
-      service.enqueueUpdateDebounced('path/b.md', 'cid-b', 'srv-b');
+      metadataCache.trigger(mockFile);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(apiClient.updateComposedPost).not.toHaveBeenCalled();
 
-      // Should not throw — clears timers
-      expect(() => service.onPluginUnload()).not.toThrow();
+      leave('test/path.md');
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.waitFor(() => expect(apiClient.updateComposedPost).toHaveBeenCalledTimes(1));
     });
   });
 
@@ -701,6 +735,7 @@ describe('ComposedPostSyncService', () => {
         postOrigin: 'composer',
         sourceArchiveId: 'srv-bg-1',
         clientPostId: 'cid-bg-1',
+        syncedContentRevision: 0,
       });
       const app = makeMockApp(undefined, metadataCache);
       const vault = {
@@ -735,6 +770,7 @@ describe('ComposedPostSyncService', () => {
         postOrigin: 'composer',
         sourceArchiveId: 'srv-rapid',
         clientPostId: 'cid-rapid',
+        syncedContentRevision: 0,
       });
       const app = makeMockApp(undefined, metadataCache);
       const vault = {
@@ -800,10 +836,11 @@ describe('ComposedPostSyncService', () => {
         postOrigin: 'composer',
         sourceArchiveId: 'srv-own',
         clientPostId: 'cid-own',
+        syncedContentRevision: 0,
       });
       // Like Obsidian, MetadataCache reports our own processFrontMatter write.
       const app = makeMockApp(async (_file, fn) => {
-        fn({});
+        fn((metadataCache.getFileCache() as { frontmatter: Record<string, unknown> }).frontmatter);
         metadataCache.trigger(mockFile);
       }, metadataCache);
       let note = composerNote('Synced text');

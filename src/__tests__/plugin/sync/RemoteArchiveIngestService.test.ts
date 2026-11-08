@@ -341,3 +341,57 @@ describe('RemoteArchiveIngestService', () => {
     });
   });
 });
+
+describe('RemoteArchiveIngestService composed posts (two-way sync)', () => {
+  const composed = makeArchive({ id: 'post_a', platform: 'post', postId: 'post_a', archiveSource: 'composed', contentRevision: 3 });
+
+  function service(over: Partial<ConstructorParameters<typeof RemoteArchiveIngestService>[0]>, existing: TFile | null) {
+    return new RemoteArchiveIngestService({
+      apiClient: () => ({ getUserArchive: vi.fn().mockResolvedValue({ archive: composed }) }) as unknown as WorkersAPIClient,
+      settings: () => ({ archivePath: 'Social Archives' }),
+      hasRecentlyArchivedUrl: vi.fn().mockReturnValue(false),
+      archiveLookupService: {
+        findBySourceArchiveId: vi.fn().mockReturnValue(existing),
+        findByOriginalUrl: vi.fn().mockReturnValue([]),
+        backfillFileIdentity: vi.fn().mockResolvedValue(undefined),
+        indexSavedFile: vi.fn(),
+      } as unknown as ArchiveLookupService,
+      convertUserArchiveToPostData: vi.fn().mockReturnValue({ platform: 'post', author: { name: 'A' }, content: { text: '' } } as unknown as PostData),
+      saveSubscriptionPost: vi.fn().mockResolvedValue(true),
+      refreshTimelineView: vi.fn(),
+      ...over,
+    });
+  }
+
+  it('reconciles an existing composed note with one fetch, never the limited replacement', async () => {
+    const file = makeFile('Social Archives/Post/a.md');
+    const reconcileComposedPost = vi.fn().mockResolvedValue('pulled');
+    const replaceExistingLimitedArchive = vi.fn();
+
+    const result = await service({ reconcileComposedPost, replaceExistingLimitedArchive }, file).ingestArchiveById('post_a', 'client_sync');
+
+    expect(result).toBe('created');
+    expect(reconcileComposedPost).toHaveBeenCalledWith(file, composed);
+    expect(replaceExistingLimitedArchive).not.toHaveBeenCalled();
+  });
+
+  it('reports an unchanged composed note as existing', async () => {
+    const file = makeFile('Social Archives/Post/a.md');
+    const result = await service({ reconcileComposedPost: vi.fn().mockResolvedValue('none') }, file).ingestArchiveById('post_a', 'archive_complete');
+    expect(result).toBe('existing');
+  });
+
+  it('stamps a freshly saved composed note with its downloaded media', async () => {
+    const file = makeFile('Social Archives/Post/new.md');
+    const media = [{ url: 'https://api/media/archives/u/post_a/0.png', localPath: 'attachments/1.png' }];
+    const stampNewComposedPost = vi.fn().mockResolvedValue(undefined);
+
+    const result = await service({
+      saveSubscriptionPostDetailed: vi.fn().mockResolvedValue({ status: 'created', file, media }),
+      stampNewComposedPost,
+    }, null).ingestArchiveById('post_a', 'client_sync');
+
+    expect(result).toBe('created');
+    expect(stampNewComposedPost).toHaveBeenCalledWith(file, composed, media);
+  });
+});

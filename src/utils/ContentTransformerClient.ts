@@ -24,6 +24,12 @@ export class ContentTransformerClient {
     // Remove code blocks (fenced)
     text = text.replace(/```[\s\S]*?```/g, '');
 
+    // Backslash escapes (`\*`, `\_`, `\[` — the composer writes them for literal
+    // characters) are parked so the emphasis/link rules below skip them, then
+    // restored as the bare character at the end.
+    const escapedChars: string[] = [];
+    text = text.replace(/\\([\\`*_{}[\]()#+\-.!~<>|])/g, (_match, ch: string) => `\uE000${escapedChars.push(ch) - 1}\uE000`);
+
     // Remove inline code
     text = text.replace(/`([^`]+)`/g, '$1');
 
@@ -71,6 +77,8 @@ export class ContentTransformerClient {
     text = text.replace(/&quot;/g, '"');
     text = text.replace(/&#39;/g, "'");
     text = text.replace(/&nbsp;/g, ' ');
+
+    text = text.replace(/\uE000(\d+)\uE000/g, (_match, index: string) => escapedChars[Number(index)] ?? '');
 
     // Collapse multiple newlines into double newline (paragraph break)
     text = text.replace(/\n{3,}/g, '\n\n');

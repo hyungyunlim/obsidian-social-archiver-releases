@@ -47,6 +47,8 @@ export interface SavePendingPostResult {
   file?: TFile;
   path?: string;
   reason?: string;
+  /** Main media downloaded into the note: server URL → vault path (composed baseline). */
+  media?: Array<{ url: string; localPath: string }>;
 }
 
 interface SaveSubscriptionPostOptions {
@@ -470,6 +472,8 @@ export class SubscriptionSyncService {
 
       let mediaResults: import('../../services/MediaHandler').MediaResult[] | undefined;
       let mediaHandledLocally = false;
+      /** The post's own media that landed as files (not quoted, link or thumbnail images). */
+      const downloadedMainMedia: Array<{ url: string; localPath: string }> = [];
 
       const downloadMode = this.resolveDownloadMode();
       const mainMediaCandidates = this.buildDownloadCandidates(post.media, downloadMode, {
@@ -653,6 +657,9 @@ export class SubscriptionSyncService {
                 }
               }
             } else {
+              if (post.media[sourceItem.mediaIndex] && result.fallbackKind !== 'thumbnail') {
+                downloadedMainMedia.push({ url: result.originalUrl, localPath: result.localPath });
+              }
               if (post.media[sourceItem.mediaIndex]) {
                 if (result.fallbackKind === 'thumbnail') {
                   // Thumbnail fallback: keep original URL, store thumbnail path separately
@@ -753,6 +760,7 @@ export class SubscriptionSyncService {
           status: replaceExistingFile ? 'updated' : 'created',
           file: saveResult.file,
           path: saveResult.path,
+          media: downloadedMainMedia,
         };
       }
 

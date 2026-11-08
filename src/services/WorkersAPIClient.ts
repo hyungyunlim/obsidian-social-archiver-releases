@@ -886,6 +886,19 @@ export interface UserArchive {
   isReblog?: boolean;
   // Archive source (single, profile_crawl, subscription, composed)
   archiveSource?: string | null;
+  /** Platform `post` rows: bumped by every content edit (PUT /api/user/posts/:id). */
+  contentRevision?: number;
+  /** A post's authors, main author first (absent when the account itself is the only one). */
+  postAuthors?: Array<{ id: string; name: string; handle: string | null; avatarUrl: string | null; platform: string | null }>;
+  /** Quoted originals; those with `archiveId` ride the note as trailing archive-mention lines. */
+  embeddedArchives?: Array<{
+    id: string;
+    archiveId?: string;
+    platform: string;
+    title: string | null;
+    authorName: string | null;
+    originalUrl: string | null;
+  }>;
   // X article (long-form post) derived fields
   isArticle?: boolean;
   contentType?: 'post' | 'article' | 'meeting-note' | 'audio-note';
@@ -1400,11 +1413,13 @@ export interface UpsertAuthorProfilesResult {
 // Composed Post Types
 // ============================================================================
 
-/** POST /api/user/posts/media. The R2 key is archives/{user}/{clientPostId}/media/{index}.{ext}. */
+/**
+ * POST /api/user/posts/media. The server picks the index: the R2 key is
+ * archives/{user}/{clientPostId}/media/{index}.{ext}, and the same bytes come
+ * back under the URL they were first stored at.
+ */
 export interface ComposedMediaUploadRequest {
   clientPostId: string;
-  /** 0-based position in the post's media list. */
-  index: number;
   /** Extension without the dot. */
   ext: string;
   contentType: string;
@@ -1415,6 +1430,8 @@ export interface ComposedMediaUploadRequest {
 export interface ComposedMediaUploadResult {
   r2Url: string;
   r2Key: string;
+  /** The index the server chose. */
+  index: number;
   type: 'image' | 'video';
   contentType: string;
   size: number;
@@ -1439,7 +1456,18 @@ export interface CreateComposedPostRequest extends ComposedPostContent {
   clientPostId: string;
 }
 
-export type UpdateComposedPostRequest = ComposedPostContent;
+export type UpdateComposedPostRequest = ComposedPostContent & {
+  /** The revision the edit was made on; 409 POST_EDIT_CONFLICT when the row moved on. */
+  baseContentRevision?: number;
+  /** The text's trailing archive-mention lines are the post's whole quote list. */
+  quoteRefs?: boolean;
+};
+
+export interface UpdateComposedPostResult {
+  success: boolean;
+  updatedAt: string;
+  contentRevision: number;
+}
 
 /**
  * Workers API Client
@@ -4319,7 +4347,7 @@ export class WorkersAPIClient implements IService {
    *
    * PUT /api/user/posts/:archiveId
    */
-  async updateComposedPost(archiveId: string, request: UpdateComposedPostRequest): Promise<{ success: boolean; updatedAt: string }> {
+  async updateComposedPost(archiveId: string, request: UpdateComposedPostRequest): Promise<UpdateComposedPostResult> {
     this.ensureInitialized();
 
     const extraHeaders: Record<string, string> = {};
@@ -4327,7 +4355,7 @@ export class WorkersAPIClient implements IService {
       extraHeaders['X-Client-Id'] = this.config.clientId;
     }
 
-    return await this.request<{ success: boolean; updatedAt: string }>(`/api/user/posts/${encodeURIComponent(archiveId)}`, {
+    return await this.request<UpdateComposedPostResult>(`/api/user/posts/${encodeURIComponent(archiveId)}`, {
       method: 'PUT',
       headers: extraHeaders,
       body: JSON.stringify(request),

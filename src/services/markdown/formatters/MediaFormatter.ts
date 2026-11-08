@@ -197,7 +197,8 @@ export class MediaFormatter {
     // - or from item.thumbnail if it was set by ArchiveOrchestrator/SubscriptionSyncService
     const localThumbnailPath =
       (downloadedMedia?.fallbackKind === 'thumbnail' ? downloadedMedia.localPath : undefined) ||
-      (item.thumbnail && !item.thumbnail.startsWith('http') ? item.thumbnail : undefined);
+      // A `localpath:` poster is a server-side placeholder for an upload, not a vault file.
+      (item.thumbnail && !item.thumbnail.startsWith('http') && !isLocalSentinel(item.thumbnail) ? item.thumbnail : undefined);
 
     if (localThumbnailPath) {
       // Case 2: clickable thumbnail linking to original post

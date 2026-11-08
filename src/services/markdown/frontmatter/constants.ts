@@ -52,10 +52,11 @@ export const USER_CONTROLLED_FRONTMATTER_FIELD_SET: ReadonlySet<string> =
  * `ComposedPostSyncService`. Frontmatter rebuilt from an edit's `PostData`
  * lacks them, and without them the note detaches: later edits never sync, and
  * inbound sync can't match the server row, so it imports a duplicate note.
- * `syncedContentHash` (the post the server last accepted) is kept so an edit
- * that changes nothing the server stores doesn't send it again, and
- * `syncedMedia`/`syncedMediaNext` (its uploaded embeds, the next unused upload
- * index) so an edit uploads only the embeds it adds, under fresh URLs.
+ * `syncedContentHash` and `syncedContentRevision` (the post and revision the
+ * note last matched on the server) are the two-way sync baseline, `syncedMedia`
+ * (its uploaded embeds) lets an edit upload only the embeds it adds, and
+ * `coAuthors` is server-owned display data. `syncedMediaNext` is gone: the
+ * server picks upload indexes now, and an update drops the old field.
  */
 export const COMPOSED_POST_SYNC_FRONTMATTER_FIELDS = [
   'postOrigin',
@@ -65,5 +66,6 @@ export const COMPOSED_POST_SYNC_FRONTMATTER_FIELDS = [
   'serverSyncedAt',
   'syncedContentHash',
   'syncedMedia',
-  'syncedMediaNext',
+  'syncedContentRevision',
+  'coAuthors',
 ] as const;

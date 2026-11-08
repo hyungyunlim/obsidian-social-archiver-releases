@@ -12,7 +12,6 @@ import path from 'path';
 // ponytail: quarantine list, not a permanent tier — delete entries as they go
 // green; a file that no longer fails can simply be removed from this array.
 const CI_QUARANTINE = [
-  'src/__tests__/components/MarkdownEditor.test.ts',
   'src/__tests__/components/MediaGrid.test.ts',
   'src/__tests__/components/ShareOptions.test.ts',
   'src/__tests__/components/billing/BillingEventsSection.test.ts',

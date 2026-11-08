@@ -465,7 +465,7 @@ describe('CommentFormatter', () => {
       );
     });
 
-    it('keeps `<tag>` text as text, written as `&lt;`, beside a converted anchor', () => {
+    it('keeps `<tag>` text as text, written as `\\<`, beside a converted anchor', () => {
       const comments: Comment[] = [
         {
           id: '1',
@@ -477,7 +477,7 @@ describe('CommentFormatter', () => {
       const result = formatter.formatComments(comments, 'linkedin');
 
       expect(result).toContain(
-        'Thanks [Main Author](https://www.linkedin.com/in/main-author) for the &lt;inputs> tip'
+        'Thanks [Main Author](https://www.linkedin.com/in/main-author) for the \\<inputs> tip'
       );
     });
 
@@ -501,7 +501,7 @@ describe('CommentFormatter', () => {
 
       expect(result).toBe(
         '**@alice**\nuse `<video>` or \\<kept>\n\n' +
-          '  ↳ **@bob**\n  &lt;inputs>\nAsk me\n&lt;/inputs> and &lt;책 제목>'
+          '  ↳ **@bob**\n  \\<inputs>\nAsk me\n\\</inputs> and \\<책 제목>'
       );
     });
 

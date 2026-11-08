@@ -605,6 +605,14 @@ export interface PostData {
    */
   embeddedArchives?: PostData[];
 
+  /**
+   * A composed post note (`isComposedPostNote`: postOrigin composer, not a
+   * meeting/audio note). Gates My Posts and Edit post — never `platform === 'post'`.
+   */
+  isComposedPost?: boolean;
+  /** Co-author display names of a composed post, main author left out (frontmatter `coAuthors`). */
+  coAuthors?: string[];
+
   /** Number of text highlights/annotations in the post content */
   highlightCount?: number;
 

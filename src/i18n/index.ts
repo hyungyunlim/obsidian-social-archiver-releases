@@ -26,6 +26,8 @@ import { releaseNotesStrings } from './strings/releaseNotes';
 import { collectionStrings } from './strings/collections';
 import { transcriptLanguageStrings } from './strings/transcriptLanguages';
 import { byokStrings } from './strings/byok';
+import { composedSyncStrings } from './strings/composedSync';
+import { myPostsStrings } from './strings/myPosts';
 
 /** One translatable string. `ja` can be added later without touching callers. */
 export interface LocaleText {
@@ -45,6 +47,8 @@ const strings = {
   ...collectionStrings,
   ...transcriptLanguageStrings,
   ...byokStrings,
+  ...composedSyncStrings,
+  ...myPostsStrings,
 } satisfies Record<string, LocaleText>;
 
 export type TranslationKey = keyof typeof strings;

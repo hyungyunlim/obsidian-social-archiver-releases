@@ -1,23 +1,19 @@
 <script lang="ts">
 /**
- * MarkdownEditor - Tiptap-based Markdown editor
+ * MarkdownEditor - Tiptap-based Markdown editor for the new-post composer
  *
- * A reusable Markdown editor component with:
- * - StarterKit (basic formatting)
- * - Markdown I/O (tiptap-markdown)
- * - Auto-link detection
+ * - Composer schema + official @tiptap/markdown (composerMarkdown.ts): single
+ *   line breaks, `socialarchiver://` links and task lists survive, and only
+ *   real inline syntax is escaped (same Markdown as mobile, desktop and web)
  * - 10,000 character limit
- * - Image and Link support
- * - Clipboard serialization to Markdown
+ * - Copy serializes the selection as Markdown
  */
 
 import { onMount, onDestroy } from 'svelte';
-import { Editor } from '@tiptap/core';
-import StarterKit from '@tiptap/starter-kit';
+import type { Editor } from '@tiptap/core';
 import Placeholder from '@tiptap/extension-placeholder';
-import Image from '@tiptap/extension-image';
 import CharacterCount from '@tiptap/extension-character-count';
-import { Markdown } from 'tiptap-markdown';
+import { composerMarkdown, createComposerEditor } from './composerMarkdown';
 
 /**
  * Component props
@@ -60,39 +56,15 @@ function initializeEditor(): void {
     return;
   }
 
-  editor = new Editor({
+  editor = createComposerEditor({
     element: editorElement,
     extensions: [
-      StarterKit.configure({
-        // Configure StarterKit options
-        heading: {
-          levels: [1, 2, 3],
-        },
-        codeBlock: {
-          HTMLAttributes: {
-            class: 'code-block',
-          },
-        },
-      }),
-      Markdown.configure({
-        // Configure Markdown extension
-        html: false,
-        linkify: true,
-        transformCopiedText: true,
-        transformPastedText: true,
-      }),
       CharacterCount.configure({
         limit: maxLength,
         mode: 'textSize',
       }),
       Placeholder.configure({
         placeholder,
-      }),
-      Image.configure({
-        inline: true,
-        HTMLAttributes: {
-          class: 'editor-image',
-        },
       }),
     ],
     content,
@@ -103,22 +75,12 @@ function initializeEditor(): void {
         class: 'markdown-editor-content',
         spellcheck: 'false',
       },
-      // Clipboard serialization to Markdown
+      // Copy the selection as Markdown
       clipboardTextSerializer: (slice) => {
-        if (!editor) return '';
-        const markdownSerializer = editor.storage.markdown?.serializer;
-        if (!markdownSerializer) return '';
-        return markdownSerializer.serialize(slice.content);
+        if (!editor?.markdown) return '';
+        return editor.markdown.serialize({ type: 'doc', content: slice.content.toJSON() });
       },
-      // Handle paste events
-      handlePaste: (view, event) => {
-
-        // Log different data formats
-        const html = event.clipboardData?.getData('text/html');
-        const plain = event.clipboardData?.getData('text/plain');
-        const uri = event.clipboardData?.getData('text/uri-list');
-
-
+      handlePaste: () => {
         if (onPaste) {
           // Use setTimeout to ensure content is updated before callback
           window.setTimeout(() => {
@@ -129,27 +91,14 @@ function initializeEditor(): void {
       },
     },
     onCreate: ({ editor: createdEditor }) => {
-      // Initialize character count
       updateCharacterCount(createdEditor);
     },
     onUpdate: ({ editor: updatedEditor }) => {
-      // Get Markdown content and clean escaping
-      const rawMarkdown = updatedEditor.storage.markdown?.getMarkdown() || '';
-      const markdown = cleanMarkdownEscaping(rawMarkdown);
-
-      // Update character count (also updates isLimitReached)
       updateCharacterCount(updatedEditor);
-
-      // Notify parent
-      if (onUpdate) {
-        onUpdate(markdown);
-      }
+      onUpdate?.(composerMarkdown(updatedEditor));
     },
     onBlur: () => {
-      // Notify parent when editor loses focus
-      if (onBlur) {
-        onBlur();
-      }
+      onBlur?.();
     },
   });
 }
@@ -170,26 +119,11 @@ function updateCharacterCount(editorInstance: Editor): void {
 }
 
 /**
- * Remove unnecessary markdown escaping from TipTap output
- */
-function cleanMarkdownEscaping(markdown: string): string {
-  return markdown
-    .replace(/<(https?:\/\/[^>]+)>/g, '$1')  // Convert auto-links <url> to plain URLs
-    .replace(/\\-/g, '-')    // Remove escaped hyphens
-    .replace(/\\\*/g, '*')   // Remove escaped asterisks
-    .replace(/\\_/g, '_')    // Remove escaped underscores
-    .replace(/\\\[/g, '[')   // Remove escaped opening brackets
-    .replace(/\\\]/g, ']')   // Remove escaped closing brackets
-    .replace(/\\\(/g, '(')   // Remove escaped opening parentheses
-    .replace(/\\\)/g, ')');  // Remove escaped closing parentheses
-}
-
-/**
- * Set editor content programmatically
+ * Set editor content programmatically (Markdown)
  */
 export function setContent(markdown: string): void {
   if (editor && !editor.isDestroyed) {
-    editor.commands.setContent(markdown);
+    editor.commands.setContent(markdown, { contentType: 'markdown' });
   }
 }
 
@@ -198,8 +132,7 @@ export function setContent(markdown: string): void {
  */
 export function getContent(): string {
   if (!editor || editor.isDestroyed) return '';
-  const rawMarkdown = editor.storage.markdown?.getMarkdown() || '';
-  return cleanMarkdownEscaping(rawMarkdown);
+  return composerMarkdown(editor);
 }
 
 /**
@@ -256,9 +189,8 @@ onDestroy(() => {
  */
 $effect(() => {
   if (editor && !editor.isDestroyed && content !== undefined) {
-    const currentMarkdown = cleanMarkdownEscaping(editor.storage.markdown?.getMarkdown() || '');
-    if (currentMarkdown !== content) {
-      editor.commands.setContent(content);
+    if (composerMarkdown(editor) !== content) {
+      editor.commands.setContent(content, { contentType: 'markdown' });
     }
   }
 });

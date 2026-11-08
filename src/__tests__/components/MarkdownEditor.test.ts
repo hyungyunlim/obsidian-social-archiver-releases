@@ -1,449 +1,123 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { Editor } from '@tiptap/core';
-import StarterKit from '@tiptap/starter-kit';
-import Placeholder from '@tiptap/extension-placeholder';
-import Image from '@tiptap/extension-image';
-import Link from '@tiptap/extension-link';
+import { describe, it, expect, afterEach } from 'vitest';
+import type { Editor } from '@tiptap/core';
 import CharacterCount from '@tiptap/extension-character-count';
-import { Markdown } from 'tiptap-markdown';
+import { composerMarkdown, createComposerEditor } from '@/components/editor/composerMarkdown';
+import { escapeComposerText } from '@/components/editor/composerEscape';
 
 /**
- * MarkdownEditor Component Tests
- *
- * Tests the MarkdownEditor component's core functionality:
- * - Markdown serialization/deserialization
- * - Character limit enforcement
- * - Auto-link detection
- * - Clipboard serialization
- * - Component props and lifecycle
+ * The new-post composer (MarkdownEditor) on the official @tiptap/markdown
+ * (prd-plugin-my-posts §6). Runs the editor MarkdownEditor builds, so these
+ * pin what a post written in Obsidian is stored as: the same Markdown mobile,
+ * desktop and share-web store.
  */
 
-describe('MarkdownEditor Component', () => {
-  let editor: Editor;
-  let editorElement: HTMLDivElement;
-  const maxLength = 10000;
+let editor: Editor | null = null;
 
-  beforeEach(() => {
-    // Create a DOM element for the editor
-    editorElement = document.createElement('div');
-    document.body.appendChild(editorElement);
+function makeEditor(content = ''): Editor {
+  const element = document.createElement('div');
+  document.body.appendChild(element);
+  editor = createComposerEditor({ element, content });
+  return editor;
+}
+
+afterEach(() => {
+  editor?.destroy();
+  editor = null;
+  document.body.innerHTML = '';
+});
+
+describe('MarkdownEditor composer Markdown', () => {
+  it('reads its content as Markdown and writes the same Markdown back', () => {
+    const markdown = '# Title\n\n**bold** and snake_case\n\n- [x] done\n- [ ] next';
+    expect(composerMarkdown(makeEditor(markdown))).toBe(markdown);
   });
 
-  afterEach(() => {
-    // Cleanup
-    if (editor && !editor.isDestroyed) {
-      editor.destroy();
-    }
-    if (editorElement && editorElement.parentNode) {
-      editorElement.parentNode.removeChild(editorElement);
-    }
+  it('keeps a single line break (the community extension merged lines)', () => {
+    expect(composerMarkdown(makeEditor('줄\n바꿈'))).toBe('줄\n바꿈');
+
+    const e = makeEditor('');
+    e.commands.setContent('<p>a<br>b</p>');
+    expect(composerMarkdown(e)).toBe('a  \nb');
   });
 
-  describe('Basic Initialization', () => {
-    it('should initialize with all required extensions', () => {
-      editor = new Editor({
-        element: editorElement,
-        extensions: [
-          StarterKit,
-          Markdown,
-          CharacterCount.configure({ limit: maxLength, mode: 'textSize' }),
-          Placeholder.configure({ placeholder: "What's on your mind?" }),
-          Image,
-          Link.configure({ openOnClick: false, autolink: true }),
-        ],
-        content: '',
-      });
+  it('keeps socialarchiver:// links (archive and author mentions)', () => {
+    const markdown = '[원문](socialarchiver://archive/abc)\n\n[@Me](socialarchiver://author?platform=x&name=Me)';
+    expect(composerMarkdown(makeEditor(markdown))).toBe(markdown);
 
-      expect(editor).toBeDefined();
-      expect(editor.isDestroyed).toBe(false);
-      expect(editor.storage.markdown).toBeDefined();
-      expect(editor.storage.characterCount).toBeDefined();
-    });
-
-    it('should set spellcheck to false', () => {
-      editor = new Editor({
-        element: editorElement,
-        extensions: [StarterKit],
-        editorProps: {
-          attributes: {
-            spellcheck: 'false',
-          },
-        },
-      });
-
-      const editorContent = editorElement.querySelector('.ProseMirror');
-      expect(editorContent?.getAttribute('spellcheck')).toBe('false');
-    });
-
-    it('should initialize with placeholder text', () => {
-      const placeholderText = "What's on your mind?";
-      editor = new Editor({
-        element: editorElement,
-        extensions: [
-          StarterKit,
-          Placeholder.configure({ placeholder: placeholderText }),
-        ],
-        content: '',
-      });
-
-      expect(editor.isEmpty).toBe(true);
-    });
+    const e = makeEditor('');
+    e.commands.setContent('<p><a href="socialarchiver://archive/x">q</a></p>');
+    expect(composerMarkdown(e)).toBe('[q](socialarchiver://archive/x)');
   });
 
-  describe('Markdown Serialization', () => {
-    beforeEach(() => {
-      editor = new Editor({
-        element: editorElement,
-        extensions: [StarterKit, Markdown],
-        content: '',
-      });
-    });
+  it('stores "2025. 11. 6" as typed, and pasted plain text stays a paragraph', () => {
+    const e = makeEditor('');
+    e.commands.setContent('<p>2025. 11. 6</p>');
+    expect(composerMarkdown(e)).toBe('2025. 11. 6');
 
-    it('should serialize bold text to Markdown', () => {
-      editor.commands.setContent('<p><strong>Bold text</strong></p>');
-      const markdown = editor.storage.markdown.getMarkdown();
-      expect(markdown).toContain('**Bold text**');
-    });
-
-    it('should serialize italic text to Markdown', () => {
-      editor.commands.setContent('<p><em>Italic text</em></p>');
-      const markdown = editor.storage.markdown.getMarkdown();
-      expect(markdown).toContain('*Italic text*');
-    });
-
-    it('should serialize headings to Markdown', () => {
-      editor.commands.setContent('<h1>Title</h1><h2>Subtitle</h2>');
-      const markdown = editor.storage.markdown.getMarkdown();
-      expect(markdown).toContain('# Title');
-      expect(markdown).toContain('## Subtitle');
-    });
-
-    it('should serialize lists to Markdown', () => {
-      editor.commands.setContent('<ul><li>Item 1</li><li>Item 2</li></ul>');
-      const markdown = editor.storage.markdown.getMarkdown();
-      expect(markdown).toContain('- Item 1');
-      expect(markdown).toContain('- Item 2');
-    });
-
-    it('should serialize links to Markdown', () => {
-      editor.commands.setContent('<p><a href="https://example.com">Link</a></p>');
-      const markdown = editor.storage.markdown.getMarkdown();
-      expect(markdown).toContain('[Link](https://example.com)');
-    });
-
-    it('should deserialize Markdown to HTML', () => {
-      const markdownInput = '# Hello\n\nThis is **bold** and *italic*.';
-      editor.commands.setContent(markdownInput);
-
-      const html = editor.getHTML();
-      expect(html).toContain('<h1>');
-      expect(html).toContain('Hello');
-      expect(html).toContain('<strong>');
-      expect(html).toContain('bold');
-      expect(html).toContain('<em>');
-      expect(html).toContain('italic');
-    });
+    e.commands.setContent('');
+    // jsdom has no ClipboardEvent; a plain paste event is enough for ProseMirror
+    e.view.pasteText('2025. 11. 6', new Event('paste') as ClipboardEvent);
+    expect(e.getJSON().content?.map((node) => node.type)).toEqual(['paragraph']);
+    expect(composerMarkdown(e)).toBe('2025. 11. 6');
   });
 
-  describe('Character Count and Limit', () => {
-    beforeEach(() => {
-      editor = new Editor({
-        element: editorElement,
-        extensions: [
-          StarterKit,
-          CharacterCount.configure({ limit: maxLength, mode: 'textSize' }),
-        ],
-        content: '',
-      });
+  it('serializes task lists and the toolbar marks like share-web', () => {
+    const e = makeEditor('');
+    e.commands.setContent({
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [
+          { type: 'text', text: '중요', marks: [{ type: 'bold' }] },
+          { type: 'text', text: '한 ' },
+          { type: 'text', text: '취소', marks: [{ type: 'strike' }] },
+        ] },
+        { type: 'taskList', content: [
+          { type: 'taskItem', attrs: { checked: false }, content: [{ type: 'paragraph', content: [{ type: 'text', text: '할 일' }] }] },
+          { type: 'taskItem', attrs: { checked: true }, content: [{ type: 'paragraph', content: [{ type: 'text', text: '끝' }] }] },
+        ] },
+        { type: 'paragraph', content: [{ type: 'text', text: '<책 제목>' }] },
+      ],
     });
-
-    it('should count characters correctly', () => {
-      const text = 'Hello World';
-      editor.commands.setContent(`<p>${text}</p>`);
-
-      const count = editor.storage.characterCount.characters();
-      expect(count).toBe(text.length);
-    });
-
-    it('should enforce character limit', () => {
-      const shortLimit = 10;
-      editor.destroy();
-
-      editor = new Editor({
-        element: editorElement,
-        extensions: [
-          StarterKit,
-          CharacterCount.configure({ limit: shortLimit, mode: 'textSize' }),
-        ],
-        content: '',
-      });
-
-      // Try to insert text longer than limit
-      const longText = 'This is a very long text that exceeds the limit';
-      editor.commands.setContent(`<p>${longText}</p>`);
-
-      const count = editor.storage.characterCount.characters();
-      // CharacterCount should enforce the limit
-      expect(count).toBeLessThanOrEqual(shortLimit);
-    });
-
-    it('should track character count changes', () => {
-      editor.commands.setContent('<p>Initial</p>');
-      const initialCount = editor.storage.characterCount.characters();
-
-      editor.commands.insertContent(' Added');
-      const newCount = editor.storage.characterCount.characters();
-
-      expect(newCount).toBeGreaterThan(initialCount);
-    });
-
-    it('should handle empty content', () => {
-      editor.commands.setContent('');
-      const count = editor.storage.characterCount.characters();
-      expect(count).toBe(0);
-    });
+    expect(composerMarkdown(e)).toBe('**중요**한 ~~취소~~\n\n- [ ] 할 일\n- [x] 끝\n\n&lt;책 제목&gt;');
   });
 
-  describe('Auto-link Detection', () => {
-    beforeEach(() => {
-      editor = new Editor({
-        element: editorElement,
-        extensions: [
-          StarterKit,
-          Link.configure({ openOnClick: false, autolink: true }),
-          Markdown,
-        ],
-        content: '',
-      });
-    });
-
-    it('should detect HTTP URLs', () => {
-      editor.commands.setContent('<p>Check http://example.com</p>');
-      const html = editor.getHTML();
-      expect(html).toContain('href="http://example.com"');
-    });
-
-    it('should detect HTTPS URLs', () => {
-      editor.commands.setContent('<p>Check https://example.com</p>');
-      const html = editor.getHTML();
-      expect(html).toContain('href="https://example.com"');
-    });
-
-    it('should preserve link attributes', () => {
-      editor.destroy();
-
-      editor = new Editor({
-        element: editorElement,
-        extensions: [
-          StarterKit,
-          Link.configure({
-            openOnClick: false,
-            autolink: true,
-            HTMLAttributes: {
-              class: 'editor-link',
-              rel: 'noopener noreferrer',
-              target: '_blank',
-            },
-          }),
-        ],
-        content: '',
-      });
-
-      editor.commands.setContent('<p>Check <a href="https://example.com">link</a></p>');
-      const html = editor.getHTML();
-
-      expect(html).toContain('class="editor-link"');
-      expect(html).toContain('rel="noopener noreferrer"');
-      expect(html).toContain('target="_blank"');
-    });
+  it('escapes only real inline syntax in typed text', () => {
+    const e = makeEditor('');
+    e.commands.setContent('<p>snake_case_name, 5 * 2, [[노트 이름]]</p><p>_기울임_ [괄호]</p>');
+    expect(composerMarkdown(e)).toBe('snake_case_name, 5 * 2, [[노트 이름]]\n\n\\_기울임\\_ \\[괄호\\]');
   });
 
-  describe('Clipboard Serialization', () => {
-    beforeEach(() => {
-      editor = new Editor({
-        element: editorElement,
-        extensions: [
-          StarterKit,
-          Markdown.configure({
-            html: false,
-            transformCopiedText: true,
-            transformPastedText: true,
-          }),
-        ],
-        content: '',
-      });
-    });
-
-    it('should transform copied text to Markdown', () => {
-      editor.commands.setContent('<p><strong>Bold</strong> and <em>italic</em></p>');
-
-      const markdown = editor.storage.markdown.getMarkdown();
-      expect(markdown).toContain('**Bold**');
-      expect(markdown).toContain('*italic*');
-    });
-
-    it('should transform pasted Markdown to HTML', () => {
-      const markdownInput = '**Bold** and *italic*';
-      editor.commands.setContent(markdownInput);
-
-      const html = editor.getHTML();
-      expect(html).toContain('<strong>');
-      expect(html).toContain('<em>');
-    });
+  it('drops the blank lines a trailing empty paragraph adds', () => {
+    const e = makeEditor('');
+    e.commands.setContent('<p>text</p><p></p>');
+    expect(e.getMarkdown()).not.toBe('text');
+    expect(composerMarkdown(e)).toBe('text');
   });
 
-  describe('Content Management', () => {
-    beforeEach(() => {
-      editor = new Editor({
-        element: editorElement,
-        extensions: [StarterKit, Markdown],
-        content: '',
-      });
-    });
-
-    it('should set content programmatically', () => {
-      const content = '# Hello World';
-      editor.commands.setContent(content);
-
-      const markdown = editor.storage.markdown.getMarkdown();
-      expect(markdown).toContain('# Hello World');
-    });
-
-    it('should get content as Markdown', () => {
-      editor.commands.setContent('<h1>Hello</h1><p>World</p>');
-      const markdown = editor.storage.markdown.getMarkdown();
-
-      expect(markdown).toContain('# Hello');
-      expect(markdown).toContain('World');
-    });
-
-    it('should clear content', () => {
-      editor.commands.setContent('Some content');
-      expect(editor.isEmpty).toBe(false);
-
-      editor.commands.clearContent();
-      expect(editor.isEmpty).toBe(true);
-    });
-
-    it('should check if editor is empty', () => {
-      expect(editor.isEmpty).toBe(true);
-
-      editor.commands.setContent('Not empty');
-      expect(editor.isEmpty).toBe(false);
-    });
-
-    it('should handle readonly mode', () => {
-      editor.setEditable(false);
-      expect(editor.isEditable).toBe(false);
-
-      editor.setEditable(true);
-      expect(editor.isEditable).toBe(true);
-    });
+  it('copies a selection as Markdown through the same manager', () => {
+    const e = makeEditor('**bold** snake_case');
+    expect(e.markdown?.serialize(e.getJSON())).toBe('**bold** snake_case');
   });
 
-  describe('Lifecycle Management', () => {
-    it('should create and destroy editor properly', () => {
-      editor = new Editor({
-        element: editorElement,
-        extensions: [StarterKit],
-        content: '',
-      });
+  it('adds caller extensions after the schema (character count)', () => {
+    const element = document.createElement('div');
+    editor = createComposerEditor({ element, content: 'Hello', extensions: [CharacterCount.configure({ limit: 10 })] });
+    expect(editor.storage.characterCount.characters()).toBe(5);
+  });
+});
 
-      expect(editor.isDestroyed).toBe(false);
-
-      editor.destroy();
-      expect(editor.isDestroyed).toBe(true);
-    });
-
-    it('should handle multiple destroy calls', () => {
-      editor = new Editor({
-        element: editorElement,
-        extensions: [StarterKit],
-        content: '',
-      });
-
-      editor.destroy();
-      expect(editor.isDestroyed).toBe(true);
-
-      // Should not throw on second destroy
-      expect(() => editor.destroy()).not.toThrow();
-    });
+describe('escapeComposerText (share-web fixtures)', () => {
+  it('leaves text that cannot re-parse as syntax alone', () => {
+    expect(escapeComposerText('snake_case_name, 5 * 2, [[노트 이름]]')).toBe('snake_case_name, 5 * 2, [[노트 이름]]');
   });
 
-  describe('Event Handling', () => {
-    it('should trigger onCreate callback', () => {
-      const onCreate = vi.fn();
-
-      editor = new Editor({
-        element: editorElement,
-        extensions: [StarterKit],
-        content: '',
-        onCreate,
-      });
-
-      expect(onCreate).toHaveBeenCalledTimes(1);
-    });
-
-    it('should trigger onUpdate callback', () => {
-      const onUpdate = vi.fn();
-
-      editor = new Editor({
-        element: editorElement,
-        extensions: [StarterKit],
-        content: '',
-        onUpdate,
-      });
-
-      editor.commands.setContent('New content');
-      expect(onUpdate).toHaveBeenCalled();
-    });
-
-    it('should trigger onDestroy callback', () => {
-      const onDestroy = vi.fn();
-
-      editor = new Editor({
-        element: editorElement,
-        extensions: [StarterKit],
-        content: '',
-        onDestroy,
-      });
-
-      editor.destroy();
-      expect(onDestroy).toHaveBeenCalledTimes(1);
-    });
+  it('escapes what would turn into emphasis, code, strikes or links', () => {
+    expect(escapeComposerText('_기울임_ *별표* `틱` ~물결~ [괄호]')).toBe('\\_기울임\\_ \\*별표\\* \\`틱\\` \\~물결\\~ \\[괄호\\]');
   });
 
-  describe('Image Handling', () => {
-    beforeEach(() => {
-      editor = new Editor({
-        element: editorElement,
-        extensions: [
-          StarterKit,
-          Image.configure({
-            inline: true,
-            HTMLAttributes: {
-              class: 'editor-image',
-            },
-          }),
-        ],
-        content: '',
-      });
-    });
-
-    it('should insert images', () => {
-      const imageSrc = 'https://example.com/image.png';
-      editor.chain().focus().setImage({ src: imageSrc }).run();
-
-      const html = editor.getHTML();
-      expect(html).toContain('img');
-      expect(html).toContain(imageSrc);
-    });
-
-    it('should apply image attributes', () => {
-      editor.chain().focus().setImage({ src: 'https://example.com/image.png' }).run();
-
-      const html = editor.getHTML();
-      expect(html).toContain('class="editor-image"');
-    });
+  it('escapes every underscore of a run, so __init__ survives the round trip', () => {
+    expect(escapeComposerText('__init__ a__b')).toBe('\\_\\_init\\_\\_ a\\_\\_b');
+    const e = makeEditor(escapeComposerText('__init__'));
+    expect(e.getText()).toBe('__init__');
   });
 });

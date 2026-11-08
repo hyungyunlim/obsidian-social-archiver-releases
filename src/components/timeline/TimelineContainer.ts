@@ -46,6 +46,7 @@ import { TagChipBar } from './filters/TagChipBar';
 import { CollectionTimelineMode } from './collections/CollectionTimelineMode';
 import { t } from '../../i18n';
 import { StoreChipBar, type StoreSummary } from './filters/StoreChipBar';
+import { PostAuthorChipBar, summarizePostAuthors, type PostAuthorSummary } from './filters/PostAuthorChipBar';
 import { AddPlaceModal } from './modals/AddPlaceModal';
 import { PlaceDetailRenderer } from './places/PlaceDetailRenderer';
 import { PlaceKindWriter } from './places/PlaceKindWriter';
@@ -59,7 +60,6 @@ import { SeriesGroupingService, type TimelineItem, isSeriesGroup } from '../../s
 // import type { SeriesGroup } from '../../types/series';
 import { mount, unmount } from 'svelte';
 import PostComposer from './PostComposer.svelte';
-import { composedArchiveId } from '../../plugin/sync/ComposedPostSyncService';
 import type { SubscriptionDisplay } from '@/types/subscription-ui';
 import { extractYouTubeChannelInfo } from '@/services/YouTubeChannelExtractor';
 import { isAuthenticated } from '../../utils/auth';
@@ -384,6 +384,7 @@ export class TimelineContainer {
   // Tag chip bar for filtering by user-defined tags
   private tagChipBar: TagChipBar;
   private storeChipBar: StoreChipBar;
+  private postAuthorChipBar: PostAuthorChipBar;
   private placeListRenderer: PlaceListRenderer;
   private placeMapRenderer: PlaceMapRenderer;
   /** Place Detail (inline, mirrors Author Detail — see showPlaceDetail). */
@@ -562,6 +563,12 @@ export class TimelineContainer {
     // Initialize StoreChipBar for Shopping's per-store filtering
     this.storeChipBar = new StoreChipBar((source: string | null) => {
       this.filterSortManager.updateFilter({ productSource: source });
+      void this.updatePostsFeedIncremental();
+    });
+
+    // My Posts author bubbles (main author + co-authors)
+    this.postAuthorChipBar = new PostAuthorChipBar((name: string | null) => {
+      this.filterSortManager.updateFilter({ postAuthorName: name });
       void this.updatePostsFeedIncremental();
     });
 
@@ -1117,8 +1124,8 @@ export class TimelineContainer {
       this.handleArchiveToggle(post, newArchiveStatus, cardElement);
     });
 
-    this.postCardRenderer.onEditPost((post, filePath) => {
-      this.openEditMode(post, filePath);
+    this.postCardRenderer.onEditPost((_post, filePath) => {
+      this.openPostInEditor(filePath);
     });
 
     this.postCardRenderer.onHashtagClick((hashtag) => {
@@ -1676,7 +1683,8 @@ export class TimelineContainer {
       !filterState.subscribedOnly &&
       // Shopping has its own empty state; the archived-count line below counts
       // every post, which would be a wrong number to show inside Shopping.
-      !filterState.productsOnly;
+      !filterState.productsOnly &&
+      !filterState.myPostsOnly;
     if (isPlainInboxEmpty) {
       const archivedCount = this.posts.filter((post) => post.archive === true).length;
       if (archivedCount > 0) {
@@ -2542,6 +2550,7 @@ export class TimelineContainer {
 
     this.renderPlacesButton(rightButtons);
     this.renderShoppingButton(rightButtons);
+    this.renderMyPostsButton(rightButtons);
     this.renderSubscriptionButton(rightButtons);
     this.renderSettingsButton(rightButtons);
 
@@ -3912,7 +3921,7 @@ export class TimelineContainer {
       // A place selection that survived the toggle would come back invisibly —
       // the list only renders inside Places — and silently shorten the feed.
       placeFilePaths: null,
-      ...(next ? { productsOnly: false, productSource: null } : {}),
+      ...(next ? { productsOnly: false, productSource: null, myPostsOnly: false, postAuthorName: null } : {}),
     });
 
     if (this.viewMode !== 'timeline') {
@@ -4011,7 +4020,85 @@ export class TimelineContainer {
     this.filterSortManager.updateFilter({
       productsOnly: next,
       productSource: null,
-      ...(next ? { placesOnly: false, placeFilePaths: null } : {}),
+      ...(next ? { placesOnly: false, placeFilePaths: null, myPostsOnly: false, postAuthorName: null } : {}),
+    });
+
+    if (this.viewMode !== 'timeline') {
+      await this.renderGalleryView();
+    } else {
+      await this.loadPosts();
+    }
+  }
+
+  /**
+   * Render the My Posts button: a filter over the feed (composed posts only),
+   * like Shopping, with author bubbles in the chip slot.
+   */
+  private renderMyPostsButton(parent: HTMLElement): void {
+    const myPostsBtn = parent.createDiv();
+    myPostsBtn.addClass('sa-action-btn');
+    myPostsBtn.setAttribute('role', 'button');
+    myPostsBtn.setAttribute('tabindex', '0');
+
+    const myPostsIcon = myPostsBtn.createDiv();
+    myPostsIcon.addClass('sa-icon-16');
+    myPostsIcon.addClass('sa-text-muted');
+    myPostsIcon.addClass('sa-transition-color');
+    setIcon(myPostsIcon, 'square-pen');
+
+    const updateButtonState = () => {
+      const active = this.filterSortManager.getFilterState().myPostsOnly;
+      myPostsBtn.setAttribute('aria-pressed', String(active));
+      myPostsBtn.toggleClass('sa-bg-accent', active);
+      myPostsBtn.toggleClass('sa-bg-transparent', !active);
+      myPostsBtn.removeClass('sa-bg-hover');
+      myPostsIcon.toggleClass('tc-sub-icon-active', active);
+      myPostsIcon.toggleClass('sa-text-muted', !active);
+      myPostsIcon.removeClass('sa-text-accent');
+      myPostsBtn.setAttribute('title', active ? t('myPosts.back') : t('myPosts.filter'));
+      myPostsBtn.setAttribute('aria-label', active ? t('myPosts.back') : t('myPosts.filter'));
+    };
+
+    updateButtonState();
+
+    myPostsBtn.addEventListener('mouseenter', () => {
+      if (!this.filterSortManager.getFilterState().myPostsOnly) {
+        myPostsBtn.removeClass('sa-bg-transparent');
+        myPostsBtn.addClass('sa-bg-hover');
+        myPostsIcon.removeClass('sa-text-muted');
+        myPostsIcon.addClass('sa-text-accent');
+      }
+    });
+    myPostsBtn.addEventListener('mouseleave', updateButtonState);
+
+    const toggle = () => void this.toggleMyPostsView();
+    myPostsBtn.addEventListener('click', toggle);
+    myPostsBtn.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggle();
+      }
+    });
+  }
+
+  /**
+   * Enter or leave My Posts. Exclusive with Shopping and Places (one lit mode),
+   * not persisted (same reason as Shopping), and leaving clears the author pick
+   * so it cannot come back invisibly.
+   */
+  private async toggleMyPostsView(): Promise<void> {
+    const next = !this.filterSortManager.getFilterState().myPostsOnly;
+
+    if (next && this.isSubscriptionViewActive) {
+      this.isSubscriptionViewActive = false;
+      this.syncFiltersAuthorToTimeline();
+    }
+    if (next) this.hidePlaceDetail({ restore: false });
+
+    this.filterSortManager.updateFilter({
+      myPostsOnly: next,
+      postAuthorName: null,
+      ...(next ? { productsOnly: false, productSource: null, placesOnly: false, placeFilePaths: null } : {}),
     });
 
     if (this.viewMode !== 'timeline') {
@@ -4078,7 +4165,12 @@ export class TimelineContainer {
       if (this.isSubscriptionViewActive) {
         // Authors replaces the feed, so a Shopping filter left on underneath
         // would be invisible while its toolbar button stayed lit.
-        this.filterSortManager.updateFilter({ productsOnly: false, productSource: null });
+        this.filterSortManager.updateFilter({
+          productsOnly: false,
+          productSource: null,
+          myPostsOnly: false,
+          postAuthorName: null,
+        });
         // Sync filter state from Timeline to Author
         this.syncFiltersTimelineToAuthor();
         await this.renderSubscriptionManagement();
@@ -5529,8 +5621,9 @@ export class TimelineContainer {
     }
 
     // Stores sit above tags: inside Shopping the store is the primary axis, and
-    // the two bars stack in the same slot.
+    // the two bars stack in the same slot. My Posts' authors take the same slot.
     this.renderStoreChipBar();
+    this.renderPostAuthorChipBar();
 
     const hasTagChipBar = this.hasVisibleTagChipBar();
     if (hasTagChipBar) {
@@ -5741,6 +5834,7 @@ export class TimelineContainer {
 
     // Compute new filtered list from current filter state
     this.reconcileStoreSelection();
+    this.reconcilePostAuthorSelection();
     const newFiltered = this.filterSortManager.applyFiltersAndSortIndex(this.indexEntries);
     // Compute diff against previous tracked state
     const diff = this.filterSortManager.diffWithPrevious(newFiltered);
@@ -6035,6 +6129,7 @@ export class TimelineContainer {
 
       // Use FilterSortManager to apply filters and sorting (always apply, even with cached data)
       this.reconcileStoreSelection();
+      this.reconcilePostAuthorSelection();
       this.filteredPosts = this.applyCurrentFiltersAndSort();
       // Also maintain index-based filtered list for incremental updates
       this.filteredIndexEntries = this.filterSortManager.applyFiltersAndSortIndex(this.indexEntries);
@@ -6418,6 +6513,38 @@ export class TimelineContainer {
     const filterState = this.filterSortManager.getFilterState();
     if (!filterState.productsOnly) return;
     this.storeChipBar.render(this.containerEl, this.getStoreSummaries(), filterState.productSource);
+  }
+
+  /**
+   * My Posts author bubbles over every composed post of the current tab — the
+   * whole vault, not the filtered page, so bubbles do not vanish while filtering
+   * (same rule as getStoreSummaries).
+   */
+  /** Every composed post, archived or not: My Posts ignores the inbox/archive tab (FilterSortManager). */
+  private getPostAuthorSummaries(): PostAuthorSummary[] {
+    const composed = this.indexEntries.length > 0
+      ? this.indexEntries
+        .filter((e) => e.isComposedPost === true)
+        .map((e) => ({ authorName: e.authorName, coAuthors: e.coAuthors }))
+      : this.posts
+        .filter((p) => p.isComposedPost === true)
+        .map((p) => ({ authorName: p.author.name, coAuthors: p.coAuthors }));
+    return summarizePostAuthors(composed);
+  }
+
+  /** Drop an author pick whose author no longer has a post (see reconcileStoreSelection). */
+  private reconcilePostAuthorSelection(): void {
+    const { myPostsOnly, postAuthorName } = this.filterSortManager.getFilterState();
+    if (!myPostsOnly || !postAuthorName) return;
+    if (this.getPostAuthorSummaries().some((author) => author.name === postAuthorName)) return;
+    this.filterSortManager.updateFilter({ postAuthorName: null });
+  }
+
+  /** Render the My Posts author bubbles. Presentational — see reconcilePostAuthorSelection. */
+  private renderPostAuthorChipBar(): void {
+    const filterState = this.filterSortManager.getFilterState();
+    if (!filterState.myPostsOnly) return;
+    this.postAuthorChipBar.render(this.containerEl, this.getPostAuthorSummaries(), filterState.postAuthorName);
   }
 
   private getBulkSelectionListPosts(): Array<PostData & { filePath: string }> {
@@ -7466,6 +7593,8 @@ export class TimelineContainer {
       transcribed: null,
       productsOnly: false,
       productSource: null,
+      myPostsOnly: false,
+      postAuthorName: null,
       includeArchived: false,
       activeTab: 'inbox',
       dateRange: { start: null, end: null },
@@ -7604,277 +7733,13 @@ export class TimelineContainer {
   }
 
   /**
-   * Open PostComposer in edit mode with existing post data
-   *
-   * @param post - Post data to edit
-   * @param filePath - File path of the post markdown file
+   * Edit post: open the composed post's note in Obsidian's editor. Two-way
+   * sync (ComposedPostSyncService) pushes the edit when the note settles or
+   * the tab is left — the composer has no edit mode any more.
    */
-  public openEditMode(post: PostData, filePath: string): void {
-    // Unmount existing composer if any
-    if (this.composerComponent) {
-      void unmount(this.composerComponent);
-      this.composerComponent = null;
-    }
-
-    // Clear composer container
-    if (this.composerContainer) {
-      this.composerContainer.empty();
-    } else {
-      // Create container if it doesn't exist
-      this.composerContainer = this.containerEl.createDiv({
-        cls: 'max-w-2xl mx-auto mb-6'
-      });
-    }
-
-    // Mount PostComposer in edit mode
-    this.composerComponent = mount(PostComposer, {
-      target: this.composerContainer,
-      props: {
-        app: this.app,
-        settings: this.plugin.settings,
-        archiveOrchestrator: this.plugin.archiveOrchestratorOptional, // Use optional getter to avoid error when not initialized
-        onSaveSettings: async (partial?: Partial<SocialArchiverSettings>) => {
-          if (partial && Object.keys(partial).length > 0) {
-            await this.plugin.saveSettingsPartial(partial);
-          } else {
-            await this.plugin.saveSettings();
-          }
-        },
-        editMode: true,
-        initialData: post,
-        filePath: filePath,
-        onPostCreated: async (updatedPost: PostData) => {
-          try {
-            // Import VaultStorageService
-            const { VaultStorageService } = await import('../../services/VaultStorageService');
-
-            // Initialize storage service
-            const storageService = new VaultStorageService({
-              app: this.app,
-              vault: this.vault,
-              settings: this.plugin.settings
-            });
-
-            // Extract media files from updated post
-            // Only NEW media will have 'file' property
-            // Existing media will only have 'url' property (vault path)
-            const mediaFiles: File[] = [];
-            let deletedMediaPaths: string[] = [];
-
-            if (updatedPost.media) {
-              for (const media of updatedPost.media) {
-                if ((media as unknown as { file?: File }).file) {
-                  mediaFiles.push((media as unknown as { file: File }).file);
-                }
-              }
-            }
-
-            // Extract deletedMediaPaths from updatedPost (added by PostComposer in edit mode)
-            // @ts-expect-error — deletedMediaPaths is a temporary property passed from PostComposer, not in PostData type
-            if (updatedPost.deletedMediaPaths && Array.isArray(updatedPost.deletedMediaPaths)) {
-              // @ts-expect-error — deletedMediaPaths is a temporary property, not in PostData type
-              deletedMediaPaths = updatedPost.deletedMediaPaths as string[];
-            }
-
-            // Update post using VaultStorageService. The composer's text,
-            // media and embedded archives are the new version of the body.
-            // The composer never shows the title (frontmatter, or a leading
-            // `# ` line the parser lifts out of the text), so carry it over.
-            await storageService.updatePost({
-              filePath: filePath,
-              postData: { ...updatedPost, title: post.title },
-              mediaFiles: mediaFiles,
-              deletedMediaPaths: deletedMediaPaths,
-              existingMedia: post.media || [],
-              replaceBody: true
-            });
-
-            // Enqueue composed post update for outbound sync if already synced
-            try {
-              const fileForFm = this.vault.getFileByPath(filePath);
-              if (fileForFm) {
-                const fileCache = this.app.metadataCache.getFileCache(fileForFm);
-                const fm = fileCache?.frontmatter;
-                const clientPostId = fm?.['clientPostId'] as string | undefined;
-                const sourceArchiveId = fm?.['sourceArchiveId'] as string | undefined;
-                if (clientPostId && sourceArchiveId) {
-                  this.plugin.composedPostSync?.enqueueUpdateDebounced(filePath, clientPostId, sourceArchiveId);
-                }
-              }
-            } catch {
-              // Non-fatal: local update succeeded, server sync will retry on next load
-            }
-
-            // Check if user wants to share (either new share or update existing)
-            // @ts-expect-error — shareOnPost is a temporary property passed from PostComposer, not in PostData type
-            const shouldShare = (updatedPost.shareOnPost as boolean | undefined) || post.share;
-
-            // Check if post was shared and update share if needed
-            const file = this.vault.getFileByPath(filePath);
-            if (file && shouldShare) {
-              // Wait for MetadataCache to update after file modification
-              await new Promise<void>((resolve) => {
-                const handler = (modifiedFile: unknown) => {
-                  if (modifiedFile instanceof TFile && modifiedFile.path === file.path) {
-                    this.app.metadataCache.off('changed', handler);
-                    resolve();
-                  }
-                };
-                this.app.metadataCache.on('changed', handler);
-
-                // Fallback timeout in case the event doesn't fire
-                window.setTimeout(() => {
-                  this.app.metadataCache.off('changed', handler);
-                  resolve();
-                }, 1000);
-              });
-
-              const fileCache = this.app.metadataCache.getFileCache(file);
-              const frontmatter = fileCache?.frontmatter;
-
-              // Extract shareId from shareUrl if shareId is not present
-              let shareId: string | null | undefined = typeof frontmatter?.shareId === 'string' ? frontmatter.shareId : null;
-              if (!shareId && typeof frontmatter?.shareUrl === 'string') {
-                const match = frontmatter.shareUrl.match(/\/([^/]+)$/);
-                shareId = match ? match[1] : null;
-              }
-
-              if (shareId) {
-                // Existing share - update it
-
-                try {
-                  // Re-parse the updated file to get final PostData with correct media URLs
-                  const { PostDataParser } = await import('../timeline/parsers/PostDataParser');
-                  const parser = new PostDataParser(this.vault, this.app);
-                  const finalPostData = await parser.parseFile(file);
-
-                  if (!finalPostData) {
-                    throw new Error('Failed to parse updated post');
-                  }
-
-                  // Import ShareAPIClient
-                  const { ShareAPIClient } = await import('../../services/ShareAPIClient');
-
-                  // Initialize ShareAPIClient with Vault access for media operations
-                  const shareClient = new ShareAPIClient({
-                    baseURL: this.plugin.settings.workerUrl,
-                    apiKey: this.plugin.settings.authToken,
-                    vault: this.vault // Provide vault for media file access
-                  });
-
-                  // Update share with media handling - handles incremental media updates
-                  // - Uploads new local media files to R2
-                  // - Deletes removed media files from R2
-                  // - Converts markdown image paths from local to R2 URLs
-                  // Pass sourceArchiveId + mediaSourceUrls to enable auto-resolve
-                  // (skips re-uploading preserved archive media).
-                  const reshareResult = await shareClient.updateShareWithMedia(shareId, finalPostData, {
-                    username: frontmatter?.username as string | undefined,
-                    tier: this.plugin.settings.tier,
-                    sourceArchiveId: finalPostData.sourceArchiveId,
-                    mediaSourceUrls: finalPostData.mediaSourceUrls,
-                  });
-
-                  new Notice(`Post and share updated successfully${this.formatMediaStatsSummary(reshareResult.mediaStats)}`);
-                } catch {
-                  new Notice('Post updated, but failed to update share link');
-                }
-              } else {
-                // No existing shareId - create new share with media
-
-                try {
-                  // Re-parse the updated file to get final PostData with correct media URLs
-                  const { PostDataParser } = await import('../timeline/parsers/PostDataParser');
-                  const parser = new PostDataParser(this.vault, this.app);
-                  const finalPostData = await parser.parseFile(file);
-
-                  if (!finalPostData) {
-                    throw new Error('Failed to parse updated post');
-                  }
-
-                  // Import ShareAPIClient
-                  const { ShareAPIClient } = await import('../../services/ShareAPIClient');
-
-                  // Initialize ShareAPIClient with Vault access
-                  const shareClient = new ShareAPIClient({
-                    baseURL: this.plugin.settings.workerUrl,
-                    apiKey: this.plugin.settings.authToken,
-                    vault: this.vault
-                  });
-
-                  // STEP 1: Create initial share without media (to get shareId)
-                  const initialShareResult = await shareClient.createShare({
-                    postData: {
-                      ...finalPostData,
-                      media: [] // Empty media initially
-                    },
-                    options: {
-                      username: this.plugin.settings.username,
-                      archiveId: finalPostData.sourceArchiveId ?? composedArchiveId(frontmatter),
-                    }
-                  });
-
-                  // Validate share result
-                  if (!initialShareResult?.shareId || !initialShareResult?.shareUrl) {
-                    throw new Error('Share API returned invalid data');
-                  }
-
-                  // STEP 2: Update share with media (uploads to R2)
-                  let mediaSummary = '';
-                  if (finalPostData.media && finalPostData.media.length > 0) {
-                    const result = await shareClient.updateShareWithMedia(
-                      initialShareResult.shareId,
-                      finalPostData,
-                      {
-                        username: this.plugin.settings.username,
-                        tier: this.plugin.settings.tier,
-                        sourceArchiveId: finalPostData.sourceArchiveId,
-                        mediaSourceUrls: finalPostData.mediaSourceUrls,
-                      }
-                    );
-                    mediaSummary = this.formatMediaStatsSummary(result.mediaStats);
-                  }
-
-                  // STEP 3: Update YAML frontmatter with share data atomically
-                  await this.vault.process(file, (fileContent) => this.updateFrontmatterWithShare(
-                    fileContent,
-                    initialShareResult.shareId,
-                    initialShareResult.shareUrl
-                  ));
-
-                  new Notice(`Post updated and shared to web!${mediaSummary}`);
-                } catch {
-                  new Notice('Post updated, but failed to share to web');
-                }
-              }
-            } else if (file) {
-              new Notice('Post updated successfully');
-            } else {
-              new Notice('Post updated successfully');
-            }
-
-            // Reload timeline to show updated post
-            await this.reload();
-
-            // Unmount composer after successful update
-            if (this.composerComponent) {
-              void unmount(this.composerComponent);
-              this.composerComponent = null;
-            }
-          } catch (error) {
-            new Notice(`Failed to update post: ${error instanceof Error ? error.message : 'Unknown error'}`);
-          }
-        },
-        onCancel: () => {
-
-          // Unmount composer
-          if (this.composerComponent) {
-            void unmount(this.composerComponent);
-            this.composerComponent = null;
-          }
-        }
-      }
-    });
+  private openPostInEditor(filePath: string): void {
+    const file = this.vault.getFileByPath(filePath);
+    if (file) void this.app.workspace.getLeaf('tab').openFile(file);
   }
 
   /**
@@ -8477,7 +8342,7 @@ export class TimelineContainer {
       },
       onEdit: (post) => {
         if (post.filePath) {
-          this.openEditMode(post, post.filePath);
+          this.openPostInEditor(post.filePath);
         }
       },
       onDelete: async (post) => {
@@ -8800,6 +8665,7 @@ export class TimelineContainer {
     // product-photo grid, and losing the store filter on the toggle would be a
     // filter silently changing behind a view switch.
     this.renderStoreChipBar();
+    this.renderPostAuthorChipBar();
 
     // Render tag chip bar below header (if tags exist)
     this.renderTagChipBar();
@@ -9129,7 +8995,7 @@ export class TimelineContainer {
       // relied on that, so Shopping opts in rather than changing it wholesale:
       // toggling Shopping with no products has to yield an empty gallery, not
       // every photo in the vault.
-      const scopeToFilteredFiles = filteredFiles.length > 0 || currentFilter.productsOnly;
+      const scopeToFilteredFiles = filteredFiles.length > 0 || currentFilter.productsOnly || currentFilter.myPostsOnly;
 
       // Extract media items with platform and search filters applied
       const mediaItems = await this.galleryRenderer.extractMediaItems(

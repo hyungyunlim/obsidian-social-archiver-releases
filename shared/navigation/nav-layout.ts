@@ -30,6 +30,7 @@ export const NAV_ITEM_KEYS = [
   'starred',
   'shared',
   'notes',
+  'posts',
   'history',
   'tags',
   'collections',
@@ -43,7 +44,7 @@ export const NAV_ITEM_KEYS = [
 
 export type NavItemKey = (typeof NAV_ITEM_KEYS)[number];
 
-/** Cap per list. There are 15 items today; this only bounds hostile input. */
+/** Cap per list. A handful of items today; this only bounds hostile input. */
 export const NAV_LAYOUT_MAX_KEYS = 64;
 
 /**

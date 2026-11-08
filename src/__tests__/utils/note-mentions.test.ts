@@ -18,6 +18,9 @@ import {
   splitNoteDisplayContent,
   sanitizeWikilinkAlias,
   convertInternalMentions,
+  serializeArchiveMention,
+  splitArchiveRefLines,
+  joinArchiveRefLines,
   type MentionResolvers,
 } from '../../utils/note-mentions';
 
@@ -210,5 +213,95 @@ describe('convertInternalMentions', () => {
 
   it('returns empty input unchanged', () => {
     expect(convertInternalMentions('', resolvers)).toBe('');
+  });
+});
+
+// ─── Composed-post ref lines (pinned to desktop sourceRefs + workers composed-post-refs) ───
+
+describe('serializeArchiveMention', () => {
+  it('escapes brackets, caps at 24 code points and falls back to Untitled (desktop fixtures)', () => {
+    expect(serializeArchiveMention('abc123', 'Hello [World]')).toBe('[Hello \\[World\\]](socialarchiver://archive/abc123)');
+    expect(serializeArchiveMention('x', '   ')).toBe('[Untitled](socialarchiver://archive/x)');
+    expect(serializeArchiveMention('a/1', 'A [bracketed] title that is far too long')).toBe(
+      '[A \\[bracketed\\] title that…](socialarchiver://archive/a%2F1)',
+    );
+    expect(serializeArchiveMention('k', '가나다라마바사아자차카타파하가나다라마바사아자차카타')).toBe(
+      '[가나다라마바사아자차카타파하가나다라마바사아자차…](socialarchiver://archive/k)',
+    );
+  });
+});
+
+describe('splitArchiveRefLines', () => {
+  it('takes the trailing mention lines as refs, in order, and leaves the body', () => {
+    const markdown = 'My take.\n\n> a quote\n\n[First](socialarchiver://archive/a1)\n[Second](socialarchiver://archive/a2)\n';
+    expect(splitArchiveRefLines(markdown)).toEqual({
+      body: 'My take.\n\n> a quote',
+      refs: [
+        { archiveId: 'a1', label: 'First' },
+        { archiveId: 'a2', label: 'Second' },
+      ],
+    });
+  });
+
+  it('skips blank lines, decodes ids, unescapes labels and drops duplicates', () => {
+    const markdown = 'Body\n\n[A \\[1\\]](socialarchiver://archive/x%2Fy)\n\n  [B](socialarchiver://archive/b)  \n[A again](socialarchiver://archive/x%2Fy)';
+    expect(splitArchiveRefLines(markdown)).toEqual({
+      body: 'Body',
+      refs: [
+        { archiveId: 'x/y', label: 'A [1]' },
+        { archiveId: 'b', label: 'B' },
+      ],
+    });
+  });
+
+  it('stops at the first other line, and leaves the input untouched without a block', () => {
+    expect(splitArchiveRefLines('See [this](socialarchiver://archive/in-text) here\n\n[Card](socialarchiver://archive/c1)')).toEqual({
+      body: 'See [this](socialarchiver://archive/in-text) here',
+      refs: [{ archiveId: 'c1', label: 'Card' }],
+    });
+    for (const tail of [
+      '[x](https://example.com)',
+      '[@Ann](socialarchiver://author?platform=x&name=Ann)',
+      '[Card](socialarchiver://archive/c1) and more',
+      '[x](socialarchiver://archive/)',
+    ]) {
+      const markdown = `Body\n\n${tail}`;
+      expect(splitArchiveRefLines(markdown)).toEqual({ body: markdown, refs: [] });
+    }
+    expect(splitArchiveRefLines('Just text\n\n')).toEqual({ body: 'Just text\n\n', refs: [] });
+  });
+
+  it('drops a query/fragment, keeps a raw id on bad encoding, and takes a post that is only quotes', () => {
+    expect(splitArchiveRefLines('[x](socialarchiver://archive/c?from=share#top)').refs[0]?.archiveId).toBe('c');
+    expect(splitArchiveRefLines('[x](socialarchiver://archive/bad%E0%A4)').refs[0]?.archiveId).toBe('bad%E0%A4');
+    expect(splitArchiveRefLines('[Only](socialarchiver://archive/o1)')).toEqual({ body: '', refs: [{ archiveId: 'o1', label: 'Only' }] });
+  });
+});
+
+describe('joinArchiveRefLines', () => {
+  it('round-trips through split', () => {
+    const joined = joinArchiveRefLines('Body text\n', [
+      { archiveId: 'a/1', label: 'A [bracketed] title that is far too long' },
+      { archiveId: 'b2', label: '' },
+    ]);
+    expect(joined).toBe(
+      'Body text\n\n[A \\[bracketed\\] title that…](socialarchiver://archive/a%2F1)\n[Untitled](socialarchiver://archive/b2)',
+    );
+    const split = splitArchiveRefLines(joined);
+    expect(joinArchiveRefLines(split.body, split.refs)).toBe(joined);
+  });
+
+  it('drops backslashes from labels so the line still reads as a ref', () => {
+    const joined = joinArchiveRefLines('Body', [
+      { archiveId: 'p1', label: 'C:\\Temp\\' },
+      { archiveId: 'p2', label: 'x\\]y' },
+    ]);
+    expect(joined).toBe('Body\n\n[C:Temp](socialarchiver://archive/p1)\n[x\\]y](socialarchiver://archive/p2)');
+    expect(splitArchiveRefLines(joined).refs.map((r) => r.label)).toEqual(['C:Temp', 'x]y']);
+  });
+
+  it('leaves a body without refs as it is, and writes refs alone for an empty body', () => {
+    expect(joinArchiveRefLines('Just text', [])).toBe('Just text');
+    expect(joinArchiveRefLines('', [{ archiveId: 'x', label: 'X' }])).toBe('[X](socialarchiver://archive/x)');
   });
 });

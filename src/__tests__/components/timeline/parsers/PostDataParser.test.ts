@@ -1,4 +1,4 @@
-import type { Vault } from 'obsidian';
+import { TFile, type App, type Vault } from 'obsidian';
 import { PostDataParser } from '@/components/timeline/parsers/PostDataParser';
 import { parseTranscriptSections, resolveNoteTranscriptLanguages, type TranscriptSection } from '@/services/markdown/TranscriptSectionManager';
 import type { MultiLangTranscript, PostData } from '@/types/post';
@@ -152,5 +152,76 @@ describe('PostDataParser transcript languages (T10/T12)', () => {
 
     expect(Object.keys(multi!.byLanguage)).toEqual(['ko', 'pt-br']);
     expect(multi!.defaultLanguage).toBe('pt-br');
+  });
+});
+
+describe('PostDataParser composed posts (prd-plugin-my-posts §6, C6)', () => {
+  const FOOTER = '\n\n---\n\n**Author:** Work | **Published:** 2026-11-08\n';
+  const BODY = '# Heading\n\n![](https://api.example/media/archives/u/p/inline-0.png)\n\nLine one\nLine ==two==\n\n[Quote](socialarchiver://archive/abc)';
+
+  function setup(frontmatter: Record<string, unknown>, body: string) {
+    const markdown = `---\nplatform: post\n---\n\n${body}${FOOTER}`;
+    const file = new (TFile as unknown as new (path: string) => TFile)('Social Archives/Post/my-post.md');
+    file.stat = { ctime: 0, mtime: 0, size: 0 } as TFile['stat'];
+    const vault = { cachedRead: async () => markdown, read: async () => markdown, getFiles: () => [] } as unknown as Vault;
+    const app = {
+      vault,
+      metadataCache: { getFileCache: () => ({ frontmatter }), getFirstLinkpathDest: () => null },
+    } as unknown as App;
+    return { parser: new PostDataParser(vault, app), file, markdown };
+  }
+
+  const composedFm = {
+    platform: 'post',
+    postOrigin: 'composer',
+    author: 'Work',
+    published: '2026-11-08T00:00:00.000Z',
+    coAuthors: ['Me', ' Club ', 3],
+  };
+
+  it('marks a composed note, reads its co-authors and keeps its text as written', async () => {
+    const { parser, file } = setup(composedFm, BODY);
+    const post = await parser.parseFile(file);
+
+    expect(post?.isComposedPost).toBe(true);
+    expect(post?.coAuthors).toEqual(['Me', 'Club']);
+    // Heading, remote inline image, highlight marks and the ref line all stay
+    expect(post?.content.text).toBe(BODY);
+    // No leading-H1 title fallback: the heading belongs to the text
+    expect(post?.title).toBeUndefined();
+  });
+
+  it('projects isComposedPost and coAuthors into the index (co-authors searchable)', async () => {
+    const { parser, file } = setup(composedFm, BODY);
+    const entry = await parser.buildIndexEntry(file);
+
+    expect(entry?.isComposedPost).toBe(true);
+    expect(entry?.coAuthors).toEqual(['Me', 'Club']);
+    expect(entry?.searchText).toContain('club');
+    expect(entry?.previewText).toContain('# Heading');
+  });
+
+  it('never treats a meeting or audio note as composed, even with postOrigin composer', async () => {
+    for (const contentType of ['meeting-note', 'audio-note']) {
+      const { parser, file, markdown } = setup({ ...composedFm, contentType }, BODY);
+      const post = await parser.parseFile(file);
+      expect(post?.isComposedPost).toBeUndefined();
+      expect(post?.coAuthors).toBeUndefined();
+      expect(post?.content.text).toBe(parser.extractContentText(markdown));
+      expect((await parser.buildIndexEntry(file))?.isComposedPost).toBeUndefined();
+    }
+  });
+
+  it('leaves other post notes on extractContentText and the leading-H1 title (C6)', async () => {
+    const { parser, file, markdown } = setup(
+      { platform: 'post', author: 'Me', published: '2026-11-08T00:00:00.000Z' },
+      '# Old title\n\nBody text',
+    );
+    const post = await parser.parseFile(file);
+
+    expect(post?.isComposedPost).toBeUndefined();
+    expect(post?.title).toBe('Old title');
+    expect(post?.content.text).toBe(parser.extractContentText(markdown));
+    expect(post?.content.text).toBe('Body text');
   });
 });

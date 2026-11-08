@@ -17,6 +17,8 @@ import type { ArchiveLookupService } from '../../services/ArchiveLookupService';
 import type { PendingPost } from '../../services/SubscriptionManager';
 import type { PostData } from '../../types/post';
 import type { LocalLockRegistry } from '../locks/LocalLockRegistry';
+import type { ComposedReconcileResult } from './composed/ComposedPostReconciler';
+import type { DownloadedComposedMedia } from './composed/ComposedPostPullWriter';
 import { isLocalOnlyNoteByContent } from './localOnlyNoteGuard';
 
 // ---------------------------------------------------------------------------
@@ -94,6 +96,12 @@ export interface RemoteArchiveIngestDeps {
 
   /** Shared local write lock registry used by plugin archive/materialization writers. */
   localLockRegistry?: LocalLockRegistry;
+
+  /** Two-way sync of an existing composed post note; runs under this service's locks. Wired to ComposedPostReconciler.reconcile. */
+  reconcileComposedPost?: (file: TFile, archive: UserArchive) => Promise<ComposedReconcileResult>;
+
+  /** A freshly saved composed post note gets its two-way sync baseline. Wired to ComposedPostReconciler.stampNew. */
+  stampNewComposedPost?: (file: TFile, archive: UserArchive, downloaded?: DownloadedComposedMedia) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -107,6 +115,8 @@ interface RemoteArchiveSaveResult {
   file?: TFile;
   path?: string;
   reason?: string;
+  /** Main media downloaded into the note: server URL → vault path (composed baseline). */
+  media?: DownloadedComposedMedia;
 }
 
 // ---------------------------------------------------------------------------
@@ -145,8 +155,18 @@ export class RemoteArchiveIngestService {
     // 1. Check if already exists by sourceArchiveId
     const existing = this.deps.archiveLookupService?.findBySourceArchiveId(archiveId) ?? null;
     if (existing) {
-      if (await this.updateExistingLimitedArchiveById(existing, archiveId, source)) {
-        return 'created';
+      // One fetch serves both: a composed post syncs both ways, any other
+      // note may be a limited archive to replace.
+      const fetched = await this.fetchForExisting(archiveId);
+      if (fetched) {
+        const composed = await this.reconcileComposedPost(existing, fetched);
+        if (composed !== 'not-composed') {
+          this.deps.refreshTimelineView();
+          return composed === 'pulled' || composed === 'conflict' ? 'created' : 'existing';
+        }
+        if (await this.updateExistingLimitedArchive(existing, fetched, source)) {
+          return 'created';
+        }
       }
       this.deps.refreshTimelineView();
       return 'existing';
@@ -209,6 +229,9 @@ export class RemoteArchiveIngestService {
 
     if (saveResult.file) {
       await this.bindFileIdentity(saveResult.file, archive);
+      if (saveResult.status === 'created' || saveResult.status === 'updated') {
+        await this.stampNewComposedPost(saveResult.file, archive, saveResult.media);
+      }
       // Late-resolution: render the new note's linked-archives section + upgrade
       // any source note already pointing at it. Fire-and-forget, non-fatal.
       if (saveResult.status === 'created' || saveResult.status === 'updated') {
@@ -295,22 +318,31 @@ export class RemoteArchiveIngestService {
     return true;
   }
 
-  private async updateExistingLimitedArchiveById(
-    file: TFile,
-    archiveId: string,
-    source: 'client_sync' | 'archive_complete' | 'ai_comment_job' | 'transcription_job',
-  ): Promise<boolean> {
-    if (!this.deps.replaceExistingLimitedArchive) {
-      return false;
-    }
-
+  /** The server row for a note already in the vault, when something may act on it. */
+  private async fetchForExisting(archiveId: string): Promise<UserArchive | null> {
+    if (!this.deps.reconcileComposedPost && !this.deps.replaceExistingLimitedArchive) return null;
     const apiClient = this.deps.apiClient();
-    if (!apiClient) return false;
+    if (!apiClient) return null;
+    return this.fetchWithRetry(apiClient, archiveId);
+  }
 
-    const archive = await this.fetchWithRetry(apiClient, archiveId);
-    if (!archive) return false;
+  /** Never fatal. Only a composed row can throw past the first check, so a throw is 'skipped'. */
+  private async reconcileComposedPost(file: TFile, archive: UserArchive): Promise<ComposedReconcileResult> {
+    if (!this.deps.reconcileComposedPost) return 'not-composed';
+    try {
+      return await this.deps.reconcileComposedPost(file, archive);
+    } catch (error) {
+      console.warn('[RemoteArchiveIngest] Composed post reconcile failed', { archiveId: archive.id, path: file.path, error });
+      return 'skipped';
+    }
+  }
 
-    return this.updateExistingLimitedArchive(file, archive, source);
+  private async stampNewComposedPost(file: TFile, archive: UserArchive, media?: DownloadedComposedMedia): Promise<void> {
+    try {
+      await this.deps.stampNewComposedPost?.(file, archive, media);
+    } catch (error) {
+      console.warn('[RemoteArchiveIngest] Composed post baseline failed', { archiveId: archive.id, path: file.path, error });
+    }
   }
 
   private async updateExistingLimitedArchive(

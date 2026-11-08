@@ -35,6 +35,13 @@ function makeArchive(overrides: Partial<UserArchive> = {}): UserArchive {
 }
 
 describe('convertUserArchiveToPostData', () => {
+  it('dates a composed post by when it was archived, not when the note is written', () => {
+    const composed = makeArchive({ platform: 'post', archiveSource: 'composed', postedAt: null, fullContent: 'Hi' });
+    expect(convertUserArchiveToPostData(composed).metadata.timestamp).toBe('2026-05-22T03:11:00.000Z');
+    // postedAt still wins when a row has one.
+    expect(convertUserArchiveToPostData(makeArchive()).metadata.timestamp).toBe('2026-05-20T03:20:00.000Z');
+  });
+
   it('preserves the full location attachment array and the legacy primary projection', () => {
     const locations = [{
       id: 'location-1', archiveId: 'archive-1', placeKey: 'kakaomap:101', name: '희작',

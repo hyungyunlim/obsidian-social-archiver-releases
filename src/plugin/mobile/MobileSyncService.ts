@@ -52,8 +52,11 @@ export interface MobileSyncServiceDeps {
   /** Returns the subset of plugin settings needed by this service. */
   settings: () => { syncClientId: string; archivePath: string };
 
-  /** Persist a PendingPost to the vault (handles media download, path generation, etc.). */
-  saveSubscriptionPost: (post: PendingPost) => Promise<boolean>;
+  /**
+   * Persist a PendingPost to the vault (handles media download, path generation, etc.).
+   * `archive` lets a composed post join two-way sync (baseline on a new note, reconcile on an existing one).
+   */
+  saveSubscriptionPost: (post: PendingPost, archive?: UserArchive) => Promise<boolean>;
 
   /** Convert a server UserArchive into the local PostData format. */
   convertUserArchiveToPostData: (archive: UserArchive) => PostData;
@@ -107,6 +110,12 @@ export class MobileSyncService {
   private scheduledMobileSyncRetries = new Set<string>();
   private mobileSyncRetryCount = new Map<string, number>();
   private failedSyncQueueIds = new Set<string>();
+  /**
+   * Bumped by clearState (unload, sign-out). A catch-up started before it stops:
+   * its client is disposed, so every remaining item would fail and the run would
+   * end with a "Failed to sync N archive(s)" notice for items still pending.
+   */
+  private generation = 0;
 
   constructor(private readonly deps: MobileSyncServiceDeps) {}
 
@@ -170,7 +179,7 @@ export class MobileSyncService {
         destinationFolder: this.deps.settings().archivePath,
         archivedAt: new Date().toISOString(),
       };
-      const saved = await this.deps.saveSubscriptionPost(pendingPost);
+      const saved = await this.deps.saveSubscriptionPost(pendingPost, archive);
 
       if (saved) {
         // 5. Acknowledge sync completion
@@ -263,9 +272,11 @@ export class MobileSyncService {
     }
 
     this.isSyncingMobileQueue = true;
+    const generation = this.generation;
 
     try {
       const { items } = await apiClient.getSyncQueue(clientId);
+      if (generation !== this.generation) return;
       const pendingItems = items.filter(item => item.status === 'pending' && !this.failedSyncQueueIds.has(item.queueId));
 
       if (pendingItems.length === 0) {
@@ -281,7 +292,12 @@ export class MobileSyncService {
       let successCount = 0;
       let failedCount = 0;
       let rateLimited = false;
+      let stopped = false;
       for (const item of pendingItems) {
+        if (generation !== this.generation) {
+          stopped = true;
+          break;
+        }
         const outcome = await this.processQueueItemInternal(item.queueId, item.archiveId, clientId, {
           // Per-item failure notices flood during large catch-ups — one
           // summary notice is emitted after the loop instead.
@@ -302,6 +318,8 @@ export class MobileSyncService {
 
       // Resume timeline refresh — trigger reload only if something was saved
       this.deps.resumeTimelineRefresh(successCount > 0);
+      // Unload or sign-out mid-run: the rest stays pending on the server for the next catch-up.
+      if (stopped) return;
 
       if (successCount > 0) {
         console.debug(`[Social Archiver] Catch-up complete: ${successCount}/${pendingItems.length} synced`);
@@ -325,12 +343,14 @@ export class MobileSyncService {
       // Ensure timeline refresh is resumed even on error
       this.deps.resumeTimelineRefresh(false);
     } finally {
-      this.isSyncingMobileQueue = false;
+      // A newer run (sign-in after sign-out) owns the flag now.
+      if (generation === this.generation) this.isSyncingMobileQueue = false;
     }
   }
 
-  /** Reset all internal state (e.g. on sign-out). */
+  /** Reset all internal state (unload, sign-out) and stop a catch-up in flight. */
   clearState(): void {
+    this.generation += 1;
     this.isSyncingMobileQueue = false;
     this.scheduledMobileSyncRetries.clear();
     this.mobileSyncRetryCount.clear();
