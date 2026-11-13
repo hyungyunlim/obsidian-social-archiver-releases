@@ -5,7 +5,8 @@ import type { PostData, Media } from '../../types/post';
 import type { ResolvedShareMediaItem } from '../../types/share';
 import { buildShareResolveHints } from '../../utils/shareResolveHints';
 import { TimelineView, VIEW_TYPE_TIMELINE } from '../../views/TimelineView';
-import { getShareUrlForClipboard } from '../../utils/shareUrl';
+import { toPostShareDisplayMode } from '../../services/collections/collectionDisplayMode';
+import type { PostShareDisplayMode } from '../../types/collections';
 import type { SocialArchiverSettings } from '../../types/settings';
 import type { ShareAPIClient } from '../../services/ShareAPIClient';
 
@@ -141,6 +142,7 @@ export class PostShareService {
         tier?: typeof settings.tier;
         shareId?: string;
         sourceArchiveId?: string;
+        displayMode?: PostShareDisplayMode;
       } = {
         username: settings.username,
         tier: settings.tier,
@@ -148,6 +150,9 @@ export class PostShareService {
       if (isReshare && existingArchiveId) {
         shareOptions.shareId = existingArchiveId;
         shareOptions.sourceArchiveId = existingArchiveId;
+      } else {
+        // A new share stores how it opens; a re-share keeps its stored mode.
+        shareOptions.displayMode = toPostShareDisplayMode(settings.copyShareLinkAsReaderMode);
       }
 
       // Attempt to resolve already-preserved archive media BEFORE touching
@@ -254,11 +259,9 @@ export class PostShareService {
 
       await this.updatePostFrontmatter(postedFile, content, frontmatterUpdates);
 
-      const clipboardShareUrl = getShareUrlForClipboard(
-        shareResponse.shareUrl,
-        settings.copyShareLinkAsReaderMode
-      );
-      await navigator.clipboard.writeText(clipboardShareUrl);
+      // Plain URL: the share's stored Post/Reader mode decides how it opens;
+      // a #reader hash would override a later switch to Post (feedback #248).
+      await navigator.clipboard.writeText(shareResponse.shareUrl);
       new Notice('Shared! URL copied to clipboard');
 
       await this.refreshOpenTimelines();

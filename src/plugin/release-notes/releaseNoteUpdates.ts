@@ -77,6 +77,8 @@ export interface ReleaseNotesCheck {
   fetchUpdates: (query: ReleaseNoteUpdatesQuery) => Promise<ReleaseNoteUpdates | null>;
   saveLastSeen: (version: string) => Promise<void>;
   show: (entries: ReleaseNoteUpdate[], onClose: () => void) => void;
+  /** Called once, after the version is recorded, when nothing was recorded before. */
+  onFirstInstall?: () => void;
 }
 
 const RELEASE_VERSION = /^\d+\.\d+\.\d+$/;
@@ -98,6 +100,7 @@ export async function checkReleaseNotes(check: ReleaseNotesCheck): Promise<void>
   // A fresh install has nothing to catch up on.
   if (!lastSeenVersion || !check.enabled) {
     await check.saveLastSeen(currentVersion);
+    if (!lastSeenVersion) check.onFirstInstall?.();
     return;
   }
 

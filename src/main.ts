@@ -2052,6 +2052,12 @@ export default class SocialArchiverPlugin extends Plugin {
       fetchUpdates: fetchReleaseNoteUpdates,
       saveLastSeen: (version) => this.saveSettingsPartial({ lastSeenVersion: version }),
       show: (entries, onClose) => new ReleaseNotesModal(this.app, entries, onClose).open(),
+      // Land a new user on the empty timeline, which carries the first-save actions.
+      onFirstInstall: () => {
+        void this.activateTimelineView(
+          resolveViewLocation(this.settings.timelineLocation, this.settings.viewLocationDefault)
+        );
+      },
     });
   }
 
@@ -3902,8 +3908,8 @@ export default class SocialArchiverPlugin extends Plugin {
       const fileName = filePath.split('/').pop() ?? filePath;
       new Notice(
         isFirstClip
-          ? 'First clip saved! Find it in your timeline.'
-          : `Clipped to vault: ${fileName}`
+          ? t('firstRun.notice.firstClip')
+          : t('firstRun.notice.clipped', { fileName })
       );
 
       const file = this.app.vault.getAbstractFileByPath(filePath);

@@ -8,6 +8,7 @@ import { dangerZoneStrings } from '../../i18n/strings/dangerZone';
 import { newsletterStrings } from '../../i18n/strings/newsletter';
 import { transcriptLanguageStrings } from '../../i18n/strings/transcriptLanguages';
 import { byokStrings } from '../../i18n/strings/byok';
+import { firstRunStrings } from '../../i18n/strings/firstRun';
 
 const ALL_MODULES = {
   settingTabStrings,
@@ -18,6 +19,7 @@ const ALL_MODULES = {
   newsletterStrings,
   transcriptLanguageStrings,
   byokStrings,
+  firstRunStrings,
 };
 
 describe('settings i18n', () => {

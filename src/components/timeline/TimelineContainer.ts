@@ -44,7 +44,8 @@ import { ClipGuideModal } from '../../modals/ClipGuideModal';
 import type { NoticePayloadV1 } from '../../types/notices';
 import { TagChipBar } from './filters/TagChipBar';
 import { CollectionTimelineMode } from './collections/CollectionTimelineMode';
-import { t } from '../../i18n';
+import { currentLang, t } from '../../i18n';
+import { sampleArticleUrl } from '../../constants';
 import { StoreChipBar, type StoreSummary } from './filters/StoreChipBar';
 import { PostAuthorChipBar, summarizePostAuthors, type PostAuthorSummary } from './filters/PostAuthorChipBar';
 import { AddPlaceModal } from './modals/AddPlaceModal';
@@ -1548,12 +1549,12 @@ export class TimelineContainer {
     iconContainer.addClass('tc-empty-icon');
 
     emptyDiv.createEl('h3', {
-      text: 'No archived posts yet',
+      text: t('firstRun.timeline.title'),
       cls: 'text-xl font-semibold mb-2 text-[var(--text-normal)]'
     });
 
     emptyDiv.createEl('p', {
-      text: 'Archive your first social media post to see it here!',
+      text: t('firstRun.timeline.message'),
       cls: 'mb-6'
     });
 
@@ -1571,9 +1572,19 @@ export class TimelineContainer {
       const archiveBtn = buttonContainer.createEl('button', {
         cls: 'px-4 py-2 rounded border border-[var(--background-modifier-border)] text-[var(--text-normal)] hover:border-[var(--text-muted)] hover:bg-[var(--background-modifier-hover)] transition-colors cursor-pointer'
       });
-      archiveBtn.createSpan({ text: 'Archive a post' });
+      archiveBtn.createSpan({ text: t('firstRun.timeline.archivePost') });
       archiveBtn.addEventListener('click', () => {
         this.plugin.openArchiveModal();
+      });
+
+      // Same modal, prefilled with our own blog post so a new user can see a
+      // full archive without hunting for a link first.
+      const sampleBtn = buttonContainer.createEl('button', {
+        cls: 'px-4 py-2 rounded border border-[var(--background-modifier-border)] text-[var(--text-muted)] hover:border-[var(--text-muted)] hover:bg-[var(--background-modifier-hover)] hover:text-[var(--text-normal)] transition-colors cursor-pointer'
+      });
+      sampleBtn.createSpan({ text: t('firstRun.timeline.trySample') });
+      sampleBtn.addEventListener('click', () => {
+        this.plugin.openArchiveModal(sampleArticleUrl(currentLang()));
       });
     } else {
       // User is not authenticated - anonymous mode: the browser extension is
@@ -1582,7 +1593,7 @@ export class TimelineContainer {
       const clipGuideBtn = buttonContainer.createEl('button', {
         cls: 'px-4 py-2 rounded border border-[var(--background-modifier-border)] text-[var(--text-normal)] hover:border-[var(--text-muted)] hover:bg-[var(--background-modifier-hover)] transition-colors cursor-pointer'
       });
-      clipGuideBtn.createSpan({ text: 'Clip from your browser' });
+      clipGuideBtn.createSpan({ text: t('firstRun.clipFromBrowser') });
       clipGuideBtn.addEventListener('click', () => {
         new ClipGuideModal(this.plugin).open();
       });
@@ -1590,7 +1601,7 @@ export class TimelineContainer {
       const setupBtn = buttonContainer.createEl('button', {
         cls: 'px-4 py-2 rounded border border-[var(--background-modifier-border)] text-[var(--text-muted)] hover:border-[var(--text-muted)] hover:bg-[var(--background-modifier-hover)] hover:text-[var(--text-normal)] transition-colors cursor-pointer'
       });
-      setupBtn.createSpan({ text: 'Set up account' });
+      setupBtn.createSpan({ text: t('firstRun.timeline.setUpAccount') });
       setupBtn.addEventListener('click', () => {
         // @ts-expect-error — app.setting is available at runtime but not in public Obsidian types
         (this.app.setting as { open: () => void; openTabById: (id: string) => void }).open();
@@ -1603,7 +1614,7 @@ export class TimelineContainer {
     const guideBtn = buttonContainer.createEl('a', {
       cls: 'px-4 py-2 rounded border border-[var(--background-modifier-border)] text-[var(--text-muted)] hover:border-[var(--text-muted)] hover:bg-[var(--background-modifier-hover)] hover:text-[var(--text-normal)] transition-colors cursor-pointer no-underline'
     });
-    guideBtn.createSpan({ text: 'View guide' });
+    guideBtn.createSpan({ text: t('firstRun.timeline.viewGuide') });
     guideBtn.setAttr('href', 'https://docs.social-archive.org');
     guideBtn.setAttr('target', '_blank');
     guideBtn.setAttr('rel', 'noopener noreferrer');

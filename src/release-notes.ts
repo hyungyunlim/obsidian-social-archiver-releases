@@ -26,6 +26,25 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.12.1': {
+    title: 'A better first run, and share links that keep their Post or Reader setting',
+    date: '2026-11-13',
+    notes: `## New
+
+- **A new install opens the timeline.** The first time the plugin runs, the timeline opens with what you need to get going: sign in, or clip from your browser without an account.
+- **Try it with a sample article.** Signed in with an empty timeline, **Try with a sample article** opens the archive window with our own blog post filled in, so you can see a full archive before hunting for a link. It uses one credit, like any archive.
+- **First-run screens in Korean.** The empty timeline, the clip guide, the signed-out archive window and the clip notices follow the plugin language now; they were English only.
+
+## Fixes
+
+- **Copied share links follow the share's Post or Reader setting.** "Copy share link" used to add \`#reader\` whenever the reader-link setting was on, and that hash beat the share's own setting, so a share switched to Post still opened in Reader. Copied links are now always the plain link. A new post share stores Reader on the share instead of adding a hash, and a re-share keeps the mode it has. The setting now reads **Open new share links in Reader**.
+- Shares made before per-share modes existed have no stored mode, so a re-copied link to one opens as Post until you switch it in its share settings.
+
+## Requirements
+
+- **Obsidian 1.11.4 or later.**
+`,
+  },
   '4.12.0': {
     title: 'My Posts stay in step with your other devices',
     date: '2026-11-09',

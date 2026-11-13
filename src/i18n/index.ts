@@ -10,8 +10,8 @@
  *   t('sync.connect.name')
  *   t('danger.resetResult', { count: 3 })   // "{count}" placeholder
  *
- * Scope: settings UI only (Phase 1). Notices/modals outside settings and the
- * timeline UI are Phase 2.
+ * Scope: settings UI (Phase 1) plus the first-run surfaces (./strings/firstRun).
+ * Other notices/modals outside settings and the timeline UI are Phase 2.
  */
 
 import { getLanguage } from 'obsidian';
@@ -28,6 +28,7 @@ import { transcriptLanguageStrings } from './strings/transcriptLanguages';
 import { byokStrings } from './strings/byok';
 import { composedSyncStrings } from './strings/composedSync';
 import { myPostsStrings } from './strings/myPosts';
+import { firstRunStrings } from './strings/firstRun';
 
 /** One translatable string. `ja` can be added later without touching callers. */
 export interface LocaleText {
@@ -49,6 +50,7 @@ const strings = {
   ...byokStrings,
   ...composedSyncStrings,
   ...myPostsStrings,
+  ...firstRunStrings,
 } satisfies Record<string, LocaleText>;
 
 export type TranslationKey = keyof typeof strings;

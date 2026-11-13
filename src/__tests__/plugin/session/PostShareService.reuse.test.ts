@@ -259,7 +259,7 @@ describe('PostShareService.resolveArchiveMedia', () => {
 // ─── Todo 17: first-share linkage delegation contract ─────────────────
 
 describe('PostShareService.postAndShareCurrentNote linkage delegation', () => {
-  function makeShareablePlugin(frontmatter: Record<string, unknown>) {
+  function makeShareablePlugin(frontmatter: Record<string, unknown>, copyShareLinkAsReaderMode = false) {
     const file = { path: 'Note.md', basename: 'Note' };
     return new PostShareService({
       app: {
@@ -283,7 +283,7 @@ describe('PostShareService.postAndShareCurrentNote linkage delegation', () => {
           username: 'me',
           tier: 'free',
           shareMode: 'preview',
-          copyShareLinkAsReaderMode: false,
+          copyShareLinkAsReaderMode,
         }) as never,
       manifest: { version: '0.0.0-test' },
       refreshTimelineView: () => undefined,
@@ -326,5 +326,27 @@ describe('PostShareService.postAndShareCurrentNote linkage delegation', () => {
     expect(fakeShare.createShare).toHaveBeenCalledTimes(1);
     expect(fakeShare.createShare.mock.calls[0]?.[1]).toBeUndefined();
     expect(fakeShare.importShareArchive).not.toHaveBeenCalled();
+  });
+
+  it('stores Reader on a new share and copies the plain URL (feedback #248)', async () => {
+    const writeText = vi.fn(async () => undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    try {
+      await makeShareablePlugin({}, true).postAndShareCurrentNote();
+
+      const request = fakeShare.createShare.mock.calls[0]?.[0] as { options?: { displayMode?: string } };
+      expect(request.options?.displayMode).toBe('reader');
+      // A #reader hash would override a later switch to Post.
+      expect(writeText).toHaveBeenCalledWith('https://share.example/me/share-1');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('leaves a re-share on its stored display mode', async () => {
+    await makeShareablePlugin({ sourceArchiveId: 'arch-1' }, true).postAndShareCurrentNote();
+
+    const request = fakeShare.createShare.mock.calls[0]?.[0] as { options?: { displayMode?: string } };
+    expect(request.options).not.toHaveProperty('displayMode');
   });
 });

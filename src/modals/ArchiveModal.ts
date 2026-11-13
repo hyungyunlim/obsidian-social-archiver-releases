@@ -3868,7 +3868,7 @@ export class ArchiveModal extends Modal {
     contentEl.addClass('am-unauth-content');
 
     // Title (no icon)
-    const title = contentEl.createEl('h2', { text: 'Archive needs a free account' });
+    const title = contentEl.createEl('h2', { text: t('firstRun.archiveModal.title') });
     title.addClass('am-unauth-title');
 
     // Centered message
@@ -3876,12 +3876,12 @@ export class ArchiveModal extends Modal {
     messageContainer.addClass('am-unauth-message-container');
 
     const mainMessage = messageContainer.createEl('p', {
-      text: 'Archiving by URL runs on the Social Archiver server. Create a free account to archive from any platform, sync with mobile, and share.'
+      text: t('firstRun.archiveModal.message')
     });
     mainMessage.addClass('am-unauth-main-message');
 
     const subMessage = messageContainer.createEl('p', {
-      text: 'Free plan available • no password needed • magic link authentication'
+      text: t('firstRun.archiveModal.subMessage')
     });
     subMessage.addClass('am-unauth-sub-message');
 
@@ -3900,33 +3900,33 @@ export class ArchiveModal extends Modal {
       stepText.addClass('am-unauth-step-text');
     };
 
-    createStep('1', 'Enter email & username');
-    createStep('2', 'Click magic link in email');
-    createStep('3', 'Start archiving');
+    createStep('1', t('firstRun.archiveModal.step1'));
+    createStep('2', t('firstRun.archiveModal.step2'));
+    createStep('3', t('firstRun.archiveModal.step3'));
 
     // Anonymous alternative: browser clipping works without an account
-    const divider = contentEl.createDiv({ text: 'or' });
+    const divider = contentEl.createDiv({ text: t('firstRun.archiveModal.or') });
     divider.addClass('am-unauth-divider');
 
     const clipBtn = contentEl.createEl('button');
     clipBtn.addClass('am-unauth-clip-btn');
-    clipBtn.createSpan({ text: 'Clip from your browser instead', cls: 'am-unauth-clip-btn-title' });
-    clipBtn.createSpan({ text: 'No account needed', cls: 'am-unauth-clip-btn-sub' });
+    clipBtn.createSpan({ text: t('firstRun.archiveModal.clipInstead'), cls: 'am-unauth-clip-btn-title' });
+    clipBtn.createSpan({ text: t('firstRun.archiveModal.noAccount'), cls: 'am-unauth-clip-btn-sub' });
     clipBtn.addEventListener('click', () => { void this.openClipGuide(); });
 
     // Subtle disclaimer at bottom (no icon)
     const disclaimerContainer = contentEl.createDiv();
-    disclaimerContainer.setText('Only archive content you have permission to save');
+    disclaimerContainer.setText(t('firstRun.archiveModal.disclaimer'));
     disclaimerContainer.addClass('am-unauth-disclaimer');
 
     // Footer buttons with proper spacing from border
     const footer = contentEl.createDiv({ cls: 'modal-button-container am-unauth-footer' });
 
-    const closeBtn = footer.createEl('button', { text: 'Cancel', cls: 'mod-cancel am-unauth-btn' });
+    const closeBtn = footer.createEl('button', { text: t('auth.common.cancel'), cls: 'mod-cancel am-unauth-btn' });
     closeBtn.addEventListener('click', () => this.close());
 
     const settingsBtn = footer.createEl('button', {
-      text: 'Open settings →',
+      text: t('firstRun.archiveModal.openSettings'),
       cls: 'mod-cta am-unauth-btn'
     });
     settingsBtn.addEventListener('click', () => {

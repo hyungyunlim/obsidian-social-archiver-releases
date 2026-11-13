@@ -1261,7 +1261,7 @@ describe('PostDataParser - embedded archive round trip', () => {
       const thrice = andThen(twice, [joined(first, twice), cases.x!, cases.reddit!]);
       // Three sections, and the heading in archive 1's text
       expect(thrice.match(/## Referenced Social Media Posts/g)).toHaveLength(4);
-      expect(thrice.includes('&lt;!-- Embedded:')).toBe(first === threads);
+      expect(thrice.includes('\\<!-- Embedded:')).toBe(first === threads);
 
       expect(section(reparse(thrice))).toBe(section([first, cases.x!, cases.reddit!]));
     });

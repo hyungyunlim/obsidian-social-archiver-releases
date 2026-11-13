@@ -341,12 +341,12 @@ export const settingTabStrings = {
   'st.share.mode.preview': { en: 'Preview (copyright-safe)', ko: '미리보기 (저작권 안전)' },
   'st.share.mode.full': { en: 'Full content (original)', ko: '전체 내용 (원본)' },
   'st.share.readerLink.name': {
-    en: 'Copy reader mode link by default',
-    ko: '기본으로 리더 모드 링크 복사',
+    en: 'Open new share links in Reader',
+    ko: '새 공유 링크를 리더로 열기',
   },
   'st.share.readerLink.desc': {
-    en: 'When creating a share link, copy the reader-mode URL (#reader). Disable to copy the normal post URL.',
-    ko: '공유 링크를 만들 때 리더 모드 URL(#reader)을 복사합니다. 비활성화하면 일반 포스트 URL을 복사합니다.',
+    en: 'New share links open straight into the reader. You can switch any link to Post in its share settings.',
+    ko: '새로 만드는 공유 링크가 리더 화면으로 바로 열립니다. 링크마다 공유 설정에서 게시물로 바꿀 수 있습니다.',
   },
   'st.share.previewLength.name': { en: 'Preview length', ko: '미리보기 길이' },
   'st.share.previewLength.desc': {

@@ -318,12 +318,23 @@ describe('ComposedPostSyncService', () => {
   // ── flush: update path ─────────────────────────────────────────────────────
 
   describe('flush — update path', () => {
-    it('calls updateComposedPost with sourceArchiveId and writes syncState=synced', async () => {
+    it('PUTs a participant note with its base revision and writes the new baseline', async () => {
       const vault = makeVault({ '/note.md': composerNote('Updated body') });
-      const apiClient = makeApiClient();
+      const apiClient = makeApiClient({
+        updateComposedPost: vi.fn().mockResolvedValue({
+          success: true,
+          updatedAt: '2026-03-26T11:00:00.000Z',
+          contentRevision: 4,
+        }),
+      });
 
       let capturedFm: Record<string, unknown> = {};
       const app = makeApp(async (_file: TFile, updater) => { updater(capturedFm); });
+      // Only a two-way sync participant (a note with a baseline revision) is pushed.
+      // The obsidian mock has no parseYaml, so the frontmatter comes from the cache.
+      app.metadataCache.getFileCache = vi.fn(() => ({
+        frontmatter: { platform: 'post', postOrigin: 'composer', syncedContentRevision: 3 },
+      })) as never;
 
       const entry: PendingComposedPostSyncEntry = {
         op: 'update',
@@ -348,12 +359,34 @@ describe('ComposedPostSyncService', () => {
 
       expect(apiClient.updateComposedPost).toHaveBeenCalledWith(
         'existing-archive-99',
-        expect.objectContaining({ fullContent: 'Updated body' })
+        expect.objectContaining({ fullContent: 'Updated body', baseContentRevision: 3 })
       );
 
       expect(capturedFm['syncState']).toBe('synced');
       expect(capturedFm['serverSyncedAt']).toBe('2026-03-26T11:00:00.000Z');
+      expect(capturedFm['syncedContentRevision']).toBe(4);
       expect(settings.pendingComposedPostSyncs).toHaveLength(0);
+    });
+
+    it('drops an update for a note with no baseline instead of pushing it', async () => {
+      const vault = makeVault({ '/note.md': composerNote('Updated body') });
+      const apiClient = makeApiClient();
+      const entry: PendingComposedPostSyncEntry = {
+        op: 'update',
+        filePath: '/note.md',
+        clientPostId: 'post_flush-update',
+        sourceArchiveId: 'existing-archive-99',
+        queuedAt: new Date().toISOString(),
+        retryCount: 0,
+      };
+      const settings = makeSettings({ pendingComposedPostSyncs: [entry] });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      await new ComposedPostSyncService(makeApp() as any, vault as any, settings, apiClient as any, vi.fn().mockResolvedValue(undefined)).flush();
+
+      expect(apiClient.updateComposedPost).not.toHaveBeenCalled();
+      expect(settings.pendingComposedPostSyncs).toHaveLength(0);
+      warn.mockRestore();
     });
   });
 

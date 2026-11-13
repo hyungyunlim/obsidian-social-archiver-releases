@@ -99,7 +99,6 @@ import { insertTranscriptSection, extractTranscriptLanguages, parseTranscriptSec
 import { languageCodeToName } from '../../../constants/languages';
 import { getPlatformCategory } from '../../../shared/platforms/types';
 import { createSVGElement } from '../../../utils/dom-helpers';
-import { getShareUrlForClipboard } from '../../../utils/shareUrl';
 import {
   type SubscriptionLookupMap,
   type SubscriptionCacheEntry,
@@ -4727,7 +4726,8 @@ export class PostCardRenderer extends Component {
       .setIcon('copy')
       .setTitle(t('col.postShare.copyLink'))
       .onClick(() => {
-        void navigator.clipboard.writeText(getShareUrlForClipboard(shareUrl, this.plugin.settings.copyShareLinkAsReaderMode))
+        // Plain URL: the share's own Post/Reader setting decides how it opens (feedback #248).
+        void navigator.clipboard.writeText(shareUrl)
           .then(() => new Notice(t('col.toast.linkCopied')));
       }));
     if (this.plugin.collectionUi) {
@@ -4758,7 +4758,7 @@ export class PostCardRenderer extends Component {
           .setIcon('copy')
           .setTitle('Copy share link')
           .onClick(() => {
-            void navigator.clipboard.writeText(getShareUrlForClipboard(currentShareUrl, false));
+            void navigator.clipboard.writeText(currentShareUrl);
           });
       });
       menu.addItem((item) => {

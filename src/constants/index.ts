@@ -77,3 +77,10 @@ export const BROWSER_EXTENSION_LINKS = {
     'https://chromewebstore.google.com/detail/social-archiver/gifddgdekeffpnadpdcgjaehmlblomaf',
   GUIDE: 'https://docs.social-archive.org/en/guide/browser-extension'
 } as const;
+
+/** Our own blog post, in the UI language when it exists: what a new user can archive to try the product. */
+export function sampleArticleUrl(language: string): string {
+  const lang = language.slice(0, 2).toLowerCase();
+  const prefix = lang === 'ko' || lang === 'ja' ? `${lang}/` : '';
+  return `https://blog.social-archive.org/${prefix}posts/save-less-read-more/`;
+}

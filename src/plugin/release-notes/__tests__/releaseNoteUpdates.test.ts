@@ -91,22 +91,39 @@ describe('checkReleaseNotes', () => {
     expect(check.show).toHaveBeenCalledTimes(1);
   });
 
-  it('records a fresh install without showing anything', async () => {
-    const check = setup({ lastSeenVersion: '' });
+  it('records a fresh install without showing anything, then reports it once', async () => {
+    const onFirstInstall = vi.fn();
+    const check = setup({ lastSeenVersion: '', onFirstInstall });
 
     await checkReleaseNotes(check);
 
     expect(check.fetchUpdates).not.toHaveBeenCalled();
+    expect(check.show).not.toHaveBeenCalled();
     expect(check.saveLastSeen).toHaveBeenCalledWith('4.7.11');
+    expect(onFirstInstall).toHaveBeenCalledTimes(1);
+    expect(check.saveLastSeen.mock.invocationCallOrder[0]).toBeLessThan(
+      onFirstInstall.mock.invocationCallOrder[0]
+    );
   });
 
   it('records the version silently when the modal is turned off', async () => {
-    const check = setup({ enabled: false });
+    const onFirstInstall = vi.fn();
+    const check = setup({ enabled: false, onFirstInstall });
 
     await checkReleaseNotes(check);
 
     expect(check.fetchUpdates).not.toHaveBeenCalled();
     expect(check.saveLastSeen).toHaveBeenCalledWith('4.7.11');
+    expect(onFirstInstall).not.toHaveBeenCalled();
+  });
+
+  it('does not report a first install on an update', async () => {
+    const onFirstInstall = vi.fn();
+    const check = setup({ onFirstInstall }, { entries: [update('4.7.11')], seenThrough: '4.7.11' });
+
+    await checkReleaseNotes(check);
+
+    expect(onFirstInstall).not.toHaveBeenCalled();
   });
 
   it('keeps the last version seen when offline, so the next load retries', async () => {

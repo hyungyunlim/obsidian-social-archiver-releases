@@ -22,6 +22,7 @@
 import { Modal, Platform } from 'obsidian';
 import type SocialArchiverPlugin from '../main';
 import { BROWSER_EXTENSION_LINKS } from '../constants';
+import { t } from '../i18n';
 
 export class ClipGuideModal extends Modal {
   private readonly plugin: SocialArchiverPlugin;
@@ -43,7 +44,7 @@ export class ClipGuideModal extends Modal {
 
     const titleEl = contentEl.createEl('h2', {
       cls: 'sa-clip-guide-title',
-      text: 'Clip from your browser',
+      text: t('firstRun.clipFromBrowser'),
     });
     titleEl.id = 'sa-clip-guide-title';
     modalEl.setAttribute('aria-labelledby', 'sa-clip-guide-title');
@@ -76,14 +77,14 @@ export class ClipGuideModal extends Modal {
     if (clipCount > 0) {
       contentEl.createEl('p', {
         cls: 'sa-clip-guide-done',
-        text: `${clipCount} ${clipCount === 1 ? 'clip' : 'clips'} saved locally so far`,
+        text: t(clipCount === 1 ? 'firstRun.clipGuide.doneOne' : 'firstRun.clipGuide.doneMany', { count: clipCount }),
       });
       return;
     }
 
     contentEl.createEl('p', {
       cls: 'sa-clip-guide-tagline',
-      text: 'Save posts straight to your vault — no account needed.',
+      text: t('firstRun.clipGuide.tagline'),
     });
   }
 
@@ -92,14 +93,14 @@ export class ClipGuideModal extends Modal {
 
     // Step 1 — install, with the Web Store CTA as the modal's primary action.
     const installStep = this.createStep(stepsEl, '1');
-    installStep.textEl.setText('Install the browser extension');
+    installStep.textEl.setText(t('firstRun.clipGuide.installStep'));
 
     if (Platform.isMobile) {
       // Extension is desktop-browser-only; hint without hiding the guide so
       // mobile users still learn the workflow exists.
       installStep.body.createEl('p', {
         cls: 'sa-clip-guide-mobile-hint',
-        text: 'Clipping works from a desktop browser — install the extension on your computer.',
+        text: t('firstRun.clipGuide.mobileHint'),
       });
     }
 
@@ -107,7 +108,7 @@ export class ClipGuideModal extends Modal {
 
     const installBtn = installActions.createEl('button', {
       cls: 'mod-cta sa-clip-guide-install-btn',
-      text: 'Install from Chrome Web Store',
+      text: t('firstRun.clipGuide.installButton'),
     });
     installBtn.addEventListener('click', () => {
       window.open(BROWSER_EXTENSION_LINKS.CHROME_WEB_STORE, '_blank');
@@ -115,21 +116,22 @@ export class ClipGuideModal extends Modal {
 
     const guideLink = installActions.createEl('a', {
       cls: 'sa-clip-guide-link',
-      text: 'Extension guide',
+      text: t('firstRun.clipGuide.guideLink'),
     });
     guideLink.setAttr('href', BROWSER_EXTENSION_LINKS.GUIDE);
     guideLink.setAttr('target', '_blank');
     guideLink.setAttr('rel', 'noopener noreferrer');
-    guideLink.setAttr('aria-label', 'Extension guide for non-Chrome browsers');
+    guideLink.setAttr('aria-label', t('firstRun.clipGuide.guideLinkAria'));
 
     // Step 2 — clip a post (action name emphasized like a UI label).
     const clipStep = this.createStep(stepsEl, '2');
-    clipStep.textEl.appendText('Open a post (X, Instagram, Reddit, …) and click ');
-    clipStep.textEl.createEl('em', { text: 'Clip to Obsidian' });
+    clipStep.textEl.appendText(t('firstRun.clipGuide.clipStep.prefix'));
+    clipStep.textEl.createEl('em', { text: t('firstRun.clipGuide.clipStep.action') });
+    clipStep.textEl.appendText(t('firstRun.clipGuide.clipStep.suffix'));
 
     // Step 3 — arrival.
     const arriveStep = this.createStep(stepsEl, '3');
-    arriveStep.textEl.setText('Your clip appears in the timeline here — no account needed');
+    arriveStep.textEl.setText(t('firstRun.clipGuide.arriveStep'));
   }
 
   /**
@@ -150,11 +152,11 @@ export class ClipGuideModal extends Modal {
 
   private renderFooter(contentEl: HTMLElement): void {
     const footer = contentEl.createEl('p', { cls: 'sa-clip-guide-footer' });
-    footer.appendText('Archiving by URL, sync, and sharing need a free account. ');
+    footer.appendText(t('firstRun.clipGuide.footer'));
 
     const settingsLink = footer.createEl('a', {
       cls: 'sa-clip-guide-footer-link',
-      text: 'Open settings',
+      text: t('firstRun.openSettings'),
     });
     settingsLink.addEventListener('click', (event) => {
       event.preventDefault();
