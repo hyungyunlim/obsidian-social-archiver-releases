@@ -26,6 +26,18 @@ export interface ReleaseNote {
  * Minor patches (e.g., 2.3.1, 2.3.2) without entries are silently skipped.
  */
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '4.12.2': {
+    title: 'Threads posting turned off, and new shares start at your account default',
+    date: '2026-11-23',
+    notes: `## Changes
+
+- **Posting to Threads is unavailable for now.** Meta revoked Social Archiver's access to the Threads API. The Cross-Post settings tab now says so instead of offering Connect, the composer no longer offers **Post & Threads**, and deleting a card you cross-posted leaves the copy on Threads and tells you to remove it there. Threads subscriptions, Threads profile crawls and saving Threads posts from a link keep working.
+- **New post shares start at your account's default visibility.** The share window reads your account's sharing settings and tells you when a hidden public profile lists nothing.
+
+## Fixes
+
+- **Naver cafe and blog links match the posts you already saved**, so saving one again is recognized as already archived.`,
+  },
   '4.12.1': {
     title: 'A better first run, and share links that keep their Post or Reader setting',
     date: '2026-11-13',

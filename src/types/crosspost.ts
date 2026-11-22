@@ -10,6 +10,8 @@
 // Connection status from GET /api/threads/oauth/status
 export interface ThreadsConnectionStatus {
   connected: boolean;
+  /** false while Meta has the Threads API revoked; older servers omit it (= available). */
+  apiAvailable?: boolean;
   platform?: 'threads';
   username?: string;
   status?: 'active' | 'disconnected' | 'revoked' | 'error';

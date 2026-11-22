@@ -36,6 +36,8 @@ export function renderPostShareSettingsFields(
   settings: PostShareSettings,
   disabled: boolean,
   onChange: (patch: Partial<PostShareSettings>) => void,
+  /** The owner hid their public profile (feedback #268): Public lists nothing there for now. */
+  profileHidden = false,
 ): void {
   body.createDiv({ cls: 'sa-collection-section-label', text: t('col.share.visibility'), attr: { id: 'sa-post-visibility-label' } });
   const handle = renderVisibilityChoices<PostShareVisibility>(body, {
@@ -43,7 +45,9 @@ export function renderPostShareSettingsFields(
     choices: POST_SHARE_VISIBILITIES.map((value) => ({
       value,
       label: value === 'public' ? t('col.visibility.public') : t('col.visibility.unlisted'),
-      hint: value === 'public' ? t('col.visibility.publicHint') : t('col.visibility.unlistedHint'),
+      hint: value === 'public'
+        ? t(profileHidden ? 'col.visibility.publicHintProfileHidden' : 'col.visibility.publicHint')
+        : t('col.visibility.unlistedHint'),
       icon: POST_VISIBILITY_ICON[value],
     })),
     value: settings.visibility,
@@ -130,6 +134,8 @@ export class PostShareSettingsModal extends Modal {
 
 export interface NewPostShareOptions {
   initial: PostShareSettings;
+  /** The owner hid their public profile (feedback #268). */
+  profileHidden?: boolean;
   /** Publishes with the chosen settings and copies; null when it failed (it reports why). */
   create: (settings: PostShareSettings) => Promise<string | null>;
   /** Once, when the modal closes: the new link, or null when nothing was published. */
@@ -164,7 +170,7 @@ export class NewPostShareModal extends Modal {
     renderPostShareSettingsFields(body, this.settings, this.busy, (patch) => {
       this.settings = { ...this.settings, ...patch };
       this.render();
-    });
+    }, this.options.profileHidden === true);
     new Setting(body)
       .setDesc(t('col.share.createLinkHint'))
       .addButton((button) => {

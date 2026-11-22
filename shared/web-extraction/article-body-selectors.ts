@@ -34,8 +34,10 @@
  *
  * Measured 2026-08-20, auto → selector, one live post per board: theqoo
  * 0 → 20 post images (was the 27-row board list), inven footer → the post,
- * bobaedream/dcinside/todayhumor/pann sitewide navigation → the post. fmkorea,
- * clien and ruliweb already extract correctly and are deliberately absent.
+ * bobaedream/dcinside/todayhumor/pann sitewide navigation → the post. clien
+ * and ruliweb already extract correctly and are deliberately absent. fmkorea
+ * was absent too until image-only posts (its usual 유머 format) turned out to
+ * archive the 포텐 터짐 화제순 sidebar instead — the 08-20 check used a text post.
  *
  * To add an outlet: open one of its articles, find the element wrapping only
  * the story text, and add `'<registrable host>': '<selector>'`.
@@ -122,6 +124,8 @@ const ARTICLE_BODY_SELECTORS: Record<string, string> = {
   // whose auto-detection is already clean, and it has no #contentArea —
   // a selector that matches nothing costs nothing.
   'teamblind.com': '#contentArea',
+  // `.xe_content` alone also matches every comment; the article is scoped.
+  'fmkorea.com': '.rd_body article',
   'inven.co.kr': '#powerbbsContent',
   'pann.nate.com': '#contentArea',
   'dcinside.com': '.write_div',
@@ -271,4 +275,114 @@ export function removeArticleClutterInPlace(document: ClutterDocument, hostname:
       entry.parent.insertBefore(entry.node, entry.next);
     }
   };
+}
+
+interface PrepElement {
+  remove?(): void;
+  textContent?: string | null;
+  getAttribute?(name: string): string | null;
+  removeAttribute?(name: string): void;
+  contains?(node: unknown): boolean;
+}
+
+interface PrepDocument {
+  querySelector(selector: string): PrepElement | null;
+  querySelectorAll(selector: string): Iterable<PrepElement> | ArrayLike<PrepElement>;
+  body: { replaceChildren?(...nodes: unknown[]): void } | null;
+}
+
+/**
+ * Delete everything outside the known article container before Defuddle looks.
+ *
+ * `contentSelector` alone is not binding: Defuddle's public `parse()` re-runs
+ * extraction when the result has fewer than 50 words, and one of those retries
+ * substitutes its own selector and keeps whichever attempt scored more words.
+ * An image-only board post has zero, so the site footer or the board's own
+ * post-list table wins and the archive becomes navigation. Cutting the body
+ * down first leaves the retries nothing else to find.
+ *
+ * JSON-LD is carried over because it usually sits in `<body>`, and Defuddle
+ * reads author/published/title out of it.
+ *
+ * Measured no-op on the text-heavy hosts already in the table (donga, mk,
+ * hani, yna extract byte-identical markup, author and published with and
+ * without this), so it runs for every listed host rather than only the sparse
+ * ones — one behaviour beats a word-count threshold that mirrors Defuddle's.
+ */
+export function narrowBodyToContent(document: PrepDocument, selector: string): void {
+  const content = document.querySelector(selector);
+  const body = document.body;
+  if (!content || typeof body?.replaceChildren !== 'function') return;
+
+  const schema = Array.from(document.querySelectorAll('script[type="application/ld+json"]')).filter(
+    (node) => !content.contains?.(node)
+  );
+  body.replaceChildren(...schema, content);
+}
+
+/**
+ * Delete in-body clutter the container selector cannot cut — related-article
+ * boxes some sites nest INSIDE the article (mediatoday, zdnet). Any heading
+ * that reads exactly "관련기사" goes with them: zdnet's sits as a bare sibling
+ * outside the box it labels, and no article's own heading is that string.
+ */
+export function stripArticleClutter(document: PrepDocument, selector: string | undefined): void {
+  if (selector) {
+    for (const node of Array.from(document.querySelectorAll(selector))) node.remove?.();
+  }
+  for (const heading of Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6'))) {
+    if (/^관련\s*기사$/.test(heading.textContent?.trim() ?? '')) heading.remove?.();
+  }
+}
+
+/**
+ * Clear image alts that only repeat the article title. Defuddle collapses
+ * adjacent images sharing an alt as a lazy-load placeholder + real pair, so a
+ * board that slices one tall screenshot into several images and stamps every
+ * slice with the post title (fmkorea's `auto_insert`) keeps only the first and
+ * last. An alt equal to the title says nothing the heading does not.
+ */
+export function clearTitleAltsInPlace(document: PrepDocument): void {
+  const title = document.querySelector('meta[property="og:title"]')?.getAttribute?.('content')?.trim();
+  if (!title) return;
+  for (const img of Array.from(document.querySelectorAll('img[alt]'))) {
+    if (img.getAttribute?.('alt')?.trim() === title) img.removeAttribute?.('alt');
+  }
+}
+
+/**
+ * Cut a throwaway document down to this host's article container: everything
+ * outside it, the in-body clutter inside it, and title-only image alts.
+ * Returns the selector to hand Defuddle, or undefined for hosts without one.
+ * When the page lacks the container only the narrowing is skipped, and
+ * Defuddle falls back to auto-detection.
+ */
+export function prepareArticleContainer(document: PrepDocument, hostname: string): string | undefined {
+  const selector = articleBodySelectorForHost(hostname);
+  if (!selector) return undefined;
+  narrowBodyToContent(document, selector);
+  stripArticleClutter(document, articleStripSelectorForHost(hostname));
+  clearTitleAltsInPlace(document);
+  return selector;
+}
+
+/**
+ * For the extension, which parses the LIVE page: a detached copy prepared
+ * exactly as the Worker prepares its fetched page, or null when the host has
+ * no container or this page lacks it (then the live page is parsed as before).
+ *
+ * The copy has no `defaultView`, which turns off Defuddle's computed-style
+ * checks — the mode the Worker's LinkedOM parse always runs in, so both lanes
+ * read these hosts the same way. A document without a browsing context loads
+ * no images and runs no scripts, so the copy costs nothing beyond the clone.
+ */
+export function preparedContainerCopy<D extends PrepDocument & { cloneNode(deep?: boolean): unknown }>(
+  document: D,
+  hostname: string
+): D | null {
+  const selector = articleBodySelectorForHost(hostname);
+  if (!selector || !document.querySelector(selector)) return null;
+  const copy = document.cloneNode(true) as D;
+  prepareArticleContainer(copy, hostname);
+  return copy;
 }

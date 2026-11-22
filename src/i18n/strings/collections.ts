@@ -39,6 +39,10 @@ export const collectionStrings = {
   'col.visibility.privateHint': { en: 'Only you', ko: '나만 볼 수 있습니다' },
   'col.visibility.unlistedHint': { en: 'Not on your profile or in search', ko: '프로필과 검색에 나오지 않습니다' },
   'col.visibility.publicHint': { en: 'Shown on your profile', ko: '내 프로필에 표시됩니다' },
+  'col.visibility.publicHintProfileHidden': {
+    en: "Your public profile is hidden, so this won't appear there for now",
+    ko: '공개 프로필을 숨겨 두어 지금은 프로필에 표시되지 않습니다',
+  },
 
   // Roles
   'col.role.owner': { en: 'Owner', ko: '소유자' },

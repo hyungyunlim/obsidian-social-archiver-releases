@@ -250,6 +250,10 @@ export const SEARCH_FLAGS = {
         value: '<csv>',
     },
     cursor: { description: 'Pagination cursor from a previous response.', value: '<cursor>' },
+    scope: {
+        description: 'What to search: saved, posts, highlights, or notes (your notes, including image text). Default: archives.',
+        value: '<scope>',
+    },
     ...FORMAT_FLAG,
 };
 export const SUBSCRIPTIONS_FLAGS = {

@@ -285,11 +285,16 @@ export function extractPostsFromSSR(scripts: string[], targetShortcode: string):
  *
  * Each returned thread is `[topReply, ...subReplies]`, matching the shape
  * `extractPostsFromSSR` produces for `replyThreads`.
+ *
+ * Pages come in both payload shapes: the old `data.data.edges[].node.thread_items`
+ * and, since `BarcelonaPostPageDirectRepliesRefetchQuery` (verified live
+ * 2026-11-18), `data.media.text_post_app_info.direct_replies` — the shape the
+ * permalink SSR moved to in 2026-09 (see {@link collectMediaEdges}).
  */
 export function extractReplyThreadsFromPages(pages: string[]): SSRPost[][] {
 	const threads: SSRPost[][] = [];
 	for (const text of pages) {
-		if (!text.includes('thread_items')) continue;
+		if (!hasParseableBlock(text)) continue;
 		let json: unknown;
 		try {
 			json = JSON.parse(text);
@@ -303,6 +308,15 @@ export function extractReplyThreadsFromPages(pages: string[]): SSRPost[][] {
 				.map((ti) => ti.post)
 				.filter((p): p is SSRPost => p !== undefined && p !== null);
 			if (posts.length > 0) threads.push(posts);
+		}
+		const medias: SSRPost[] = [];
+		findMediaObjects(json, medias);
+		for (const media of medias) {
+			const info = media.text_post_app_info as MediaThreadInfo | undefined;
+			for (const edge of info?.direct_replies?.edges ?? []) {
+				const posts = postsFromConnection(edge?.node?.posts);
+				if (posts.length > 0) threads.push(posts);
+			}
 		}
 	}
 	return threads;

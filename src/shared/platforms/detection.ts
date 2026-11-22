@@ -415,6 +415,9 @@ export function extractPostIdFromUrl(platform: Platform, url: string): string | 
         return `${m[1]}/${m[2]}`;
       }
 
+      case 'naver':
+        return extractNaverPostId(parsed);
+
       case 'xiaohongshu': {
         // /explore/<24hex> and legacy /discovery/item/<24hex>; profile-scoped
         // /user/profile/<uid>/<noteId> uses the second 24-hex segment.
@@ -441,4 +444,46 @@ export function extractPostIdFromUrl(platform: Platform, url: string): string | 
   } catch {
     return null;
   }
+}
+
+const NAVER_ID_SEGMENT = /^[A-Za-z0-9_-]+$/;
+
+/**
+ * The post_id the Naver direct services store, so a re-share of a saved
+ * Naver post hits the server's "already archived" check instead of being
+ * charged again (feedback #270): cafe `cafe-{cafeUrl}-{articleId}`
+ * (NaverCafeDirectService), blog `blog-{blogId}-{logNo}`
+ * (NaverBlogDirectService). Mirrors those services' URL parsing.
+ *
+ * ponytail: cafeId-only cafe URLs (/ca-fe/cafes/{id}/…) and news return null —
+ * their stored id needs an upstream lookup (cafe URL name) or is a web hash.
+ */
+function extractNaverPostId(parsed: URL): string | null {
+  const hostname = parsed.hostname.toLowerCase();
+  const pathname = parsed.pathname;
+
+  if (hostname === 'cafe.naver.com' || hostname === 'm.cafe.naver.com') {
+    const web = pathname.match(/^\/(?:ca-fe|f-e)\/web\/cafes\/([^/]+)\/articles\/(\d+)$/);
+    if (web?.[1] && web[2]) {
+      const cafeKey = decodeURIComponent(web[1]);
+      if (parsed.searchParams.get('useCafeId') === 'true' || /^\d+$/.test(cafeKey)) return null;
+      return NAVER_ID_SEGMENT.test(cafeKey) ? `cafe-${cafeKey}-${web[2]}` : null;
+    }
+    const legacy = pathname.match(/^\/([A-Za-z0-9_-]+)\/(?:articles\/)?(\d+)$/);
+    return legacy?.[1] && legacy[2] ? `cafe-${legacy[1]}-${legacy[2]}` : null;
+  }
+
+  if (hostname === 'blog.naver.com' || hostname === 'm.blog.naver.com') {
+    const path = pathname.match(/^\/([A-Za-z0-9_-]+)\/(\d+)$/);
+    if (path?.[1] && path[2]) return `blog-${path[1]}-${path[2]}`;
+    if (/^\/PostView\.(?:naver|nhn)$/i.test(pathname)) {
+      const blogId = parsed.searchParams.get('blogId');
+      const logNo = parsed.searchParams.get('logNo');
+      if (blogId && NAVER_ID_SEGMENT.test(blogId) && logNo && /^\d+$/.test(logNo)) {
+        return `blog-${blogId}-${logNo}`;
+      }
+    }
+  }
+
+  return null;
 }

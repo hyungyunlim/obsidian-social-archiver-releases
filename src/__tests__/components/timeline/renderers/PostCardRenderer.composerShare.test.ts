@@ -27,9 +27,17 @@ vi.mock('obsidian', async () => {
 });
 
 const createShare = vi.hoisted(() => vi.fn());
+/** The account sharing controls the modal starts from (feedback #268); null = unreadable. */
+const sharePreferences = vi.hoisted(() => ({
+  current: null as null | { profileListed: boolean; defaultPostVisibility: 'public' | 'unlisted' },
+}));
 vi.mock('@/services/ShareAPIClient', () => ({
   ShareAPIClient: class {
     createShare = createShare;
+    getSharePreferences = async () => {
+      if (!sharePreferences.current) throw new Error('unavailable');
+      return sharePreferences.current;
+    };
   },
 }));
 
@@ -118,9 +126,11 @@ async function shareFromCard(
 
   shareModal.options = null;
   const sharing = renderer.toggleShareForReader(post);
+  // The modal opens once the account sharing controls are read.
+  await vi.waitFor(() => expect(shareModal.options).not.toBeNull());
 
   // Nothing is published until the modal's Create.
-  const modal = shareModal.options;
+  const modal = shareModal.options as typeof shareModal.options;
   if (!modal) throw new Error('expected the share modal');
   expect(createShare).not.toHaveBeenCalled();
   const shareUrl = await modal.create(settings ?? modal.initial);
@@ -172,6 +182,17 @@ describe('PostCardRenderer share — composer notes', () => {
       { visibility: 'unlisted', displayMode: 'reader', includeAnnotations: false },
     );
     expect(picked).toMatchObject({ visibility: 'unlisted', displayMode: 'reader', includeAnnotations: false });
+  });
+
+  it('starts the modal at the account default and says so when the profile is hidden (feedback #268)', async () => {
+    sharePreferences.current = { profileListed: false, defaultPostVisibility: 'unlisted' };
+    try {
+      const options = await shareFromCard({ platform: 'post' });
+      expect(options).toMatchObject({ visibility: 'unlisted' });
+      expect(shareModal.options).toMatchObject({ profileHidden: true });
+    } finally {
+      sharePreferences.current = null;
+    }
   });
 
   it('copies the plain link with the reader-link setting on, so a picked Post opens as a post (feedback #223)', async () => {

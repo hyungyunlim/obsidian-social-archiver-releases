@@ -701,6 +701,22 @@ export class ShareAPIClient implements IService {
   }
 
   /**
+   * The account's sharing controls (feedback #268): whether shares are listed
+   * on the public profile, and the visibility a new link starts at. Throws on
+   * failure; callers fall back to the old defaults (listed, public).
+   */
+  async getSharePreferences(): Promise<{ profileListed: boolean; defaultPostVisibility: PostShareVisibility }> {
+    const result = await this.httpRequest<{ success: boolean; data?: Record<string, unknown> }>(
+      'GET',
+      '/api/user/share-preferences'
+    );
+    return {
+      profileListed: result.data?.['profileListed'] !== false,
+      defaultPostVisibility: result.data?.['defaultPostVisibility'] === 'unlisted' ? 'unlisted' : 'public',
+    };
+  }
+
+  /**
    * Get share status/info
    */
   async getShareInfo(shareId: string): Promise<ShareAPIResponse> {

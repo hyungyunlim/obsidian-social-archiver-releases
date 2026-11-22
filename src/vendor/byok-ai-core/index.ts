@@ -109,6 +109,21 @@ export {
   type ByokResearchDepth,
 } from './research';
 export { COMMENT_SYSTEM_INSTRUCTIONS, buildCommentPrompt } from './comment-prompts';
+export {
+  COMPOSER_AFTER_MAX_CHARS,
+  COMPOSER_AI_ACTIONS,
+  COMPOSER_AI_MAX_OUTPUT_TOKENS,
+  COMPOSER_BEFORE_MAX_CHARS,
+  COMPOSER_DRAFT_MAX_CHARS,
+  COMPOSER_MAX_INSTRUCTION_CHARS,
+  COMPOSER_MAX_TEXT_CHARS,
+  COMPOSER_SELECTION_ACTIONS,
+  buildComposerPrompt,
+  parseComposerAIInput,
+  type ComposerAIAction,
+  type ComposerAIInput,
+  type ComposerInputError,
+} from './composer';
 
 // M2 exports (core-B): errors.ts, client.ts, engine.ts go below this line.
 export {

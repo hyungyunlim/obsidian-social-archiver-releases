@@ -136,6 +136,7 @@ import {
   type FormattedBusinessHours,
 } from './PreviewableHelpers';
 import { isFailedArchiveAttemptPost } from '../../../utils/archiveAttempts';
+import { isThreadsApiAvailable } from '../../../utils/crosspostStatus';
 import { isWebLanePlatform } from '@/shared/platforms';
 
 interface DeletePostOptions {
@@ -4974,17 +4975,41 @@ export class PostCardRenderer extends Component {
       new Notice('Please log in to share posts. Go to settings → Social Archiver → authentication');
       return Promise.resolve(null);
     }
-    return new Promise((resolve) => {
+    return this.loadSharePreferences().then((preferences) => new Promise((resolve) => {
       new NewPostShareModal(this.app, {
         initial: {
-          visibility: 'public',
+          // The account's "Who can see new links" (feedback #268); Public if unknown.
+          visibility: preferences?.defaultPostVisibility ?? 'public',
           displayMode: toPostShareDisplayMode(this.plugin.settings.copyShareLinkAsReaderMode),
           includeAnnotations: true,
         },
+        profileHidden: preferences?.profileListed === false,
         create: (settings): Promise<string | null> => this.createShare(post, shareBtn, shareIcon, settings),
         onClosed: resolve,
       }).open();
+    }));
+  }
+
+  /**
+   * The account sharing controls for the new-share modal, or null when they
+   * cannot be read within 2 s (the modal then starts at Public, as before).
+   */
+  private async loadSharePreferences(): Promise<{ profileListed: boolean; defaultPostVisibility: 'public' | 'unlisted' } | null> {
+    const client = new ShareAPIClient({
+      baseURL: this.getWorkerUrl(),
+      apiKey: this.plugin.settings.authToken,
+      vault: this.vault,
+      pluginVersion: this.plugin.manifest.version,
     });
+    let timer: number | undefined;
+    const timeout = new Promise<null>((resolve) => { timer = window.setTimeout(() => resolve(null), 2000); });
+    try {
+      return await Promise.race([client.getSharePreferences(), timeout]);
+    } catch {
+      return null;
+    } finally {
+      window.clearTimeout(timer);
+    }
   }
 
   /**
@@ -5587,6 +5612,12 @@ export class PostCardRenderer extends Component {
               authToken: this.plugin.settings.authToken,
             });
             client.initialize();
+            // While the Threads API is revoked the delete call can only fail
+            // (503 after retries), so skip it and say the copy is still there.
+            if (!isThreadsApiAvailable(await client.getConnectionStatus())) {
+              new Notice(t('xpost.deleteOnThreadsUnavailable'));
+              return;
+            }
             await client.deletePlatformPost(crossPostId, 'threads');
             new Notice('Threads post also deleted');
           } catch {

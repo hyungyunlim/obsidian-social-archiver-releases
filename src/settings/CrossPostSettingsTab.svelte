@@ -8,6 +8,7 @@ import type { ThreadsConnectionStatus, ThreadsReplyControl } from '../types/cros
 import {
   getThreadsConnectionIssueFromError,
   getThreadsConnectionIssueFromStatus,
+  isThreadsApiAvailable,
   isThreadsConnectionUsable,
 } from '@/utils/crosspostStatus';
 import { showConfirmModal } from '@/utils/confirm-modal';
@@ -32,6 +33,7 @@ let tokenStatus = $state<'valid' | 'expiring_soon' | 'expired' | 'error'>('valid
 let tokenExpiresAt = $state<number | null>(null);
 let isPolling = $state(false);
 let isLoadingStatus = $state(true);
+let apiAvailable = $state(true);
 let error = $state('');
 
 // Polling handles
@@ -98,6 +100,7 @@ function getStatusDotClass(connected: boolean, status: typeof tokenStatus): stri
 }
 
 function applyStatusToState(status: ThreadsConnectionStatus): void {
+  apiAvailable = isThreadsApiAvailable(status);
   isConnected = isThreadsConnectionUsable(status);
   username = status.username ?? '';
   tokenStatus = status.tokenStatus ?? 'valid';
@@ -337,6 +340,9 @@ onDestroy(() => {
       <div class="crosspost-status-row">
         <span class="crosspost-loading-text">{t('xpost.checkingStatus')}</span>
       </div>
+    {:else if !apiAvailable}
+      <!-- Threads API revoked server-side: nothing to connect, refresh or disconnect -->
+      <p class="crosspost-coming-soon-text crosspost-api-unavailable">{t('xpost.apiUnavailable')}</p>
     {:else if isConnected}
       <!-- Connected state -->
       <div class="crosspost-connected-info">

@@ -135,6 +135,9 @@ export interface TagApplyResult {
     noop: boolean;
 }
 export type SearchMatchField = 'content' | 'title' | 'author' | 'url';
+/** What to search: archives split by source, or single highlights / notes (OCR text lives in notes). */
+export declare const SEARCH_SCOPES: readonly ["saved", "posts", "highlights", "notes"];
+export type SearchScope = (typeof SEARCH_SCOPES)[number];
 export interface SearchCliOptions {
     /** Search text (host/server validate length). */
     q: string;
@@ -150,6 +153,8 @@ export interface SearchCliOptions {
     match?: string[];
     /** Opaque pagination cursor from a previous result. */
     cursor?: string;
+    /** Absent searches archives; `notes` / `highlights` return one row per matching item. */
+    scope?: SearchScope;
 }
 export interface SearchCliMatch {
     archiveId: string;
@@ -165,6 +170,12 @@ export interface SearchCliMatch {
     /** Short highlighted excerpt — never the full body. */
     snippet: string;
     matchedField: string;
+    /** What the row is: an archive (`saved` / `post`) or one `highlight` / `note` in it. */
+    kind?: 'saved' | 'post' | 'highlight' | 'note';
+    /** Highlight / note rows only: the item's id inside the archive. */
+    itemId?: string;
+    /** Highlight / note rows only: the item's text, at most 500 chars. */
+    itemText?: string;
 }
 export interface SearchCliResult {
     query: string;

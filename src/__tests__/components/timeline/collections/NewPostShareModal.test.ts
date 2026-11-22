@@ -70,6 +70,17 @@ async function settle(): Promise<void> {
 }
 
 describe('NewPostShareModal', () => {
+  it('says Public lands nowhere while the profile is hidden (feedback #268)', () => {
+    const visible = new NewPostShareModal({} as App, { initial: INITIAL, create: vi.fn() });
+    visible.open();
+    expect(visible.contentEl.textContent).toContain('Shown on your profile');
+
+    const hidden = new NewPostShareModal({} as App, { initial: INITIAL, create: vi.fn(), profileHidden: true });
+    hidden.open();
+    expect(hidden.contentEl.textContent).toContain("Your public profile is hidden, so this won't appear there for now");
+    expect(hidden.contentEl.textContent).not.toContain('Shown on your profile');
+  });
+
   it('shows the defaults and publishes only on Create, with the picked settings', async () => {
     const create = vi.fn(async () => SHARE_URL);
     const ui = open(create);

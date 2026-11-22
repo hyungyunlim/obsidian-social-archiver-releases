@@ -12,7 +12,7 @@
 import { BILLING_FALLBACK_MESSAGE, ErrorCode, err, ok, } from './response.js';
 import { CliValidationError, parseBool, parseCsv, parseEnum, parseNumber, parseString, parseWorkspacePath, } from './params.js';
 import { COMMANDS } from './flags.js';
-import { HostError } from './host.js';
+import { HostError, SEARCH_SCOPES } from './host.js';
 // -----------------------------------------------------------------------------
 // Error mapping
 // -----------------------------------------------------------------------------
@@ -187,6 +187,7 @@ export const searchHandler = async (params, { host, version }) => {
     const until = parseString(params, 'until');
     const match = parseCsv(params, 'match');
     const cursor = parseString(params, 'cursor');
+    const scope = parseEnum(params, 'scope', SEARCH_SCOPES);
     const result = await host.search({
         q,
         ...(typeof limit === 'number' ? { limit } : {}),
@@ -196,6 +197,7 @@ export const searchHandler = async (params, { host, version }) => {
         ...(until ? { until } : {}),
         ...(match.length > 0 ? { match } : {}),
         ...(cursor ? { cursor } : {}),
+        ...(scope ? { scope } : {}),
     });
     return ok(COMMANDS.SEARCH, version, result);
 };

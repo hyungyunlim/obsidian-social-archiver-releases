@@ -458,6 +458,32 @@ describe('ShareAPIClient', () => {
     });
   });
 
+  describe('getSharePreferences (feedback #268)', () => {
+    it('reads the account sharing controls with the bearer token', async () => {
+      let seen: { url?: string; headers?: Record<string, string> } = {};
+      mock.add(async (params) => {
+        seen = { url: params.url, headers: params.headers };
+        return makeResponse(200, wrap({ profileListed: false, defaultPostVisibility: 'unlisted', updatedAt: null }))();
+      });
+
+      await expect(client.getSharePreferences()).resolves.toEqual({ profileListed: false, defaultPostVisibility: 'unlisted' });
+      expect(seen.url).toMatch(/\/api\/user\/share-preferences$/);
+      expect(seen.headers?.['Authorization']).toMatch(/^Bearer /);
+    });
+
+    it('reads missing or unknown values as the old defaults', async () => {
+      mock.add(makeResponse(200, wrap({ defaultPostVisibility: 'private' })));
+
+      await expect(client.getSharePreferences()).resolves.toEqual({ profileListed: true, defaultPostVisibility: 'public' });
+    });
+
+    it('throws on a server error so the caller falls back', async () => {
+      mock.add(makeResponse(500, { success: false, error: { code: 'DB_ERROR', message: 'x' } }));
+
+      await expect(client.getSharePreferences()).rejects.toBeTruthy();
+    });
+  });
+
   describe('Request Headers', () => {
     it('should include required headers', async () => {
       const captured: any[] = [];

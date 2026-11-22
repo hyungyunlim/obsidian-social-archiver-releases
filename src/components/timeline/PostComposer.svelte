@@ -32,6 +32,7 @@ import { FEATURE_CROSSPOST_ENABLED } from '@/shared/constants';
 import {
   getThreadsConnectionIssueFromError,
   getThreadsConnectionIssueFromStatus,
+  isThreadsApiAvailable,
   isThreadsConnectionUsable,
 } from '@/utils/crosspostStatus';
 import { showConfirmModal } from '@/utils/confirm-modal';
@@ -113,6 +114,8 @@ let shareOnPost = $state(editMode && initialData?.shareUrl ? true : false); // S
  * Cross-post state (inline — no separate panel component)
  */
 let threadsConnected = $state(false);
+// Server-side kill switch (Meta revoked the Threads API); true until a status says otherwise.
+let threadsApiAvailable = $state(true);
 let threadsUsername = $state<string | undefined>(undefined);
 let threadsEnabled = $state(settings.crossPostThreadsEnabled ?? false);
 let crossPostClient: CrossPostAPIClient | null = null;
@@ -391,8 +394,12 @@ async function checkThreadsConnection(): Promise<void> {
     const statusIssue = getThreadsConnectionIssueFromStatus(status, {
       crossPostEnabled: settings.crossPostThreadsEnabled,
     });
+    threadsApiAvailable = isThreadsApiAvailable(status);
     threadsConnected = isThreadsConnectionUsable(status);
     threadsUsername = status.username;
+    if (!threadsApiAvailable && postMode === 'post+share+threads') {
+      postMode = 'post+share';
+    }
     if (statusIssue && settings.crossPostThreadsEnabled) {
       onCrossPostStatusIssue?.(statusIssue.message);
       return;
@@ -1076,7 +1083,7 @@ function openPostModeMenu(e: MouseEvent): void {
       { id: 'post', label: 'Post', desc: 'Save to vault only' },
       { id: 'post+share', label: 'Post & Share', desc: 'Save + public share link' },
     ];
-    if (FEATURE_CROSSPOST_ENABLED) {
+    if (FEATURE_CROSSPOST_ENABLED && threadsApiAvailable) {
       modes.push({ id: 'post+share+threads', label: 'Post & Threads',
         desc: threadsConnected ? 'Save + share + crosspost' : 'Connect in Settings' });
     }

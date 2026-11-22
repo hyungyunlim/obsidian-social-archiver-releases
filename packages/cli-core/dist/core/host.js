@@ -12,6 +12,8 @@
  * Remaining commands are gated through `supports()` until their host methods
  * land.
  */
+/** What to search: archives split by source, or single highlights / notes (OCR text lives in notes). */
+export const SEARCH_SCOPES = ['saved', 'posts', 'highlights', 'notes'];
 // -----------------------------------------------------------------------------
 // Host error
 // -----------------------------------------------------------------------------

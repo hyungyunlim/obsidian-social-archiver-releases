@@ -6,6 +6,7 @@ import {
 import {
   getThreadsConnectionIssueFromError,
   getThreadsConnectionIssueFromStatus,
+  isThreadsApiAvailable,
   isThreadsConnectionUsable,
 } from '@/utils/crosspostStatus';
 
@@ -60,5 +61,40 @@ describe('crosspostStatus utilities', () => {
     expect(issue.kind).toBe('api_unreachable');
     expect(issue.message).toContain('http://localhost:8787');
     expect(issue.message).toContain('cross-posting is paused');
+  });
+
+  describe('Threads API availability (server kill switch)', () => {
+    it('treats only an explicit apiAvailable: false as unavailable', () => {
+      expect(isThreadsApiAvailable({ apiAvailable: false })).toBe(false);
+      expect(isThreadsApiAvailable({ apiAvailable: true })).toBe(true);
+      // Servers from before the field: keep every Threads feature.
+      expect(isThreadsApiAvailable({})).toBe(true);
+    });
+
+    it('never treats a connection as usable while the API is unavailable', () => {
+      const status = {
+        connected: true,
+        apiAvailable: false,
+        username: 'alice',
+        tokenStatus: 'valid' as const,
+      };
+
+      expect(isThreadsConnectionUsable(status)).toBe(false);
+      expect(isThreadsConnectionUsable({ ...status, apiAvailable: true })).toBe(true);
+      expect(isThreadsConnectionUsable({ connected: true, username: 'alice' })).toBe(true);
+    });
+
+    it('raises no reconnect issue while the API is unavailable, even with cross-posting enabled', () => {
+      // What the server answers today: { success: true, connected: false, apiAvailable: false }.
+      const status = { connected: false, apiAvailable: false };
+
+      expect(getThreadsConnectionIssueFromStatus(status, { crossPostEnabled: true })).toBeNull();
+      expect(
+        getThreadsConnectionIssueFromStatus(
+          { connected: true, apiAvailable: false, tokenStatus: 'expired' as const },
+          { crossPostEnabled: true }
+        )
+      ).toBeNull();
+    });
   });
 });

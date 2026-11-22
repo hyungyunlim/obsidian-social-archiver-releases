@@ -70,6 +70,14 @@ export const crossPostStrings = {
   },
   'xpost.checking': { en: 'Checking...', ko: '확인 중...' },
   'xpost.retry': { en: 'Retry', ko: '다시 시도' },
+  'xpost.apiUnavailable': {
+    en: 'Posting to Threads is unavailable for now.',
+    ko: '지금은 Threads에 게시할 수 없습니다.',
+  },
+  'xpost.deleteOnThreadsUnavailable': {
+    en: 'The Threads copy of this post was not deleted. Remove it on Threads directly.',
+    ko: '이 글의 Threads 게시물은 삭제되지 않았습니다. Threads에서 직접 삭제해 주세요.',
+  },
   'xpost.comingSoon': { en: 'Coming soon', ko: '출시 예정' },
   'xpost.comingSoonText': {
     en: 'X (Twitter) cross-posting will be available in a future update.',
